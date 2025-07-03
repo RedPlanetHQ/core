@@ -2,6 +2,7 @@ import { openai } from "@ai-sdk/openai";
 import type { StatementNode } from "@core/types";
 import { embed } from "ai";
 import { logger } from "./logger.service";
+import { posthogService } from "./posthog.server";
 import { applyCrossEncoderReranking, applyWeightedRRF } from "./search/rerank";
 import {
   getEpisodesByStatements,
@@ -76,10 +77,37 @@ export class SearchService {
 
     // 3. Return top results
     const episodes = await getEpisodesByStatements(filteredResults);
-    return {
+    const results = {
       episodes: episodes.map((episode) => episode.content),
       facts: filteredResults.map((statement) => statement.fact),
     };
+
+    // Track search metrics in PostHog
+    posthogService.trackSearch(userId, query, 
+      {
+        limit: opts.limit,
+        max_bfs_depth: opts.maxBfsDepth,
+        valid_at: opts.validAt.toISOString(),
+        include_invalidated: opts.includeInvalidated,
+        has_entity_filters: opts.entityTypes.length > 0,
+        has_predicate_filters: opts.predicateTypes.length > 0,
+        score_threshold: opts.scoreThreshold,
+        min_results: opts.minResults,
+        time_range: opts.startTime && opts.endTime ? 
+          (new Date(opts.endTime).getTime() - new Date(opts.startTime || 0).getTime()) / (1000 * 60 * 60 * 24) : null
+      },
+      {
+        result_count_total: results.episodes.length + results.facts.length,
+        result_count_episodes: results.episodes.length,
+        result_count_facts: results.facts.length,
+        result_count_bm25: bm25Results.length,
+        result_count_vector: vectorResults.length,
+        result_count_bfs: bfsResults.length,
+        result_count_after_filtering: filteredResults.length
+      }
+    ).catch(error => logger.error("Failed to track search metrics", { error }));
+
+    return results;
   }
 
   /**
