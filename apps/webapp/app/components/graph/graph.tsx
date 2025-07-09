@@ -179,7 +179,8 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
               relations: [],
               relationData: [],
               label: "",
-              color: theme.link.stroke,
+              color: "#0000001A",
+              labelColor: "#0000001A",
               size: 1,
             };
           }

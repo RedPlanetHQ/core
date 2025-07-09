@@ -1,70 +1,63 @@
-import { Spec } from "./oauth";
+import { APIKeyParams, OAuth2Params } from "./oauth";
 
-export enum IntegrationPayloadEventType {
+export enum IntegrationEventType {
   /**
-   * When a webhook is received, this event is triggered to identify which integration
-   * account the webhook belongs to
+   * Processes authentication data and returns tokens/credentials to be saved
    */
-  IDENTIFY_WEBHOOK_ACCOUNT = "identify_webhook_account",
-
-  /**
-   * Lifecycle events for integration accounts
-   */
-  INTEGRATION_ACCOUNT_CREATED = "integration_account_created",
+  SETUP = "setup",
 
   /**
-   * When data is received from the integration source (e.g. new Slack message)
+   * Processing incoming data from the integration
    */
-  INTEGRATION_DATA_RECEIVED = "integration_data_received",
+  PROCESS = "process",
 
   /**
-   * For integrations without webhook support, this event is triggered at the
-   * configured frequency to sync data
+   * Identifying which account a webhook belongs to
    */
-  SCHEDULED_SYNC = "scheduled_sync",
+  IDENTIFY = "identify",
+
+  /**
+   * Scheduled synchronization of data
+   */
+  SYNC = "sync",
+
+  /**
+   * For returning integration metadata/config
+   */
+  SPEC = "spec",
 }
 
 export interface IntegrationEventPayload {
-  event: IntegrationPayloadEventType;
+  event: IntegrationEventType;
   [x: string]: any;
 }
 
-export interface Activity {
-  id: string;
-  type: string;
-  timestamp: string;
-  data: any;
+export class Spec {
+  name: string;
+  key: string;
+  description: string;
+  icon: string;
+  mcp?: {
+    command: string;
+    args: string[];
+    env: Record<string, string>;
+  };
+  auth?: Record<string, OAuth2Params | APIKeyParams>;
 }
 
-export interface IntegrationAccountConfig {
+export interface Config {
   access_token: string;
-  team_id?: string;
-  channel_ids?: string;
   [key: string]: any;
 }
 
-export interface IntegrationAccountIdentifier {
-  identifier: string;
-  type: string;
+export interface Identifier {
+  id: string;
+  type?: string;
 }
 
-export interface IntegrationAccountSettings {
-  [key: string]: any;
-}
-
-export type MessageType =
-  | "Spec"
-  | "Activity"
-  | "IntegrationAccountConfig"
-  | "IntegrationAccountIdentifier"
-  | "IntegrationAccountSettings";
+export type MessageType = "spec" | "activity" | "state" | "identifier";
 
 export interface Message {
   type: MessageType;
-  data:
-    | Spec
-    | Activity
-    | IntegrationAccountConfig
-    | IntegrationAccountIdentifier
-    | IntegrationAccountSettings;
+  data: any;
 }

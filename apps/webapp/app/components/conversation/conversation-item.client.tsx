@@ -1,14 +1,10 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 
-import React, { useEffect } from "react";
-import { Document } from "@tiptap/extension-document";
-import HardBreak from "@tiptap/extension-hard-break";
-import { History } from "@tiptap/extension-history";
-import { Paragraph } from "@tiptap/extension-paragraph";
-import { Text } from "@tiptap/extension-text";
+import { useEffect } from "react";
 import { UserTypeEnum } from "@core/types";
 import { type ConversationHistory } from "@core/database";
 import { cn } from "~/lib/utils";
+import { extensionsForConversation } from "./editor-extensions";
 
 interface AIConversationItemProps {
   conversationHistory: ConversationHistory;
@@ -24,14 +20,7 @@ export const ConversationItem = ({
   const id = `a${conversationHistory.id.replace(/-/g, "")}`;
 
   const editor = useEditor({
-    extensions: [
-      Document,
-      Paragraph,
-      Text,
-      HardBreak.configure({
-        keepMarks: true,
-      }),
-    ],
+    extensions: [...extensionsForConversation],
     editable: false,
     content: conversationHistory.message,
   });
@@ -54,7 +43,7 @@ export const ConversationItem = ({
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >
-        <EditorContent editor={editor} />
+        <EditorContent editor={editor} className="editor-container" />
       </div>
     </div>
   );

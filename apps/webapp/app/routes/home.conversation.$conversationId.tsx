@@ -138,7 +138,10 @@ export default function SingleConversation() {
         collapsedSize={16}
         className="border-border h-[calc(100vh_-_60px)] min-w-[200px] border-r-1"
       >
-        <ConversationList currentConversationId={conversationId} />
+        <ConversationList
+          currentConversationId={conversationId}
+          showNewConversationCTA
+        />
       </ResizablePanel>
       <ResizableHandle className="w-1" />
 

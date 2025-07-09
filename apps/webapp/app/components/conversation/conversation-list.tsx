@@ -1,4 +1,4 @@
-import { useFetcher } from "@remix-run/react";
+import { useFetcher, useNavigate } from "@remix-run/react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   List,
@@ -7,7 +7,7 @@ import {
   type ListRowRenderer,
 } from "react-virtualized";
 import { format } from "date-fns";
-import { MessageSquare, Clock } from "lucide-react";
+import { MessageSquare, Clock, Plus } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 
@@ -40,10 +40,13 @@ type ConversationListResponse = {
 
 export const ConversationList = ({
   currentConversationId,
+  showNewConversationCTA,
 }: {
   currentConversationId?: string;
+  showNewConversationCTA?: boolean;
 }) => {
   const fetcher = useFetcher<ConversationListResponse>();
+  const navigate = useNavigate();
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(true);
@@ -155,7 +158,7 @@ export const ConversationList = ({
 
       return (
         <div key={key} style={style}>
-          <div className="p-2">
+          <div className="p-1">
             <Button
               variant="ghost"
               className={cn(
@@ -194,6 +197,19 @@ export const ConversationList = ({
 
   return (
     <div className="flex h-full flex-col">
+      {showNewConversationCTA && (
+        <div className="flex items-center justify-start p-1 pb-0">
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2 py-4"
+            onClick={() => {
+              navigate("/home/conversation");
+            }}
+          >
+            <Plus size={14} /> New conversation
+          </Button>
+        </div>
+      )}
       {/* <div className="border-b">
         <Input
           type="text"

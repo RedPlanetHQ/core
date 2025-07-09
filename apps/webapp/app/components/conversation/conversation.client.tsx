@@ -1,6 +1,6 @@
 import { EditorRoot, EditorContent, Placeholder } from "novel";
 import { useState, useRef, useCallback } from "react";
-import { Form, useNavigate, useSubmit } from "@remix-run/react";
+import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 import { Document } from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
@@ -21,6 +21,7 @@ export const ConversationNew = ({
   user: { name: string | null };
 }) => {
   const [content, setContent] = useState("");
+  const [title, setTitle] = useState("");
   const editorRef = useRef<any>(null);
 
   const submit = useSubmit();
@@ -31,13 +32,15 @@ export const ConversationNew = ({
       if (!content.trim()) return;
 
       submit(
-        { message: content, title: content },
+        { message: content, title },
         {
           action: "/home/conversation",
           method: "post",
         },
       );
       e.preventDefault();
+      setContent("");
+      setTitle("");
     },
     [content],
   );
@@ -71,9 +74,13 @@ export const ConversationNew = ({
             <div className="flex h-full w-full flex-col items-start justify-start overflow-y-auto p-4">
               <div className="flex w-full flex-col items-center">
                 <div className="w-full max-w-[90ch]">
-                  <h1 className="mx-1 mb-4 text-left text-[32px] font-medium">
+                  <h1 className="mx-1 text-left text-[32px] font-medium">
                     Hello <span className="text-primary">{user.name}</span>
                   </h1>
+
+                  <p className="text-muted-foreground mx-1 mb-4">
+                    Demo UI: basic conversation to showcase memory integration.
+                  </p>
                   <div className="bg-background-3 border-border rounded-lg border-1 py-2">
                     <EditorRoot>
                       <EditorContent
@@ -82,7 +89,7 @@ export const ConversationNew = ({
                         extensions={[
                           Placeholder.configure({
                             placeholder: () => {
-                              return "Ask sol...";
+                              return "Ask CORE...";
                             },
                             includeChildren: true,
                           }),
@@ -113,6 +120,7 @@ export const ConversationNew = ({
                                 );
 
                                 setContent("");
+                                setTitle("");
                               }
                               return true;
                             }
@@ -125,7 +133,9 @@ export const ConversationNew = ({
                         )}
                         onUpdate={({ editor }: { editor: any }) => {
                           const html = editor.getHTML();
+                          const text = editor.getText();
                           setContent(html);
+                          setTitle(text);
                         }}
                       />
                     </EditorRoot>

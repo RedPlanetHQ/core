@@ -18,8 +18,3 @@ export class APIKeyParams {
   "header_name": string;
   "format": string;
 }
-
-export class Spec {
-  auth: Record<string, OAuth2Params | APIKeyParams>;
-  other_data?: any;
-}

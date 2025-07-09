@@ -2,22 +2,23 @@
 
 import { integrationCreate } from './account-create';
 import { createActivityEvent } from './create-activity';
-import { IntegrationCLI } from './common/IntegrationCLI';
-import { IntegrationEventPayload, Spec } from '@echo/core-types';
+import {
+  IntegrationCLI,
+  IntegrationEventPayload,
+  IntegrationEventType,
+  Spec,
+} from '@redplanethq/sdk';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
-    case 'SETUP':
+    case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody, eventPayload.integrationDefinition);
 
-    case 'IDENTIFY':
+    case IntegrationEventType.IDENTIFY:
       return eventPayload.eventBody.event.user;
 
-    case 'PROCESS':
+    case IntegrationEventType.PROCESS:
       return createActivityEvent(eventPayload.eventBody, eventPayload.config);
-
-    case 'SYNC':
-      return { message: 'Scheduled sync completed successfully' };
 
     default:
       return {
@@ -38,45 +39,45 @@ class SlackCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: "Slack extension",
-      key: "slack",
-      description: "Connect your workspace to Slack. Run your workflows from slack bookmarks",
-      icon: "slack",
+      name: 'Slack extension',
+      key: 'slack',
+      description: 'Connect your workspace to Slack. Run your workflows from slack bookmarks',
+      icon: 'slack',
       mcp: {
-        command: "npx",
-        args: ["-y", "@modelcontextprotocol/server-slack"],
+        command: 'npx',
+        args: ['-y', '@modelcontextprotocol/server-slack'],
         env: {
-          "SLACK_BOT_TOKEN": "${config:access_token}",
-          "SLACK_TEAM_ID": "${config:team_id}",
-          "SLACK_CHANNEL_IDS": "${config:channel_ids}"
-        }
+          SLACK_BOT_TOKEN: '${config:access_token}',
+          SLACK_TEAM_ID: '${config:team_id}',
+          SLACK_CHANNEL_IDS: '${config:channel_ids}',
+        },
       },
       auth: {
         OAuth2: {
-          token_url: "https://slack.com/api/oauth.v2.access",
-          authorization_url: "https://slack.com/oauth/v2/authorize",
+          token_url: 'https://slack.com/api/oauth.v2.access',
+          authorization_url: 'https://slack.com/oauth/v2/authorize',
           scopes: [
-            "stars:read",
-            "team:read",
-            "stars:write",
-            "users:read",
-            "channels:read",
-            "groups:read",
-            "im:read",
-            "im:history",
-            "mpim:read",
-            "mpim:write",
-            "mpim:history",
-            "channels:history",
-            "chat:write",
-            "reactions:read",
-            "reactions:write",
-            "users.profile:read"
+            'stars:read',
+            'team:read',
+            'stars:write',
+            'users:read',
+            'channels:read',
+            'groups:read',
+            'im:read',
+            'im:history',
+            'mpim:read',
+            'mpim:write',
+            'mpim:history',
+            'channels:history',
+            'chat:write',
+            'reactions:read',
+            'reactions:write',
+            'users.profile:read',
           ],
-          scope_identifier: "user_scope",
-          scope_separator: ","
-        }
-      }
+          scope_identifier: 'user_scope',
+          scope_separator: ',',
+        },
+      },
     };
   }
 }

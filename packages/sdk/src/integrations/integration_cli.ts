@@ -1,11 +1,10 @@
 import { Command } from 'commander';
-import { 
-  IntegrationEventPayload, 
-  Spec, 
-  Config,
-  Identifier,
-  Message 
-} from '@echo/core-types';
+import {
+  IntegrationEventPayload,
+  Spec,
+  Message,
+  IntegrationEventType,
+} from '@core/types';
 
 export abstract class IntegrationCLI {
   protected program: Command;
@@ -32,28 +31,35 @@ export abstract class IntegrationCLI {
   }
 
   private setupAccountCommands(): void {
-    const accountCmd = this.program
-      .command('account')
-      .description(`Manage ${this.integrationName} integration accounts`);
-
-    accountCmd
-      .command('create')
-      .description(`Create a new ${this.integrationName} integration account`)
-      .requiredOption('--oauth-response <response>', 'OAuth response JSON')
+    this.program
+      .command('setup')
+      .description(`Set up a new ${this.integrationName} integration account`)
+      .requiredOption(
+        '--event-body <body>',
+        'Event body JSON (e.g. OAuth response or setup data)',
+      )
+      .requiredOption(
+        '--integration-definition <definition>',
+        'Integration definition JSON',
+      )
       .action(async (options) => {
         try {
-          const oauthResponse = JSON.parse(options.oauthResponse);
-          const integrationDefinition = JSON.parse(options.integrationDefinition);
+          const eventBody = JSON.parse(options.eventBody);
+          const integrationDefinition = JSON.parse(
+            options.integrationDefinition,
+          );
 
-          const result = await this.handleEvent({
-            event: 'INTEGRATION_ACCOUNT_CREATED',
-            eventBody: { oauthResponse },
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.SETUP,
+            eventBody,
             integrationDefinition,
           });
 
-          console.log('Account created successfully:', JSON.stringify(result, null, 2));
+          for (const message of messages) {
+            console.log(JSON.stringify(message, null, 2));
+          }
         } catch (error) {
-          console.error('Error creating account:', error);
+          console.error('Error during setup:', error);
           process.exit(1);
         }
       });
@@ -70,17 +76,15 @@ export abstract class IntegrationCLI {
           const eventData = JSON.parse(options.eventData);
           const config = JSON.parse(options.config);
 
-          const result = await this.handleEvent({
-            event: 'PROCESS',
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.PROCESS,
             eventBody: { eventData },
             config,
           });
 
-          const message: Message = {
-            type: 'data',
-            data: result
-          };
-          console.log(JSON.stringify(message, null, 2));
+          for (const message of messages) {
+            console.log(JSON.stringify(message, null, 2));
+          }
         } catch (error) {
           console.error('Error processing data:', error);
           process.exit(1);
@@ -95,16 +99,14 @@ export abstract class IntegrationCLI {
         try {
           const webhookData = JSON.parse(options.webhookData);
 
-          const result = await this.handleEvent({
-            event: 'IDENTIFY',
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.IDENTIFY,
             eventBody: webhookData,
           });
 
-          const message: Message = {
-            type: 'identifier',
-            data: result
-          };
-          console.log(JSON.stringify(message, null, 2));
+          for (const message of messages) {
+            console.log(JSON.stringify(message, null, 2));
+          }
         } catch (error) {
           console.error('Error identifying account:', error);
           process.exit(1);
@@ -121,8 +123,9 @@ export abstract class IntegrationCLI {
           const spec = await this.getSpec();
           const message: Message = {
             type: 'spec',
-            data: spec
+            data: spec,
           };
+          // For spec, we keep the single message output for compatibility
           console.log(JSON.stringify(message, null, 2));
         } catch (error) {
           console.error('Error getting spec:', error);
@@ -136,21 +139,22 @@ export abstract class IntegrationCLI {
       .command('sync')
       .description('Perform scheduled sync')
       .requiredOption('--config <config>', 'Integration configuration JSON')
+      .option('--state <state>', 'Integration state JSON', '{}')
       .action(async (options) => {
         try {
           const config = JSON.parse(options.config);
+          const state = options.state ? JSON.parse(options.state) : {};
 
-          const result = await this.handleEvent({
-            event: 'SYNC',
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.SYNC,
             eventBody: {},
             config,
+            state,
           });
 
-          const message: Message = {
-            type: 'data',
-            data: result
-          };
-          console.log(JSON.stringify(message, null, 2));
+          for (const message of messages) {
+            console.log(JSON.stringify(message, null, 2));
+          }
         } catch (error) {
           console.error('Error during sync:', error);
           process.exit(1);
@@ -161,8 +165,11 @@ export abstract class IntegrationCLI {
   /**
    * Abstract method that must be implemented by each integration
    * This method should handle the integration-specific logic for each event type
+   * and return an array of Message objects.
    */
-  protected abstract handleEvent(eventPayload: IntegrationEventPayload): Promise<any>;
+  protected abstract handleEvent(
+    eventPayload: IntegrationEventPayload,
+  ): Promise<Message[]>;
 
   /**
    * Abstract method that must be implemented by each integration

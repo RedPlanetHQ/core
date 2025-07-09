@@ -1,5 +1,4 @@
-import { openai } from "@ai-sdk/openai";
-import { type CoreMessage, embed } from "ai";
+import { type CoreMessage } from "ai";
 import {
   type AddEpisodeParams,
   type EntityNode,
@@ -35,39 +34,16 @@ import {
   saveTriple,
   searchStatementsByEmbedding,
 } from "./graphModels/statement";
-import { makeModelCall } from "~/lib/model.server";
+import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import { Apps, getNodeTypes, getNodeTypesString } from "~/utils/presets/nodes";
 import { normalizePrompt } from "./prompts";
-import { env } from "~/env.server";
-import { createOllama } from "ollama-ai-provider";
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
 
 export class KnowledgeGraphService {
-  async getEmbedding(text: string, useOpenAI = false) {
-    if (useOpenAI) {
-      // Use OpenAI embedding model when explicitly requested
-      const { embedding } = await embed({
-        model: openai.embedding("text-embedding-3-small"),
-        value: text,
-      });
-      return embedding;
-    }
-
-    // Default to using Ollama
-    const ollamaUrl = env.OLLAMA_URL;
-    const model = env.EMBEDDING_MODEL;
-
-    const ollama = createOllama({
-      baseURL: ollamaUrl,
-    });
-    const { embedding } = await embed({
-      model: ollama.embedding(model),
-      value: text,
-    });
-
-    return embedding;
+  async getEmbedding(text: string) {
+    return getEmbedding(text);
   }
 
   /**

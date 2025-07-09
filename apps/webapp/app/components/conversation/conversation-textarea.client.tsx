@@ -43,9 +43,7 @@ export function ConversationTextarea({
       return;
     }
 
-    const data = isLoading
-      ? {}
-      : { message: text, title: text, conversationId };
+    const data = isLoading ? {} : { message: text, conversationId };
 
     submit(data as any, {
       action: isLoading

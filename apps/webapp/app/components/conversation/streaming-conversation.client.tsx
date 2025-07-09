@@ -1,13 +1,8 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 import React from "react";
-import { Document } from "@tiptap/extension-document";
-import HardBreak from "@tiptap/extension-hard-break";
-import { History } from "@tiptap/extension-history";
-import { Paragraph } from "@tiptap/extension-paragraph";
-import { Text } from "@tiptap/extension-text";
 
 import { useTriggerStream } from "./use-trigger-stream";
-import { Placeholder } from "novel";
+import { extensionsForConversation } from "./editor-extensions";
 
 interface StreamingConversationProps {
   runId: string;
@@ -41,15 +36,7 @@ export const StreamingConversation = ({
   ];
 
   const messagesEditor = useEditor({
-    extensions: [
-      Placeholder,
-      Document,
-      Paragraph,
-      Text,
-      HardBreak.configure({
-        keepMarks: true,
-      }),
-    ],
+    extensions: [...extensionsForConversation],
     editable: false,
     content: "",
   });
@@ -94,7 +81,7 @@ export const StreamingConversation = ({
           {message ? (
             <EditorContent
               editor={messagesEditor}
-              className="text-foreground"
+              className="text-foreground editor-container"
             />
           ) : (
             <div className="text-foreground italic">{loadingText}</div>

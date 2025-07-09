@@ -2,6 +2,7 @@ import { LLMMappings, LLMModelEnum } from "@core/types";
 import {
   type CoreMessage,
   type LanguageModelV1,
+  embed,
   generateText,
   streamText,
 } from "ai";
@@ -76,4 +77,30 @@ export async function makeModelCall(
   onFinish(text, finalModel);
 
   return text;
+}
+
+export async function getEmbedding(text: string) {
+  const ollamaUrl = env.OLLAMA_URL;
+
+  if (!ollamaUrl) {
+    // Use OpenAI embedding model when explicitly requested
+    const { embedding } = await embed({
+      model: openai.embedding("text-embedding-3-small"),
+      value: text,
+    });
+    return embedding;
+  }
+
+  // Default to using Ollama
+  const model = env.EMBEDDING_MODEL;
+
+  const ollama = createOllama({
+    baseURL: ollamaUrl,
+  });
+  const { embedding } = await embed({
+    model: ollama.embedding(model),
+    value: text,
+  });
+
+  return embedding;
 }

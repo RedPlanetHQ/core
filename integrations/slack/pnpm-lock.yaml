@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      '@redplanethq/sdk':
+        specifier: 0.1.0
+        version: 0.1.0
       axios:
         specifier: ^1.7.9
         version: 1.9.0
@@ -489,6 +492,10 @@ packages:
     resolution: {integrity: sha512-ROFF39F6ZrnzSUEmQQZUar0Jt4xVoP9WnDRdWwF4NNcXs3xBTLgBUDoOwW141y1jP+S8nahIbdxbFC7IShw9Iw==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
+  '@redplanethq/sdk@0.1.0':
+    resolution: {integrity: sha512-RmPfT9XESjTSMLlAMkolZEF28PvGo5hlwrG75JQy1tAZkvaTHzC7A2mEAMbsBvOMrJuUztL3NtCmVF//C/C/+A==}
+    engines: {node: '>=18.0.0'}
+
   '@rollup/plugin-commonjs@28.0.3':
     resolution: {integrity: sha512-pyltgilam1QPdn+Zd9gaCfOLcnjMEJ9gV+bTw6/r73INdvzf1ah9zLIJBm+kW7R6IUFIQ1YO+VqZtYxZNWFPEQ==}
     engines: {node: '>=16.0.0 || 14 >= 14.17'}
@@ -900,6 +907,10 @@ packages:
   commander@12.1.0:
     resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
     engines: {node: '>=18'}
+
+  commander@14.0.0:
+    resolution: {integrity: sha512-2uM9rYjPvyq39NwLRqaiLtWHyDC1FvryJDa2ATTVims5YAS4PupsEQsDvP14FqhFr0P49CYDugi59xaxJlTXRA==}
+    engines: {node: '>=20'}
 
   commander@2.20.3:
     resolution: {integrity: sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==}
@@ -2894,6 +2905,10 @@ snapshots:
 
   '@pkgr/core@0.2.4': {}
 
+  '@redplanethq/sdk@0.1.0':
+    dependencies:
+      commander: 14.0.0
+
   '@rollup/plugin-commonjs@28.0.3(rollup@4.40.2)':
     dependencies:
       '@rollup/pluginutils': 5.1.4(rollup@4.40.2)
@@ -3319,6 +3334,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   commander@12.1.0: {}
+
+  commander@14.0.0: {}
 
   commander@2.20.3: {}
 

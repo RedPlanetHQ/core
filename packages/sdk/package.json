@@ -1,7 +1,7 @@
 {
-  "name": "@redplanethq/sol-sdk",
-  "version": "0.2.18",
-  "description": "Sol Node.JS SDK",
+  "name": "@redplanethq/sdk",
+  "version": "0.1.0",
+  "description": "CORE Node.JS SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "module": "./dist/index.mjs",
@@ -29,6 +29,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "commander": "14.0.0"
   },
   "devDependencies": {
     "@core/types": "workspace:*",
@@ -44,6 +45,5 @@
   },
   "engines": {
     "node": ">=18.0.0"
-  },
-  "packageManager": "pnpm@10.3.0"
+  }
 }

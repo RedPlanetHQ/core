@@ -41,8 +41,8 @@ export default function Home() {
       <SidebarInset className="bg-background h-[100vh] py-2 pr-2">
         <div className="bg-background-2 h-full rounded-md">
           <SiteHeader />
-          <div className="flex flex-1 flex-col">
-            <div className="@container/main flex flex-1 flex-col gap-2">
+          <div className="flex h-[calc(100vh_-_60px)] flex-col">
+            <div className="@container/main flex h-full flex-col gap-2">
               <div className="flex h-full flex-col">
                 <Outlet />
               </div>

@@ -1,6 +1,4 @@
-import { openai } from "@ai-sdk/openai";
 import type { StatementNode } from "@core/types";
-import { embed } from "ai";
 import { logger } from "./logger.service";
 import { applyCrossEncoderReranking, applyWeightedRRF } from "./search/rerank";
 import {
@@ -9,6 +7,7 @@ import {
   performBM25Search,
   performVectorSearch,
 } from "./search/utils";
+import { getEmbedding } from "~/lib/model.server";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -16,12 +15,7 @@ import {
  */
 export class SearchService {
   async getEmbedding(text: string) {
-    const { embedding } = await embed({
-      model: openai.embedding("text-embedding-3-small"),
-      value: text,
-    });
-
-    return embedding;
+    return getEmbedding(text);
   }
 
   /**

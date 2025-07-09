@@ -23,7 +23,7 @@ export const createConversationTitle = task({
       () => {},
       undefined,
       "",
-      LLMMappings.CLAUDESONNET,
+      LLMMappings.GPT41,
     );
 
     for await (const chunk of gen) {
