@@ -447,3 +447,55 @@ export function getNodeTypesString(apps: Array<keyof typeof APP_NODE_TYPES>) {
 export function getNodeAttributesString(
   apps: Array<keyof typeof APP_NODE_TYPES>,
 ) {}
+
+/**
+ * Check if a type is a preset type (from GENERAL_NODE_TYPES or APP_NODE_TYPES)
+ */
+export function isPresetType(
+  type: string,
+  apps: Array<keyof typeof APP_NODE_TYPES> = [],
+): boolean {
+  // Check general types
+  const generalTypes = Object.keys(GENERAL_NODE_TYPES).map(
+    (key) => GENERAL_NODE_TYPES[key as keyof typeof GENERAL_NODE_TYPES].name,
+  );
+
+  if (generalTypes.includes(type as any)) {
+    return true;
+  }
+
+  // Check app-specific types
+  for (const app of apps) {
+    const appTypes = Object.keys(APP_NODE_TYPES[app] || {}).map(
+      (key) =>
+        APP_NODE_TYPES[app][key as keyof (typeof APP_NODE_TYPES)[typeof app]]
+          .name,
+    );
+    if (appTypes.includes(type as any)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Get all preset types for given apps
+ */
+export function getAllPresetTypes(
+  apps: Array<keyof typeof APP_NODE_TYPES> = [],
+): string[] {
+  const generalTypes = Object.keys(GENERAL_NODE_TYPES).map(
+    (key) => GENERAL_NODE_TYPES[key as keyof typeof GENERAL_NODE_TYPES].name,
+  );
+
+  const appTypes = apps.flatMap((app) =>
+    Object.keys(APP_NODE_TYPES[app] || {}).map(
+      (key) =>
+        APP_NODE_TYPES[app][key as keyof (typeof APP_NODE_TYPES)[typeof app]]
+          .name,
+    ),
+  );
+
+  return [...generalTypes, ...appTypes];
+}

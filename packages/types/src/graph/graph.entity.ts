@@ -29,9 +29,10 @@ export interface EpisodicNode {
 export interface EntityNode {
   uuid: string;
   name: string;
-  type: string;
+  type: string; // Single type - either from presets or custom
   attributes: Record<string, any>;
   nameEmbedding: number[];
+  typeEmbedding: number[];
   createdAt: Date;
   userId: string;
   space?: string;
@@ -82,3 +83,13 @@ export type AddEpisodeResult = {
   statementsCreated: number;
   processingTimeMs: number;
 };
+
+export interface ExtractedTripleData {
+  source: string;
+  sourceType: string;
+  predicate: string;
+  target: string;
+  targetType: string;
+  fact: string;
+  attributes?: Record<string, any>;
+}

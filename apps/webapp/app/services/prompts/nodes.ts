@@ -26,20 +26,37 @@ You are given a conversation context and a CURRENT EPISODE. Your task is to extr
    - For pronouns that refer to named entities, extract them as separate Alias entities.
 
 2. **Entity Classification**:
-   - CRITICAL: You MUST ONLY use entity types provided in the ENTITY_TYPES section.
-   - Use the descriptions in ENTITY TYPES to classify each extracted entity.
-   - Assign the appropriate type for each one.
-   - Classify pronouns (I, me, you, etc.) as "ALIAS" entities.
-   - DO NOT invent new entity types that are not in the ENTITY_TYPES section.
+   - Prefer using appropriate types from the ENTITY_TYPES section when they fit naturally.
+   - DO NOT force-fit entities into inappropriate types from ENTITY_TYPES.
+   - If no type from ENTITY_TYPES fits naturally, create a descriptive type based on context (e.g., "memory_graph_system", "authentication_bug").
+   - Each entity should have exactly ONE type that best describes what it is.
+   - Classify pronouns (I, me, you, etc.) as "Alias" entities.
 
 3. **Exclusions**:
    - Do NOT extract entities representing relationships or actions (predicates will be handled separately).
    - Do NOT extract dates, times, or other temporal information—these will be handled separately.
 
-4. **Formatting**:
-   - Be **explicit and unambiguous** in naming entities (e.g., use full names when available).
-   - For pronouns, use the exact form as they appear in the text (e.g., "I", "me", "you").
+4. **Entity Name Extraction**:
+   - Extract ONLY the core entity name, WITHOUT any type descriptors or qualifiers
+   - When text mentions "Tesla car", extract name as "Tesla" with type "Vehicle" 
+   - When text mentions "John's company", extract name as "John" with type "Person" (company is a separate entity)
+   - **CLEAN NAMES**: Remove type words like "app", "system", "platform", "tool", "service", "company", "organization" from the entity name
+   - **PRONOUNS**: Use exact form as they appear (e.g., "I", "me", "you") and classify as "Alias"
+   - **FULL NAMES**: Use complete names when available (e.g., "John Smith" not "John")
+   - **NO TYPE SUFFIXES**: Never append the entity type to the entity name
 
+## Examples of Correct Entity Extraction:
+
+**CORRECT Examples:**
+- Text: "Tesla car" → Name: "Tesla", Type: "Vehicle"
+- Text: "Google's search engine" → Name: "Google", Type: "Company" + Name: "Search Engine", Type: "Product"
+- Text: "Microsoft Office suite" → Name: "Microsoft Office", Type: "Software"
+- Text: "John's startup company" → Name: "John", Type: "Person" + Name: "Startup", Type: "Company"
+
+**INCORRECT Examples:**
+- Text: "Tesla car" → ❌ Name: "Tesla car", Type: "Vehicle"
+- Text: "authentication system" → ❌ Name: "authentication system", Type: "System"
+- Text: "payment service" → ❌ Name: "payment service", Type: "Service"
 
 Format your response as a JSON object with the following structure:
 <output>
@@ -98,17 +115,37 @@ You are given a TEXT. Your task is to extract **entity nodes** mentioned **expli
    - For pronouns that refer to named entities, extract them as separate Alias entities.
 
 2. **Entity Classification**:
-   - Use the descriptions in ENTITY TYPES to classify each extracted entity.
-   - Assign the appropriate type for each one.
-   - Classify pronouns (I, me, you, etc.) as Alias entities.
+   - Prefer using appropriate types from the ENTITY_TYPES section when they fit naturally.
+   - DO NOT force-fit entities into inappropriate types from ENTITY_TYPES.
+   - If no type from ENTITY_TYPES fits naturally, create a descriptive type based on context.
+   - Each entity should have exactly ONE type that best describes what it is.
+   - Classify pronouns (I, me, you, etc.) as "Alias" entities.
 
 3. **Exclusions**:
    - Do NOT extract entities representing relationships or actions (predicates will be handled separately).
    - Do NOT extract dates, times, or other temporal information—these will be handled separately.
 
-4. **Formatting**:
-   - Be **explicit and unambiguous** when naming entities (e.g., use full names when available).
-   - For pronouns, use the exact form as they appear in the text (e.g., "I", "me", "you").
+4. **Entity Name Extraction**:
+   - Extract ONLY the core entity name, WITHOUT any type descriptors or qualifiers
+   - When text mentions "Tesla car", extract name as "Tesla" with type "Vehicle" 
+   - When text mentions "John's company", extract name as "John" with type "Person" (company is a separate entity)
+   - **CLEAN NAMES**: Remove type words like "app", "system", "platform", "tool", "service", "company", "organization" from the entity name
+   - **PRONOUNS**: Use exact form as they appear (e.g., "I", "me", "you") and classify as "Alias"
+   - **FULL NAMES**: Use complete names when available (e.g., "John Smith" not "John")
+   - **NO TYPE SUFFIXES**: Never append the entity type to the entity name
+
+## Examples of Correct Entity Extraction:
+
+**CORRECT Examples:**
+- Text: "Tesla car" → Name: "Tesla", Type: "Vehicle"
+- Text: "Google's search engine" → Name: "Google", Type: "Company" + Name: "Search Engine", Type: "Product"
+- Text: "Microsoft Office suite" → Name: "Microsoft Office", Type: "Software"
+- Text: "John's startup company" → Name: "John", Type: "Person" + Name: "Startup", Type: "Company"
+
+**INCORRECT Examples:**
+- Text: "Tesla car" → ❌ Name: "Tesla car", Type: "Vehicle"
+- Text: "authentication system" → ❌ Name: "authentication system", Type: "System"
+- Text: "payment service" → ❌ Name: "payment service", Type: "Service"
 
 Format your response as a JSON object with the following structure:
 <output>
@@ -167,7 +204,10 @@ Guidelines:
 1. Extract significant entities, concepts, or actors mentioned in the content.
 2. Avoid creating nodes for relationships or actions.
 3. Avoid creating nodes for temporal information like dates, times or years (these will be added to edges later).
-4. Be as explicit as possible in your node names, using full names and avoiding abbreviations.
+4. **CLEAN ENTITY NAMES**: Extract ONLY the core entity name WITHOUT type descriptors:
+   - "Tesla car" → Name: "Tesla", Type: "Vehicle"
+   - Remove words like "app", "system", "platform", "tool", "service", "company" from entity names
+5. Use full names when available and avoid abbreviations.
 
 ${context.customPrompt || ""}
 `;
@@ -186,7 +226,17 @@ export const dedupeNodes = (context: Record<string, any>): CoreMessage[] => {
     {
       role: "system",
       content: `You are a helpful assistant who determines whether or not ENTITIES extracted from a conversation are duplicates of existing entities.
-      
+
+## CRITICAL RULE: Entity Type Matters
+DO NOT mark entities with different types as duplicates, even if they have identical names.
+- DO NOT mark "John" (Person) and "John" (Company) as duplicates
+- DO NOT mark "Apple" (Company) and "Apple" (Fruit) as duplicates  
+- DO NOT mark "Core" (App) and "Core" (Concept) as duplicates
+
+Consider entities as potential duplicates ONLY if they have:
+1. Similar or identical names AND
+2. The EXACT SAME entity type
+
 Each entity in ENTITIES is represented as a JSON object with the following structure:
 {
     id: integer id of the entity,
@@ -203,18 +253,55 @@ Each entity in ENTITIES is represented as a JSON object with the following struc
     ]
 }
 
-For each of the above ENTITIES, determine if the entity is a duplicate of any of its duplication candidates.
-Entities should only be considered duplicates if they refer to the *same real-world object or concept*.
-Do NOT mark entities as duplicates if:
-- They are related but distinct.
-- They have similar names or purposes but refer to separate instances or concepts.
+## Duplication Decision Rules
+For each entity, determine if it is a duplicate of any of its duplication candidates:
 
-Task:
-Your response must be a JSON object with an "entity_resolutions" array containing one entry for each entity.
+### MARK AS DUPLICATE (duplicate_idx >= 0) when:
+- Verify the candidate has the SAME entity_type as the current entity
+- AND confirm the entities refer to the same real-world object or concept
+- AND check that the names are very similar or identical
+
+### SPECIAL RULE FOR PREDICATES:
+**ALWAYS mark identical predicates as duplicates** - predicates are universal and reusable:
+- Mark "is associated with" (Predicate) vs "is associated with" (Predicate) → duplicate_idx = 0 ✓
+- Mark "works for" (Predicate) vs "works for" (Predicate) → duplicate_idx = 0 ✓
+- Mark "owns" (Predicate) vs "owns" (Predicate) → duplicate_idx = 0 ✓
+
+### DO NOT mark as duplicate (duplicate_idx = -1) when:
+- Confirm the candidate has a DIFFERENT entity_type (even with identical names)
+- Identify they are related but distinct entities
+- Recognize they have similar names or purposes but refer to separate instances or concepts
+- Distinguish when one is a general concept and the other is a specific instance
+- **EXCEPTION**: DO NOT apply this rule to Predicates - always deduplicate identical predicates
+
+## Examples:
+
+**CORRECT - Mark as NOT Duplicates (Different Types):**
+- Set "Tesla" (Company) vs "Tesla" (Car) → duplicate_idx = -1
+- Set "Apple" (Company) vs "Apple" (Fruit) → duplicate_idx = -1
+- Set "Core" (App) vs "Core" (System) → duplicate_idx = -1
+
+**CORRECT - Mark Predicates AS Duplicates (Same Name, Same Type):**
+- Set "is associated with" (Predicate) vs "is associated with" (Predicate) → duplicate_idx = 0
+- Set "works for" (Predicate) vs "works for" (Predicate) → duplicate_idx = 0
+- Set "owns" (Predicate) vs "owns" (Predicate) → duplicate_idx = 0
+
+**CORRECT - Evaluate Potential Duplicates (Same Type):**
+- Check if "John Smith" (Person) vs "John Smith" (Person) refer to same person
+- Check if "Microsoft" (Company) vs "Microsoft Corporation" (Company) are the same company
+- Check if "iPhone" (Product) vs "Apple iPhone" (Product) are the same product
+
+**CORRECT - Mark as NOT Duplicates (Same Type, Different Instances):**
+- Set "Meeting" (Event) vs "Meeting" (Event) → duplicate_idx = -1 (different meetings)
+- Set "Project" (Task) vs "Project" (Task) → duplicate_idx = -1 (different projects)
+- **NOTE**: DO NOT apply this rule to Predicates - always deduplicate identical predicates
+
+## Task:
+Provide your response as a JSON object with an "entity_resolutions" array containing one entry for each entity.
 
 For each entity, include:
 - "id": the id of the entity (integer)
-- "name": the name of the entity (string)
+- "name": the name of the entity (string)  
 - "duplicate_idx": the index of the duplicate candidate, or -1 if no duplicate (integer)
 
 Format your response as follows:
@@ -231,10 +318,12 @@ Format your response as follows:
 }
 </output>
 
-Notes:
-- If an entity is a duplicate of one of its duplication_candidates, set duplicate_idx to the idx of that candidate.
-- If an entity is not a duplicate of any candidate, set duplicate_idx to -1.
-- Always include all entities from the input in your response.
+## Important Instructions:
+- FIRST check if entity types match before considering any duplication
+- If entity types don't match, immediately set duplicate_idx = -1
+- Only mark entities with identical types as potential duplicates
+- When in doubt, prefer NOT marking as duplicate (duplicate_idx = -1)
+- Always include all entities from the input in your response
 - Always wrap the output in these tags <output> </output>
     `,
     },

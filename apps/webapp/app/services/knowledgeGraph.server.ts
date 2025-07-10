@@ -1,5 +1,6 @@
 import { type CoreMessage } from "ai";
 import {
+  type ExtractedTripleData,
   type AddEpisodeParams,
   type EntityNode,
   type EpisodicNode,
@@ -20,11 +21,14 @@ import {
 } from "./prompts/statements";
 import {
   getRecentEpisodes,
+  getRelatedEpisodesEntities,
   searchEpisodesByEmbedding,
 } from "./graphModels/episode";
 import {
   findExactPredicateMatches,
   findSimilarEntities,
+  findSimilarEntitiesWithSameType,
+  replaceEntityReferences,
 } from "./graphModels/entity";
 import {
   findContradictoryStatements,
@@ -35,7 +39,13 @@ import {
   searchStatementsByEmbedding,
 } from "./graphModels/statement";
 import { getEmbedding, makeModelCall } from "~/lib/model.server";
-import { Apps, getNodeTypes, getNodeTypesString } from "~/utils/presets/nodes";
+import {
+  Apps,
+  getNodeTypes,
+  getNodeTypesString,
+  isPresetType,
+  getAllPresetTypes,
+} from "~/utils/presets/nodes";
 import { normalizePrompt } from "./prompts";
 
 // Default number of previous episodes to retrieve for context
@@ -72,6 +82,12 @@ export class KnowledgeGraphService {
         params.userId,
       );
 
+      const relatedEpisodesEntities = await getRelatedEpisodesEntities({
+        embedding: await this.getEmbedding(normalizedEpisodeBody),
+        userId: params.userId,
+        minSimilarity: 0.7,
+      });
+
       if (normalizedEpisodeBody === "NOTHING_TO_REMEMBER") {
         logger.log("Nothing to remember");
         return;
@@ -99,10 +115,20 @@ export class KnowledgeGraphService {
         previousEpisodes,
       );
 
+      // Step 3.1: Context-aware entity resolution with preset type evolution
+      await this.resolveEntitiesWithContext(
+        extractedNodes,
+        relatedEpisodesEntities,
+      );
+
+      // Step 3.2: Handle preset type logic - expand entities for statement extraction
+      const entitiesForStatementExtraction =
+        await this.expandEntitiesForStatements(extractedNodes, episode);
+
       // Step 4: Statement Extraction - Extract statements (triples) instead of direct edges
       const extractedStatements = await this.extractStatements(
         episode,
-        extractedNodes,
+        entitiesForStatementExtraction,
         previousEpisodes,
       );
 
@@ -126,9 +152,21 @@ export class KnowledgeGraphService {
       for (const triple of updatedTriples) {
         const { subject, predicate, object, statement, provenance } = triple;
         const safeTriple = {
-          subject: { ...subject, nameEmbedding: undefined },
-          predicate: { ...predicate, nameEmbedding: undefined },
-          object: { ...object, nameEmbedding: undefined },
+          subject: {
+            ...subject,
+            nameEmbedding: undefined,
+            typeEmbedding: undefined,
+          },
+          predicate: {
+            ...predicate,
+            nameEmbedding: undefined,
+            typeEmbedding: undefined,
+          },
+          object: {
+            ...object,
+            nameEmbedding: undefined,
+            typeEmbedding: undefined,
+          },
           statement: { ...statement, factEmbedding: undefined },
           provenance: { ...provenance, contentEmbedding: undefined },
         };
@@ -206,9 +244,8 @@ export class KnowledgeGraphService {
           name: entity.name,
           type: entity.type,
           attributes: entity.attributes || {},
-          nameEmbedding: await this.getEmbedding(
-            `${entity.type}: ${entity.name}`,
-          ),
+          nameEmbedding: await this.getEmbedding(entity.name),
+          typeEmbedding: await this.getEmbedding(entity.type),
           createdAt: new Date(),
           userId: episode.userId,
         })),
@@ -257,7 +294,8 @@ export class KnowledgeGraphService {
     }
 
     // Parse the statements from the LLM response
-    const extractedTriples = JSON.parse(responseText || "{}").edges || [];
+    const extractedTriples: ExtractedTripleData[] =
+      JSON.parse(responseText || "{}").edges || [];
 
     // Create maps to deduplicate entities by name within this extraction
     const predicateMap = new Map<string, EntityNode>();
@@ -272,9 +310,8 @@ export class KnowledgeGraphService {
           name: triple.predicate,
           type: "Predicate",
           attributes: {},
-          nameEmbedding: await this.getEmbedding(
-            `Predicate: ${triple.predicate}`,
-          ),
+          nameEmbedding: await this.getEmbedding(triple.predicate),
+          typeEmbedding: await this.getEmbedding("Predicate"),
           createdAt: new Date(),
           userId: episode.userId,
         };
@@ -284,15 +321,18 @@ export class KnowledgeGraphService {
 
     // Convert extracted triples to Triple objects with Statement nodes
     const triples = await Promise.all(
-      // Fix: Type 'any'.
-      extractedTriples.map(async (triple: any) => {
-        // Find the subject and object nodes
+      extractedTriples.map(async (triple: ExtractedTripleData) => {
+        // Find the subject and object nodes by matching both name and type
         const subjectNode = extractedEntities.find(
-          (node) => node.name.toLowerCase() === triple.source.toLowerCase(),
+          (node) =>
+            node.name.toLowerCase() === triple.source.toLowerCase() &&
+            node.type.toLowerCase() === triple.sourceType.toLowerCase(),
         );
 
         const objectNode = extractedEntities.find(
-          (node) => node.name.toLowerCase() === triple.target.toLowerCase(),
+          (node) =>
+            node.name.toLowerCase() === triple.target.toLowerCase() &&
+            node.type.toLowerCase() === triple.targetType.toLowerCase(),
         );
 
         // Get the deduplicated predicate node
@@ -325,6 +365,89 @@ export class KnowledgeGraphService {
 
     // Filter out null values (where subject or object wasn't found)
     return triples.filter(Boolean) as Triple[];
+  }
+
+  /**
+   * Expand entities for statement extraction by adding existing preset entities
+   */
+  private async expandEntitiesForStatements(
+    extractedNodes: EntityNode[],
+    episode: EpisodicNode,
+  ): Promise<EntityNode[]> {
+    const allAppEnumValues = Object.values(Apps);
+    const expandedEntities = [...extractedNodes];
+
+    // For each extracted entity, check if we need to add existing preset entities
+    for (const entity of extractedNodes) {
+      const newIsPreset = isPresetType(entity.type, allAppEnumValues);
+
+      // Find similar entities with same name
+      const similarEntities = await findSimilarEntities({
+        queryEmbedding: entity.nameEmbedding,
+        limit: 5,
+        threshold: 0.7,
+        userId: episode.userId,
+      });
+
+      for (const existingEntity of similarEntities) {
+        const existingIsPreset = isPresetType(
+          existingEntity.type,
+          allAppEnumValues,
+        );
+
+        // If both are preset types, include both for statement extraction
+        if (newIsPreset && existingIsPreset) {
+          // Add the existing entity to the list if not already present
+          if (!expandedEntities.some((e) => e.uuid === existingEntity.uuid)) {
+            expandedEntities.push(existingEntity);
+          }
+        }
+      }
+    }
+
+    return expandedEntities;
+  }
+
+  /**
+   * Resolve entities with context-aware deduplication and preset type evolution
+   * Only merges entities that appear in semantically related episodes
+   */
+  private async resolveEntitiesWithContext(
+    extractedNodes: EntityNode[],
+    relatedEpisodesEntities: EntityNode[],
+  ): Promise<void> {
+    const allAppEnumValues = Object.values(Apps);
+
+    extractedNodes.map(async (newEntity) => {
+      // Find same-name entities in related episodes (contextually relevant)
+      const sameNameInContext = relatedEpisodesEntities.filter(
+        (existing) =>
+          existing.name.toLowerCase() === newEntity.name.toLowerCase(),
+      );
+
+      if (sameNameInContext.length > 0) {
+        let existingEntityIds: string[] = [];
+        sameNameInContext.forEach(async (existingEntity) => {
+          const newIsPreset = isPresetType(newEntity.type, allAppEnumValues);
+          const existingIsPreset = isPresetType(
+            existingEntity.type,
+            allAppEnumValues,
+          );
+
+          if (newIsPreset && !existingIsPreset) {
+            // New is preset, existing is custom - evolve existing entity to preset type
+            console.log(
+              `Evolving entity: ${existingEntity.name} from ${existingEntity.type} to ${newEntity.type}`,
+            );
+            existingEntityIds.push(existingEntity.uuid);
+          }
+        });
+
+        if (existingEntityIds.length > 0) {
+          await replaceEntityReferences(newEntity, existingEntityIds);
+        }
+      }
+    });
   }
 
   /**
@@ -398,8 +521,9 @@ export class KnowledgeGraphService {
     // Step 2a: Find similar entities for non-predicate entities
     const similarEntitiesResults = await Promise.all(
       nonPredicates.map(async (entity) => {
-        const similarEntities = await findSimilarEntities({
+        const similarEntities = await findSimilarEntitiesWithSameType({
           queryEmbedding: entity.nameEmbedding,
+          entityType: entity.type,
           limit: 5,
           threshold: 0.7,
           userId: episode.userId,
@@ -437,11 +561,6 @@ export class KnowledgeGraphService {
       ...exactPredicateResults,
     ];
 
-    // If no similar entities found for any entity, return original triples
-    if (allEntityResults.length === 0) {
-      return triples;
-    }
-
     // Step 3: Prepare context for LLM deduplication
     const dedupeContext = {
       extracted_nodes: allEntityResults.map((result, index) => ({
@@ -451,7 +570,7 @@ export class KnowledgeGraphService {
         duplication_candidates: result.similarEntities.map((candidate, j) => ({
           idx: j,
           name: candidate.name,
-          entity_types: candidate.type,
+          entity_type: candidate.type,
         })),
       })),
       episode_content: episode ? episode.content : "",

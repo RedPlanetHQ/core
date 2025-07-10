@@ -243,6 +243,7 @@ export async function getTripleForStatement({
     name: subjectProps.name,
     type: subjectProps.type,
     nameEmbedding: subjectProps.nameEmbedding,
+    typeEmbedding: subjectProps.typeEmbedding,
     attributes: subjectProps.attributesJson
       ? JSON.parse(subjectProps.attributesJson)
       : {},
@@ -255,6 +256,7 @@ export async function getTripleForStatement({
     name: predicateProps.name,
     type: predicateProps.type,
     nameEmbedding: predicateProps.nameEmbedding,
+    typeEmbedding: predicateProps.typeEmbedding,
     attributes: predicateProps.attributesJson
       ? JSON.parse(predicateProps.attributesJson)
       : {},
@@ -267,6 +269,7 @@ export async function getTripleForStatement({
     name: objectProps.name,
     type: objectProps.type,
     nameEmbedding: objectProps.nameEmbedding,
+    typeEmbedding: objectProps.typeEmbedding,
     attributes: objectProps.attributesJson
       ? JSON.parse(objectProps.attributesJson)
       : {},

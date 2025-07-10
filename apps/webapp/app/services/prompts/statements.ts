@@ -12,7 +12,7 @@ export const extractStatements = (
   return [
     {
       role: "system",
-      content: `You are a knowledge graph expert who extracts factual statements from text as subject-predicate-object triples.
+      content: `You are a knowledge graph expert who extracts NEW factual statements from text as subject-predicate-object triples.
 
 CRITICAL REQUIREMENT:
 - You MUST ONLY use entities from the AVAILABLE ENTITIES list as subjects and objects.
@@ -21,28 +21,60 @@ CRITICAL REQUIREMENT:
 - DO NOT create, invent, or modify any entity names.
 - NEVER create statements where the source and target are the same entity (no self-loops).
 
-Your task is to identify important facts from the provided text and represent them in a knowledge graph format.
+## PRIMARY MISSION: EXTRACT NEW RELATIONSHIPS
+Focus on extracting factual statements that ADD NEW VALUE to the knowledge graph:
+- **PRIORITIZE**: New relationships not already captured in previous episodes
+- **EMPHASIZE**: Connections between entities with same names but different types
+- **FILTER**: Avoid extracting facts already present in previous episodes
+- **EVOLVE**: Form relationships that enhance the existing knowledge structure
+
+Your task is to identify NEW important facts from the provided text and represent them in a knowledge graph format.
 
 Follow these instructions:
 
-1. First, carefully review the AVAILABLE ENTITIES list. These are the ONLY entities you can use as subjects and objects.
-2. Identify factual statements that can be expressed using ONLY these available entities.
-3. For each valid statement, provide:
+1. **ANALYZE PREVIOUS EPISODES**: Review previous episodes to understand what relationships already exist
+2. **REVIEW AVAILABLE ENTITIES**: Carefully examine the AVAILABLE ENTITIES list - these are the ONLY entities you can use as subjects and objects
+3. **IDENTIFY SAME-NAME ENTITIES**: Look for entities with identical names but different types - these often represent natural relationships that should be explicitly connected
+4. **EXTRACT NEW RELATIONSHIPS**: Identify factual statements that can be expressed using ONLY available entities AND are NOT already captured in previous episodes
+5. For each NEW valid statement, provide:
    - source: The subject entity (MUST be from AVAILABLE ENTITIES)
    - predicate: The relationship type (can be a descriptive phrase)
    - target: The object entity (MUST be from AVAILABLE ENTITIES)
 
-EXTRACT ALL MEANINGFUL RELATIONSHIPS:
-- Extract any meaningful relationship between available entities that's expressed in the text.
-- Use predicates that accurately describe the relationship between entities.
-- Be creative but precise in identifying relationships - don't miss important facts.
-- Common examples include (but are not limited to):
-  * Ownership or association (e.g., "Taylor Swift" "performs at" "Taylor Swift's concert")
-  * Participation or attendance (e.g., "John" "attends" "Conference")
-  * Personal connections (e.g., "John" "is friend of" "Max")
-  * Aliases (e.g., "John" "is also known as" "John Smith")
-  * Locations (e.g., "Company" "headquartered in" "City")
-  * Characteristics (e.g., "Product" "has feature" "Feature")
+EXTRACT NEW MEANINGFUL RELATIONSHIPS:
+- Extract meaningful relationships between available entities that are NOT already captured in previous episodes
+- Use predicates that accurately describe new relationships between entities
+- Be creative but precise in identifying NEW relationships - focus on value-adding connections
+- **HIGHEST PRIORITY**: Entities with identical names but different types MUST be connected with explicit relationship statements
+- **MANDATORY**: When you find entities like "John (Person)" and "John (Company)", create explicit relationships such as "John" "owns" "John" or "John" "founded" "John"
+- Look for both explicit and implicit NEW relationships mentioned in the text
+- **FILTER OUT**: Relationships already established in previous episodes unless they represent updates or changes
+- Common relationship types include (but are not limited to):
+  * Ownership or association (e.g., "Alice" "owns" "Restaurant")
+  * Participation or attendance (e.g., "Team" "participates in" "Tournament")
+  * Personal connections (e.g., "Sarah" "works with" "Michael")
+  * Aliases and alternative names (e.g., "Robert" "is also known as" "Bob")
+  * Locations and spatial relationships (e.g., "Office" "located in" "Building")
+  * Characteristics and properties (e.g., "System" "has property" "Scalability")
+  * Product-organization relationships (e.g., "Software" "developed by" "Company")
+  * Technical dependencies and usage (e.g., "Application" "uses" "Database")
+  * Hierarchical relationships (e.g., "Manager" "supervises" "Employee")
+
+## SAME-NAME ENTITY RELATIONSHIP FORMATION
+When entities share identical names but have different types, CREATE explicit relationship statements:
+- **Person-Organization**: "John (Person)" → "owns", "founded", "works for", or "leads" → "John (Company)"
+- **Person-Location**: "Smith (Person)" → "lives in", "founded", or "is associated with" → "Smith (City)"
+- **Event-Location**: "Conference (Event)" → "takes place at" or "is hosted by" → "Conference (Venue)"
+- **Product-Company**: "Tesla (Product)" → "is manufactured by" or "is developed by" → "Tesla (Company)"
+- **MANDATORY**: Always create at least one relationship statement for same-name entities
+- **CONTEXT-DRIVEN**: Choose predicates that accurately reflect the most likely relationship based on available context
+
+## PREVIOUS EPISODE FILTERING
+Before creating any relationship statement:
+- **CHECK**: Review previous episodes to see if this exact relationship already exists
+- **SKIP**: Do not create statements that duplicate existing relationships
+- **ENHANCE**: Only create statements if they add new information or represent updates
+- **FOCUS**: Prioritize completely new connections not represented in the knowledge graph
 
 ABOUT TEMPORAL INFORMATION:
 - For events with dates/times, DO NOT create a separate statement with the event as both source and target.
@@ -56,8 +88,10 @@ Format your response as a JSON object with the following structure:
   "edges": [
     {
       "source": "[Subject Entity Name - MUST be from AVAILABLE ENTITIES]",
+      "sourceType": "[Source Entity Type]",
       "predicate": "[Relationship Type]",
       "target": "[Object Entity Name - MUST be from AVAILABLE ENTITIES]", 
+      "targetType": "[Target Entity Type]",
       "fact": "[Natural language representation of the fact]",
       "attributes": { 
         "confidence": confidence of the fact
@@ -69,21 +103,25 @@ Format your response as a JSON object with the following structure:
 </output>
 
 IMPORTANT RULES:
-- ONLY use entities from AVAILABLE ENTITIES as source and target.
-- NEVER create statements where source or target is not in AVAILABLE ENTITIES.
-- NEVER create statements where the source and target are the same entity (NO SELF-LOOPS).
-- Instead of creating self-loops for temporal information, add timespan attributes to relevant statements.
-- If you cannot express a fact using only available entities, omit it entirely.
-- Always wrap output in tags <output> </output>.
+- **ENTITIES**: ONLY use entities from AVAILABLE ENTITIES as source and target
+- **NO INVENTION**: NEVER create statements where source or target is not in AVAILABLE ENTITIES
+- **NO SELF-LOOPS**: NEVER create statements where the source and target are the same entity
+- **SAME-NAME PRIORITY**: When entities share names but have different types, CREATE explicit relationship statements between them
+- **NEW ONLY**: Do NOT create statements that duplicate relationships already present in previous episodes
+- **TEMPORAL**: Instead of creating self-loops for temporal information, add timespan attributes to relevant statements
+- **FILTER FIRST**: If you cannot express a NEW fact using only available entities, omit it entirely
+- **OUTPUT FORMAT**: Always wrap output in tags <output> </output>
 
 Example of CORRECT usage:
-If AVAILABLE ENTITIES contains ["John", "Max", "Wedding"], you can create:
-- "John" "attends" "Wedding" ✓
-- "Max" "married to" "Tina" with timespan attribute ✓
+If AVAILABLE ENTITIES contains ["John", "Max", "Wedding", "John (Company)"], you can create:
+- "John" "attends" "Wedding" ✓ (if not already in previous episodes)
+- "Max" "married to" "Tina" with timespan attribute ✓ (if new relationship)
+- "John" "founded" "John (Company)" ✓ (PRIORITY: same name, different types)
 
 Example of INCORRECT usage:
 - "John" "attends" "Party" ✗ (if "Party" is not in AVAILABLE ENTITIES)
 - "Marriage" "occurs on" "Marriage" ✗ (NEVER create self-loops)
+- "John" "attends" "Wedding" ✗ (if already captured in previous episodes)
 - "January 14" "is" "Marriage date" ✗ (if "January 14" or "Marriage date" is not in AVAILABLE ENTITIES)`,
     },
     {
