@@ -1,4 +1,4 @@
-import { IntegrationPayloadEventType, type OAuth2Params } from "@core/types";
+import { IntegrationEventType, type OAuth2Params } from "@core/types";
 import * as simpleOauth2 from "simple-oauth2";
 import { tasks } from "@trigger.dev/sdk/v3";
 import {
@@ -121,7 +121,7 @@ export async function callbackHandler(
     const integrationAccount = await runIntegrationTrigger(
       integrationDefinition,
       {
-        event: IntegrationPayloadEventType.INTEGRATION_ACCOUNT_CREATED,
+        event: IntegrationEventType.SETUP,
         eventBody: {
           oauthResponse: tokensResponse.token,
           oauthParams: {
@@ -132,7 +132,6 @@ export async function callbackHandler(
         },
       },
       sessionRecord.userId,
-      sessionRecord.workspaceId,
     );
 
     await tasks.trigger<typeof scheduler>("scheduler", {

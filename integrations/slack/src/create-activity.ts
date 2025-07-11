@@ -48,7 +48,7 @@ export const createActivityEvent = async (
 
     const accessToken = config.access_token;
 
-    const text = `DM with Sigma channel Content: '${event.text}'`;
+    const text = `DM with SOL channel Content: '${event.text}'`;
 
     const permalinkResponse = await axios.get(
       `https://slack.com/api/chat.getPermalink?channel=${event.channel}&message_ts=${event.ts}`,
@@ -104,7 +104,7 @@ export const createActivityEvent = async (
       conversationContext = `channel ${conversationInfo.name}(${conversationInfo.id})`;
     }
 
-    const text = `Message from user ${userIdMap.get(eventMessage.user)?.real_name}(${eventMessage.user}) in ${conversationContext} at ${eventMessage.ts}. Content: '${eventMessageText}'`;
+    const text = `Message to User from ${userIdMap.get(eventMessage.user)?.real_name}(${eventMessage.user}) in ${conversationContext} at ${eventMessage.ts}. Content: '${eventMessageText}'`;
 
     const permalinkResponse = await axios.get(
       `https://slack.com/api/chat.getPermalink?channel=${channel}&message_ts=${ts}`,
@@ -115,9 +115,9 @@ export const createActivityEvent = async (
 
     const activity = {
       sourceURL: permalinkResponse.data.permalink,
+      source: 'slack',
       text,
       integrationAccountId: config.integrationAccountId,
-      taskId: null,
     };
 
     await axios.post('/api/v1/activity', activity);

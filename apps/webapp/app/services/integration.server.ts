@@ -13,11 +13,11 @@ import type { IntegrationDefinitionV2 } from "@core/database";
 async function prepareIntegrationTrigger(
   integrationDefinition: IntegrationDefinitionV2,
   userId?: string,
-  workspaceId?: string,
 ) {
   logger.info(`Loading integration ${integrationDefinition.slug}`);
 
   let pat = "";
+  let patId = "";
   if (userId) {
     // Use the integration slug as the token name for uniqueness
     const tokenResult = await getOrCreatePersonalAccessToken({
@@ -25,11 +25,13 @@ async function prepareIntegrationTrigger(
       userId,
     });
     pat = tokenResult.token ?? "";
+    patId = tokenResult.id ?? "";
   }
 
   return {
     integrationDefinition,
     pat,
+    patId,
   };
 }
 
@@ -41,13 +43,8 @@ export async function runIntegrationTriggerAsync(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   event: any,
   userId?: string,
-  workspaceId?: string,
 ) {
-  const params = await prepareIntegrationTrigger(
-    integrationDefinition,
-    userId,
-    workspaceId,
-  );
+  const params = await prepareIntegrationTrigger(integrationDefinition, userId);
   return await tasks.trigger<typeof integrationRun>("integration-run", {
     ...params,
     event,
@@ -62,13 +59,8 @@ export async function runIntegrationTrigger(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   event: any,
   userId?: string,
-  workspaceId?: string,
 ) {
-  const params = await prepareIntegrationTrigger(
-    integrationDefinition,
-    userId,
-    workspaceId,
-  );
+  const params = await prepareIntegrationTrigger(integrationDefinition, userId);
 
   const response = await tasks.triggerAndPoll<typeof integrationRun>(
     "integration-run",

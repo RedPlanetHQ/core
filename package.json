@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@changesets/cli": "2.26.2",
+    "@redplanethq/sdk": "^0.1.0",
     "@remix-run/changelog-github": "^0.0.5"
   },
   "packageManager": "pnpm@9.0.0",

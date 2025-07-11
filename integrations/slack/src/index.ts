@@ -18,12 +18,10 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return eventPayload.eventBody.event.user;
 
     case IntegrationEventType.PROCESS:
-      return createActivityEvent(eventPayload.eventBody, eventPayload.config);
+      return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
 
     default:
-      return {
-        message: `The event payload type is ${eventPayload.event}`,
-      };
+      return { message: `The event payload type is ${eventPayload.event}` };
   }
 }
 
