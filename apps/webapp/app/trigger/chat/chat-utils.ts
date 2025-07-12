@@ -17,12 +17,13 @@ import { generate, processTag } from "./stream-utils";
 import { type AgentMessage, AgentMessageType, Message } from "./types";
 import { type MCP } from "../utils/mcp";
 import {
+  WebSearchSchema,
   type ExecutionState,
   type HistoryStep,
   type Resource,
   type TotalCost,
 } from "../utils/types";
-import { flattenObject } from "../utils/utils";
+import { flattenObject, webSearch } from "../utils/utils";
 import { searchMemory, addMemory } from "./memory-utils";
 
 interface LLMOutputInterface {
@@ -98,6 +99,12 @@ const addMemoryTool = tool({
     required: ["message"],
     additionalProperties: false,
   }),
+});
+
+const websearchTool = tool({
+  description:
+    "Search the web for current information and news. Use this when you need up-to-date information that might not be in your training data. Try different search strategies: broad terms first, then specific phrases, keywords, exact quotes. Use multiple searches with varied approaches to get comprehensive results.",
+  parameters: WebSearchSchema,
 });
 
 const internalTools = [
@@ -258,6 +265,7 @@ export async function* run(
     "core--progress_update": progressUpdateTool,
     "core--search_memory": searchMemoryTool,
     "core--add_memory": addMemoryTool,
+    "core--websearch": websearchTool,
   };
 
   logger.info("Tools have been formed");
@@ -513,6 +521,16 @@ export async function* run(
                   });
                   result =
                     "Memory storage failed - please check your memory configuration";
+                }
+              } else if (toolName === "websearch") {
+                try {
+                  result = await webSearch(skillInput);
+                } catch (apiError) {
+                  logger.error("Web search failed", {
+                    apiError,
+                  });
+                  result =
+                    "Web search failed - please check your search configuration";
                 }
               }
             }

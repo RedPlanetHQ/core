@@ -34,6 +34,12 @@ When related memories are provided, make memory graph evolution your PRIMARY GOA
 ## Node Entity Types
 ${context.entityTypes}
 
+## Ingestion Rules
+${context.ingestionRules ? `The following rules apply to content from ${context.source}:
+${context.ingestionRules}
+
+IMPORTANT: If the content does NOT satisfy these rules, respond with "NOTHING_TO_REMEMBER" regardless of other criteria.` : 'No specific ingestion rules defined for this source.'}
+
 ## Related Memory Processing Strategy
 When related memories are provided, apply this filtering and enhancement strategy:
 

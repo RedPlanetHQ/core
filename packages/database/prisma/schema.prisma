@@ -146,6 +146,24 @@ model IngestionQueue {
   processedAt DateTime?
 }
 
+model IngestionRule {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deleted   DateTime?
+
+  name     String? // Optional human-readable rule name
+  text     String // Free-flowing text rule description (mandatory)
+  source   String // Source/integration this rule applies to (mandatory)
+  isActive Boolean @default(true) // Enable/disable rule (mandatory)
+
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+}
+
 model IntegrationAccount {
   id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
@@ -296,6 +314,7 @@ model User {
   WebhookConfiguration WebhookConfiguration[]
   Conversation         Conversation[]
   ConversationHistory  ConversationHistory[]
+  IngestionRule        IngestionRule[]
 }
 
 model WebhookConfiguration {
@@ -351,6 +370,7 @@ model Workspace {
   Activity                Activity[]
   WebhookConfiguration    WebhookConfiguration[]
   Conversation            Conversation[]
+  IngestionRule           IngestionRule[]
 }
 
 enum AuthenticationMethod {

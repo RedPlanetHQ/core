@@ -947,12 +947,16 @@ export class KnowledgeGraphService {
     }
     const entityTypes = getNodeTypesString(appEnumValues);
     const relatedMemories = await this.getRelatedMemories(episodeBody, userId);
+    
+    // Fetch ingestion rules for this source
+    const ingestionRules = await this.getIngestionRulesForSource(source, userId);
 
     const context = {
       episodeContent: episodeBody,
       entityTypes: entityTypes,
       source,
       relatedMemories,
+      ingestionRules,
     };
     const messages = normalizePrompt(context);
     let responseText = "";
@@ -1033,6 +1037,61 @@ export class KnowledgeGraphService {
     } catch (error) {
       console.error("Error retrieving related memories:", error);
       return "";
+    }
+  }
+
+  /**
+   * Retrieves active ingestion rules for a specific source and user
+   */
+  private async getIngestionRulesForSource(
+    source: string,
+    userId: string,
+  ): Promise<string | null> {
+    try {
+      // Import prisma here to avoid circular dependencies
+      const { prisma } = await import("~/db.server");
+
+      // Get the user's workspace
+      const user = await prisma.user.findUnique({
+        where: { id: userId },
+        include: { Workspace: true },
+      });
+
+      if (!user?.Workspace) {
+        return null;
+      }
+
+      // Fetch active rules for this source
+      const rules = await prisma.ingestionRule.findMany({
+        where: {
+          source,
+          workspaceId: user.Workspace.id,
+          isActive: true,
+          deleted: null,
+        },
+        select: {
+          text: true,
+          name: true,
+        },
+        orderBy: { createdAt: "asc" },
+      });
+
+      if (rules.length === 0) {
+        return null;
+      }
+
+      // Format rules for the prompt
+      const formattedRules = rules
+        .map((rule, index) => {
+          const ruleName = rule.name ? `${rule.name}: ` : `Rule ${index + 1}: `;
+          return `${ruleName}${rule.text}`;
+        })
+        .join("\n");
+
+      return formattedRules;
+    } catch (error) {
+      console.error("Error retrieving ingestion rules:", error);
+      return null;
     }
   }
 }
