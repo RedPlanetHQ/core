@@ -141,6 +141,9 @@ const initializeSchema = async () => {
     await runQuery(
       "CREATE CONSTRAINT statement_uuid IF NOT EXISTS FOR (n:Statement) REQUIRE n.uuid IS UNIQUE",
     );
+    await runQuery(
+      "CREATE CONSTRAINT cluster_uuid IF NOT EXISTS FOR (n:Cluster) REQUIRE n.uuid IS UNIQUE",
+    );
 
     // Create indexes for better query performance
     await runQuery(
@@ -153,7 +156,16 @@ const initializeSchema = async () => {
       "CREATE INDEX statement_invalid_at IF NOT EXISTS FOR (n:Statement) ON (n.invalidAt)",
     );
     await runQuery(
+      "CREATE INDEX statement_cluster_id IF NOT EXISTS FOR (n:Statement) ON (n.clusterId)",
+    );
+    await runQuery(
       "CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)",
+    );
+    await runQuery(
+      "CREATE INDEX cluster_user_id IF NOT EXISTS FOR (n:Cluster) ON (n.userId)",
+    );
+    await runQuery(
+      "CREATE INDEX cluster_aspect_type IF NOT EXISTS FOR (n:Cluster) ON (n.aspectType)",
     );
 
     // Create vector indexes for semantic search (if using Neo4j 5.0+)

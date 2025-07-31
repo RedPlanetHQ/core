@@ -8,6 +8,7 @@ import {
   type Triple,
 } from "@core/types";
 import { logger } from "./logger.service";
+import { ClusteringService } from "./clustering.server";
 import crypto from "crypto";
 import {
   dedupeNodes,
@@ -53,6 +54,12 @@ import { type PrismaClient } from "@prisma/client";
 const DEFAULT_EPISODE_WINDOW = 5;
 
 export class KnowledgeGraphService {
+  private clusteringService: ClusteringService;
+
+  constructor() {
+    this.clusteringService = new ClusteringService();
+  }
+
   async getEmbedding(text: string) {
     return getEmbedding(text);
   }
@@ -187,6 +194,26 @@ export class KnowledgeGraphService {
 
       // Invalidate invalidated statements
       await invalidateStatements({ statementIds: invalidatedStatements });
+
+      // Trigger incremental clustering process after successful ingestion
+      if (resolvedStatements.length > 0) {
+        try {
+          logger.info(
+            "Triggering incremental clustering process after episode ingestion",
+          );
+          const clusteringResult =
+            await this.clusteringService.performClustering(
+              params.userId,
+              false,
+            );
+          logger.info(
+            `Incremental clustering completed: ${clusteringResult.clustersCreated} clusters created, ${clusteringResult.statementsProcessed} statements processed`,
+          );
+        } catch (clusteringError) {
+          logger.error("Error in incremental clustering process:");
+          // Don't fail the entire ingestion if clustering fails
+        }
+      }
 
       const endTime = Date.now();
       const processingTimeMs = endTime - startTime;
