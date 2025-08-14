@@ -35,6 +35,7 @@ import {
 import {
   findContradictoryStatements,
   findSimilarStatements,
+  findStatementsWithSameSubjectObject,
   getTripleForStatement,
   invalidateStatements,
   saveTriple,
@@ -84,11 +85,24 @@ export class KnowledgeGraphService {
         sessionId: params.sessionId,
       });
 
+      // Format session context from previous episodes
+      const sessionContext =
+        params.sessionId && previousEpisodes.length > 0
+          ? previousEpisodes
+              .map(
+                (ep, i) =>
+                  `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
+              )
+              .join("\n\n")
+          : undefined;
+
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
         params.source,
         params.userId,
         prisma,
+        new Date(params.referenceTime),
+        sessionContext,
       );
 
       const relatedEpisodesEntities = await getRelatedEpisodesEntities({
@@ -187,33 +201,11 @@ export class KnowledgeGraphService {
         };
       }
 
-      // Save triples sequentially to avoid parallel processing issues
-      for (const triple of updatedTriples) {
-        await saveTriple(triple);
-      }
+      // Save triples in parallel for better performance
+      await Promise.all(updatedTriples.map(triple => saveTriple(triple)));
 
       // Invalidate invalidated statements
       await invalidateStatements({ statementIds: invalidatedStatements });
-
-      // Trigger incremental clustering process after successful ingestion
-      if (resolvedStatements.length > 0) {
-        try {
-          logger.info(
-            "Triggering incremental clustering process after episode ingestion",
-          );
-          const clusteringResult =
-            await this.clusteringService.performClustering(
-              params.userId,
-              false,
-            );
-          logger.info(
-            `Incremental clustering completed: ${clusteringResult.clustersCreated} clusters created, ${clusteringResult.statementsProcessed} statements processed`,
-          );
-        } catch (clusteringError) {
-          logger.error("Error in incremental clustering process:");
-          // Don't fail the entire ingestion if clustering fails
-        }
-      }
 
       const endTime = Date.now();
       const processingTimeMs = endTime - startTime;
@@ -273,18 +265,24 @@ export class KnowledgeGraphService {
       responseText = outputMatch[1].trim();
       const extractedEntities = JSON.parse(responseText || "{}").entities || [];
 
-      entities = await Promise.all(
-        extractedEntities.map(async (entity: any) => ({
-          uuid: crypto.randomUUID(),
-          name: entity.name,
-          type: entity.type,
-          attributes: entity.attributes || {},
-          nameEmbedding: await this.getEmbedding(entity.name),
-          typeEmbedding: await this.getEmbedding(entity.type),
-          createdAt: new Date(),
-          userId: episode.userId,
-        })),
-      );
+      // Batch generate embeddings for better performance
+      const entityNames = extractedEntities.map((entity: any) => entity.name);
+      const entityTypes = extractedEntities.map((entity: any) => entity.type);
+      const [nameEmbeddings, typeEmbeddings] = await Promise.all([
+        Promise.all(entityNames.map((name: string) => this.getEmbedding(name))),
+        Promise.all(entityTypes.map((type: string) => this.getEmbedding(type)))
+      ]);
+
+      entities = extractedEntities.map((entity: any, index: number) => ({
+        uuid: crypto.randomUUID(),
+        name: entity.name,
+        type: entity.type,
+        attributes: entity.attributes || {},
+        nameEmbedding: nameEmbeddings[index],
+        typeEmbedding: typeEmbeddings[index],
+        createdAt: new Date(),
+        userId: episode.userId,
+      }));
     }
 
     return entities;
@@ -348,14 +346,14 @@ export class KnowledgeGraphService {
     for (const triple of extractedTriples) {
       const predicateName = triple.predicate.toLowerCase();
       if (!predicateMap.has(predicateName)) {
-        // Create new predicate
+        // Create new predicate (embedding will be generated later in batch)
         const newPredicate = {
           uuid: crypto.randomUUID(),
           name: triple.predicate,
           type: "Predicate",
           attributes: {},
-          nameEmbedding: await this.getEmbedding(triple.predicate),
-          typeEmbedding: await this.getEmbedding("Predicate"),
+          nameEmbedding: null as any, // Will be filled later
+          typeEmbedding: null as any, // Will be filled later
           createdAt: new Date(),
           userId: episode.userId,
         };
@@ -369,9 +367,25 @@ export class KnowledgeGraphService {
       ...categorizedEntities.expanded,
     ];
 
+    // Batch generate embeddings for predicates and facts
+    const uniquePredicates = Array.from(predicateMap.values());
+    const factTexts = extractedTriples.map(t => t.fact);
+    const predicateNames = uniquePredicates.map(p => p.name);
+    
+    const [predicateNameEmbeddings, predicateTypeEmbeddings, factEmbeddings] = await Promise.all([
+      Promise.all(predicateNames.map(name => this.getEmbedding(name))),
+      Promise.all(predicateNames.map(() => this.getEmbedding("Predicate"))),
+      Promise.all(factTexts.map(fact => this.getEmbedding(fact)))
+    ]);
+    
+    // Update predicate embeddings
+    uniquePredicates.forEach((predicate, index) => {
+      predicate.nameEmbedding = predicateNameEmbeddings[index];
+      predicate.typeEmbedding = predicateTypeEmbeddings[index];
+    });
+
     // Convert extracted triples to Triple objects with Statement nodes
-    const triples = await Promise.all(
-      extractedTriples.map(async (triple: ExtractedTripleData) => {
+    const triples = extractedTriples.map((triple: ExtractedTripleData, tripleIndex: number) => {
         // Find the subject and object nodes by matching both name and type
         const subjectNode = allEntities.find(
           (node) =>
@@ -393,7 +407,7 @@ export class KnowledgeGraphService {
           const statement: StatementNode = {
             uuid: crypto.randomUUID(),
             fact: triple.fact,
-            factEmbedding: await this.getEmbedding(triple.fact),
+            factEmbedding: factEmbeddings[tripleIndex],
             createdAt: new Date(),
             validAt: episode.validAt,
             invalidAt: null,
@@ -410,8 +424,7 @@ export class KnowledgeGraphService {
           };
         }
         return null;
-      }),
-    );
+      });
 
     // Filter out null values (where subject or object wasn't found)
     return triples.filter(Boolean) as Triple[];
@@ -760,7 +773,8 @@ export class KnowledgeGraphService {
       const checkedStatementIds: string[] = [];
       let potentialMatches: StatementNode[] = [];
 
-      // Phase 1: Find statements with exact subject-predicate match
+      // Phase 1a: Find statements with exact subject-predicate match
+      // Example: "John lives_in New York" vs "John lives_in San Francisco"
       const exactMatches = await findContradictoryStatements({
         subjectId: triple.subject.uuid,
         predicateId: triple.predicate.uuid,
@@ -770,6 +784,28 @@ export class KnowledgeGraphService {
       if (exactMatches && exactMatches.length > 0) {
         potentialMatches.push(...exactMatches);
         checkedStatementIds.push(...exactMatches.map((s) => s.uuid));
+      }
+
+      // Phase 1b: Find statements with same subject-object but different predicates
+      // Example: "John is_married_to Sarah" vs "John is_divorced_from Sarah"
+      const subjectObjectMatches = await findStatementsWithSameSubjectObject({
+        subjectId: triple.subject.uuid,
+        objectId: triple.object.uuid,
+        excludePredicateId: triple.predicate.uuid,
+        userId: triple.provenance.userId,
+      });
+
+      if (subjectObjectMatches && subjectObjectMatches.length > 0) {
+        // Filter out statements we've already checked
+        const newSubjectObjectMatches = subjectObjectMatches.filter(
+          (match) => !checkedStatementIds.includes(match.uuid),
+        );
+        if (newSubjectObjectMatches.length > 0) {
+          potentialMatches.push(...newSubjectObjectMatches);
+          checkedStatementIds.push(
+            ...newSubjectObjectMatches.map((s) => s.uuid),
+          );
+        }
       }
 
       // Phase 2: Find semantically similar statements
@@ -1037,6 +1073,8 @@ export class KnowledgeGraphService {
     source: string,
     userId: string,
     prisma: PrismaClient,
+    episodeTimestamp?: Date,
+    sessionContext?: string,
   ) {
     let appEnumValues: Apps[] = [];
     if (Apps[source.toUpperCase() as keyof typeof Apps]) {
@@ -1058,6 +1096,8 @@ export class KnowledgeGraphService {
       source,
       relatedMemories,
       ingestionRules,
+      episodeTimestamp: episodeTimestamp?.toISOString(),
+      sessionContext,
     };
     const messages = normalizePrompt(context);
     let responseText = "";
@@ -1129,7 +1169,7 @@ export class KnowledgeGraphService {
 
       if (relatedFacts.length > 0) {
         formattedMemories += "## Related Facts\n";
-        relatedFacts.forEach((fact, index) => {
+        relatedFacts.forEach((fact) => {
           formattedMemories += `- ${fact.fact}\n`;
         });
       }

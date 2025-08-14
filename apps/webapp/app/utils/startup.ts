@@ -138,7 +138,7 @@ export async function addEnvVariablesInTrigger() {
     OPENAI_API_KEY: OPENAI_API_KEY ?? "",
   };
 
-  const envName = "prod";
+  const envName = env.NODE_ENV === "production" ? "prod" : "dev";
   const apiBase = `${TRIGGER_API_URL}/api/v1`;
   const envVarsUrl = `${apiBase}/projects/${TRIGGER_PROJECT_ID}/envvars/${envName}`;
 

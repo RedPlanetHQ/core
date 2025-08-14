@@ -21,6 +21,17 @@ When related memories are provided, make memory graph evolution your PRIMARY GOA
 - Include relevant context and temporal information when available.
 - When ingesting from assistant's perspective, capture the complete user-assistant interaction context.
 
+## Temporal Resolution
+When processing episodes with relative time references, resolve them to absolute dates based on the episode timestamp:
+- "yesterday" → resolve to the day before the episode date
+- "today" → resolve to the episode date
+- "last week" → resolve to the week before the episode date
+- "two days ago" → resolve to two days before the episode date
+- "this morning/afternoon/evening" → resolve to the episode date with time context
+
+Include these resolved dates in the extracted statements for precise temporal information.
+Example: If episode is from May 8th, 2024, and content mentions "yesterday", convert to "on May 7th, 2024".
+
 ## Complete Conversational Context
 - IMPORTANT: Preserve the complete context of conversations, including BOTH:
   - What the user said, asked, or requested
@@ -225,6 +236,14 @@ ${context.episodeContent}
 <SOURCE>
 ${context.source}
 </SOURCE>
+
+<EPISODE_TIMESTAMP>
+${context.episodeTimestamp || 'Not provided'}
+</EPISODE_TIMESTAMP>
+
+<SAME_SESSION_CONTEXT>
+${context.sessionContext || 'No previous episodes in this session'}
+</SAME_SESSION_CONTEXT>
 
 <RELATED_MEMORIES>
 ${context.relatedMemories}

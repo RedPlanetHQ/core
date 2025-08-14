@@ -73,8 +73,9 @@ export class SearchService {
       opts,
     );
 
-    // 3. Apply adaptive filtering based on score threshold and minimum count
-    const filteredResults = this.applyAdaptiveFiltering(rankedStatements, opts);
+    // // 3. Apply adaptive filtering based on score threshold and minimum count
+    // const filteredResults = this.applyAdaptiveFiltering(rankedStatements, opts);
+    const filteredResults = rankedStatements;
 
     // 3. Return top results
     const episodes = await getEpisodesByStatements(filteredResults);

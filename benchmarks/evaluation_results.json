@@ -1,0 +1,44 @@
+{
+  "timestamp": "2025-08-11T15:08:14.955Z",
+  "summary": {
+    "totalQuestions": 199,
+    "questionsWithContext": 1,
+    "questionsWithAnswerInContext": 0,
+    "contextRetrievalRate": "0.5",
+    "answerFoundRate": "0.0",
+    "categoryBreakdown": {
+      "2": {
+        "total": 1,
+        "withContext": 1,
+        "withAnswer": 0
+      }
+    }
+  },
+  "conversations": [
+    {
+      "conversationId": "locomo_1",
+      "results": [
+        {
+          "question": "When did Caroline go to the LGBTQ support group?",
+          "expectedAnswer": "7 May 2023",
+          "evidence": [
+            "D1:3"
+          ],
+          "category": 2,
+          "searchContext": "Caroline attended an LGBTQ support group, where she was inspired by transgender stories and felt accepted, which encouraged her to embrace herself. Caroline plans to continue her education and is interested in exploring career options in counseling or mental health. Melanie expressed appreciation for Caroline's empathy and shared that she painted a lake sunrise last year as a form of self-expression. Caroline complimented Melanie's painting, and both agreed that painting is a valuable outlet for relaxation and self-expression. Caroline intended to do research after the conversation, while Melanie planned to go swimming with her children. Both Caroline and Melanie emphasized the importance of self-care.\nCaroline informed Melanie on 20 July 2023 that she recently joined a new LGBTQ activist group called \"Connected LGBTQ Activists\" and is enjoying making a difference. Melanie expressed happiness for Caroline and showed interest in learning more about the group. Caroline explained that the group focuses on positive change and mutual support. Caroline participated in a recent pride parade in their city, which she described as a powerful reminder of the fight for equality. Melanie shared that she recently went to the beach with her children, which they enjoyed, and mentioned that her family's summer highlight is a camping trip where they witnessed the Perseid meteor shower, an experience that made her feel awe for the universe and appreciate life. Melanie also shared a special memory of her youngest child taking her first steps, which Caroline found sweet and reflective of the special bonds in families. Melanie expressed gratitude for her family, and Caroline praised her for having an awesome family.\nOn August 14, 2023, Melanie and Caroline discussed their recent experiences, with Melanie sharing her enjoyment of a concert for her daughter's birthday and Caroline describing her attendance at an advocacy event focused on love and support. Melanie inquired about Caroline's pride parade experience, leading Caroline to express pride in being part of the LGBTQ community and her commitment to fighting for equality. Melanie emphasized the importance of creating a loving and inclusive environment for their children. Caroline shared that she incorporates inclusivity and diversity into her artwork to advocate for LGBTQ+ acceptance, and that her art expresses her trans experience and aims to foster understanding of the trans community. Caroline shared a painting titled \"Embracing Identity,\" which represents self-acceptance and love, and explained that art has aided her self-discovery and acceptance. Melanie acknowledged the healing power of art and praised Caroline's work. Both Melanie and Caroline invited each other to reach out anytime, reinforcing a supportive relationship.",
+          "searchResultsCount": 3,
+          "hasContext": true,
+          "contextLength": 2810,
+          "answerInContext": false,
+          "conversationId": "locomo_1",
+          "facts": [
+            "The support group is associated with LGBTQ.",
+            "Caroline joined Connected LGBTQ Activists.",
+            "Caroline is a member of the LGBTQ community."
+          ]
+        }
+      ],
+      "totalQuestions": 199
+    }
+  ]
+}

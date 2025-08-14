@@ -7,6 +7,7 @@ import type {
 import { runQuery } from "~/lib/neo4j.server";
 import { saveEntity } from "./entity";
 import { saveEpisode } from "./episode";
+import crypto from "crypto";
 
 export async function saveTriple(triple: Triple): Promise<string> {
   // First, save the Episode
@@ -97,6 +98,7 @@ export async function saveTriple(triple: Triple): Promise<string> {
 
 /**
  * Find statements that might contradict a new statement (same subject and predicate)
+ * Example: "John lives_in New York" vs "John lives_in San Francisco"
  */
 export async function findContradictoryStatements({
   subjectId,
@@ -117,6 +119,57 @@ export async function findContradictoryStatements({
     `;
 
   const result = await runQuery(query, { subjectId, predicateId, userId });
+
+  if (!result || result.length === 0) {
+    return [];
+  }
+
+  return result.map((record) => {
+    const statement = record.get("statement").properties;
+    return {
+      uuid: statement.uuid,
+      fact: statement.fact,
+      factEmbedding: statement.factEmbedding,
+      createdAt: new Date(statement.createdAt),
+      validAt: new Date(statement.validAt),
+      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
+      attributes: statement.attributesJson
+        ? JSON.parse(statement.attributesJson)
+        : {},
+      userId: statement.userId,
+    };
+  });
+}
+
+/**
+ * Find statements with same subject and object but different predicates (potential contradictions)
+ * Example: "John is_married_to Sarah" vs "John is_divorced_from Sarah"
+ */
+export async function findStatementsWithSameSubjectObject({
+  subjectId,
+  objectId,
+  excludePredicateId,
+  userId,
+}: {
+  subjectId: string;
+  objectId: string;
+  excludePredicateId?: string;
+  userId: string;
+}): Promise<StatementNode[]> {
+  const query = `
+      MATCH (statement:Statement)
+      WHERE statement.userId = $userId
+        AND statement.invalidAt IS NULL
+      MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)-[:HAS_PREDICATE]->(predicate:Entity)
+      MATCH (statement)-[:HAS_OBJECT]->(object:Entity)
+      WHERE subject.uuid = $subjectId 
+        AND object.uuid = $objectId
+        ${excludePredicateId ? "AND predicate.uuid <> $excludePredicateId" : ""}
+      RETURN statement
+    `;
+
+  const params = { subjectId, objectId, userId, ...(excludePredicateId && { excludePredicateId }) };
+  const result = await runQuery(query, params);
 
   if (!result || result.length === 0) {
     return [];

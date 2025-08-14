@@ -80,7 +80,10 @@ export async function makeModelCall(
 export async function getEmbedding(text: string) {
   const ollamaUrl = process.env.OLLAMA_URL;
 
-  if (!ollamaUrl) {
+  // Default to using Ollama
+  const model = process.env.EMBEDDING_MODEL;
+
+  if (model === "text-embedding-3-small") {
     // Use OpenAI embedding model when explicitly requested
     const { embedding } = await embed({
       model: openai.embedding("text-embedding-3-small"),
@@ -88,9 +91,6 @@ export async function getEmbedding(text: string) {
     });
     return embedding;
   }
-
-  // Default to using Ollama
-  const model = process.env.EMBEDDING_MODEL;
 
   const ollama = createOllama({
     baseURL: ollamaUrl,

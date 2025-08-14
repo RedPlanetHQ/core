@@ -1,0 +1,23 @@
+{
+  "name": "locomo",
+  "version": "1.0.0",
+  "description": "**Authors**: [Adyasha Maharana](https://adymaharana.github.io/), [Dong-Ho Lee](https://www.danny-lee.info/), [Sergey Tulyakov](https://stulyakov.com/), [Mohit Bansal](https://www.cs.unc.edu/~mbansal/), [Francesco Barbieri](https://fvancesco.github.io/) and [Yuwei Fang](https://yuwfan.github.io/)",
+  "main": "debug_auth.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/snap-research/locomo.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/snap-research/locomo/issues"
+  },
+  "homepage": "https://github.com/snap-research/locomo#readme",
+  "dependencies": {
+    "axios": "^1.11.0"
+  }
+}

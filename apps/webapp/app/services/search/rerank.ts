@@ -6,13 +6,13 @@ import { logger } from "../logger.service";
 
 // Utility function to safely convert BigInt values to Number
 function safeNumber(value: any): number {
-  if (typeof value === 'bigint') {
+  if (typeof value === "bigint") {
     return Number(value);
   }
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return value;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const parsed = parseFloat(value);
     return isNaN(parsed) ? 0 : parsed;
   }
@@ -81,14 +81,14 @@ export function applyWeightedRRF(results: {
 export function applyMMRReranking(
   statements: StatementNode[],
   lambda: number = 0.7, // Balance between relevance (1.0) and diversity (0.0)
-  maxResults: number = 50
+  maxResults: number = 50,
 ): StatementNode[] {
   if (statements.length === 0) return [];
-  
+
   // Extract relevance scores and embeddings
   const candidates = statements.map((statement) => {
     let relevanceScore = 0;
-    
+
     // Use existing scores from MultiFactorReranking or other sources
     if ((statement as any).multifactorScore !== undefined) {
       relevanceScore = safeNumber((statement as any).multifactorScore);
@@ -99,71 +99,93 @@ export function applyMMRReranking(
     } else if ((statement as any).finalScore !== undefined) {
       relevanceScore = safeNumber((statement as any).finalScore);
     }
-    
+
     return {
       statement,
       relevanceScore,
       embedding: statement.factEmbedding || [],
-      selected: false
+      selected: false,
     };
   });
-  
+
   // Sort by relevance score (descending)
   candidates.sort((a, b) => b.relevanceScore - a.relevanceScore);
-  
+
   const selectedCandidates: typeof candidates = [];
   const remainingCandidates = [...candidates];
-  
+
   // Pre-filter candidates with no embeddings for faster processing
-  const candidatesWithEmbeddings = remainingCandidates.filter(c => c.embedding.length > 0);
-  const candidatesWithoutEmbeddings = remainingCandidates.filter(c => c.embedding.length === 0);
-  
+  const candidatesWithEmbeddings = remainingCandidates.filter(
+    (c) => c.embedding.length > 0,
+  );
+  const candidatesWithoutEmbeddings = remainingCandidates.filter(
+    (c) => c.embedding.length === 0,
+  );
+
   // MMR Selection Algorithm with optimizations
-  while (selectedCandidates.length < maxResults && remainingCandidates.length > 0) {
+  while (
+    selectedCandidates.length < maxResults &&
+    remainingCandidates.length > 0
+  ) {
     let bestCandidate = null;
     let bestScore = -Infinity;
     let bestIndex = -1;
-    
+
     // Early termination: if we have enough high-relevance items, stop diversity checking
-    const relevanceThreshold = selectedCandidates.length > 0 ? 
-      selectedCandidates[selectedCandidates.length - 1].relevanceScore * 0.5 : 0;
-    
+    const relevanceThreshold =
+      selectedCandidates.length > 0
+        ? selectedCandidates[selectedCandidates.length - 1].relevanceScore * 0.5
+        : 0;
+
     for (let i = 0; i < remainingCandidates.length; i++) {
       const candidate = remainingCandidates[i];
-      
+
       // Skip similarity calculation for very low relevance items
-      if (candidate.relevanceScore < relevanceThreshold && selectedCandidates.length > 3) {
+      if (
+        candidate.relevanceScore < relevanceThreshold &&
+        selectedCandidates.length > 3
+      ) {
         continue;
       }
-      
+
       let maxSimilarityToSelected = 0;
-      
+
       // Only calculate similarity if candidate has embedding and we have selected items
       if (selectedCandidates.length > 0 && candidate.embedding.length > 0) {
         // Optimization: only check similarity with most recent selected items (last 5)
-        const recentSelected = selectedCandidates.slice(-Math.min(5, selectedCandidates.length));
-        
+        const recentSelected = selectedCandidates.slice(
+          -Math.min(5, selectedCandidates.length),
+        );
+
         for (const selected of recentSelected) {
           if (selected.embedding.length > 0) {
-            const similarity = cosineSimilarity(candidate.embedding, selected.embedding);
-            maxSimilarityToSelected = Math.max(maxSimilarityToSelected, similarity);
-            
+            const similarity = cosineSimilarity(
+              candidate.embedding,
+              selected.embedding,
+            );
+            maxSimilarityToSelected = Math.max(
+              maxSimilarityToSelected,
+              similarity,
+            );
+
             // Early exit: if similarity is very high, no need to check more
             if (similarity > 0.95) break;
           }
         }
       }
-      
+
       // MMR Score: λ * relevance - (1-λ) * max_similarity_to_selected
-      const mmrScore = lambda * candidate.relevanceScore - (1 - lambda) * maxSimilarityToSelected;
-      
+      const mmrScore =
+        lambda * candidate.relevanceScore -
+        (1 - lambda) * maxSimilarityToSelected;
+
       if (mmrScore > bestScore) {
         bestScore = mmrScore;
         bestCandidate = candidate;
         bestIndex = i;
       }
     }
-    
+
     if (bestCandidate && bestIndex !== -1) {
       selectedCandidates.push(bestCandidate);
       remainingCandidates.splice(bestIndex, 1);
@@ -172,12 +194,12 @@ export function applyMMRReranking(
       break;
     }
   }
-  
+
   // Return selected statements with MMR scores
   return selectedCandidates.map((item, index) => ({
     ...item.statement,
     mmrScore: item.relevanceScore, // Keep original relevance score
-    mmrRank: index + 1
+    mmrRank: index + 1,
   }));
 }
 
@@ -186,19 +208,19 @@ export function applyMMRReranking(
  */
 function cosineSimilarity(a: number[], b: number[]): number {
   if (a.length !== b.length || a.length === 0) return 0;
-  
+
   let dotProduct = 0;
   let normA = 0;
   let normB = 0;
-  
+
   for (let i = 0; i < a.length; i++) {
     dotProduct += a[i] * b[i];
     normA += a[i] * a[i];
     normB += b[i] * b[i];
   }
-  
+
   if (normA === 0 || normB === 0) return 0;
-  
+
   return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
 }
 
@@ -264,27 +286,30 @@ export async function applyCrossEncoderReranking(
  * First applies MultiFactorReranking for authority/popularity/temporal scoring,
  * then applies MMR to reduce redundancy while maintaining relevance
  */
-export function applyMultiFactorMMRReranking(results: {
-  bm25: StatementNode[];
-  vector: StatementNode[];
-  bfs: StatementNode[];
-}, options?: {
-  lambda?: number; // MMR balance parameter (default: 0.7)
-  maxResults?: number; // Maximum results to return (default: 50)
-}): StatementNode[] {
+export function applyMultiFactorMMRReranking(
+  results: {
+    bm25: StatementNode[];
+    vector: StatementNode[];
+    bfs: StatementNode[];
+  },
+  options?: {
+    lambda?: number; // MMR balance parameter (default: 0.7)
+    maxResults?: number; // Maximum results to return (default: 50)
+  },
+): StatementNode[] {
   const { lambda = 0.7, maxResults = 50 } = options || {};
-  
+
   // Step 1: Apply MultiFactorReranking to get relevance/authority/popularity scores
   const multiFactorResults = applyMultiFactorReranking(results);
-  
+
   // Step 2: Apply MMR to reduce redundancy while maintaining relevance
   const mmrResults = applyMMRReranking(multiFactorResults, lambda, maxResults);
-  
+
   // Add combined score for debugging
   return mmrResults.map((statement) => ({
     ...statement,
     combinedScore: safeNumber((statement as any).mmrScore), // MMR preserves MultiFactorScore
-    rerankerUsed: 'multifactor+mmr'
+    rerankerUsed: "multifactor+mmr",
   }));
 }
 
@@ -308,7 +333,8 @@ export function applyMultiFactorReranking(results: {
 
   // Extract original scores when available (handle BigInt)
   const getOriginalScore = (statement: any) => {
-    const rawScore = statement.similarity || statement.score || statement.bm25Score || 0;
+    const rawScore =
+      statement.similarity || statement.score || statement.bm25Score || 0;
     return safeNumber(rawScore);
   };
 
@@ -377,14 +403,17 @@ export function applyMultiFactorReranking(results: {
     const now = Date.now();
     const daysSince = (now - createdAt) / (1000 * 60 * 60 * 24);
     const recencyBonus = Math.max(0.9, 1.0 - (daysSince / 365) * 0.1); // Max 10% decay over 1 year
-    
+
     // Popularity bonus based on recall count (log-scaled to prevent dominance)
     const recallCount = safeNumber(item.statement.recallCount);
-    const popularityBonus = 1.0 + (Math.log(1 + recallCount) * 0.15); // Up to ~30% boost for frequently recalled facts
-    
+    const popularityBonus = 1.0 + Math.log(1 + recallCount) * 0.15; // Up to ~30% boost for frequently recalled facts
+
     // Provenance authority bonus based on multiple source episodes
-    const provenanceCount = Math.max(1, safeNumber(item.statement.provenanceCount));
-    const authorityBonus = 1.0 + (Math.log(provenanceCount) * 0.2); // Up to ~35% boost for multi-source facts
+    const provenanceCount = Math.max(
+      1,
+      safeNumber(item.statement.provenanceCount),
+    );
+    const authorityBonus = 1.0 + Math.log(provenanceCount) * 0.2; // Up to ~35% boost for multi-source facts
 
     // Final weighted score with all bonuses
     item.score =
@@ -399,6 +428,7 @@ export function applyMultiFactorReranking(results: {
   const sortedResults = Object.values(scores)
     .sort((a, b) => b.score - a.score)
     .map((item) => {
+      console.log(item.statement.fact, item.score);
       // Add the reranking score and signal breakdown for debugging
       return {
         ...item.statement,
