@@ -39,6 +39,9 @@
     <a href="https://deepwiki.com/RedPlanetHQ/core">
         <img src="https://deepwiki.com/badge.svg" alt="DeepWiki Badge" />
     </a>
+    <a href="https://github.com/Piebald-AI/awesome-gemini-cli">
+        <img alt="Mentioned in Awesome Gemini CLI" src="https://awesome.re/mentioned-badge.svg" />
+    </a>
 </p>
 <p align="center">
     <a href="https://docs.heysol.ai/core/overview"><b>Documentation</b></a> •
