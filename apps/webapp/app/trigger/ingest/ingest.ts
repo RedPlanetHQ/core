@@ -7,6 +7,7 @@ const prisma = new PrismaClient();
 
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
+import { triggerSpaceAssignment } from "../spaces/space-assignment";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
@@ -62,6 +63,30 @@ export const ingestTask = task({
           status: IngestionStatus.COMPLETED,
         },
       });
+
+      // Trigger space assignment after successful ingestion
+      try {
+        logger.info(`Triggering space assignment after successful ingestion`, {
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+          episodeId: episodeDetails?.episodeUuid,
+        });
+        if (episodeDetails.episodeUuid) {
+          await triggerSpaceAssignment({
+            userId: payload.userId,
+            workspaceId: payload.workspaceId,
+            mode: "episode",
+            episodeId: episodeDetails.episodeUuid,
+          });
+        }
+      } catch (assignmentError) {
+        // Don't fail the ingestion if assignment fails
+        logger.warn(`Failed to trigger space assignment after ingestion:`, {
+          error: assignmentError,
+          userId: payload.userId,
+          episodeId: episodeDetails?.episodeUuid,
+        });
+      }
 
       return { success: true, episodeDetails };
     } catch (err: any) {

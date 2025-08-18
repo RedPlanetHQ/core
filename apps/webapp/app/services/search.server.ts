@@ -51,6 +51,7 @@ export class SearchService {
       predicateTypes: options.predicateTypes || [],
       scoreThreshold: options.scoreThreshold || 0.7,
       minResults: options.minResults || 10,
+      spaceIds: options.spaceIds || [],
     };
 
     const queryVector = await this.getEmbedding(query);
@@ -74,8 +75,8 @@ export class SearchService {
     );
 
     // // 3. Apply adaptive filtering based on score threshold and minimum count
-    // const filteredResults = this.applyAdaptiveFiltering(rankedStatements, opts);
-    const filteredResults = rankedStatements;
+    const filteredResults = this.applyAdaptiveFiltering(rankedStatements, opts);
+    // const filteredResults = rankedStatements;
 
     // 3. Return top results
     const episodes = await getEpisodesByStatements(filteredResults);
@@ -352,4 +353,5 @@ export interface SearchOptions {
   predicateTypes?: string[];
   scoreThreshold?: number;
   minResults?: number;
+  spaceIds?: string[]; // Filter results by specific spaces
 }

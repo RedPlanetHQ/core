@@ -52,7 +52,8 @@ export interface StatementNode {
   invalidAt: Date | null;
   attributes: Record<string, any>;
   userId: string;
-  space?: string;
+  space?: string; // Legacy field - deprecated in favor of spaceIds
+  spaceIds?: string[]; // Array of space UUIDs this statement belongs to
   recallCount?: number;
   provenanceCount?: number;
 }

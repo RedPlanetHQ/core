@@ -31,6 +31,14 @@ export async function performBM25Search(
       `;
     }
 
+    // Add space filtering if spaceIds are provided
+    let spaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      spaceCondition = `
+        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
+      `;
+    }
+
     // Use Neo4j's built-in fulltext search capabilities with provenance count
     const cypher = `
         CALL db.index.fulltext.queryNodes("statement_fact_index", $query) 
@@ -38,6 +46,7 @@ export async function performBM25Search(
         WHERE 
           (s.userId = $userId)
           ${timeframeCondition}
+          ${spaceCondition}
         OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(s)
         WITH s, score, count(episode) as provenanceCount
         RETURN s, score, provenanceCount
@@ -49,6 +58,7 @@ export async function performBM25Search(
       userId,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
+      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
     };
 
     const records = await runQuery(cypher, params);
@@ -111,12 +121,21 @@ export async function performVectorSearch(
       `;
     }
 
+    // Add space filtering if spaceIds are provided
+    let spaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      spaceCondition = `
+        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
+      `;
+    }
+
     // 1. Search for similar statements using Neo4j vector search with provenance count
     const cypher = `
       MATCH (s:Statement)
       WHERE 
       (s.userId = $userId)
       ${timeframeCondition}
+      ${spaceCondition}
       WITH s, vector.similarity.cosine(s.factEmbedding, $embedding) AS score
       WHERE score > 0.7
       OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(s)
@@ -130,6 +149,7 @@ export async function performVectorSearch(
       userId,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
+      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
     };
 
     const records = await runQuery(cypher, params);
@@ -171,6 +191,7 @@ export async function performBfsSearch(
         userId,
         options.includeInvalidated,
         options.startTime,
+        options.spaceIds,
       );
       allStatements.push(...statements);
     }
@@ -192,6 +213,7 @@ export async function bfsTraversal(
   userId: string,
   includeInvalidated: boolean,
   startTime: Date | null,
+  spaceIds: string[] = [],
 ): Promise<StatementNode[]> {
   try {
     // Build the WHERE clause based on timeframe options
@@ -208,6 +230,15 @@ export async function bfsTraversal(
         AND s.validAt >= $startTime
       `;
     }
+
+    // Add space filtering if spaceIds are provided
+    let spaceCondition = "";
+    if (spaceIds.length > 0) {
+      spaceCondition = `
+        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
+      `;
+    }
+
     // Use Neo4j's built-in path finding capabilities for efficient BFS
     // This query implements BFS up to maxDepth and collects all statements along the way
     const cypher = `
@@ -216,6 +247,7 @@ export async function bfsTraversal(
         (s.userId = $userId)
         AND ($includeInvalidated OR s.invalidAt IS NULL)
         ${timeframeCondition}
+        ${spaceCondition}
       RETURN s as statement
     `;
 
@@ -226,6 +258,7 @@ export async function bfsTraversal(
       userId,
       includeInvalidated,
       ...(startTime && { startTime: startTime.toISOString() }),
+      ...(spaceIds.length > 0 && { spaceIds }),
     };
 
     const records = await runQuery(cypher, params);

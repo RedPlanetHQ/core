@@ -470,14 +470,20 @@ model RecallLog {
 }
 
 model Space {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-  autoMode    Boolean @default(false)
+  id             String   @id @default(cuid())
+  name           String
+  description    String?
+  autoMode       Boolean  @default(false)
+  summary        String?
+  themes         String[]
+  statementCount Int?
+
+  lastPatternTrigger          DateTime?
+  statementCountAtLastTrigger Int?
 
   // Relations
-  user   User   @relation(fields: [userId], references: [id])
-  userId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id])
+  workspaceId String
 
   // Space's enabled entities
   enabledEntities SpaceEntity[]
@@ -485,6 +491,7 @@ model Space {
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   IngestionQueue IngestionQueue[]
+  SpacePattern   SpacePattern[]
 }
 
 model SpaceEntity {
@@ -504,6 +511,28 @@ model SpaceEntity {
   updatedAt DateTime @updatedAt
 
   @@unique([spaceId, entityId])
+}
+
+model SpacePattern {
+  id        String    @id @default(cuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deleted   DateTime?
+
+  name          String
+  source        String
+  type          String
+  summary       String
+  editedSummary String?
+  evidence      String[]
+  confidence    Float
+  userConfirmed String   @default("pending")
+
+  // Relations
+  space   Space  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  spaceId String
+
+  @@index([spaceId, source])
 }
 
 model User {
@@ -535,7 +564,6 @@ model User {
   personalAccessTokens PersonalAccessToken[]
   InvitationCode       InvitationCode?        @relation(fields: [invitationCodeId], references: [id])
   invitationCodeId     String?
-  Space                Space[]
   Workspace            Workspace?
   IntegrationAccount   IntegrationAccount[]
   WebhookConfiguration WebhookConfiguration[]
@@ -627,6 +655,7 @@ model Workspace {
   OAuthAccessToken        OAuthAccessToken[]
   OAuthRefreshToken       OAuthRefreshToken[]
   RecallLog               RecallLog[]
+  Space                   Space[]
 }
 
 enum AuthenticationMethod {

@@ -1,0 +1,12 @@
+{
+  "conversations": {
+    "locomo_1": {
+      "ingested": true,
+      "timestamp": "2025-08-12T05:31:39.437Z",
+      "totalEpisodes": 419,
+      "successCount": 419,
+      "errorCount": 0
+    }
+  },
+  "timestamp": "2025-08-12T05:31:39.441Z"
+}

@@ -71,7 +71,14 @@ export class KnowledgeGraphService {
    * This method extracts information from the episode, creates nodes and statements,
    * and updates the HelixDB database according to the reified + temporal approach.
    */
-  async addEpisode(params: AddEpisodeParams, prisma: PrismaClient) {
+  async addEpisode(
+    params: AddEpisodeParams,
+    prisma: PrismaClient,
+  ): Promise<{
+    episodeUuid: string | null;
+    statementsCreated: number;
+    processingTimeMs: number;
+  }> {
     const startTime = Date.now();
     const now = new Date();
 
@@ -113,7 +120,11 @@ export class KnowledgeGraphService {
 
       if (normalizedEpisodeBody === "NOTHING_TO_REMEMBER") {
         logger.log("Nothing to remember");
-        return;
+        return {
+          episodeUuid: null,
+          statementsCreated: 0,
+          processingTimeMs: 0,
+        };
       }
 
       // Step 2: Episode Creation - Create or retrieve the episode
@@ -202,7 +213,7 @@ export class KnowledgeGraphService {
       }
 
       // Save triples in parallel for better performance
-      await Promise.all(updatedTriples.map(triple => saveTriple(triple)));
+      await Promise.all(updatedTriples.map((triple) => saveTriple(triple)));
 
       // Invalidate invalidated statements
       await invalidateStatements({ statementIds: invalidatedStatements });
@@ -270,7 +281,7 @@ export class KnowledgeGraphService {
       const entityTypes = extractedEntities.map((entity: any) => entity.type);
       const [nameEmbeddings, typeEmbeddings] = await Promise.all([
         Promise.all(entityNames.map((name: string) => this.getEmbedding(name))),
-        Promise.all(entityTypes.map((type: string) => this.getEmbedding(type)))
+        Promise.all(entityTypes.map((type: string) => this.getEmbedding(type))),
       ]);
 
       entities = extractedEntities.map((entity: any, index: number) => ({
@@ -369,15 +380,16 @@ export class KnowledgeGraphService {
 
     // Batch generate embeddings for predicates and facts
     const uniquePredicates = Array.from(predicateMap.values());
-    const factTexts = extractedTriples.map(t => t.fact);
-    const predicateNames = uniquePredicates.map(p => p.name);
-    
-    const [predicateNameEmbeddings, predicateTypeEmbeddings, factEmbeddings] = await Promise.all([
-      Promise.all(predicateNames.map(name => this.getEmbedding(name))),
-      Promise.all(predicateNames.map(() => this.getEmbedding("Predicate"))),
-      Promise.all(factTexts.map(fact => this.getEmbedding(fact)))
-    ]);
-    
+    const factTexts = extractedTriples.map((t) => t.fact);
+    const predicateNames = uniquePredicates.map((p) => p.name);
+
+    const [predicateNameEmbeddings, predicateTypeEmbeddings, factEmbeddings] =
+      await Promise.all([
+        Promise.all(predicateNames.map((name) => this.getEmbedding(name))),
+        Promise.all(predicateNames.map(() => this.getEmbedding("Predicate"))),
+        Promise.all(factTexts.map((fact) => this.getEmbedding(fact))),
+      ]);
+
     // Update predicate embeddings
     uniquePredicates.forEach((predicate, index) => {
       predicate.nameEmbedding = predicateNameEmbeddings[index];
@@ -385,7 +397,8 @@ export class KnowledgeGraphService {
     });
 
     // Convert extracted triples to Triple objects with Statement nodes
-    const triples = extractedTriples.map((triple: ExtractedTripleData, tripleIndex: number) => {
+    const triples = extractedTriples.map(
+      (triple: ExtractedTripleData, tripleIndex: number) => {
         // Find the subject and object nodes by matching both name and type
         const subjectNode = allEntities.find(
           (node) =>
@@ -424,7 +437,8 @@ export class KnowledgeGraphService {
           };
         }
         return null;
-      });
+      },
+    );
 
     // Filter out null values (where subject or object wasn't found)
     return triples.filter(Boolean) as Triple[];
