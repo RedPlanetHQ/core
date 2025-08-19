@@ -47,16 +47,13 @@ export const ConversationNew = ({
       className="h-[calc(100vh_-_56px)] pt-2"
     >
       <div className={cn("flex h-[calc(100vh_-_56px)] flex-col")}>
-        <div className="flex h-full w-full flex-col items-start justify-start overflow-y-auto p-4">
+        <div className="flex h-full w-full flex-col items-center justify-start overflow-y-auto p-4">
           <div className="flex w-full flex-col items-center">
-            <div className="w-full max-w-[90ch]">
-              <h1 className="mx-1 text-left text-[32px] font-medium">
-                Hello <span className="text-primary">{user.name}</span>
+            <div className="w-full max-w-[90ch] pt-[5rem]">
+              <h1 className="mx-1 mb-4 text-center text-[32px] font-medium">
+                What would you like me to remember?
               </h1>
 
-              <p className="text-muted-foreground mx-1 mb-4">
-                Update your memory or ask about anything it already knows
-              </p>
               <div className="bg-background-3 rounded-lg border-1 border-gray-300 py-2">
                 <EditorRoot>
                   <EditorContent
@@ -117,7 +114,7 @@ export const ConversationNew = ({
                 </EditorRoot>
                 <div className="mb-1 flex justify-end px-3">
                   <Button
-                    variant="default"
+                    variant="secondary"
                     className="gap-1 shadow-none transition-all duration-500 ease-in-out"
                     type="submit"
                     size="lg"

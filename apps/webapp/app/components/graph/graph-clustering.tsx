@@ -21,12 +21,16 @@ import {
 import { useTheme } from "remix-themes";
 import { drawHover } from "./utils";
 
-interface ClusterData {
-  uuid: string;
+export interface ClusterData {
+  id: string;
   name: string;
   description?: string;
   size: number;
   cohesionScore?: number;
+  aspectType?: "thematic" | "social" | "activity";
+  createdAt: string;
+  updatedAt: string;
+  workspaceId: string;
 }
 
 export interface GraphClusteringProps {
@@ -102,7 +106,7 @@ export const GraphClustering = forwardRef<
     const clusterColorMap = useMemo(() => {
       if (!enableClusterColors) return new Map();
 
-      const clusterIds = clusters.map((c) => c.uuid);
+      const clusterIds = clusters.map((c) => c.id);
       const clusterColors = generateClusterColors(
         clusterIds.length,
         themeMode === "dark",
@@ -503,13 +507,13 @@ export const GraphClustering = forwardRef<
       const complexity = nodeCount + edgeCount;
       let durationSeconds: number;
       if (complexity < 50) {
-        durationSeconds = 1.5;
+        durationSeconds = 2.0;
       } else if (complexity < 200) {
-        durationSeconds = 2.5;
+        durationSeconds = 3.0;
       } else if (complexity < 500) {
-        durationSeconds = 3.5;
+        durationSeconds = 4.0;
       } else {
-        durationSeconds = Math.min(6, 4 + (complexity - 500) * 0.004);
+        durationSeconds = Math.min(8, 5 + (complexity - 500) * 0.006);
       }
 
       return {
@@ -642,7 +646,6 @@ export const GraphClustering = forwardRef<
         const optimalParams = calculateOptimalParameters(graph);
         const settings = forceAtlas2.inferSettings(graph);
 
-        console.log(optimalParams);
         const layout = new FA2Layout(graph, {
           settings: {
             ...settings,

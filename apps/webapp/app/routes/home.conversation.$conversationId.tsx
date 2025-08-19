@@ -5,11 +5,7 @@ import {
 import { sort } from "fast-sort";
 
 import { useParams, useRevalidator, useNavigate } from "@remix-run/react";
-import {
-  requireUser,
-  requireUserId,
-  requireWorkpace,
-} from "~/services/session.server";
+import { requireUser, requireWorkpace } from "~/services/session.server";
 import {
   getConversationAndHistory,
   getCurrentConversationRun,
@@ -18,7 +14,6 @@ import {
 import { type ConversationHistory } from "@core/database";
 import {
   ConversationItem,
-  ConversationList,
   ConversationTextarea,
   StreamingConversation,
 } from "~/components/conversation";
@@ -30,11 +25,6 @@ import { Plus } from "lucide-react";
 
 import { json } from "@remix-run/node";
 import { env } from "~/env.server";
-import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "~/components/ui/resizable";
 
 // Example loader accessing params
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -59,7 +49,6 @@ export async function action({ params, request }: ActionFunctionArgs) {
   if (request.method.toUpperCase() !== "POST") {
     return new Response("Method Not Allowed", { status: 405 });
   }
-  const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
   // params.conversationId will be available here
   const { conversationId } = params;
@@ -80,8 +69,6 @@ export default function SingleConversation() {
   const [conversationResponse, setConversationResponse] = React.useState<
     { conversationHistoryId: string; id: string; token: string } | undefined
   >(run);
-
-  const [stopLoading, setStopLoading] = React.useState(false);
 
   const { conversationId } = useParams();
   const revalidator = useRevalidator();
@@ -174,9 +161,7 @@ export default function SingleConversation() {
                   conversationId={conversationId as string}
                   className="bg-background-3 w-full border-1 border-gray-300"
                   isLoading={
-                    !!conversationResponse ||
-                    conversation?.status === "running" ||
-                    stopLoading
+                    !!conversationResponse || conversation?.status === "running"
                   }
                 />
               )}

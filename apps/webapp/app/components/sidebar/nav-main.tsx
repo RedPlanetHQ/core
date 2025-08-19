@@ -33,11 +33,7 @@ export const NavMain = ({
                   location.pathname.includes(item.url) &&
                     "!bg-accent !text-accent-foreground",
                 )}
-                onClick={() =>
-                  navigate(
-                    item.url.includes("/logs") ? `${item.url}/all` : item.url,
-                  )
-                }
+                onClick={() => navigate(item.url)}
                 variant="ghost"
               >
                 {item.icon && <item.icon size={16} />}

@@ -4,7 +4,7 @@ import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 import { requireUser } from "~/services/session.server";
 import {
   confirmBasicDetailsPath,
-  dashboardPath,
+  conversationPath,
   onboardingPath,
 } from "~/utils/pathBuilder";
 
@@ -24,7 +24,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   } else if (!user.onboardingComplete) {
     return redirect(onboardingPath());
   } else {
-    return redirect(dashboardPath());
+    return redirect(conversationPath());
   }
 };
 

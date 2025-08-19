@@ -1,8 +1,12 @@
 import { z } from "zod";
-import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import {
+  createHybridActionApiRoute,
+  createHybridLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 import { SpaceService } from "~/services/space.server";
 import { json } from "@remix-run/node";
 import { prisma } from "~/db.server";
+import { apiCors } from "~/utils/apiCors";
 
 const spaceService = new SpaceService();
 
@@ -30,10 +34,9 @@ const SearchParamsSchema = z.object({
   q: z.string().optional(),
 });
 
-const { action, loader } = createActionApiRoute(
+const { action } = createHybridActionApiRoute(
   {
     body: z.union([CreateSpaceSchema, BulkOperationSchema]),
-    searchParams: SearchParamsSchema,
     allowJWT: true,
     authorization: {
       action: "manage",
@@ -54,20 +57,6 @@ const { action, loader } = createActionApiRoute(
       throw new Error(
         "Workspace ID is required to create an ingestion queue entry.",
       );
-    }
-
-    if (request.method === "GET") {
-      // List/search spaces
-      if (searchParams?.q) {
-        const spaces = await spaceService.searchSpacesByName(
-          searchParams.q,
-          user?.Workspace?.id,
-        );
-        return json({ spaces });
-      } else {
-        const spaces = await spaceService.getUserSpaces(user.Workspace.id);
-        return json({ spaces });
-      }
     }
 
     if (request.method === "POST") {
@@ -177,6 +166,47 @@ const { action, loader } = createActionApiRoute(
     }
 
     return json({ error: "Method not allowed" }, { status: 405 });
+  },
+);
+
+const loader = createHybridLoaderApiRoute(
+  {
+    allowJWT: true,
+    searchParams: SearchParamsSchema,
+    corsStrategy: "all",
+    findResource: async () => 1,
+  },
+  async ({ authentication, request, searchParams }) => {
+    if (request.method.toUpperCase() === "OPTIONS") {
+      return apiCors(request, json({}));
+    }
+
+    const user = await prisma.user.findUnique({
+      where: {
+        id: authentication.userId,
+      },
+      include: {
+        Workspace: true,
+      },
+    });
+
+    if (!user?.Workspace?.id) {
+      throw new Error(
+        "Workspace ID is required to create an ingestion queue entry.",
+      );
+    }
+
+    // List/search spaces
+    if (searchParams?.q) {
+      const spaces = await spaceService.searchSpacesByName(
+        searchParams.q,
+        user?.Workspace?.id,
+      );
+      return json({ spaces });
+    } else {
+      const spaces = await spaceService.getUserSpaces(user.Workspace.id);
+      return json({ spaces });
+    }
   },
 );
 

@@ -8,7 +8,7 @@ import { EditorContent, Placeholder, EditorRoot } from "novel";
 import { useCallback, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
-import { Loader, LoaderCircle } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import { Form, useSubmit } from "@remix-run/react";
 
 interface ConversationTextareaProps {
@@ -25,7 +25,6 @@ export function ConversationTextarea({
   defaultValue,
   isLoading = false,
   placeholder,
-  className,
   conversationId,
   onChange,
 }: ConversationTextareaProps) {

@@ -1,5 +1,4 @@
-import React, { useMemo } from "react";
-import { Layout, LayoutGrid, Search } from "lucide-react";
+import { LayoutGrid } from "lucide-react";
 import { IntegrationCard } from "./integration-card";
 
 interface IntegrationGridProps {

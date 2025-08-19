@@ -14,6 +14,10 @@ export function dashboardPath() {
   return `/home/dashboard`;
 }
 
+export function conversationPath() {
+  return `/home/conversation`;
+}
+
 export function rootPath() {
   return `/`;
 }

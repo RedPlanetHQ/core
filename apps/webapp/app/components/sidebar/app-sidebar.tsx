@@ -8,7 +8,13 @@ import {
   SidebarMenu,
   SidebarMenuItem,
 } from "../ui/sidebar";
-import { Activity, LayoutGrid, MessageSquare, Network } from "lucide-react";
+import {
+  Activity,
+  Columns3,
+  LayoutGrid,
+  MessageSquare,
+  Network,
+} from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
 import { NavUser } from "./nav-user";
@@ -26,6 +32,11 @@ const data = {
       title: "Memory",
       url: "/home/dashboard",
       icon: Network,
+    },
+    {
+      title: "Spaces",
+      url: "/home/space",
+      icon: Columns3,
     },
     {
       title: "Activity",

@@ -1,7 +1,11 @@
 import { z } from "zod";
-import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import {
+  createActionApiRoute,
+  createHybridLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 import { SpaceService } from "~/services/space.server";
 import { json } from "@remix-run/node";
+import { apiCors } from "~/utils/apiCors";
 
 const spaceService = new SpaceService();
 
@@ -16,10 +20,10 @@ const UpdateSpaceSchema = z.object({
   description: z.string().optional(),
 });
 
-const { action, loader } = createActionApiRoute(
+const { action } = createActionApiRoute(
   {
-    params: SpaceParamsSchema,
     body: UpdateSpaceSchema,
+    params: SpaceParamsSchema,
     allowJWT: true,
     authorization: {
       action: "manage",
@@ -30,17 +34,6 @@ const { action, loader } = createActionApiRoute(
     const userId = authentication.userId;
     const { spaceId } = params;
 
-    if (request.method === "GET") {
-      // Get space details
-      const space = await spaceService.getSpace(spaceId, userId);
-      
-      if (!space) {
-        return json({ error: "Space not found" }, { status: 404 });
-      }
-
-      return json({ space });
-    }
-
     if (request.method === "PUT") {
       // Update space
       if (!body || Object.keys(body).length === 0) {
@@ -49,29 +42,55 @@ const { action, loader } = createActionApiRoute(
 
       const updates: any = {};
       if (body.name !== undefined) updates.name = body.name;
-      if (body.description !== undefined) updates.description = body.description;
+      if (body.description !== undefined)
+        updates.description = body.description;
 
       const space = await spaceService.updateSpace(spaceId, updates, userId);
       return json({ space, success: true });
     }
 
     if (request.method === "DELETE") {
-      // Delete space
-      const result = await spaceService.deleteSpace(spaceId, userId);
-      
-      if (result.deleted) {
-        return json({ 
-          success: true, 
+      try {
+        // Delete space
+        await spaceService.deleteSpace(spaceId, userId);
+
+        return json({
+          success: true,
           message: "Space deleted successfully",
-          statementsUpdated: result.statementsUpdated 
         });
-      } else {
-        return json({ error: result.error }, { status: 400 });
+      } catch (e) {
+        return json({ error: e }, { status: 400 });
       }
     }
 
     return json({ error: "Method not allowed" }, { status: 405 });
-  }
+  },
+);
+
+const loader = createHybridLoaderApiRoute(
+  {
+    allowJWT: true,
+    params: SpaceParamsSchema,
+    corsStrategy: "all",
+    findResource: async () => 1,
+  },
+  async ({ authentication, request, params }) => {
+    if (request.method.toUpperCase() === "OPTIONS") {
+      return apiCors(request, json({}));
+    }
+
+    // Get space details
+    const space = await spaceService.getSpace(
+      params.spaceId,
+      authentication.userId,
+    );
+
+    if (!space) {
+      return json({ error: "Space not found" }, { status: 404 });
+    }
+
+    return json({ space });
+  },
 );
 
 export { action, loader };

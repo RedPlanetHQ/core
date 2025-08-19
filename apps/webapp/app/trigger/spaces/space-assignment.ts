@@ -15,7 +15,6 @@ import { triggerSpacePattern } from "./space-pattern";
 import type { CoreMessage } from "ai";
 import { z } from "zod";
 import { type Space } from "@prisma/client";
-import { r } from "@/build/server/assets/parseJsonBody-B4eccTHr";
 
 interface SpaceAssignmentPayload {
   userId: string;

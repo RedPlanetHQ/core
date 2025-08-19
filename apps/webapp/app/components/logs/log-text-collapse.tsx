@@ -1,23 +1,9 @@
 import { useState } from "react";
-import { useFetcher } from "@remix-run/react";
-import { AlertCircle, Info, Trash } from "lucide-react";
 import { cn } from "~/lib/utils";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
-import { Button } from "../ui";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "../ui/alert-dialog";
 import { Badge } from "../ui/badge";
 import { type LogItem } from "~/hooks/use-logs";
+import { LogOptions } from "./log-options";
+import { LogDetails } from "./log-details";
 
 interface LogTextCollapseProps {
   text?: string;
@@ -25,7 +11,6 @@ interface LogTextCollapseProps {
   logData: any;
   log: LogItem;
   id: string;
-  episodeUUID?: string;
 }
 
 const getStatusColor = (status: string) => {
@@ -46,33 +31,12 @@ const getStatusColor = (status: string) => {
 };
 
 export function LogTextCollapse({
-  episodeUUID,
   text,
   error,
   id,
-  logData,
   log,
 }: LogTextCollapseProps) {
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const deleteFetcher = useFetcher();
-
-  const handleDelete = () => {
-    if (!episodeUUID) {
-      console.error("No episodeUuid found in log data");
-      return;
-    }
-
-    deleteFetcher.submit(
-      { id },
-      {
-        method: "DELETE",
-        action: "/api/v1/ingestion_queue/delete",
-        encType: "application/json",
-      },
-    );
-    setDeleteDialogOpen(false);
-  };
 
   // Show collapse if text is long (by word count)
   const COLLAPSE_WORD_LIMIT = 30;
@@ -105,7 +69,7 @@ export function LogTextCollapse({
       >
         <div
           className={cn(
-            "border-border flex w-full min-w-[0px] shrink flex-col border-b py-2",
+            "border-border flex w-full min-w-[0px] shrink flex-col border-b py-1",
           )}
         >
           <div className="flex w-full items-center justify-between gap-4">
@@ -113,44 +77,12 @@ export function LogTextCollapse({
               className="inline-flex min-h-[24px] min-w-[0px] shrink cursor-pointer items-center justify-start"
               onClick={() => setDialogOpen(true)}
             >
-              <div
-                className={cn("truncate text-left")}
-                dangerouslySetInnerHTML={{ __html: text }}
-              ></div>
+              <div className={cn("truncate text-left")}>
+                {text.replace(/<[^>]+>/g, "")}
+              </div>
             </div>
 
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogContent className="max-w-2xl p-4">
-                <DialogHeader>
-                  <DialogTitle className="flex w-full items-center justify-between">
-                    <span>Log Details</span>
-                  </DialogTitle>
-                </DialogHeader>
-                <div className="max-h-[70vh] overflow-auto p-0">
-                  <p
-                    className="px-3 py-2 text-sm break-words whitespace-pre-wrap"
-                    style={{ lineHeight: "1.5" }}
-                    dangerouslySetInnerHTML={{ __html: text }}
-                  />
-                  {error && (
-                    <div className="mt-4 border-t px-3 py-2">
-                      <div className="flex items-start gap-2 text-red-600">
-                        <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                        <div>
-                          <p className="mb-1 text-sm font-medium">
-                            Error Details
-                          </p>
-                          <p className="text-sm break-words whitespace-pre-wrap">
-                            {error}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-            <div className="text-muted-foreground flex items-center justify-end text-xs">
+            <div className="text-muted-foreground flex shrink-0 items-center justify-end text-xs">
               <div className="flex items-center">
                 <Badge
                   className={cn(
@@ -166,50 +98,20 @@ export function LogTextCollapse({
                   {new Date(log.time).toLocaleString()}
                 </div>
 
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="-ml-2 rounded px-2"
-                  onClick={() => setDialogOpen(true)}
-                >
-                  <Info size={15} />
-                </Button>
-                {episodeUUID && (
-                  <AlertDialog
-                    open={deleteDialogOpen}
-                    onOpenChange={setDeleteDialogOpen}
-                  >
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="rounded px-2"
-                      >
-                        <Trash size={15} />
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Delete Episode</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          Are you sure you want to delete this episode? This
-                          action cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={handleDelete}>
-                          Continue
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                )}
+                <LogOptions id={id} />
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <LogDetails
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        text={text}
+        error={error}
+        log={log}
+      />
     </div>
   );
 }

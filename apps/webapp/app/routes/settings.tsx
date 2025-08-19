@@ -59,7 +59,7 @@ export default function Settings() {
   const navigate = useNavigate();
 
   const gotoHome = () => {
-    navigate("/home/dashboard");
+    navigate("/home/conversation");
   };
 
   return (

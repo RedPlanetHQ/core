@@ -87,8 +87,8 @@ services:
       - NEO4J_apoc_export_file_enabled=true # Enable file export
       - NEO4J_apoc_import_file_enabled=true # Enable file import
       - NEO4J_apoc_import_file_use_neo4j_config=true
-      - NEO4J_dbms_memory_heap_initial__size=1G
-      - NEO4J_dbms_memory_heap_max__size=2G
+      - NEO4J_server_memory_heap_initial__size=2G
+      - NEO4J_server_memory_heap_max__size=4G
     ports:
       - "7474:7474"
       - "7687:7687"

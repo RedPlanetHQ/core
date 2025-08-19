@@ -36,20 +36,23 @@ const { action, loader } = createHybridActionApiRoute(
       }
 
       const output = ingestionQueue.output as any;
+      let result;
 
-      const result = await deleteEpisodeWithRelatedNodes({
-        episodeUuid: output?.episodeUuid,
-        userId: authentication.userId,
-      });
+      if (output?.episodeUuid) {
+        result = await deleteEpisodeWithRelatedNodes({
+          episodeUuid: output?.episodeUuid,
+          userId: authentication.userId,
+        });
 
-      if (!result.episodeDeleted) {
-        return json(
-          {
-            error: "Episode not found or unauthorized",
-            code: "not_found",
-          },
-          { status: 404 },
-        );
+        if (!result.episodeDeleted) {
+          return json(
+            {
+              error: "Episode not found or unauthorized",
+              code: "not_found",
+            },
+            { status: 404 },
+          );
+        }
       }
 
       await deleteIngestionQueue(ingestionQueue.id);
@@ -58,10 +61,10 @@ const { action, loader } = createHybridActionApiRoute(
         success: true,
         message: "Episode deleted successfully",
         deleted: {
-          episode: result.episodeDeleted,
-          statements: result.statementsDeleted,
-          entities: result.entitiesDeleted,
-          facts: result.factsDeleted,
+          episode: result?.episodeDeleted,
+          statements: result?.statementsDeleted,
+          entities: result?.entitiesDeleted,
+          facts: result?.factsDeleted,
         },
       });
     } catch (error) {

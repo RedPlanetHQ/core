@@ -8,8 +8,6 @@ import {
   type ListRowProps,
 } from "react-virtualized";
 import { type LogItem } from "~/hooks/use-logs";
-import { Badge } from "~/components/ui/badge";
-import { cn } from "~/lib/utils";
 import { ScrollManagedList } from "../virtualized-list";
 import { LogTextCollapse } from "./log-text-collapse";
 
@@ -61,7 +59,6 @@ function LogItemRenderer(
             logData={log.data}
             log={log}
             id={log.id}
-            episodeUUID={log.episodeUUID}
           />
         </div>
       </div>

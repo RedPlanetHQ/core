@@ -141,7 +141,7 @@ export const getClusteredGraphData = async (userId: string) => {
          rel.target.properties as targetProperties,
          rel.type as relationshipType,
          s.uuid as statementUuid,
-         s.clusterId as clusterId,
+         s.spaceId as spaceId,
          s.fact as fact, 
          s.createdAt as createdAt,
          rel.isEntityToStatement as isEntityToStatement,
@@ -167,7 +167,7 @@ export const getClusteredGraphData = async (userId: string) => {
 
       const relationshipType = record.get("relationshipType");
       const statementUuid = record.get("statementUuid");
-      const clusterId = record.get("clusterId");
+      const clusterId = record.get("spaceId");
       const fact = record.get("fact");
       const createdAt = record.get("createdAt");
 

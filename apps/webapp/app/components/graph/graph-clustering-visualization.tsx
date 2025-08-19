@@ -1,6 +1,10 @@
 import { useState, useMemo, forwardRef, useEffect } from "react";
 import { useTheme } from "remix-themes";
-import { GraphClustering, type GraphClusteringRef } from "./graph-clustering";
+import {
+  type ClusterData,
+  GraphClustering,
+  type GraphClusteringRef,
+} from "./graph-clustering";
 import { GraphPopovers } from "./graph-popover";
 import type { RawTriplet, NodePopupContent, EdgePopupContent } from "./type";
 import { Card, CardContent } from "~/components/ui/card";
@@ -15,15 +19,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../ui/select";
-
-interface ClusterData {
-  uuid: string;
-  name: string;
-  description?: string;
-  size: number;
-  cohesionScore?: number;
-  aspectType?: "thematic" | "social" | "activity";
-}
 
 export interface GraphClusteringVisualizationProps {
   triplets: RawTriplet[];
@@ -53,8 +48,9 @@ export const GraphClusteringVisualization = forwardRef<
     },
     ref,
   ) => {
+    console.log(clusters);
     const [themeMode] = useTheme();
-    
+
     // Graph state for popovers
     const [showNodePopup, setShowNodePopup] = useState<boolean>(false);
     const [showEdgePopup, setShowEdgePopup] = useState<boolean>(false);
@@ -206,20 +202,23 @@ export const GraphClusteringVisualization = forwardRef<
                     className="bg-background w-48 rounded px-2 py-1 text-sm"
                     showIcon
                   >
-                    <SelectValue placeholder="All Clusters" />
+                    <SelectValue placeholder="All Spaces" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="all_clusters">All Clusters</SelectItem>
+                    <SelectItem value="all_clusters">All Spaces</SelectItem>
                     {clusters.map((cluster, index) => {
                       // Get cluster color from the same palette used in the graph
-                      const palette = themeMode === "dark" ? nodeColorPalette.dark : nodeColorPalette.light;
+                      const palette =
+                        themeMode === "dark"
+                          ? nodeColorPalette.dark
+                          : nodeColorPalette.light;
                       const clusterColor = palette[index % palette.length];
-                      
+
                       return (
-                        <SelectItem key={cluster.uuid} value={cluster.uuid}>
+                        <SelectItem key={cluster.id} value={cluster.id}>
                           <div className="flex items-center gap-2">
-                            <div 
-                              className="w-3 h-3 rounded-full flex-shrink-0" 
+                            <div
+                              className="h-3 w-3 flex-shrink-0 rounded-full"
                               style={{ backgroundColor: clusterColor }}
                             />
                             <span>{cluster.name}</span>

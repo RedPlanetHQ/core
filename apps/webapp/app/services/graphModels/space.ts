@@ -60,7 +60,7 @@ export async function getSpace(
     
     // Count statements in this space
     OPTIONAL MATCH (stmt:Statement)
-    WHERE stmt.userId = $userId AND s.uuid IN stmt.spaceIds
+    WHERE stmt.userId = $userId AND s.id IN stmt.spaceIds
     
     WITH s, count(stmt) as statementCount
     RETURN s, statementCount
@@ -324,11 +324,15 @@ export async function getSpaceStatementCount(
 export async function shouldTriggerSpacePattern(
   spaceId: string,
   userId: string,
-): Promise<{ shouldTrigger: boolean; isNewSpace: boolean; currentCount: number }> {
+): Promise<{
+  shouldTrigger: boolean;
+  isNewSpace: boolean;
+  currentCount: number;
+}> {
   try {
     // Get current statement count from Neo4j
     const currentCount = await getSpaceStatementCount(spaceId, userId);
-    
+
     // Get space data from PostgreSQL
     const space = await prisma.space.findUnique({
       where: { id: spaceId },

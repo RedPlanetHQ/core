@@ -37,8 +37,8 @@ export class SpaceService {
       throw new Error("Space name too long (max 100 characters)");
     }
 
-    if (params.description && params.description.length > 500) {
-      throw new Error("Space description too long (max 500 characters)");
+    if (params.description && params.description.length > 1000) {
+      throw new Error("Space description too long (max 1000 characters)");
     }
 
     // Check for duplicate names
@@ -172,6 +172,10 @@ export class SpaceService {
         id: spaceId,
       },
     });
+
+    if (space.name === "Profile") {
+      throw new Error("Bad request");
+    }
 
     await deleteSpace(spaceId, userId);
 

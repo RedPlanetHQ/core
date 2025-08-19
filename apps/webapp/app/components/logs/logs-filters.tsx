@@ -47,11 +47,8 @@ export function LogsFilters({
 
   const hasFilters = selectedSource || selectedStatus;
 
-  // Helper for going back to main step
-  const handleBack = () => setStep("main");
-
   return (
-    <div className="mb-4 flex w-full items-center justify-start gap-2 px-5">
+    <div className="mb-2 flex w-full items-center justify-start gap-2 px-5">
       <Popover
         open={popoverOpen}
         onOpenChange={(open) => {
@@ -166,19 +163,19 @@ export function LogsFilters({
       {hasFilters && (
         <div className="flex items-center gap-2">
           {selectedSource && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded">
+            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
               {selectedSourceName}
               <X
-                className="hover:text-destructive h-4 w-4 cursor-pointer"
+                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onSourceChange(undefined)}
               />
             </Badge>
           )}
           {selectedStatus && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded">
+            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
               {selectedStatusLabel}
               <X
-                className="hover:text-destructive h-4 w-4 cursor-pointer"
+                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onStatusChange(undefined)}
               />
             </Badge>

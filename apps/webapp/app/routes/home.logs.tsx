@@ -1,16 +1,14 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useFetcher } from "@remix-run/react";
+import { useFetcher } from "@remix-run/react";
 import { useLogs } from "~/hooks/use-logs";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
-import { AppContainer, PageContainer } from "~/components/layout/app-layout";
 import { Card, CardContent } from "~/components/ui/card";
 import { Database, LoaderCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { ContributionGraph } from "~/components/activity/contribution-graph";
 
 export default function LogsAll() {
-  const navigate = useNavigate();
   const [selectedSource, setSelectedSource] = useState<string | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
   const contributionFetcher = useFetcher<any>();
@@ -23,7 +21,7 @@ export default function LogsAll() {
     isLoading,
     isInitialLoad,
   } = useLogs({
-    endpoint: "/api/v1/logs/all",
+    endpoint: "/api/v1/logs",
     source: selectedSource,
     status: selectedStatus,
   });
@@ -64,15 +62,15 @@ export default function LogsAll() {
         ) : (
           <>
             {/* Filters */}
-            {logs.length > 0 && (
-              <LogsFilters
-                availableSources={availableSources}
-                selectedSource={selectedSource}
-                selectedStatus={selectedStatus}
-                onSourceChange={setSelectedSource}
-                onStatusChange={setSelectedStatus}
-              />
-            )}
+
+            <LogsFilters
+              availableSources={availableSources}
+              selectedSource={selectedSource}
+              selectedStatus={selectedStatus}
+              onSourceChange={setSelectedSource}
+              onStatusChange={setSelectedStatus}
+            />
+
             {/* Logs List */}
             <div className="flex h-full w-full space-y-4">
               {logs.length === 0 ? (
