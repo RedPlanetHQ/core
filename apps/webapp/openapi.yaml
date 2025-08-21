@@ -1,0 +1,1750 @@
+openapi: 3.0.3
+info:
+  title: Core API
+  version: 1.0.0
+  description: |
+    Core is a memory sharing platform for LLMs with graph-based storage, temporal facts, and comprehensive search capabilities.
+
+    ## Authentication
+
+    Core supports multiple authentication methods:
+    - **Bearer Token**: Personal API tokens or OAuth2 access tokens
+    - **OAuth2**: Full OAuth2 authorization code flow with PKCE support
+    - **Session Cookies**: For web interface access
+
+    Most API endpoints support Bearer token authentication via the Authorization header:
+    ```
+    Authorization: Bearer YOUR_TOKEN_HERE
+    ```
+
+    ## Features
+
+    - **Temporal Knowledge Graph**: Store and query facts with temporal validity
+    - **Spaces**: Organize knowledge into logical spaces/projects
+    - **Search**: Advanced semantic search with graph traversal
+    - **Ingestion**: Process and extract facts from various data sources  
+    - **Integrations**: Connect with external platforms via OAuth2
+    - **MCP Support**: Model Context Protocol for AI assistant integration
+    - **Webhooks**: Real-time notifications for data changes
+
+  contact:
+    name: Core
+    url: https://github.com/redplanethq/core
+
+servers:
+  - url: "{protocol}://{domain}"
+    description: Configurable Core server
+    variables:
+      protocol:
+        default: https
+        enum: [http, https]
+        description: The protocol to use
+      domain:
+        default: core.heysol.ai
+        description: The Core API domain
+
+security:
+  - bearerAuth: []
+  - oauth2: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Bearer token authentication supports:
+        - Personal API tokens (PATs)
+        - OAuth2 access tokens
+        - JWT tokens
+
+        Example: `Authorization: Bearer your_token_here`
+
+    oauth2:
+      type: oauth2
+      description: |
+        OAuth2 authorization code flow with PKCE support.
+        Supports scopes: read, write, mcp, integration, oauth
+      flows:
+        authorizationCode:
+          authorizationUrl: "/oauth/authorize"
+          tokenUrl: "/oauth/token"
+          refreshUrl: "/oauth/token"
+          scopes:
+            read: Read access to user data
+            write: Write access to user data
+            mcp: MCP (Model Context Protocol) access
+            integration: Access to integrations
+            oauth: OAuth client management
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code or message
+        error_description:
+          type: string
+          description: Human-readable error description
+        details:
+          type: array
+          description: Validation error details
+          items:
+            type: object
+      required:
+        - error
+
+    OAuth2Error:
+      type: object
+      properties:
+        error:
+          type: string
+          enum:
+            [
+              invalid_request,
+              invalid_client,
+              invalid_grant,
+              unauthorized_client,
+              unsupported_grant_type,
+              invalid_scope,
+            ]
+        error_description:
+          type: string
+        error_uri:
+          type: string
+        state:
+          type: string
+
+    OAuth2TokenResponse:
+      type: object
+      properties:
+        access_token:
+          type: string
+          description: The access token
+        token_type:
+          type: string
+          enum: [Bearer]
+        expires_in:
+          type: integer
+          description: Access token lifetime in seconds
+        refresh_token:
+          type: string
+          description: Refresh token (if applicable)
+        scope:
+          type: string
+          description: Space-separated list of granted scopes
+
+    UserInfo:
+      type: object
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+        picture:
+          type: string
+          format: uri
+
+    SearchRequest:
+      type: object
+      required:
+        - query
+      properties:
+        query:
+          type: string
+          description: Search query text
+        startTime:
+          type: string
+          format: date-time
+          description: Filter facts after this timestamp
+        endTime:
+          type: string
+          format: date-time
+          description: Filter facts before this timestamp
+        spaceIds:
+          type: array
+          items:
+            type: string
+          default: []
+          description: Filter results to specific spaces
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          description: Maximum number of results
+        maxBfsDepth:
+          type: integer
+          minimum: 1
+          maximum: 10
+          description: Maximum graph traversal depth
+        includeInvalidated:
+          type: boolean
+          default: false
+          description: Include invalidated facts
+        entityTypes:
+          type: array
+          items:
+            type: string
+          description: Filter by entity types
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: Minimum relevance score
+        minResults:
+          type: integer
+          minimum: 1
+          description: Minimum number of results to return
+
+    ExtensionSearchRequest:
+      type: object
+      required:
+        - input
+      properties:
+        input:
+          type: string
+          description: Search input text
+        limit:
+          type: integer
+          minimum: 1
+          maximum: 1000
+        maxBfsDepth:
+          type: integer
+          minimum: 1
+          maximum: 10
+        includeInvalidated:
+          type: boolean
+          default: false
+        entityTypes:
+          type: array
+          items:
+            type: string
+        scoreThreshold:
+          type: number
+          minimum: 0
+          maximum: 1
+        minResults:
+          type: integer
+          minimum: 1
+
+    ExtensionSummaryRequest:
+      type: object
+      required:
+        - html
+        - url
+      properties:
+        html:
+          type: string
+          description: HTML content to summarize
+        url:
+          type: string
+          format: uri
+          description: URL of the page
+        title:
+          type: string
+          description: Page title
+
+    IngestRequest:
+      type: object
+      required:
+        - episodeBody
+        - referenceTime
+        - source
+      properties:
+        episodeBody:
+          type: string
+          description: Content to ingest and process
+        referenceTime:
+          type: string
+          format: date-time
+          description: Reference timestamp for the content
+        metadata:
+          type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+          description: Additional metadata
+        source:
+          type: string
+          description: Source identifier
+        spaceId:
+          type: string
+          description: Space to assign the content to
+        sessionId:
+          type: string
+          description: Session identifier
+
+    ActivityRequest:
+      type: object
+      required:
+        - text
+        - source
+      properties:
+        text:
+          type: string
+          description: Activity text content
+        source:
+          type: string
+          description: Source identifier
+        sourceURL:
+          type: string
+          format: uri
+          description: Source URL
+        integrationAccountId:
+          type: string
+          description: Integration account ID
+        taskId:
+          type: string
+          description: Task identifier
+
+    Space:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        userId:
+          type: string
+
+    CreateSpaceRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          description: Space name
+        description:
+          type: string
+          description: Space description
+
+    UpdateSpaceRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: Updated space name
+        description:
+          type: string
+          description: Updated space description
+
+    BulkSpaceOperation:
+      type: object
+      required:
+        - intent
+      properties:
+        intent:
+          type: string
+          enum:
+            [
+              assign_statements,
+              remove_statements,
+              bulk_assign,
+              initialize_space_ids,
+            ]
+          description: Type of bulk operation
+        spaceId:
+          type: string
+          description: Target space ID (required for some operations)
+        statementIds:
+          type: array
+          items:
+            type: string
+          description: Statement IDs to operate on
+        spaceIds:
+          type: array
+          items:
+            type: string
+          description: Space IDs for bulk operations
+
+    IngestionRule:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        text:
+          type: string
+        source:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    CreateIngestionRuleRequest:
+      type: object
+      required:
+        - text
+        - source
+      properties:
+        name:
+          type: string
+        text:
+          type: string
+          description: Rule text/content
+        source:
+          type: string
+          description: Source identifier
+        isActive:
+          type: boolean
+          default: true
+
+    UpdateIngestionRuleRequest:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        text:
+          type: string
+        source:
+          type: string
+        isActive:
+          type: boolean
+
+    OAuth2Client:
+      type: object
+      properties:
+        id:
+          type: string
+        clientId:
+          type: string
+        name:
+          type: string
+        redirectUris:
+          type: array
+          items:
+            type: string
+            format: uri
+        createdAt:
+          type: string
+          format: date-time
+
+    Conversation:
+      type: object
+      properties:
+        id:
+          type: string
+        title:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+paths:
+  # OAuth2 & Authentication
+  /oauth/authorize:
+    get:
+      summary: OAuth2 Authorization Endpoint
+      description: |
+        OAuth2 authorization endpoint supporting authorization code flow with PKCE.
+        Requires user to be logged in via session cookie.
+      security:
+        - {} # No security for initial auth request
+      parameters:
+        - name: client_id
+          in: query
+          required: true
+          schema:
+            type: string
+          description: OAuth2 client identifier
+        - name: redirect_uri
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uri
+          description: Redirect URI after authorization
+        - name: response_type
+          in: query
+          required: true
+          schema:
+            type: string
+            enum: [code]
+          description: Must be 'code' for authorization code flow
+        - name: scope
+          in: query
+          schema:
+            type: string
+          description: Space-separated list of requested scopes
+          example: "read write mcp"
+        - name: state
+          in: query
+          schema:
+            type: string
+          description: State parameter for CSRF protection
+        - name: code_challenge
+          in: query
+          schema:
+            type: string
+          description: PKCE code challenge
+        - name: code_challenge_method
+          in: query
+          schema:
+            type: string
+            enum: [S256, plain]
+          description: PKCE code challenge method
+      responses:
+        "200":
+          description: Authorization page displayed
+        "302":
+          description: Redirect to login if not authenticated
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2Error"
+          description: Invalid request parameters
+
+    post:
+      summary: OAuth2 Authorization Decision
+      description: Handle user's allow/deny decision for OAuth2 authorization
+      security:
+        - {} # Session cookie required but not in security schemes
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - action
+              properties:
+                action:
+                  type: string
+                  enum: [allow, deny]
+                client_id:
+                  type: string
+                redirect_uri:
+                  type: string
+                  format: uri
+                scope:
+                  type: string
+                state:
+                  type: string
+                code_challenge:
+                  type: string
+                code_challenge_method:
+                  type: string
+                  enum: [S256, plain]
+      responses:
+        "302":
+          description: Redirect to redirect_uri with code or error
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2Error"
+          description: Invalid request
+
+  /oauth/token:
+    post:
+      summary: OAuth2 Token Endpoint
+      description: |
+        Exchange authorization code for access token, or refresh an existing token.
+        Supports both JSON and form-encoded requests.
+      security:
+        - {} # Client authentication via client_secret or PKCE
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - client_id
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token]
+                code:
+                  type: string
+                  description: Authorization code (for authorization_code grant)
+                redirect_uri:
+                  type: string
+                  format: uri
+                  description: Original redirect URI (for authorization_code grant)
+                client_id:
+                  type: string
+                  description: OAuth2 client ID
+                client_secret:
+                  type: string
+                  description: OAuth2 client secret (if not using PKCE)
+                code_verifier:
+                  type: string
+                  description: PKCE code verifier (for PKCE flow)
+                refresh_token:
+                  type: string
+                  description: Refresh token (for refresh_token grant)
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - grant_type
+                - client_id
+              properties:
+                grant_type:
+                  type: string
+                  enum: [authorization_code, refresh_token]
+                code:
+                  type: string
+                redirect_uri:
+                  type: string
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                code_verifier:
+                  type: string
+                refresh_token:
+                  type: string
+      responses:
+        "200":
+          description: Token issued successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2TokenResponse"
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2Error"
+
+  /oauth/userinfo:
+    get:
+      summary: OAuth2 User Info Endpoint
+      description: Get authenticated user information
+      security:
+        - oauth2: [read]
+      responses:
+        "200":
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserInfo"
+        "401":
+          description: Invalid or expired token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /oauth/tokeninfo:
+    get:
+      summary: OAuth2 Token Introspection
+      description: Get information about the current access token
+      security:
+        - oauth2: []
+      responses:
+        "200":
+          description: Token information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active:
+                    type: boolean
+                  scope:
+                    type: string
+                  client_id:
+                    type: string
+                  exp:
+                    type: integer
+                  sub:
+                    type: string
+        "401":
+          description: Invalid token
+
+  # Profile & User Data
+  /api/profile:
+    get:
+      summary: Get User Profile
+      description: Get user profile information via OAuth2 authentication
+      security:
+        - oauth2: [read]
+      responses:
+        "200":
+          description: User profile data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user:
+                    $ref: "#/components/schemas/UserInfo"
+                  client:
+                    type: object
+                    properties:
+                      clientId:
+                        type: string
+                      name:
+                        type: string
+                  scopes:
+                    type: array
+                    items:
+                      type: string
+
+  # Search & Knowledge Graph
+  /api/v1/search:
+    post:
+      summary: Search Knowledge Graph
+      description: |
+        Perform advanced semantic search with graph traversal capabilities.
+        Supports temporal filtering, entity type filtering, and relevance scoring.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SearchRequest"
+      responses:
+        "200":
+          description: Search results
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  results:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        content:
+                          type: string
+                        score:
+                          type: number
+                        metadata:
+                          type: object
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+        "401":
+          description: Unauthorized
+
+  /api/v1/extension-search:
+    post:
+      summary: LLM-Powered Multi-Query Search
+      description: |
+        Advanced search endpoint for browser extensions with LLM-powered query expansion.
+        Optimized for finding relevant context across multiple query variations.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtensionSearchRequest"
+      responses:
+        "200":
+          description: Enhanced search results
+        "400":
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/extension-summary:
+    post:
+      summary: Generate AI Summary
+      description: |
+        Generate AI-powered summaries of web page content for browser extensions.
+        Processes HTML content and extracts key insights.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExtensionSummaryRequest"
+      responses:
+        "200":
+          description: Generated summary
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  summary:
+                    type: string
+                    description: AI-generated summary
+
+  /api/v1/graph/clustered:
+    get:
+      summary: Get Clustered Knowledge Graph
+      description: |
+        Retrieve knowledge graph data with clustering information and spaces.
+        Returns graph structure optimized for visualization.
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Clustered graph data
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  nodes:
+                    type: array
+                    items:
+                      type: object
+                  edges:
+                    type: array
+                    items:
+                      type: object
+                  clusters:
+                    type: array
+                    items:
+                      type: object
+
+  # Data Ingestion
+  /api/v1/add:
+    post:
+      summary: Add Data to Ingestion Queue
+      description: |
+        Add data to the ingestion queue for processing. Content will be analyzed
+        and facts will be extracted into the knowledge graph.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IngestRequest"
+      responses:
+        "200":
+          description: Data queued for ingestion
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  queueId:
+                    type: string
+
+  /api/v1/activity:
+    post:
+      summary: Create Activity
+      description: |
+        Create activity and trigger ingestion with webhook notifications.
+        Used for real-time data processing with external integrations.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityRequest"
+      responses:
+        "200":
+          description: Activity created and processed
+
+  # Spaces Management
+  /api/v1/spaces:
+    get:
+      summary: List/Search Spaces
+      description: Get list of spaces with optional search filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: q
+          in: query
+          schema:
+            type: string
+          description: Search query for space names
+      responses:
+        "200":
+          description: List of spaces
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Space"
+
+    post:
+      summary: Create New Space
+      description: Create a new space for organizing knowledge
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSpaceRequest"
+      responses:
+        "201":
+          description: Space created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+
+    put:
+      summary: Bulk Space Operations
+      description: |
+        Perform bulk operations on spaces including:
+        - assign_statements: Assign statements to a space
+        - remove_statements: Remove statements from a space  
+        - bulk_assign: Bulk assign multiple statements
+        - initialize_space_ids: Initialize space IDs for statements
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkSpaceOperation"
+      responses:
+        "200":
+          description: Bulk operation completed
+
+  /api/v1/spaces/{spaceId}:
+    parameters:
+      - name: spaceId
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Space identifier
+
+    get:
+      summary: Get Space Details
+      description: Retrieve detailed information about a specific space
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Space details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+        "404":
+          description: Space not found
+
+    put:
+      summary: Update Space
+      description: Update space name and/or description
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateSpaceRequest"
+      responses:
+        "200":
+          description: Space updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Space"
+
+    delete:
+      summary: Delete Space
+      description: Delete a space and optionally reassign its content
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Space deleted successfully
+
+  # Conversations Management
+  /api/v1/conversations:
+    get:
+      summary: List Conversations
+      description: Get paginated list of conversations with filtering options
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        "200":
+          description: List of conversations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  conversations:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/Conversation"
+                  pagination:
+                    type: object
+                    properties:
+                      page:
+                        type: integer
+                      limit:
+                        type: integer
+                      total:
+                        type: integer
+
+  /api/v1/conversation/{conversationId}:
+    parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get Conversation
+      description: Retrieve conversation details and messages
+      security:
+        - bearerAuth: []
+        - oauth2: [oauth]
+      responses:
+        "200":
+          description: Conversation details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Conversation"
+
+    delete:
+      summary: Delete Conversation
+      description: Soft delete a conversation
+      security:
+        - bearerAuth: []
+        - oauth2: [oauth]
+      responses:
+        "204":
+          description: Conversation deleted
+
+  /api/v1/conversation/{conversationId}/run:
+    parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      summary: Run Conversation
+      description: Execute/run a conversation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversation execution started
+
+  /api/v1/conversation/{conversationId}/stop:
+    parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      summary: Stop Conversation
+      description: Stop a running conversation
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversation stopped
+
+  /api/v1/conversation/{conversationId}/read:
+    parameters:
+      - name: conversationId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    post:
+      summary: Mark Conversation as Read
+      description: Mark conversation as read by the user
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Conversation marked as read
+
+  # Ingestion Rules Management
+  /api/v1/ingestion-rules:
+    get:
+      summary: List Ingestion Rules
+      description: Get list of ingestion rules with optional filtering
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: source
+          in: query
+          schema:
+            type: string
+          description: Filter by source
+        - name: isActive
+          in: query
+          schema:
+            type: boolean
+          description: Filter by active status
+      responses:
+        "200":
+          description: List of ingestion rules
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/IngestionRule"
+
+    post:
+      summary: Create Ingestion Rule
+      description: Create a new ingestion rule
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIngestionRuleRequest"
+      responses:
+        "201":
+          description: Ingestion rule created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionRule"
+
+    put:
+      summary: Update Ingestion Rule
+      description: Update an existing ingestion rule
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIngestionRuleRequest"
+      responses:
+        "200":
+          description: Ingestion rule updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionRule"
+
+  /api/v1/ingestion-rules/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get Ingestion Rule
+      description: Retrieve specific ingestion rule details
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Ingestion rule details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IngestionRule"
+
+    put:
+      summary: Update Ingestion Rule
+      description: Update specific ingestion rule
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateIngestionRuleRequest"
+      responses:
+        "200":
+          description: Rule updated
+
+    delete:
+      summary: Delete Ingestion Rule
+      description: Delete an ingestion rule
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Rule deleted
+
+  # MCP (Model Context Protocol)
+  /api/v1/mcp/memory:
+    post:
+      summary: MCP Memory Operations
+      description: |
+        MCP server endpoint for memory operations including:
+        - ingest: Add data to memory
+        - search: Search memory content
+        - get_spaces: Retrieve available spaces
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mcp-session-id
+          in: header
+          schema:
+            type: string
+          description: MCP session identifier
+        - name: source
+          in: header
+          schema:
+            type: string
+          description: MCP integration source
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              description: MCP request payload
+      responses:
+        "200":
+          description: MCP response
+          content:
+            application/json:
+              schema:
+                type: object
+
+    delete:
+      summary: MCP Session Cleanup
+      description: Clean up MCP session resources
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mcp-session-id
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Session cleaned up
+
+  /api/v1/mcp/{slug}:
+    parameters:
+      - name: slug
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Integration slug identifier
+
+    post:
+      summary: MCP Integration Proxy
+      description: |
+        Proxy MCP requests to integration-specific servers.
+        Routes requests based on the slug to appropriate integration.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: mcp-session-id
+          in: header
+          schema:
+            type: string
+          description: MCP session identifier
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Proxied MCP response
+
+  # Integration Management
+  /api/v1/integrations:
+    get:
+      summary: Get Connected Integrations
+      description: Get OAuth client's connected integrations with usage statistics
+      security:
+        - oauth2: [integration]
+      responses:
+        "200":
+          description: List of connected integrations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  integrations:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        name:
+                          type: string
+                        type:
+                          type: string
+                        status:
+                          type: string
+                  count:
+                    type: integer
+
+  /api/v1/integration_account:
+    get:
+      summary: List Integration Accounts
+      description: Get user's integration accounts
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of integration accounts
+
+    post:
+      summary: Create Integration Account
+      description: Create new integration account
+      security:
+        - bearerAuth: []
+      responses:
+        "201":
+          description: Integration account created
+
+  /api/v1/integration_account/{id}/credentials:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get Integration Credentials
+      description: Retrieve integration account credentials
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Integration credentials
+
+    put:
+      summary: Update Integration Credentials
+      description: Update integration account credentials
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Credentials updated
+
+    delete:
+      summary: Delete Integration Credentials
+      description: Delete integration account credentials
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Credentials deleted
+
+  /api/v1/integration_account/disconnect:
+    post:
+      summary: Disconnect Integration Account
+      description: Disconnect an integration account
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Integration disconnected
+
+  /api/v1/integration_account/disconnect_mcp:
+    post:
+      summary: Disconnect MCP Integration
+      description: Disconnect an MCP integration account
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: MCP integration disconnected
+
+  # OAuth Client Management
+  /api/oauth/clients:
+    get:
+      summary: List OAuth Clients
+      description: Get user's OAuth clients
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of OAuth clients
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OAuth2Client"
+
+    post:
+      summary: Create OAuth Client
+      description: Create new OAuth client application
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+                - redirectUris
+              properties:
+                name:
+                  type: string
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+      responses:
+        "201":
+          description: OAuth client created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2Client"
+
+  /api/oauth/clients/{clientId}:
+    parameters:
+      - name: clientId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get OAuth Client
+      description: Get specific OAuth client details
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: OAuth client details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OAuth2Client"
+
+    put:
+      summary: Update OAuth Client
+      description: Update OAuth client configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                redirectUris:
+                  type: array
+                  items:
+                    type: string
+                    format: uri
+      responses:
+        "200":
+          description: Client updated
+
+    delete:
+      summary: Delete OAuth Client
+      description: Delete OAuth client application
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Client deleted
+
+  # Episodes & Facts
+  /api/v1/episodes/{episodeId}/facts:
+    parameters:
+      - name: episodeId
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get Episode Facts
+      description: Get facts/statements for a specific episode
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Episode facts
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    id:
+                      type: string
+                    content:
+                      type: string
+                    type:
+                      type: string
+                    confidence:
+                      type: number
+                    validFrom:
+                      type: string
+                      format: date-time
+                    validTo:
+                      type: string
+                      format: date-time
+
+  # System & Monitoring
+  /api/v1/logs:
+    get:
+      summary: Get Ingestion Logs
+      description: View ingestion queue status and processing logs
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: source
+          in: query
+          schema:
+            type: string
+          description: Filter by source
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, processing, completed, failed]
+          description: Filter by status
+      responses:
+        "200":
+          description: Paginated ingestion logs
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  logs:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        source:
+                          type: string
+                        status:
+                          type: string
+                        message:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                  pagination:
+                    type: object
+
+  /api/v1/ingestion-queue/status:
+    get:
+      summary: Get Ingestion Queue Status
+      description: Get current status of the ingestion queue
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Queue status information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  pending:
+                    type: integer
+                  processing:
+                    type: integer
+                  completed:
+                    type: integer
+                  failed:
+                    type: integer
+                  totalCapacity:
+                    type: integer
+
+  /api/v1/ingestion_queue/delete:
+    delete:
+      summary: Delete Queue Items
+      description: Delete items from the ingestion queue
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                itemIds:
+                  type: array
+                  items:
+                    type: string
+      responses:
+        "204":
+          description: Items deleted from queue
+
+  # Webhooks Management
+  /api/v1/webhooks:
+    post:
+      summary: Create Webhook
+      description: Create webhook configuration for real-time notifications
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+                - url
+              properties:
+                url:
+                  type: string
+                  format: uri
+                  description: Webhook endpoint URL
+                secret:
+                  type: string
+                  description: Optional webhook secret for signature verification
+      responses:
+        "201":
+          description: Webhook created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  url:
+                    type: string
+                  secret:
+                    type: string
+                  createdAt:
+                    type: string
+                    format: date-time
+
+  /api/v1/webhooks/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+
+    get:
+      summary: Get Webhook
+      description: Get webhook configuration details
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Webhook details
+
+    put:
+      summary: Update Webhook
+      description: Update webhook configuration
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                  format: uri
+                secret:
+                  type: string
+      responses:
+        "200":
+          description: Webhook updated
+
+    delete:
+      summary: Delete Webhook
+      description: Delete webhook configuration
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Webhook deleted

@@ -3,7 +3,6 @@ import { logger } from "~/services/logger.service";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getClusteredGraphData } from "~/lib/neo4j.server";
 import { SpaceService } from "~/services/space.server";
-import { prisma } from "~/db.server";
 
 const spaceService = new SpaceService();
 
@@ -14,26 +13,11 @@ const loader = createHybridLoaderApiRoute(
     findResource: async () => 1,
   },
   async ({ authentication }) => {
-    const user = await prisma.user.findUnique({
-      where: {
-        id: authentication.userId,
-      },
-      include: {
-        Workspace: true,
-      },
-    });
-
-    if (!user?.Workspace?.id) {
-      throw new Error(
-        "Workspace ID is required to create an ingestion queue entry.",
-      );
-    }
-
     try {
       // Get clustered graph data and cluster metadata in parallel
       const [graphData, clusters] = await Promise.all([
         getClusteredGraphData(authentication.userId),
-        spaceService.getUserSpaces(user.Workspace.id),
+        spaceService.getUserSpaces(authentication.userId),
       ]);
 
       return json({

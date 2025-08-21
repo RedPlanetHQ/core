@@ -110,18 +110,6 @@ model ConversationHistory {
   ConversationExecutionStep ConversationExecutionStep[]
 }
 
-model Entity {
-  id       String @id @default(cuid())
-  name     String @unique // e.g., "User", "Issue", "Task", "Automation"
-  metadata Json // Store field definitions and their types
-
-  // Relations
-  spaceEntities SpaceEntity[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model IngestionQueue {
   id String @id @default(cuid())
 
@@ -478,6 +466,10 @@ model Space {
   themes         String[]
   statementCount Int?
 
+  status String?
+
+  icon String?
+
   lastPatternTrigger          DateTime?
   statementCountAtLastTrigger Int?
 
@@ -485,32 +477,10 @@ model Space {
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
   workspaceId String
 
-  // Space's enabled entities
-  enabledEntities SpaceEntity[]
-
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
   IngestionQueue IngestionQueue[]
   SpacePattern   SpacePattern[]
-}
-
-model SpaceEntity {
-  id String @id @default(cuid())
-
-  // Relations
-  space   Space  @relation(fields: [spaceId], references: [id])
-  spaceId String
-
-  entity   Entity @relation(fields: [entityId], references: [id])
-  entityId String
-
-  // Custom settings for this entity in this space
-  settings Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([spaceId, entityId])
 }
 
 model SpacePattern {

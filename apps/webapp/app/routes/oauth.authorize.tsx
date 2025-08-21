@@ -12,7 +12,6 @@ import {
 } from "~/services/oauth2.server";
 import { Button } from "~/components/ui/button";
 import { Card, CardContent } from "~/components/ui/card";
-import { Arrows } from "~/components/icons";
 import Logo from "~/components/logo/logo";
 import {
   AlignLeft,
@@ -23,6 +22,7 @@ import {
   Shield,
   Database,
   LoaderCircle,
+  ArrowRightLeft,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -240,7 +240,7 @@ export default function OAuthAuthorize() {
             ) : (
               <LayoutGrid size={40} />
             )}
-            <Arrows size={16} />
+            <ArrowRightLeft size={16} />
             <Logo width={40} height={40} />
           </div>
           <div className="mt-4 space-y-4">

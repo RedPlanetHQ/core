@@ -39,7 +39,7 @@ export function NewSpaceDialog({
         return;
       }
 
-      const descriptionText = editor?.getText().trim() || "";
+      const descriptionText = editor?.getHTML() || "";
 
       fetcher.submit(
         {
@@ -49,6 +49,7 @@ export function NewSpaceDialog({
         {
           action: "/api/v1/spaces",
           method: "post",
+          encType: "application/json",
         },
       );
     },
@@ -67,7 +68,7 @@ export function NewSpaceDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md p-4">
+      <DialogContent className="max-w-md overflow-auto p-4">
         <DialogHeader>
           <DialogTitle>Create New Space</DialogTitle>
         </DialogHeader>
@@ -88,7 +89,7 @@ export function NewSpaceDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="space-description">Description</Label>
+            <Label htmlFor="space-description">Rule</Label>
             <div className="bg-grayAlpha-100 rounded-lg border border-gray-300 p-1">
               <EditorRoot>
                 <EditorContent
@@ -100,7 +101,7 @@ export function NewSpaceDialog({
                       keepMarks: true,
                     }),
                     Placeholder.configure({
-                      placeholder: "Enter a description for this space...",
+                      placeholder: "Enter a rule for this space...",
                       includeChildren: true,
                     }),
                     History,

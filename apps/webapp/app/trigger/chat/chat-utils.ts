@@ -24,7 +24,7 @@ import {
   type TotalCost,
 } from "../utils/types";
 import { flattenObject, webSearch } from "../utils/utils";
-import { searchMemory, addMemory } from "./memory-utils";
+import { searchMemory, addMemory, searchSpaces } from "./memory-utils";
 
 interface LLMOutputInterface {
   response: AsyncGenerator<
@@ -80,6 +80,14 @@ const searchMemoryTool = tool({
         type: "string",
         description: "The end time in ISO format",
       },
+      spaceIds: {
+        type: "array",
+        items: {
+          type: "string",
+          format: "uuid",
+        },
+        description: "Array of strings representing UUIDs of spaces",
+      },
     },
     required: ["query"],
     additionalProperties: false,
@@ -97,6 +105,16 @@ const addMemoryTool = tool({
       },
     },
     required: ["message"],
+    additionalProperties: false,
+  }),
+});
+
+const searchSpacesTool = tool({
+  description: "Get spaces in memory",
+  parameters: jsonSchema({
+    type: "object",
+    properties: {},
+    required: [],
     additionalProperties: false,
   }),
 });
@@ -291,6 +309,7 @@ export async function* run(
     "core--progress_update": progressUpdateTool,
     "core--search_memory": searchMemoryTool,
     "core--add_memory": addMemoryTool,
+    "core--search_spaces": searchSpacesTool,
     "core--websearch": websearchTool,
     "core--load_mcp": loadMCPTools,
   };
@@ -549,6 +568,15 @@ export async function* run(
                   });
                   result =
                     "Memory storage failed - please check your memory configuration";
+                }
+              } else if (toolName === "search_spaces") {
+                try {
+                  result = await searchSpaces();
+                } catch (apiError) {
+                  logger.error("Search spaces call failed", {
+                    apiError,
+                  });
+                  result = "Search spaces call failed";
                 }
               } else if (toolName === "websearch") {
                 try {

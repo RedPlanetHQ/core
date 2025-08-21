@@ -43,7 +43,7 @@ const { action } = createHybridActionApiRoute(
     },
     corsStrategy: "all",
   },
-  async ({ authentication, body, searchParams, request }) => {
+  async ({ authentication, body, request }) => {
     const user = await prisma.user.findUnique({
       where: {
         id: authentication.userId,
@@ -63,6 +63,13 @@ const { action } = createHybridActionApiRoute(
       // Create space
       if (!body || !("name" in body)) {
         return json({ error: "Name is required" }, { status: 400 });
+      }
+
+      if (body.name.toLowerCase() === "profile") {
+        return json(
+          { error: "Can't create space with name Profile" },
+          { status: 400 },
+        );
       }
 
       const space = await spaceService.createSpace({
@@ -204,7 +211,7 @@ const loader = createHybridLoaderApiRoute(
       );
       return json({ spaces });
     } else {
-      const spaces = await spaceService.getUserSpaces(user.Workspace.id);
+      const spaces = await spaceService.getUserSpaces(user.id);
       return json({ spaces });
     }
   },

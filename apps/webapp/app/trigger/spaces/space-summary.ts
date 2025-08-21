@@ -3,6 +3,7 @@ import { logger } from "~/services/logger.service";
 import { SpaceService } from "~/services/space.server";
 import { makeModelCall } from "~/lib/model.server";
 import { runQuery } from "~/lib/neo4j.server";
+import { updateSpaceStatus, SPACE_STATUS } from "../utils/space-status";
 import type { CoreMessage } from "ai";
 import { z } from "zod";
 import { prisma } from "~/db.server";
@@ -71,12 +72,31 @@ export const spaceSummaryTask = task({
     });
 
     try {
+      // Update status to processing
+      await updateSpaceStatus(spaceId, SPACE_STATUS.PROCESSING, {
+        userId,
+        operation: "space-summary",
+        metadata: { triggerSource, phase: "start_summary" },
+      });
+
       // Generate summary for the single space
       const summaryResult = await generateSpaceSummary(spaceId, userId);
 
       if (summaryResult) {
         // Store the summary
         await storeSummary(summaryResult);
+
+        // Update status to ready after successful completion
+        await updateSpaceStatus(spaceId, SPACE_STATUS.READY, {
+          userId,
+          operation: "space-summary",
+          metadata: { 
+            triggerSource, 
+            phase: "completed_summary",
+            statementCount: summaryResult.statementCount,
+            confidence: summaryResult.confidence,
+          },
+        });
 
         logger.info(`Generated summary for space ${spaceId}`, {
           statementCount: summaryResult.statementCount,
@@ -105,6 +125,13 @@ export const spaceSummaryTask = task({
           },
         };
       } else {
+        // Update status to error if summary generation fails
+        await updateSpaceStatus(spaceId, SPACE_STATUS.ERROR, {
+          userId,
+          operation: "space-summary",
+          metadata: { triggerSource, phase: "failed_summary", error: "Failed to generate summary" },
+        });
+
         logger.warn(`Failed to generate summary for space ${spaceId}`);
         return {
           success: false,
@@ -114,6 +141,23 @@ export const spaceSummaryTask = task({
         };
       }
     } catch (error) {
+      // Update status to error on exception
+      try {
+        await updateSpaceStatus(spaceId, SPACE_STATUS.ERROR, {
+          userId,
+          operation: "space-summary",
+          metadata: { 
+            triggerSource, 
+            phase: "exception", 
+            error: error instanceof Error ? error.message : "Unknown error"
+          },
+        });
+      } catch (statusError) {
+        logger.warn(`Failed to update status to error for space ${spaceId}`, {
+          statusError,
+        });
+      }
+
       logger.error(
         `Error in space summary generation for space ${spaceId}:`,
         error as Record<string, unknown>,
@@ -193,7 +237,7 @@ async function generateSpaceSummary(
 
         const batchResult = await generateUnifiedSummary(
           space.name,
-          space.description,
+          space.description as string,
           batch,
           currentSummary,
           currentThemes,
@@ -228,7 +272,7 @@ async function generateSpaceSummary(
       // Use unified approach for smaller spaces
       summaryResult = await generateUnifiedSummary(
         space.name,
-        space.description,
+        space.description as string,
         statements,
         existingSummary?.summary || null,
         existingSummary?.themes || [],
@@ -243,7 +287,7 @@ async function generateSpaceSummary(
     return {
       spaceId: space.uuid,
       spaceName: space.name,
-      spaceDescription: space.description,
+      spaceDescription: space.description as string,
       statementCount: statements.length,
       summary: summaryResult.summary,
       keyEntities: summaryResult.keyEntities || [],
@@ -363,11 +407,11 @@ ${
 }
 
 RESPONSE FORMAT:
-Provide your response inside <output></output> tags with valid JSON. IMPORTANT: Use only plain text without newlines, tabs, or special characters in string values.
+Provide your response inside <output></output> tags with valid JSON. The summary should be formatted as HTML for better presentation.
 
 <output>
 {
-  "summary": "${isUpdate ? "Updated summary that integrates new insights with existing knowledge through identified connections. The summary should clearly explain what this space contains, what topics are covered, and what users can learn from it." : "A comprehensive 2-3 paragraph summary that clearly explains what this space contains, what knowledge domains it covers, and what insights users can gain. Focus on making the content accessible and understandable to users who want to know what they'll find in this space."}",
+  "summary": "${isUpdate ? "Updated HTML summary that integrates new insights with existing knowledge through identified connections. Use HTML tags like <p>, <strong>, <em>, <ul>, <li> to structure and emphasize key information. The summary should clearly explain what this space contains, what topics are covered, and what users can learn from it." : "A comprehensive 2-3 paragraph HTML summary that clearly explains what this space contains, what knowledge domains it covers, and what insights users can gain. Use HTML tags like <p>, <strong>, <em>, <ul>, <li> to structure and emphasize key information for better readability. Focus on making the content accessible and understandable to users who want to know what they'll find in this space."}",
   "keyEntities": ["entity1", "entity2", "entity3"],
   "themes": ["${isUpdate ? 'updated_theme1", "new_theme2", "evolved_theme3' : 'theme1", "theme2", "theme3'}"],
   "confidence": 0.85
@@ -375,10 +419,11 @@ Provide your response inside <output></output> tags with valid JSON. IMPORTANT: 
 </output>
 
 JSON FORMATTING RULES:
-- All string values must be on single lines (no line breaks)
-- Use spaces instead of newlines for paragraph separation
+- HTML content in summary field is allowed and encouraged
 - Escape quotes within strings as \"
-- Do not use control characters (tabs, newlines, etc.) in string values
+- Escape HTML angle brackets if needed: &lt; and &gt;
+- Use proper HTML tags for structure: <p>, <strong>, <em>, <ul>, <li>, <h3>, etc.
+- HTML content should be well-formed and semantic
 
 GUIDELINES:
 ${
@@ -391,6 +436,7 @@ ${
     : `- Summary should clearly communicate what this space is about and what users will find
 - Focus on practical value - what knowledge, insights, or information does this space contain?
 - Use accessible language that helps users understand the space's purpose and content
+- Format the summary using HTML tags for better visual presentation and readability
 - Themes must be backed by at least 5 supporting statements
 - Only include themes with substantial evidence - better to have fewer, well-supported themes than many weak ones
 - Confidence should reflect data quality, coherence, coverage, and theme strength`
@@ -495,6 +541,7 @@ async function getSpaceStatements(
       object: record.get("object"),
       createdAt: new Date(statement.createdAt),
       validAt: new Date(statement.validAt),
+      invalidAt: new Date(statement.invalidAt),
     };
   });
 }
@@ -576,6 +623,7 @@ async function storeSummary(summaryData: SpaceSummaryData): Promise<void> {
       data: {
         summary: summaryData.summary,
         themes: summaryData.themes,
+        statementCount: summaryData.statementCount,
       },
     });
 

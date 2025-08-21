@@ -89,13 +89,13 @@ export function GraphPopovers({
   }, [nodePopupContent]);
 
   return (
-    <div className="absolute top-4 right-4 z-50">
+    <div className="fixed right-4 bottom-4 z-50">
       <Popover open={showNodePopup} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <div className="pointer-events-none h-4 w-4" />
         </PopoverTrigger>
         <PopoverContent
-          className="h-35 max-w-80 overflow-auto"
+          className="shadow-1 border-border bg-background-3 h-35 max-w-80 overflow-auto border-1"
           side="bottom"
           align="end"
           sideOffset={5}

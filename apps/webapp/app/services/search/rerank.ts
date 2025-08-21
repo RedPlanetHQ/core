@@ -428,7 +428,7 @@ export function applyMultiFactorReranking(results: {
   const sortedResults = Object.values(scores)
     .sort((a, b) => b.score - a.score)
     .map((item) => {
-      console.log(item.statement.fact, item.score);
+      // console.log(item.statement.fact, item.score);
       // Add the reranking score and signal breakdown for debugging
       return {
         ...item.statement,

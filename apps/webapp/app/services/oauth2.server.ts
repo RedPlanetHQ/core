@@ -742,6 +742,22 @@ export class OAuth2Service {
     };
   }
 
+  async getClientForCode(code: string) {
+    const oAuthCode = await prisma.oAuthAuthorizationCode.findUnique({
+      where: {
+        code,
+      },
+      include: {
+        client: true,
+      },
+    });
+
+    return {
+      client_id: oAuthCode?.client.clientId,
+      client_secret: oAuthCode?.client.clientSecret,
+    };
+  }
+
   async createDynamicClient(params: {
     name: string;
     redirectUris: string[];

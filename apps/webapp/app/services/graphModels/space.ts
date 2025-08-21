@@ -273,7 +273,7 @@ export async function removeStatementsFromSpace(
 export async function getSpaceStatements(spaceId: string, userId: string) {
   const query = `
     MATCH (s:Statement)
-    WHERE s.userId = $userId AND s.spaceIds IS NOT NULL AND $spaceId IN s.spaceIds AND s.invalidAt IS NULL
+    WHERE s.userId = $userId AND s.spaceIds IS NOT NULL AND $spaceId IN s.spaceIds
     MATCH (s)-[:HAS_SUBJECT]->(subj:Entity)
     MATCH (s)-[:HAS_PREDICATE]->(pred:Entity)
     MATCH (s)-[:HAS_OBJECT]->(obj:Entity)
@@ -293,7 +293,11 @@ export async function getSpaceStatements(spaceId: string, userId: string) {
       object: record.get("object"),
       createdAt: new Date(statement.createdAt),
       validAt: new Date(statement.validAt),
+      invalidAt: statement.invalidAt
+        ? new Date(statement.invalidAt)
+        : undefined,
       spaceIds: statement.spaceIds || [],
+      recallCount: statement.recallCount,
     };
   });
 }

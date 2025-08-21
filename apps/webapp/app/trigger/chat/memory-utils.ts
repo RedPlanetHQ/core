@@ -50,3 +50,13 @@ export const addMemory = async (params: AddMemoryParams) => {
     return { error: "Memory storage failed" };
   }
 };
+
+export const searchSpaces = async () => {
+  try {
+    const response = await axios.post("https://core::memory/api/v1/spaces");
+    return response.data;
+  } catch (error) {
+    logger.error("Memory storage failed", { error });
+    return { error: "Memory storage failed" };
+  }
+};

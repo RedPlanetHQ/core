@@ -9,7 +9,7 @@ export const SearchBodyRequest = z.object({
   endTime: z.string().optional(),
 
   // These are not supported yet, but need to support these
-  spaceId: z.string().optional(),
+  spaceIds: z.array(z.string()).default([]),
   limit: z.number().optional(),
   maxBfsDepth: z.number().optional(),
   includeInvalidated: z.boolean().optional(),
@@ -41,6 +41,7 @@ const { action, loader } = createActionApiRoute(
         entityTypes: body.entityTypes,
         scoreThreshold: body.scoreThreshold,
         minResults: body.minResults,
+        spaceIds: body.spaceIds,
       },
     );
     return json(results);

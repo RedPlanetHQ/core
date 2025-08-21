@@ -1,6 +1,4 @@
-import { GraphClusteringProps } from "./graph-clustering";
 import { type GraphClusteringVisualizationProps } from "./graph-clustering-visualization";
-import { type GraphVisualizationProps } from "./graph-visualization";
 import { useState, useEffect } from "react";
 
 export function GraphVisualizationClient(

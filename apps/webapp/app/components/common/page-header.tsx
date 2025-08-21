@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight } from "lucide-react";
 import { SidebarTrigger } from "~/components/ui/sidebar";
 
 export interface BreadcrumbItem {
-  label: string;
+  label: string | React.ReactNode;
   href?: string;
 }
 
@@ -26,6 +26,7 @@ export interface PageHeaderProps {
   title: string;
   breadcrumbs?: BreadcrumbItem[];
   actions?: PageHeaderAction[];
+  actionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
   showBackForward?: boolean;
 }
@@ -66,8 +67,11 @@ export function PageHeader({
   actions,
   tabs,
   showBackForward = true,
+  actionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
+  const navigate = useNavigate();
+
   const isLoading =
     navigation.state === "loading" || navigation.state === "submitting";
 
@@ -104,7 +108,9 @@ export function PageHeader({
                     <span className="text-muted-foreground mx-1">/</span>
                   )}
                   {breadcrumb.href ? (
-                    <a href={breadcrumb.href}>{breadcrumb.label}</a>
+                    <a onClick={() => navigate(breadcrumb.href as string)}>
+                      {breadcrumb.label}
+                    </a>
                   ) : (
                     <span className="text-gray-900">{breadcrumb.label}</span>
                   )}
@@ -151,6 +157,8 @@ export function PageHeader({
             ))}
           </div>
         )}
+
+        {actionsNode && actionsNode}
       </div>
 
       {isLoading && (

@@ -6,12 +6,13 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { Badge } from "../ui/badge";
-import { Folder, SquareUserRound } from "lucide-react";
+import { getIcon } from "../icon-picker";
 
 interface SpaceCardProps {
   space: {
     id: string;
     name: string;
+    icon?: string;
     description: string | null;
     createdAt: string;
     updatedAt: string;
@@ -25,14 +26,14 @@ interface SpaceCardProps {
 export function SpaceCard({ space }: SpaceCardProps) {
   return (
     <Link
-      to={`/home/space/${space.id}`}
+      to={`/home/space/${space.id}/overview`}
       className="bg-background-3 h-full rounded-lg"
     >
       <Card className="transition-all">
         <CardHeader className="p-4">
           <div className="flex items-center justify-between">
             <div className="bg-background-2 mb-2 flex h-6 w-6 items-center justify-center rounded">
-              <SquareUserRound size={18} />
+              {getIcon(space?.icon, 16)}
             </div>
 
             {space.autoMode && (
@@ -50,7 +51,7 @@ export function SpaceCard({ space }: SpaceCardProps) {
           <div className="text-muted-foreground mt-2 flex items-center justify-between text-xs">
             {space.statementCount && space.statementCount > 0 && (
               <div>
-                {space.statementCount} statement
+                {space.statementCount} fact
                 {space.statementCount !== 1 ? "s" : ""}
               </div>
             )}

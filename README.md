@@ -93,6 +93,17 @@ Explore our documentation to get the most out of CORE
 - [Basic Concepts](https://docs.heysol.ai/overview)
 - [API Reference](https://docs.heysol.ai/local-setup)
 
+## 🔒 Security
+
+CORE takes security seriously. We implement industry-standard security practices to protect your data:
+
+- **Data Encryption**: All data in transit (TLS 1.3) and at rest (AES-256)
+- **Authentication**: OAuth 2.0 and magic link authentication
+- **Access Control**: Workspace-based isolation and role-based permissions
+- **Vulnerability Reporting**: Please report security issues to harshith@tegon.ai
+
+For detailed security information, see our [Security Policy](SECURITY.md).
+
 ## 🧑‍💻 Support
 
 Have questions or feedback? We're here to help:

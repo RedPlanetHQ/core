@@ -58,7 +58,11 @@ async function init() {
         "client_credentials",
       ],
       code_challenge_methods_supported: ["S256"],
-      token_endpoint_auth_methods_supported: ["client_secret_basic", "none"],
+      token_endpoint_auth_methods_supported: [
+        "client_secret_basic",
+        "none",
+        "client_secret_post",
+      ],
     });
   });
 

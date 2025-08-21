@@ -2,19 +2,19 @@ import { PageHeader } from "~/components/common/page-header";
 import { SpacesGrid } from "~/components/spaces/spaces-grid";
 import { NewSpaceDialog } from "~/components/spaces/new-space-dialog.client";
 import { json } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { requireUserId, requireWorkpace } from "~/services/session.server";
+import { requireUserId } from "~/services/session.server";
 import { useState } from "react";
 
 import { SpaceService } from "~/services/space.server";
 import { Plus } from "lucide-react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const workspace = await requireWorkpace(request);
+  const userId = await requireUserId(request);
   const spaceService = new SpaceService();
 
-  const spaces = await spaceService.getUserSpaces(workspace.id);
+  const spaces = await spaceService.getUserSpaces(userId);
 
   return json({
     spaces,
@@ -23,12 +23,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
 export default function Spaces() {
   const { spaces } = useLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const [showNewSpaceDialog, setShowNewSpaceDialog] = useState(false);
 
   const handleNewSpaceSuccess = () => {
     // Refresh the page to show the new space
-    navigate(".", { replace: true });
+    setShowNewSpaceDialog(false);
   };
 
   return (

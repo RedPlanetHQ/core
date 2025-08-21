@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   createActionApiRoute,
+  createHybridActionApiRoute,
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { SpaceService } from "~/services/space.server";
@@ -19,11 +20,10 @@ const UpdateSpaceSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
 });
-
-const { action } = createActionApiRoute(
+const { action } = createHybridActionApiRoute(
   {
-    body: UpdateSpaceSchema,
     params: SpaceParamsSchema,
+    body: UpdateSpaceSchema.optional(),
     allowJWT: true,
     authorization: {
       action: "manage",
@@ -40,10 +40,20 @@ const { action } = createActionApiRoute(
         return json({ error: "No updates provided" }, { status: 400 });
       }
 
+      const parseResult = UpdateSpaceSchema.safeParse(body);
+      if (!parseResult.success) {
+        return json(
+          { error: "Invalid update data", details: parseResult.error.errors },
+          { status: 400 },
+        );
+      }
+
       const updates: any = {};
-      if (body.name !== undefined) updates.name = body.name;
-      if (body.description !== undefined)
-        updates.description = body.description;
+      if (parseResult.data.name !== undefined)
+        updates.name = parseResult.data.name;
+
+      if (parseResult.data.description !== undefined)
+        updates.description = parseResult.data.description;
 
       const space = await spaceService.updateSpace(spaceId, updates, userId);
       return json({ space, success: true });

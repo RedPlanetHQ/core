@@ -11,7 +11,6 @@ import {
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
-      console.log(eventPayload.eventBody);
       return await integrationCreate(eventPayload.eventBody);
 
     case IntegrationEventType.SYNC:

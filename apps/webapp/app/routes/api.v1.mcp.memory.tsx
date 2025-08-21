@@ -8,6 +8,7 @@ import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.
 import { addToQueue } from "~/lib/ingest.server";
 import { SearchService } from "~/services/search.server";
 import { handleTransport } from "~/utils/mcp";
+import { SpaceService } from "~/services/space.server";
 
 // Map to store transports by session ID with cleanup tracking
 const transports: {
@@ -29,6 +30,10 @@ const SearchParamsSchema = z.object({
   validAt: z.string().optional().describe("The valid at time in ISO format"),
   startTime: z.string().optional().describe("The start time in ISO format"),
   endTime: z.string().optional().describe("The end time in ISO format"),
+  spaceIds: z
+    .array(z.string())
+    .optional()
+    .describe("Array of strings representing UUIDs of spaces"),
 });
 
 const IngestSchema = z.object({
@@ -36,6 +41,7 @@ const IngestSchema = z.object({
 });
 
 const searchService = new SearchService();
+const spaceService = new SpaceService();
 
 // Handle MCP HTTP requests properly
 const handleMCPRequest = async (
@@ -176,6 +182,44 @@ const handleMCPRequest = async (
                 {
                   type: "text",
                   text: `Error searching: ${error instanceof Error ? error.message : String(error)}`,
+                },
+              ],
+              isError: true,
+            };
+          }
+        },
+      );
+
+      // Register search tool
+      server.registerTool(
+        "get_spaces",
+        {
+          title: "Get spaces",
+          description: "Get spaces in memory",
+        },
+        async () => {
+          try {
+            const userId = authentication.userId;
+
+            const spaces = await spaceService.getUserSpaces(userId);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: JSON.stringify(spaces),
+                },
+              ],
+              isError: false,
+            };
+          } catch (error) {
+            console.error("Spaces error:", error);
+
+            return {
+              content: [
+                {
+                  type: "text",
+                  text: `Error getting spaces`,
                 },
               ],
               isError: true,

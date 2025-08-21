@@ -20,6 +20,7 @@ export interface CreateSpaceParams {
 export interface UpdateSpaceParams {
   name?: string;
   description?: string;
+  icon?: string;
 }
 
 export interface SpaceWithStatements extends SpaceNode {

@@ -66,6 +66,7 @@ export function LogTextCollapse({
         className={cn(
           "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-4",
         )}
+        onClick={() => setDialogOpen(true)}
       >
         <div
           className={cn(
@@ -73,10 +74,7 @@ export function LogTextCollapse({
           )}
         >
           <div className="flex w-full items-center justify-between gap-4">
-            <div
-              className="inline-flex min-h-[24px] min-w-[0px] shrink cursor-pointer items-center justify-start"
-              onClick={() => setDialogOpen(true)}
-            >
+            <div className="inline-flex min-h-[24px] min-w-[0px] shrink cursor-pointer items-center justify-start">
               <div className={cn("truncate text-left")}>
                 {text.replace(/<[^>]+>/g, "")}
               </div>
@@ -84,6 +82,13 @@ export function LogTextCollapse({
 
             <div className="text-muted-foreground flex shrink-0 items-center justify-end text-xs">
               <div className="flex items-center">
+                <Badge
+                  className={cn(
+                    "bg-grayAlpha-100 text-foreground mr-3 rounded text-xs",
+                  )}
+                >
+                  {log.source}
+                </Badge>
                 <Badge
                   className={cn(
                     "mr-3 rounded text-xs",

@@ -3,7 +3,6 @@ import {
   type SpaceNode,
   type CreateSpaceParams,
   type UpdateSpaceParams,
-  type SpaceDeletionResult,
   type SpaceAssignmentResult,
 } from "@core/types";
 import { prisma } from "~/db.server";
@@ -94,11 +93,19 @@ export class SpaceService {
   /**
    * Get all spaces for a user
    */
-  async getUserSpaces(workspaceId: string): Promise<Space[]> {
-    logger.info(`Fetching spaces for workspace ${workspaceId}`);
+  async getUserSpaces(userId: string): Promise<Space[]> {
+    const user = await prisma.user.findFirst({
+      where: {
+        id: userId,
+      },
+      include: {
+        Workspace: true,
+      },
+    });
+
     return await prisma.space.findMany({
       where: {
-        workspaceId,
+        workspaceId: user?.Workspace?.id,
       },
     });
   }
@@ -106,8 +113,19 @@ export class SpaceService {
   /**
    * Get a specific space by ID
    */
-  async getSpace(spaceId: string, userId: string): Promise<SpaceNode | null> {
-    return await getSpace(spaceId, userId);
+  async getSpace(spaceId: string, userId: string) {
+    const space = await prisma.space.findUnique({
+      where: {
+        id: spaceId,
+      },
+    });
+
+    const nodeData = await getSpace(spaceId, userId);
+
+    return {
+      ...(nodeData as SpaceNode),
+      ...space,
+    };
   }
 
   /**
@@ -143,8 +161,11 @@ export class SpaceService {
       }
     }
 
-    if (updates.description !== undefined && updates.description.length > 500) {
-      throw new Error("Space description too long (max 500 characters)");
+    if (
+      updates.description !== undefined &&
+      updates.description.length > 1000
+    ) {
+      throw new Error("Space description too long (max 1000 characters)");
     }
 
     const space = await prisma.space.update({
@@ -154,9 +175,14 @@ export class SpaceService {
       data: {
         name: updates.name,
         description: updates.description,
+        icon: updates.icon,
       },
     });
-    await updateSpace(spaceId, updates, userId);
+    try {
+      await updateSpace(spaceId, updates, userId);
+    } catch (e) {
+      logger.info(`Nothing to update to graph`);
+    }
     logger.info(`Updated space ${spaceId} successfully`);
     return space;
   }

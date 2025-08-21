@@ -38,6 +38,7 @@ export const LogOptions = ({ id }: LogOptionsProps) => {
     );
     setDeleteDialogOpen(false);
   };
+
   return (
     <>
       <DropdownMenu>

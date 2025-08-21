@@ -141,7 +141,7 @@ export const getClusteredGraphData = async (userId: string) => {
          rel.target.properties as targetProperties,
          rel.type as relationshipType,
          s.uuid as statementUuid,
-         s.spaceId as spaceId,
+         s.spaceIds as spaceIds,
          s.fact as fact, 
          s.createdAt as createdAt,
          rel.isEntityToStatement as isEntityToStatement,
@@ -167,7 +167,8 @@ export const getClusteredGraphData = async (userId: string) => {
 
       const relationshipType = record.get("relationshipType");
       const statementUuid = record.get("statementUuid");
-      const clusterId = record.get("spaceId");
+      const clusterIds = record.get("spaceIds");
+      const clusterId = clusterIds ? clusterIds[0] : undefined;
       const fact = record.get("fact");
       const createdAt = record.get("createdAt");
 
@@ -304,6 +305,9 @@ const initializeSchema = async () => {
     );
     await runQuery(
       "CREATE INDEX statement_cluster_id IF NOT EXISTS FOR (n:Statement) ON (n.clusterId)",
+    );
+    await runQuery(
+      "CREATE INDEX statement_space_id IF NOT EXISTS FOR (n:Statement) ON (n.spaceId)",
     );
     await runQuery(
       "CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)",

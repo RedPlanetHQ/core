@@ -12,6 +12,7 @@ import {
 } from "~/services/graphModels/space";
 import { triggerSpaceSummary } from "./space-summary";
 import { triggerSpacePattern } from "./space-pattern";
+import { updateMultipleSpaceStatuses, SPACE_STATUS } from "../utils/space-status";
 import type { CoreMessage } from "ai";
 import { z } from "zod";
 import { type Space } from "@prisma/client";
@@ -194,7 +195,7 @@ export const spaceAssignmentTask = task({
 
     try {
       // 1. Get user's spaces
-      const spaces = await spaceService.getUserSpaces(workspaceId);
+      const spaces = await spaceService.getUserSpaces(userId);
 
       if (spaces.length === 0) {
         logger.info(`No spaces found for user ${userId}, skipping assignment`);
@@ -310,7 +311,28 @@ export const spaceAssignmentTask = task({
         affectedSpaces: affectedSpaces.size,
       });
 
-      // 4. Trigger space summaries for affected spaces (fan-out pattern)
+      // 4. Update space status to "processing" for affected spaces
+      if (affectedSpaces.size > 0) {
+        try {
+          await updateMultipleSpaceStatuses(
+            Array.from(affectedSpaces),
+            SPACE_STATUS.PROCESSING,
+            {
+              userId,
+              operation: "space-assignment",
+              metadata: { mode, phase: "start_processing" },
+            }
+          );
+        } catch (statusError) {
+          logger.warn(`Failed to update space statuses to processing:`, {
+            error: statusError,
+            userId,
+            mode,
+          });
+        }
+      }
+
+      // 5. Trigger space summaries for affected spaces (fan-out pattern)  
       if (affectedSpaces.size > 0) {
         try {
           logger.info(
@@ -379,6 +401,27 @@ export const spaceAssignmentTask = task({
             userId,
             mode,
             affectedSpaces: Array.from(affectedSpaces),
+          });
+        }
+      }
+
+      // 7. Update space status to "ready" after all processing is complete
+      if (affectedSpaces.size > 0) {
+        try {
+          await updateMultipleSpaceStatuses(
+            Array.from(affectedSpaces),
+            SPACE_STATUS.READY,
+            {
+              userId,
+              operation: "space-assignment",
+              metadata: { mode, phase: "completed_processing" },
+            }
+          );
+        } catch (finalStatusError) {
+          logger.warn(`Failed to update space statuses to ready:`, {
+            error: finalStatusError,
+            userId,
+            mode,
           });
         }
       }

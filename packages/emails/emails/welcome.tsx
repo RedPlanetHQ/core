@@ -17,7 +17,7 @@ export default function Email({ name }: { name?: string }) {
         </Text>
         <Text style={paragraphLight}>
           To get started, you can{" "}
-          <Link style={anchor} href="https://core.heysol.ai/dashboard">
+          <Link style={anchor} href="https://core.heysol.ai/home">
             visit your dashboard
           </Link>{" "}
           where you'll find all the features and capabilities at your disposal. Whether it's

@@ -1,4 +1,4 @@
-import { useState, useMemo, forwardRef, useEffect } from "react";
+import { useState, useMemo, forwardRef } from "react";
 import { useTheme } from "remix-themes";
 import {
   type ClusterData,
@@ -6,19 +6,13 @@ import {
   type GraphClusteringRef,
 } from "./graph-clustering";
 import { GraphPopovers } from "./graph-popover";
+import { GraphFilters } from "./graph-filters";
+import { SpaceSearch } from "./space-search";
 import type { RawTriplet, NodePopupContent, EdgePopupContent } from "./type";
-import { Card, CardContent } from "~/components/ui/card";
 
-import { createLabelColorMap, nodeColorPalette } from "./node-colors";
+import { createLabelColorMap } from "./node-colors";
 import { toGraphTriplets } from "./utils";
 import { cn } from "~/lib/utils";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "../ui/select";
 
 export interface GraphClusteringVisualizationProps {
   triplets: RawTriplet[];
@@ -28,7 +22,8 @@ export interface GraphClusteringVisualizationProps {
   zoomOnMount?: boolean;
   className?: string;
   selectedClusterId?: string | null;
-  onClusterSelect?: (clusterId: string | null) => void;
+  onClusterSelect?: (clusterId: string) => void;
+  singleClusterView?: boolean;
 }
 
 export const GraphClusteringVisualization = forwardRef<
@@ -45,12 +40,10 @@ export const GraphClusteringVisualization = forwardRef<
       className = "rounded-md h-full overflow-hidden relative",
       selectedClusterId,
       onClusterSelect,
+      singleClusterView,
     },
     ref,
   ) => {
-    console.log(clusters);
-    const [themeMode] = useTheme();
-
     // Graph state for popovers
     const [showNodePopup, setShowNodePopup] = useState<boolean>(false);
     const [showEdgePopup, setShowEdgePopup] = useState<boolean>(false);
@@ -59,17 +52,67 @@ export const GraphClusteringVisualization = forwardRef<
     const [edgePopupContent, setEdgePopupContent] =
       useState<EdgePopupContent | null>(null);
 
-    // Filter triplets based on selected cluster (like Marvel's comic filter)
-    const filteredTriplets = useMemo(() => {
-      if (!selectedClusterId) return triplets;
+    const [selectedEntityType, setSelectedEntityType] = useState<
+      string | undefined
+    >();
+    const [searchQuery, setSearchQuery] = useState<string>("");
 
-      // Filter triplets to show only nodes from the selected cluster
-      return triplets.filter(
-        (triplet) =>
-          triplet.sourceNode.attributes?.clusterId === selectedClusterId ||
-          triplet.targetNode.attributes?.clusterId === selectedClusterId,
-      );
-    }, [triplets, selectedClusterId]);
+    // Combined filter logic for all filters
+    const filteredTriplets = useMemo(() => {
+      let filtered = triplets;
+
+      // Original cluster filter (from dropdown)
+      if (selectedClusterId) {
+        filtered = filtered.filter(
+          (triplet) =>
+            triplet.sourceNode.attributes?.clusterId === selectedClusterId ||
+            triplet.targetNode.attributes?.clusterId === selectedClusterId,
+        );
+      }
+
+      // Entity type filter
+      if (selectedEntityType) {
+        filtered = filtered.filter((triplet) => {
+          const sourceMatches =
+            triplet.sourceNode.attributes?.type === selectedEntityType;
+          const targetMatches =
+            triplet.targetNode.attributes?.type === selectedEntityType;
+
+          return sourceMatches || targetMatches;
+        });
+      }
+
+      // Search filter
+      if (searchQuery.trim()) {
+        // Helper functions for filtering
+        const isStatementNode = (node: any) => {
+          return (
+            node.attributes?.fact ||
+            (node.labels && node.labels.includes("Statement"))
+          );
+        };
+
+        const query = searchQuery.toLowerCase();
+        filtered = filtered.filter((triplet) => {
+          const sourceMatches =
+            isStatementNode(triplet.sourceNode) &&
+            triplet.sourceNode.attributes?.fact?.toLowerCase().includes(query);
+          const targetMatches =
+            isStatementNode(triplet.targetNode) &&
+            triplet.targetNode.attributes?.fact?.toLowerCase().includes(query);
+
+          return sourceMatches || targetMatches;
+        });
+      }
+
+      return filtered;
+    }, [
+      triplets,
+      selectedClusterId,
+      onClusterSelect,
+      selectedEntityType,
+      searchQuery,
+    ]);
 
     // Convert filtered triplets to graph triplets
     const graphTriplets = useMemo(
@@ -173,7 +216,7 @@ export const GraphClusteringVisualization = forwardRef<
     const handleClusterClick = (clusterId: string) => {
       if (onClusterSelect) {
         const newSelection = selectedClusterId === clusterId ? null : clusterId;
-        onClusterSelect(newSelection);
+        onClusterSelect(newSelection as string);
       }
     };
 
@@ -185,53 +228,27 @@ export const GraphClusteringVisualization = forwardRef<
 
     return (
       <div className={cn("flex flex-col gap-4", className)}>
-        {/* Cluster Filter Dropdown - Marvel style */}
-        <div>
-          <Card className="bg-transparent">
-            <CardContent className="bg-transparent p-1">
-              <div className="flex items-center gap-2">
-                <Select
-                  value={selectedClusterId || ""}
-                  onValueChange={(value) =>
-                    value === "all_clusters"
-                      ? onClusterSelect?.("")
-                      : onClusterSelect?.(value || null)
-                  }
-                >
-                  <SelectTrigger
-                    className="bg-background w-48 rounded px-2 py-1 text-sm"
-                    showIcon
-                  >
-                    <SelectValue placeholder="All Spaces" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all_clusters">All Spaces</SelectItem>
-                    {clusters.map((cluster, index) => {
-                      // Get cluster color from the same palette used in the graph
-                      const palette =
-                        themeMode === "dark"
-                          ? nodeColorPalette.dark
-                          : nodeColorPalette.light;
-                      const clusterColor = palette[index % palette.length];
-
-                      return (
-                        <SelectItem key={cluster.id} value={cluster.id}>
-                          <div className="flex items-center gap-2">
-                            <div
-                              className="h-3 w-3 flex-shrink-0 rounded-full"
-                              style={{ backgroundColor: clusterColor }}
-                            />
-                            <span>{cluster.name}</span>
-                          </div>
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        {/* Filter Controls */}
+        {!singleClusterView && (
+          <div className="flex flex-col">
+            {/* Graph Filters and Search in same row */}
+            <div className="flex items-center gap-1">
+              <GraphFilters
+                triplets={triplets}
+                clusters={clusters}
+                selectedCluster={selectedClusterId}
+                selectedEntityType={selectedEntityType}
+                onClusterChange={onClusterSelect as any}
+                onEntityTypeChange={setSelectedEntityType}
+              />
+              <SpaceSearch
+                triplets={triplets}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+              />
+            </div>
+          </div>
+        )}
 
         {filteredTriplets.length > 0 ? (
           <GraphClustering

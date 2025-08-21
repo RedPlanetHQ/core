@@ -59,11 +59,18 @@ export function LogDetails({
         <DialogHeader className="px-4 pt-4">
           <DialogTitle className="flex w-full items-center justify-between">
             <span>Log Details</span>
-            {log.episodeUUID && (
-              <Badge variant="secondary" className="rounded text-xs">
-                Episode: {log.episodeUUID.slice(0, 8)}...
-              </Badge>
-            )}
+            <div className="flex gap-0.5">
+              {log.episodeUUID && (
+                <Badge variant="secondary" className="rounded text-xs">
+                  Episode: {log.episodeUUID.slice(0, 8)}...
+                </Badge>
+              )}
+              {log.source && (
+                <Badge variant="secondary" className="rounded text-xs">
+                  Source: {log.source}
+                </Badge>
+              )}
+            </div>
           </DialogTitle>
         </DialogHeader>
 
