@@ -4,6 +4,7 @@ import {
   type ActionFunctionArgs,
   json,
   type LoaderFunctionArgs,
+  redirect,
 } from "@remix-run/node";
 import { useForm } from "@conform-to/react";
 import { getFieldsetConstraint, parse } from "@conform-to/zod";
@@ -19,7 +20,7 @@ import { Button } from "~/components/ui";
 import { Input } from "~/components/ui/input";
 import { requireUser, requireUserId } from "~/services/session.server";
 import { redirectWithSuccessMessage } from "~/models/message.server";
-import { rootPath } from "~/utils/pathBuilder";
+import { onboardingPath, rootPath } from "~/utils/pathBuilder";
 import { createWorkspace, getWorkspaceByUser } from "~/models/workspace.server";
 import { typedjson } from "remix-typedjson";
 
@@ -62,6 +63,10 @@ export async function action({ request }: ActionFunctionArgs) {
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   const workspace = await getWorkspaceByUser(user.id);
+
+  if (user.confirmedBasicDetails) {
+    return redirect(onboardingPath());
+  }
 
   return typedjson({
     user,

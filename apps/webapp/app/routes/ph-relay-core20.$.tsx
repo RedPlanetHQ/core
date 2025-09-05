@@ -19,6 +19,7 @@ const posthogProxy = async (request: Request) => {
   headers.set("host", hostname);
 
   const response = await fetch(newUrl, {
+    duplex: "half",
     method: request.method,
     headers,
     body: request.body,

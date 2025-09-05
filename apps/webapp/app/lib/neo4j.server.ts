@@ -159,6 +159,7 @@ export const getClusteredGraphData = async (userId: string) => {
     const triplets: RawTriplet[] = [];
     const processedEdges = new Set<string>();
 
+    console.log(result.records);
     result.records.forEach((record) => {
       const sourceUuid = record.get("sourceUuid");
       const sourceName = record.get("sourceName");

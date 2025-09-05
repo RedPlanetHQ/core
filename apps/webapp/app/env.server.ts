@@ -43,6 +43,11 @@ const EnvironmentSchema = z.object({
   APP_ORIGIN: z.string().default("http://localhost:5173"),
   POSTHOG_PROJECT_KEY: z.string().default(""),
 
+  //storage
+  ACCESS_KEY_ID: z.string().optional(),
+  SECRET_ACCESS_KEY: z.string().optional(),
+  BUCKET: z.string().optional(),
+
   // google auth
   AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
   AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),

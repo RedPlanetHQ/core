@@ -3,6 +3,7 @@ import { type CoreMessage } from "ai";
 import * as cheerio from "cheerio";
 import { z } from "zod";
 import { makeModelCall } from "~/lib/model.server";
+import { summarizeImage, extractImageUrls } from "./utils";
 
 export type PageType = "text" | "video";
 
@@ -10,15 +11,19 @@ export const ExtensionSummaryBodyRequest = z.object({
   html: z.string().min(1, "HTML content is required"),
   url: z.string().url("Valid URL is required"),
   title: z.string().optional(),
+  parseImages: z.boolean().default(false),
+  apiKey: z.string().optional(),
 });
 
 interface ContentExtractionResult {
   pageType: PageType;
   title: string;
   content: string;
+  images: string[];
   metadata: {
     url: string;
     wordCount: number;
+    imageCount: number;
   };
   supported: boolean;
 }
@@ -51,11 +56,13 @@ function isVideoPage(url: string, $: cheerio.CheerioAPI): boolean {
 }
 
 /**
- * Extract all text content from any webpage
+ * Extract all text content and images from any webpage
  */
 function extractTextContent(
   $: cheerio.CheerioAPI,
   url: string,
+  html: string,
+  parseImages: boolean = false,
 ): ContentExtractionResult {
   // Extract title from multiple possible locations
   const title =
@@ -105,27 +112,68 @@ function extractTextContent(
   // Clean up whitespace and normalize text
   content = content.replace(/\s+/g, " ").trim();
 
+  // Extract images if requested
+  const images = parseImages ? extractImageUrls(html) : [];
+
   const wordCount = content
     .split(/\s+/)
     .filter((word) => word.length > 0).length;
-  const supported = !isVideo && content.length > 50;
+  const supported = !isVideo && (content.length > 50 || images.length > 0);
 
   return {
     pageType,
     title: title.trim(),
     content: content.slice(0, 10000), // Limit content size for processing
+    images,
     metadata: {
       url,
       wordCount,
+      imageCount: images.length,
     },
     supported,
   };
 }
 
 /**
- * Generate summary using LLM
+ * Process images and get their summaries
  */
-async function generateSummary(title: string, content: string) {
+async function processImages(
+  images: string[],
+  apiKey?: string,
+): Promise<string[]> {
+  if (images.length === 0) return [];
+
+  const imageSummaries: string[] = [];
+
+  for (const imageUrl of images) {
+    try {
+      const summary = await summarizeImage(imageUrl, apiKey);
+      imageSummaries.push(`[Image Description]: ${summary}`);
+    } catch (error) {
+      console.error(`Error processing image ${imageUrl}:`, error);
+      imageSummaries.push(
+        `[Image Description]: Unable to analyze image at ${imageUrl}`,
+      );
+    }
+  }
+
+  return imageSummaries;
+}
+
+/**
+ * Generate summary using LLM with optional image descriptions
+ */
+async function generateSummary(
+  title: string,
+  content: string,
+  imageSummaries: string[] = [],
+) {
+  // Combine content with image descriptions
+  const contentWithImages =
+    imageSummaries.length > 0
+      ? `${content}\n\n${imageSummaries.join("\n\n")}`
+      : content;
+
   const messages: CoreMessage[] = [
     {
       role: "system",
@@ -137,15 +185,17 @@ Create a clear, informative summary that captures the key points and main ideas 
 - Maintain the original context and meaning
 - Be useful for someone who wants to quickly understand the content
 - Format the summary in clean HTML using appropriate tags like <h1>, <h2>, <p>, <ul>, <li> to structure the information
+- When image descriptions are provided, integrate them naturally into the summary context
+- Replace image references with their detailed descriptions
 
 IMPORTANT: Return ONLY the HTML content without any markdown code blocks or formatting. Do not wrap the response in \`\`\`html or any other markdown syntax. Return the raw HTML directly.
 
-Extract the essential information while preserving important details, facts, or insights.`,
+Extract the essential information while preserving important details, facts, or insights. If image descriptions are included, weave them seamlessly into the narrative.`,
     },
     {
       role: "user",
       content: `Title: ${title}
-Content: ${content}
+Content: ${contentWithImages}
 
 Please provide a concise summary of this content in HTML format.`,
     },
@@ -167,7 +217,12 @@ export const extensionSummary = task({
       const $ = cheerio.load(body.html);
 
       // Extract content from any webpage
-      const extraction = extractTextContent($, body.url);
+      const extraction = extractTextContent(
+        $,
+        body.url,
+        body.html,
+        body.parseImages,
+      );
 
       // Override title if provided
       if (body.title) {
@@ -175,22 +230,33 @@ export const extensionSummary = task({
       }
 
       let summary = "";
+      let imageSummaries: string[] = [];
 
-      if (extraction.supported && extraction.content.length > 0) {
-        // Generate summary for text content
-        const response = (await generateSummary(
-          extraction.title,
-          extraction.content,
-        )) as any;
-
-        const stream = await metadata.stream("messages", response.textStream);
-
-        let finalText: string = "";
-        for await (const chunk of stream) {
-          finalText = finalText + chunk;
+      if (extraction.supported) {
+        // Process images if requested and available
+        if (body.parseImages && extraction.images.length > 0) {
+          imageSummaries = await processImages(extraction.images, body.apiKey);
         }
 
-        summary = finalText;
+        // Generate summary for text content with image descriptions
+        if (extraction.content.length > 0 || imageSummaries.length > 0) {
+          const response = (await generateSummary(
+            extraction.title,
+            extraction.content,
+            imageSummaries,
+          )) as any;
+
+          const stream = await metadata.stream("messages", response.textStream);
+
+          let finalText: string = "";
+          for await (const chunk of stream) {
+            finalText = finalText + chunk;
+          }
+
+          summary = finalText;
+        } else {
+          summary = "Unable to extract sufficient content for summarization.";
+        }
       } else {
         // Handle unsupported content types
         if (extraction.pageType === "video") {
@@ -208,6 +274,8 @@ export const extensionSummary = task({
         title: extraction.title,
         summary,
         content: extraction.content.slice(0, 1000), // Return first 1000 chars of content
+        images: extraction.images,
+        imageSummaries: imageSummaries.length > 0 ? imageSummaries : undefined,
         supported: extraction.supported,
         metadata: extraction.metadata,
       };
@@ -223,10 +291,12 @@ export const extensionSummary = task({
         title: body.title || "Error",
         summary: "Unable to process this page content.",
         content: "",
+        images: [],
         supported: false,
         metadata: {
           url: body.url,
           wordCount: 0,
+          imageCount: 0,
         },
       };
     }

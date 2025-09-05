@@ -98,6 +98,7 @@ export enum EpisodeTypeEnum {
 export const EpisodeType = {
   CONVERSATION: "CONVERSATION",
   DOCUMENT: "DOCUMENT",
+  IMAGE: "IMAGE",
 };
 
 export type EpisodeType = (typeof EpisodeType)[keyof typeof EpisodeType];

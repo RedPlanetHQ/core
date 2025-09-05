@@ -1,7 +1,4 @@
-import { Button } from "../ui";
 import Logo from "../logo/logo";
-import { Theme, useTheme } from "remix-themes";
-import { GalleryVerticalEnd } from "lucide-react";
 
 export function LoginPageLayout({ children }: { children: React.ReactNode }) {
   return (

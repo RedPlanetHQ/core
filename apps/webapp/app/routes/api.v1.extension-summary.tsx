@@ -7,6 +7,7 @@ export const ExtensionSummaryBodyRequest = z.object({
   html: z.string().min(1, "HTML content is required"),
   url: z.string().url("Valid URL is required"),
   title: z.string().optional(),
+  parseImages: z.boolean().default(false),
 });
 
 const { action, loader } = createActionApiRoute(
@@ -18,8 +19,11 @@ const { action, loader } = createActionApiRoute(
     },
     corsStrategy: "all",
   },
-  async ({ body }) => {
-    const response = await extensionSummary.trigger(body);
+  async ({ body, authentication }) => {
+    const response = await extensionSummary.trigger({
+      ...body,
+      apiKey: authentication.apiKey,
+    });
 
     return json(response);
   },

@@ -44,6 +44,8 @@ const { action, loader } = createHybridActionApiRoute(
           userId: authentication.userId,
         });
 
+        console.log(result);
+
         if (!result.episodeDeleted) {
           return json(
             {
