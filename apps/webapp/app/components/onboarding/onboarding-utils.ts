@@ -146,42 +146,37 @@ export const ONBOARDING_QUESTIONS: OnboardingQuestion[] = [
   },
 ];
 
-// Helper function to create entity nodes
-async function createEntity(
+// Helper function to create entity nodes (client-side, no embeddings)
+function createEntity(
   name: string,
   type: string,
   userId: string,
   space?: string,
-): Promise<EntityNode> {
-  const nameEmbedding = [] as any;
-  const typeEmbedding = [] as any;
-
+): EntityNode {
   return {
     uuid: crypto.randomUUID(),
     name,
     type,
     attributes: {},
-    nameEmbedding,
-    typeEmbedding,
+    nameEmbedding: [], // Empty placeholder for client-side preview
+    typeEmbedding: [], // Empty placeholder for client-side preview
     createdAt: new Date(),
     userId,
     space,
   };
 }
 
-// Helper function to create episodic node
-async function createEpisode(
+// Helper function to create episodic node (client-side, no embeddings)
+function createEpisode(
   content: string,
   userId: string,
   space?: string,
-): Promise<EpisodicNode> {
-  const contentEmbedding = [] as any;
-
+): EpisodicNode {
   return {
     uuid: crypto.randomUUID(),
     content,
     originalContent: content,
-    contentEmbedding,
+    contentEmbedding: [], // Empty placeholder for client-side preview
     metadata: { source: "onboarding" },
     source: "onboarding",
     createdAt: new Date(),
@@ -192,18 +187,16 @@ async function createEpisode(
   };
 }
 
-// Helper function to create statement node
-async function createStatement(
+// Helper function to create statement node (client-side, no embeddings)
+function createStatement(
   fact: string,
   userId: string,
   space?: string,
-): Promise<StatementNode> {
-  const factEmbedding = [] as any;
-
+): StatementNode {
   return {
     uuid: crypto.randomUUID(),
     fact,
-    factEmbedding,
+    factEmbedding: [], // Empty placeholder for client-side preview
     createdAt: new Date(),
     validAt: new Date(),
     invalidAt: null,
@@ -213,94 +206,47 @@ async function createStatement(
   };
 }
 
-// Create triplet from onboarding answer
-export async function createOnboardingTriplet(
+// Create triplet from onboarding answer using reified knowledge graph structure (client-side, no embeddings)
+export function createOnboardingTriplet(
   username: string,
   questionId: string,
   answer: string | string[],
   userId: string,
   space?: string,
-): Promise<Triple[]> {
+): Triple[] {
   const triplets: Triple[] = [];
 
   // Convert array answers to individual triplets
   const answers = Array.isArray(answer) ? answer : [answer];
 
   for (const singleAnswer of answers) {
-    let subject: EntityNode;
-    let predicate: EntityNode;
-    let object: EntityNode;
-    let fact: string;
+    // Get the statement mapping for this question type
+    const { predicateType, objectType, factTemplate } = getStatementMapping(questionId);
+    
+    // Create the statement fact (e.g., "Manoj uses GitHub")
+    const fact = factTemplate(username, singleAnswer);
+    
+    // Create entities following CORE's reified structure (client-side preview only)
+    const subject = createEntity(username, "Person", userId, space);
+    const predicate = createEntity(
+      predicateType.toLowerCase().replace('_', ' '), // "uses tool" instead of "USES_TOOL"
+      "Predicate", // Use "Predicate" type instead of "Relationship"
+      userId,
+      space,
+    );
+    const object = createEntity(singleAnswer, objectType, userId, space);
 
-    switch (questionId) {
-      case "role":
-        subject = await createEntity(username, "Person", userId, space);
-        predicate = await createEntity(
-          "has_role",
-          "Relationship",
-          userId,
-          space,
-        );
-        object = await createEntity(singleAnswer, "Role", userId, space);
-        fact = `${username} has role ${singleAnswer}`;
-        break;
-
-      case "goal":
-        subject = await createEntity(username, "Person", userId, space);
-        predicate = await createEntity(
-          "has_goal",
-          "Relationship",
-          userId,
-          space,
-        );
-        object = await createEntity(singleAnswer, "Goal", userId, space);
-        fact = `${username} has goal to ${singleAnswer}`;
-        break;
-
-      case "tools":
-        subject = await createEntity(username, "Person", userId, space);
-        predicate = await createEntity(
-          "uses_tool",
-          "Relationship",
-          userId,
-          space,
-        );
-        object = await createEntity(singleAnswer, "Tool", userId, space);
-        fact = `${username} uses tool ${singleAnswer}`;
-        break;
-
-      case "use-case":
-        subject = await createEntity(username, "Person", userId, space);
-        predicate = await createEntity(
-          "interested_in",
-          "Relationship",
-          userId,
-          space,
-        );
-        object = await createEntity(singleAnswer, "UseCase", userId, space);
-        fact = `${username} is interested in ${singleAnswer}`;
-        break;
-
-      default:
-        // Generic triplet creation
-        subject = await createEntity(username, "Person", userId, space);
-        predicate = await createEntity(
-          "has_attribute",
-          "Relationship",
-          userId,
-          space,
-        );
-        object = await createEntity(singleAnswer, "Attribute", userId, space);
-        fact = `${username} has attribute ${singleAnswer}`;
-    }
-
-    const statement = await createStatement(fact, userId, space);
-    const provenance = await createEpisode(
+    // Create statement node as first-class object (client-side preview only)
+    const statement = createStatement(fact, userId, space);
+    
+    // Create provenance episode (client-side preview only)
+    const provenance = createEpisode(
       `Onboarding question: ${questionId} - Answer: ${singleAnswer}`,
       userId,
       space,
     );
 
+    // Create the reified triple structure (no embeddings for client preview)
     triplets.push({
       statement,
       subject,
@@ -313,42 +259,358 @@ export async function createOnboardingTriplet(
   return triplets;
 }
 
-// Create initial identity triplet for preview
-export function createInitialIdentityTriplet(displayName: string): any {
+// Create initial identity statement for preview using reified knowledge graph structure
+export function createInitialIdentityStatement(displayName: string): any {
   const timestamp = Date.now();
+  const now = new Date().toISOString();
+  
+  // Create the identity statement: "I'm [DisplayName]" using reified structure
+  const fact = `I'm ${displayName}`;
+  
   return {
-    sourceNode: {
+    // Statement node (center)
+    statementNode: {
+      uuid: `identity-statement-${timestamp}`,
+      name: fact,
+      labels: ["Statement"],
+      attributes: { 
+        nodeType: "Statement", 
+        type: "Statement",
+        fact: fact,
+        source: "onboarding",
+        validAt: now
+      },
+      createdAt: now,
+    },
+    // Subject entity ("I")
+    subjectNode: {
       uuid: `pronoun-${timestamp}`,
       name: "I",
-      labels: ["Pronoun"],
-      attributes: { nodeType: "Entity", type: "Pronoun" },
+      labels: ["Entity"],
+      attributes: { 
+        nodeType: "Entity", 
+        type: "Pronoun",
+        source: "onboarding"
+      },
+      createdAt: now,
     },
-    edge: {
-      uuid: `alias-edge-${timestamp}`,
-      type: "IS_ALIAS_OF",
-      source_node_uuid: `pronoun-${timestamp}`,
-      target_node_uuid: `user-${timestamp}`,
+    // Predicate entity ("am")
+    predicateNode: {
+      uuid: `predicate-identity-${timestamp}`,
+      name: "am",
+      labels: ["Entity"],
+      attributes: { 
+        nodeType: "Entity", 
+        type: "Predicate",
+        source: "onboarding"
+      },
+      createdAt: now,
     },
-    targetNode: {
+    // Object entity (DisplayName)
+    objectNode: {
       uuid: `user-${timestamp}`,
       name: displayName,
-      labels: ["Person"],
-      attributes: { nodeType: "Entity", type: "Person" },
+      labels: ["Entity"],
+      attributes: { 
+        nodeType: "Entity", 
+        type: "Person",
+        source: "onboarding"
+      },
+      createdAt: now,
     },
+    // Edges connecting statement to subject, predicate, object
+    edges: {
+      hasSubject: {
+        uuid: `identity-has-subject-${timestamp}`,
+        type: "HAS_SUBJECT",
+        source_node_uuid: `identity-statement-${timestamp}`,
+        target_node_uuid: `pronoun-${timestamp}`,
+        createdAt: now,
+      },
+      hasPredicate: {
+        uuid: `identity-has-predicate-${timestamp}`,
+        type: "HAS_PREDICATE",
+        source_node_uuid: `identity-statement-${timestamp}`,
+        target_node_uuid: `predicate-identity-${timestamp}`,
+        createdAt: now,
+      },
+      hasObject: {
+        uuid: `identity-has-object-${timestamp}`,
+        type: "HAS_OBJECT",
+        source_node_uuid: `identity-statement-${timestamp}`,
+        target_node_uuid: `user-${timestamp}`,
+        createdAt: now,
+      }
+    }
   };
 }
 
-// Process all onboarding answers and create triplets
-export async function processOnboardingAnswers(
+// Create progressive episode content as user answers questions
+export function createProgressiveEpisode(
+  username: string,
+  answers: OnboardingAnswer[],
+): string {
+  // Start with identity
+  let episodeContent = `I'm ${username}.`;
+  
+  // Build episode progressively based on answers
+  for (const answer of answers) {
+    const values = Array.isArray(answer.value) ? answer.value : [answer.value];
+    
+    switch (answer.questionId) {
+      case "role":
+        episodeContent += ` I'm a ${values[0]}.`;
+        break;
+        
+      case "goal":
+        episodeContent += ` My primary goal with CORE is to ${values[0].toLowerCase()}.`;
+        break;
+        
+      case "tools":
+        if (values.length === 1) {
+          episodeContent += ` I use ${values[0]}.`;
+        } else if (values.length === 2) {
+          episodeContent += ` I use ${values[0]} and ${values[1]}.`;
+        } else {
+          // Create a copy to avoid mutating the original array
+          const toolsCopy = [...values];
+          const lastTool = toolsCopy.pop();
+          episodeContent += ` I use ${toolsCopy.join(', ')}, and ${lastTool}.`;
+        }
+        break;
+        
+      case "use-case":
+        episodeContent += ` I'm most interested in ${values[0].toLowerCase()}.`;
+        break;
+    }
+  }
+  
+  return episodeContent;
+}
+
+// Create preview statements for real-time visualization (reified structure) 
+// Including episode hierarchy: Episode → Statements → Entities
+export function createPreviewStatements(
+  username: string,
+  answers: OnboardingAnswer[],
+): { episode: any; statements: any[] } {
+  const allStatements: any[] = [];
+  const now = new Date().toISOString();
+  const baseTimestamp = Date.now();
+
+  // Create the cumulative episode content
+  const episodeContent = createProgressiveEpisode(username, answers);
+  
+  // Create episode node that contains all statements
+  const episode = {
+    uuid: `onboarding-episode-${baseTimestamp}`,
+    name: `Onboarding Episode: ${username}`,
+    content: episodeContent,
+    labels: ["Episode"],
+    attributes: {
+      nodeType: "Episode",
+      type: "Episode", 
+      source: "onboarding",
+      content: episodeContent,
+      validAt: now
+    },
+    createdAt: now,
+  };
+
+  // Create user entity that will be the subject of all statements
+  const userEntityId = `user-${baseTimestamp}`;
+
+  for (let i = 0; i < answers.length; i++) {
+    const answer = answers[i];
+    const values = Array.isArray(answer.value) ? answer.value : [answer.value];
+    
+    for (let j = 0; j < values.length; j++) {
+      const value = values[j];
+      const uniqueId = `${baseTimestamp}-${i}-${j}`;
+      
+      // Get the relationship mapping for this question
+      const { predicateType, objectType, factTemplate } = getStatementMapping(answer.questionId);
+      
+      // Create the statement fact (e.g., "Manoj uses GitHub")
+      const fact = factTemplate(username, value);
+      
+      // Create statement visualization as a reified structure
+      const statement = {
+        // Statement node (center)
+        statementNode: {
+          uuid: `statement-${uniqueId}`,
+          name: fact,
+          labels: ["Statement"],
+          attributes: { 
+            nodeType: "Statement", 
+            type: "Statement",
+            fact: fact,
+            source: "onboarding",
+            validAt: now
+          },
+          createdAt: now,
+        },
+        // Subject entity (user)
+        subjectNode: {
+          uuid: userEntityId,
+          name: username,
+          labels: ["Entity"],
+          attributes: { 
+            nodeType: "Entity", 
+            type: "Person",
+            source: "onboarding"
+          },
+          createdAt: now,
+        },
+        // Predicate entity (relationship type)
+        predicateNode: {
+          uuid: `predicate-${predicateType}-${uniqueId}`,
+          name: predicateType.toLowerCase().replace('_', ' '),
+          labels: ["Entity"],
+          attributes: { 
+            nodeType: "Entity", 
+            type: "Predicate",
+            source: "onboarding"
+          },
+          createdAt: now,
+        },
+        // Object entity (the thing being related to)
+        objectNode: {
+          uuid: `object-${uniqueId}`,
+          name: value,
+          labels: ["Entity"],
+          attributes: { 
+            nodeType: "Entity", 
+            type: objectType,
+            source: "onboarding"
+          },
+          createdAt: now,
+        },
+        // Edges connecting statement to subject, predicate, object
+        edges: {
+          hasSubject: {
+            uuid: `has-subject-${uniqueId}`,
+            type: "HAS_SUBJECT",
+            source_node_uuid: `statement-${uniqueId}`,
+            target_node_uuid: userEntityId,
+            createdAt: now,
+          },
+          hasPredicate: {
+            uuid: `has-predicate-${uniqueId}`,
+            type: "HAS_PREDICATE",
+            source_node_uuid: `statement-${uniqueId}`,
+            target_node_uuid: `predicate-${predicateType}-${uniqueId}`,
+            createdAt: now,
+          },
+          hasObject: {
+            uuid: `has-object-${uniqueId}`,
+            type: "HAS_OBJECT",
+            source_node_uuid: `statement-${uniqueId}`,
+            target_node_uuid: `object-${uniqueId}`,
+            createdAt: now,
+          },
+          // Provenance connection: Episode → Statement
+          hasProvenance: {
+            uuid: `provenance-${uniqueId}`,
+            type: "HAS_PROVENANCE",
+            source_node_uuid: `statement-${uniqueId}`,
+            target_node_uuid: episode.uuid,
+            createdAt: now,
+          }
+        }
+      };
+      
+      allStatements.push(statement);
+    }
+  }
+
+  return { episode, statements: allStatements };
+}
+
+// Helper function to map question types to statement templates with natural English phrasing
+function getStatementMapping(questionId: string): {
+  predicateType: string;
+  objectType: string;
+  factTemplate: (subject: string, object: string) => string;
+} {
+  switch (questionId) {
+    case "role":
+      return {
+        predicateType: "IS_A",
+        objectType: "Role", 
+        factTemplate: (subject, object) => `${subject} is a ${object.toLowerCase()}`
+      };
+    case "goal":
+      return {
+        predicateType: "WANTS_TO",
+        objectType: "Goal",
+        factTemplate: (subject, object) => `${subject} wants to ${object.toLowerCase()}`
+      };
+    case "tools":
+      return {
+        predicateType: "USES",
+        objectType: "Tool",
+        factTemplate: (subject, object) => `${subject} uses ${object}`
+      };
+    case "use-case":
+      return {
+        predicateType: "IS_INTERESTED_IN",
+        objectType: "UseCase",
+        factTemplate: (subject, object) => `${subject} is interested in ${object.toLowerCase()}`
+      };
+    default:
+      return {
+        predicateType: "HAS",
+        objectType: "Attribute",
+        factTemplate: (subject, object) => `${subject} has ${object}`
+      };
+  }
+}
+
+// Create main onboarding episode (client-side preview, no embeddings)
+export function createOnboardingEpisode(
   username: string,
   answers: OnboardingAnswer[],
   userId: string,
   space?: string,
-): Promise<Triple[]> {
+): EpisodicNode {
+  // Generate progressive episode content
+  const episodeContent = createProgressiveEpisode(username, answers);
+  
+  // Create the main onboarding episode for client preview
+  const episode: EpisodicNode = {
+    uuid: crypto.randomUUID(),
+    content: episodeContent,
+    originalContent: episodeContent, // Same as content for onboarding
+    contentEmbedding: [], // Empty placeholder for client-side preview
+    source: "onboarding",
+    metadata: { 
+      completedAt: new Date().toISOString(),
+      questionCount: answers.length,
+      answersData: answers // Store original answers for reference
+    },
+    createdAt: new Date(),
+    validAt: new Date(),
+    labels: ["onboarding", "user-profile"],
+    userId,
+    space,
+    sessionId: crypto.randomUUID(), // Generate unique session for onboarding
+  };
+
+  return episode;
+}
+
+// Process all onboarding answers and create triplets (client-side preview, no embeddings)
+export function processOnboardingAnswers(
+  username: string,
+  answers: OnboardingAnswer[],
+  userId: string,
+  space?: string,
+): Triple[] {
   const allTriplets: Triple[] = [];
 
   for (const answer of answers) {
-    const triplets = await createOnboardingTriplet(
+    const triplets = createOnboardingTriplet(
       username,
       answer.questionId,
       answer.value,

@@ -96,7 +96,7 @@ export default function OnboardingQuestionComponent({
                       selectedValue === option.value ? "secondary" : "outline"
                     }
                     className="hover:bg-grayAlpha-100 h-auto w-full justify-start px-4 py-3 text-left font-normal"
-                    onClick={() => handleSingleSelect(option.id)}
+                    onClick={() => handleSingleSelect(option.value)}
                   >
                     {option.label}
                   </Button>

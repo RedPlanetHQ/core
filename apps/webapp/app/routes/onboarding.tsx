@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { useActionData, useLoaderData } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -8,7 +8,6 @@ import {
 } from "@remix-run/node";
 import { requireUser, requireUserId } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
-import type { Triple } from "@core/types";
 import Logo from "~/components/logo/logo";
 import { useState, useEffect } from "react";
 import { GraphVisualizationClient } from "~/components/graph/graph-client";
@@ -16,7 +15,9 @@ import OnboardingQuestionComponent from "~/components/onboarding/onboarding-ques
 import {
   ONBOARDING_QUESTIONS,
   processOnboardingAnswers,
-  createInitialIdentityTriplet,
+  createInitialIdentityStatement,
+  createPreviewStatements,
+  createProgressiveEpisode,
   type OnboardingAnswer,
 } from "~/components/onboarding/onboarding-utils";
 import { saveTriple } from "~/services/graphModels/statement";
@@ -77,14 +78,35 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Onboarding() {
-  const lastSubmission = useActionData<typeof action>();
   const { user } = useLoaderData<typeof loader>();
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState<OnboardingAnswer[]>([]);
-  // Initialize with default identity triplet
+  // Initialize with default identity statement converted to triplets
   const getInitialTriplets = () => {
     const displayName = user.displayName || user.email || "User";
-    return [createInitialIdentityTriplet(displayName)];
+    const identityStatement = createInitialIdentityStatement(displayName);
+    
+    // Convert identity statement to triplet format for visualization
+    return [
+      // Statement -> Subject relationship
+      {
+        sourceNode: identityStatement.statementNode,
+        edge: identityStatement.edges.hasSubject,
+        targetNode: identityStatement.subjectNode,
+      },
+      // Statement -> Predicate relationship  
+      {
+        sourceNode: identityStatement.statementNode,
+        edge: identityStatement.edges.hasPredicate,
+        targetNode: identityStatement.predicateNode,
+      },
+      // Statement -> Object relationship
+      {
+        sourceNode: identityStatement.statementNode,
+        edge: identityStatement.edges.hasObject,
+        targetNode: identityStatement.objectNode,
+      }
+    ];
   };
 
   const [generatedTriplets, setGeneratedTriplets] =
@@ -105,18 +127,17 @@ export default function Onboarding() {
 
     setAnswers(newAnswers);
 
-    // Generate triplets for visualization (client-side preview)
+    // Generate reified statements with episode hierarchy for visualization (client-side preview)
     try {
-      // This would normally be server-side, but for live preview we can simulate
-      // In production, you'd call an API endpoint to generate the triplets
       const userName = user.displayName || user.email;
-      const mockTriplets = await generateMockTripletsForPreview(
-        userName,
-        answer,
-      );
-      setGeneratedTriplets((prev) => [...prev, ...mockTriplets]);
+      // Create episode and statements using the reified knowledge graph structure
+      const { episode, statements } = createPreviewStatements(userName, newAnswers);
+      // Convert episode-statement hierarchy to triplet format for visualization
+      const episodeTriplets = convertEpisodeToTriplets(episode, statements);
+      // Update with identity + episode-based statements
+      setGeneratedTriplets([...getInitialTriplets(), ...episodeTriplets]);
     } catch (error) {
-      console.error("Error generating preview triplets:", error);
+      console.error("Error generating preview statements:", error);
     }
   };
 
@@ -151,60 +172,48 @@ export default function Onboarding() {
     }
   };
 
-  // Helper function to generate mock triplets for preview (client-side)
-  const generateMockTripletsForPreview = async (
-    userName: string,
-    answer: OnboardingAnswer,
-  ): Promise<any[]> => {
-    // This is a simplified version for client-side preview
-    // The actual triplet generation happens server-side
-    const values = Array.isArray(answer.value) ? answer.value : [answer.value];
-    const displayName = user.displayName || user.name || userName;
-
-    return values.map((value) => ({
-      sourceNode: {
-        uuid: `user-${Date.now()}`,
-        name: displayName,
-        labels: ["Person"],
-        attributes: { nodeType: "Entity", type: "Person" },
-      },
-      edge: {
-        uuid: `edge-${Date.now()}`,
-        type: getPredicateForQuestion(answer.questionId),
-        source_node_uuid: `user-${Date.now()}`,
-        target_node_uuid: `value-${Date.now()}`,
-      },
-      targetNode: {
-        uuid: `value-${Date.now()}`,
-        name: value,
-        labels: [getNodeTypeForQuestion(answer.questionId)],
-        attributes: {
-          nodeType: "Entity",
-          type: getNodeTypeForQuestion(answer.questionId),
-        },
-      },
-    }));
+  // Convert episode and statements structure to triplets for visualization
+  const convertEpisodeToTriplets = (episode: any, statements: any[]): any[] => {
+    const triplets: any[] = [];
+    
+    // Add the episode node itself
+    // Episode will be connected to statements via HAS_PROVENANCE edges
+    
+    for (const statement of statements) {
+      // Episode -> Statement provenance relationship
+      triplets.push({
+        sourceNode: episode,
+        edge: statement.edges.hasProvenance,
+        targetNode: statement.statementNode,
+      });
+      
+      // Statement -> Subject relationship
+      triplets.push({
+        sourceNode: statement.statementNode,
+        edge: statement.edges.hasSubject,
+        targetNode: statement.subjectNode,
+      });
+      
+      // Statement -> Predicate relationship  
+      triplets.push({
+        sourceNode: statement.statementNode,
+        edge: statement.edges.hasPredicate,
+        targetNode: statement.predicateNode,
+      });
+      
+      // Statement -> Object relationship
+      triplets.push({
+        sourceNode: statement.statementNode,
+        edge: statement.edges.hasObject,
+        targetNode: statement.objectNode,
+      });
+    }
+    
+    return triplets;
   };
 
-  const getPredicateForQuestion = (questionId: string): string => {
-    const predicates: Record<string, string> = {
-      role: "HAS_ROLE",
-      goal: "HAS_GOAL",
-      tools: "USES_TOOL",
-      "use-case": "INTERESTED_IN",
-    };
-    return predicates[questionId] || "HAS_ATTRIBUTE";
-  };
-
-  const getNodeTypeForQuestion = (questionId: string): string => {
-    const types: Record<string, string> = {
-      role: "Role",
-      goal: "Goal",
-      tools: "Tool",
-      "use-case": "UseCase",
-    };
-    return types[questionId] || "Attribute";
-  };
+  // These helper functions are no longer needed as they're moved to onboarding-utils
+  // Keeping them for potential backward compatibility
 
   const currentQuestionData = ONBOARDING_QUESTIONS[currentQuestion];
   const currentAnswer = answers.find(
@@ -240,11 +249,22 @@ export default function Onboarding() {
       </div>
 
       <div className="bg-grayAlpha-100 relative hidden xl:block">
-        <div className="absolute top-4 left-4 rounded-lg bg-white/90 p-3 text-sm shadow-lg">
+        <div className="absolute top-4 left-4 rounded-lg bg-white/90 p-3 text-sm shadow-lg max-w-xs">
           <div className="mb-1 font-medium">Building Your Memory Graph</div>
-          <div className="text-gray-600">
+          <div className="text-gray-600 mb-2">
             {generatedTriplets.length} connections created
           </div>
+          {answers.length > 0 && (
+            <div className="border-t pt-2">
+              <div className="mb-1 text-xs font-medium text-gray-500">Your Episode:</div>
+              <div className="text-xs text-gray-700 italic">
+                "{(() => {
+                  const userName = user.displayName || user.email;
+                  return createProgressiveEpisode(userName, answers);
+                })()}"
+              </div>
+            </div>
+          )}
         </div>
         <GraphVisualizationClient
           triplets={generatedTriplets || []}
