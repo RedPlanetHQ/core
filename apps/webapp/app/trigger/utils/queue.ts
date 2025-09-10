@@ -27,6 +27,7 @@ export const addToQueue = async (
     data: {
       spaceId: body.spaceId ? body.spaceId : null,
       data: body,
+      type: body.type,
       status: IngestionStatus.PENDING,
       priority: 1,
       workspaceId: user.Workspace.id,

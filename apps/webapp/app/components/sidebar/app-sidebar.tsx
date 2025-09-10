@@ -9,8 +9,8 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  Activity,
   Columns3,
+  Inbox,
   LayoutGrid,
   MessageSquare,
   Network,
@@ -24,7 +24,12 @@ import { ConversationList } from "../conversation";
 const data = {
   navMain: [
     {
-      title: "Conversation",
+      title: "Inbox",
+      url: "/home/inbox",
+      icon: Inbox,
+    },
+    {
+      title: "Chat",
       url: "/home/conversation",
       icon: MessageSquare,
     },
@@ -37,11 +42,6 @@ const data = {
       title: "Spaces",
       url: "/home/space",
       icon: Columns3,
-    },
-    {
-      title: "Activity",
-      url: "/home/logs",
-      icon: Activity,
     },
     {
       title: "Integrations",
@@ -64,7 +64,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <SidebarMenu>
           <SidebarMenuItem>
             <div className="mt-1 ml-1 flex w-full items-center justify-start gap-2">
-              <Logo width={20} height={20} />
+              <Logo size={20} />
               C.O.R.E.
             </div>
           </SidebarMenuItem>

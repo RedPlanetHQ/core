@@ -10,6 +10,7 @@ export interface LogItem {
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
   error?: string;
   sourceURL?: string;
+  type?: string;
   integrationSlug?: string;
   activityId?: string;
   episodeUUID?: string;

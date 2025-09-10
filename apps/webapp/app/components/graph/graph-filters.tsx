@@ -12,68 +12,31 @@ import type { RawTriplet } from "./type";
 import { type ClusterData } from "./graph-clustering";
 import { nodeColorPalette } from "./node-colors";
 import { useTheme } from "remix-themes";
-import { ScrollArea } from "../ui";
 
 interface GraphFiltersProps {
-  triplets: RawTriplet[];
   clusters: ClusterData[];
   selectedCluster?: string | null;
   selectedEntityType?: string;
   onClusterChange: (cluster?: string) => void;
-  onEntityTypeChange: (entityType?: string) => void;
 }
 
 type FilterStep = "main" | "cluster" | "nodeType" | "entityType";
 
-const nodeTypeOptions = [
-  { value: "entity", label: "Entity" },
-  { value: "statement", label: "Statement" },
-];
-
 export function GraphFilters({
-  triplets,
   clusters,
   selectedCluster,
 
   selectedEntityType,
   onClusterChange,
-
-  onEntityTypeChange,
 }: GraphFiltersProps) {
   const [themeMode] = useTheme();
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [step, setStep] = useState<FilterStep>("main");
 
-  // Extract unique entity types (primaryLabel values) from triplets
-  const entityTypeOptions = useMemo(() => {
-    const entityTypes = new Set<string>();
-
-    triplets.forEach((triplet) => {
-      // Check if node has primaryLabel (indicates it's an entity)
-      if (triplet.sourceNode.attributes?.type) {
-        entityTypes.add(triplet.sourceNode.attributes.type);
-      }
-      if (triplet.targetNode.attributes?.type) {
-        entityTypes.add(triplet.targetNode.attributes.type);
-      }
-    });
-
-    return Array.from(entityTypes)
-      .sort()
-      .map((type) => ({
-        value: type,
-        label: type,
-      }));
-  }, [triplets]);
-
   // Get display labels
   const selectedClusterLabel = clusters.find(
     (c) => c.id === selectedCluster,
   )?.name;
-
-  const selectedEntityTypeLabel = entityTypeOptions.find(
-    (e) => e.value === selectedEntityType,
-  )?.label;
 
   const hasFilters = selectedCluster || selectedEntityType;
 
@@ -111,13 +74,6 @@ export function GraphFilters({
                     onClick={() => setStep("cluster")}
                   >
                     Cluster
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    className="justify-start"
-                    onClick={() => setStep("entityType")}
-                  >
-                    Entity Type
                   </Button>
                 </div>
               )}
@@ -167,40 +123,6 @@ export function GraphFilters({
                   })}
                 </div>
               )}
-
-              {step === "entityType" && (
-                <div className="flex flex-col gap-1 p-2">
-                  <Button
-                    variant="ghost"
-                    className="w-full justify-start"
-                    onClick={() => {
-                      onEntityTypeChange(undefined);
-                      setPopoverOpen(false);
-                      setStep("main");
-                    }}
-                  >
-                    All Entity Types
-                  </Button>
-                  {entityTypeOptions.map((entityType) => (
-                    <Button
-                      key={entityType.value}
-                      variant="ghost"
-                      className="w-full justify-start"
-                      onClick={() => {
-                        onEntityTypeChange(
-                          entityType.value === selectedEntityType
-                            ? undefined
-                            : entityType.value,
-                        );
-                        setPopoverOpen(false);
-                        setStep("main");
-                      }}
-                    >
-                      {entityType.label}
-                    </Button>
-                  ))}
-                </div>
-              )}
             </div>
           </PopoverContent>
         </PopoverPortal>
@@ -215,16 +137,6 @@ export function GraphFilters({
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onClusterChange(undefined)}
-              />
-            </Badge>
-          )}
-
-          {selectedEntityType && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
-              {selectedEntityTypeLabel}
-              <X
-                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
-                onClick={() => onEntityTypeChange(undefined)}
               />
             </Badge>
           )}

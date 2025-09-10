@@ -10,6 +10,9 @@ import { Cursor } from "./icons/cursor";
 import { Claude } from "./icons/claude";
 import { Cline } from "./icons/cline";
 import { VSCode } from "./icons/vscode";
+import { Obsidian } from "./icons/obsidian";
+import { Figma } from "./icons/figma";
+import StaticLogo from "./logo/logo";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -23,6 +26,9 @@ export const ICON_MAPPING = {
   claude: Claude,
   cline: Cline,
   vscode: VSCode,
+  obsidian: Obsidian,
+  figma: Figma,
+  core: StaticLogo,
 
   // Default icon
   integration: LayoutGrid,

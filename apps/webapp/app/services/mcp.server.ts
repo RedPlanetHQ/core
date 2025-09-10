@@ -185,7 +185,7 @@ export const handleMCPRequest = async (
   queryParams: z.infer<typeof QueryParams>,
 ) => {
   const sessionId = request.headers["mcp-session-id"] as string | undefined;
-  const source = queryParams.source || "api";
+  const source = queryParams.source?.toLowerCase() || "api";
   const integrations = queryParams.integrations
     ? queryParams.integrations.split(",").map((s) => s.trim())
     : [];

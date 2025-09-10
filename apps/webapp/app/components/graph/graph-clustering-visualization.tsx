@@ -1,5 +1,4 @@
 import { useState, useMemo, forwardRef } from "react";
-import { useTheme } from "remix-themes";
 import {
   type ClusterData,
   GraphClustering,
@@ -54,9 +53,6 @@ export const GraphClusteringVisualization = forwardRef<
     const [edgePopupContent, setEdgePopupContent] =
       useState<EdgePopupContent | null>(null);
 
-    const [selectedEntityType, setSelectedEntityType] = useState<
-      string | undefined
-    >();
     const [searchQuery, setSearchQuery] = useState<string>("");
 
     // Combined filter logic for all filters
@@ -70,18 +66,6 @@ export const GraphClusteringVisualization = forwardRef<
             triplet.sourceNode.attributes?.clusterId === selectedClusterId ||
             triplet.targetNode.attributes?.clusterId === selectedClusterId,
         );
-      }
-
-      // Entity type filter
-      if (selectedEntityType) {
-        filtered = filtered.filter((triplet) => {
-          const sourceMatches =
-            triplet.sourceNode.attributes?.type === selectedEntityType;
-          const targetMatches =
-            triplet.targetNode.attributes?.type === selectedEntityType;
-
-          return sourceMatches || targetMatches;
-        });
       }
 
       // Search filter
@@ -108,13 +92,7 @@ export const GraphClusteringVisualization = forwardRef<
       }
 
       return filtered;
-    }, [
-      triplets,
-      selectedClusterId,
-      onClusterSelect,
-      selectedEntityType,
-      searchQuery,
-    ]);
+    }, [triplets, selectedClusterId, onClusterSelect, searchQuery]);
 
     // Convert filtered triplets to graph triplets
     const graphTriplets = useMemo(
@@ -236,12 +214,9 @@ export const GraphClusteringVisualization = forwardRef<
             {/* Graph Filters and Search in same row */}
             <div className="flex items-center gap-1">
               <GraphFilters
-                triplets={triplets}
                 clusters={clusters}
                 selectedCluster={selectedClusterId}
-                selectedEntityType={selectedEntityType}
                 onClusterChange={onClusterSelect as any}
-                onEntityTypeChange={setSelectedEntityType}
               />
               <SpaceSearch
                 triplets={triplets}

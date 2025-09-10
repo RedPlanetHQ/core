@@ -292,7 +292,9 @@ async function generateSpaceSummary(
       spaceId: space.uuid,
       spaceName: space.name,
       spaceDescription: space.description as string,
-      statementCount: existingSummary?.statementCount ? existingSummary?.statementCount + statements.length : statements.length,
+      statementCount: existingSummary?.statementCount
+        ? existingSummary?.statementCount + statements.length
+        : statements.length,
       summary: summaryResult.summary,
       keyEntities: summaryResult.keyEntities || [],
       themes: summaryResult.themes,
@@ -354,7 +356,9 @@ function createUnifiedSummaryPrompt(
 ): CoreMessage[] {
   // If there are no statements and no previous summary, we cannot generate a meaningful summary
   if (statements.length === 0 && previousSummary === null) {
-    throw new Error("Cannot generate summary without statements or existing summary");
+    throw new Error(
+      "Cannot generate summary without statements or existing summary",
+    );
   }
 
   const statementsText = statements
@@ -506,8 +510,8 @@ async function getExistingSummary(spaceId: string): Promise<{
       return {
         summary: existingSummary.summary,
         themes: existingSummary.themes,
-        lastUpdated: existingSummary.lastPatternTrigger,
-        statementCount: existingSummary.statementCount,
+        lastUpdated: existingSummary.lastPatternTrigger as Date,
+        statementCount: existingSummary.statementCount as number,
       };
     }
 

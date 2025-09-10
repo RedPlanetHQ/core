@@ -14,8 +14,8 @@ export function dashboardPath() {
   return `/home/dashboard`;
 }
 
-export function activityPath() {
-  return `/home/logs`;
+export function inboxPath() {
+  return `/home/inbox`;
 }
 
 export function conversationPath() {

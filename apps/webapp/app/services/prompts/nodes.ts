@@ -113,7 +113,6 @@ You are given a conversation context and a CURRENT EPISODE. Your task is to extr
 - Text: "authentication system" → ❌ Extract: "authentication system" (should be "Authentication", "System")
 - Text: "payment service" → ❌ Extract: "payment service" (should be "Payment", "Service")
 
-Format your response as a JSON object with the following structure:
 <output>
 {
   "entities": [

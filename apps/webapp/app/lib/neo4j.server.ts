@@ -115,7 +115,7 @@ export const getClusteredGraphData = async (userId: string) => {
     const result = await session.run(
       `// Get all statements and their entity connections for reified graph
        MATCH (s:Statement)
-       WHERE s.userId = $userId AND s.invalidAt IS NULL
+       WHERE s.userId = $userId
        
        // Get all entities connected to each statement
        MATCH (s)-[:HAS_SUBJECT]->(subj:Entity)

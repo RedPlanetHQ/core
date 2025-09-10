@@ -60,6 +60,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         processedAt: true,
         status: true,
         error: true,
+        type: true,
         output: true,
         data: true,
         activity: {
@@ -83,7 +84,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
         createdAt: "desc",
       },
       skip,
-      take: limit,
     }),
 
     prisma.ingestionQueue.count({

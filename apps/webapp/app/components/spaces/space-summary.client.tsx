@@ -8,7 +8,7 @@ import { extensionsForConversation } from "../conversation/editor-extensions";
 export const SpaceSummary = ({ summary }: { summary?: string | null }) => {
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
-    editable: false,
+    editable: true,
     content: summary,
   });
 

@@ -1,62 +1,24 @@
+import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { prisma } from "~/db.server";
+import { requireUserId } from "~/services/session.server";
 
-export async function getIngestionLogs(
-  userId: string,
-  page: number = 1,
-  limit: number = 10,
-) {
+export async function loader({ request, params }: LoaderFunctionArgs) {
+  const userId = await requireUserId(request);
+  const logId = params.logId;
+
+  // Get user and workspace in one query
   const user = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    include: {
-      Workspace: true,
-    },
+    where: { id: userId },
+    select: { Workspace: { select: { id: true } } },
   });
 
-  const skip = (page - 1) * limit;
+  if (!user?.Workspace) {
+    throw new Response("Workspace not found", { status: 404 });
+  }
 
-  const [ingestionLogs, total] = await Promise.all([
-    prisma.ingestionQueue.findMany({
-      where: {
-        workspaceId: user?.Workspace?.id,
-      },
-      skip,
-      take: limit,
-      orderBy: {
-        createdAt: "desc",
-      },
-    }),
-    prisma.ingestionQueue.count({
-      where: {
-        workspaceId: user?.Workspace?.id,
-      },
-    }),
-  ]);
-
-  return {
-    ingestionLogs,
-    pagination: {
-      total,
-      pages: Math.ceil(total / limit),
-      currentPage: page,
-      limit,
-    },
-  };
-}
-
-export const getIngestionQueue = async (id: string) => {
-  return await prisma.ingestionQueue.findUnique({
-    where: {
-      id,
-    },
-  });
-};
-
-export const getIngestionQueueForFrontend = async (id: string) => {
   // Fetch the specific log by logId
   const log = await prisma.ingestionQueue.findUnique({
-    where: { id: id },
+    where: { id: logId },
     select: {
       id: true,
       createdAt: true,
@@ -112,13 +74,5 @@ export const getIngestionQueueForFrontend = async (id: string) => {
     data: log.data,
   };
 
-  return formattedLog;
-};
-
-export const deleteIngestionQueue = async (id: string) => {
-  return await prisma.ingestionQueue.delete({
-    where: {
-      id,
-    },
-  });
-};
+  return json({ log: formattedLog });
+}

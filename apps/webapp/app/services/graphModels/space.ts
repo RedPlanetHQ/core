@@ -312,7 +312,6 @@ export async function getSpaceStatementCount(
     MATCH (s:Statement {userId: $userId})
     WHERE s.spaceIds IS NOT NULL 
       AND $spaceId IN s.spaceIds 
-      AND s.invalidAt IS NULL
     RETURN count(s) as statementCount
   `;
 

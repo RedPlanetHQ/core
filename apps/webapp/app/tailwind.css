@@ -485,6 +485,9 @@
   }
 
   .tiptap {
+    outline:none;
+    border: none;
+
     :first-child {
       margin-top: 0;
     }

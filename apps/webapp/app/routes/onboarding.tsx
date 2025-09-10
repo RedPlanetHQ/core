@@ -24,7 +24,7 @@ import { parse } from "@conform-to/zod";
 import { type RawTriplet } from "~/components/graph/type";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
-import { activityPath } from "~/utils/pathBuilder";
+import { inboxPath } from "~/utils/pathBuilder";
 
 const schema = z.object({
   answers: z.string(),
@@ -34,7 +34,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
 
   if (user.onboardingComplete) {
-    return redirect(activityPath());
+    return redirect(inboxPath());
   }
 
   return json({ user });
@@ -76,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
       userId,
     );
 
-    return redirect("/home/logs");
+    return redirect("/home/inbox");
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }
@@ -230,7 +230,7 @@ export default function Onboarding() {
         <div className="flex justify-center gap-2 md:justify-start">
           <a href="#" className="flex items-center gap-2 font-medium">
             <div className="flex size-8 items-center justify-center rounded-md">
-              <Logo width={60} height={60} />
+              <Logo size={60} />
             </div>
             C.O.R.E.
           </a>

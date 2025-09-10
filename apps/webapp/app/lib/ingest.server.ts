@@ -7,10 +7,11 @@ import { type IngestBodyRequest, ingestTask } from "~/trigger/ingest/ingest";
 import { ingestDocumentTask } from "~/trigger/ingest/ingest-document";
 
 export const addToQueue = async (
-  body: z.infer<typeof IngestBodyRequest>,
+  rawBody: z.infer<typeof IngestBodyRequest>,
   userId: string,
   activityId?: string,
 ) => {
+  const body = { ...rawBody, source: rawBody.source.toLowerCase() };
   const user = await prisma.user.findFirst({
     where: {
       id: userId,
@@ -30,6 +31,7 @@ export const addToQueue = async (
     data: {
       spaceId: body.spaceId ? body.spaceId : null,
       data: body,
+      type: body.type,
       status: IngestionStatus.PENDING,
       priority: 1,
       workspaceId: user.Workspace.id,

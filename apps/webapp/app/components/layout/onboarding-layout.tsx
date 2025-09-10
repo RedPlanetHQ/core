@@ -14,7 +14,7 @@ export function LoginPageLayout({ children }: { children: React.ReactNode }) {
     >
       <div className="flex w-full max-w-sm flex-col items-center gap-2">
         <div className="flex size-10 items-center justify-center rounded-md">
-          <Logo width={60} height={60} />
+          <Logo size={60} />
         </div>
         <a href="#" className="flex items-center gap-2 self-center font-medium">
           <div className="font-mono">C.O.R.E.</div>

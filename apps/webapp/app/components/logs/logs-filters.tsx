@@ -48,7 +48,7 @@ export function LogsFilters({
   const hasFilters = selectedSource || selectedStatus;
 
   return (
-    <div className="mb-2 flex w-full items-center justify-start gap-2 px-5">
+    <div className="mb-2 flex w-full items-center justify-start gap-2 px-3">
       <Popover
         open={popoverOpen}
         onOpenChange={(open) => {

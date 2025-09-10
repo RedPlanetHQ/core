@@ -28,7 +28,7 @@ export interface PageHeaderProps {
   actions?: PageHeaderAction[];
   actionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
-  showBackForward?: boolean;
+  showTrigger?: boolean;
 }
 
 // Back and Forward navigation component
@@ -66,7 +66,7 @@ export function PageHeader({
   breadcrumbs,
   actions,
   tabs,
-  showBackForward = true,
+  showTrigger = true,
   actionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
@@ -95,9 +95,7 @@ export function PageHeader({
       </style>
       <div className="flex w-full items-center justify-between gap-1 px-4 pr-2 lg:gap-2">
         <div className="-ml-1 flex items-center gap-1">
-          {/* Back/Forward navigation before SidebarTrigger */}
-          {showBackForward && <NavigationBackForward />}
-          <SidebarTrigger className="mr-1" />
+          {showTrigger && <SidebarTrigger className="mr-1" />}
 
           {/* Breadcrumbs */}
           {breadcrumbs && breadcrumbs.length > 0 ? (

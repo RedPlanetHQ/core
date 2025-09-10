@@ -7,9 +7,6 @@ import { type LogItem } from "~/hooks/use-logs";
 import Markdown from "react-markdown";
 
 interface LogDetailsProps {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  text?: string;
   error?: string;
   log: LogItem;
 }
@@ -27,13 +24,7 @@ interface EpisodeFactsResponse {
   invalidFacts: EpisodeFact[];
 }
 
-export function LogDetails({
-  open,
-  onOpenChange,
-  text,
-  error,
-  log,
-}: LogDetailsProps) {
+export function LogDetails({ error, log }: LogDetailsProps) {
   const [facts, setFacts] = useState<any[]>([]);
   const [invalidFacts, setInvalidFacts] = useState<any[]>([]);
   const [factsLoading, setFactsLoading] = useState(false);
@@ -41,11 +32,11 @@ export function LogDetails({
 
   // Fetch episode facts when dialog opens and episodeUUID exists
   useEffect(() => {
-    if (open && log.episodeUUID && facts.length === 0) {
+    if (log.episodeUUID && facts.length === 0) {
       setFactsLoading(true);
       fetcher.load(`/api/v1/episodes/${log.episodeUUID}/facts`);
     }
-  }, [open, log.episodeUUID, facts.length]);
+  }, [log.episodeUUID, facts.length]);
 
   // Handle fetcher response
   useEffect(() => {
@@ -58,116 +49,112 @@ export function LogDetails({
   }, [fetcher.data, fetcher.state]);
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
-        <DialogHeader className="px-4 pt-4">
-          <DialogTitle className="flex w-full items-center justify-between">
-            <span>Log Details</span>
-            <div className="flex gap-0.5">
-              {log.episodeUUID && (
-                <Badge variant="secondary" className="rounded text-xs">
-                  Episode: {log.episodeUUID.slice(0, 8)}...
-                </Badge>
-              )}
-              {log.source && (
-                <Badge variant="secondary" className="rounded text-xs">
-                  Source: {log.source}
-                </Badge>
-              )}
-            </div>
-          </DialogTitle>
-        </DialogHeader>
+    <div className="max-w-4xl">
+      <div className="px-4 pt-4">
+        <div className="mb-4 flex w-full items-center justify-between">
+          <span>Log Details</span>
+          <div className="flex gap-0.5">
+            {log.episodeUUID && (
+              <Badge variant="secondary" className="rounded text-xs">
+                Episode: {log.episodeUUID.slice(0, 8)}...
+              </Badge>
+            )}
+            {log.source && (
+              <Badge variant="secondary" className="rounded text-xs">
+                Source: {log.source}
+              </Badge>
+            )}
+          </div>
+        </div>
+      </div>
 
-        <div className="max-h-[70vh] overflow-auto p-4 pt-0">
-          {/* Log Content */}
-          <div className="mb-4 text-sm break-words whitespace-pre-wrap">
-            <div className="rounded-md">
-              <Markdown>{text}</Markdown>
+      <div className="max-h-[90vh] overflow-auto p-4 pt-0">
+        {/* Log Content */}
+        <div className="mb-4 text-sm break-words whitespace-pre-wrap">
+          <div className="rounded-md">
+            <Markdown>{log.ingestText}</Markdown>
+          </div>
+        </div>
+
+        {/* Error Details */}
+        {log.error && (
+          <div className="mb-4">
+            <h3 className="mb-2 text-sm font-medium">Error Details</h3>
+            <div className="bg-destructive/10 rounded-md p-3">
+              <div className="flex items-start gap-2 text-red-600">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <p className="text-sm break-words whitespace-pre-wrap">
+                  {log.error}
+                </p>
+              </div>
             </div>
           </div>
+        )}
 
-          {/* Error Details */}
-          {error && (
-            <div className="mb-4">
-              <h3 className="mb-2 text-sm font-medium">Error Details</h3>
-              <div className="bg-destructive/10 rounded-md p-3">
-                <div className="flex items-start gap-2 text-red-600">
-                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                  <p className="text-sm break-words whitespace-pre-wrap">
-                    {error}
-                  </p>
+        {/* Episode Facts */}
+        {log.episodeUUID && (
+          <div className="mb-4">
+            <h3 className="text-muted-foreground mb-2 text-sm">Facts</h3>
+            <div className="rounded-md">
+              {factsLoading ? (
+                <div className="flex items-center justify-center gap-2 p-4 text-sm">
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 </div>
-              </div>
-            </div>
-          )}
-
-          {/* Episode Facts */}
-          {log.episodeUUID && (
-            <div className="mb-4">
-              <h3 className="text-muted-foreground mb-2 text-sm">Facts</h3>
-              <div className="rounded-md">
-                {factsLoading ? (
-                  <div className="flex items-center justify-center gap-2 p-4 text-sm">
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  </div>
-                ) : facts.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {facts.map((fact) => (
-                      <div
-                        key={fact.uuid}
-                        className="bg-grayAlpha-100 rounded-md p-3"
-                      >
-                        <p className="mb-1 text-sm">{fact.fact}</p>
-                        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+              ) : facts.length > 0 ? (
+                <div className="flex flex-col gap-2">
+                  {facts.map((fact) => (
+                    <div
+                      key={fact.uuid}
+                      className="bg-grayAlpha-100 rounded-md p-3"
+                    >
+                      <p className="mb-1 text-sm">{fact.fact}</p>
+                      <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                        <span>
+                          Valid: {new Date(fact.validAt).toLocaleString()}
+                        </span>
+                        {fact.invalidAt && (
                           <span>
-                            Valid: {new Date(fact.validAt).toLocaleString()}
+                            Invalid: {new Date(fact.invalidAt).toLocaleString()}
                           </span>
-                          {fact.invalidAt && (
-                            <span>
-                              Invalid:{" "}
-                              {new Date(fact.invalidAt).toLocaleString()}
-                            </span>
-                          )}
-                          {Object.keys(fact.attributes).length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {Object.keys(fact.attributes).length} attributes
-                            </Badge>
-                          )}
-                        </div>
+                        )}
+                        {Object.keys(fact.attributes).length > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {Object.keys(fact.attributes).length} attributes
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                    {invalidFacts.map((fact) => (
-                      <div
-                        key={fact.uuid}
-                        className="bg-grayAlpha-100 rounded-md p-3"
-                      >
-                        <p className="mb-1 text-sm">{fact.fact}</p>
-                        <div className="text-muted-foreground flex items-center gap-2 text-xs">
-                          {fact.invalidAt && (
-                            <span>
-                              Invalid:{" "}
-                              {new Date(fact.invalidAt).toLocaleString()}
-                            </span>
-                          )}
-                          {Object.keys(fact.attributes).length > 0 && (
-                            <Badge variant="secondary" className="text-xs">
-                              {Object.keys(fact.attributes).length} attributes
-                            </Badge>
-                          )}
-                        </div>
+                    </div>
+                  ))}
+                  {invalidFacts.map((fact) => (
+                    <div
+                      key={fact.uuid}
+                      className="bg-grayAlpha-100 rounded-md p-3"
+                    >
+                      <p className="mb-1 text-sm">{fact.fact}</p>
+                      <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                        {fact.invalidAt && (
+                          <span>
+                            Invalid: {new Date(fact.invalidAt).toLocaleString()}
+                          </span>
+                        )}
+                        {Object.keys(fact.attributes).length > 0 && (
+                          <Badge variant="secondary" className="text-xs">
+                            {Object.keys(fact.attributes).length} attributes
+                          </Badge>
+                        )}
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-muted-foreground p-4 text-center text-sm">
-                    No facts found for this episode
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-muted-foreground p-4 text-center text-sm">
+                  No facts found for this episode
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

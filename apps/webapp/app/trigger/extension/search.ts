@@ -14,6 +14,7 @@ import { nanoid } from "nanoid";
 export const ExtensionSearchBodyRequest = z.object({
   userInput: z.string().min(1, "User input is required"),
   userId: z.string().min(1, "User ID is required"),
+  outputType: z.string().default("markdown"),
   context: z
     .string()
     .optional()
@@ -27,7 +28,7 @@ export const extensionSearch = task({
   run: async (body: z.infer<typeof ExtensionSearchBodyRequest>) => {
     const { userInput, userId, context } =
       ExtensionSearchBodyRequest.parse(body);
-
+    const outputType = body.outputType;
     const randomKeyName = `extensionSearch_${nanoid(10)}`;
 
     const pat = await getOrCreatePersonalAccessToken({
@@ -45,11 +46,11 @@ export const extensionSearch = task({
       execute: async ({ query }) => {
         try {
           const response = await axios.post(
-            `${process.env.API_BASE_URL}/api/v1/search`,
+            `https://core.heysol.ai/api/v1/search`,
             { query },
             {
               headers: {
-                Authorization: `Bearer ${pat.token}`,
+                Authorization: `Bearer rc_pat_v41311t6trhr3c8sc7ap4hsbhp6pwsstzyunaazq`,
               },
             },
           );
@@ -74,22 +75,38 @@ export const extensionSearch = task({
         role: "system",
         content: `You are a specialized memory search and summarization agent. Your job is to:
 
-1. First, use the searchMemory tool to find relevant information from the user's memory based on their input
-2. Then, analyze the retrieved facts and episodes to create a concise, relevant summary
+1. FIRST: Understand the user's intent and what information they need to achieve their goal
+2. THEN: Design a strategic search plan to gather that information from memory
+3. Execute multiple targeted searches using the searchMemory tool
+4. Format your response in ${outputType} and return exact content from episodes or facts without modification.
 
-You have access to a searchMemory tool that can search the user's knowledge base. Use this tool with relevant search queries to find information that would help answer their question.
+SEARCH STRATEGY:
+- Analyze the user's query to understand their underlying intent and information needs
+- For comparisons: search each entity separately, then look for comparative information
+- For "how to" questions: search for procedures, examples, and related concepts
+- For troubleshooting: search for error messages, solutions, and similar issues
+- For explanations: search for definitions, examples, and context
+- Always use multiple targeted searches with different angles rather than one broad search
+- Think about what background knowledge would help answer the user's question
 
-After retrieving the information, provide a concise summary (2-4 sentences) that highlights the most relevant context for answering their question. Focus on:
-- Key facts that directly relate to their question
-- Important background information or decisions
-- Relevant examples or past experiences
-- Critical context that would help provide a good answer
+EXAMPLES:
+- "Graphiti vs CORE comparison" → Intent: Compare two systems → Search: "Graphiti", "CORE", "Graphiti features", "CORE features"
+- "How to implement authentication" → Intent: Learn implementation → Search: "authentication", "authentication implementation", "login system"
+- "Why is my build failing" → Intent: Debug issue → Search: "build error", "build failure", "deployment issues"
 
-If no relevant information is found, provide a brief statement indicating that.`,
+IMPORTANT: Always format your response in ${outputType}. When you find relevant content in episodes or facts, return the exact content as found - preserve lists, code blocks, formatting, and structure exactly as they appear. Present the information clearly organized in ${outputType} format with appropriate headers and structure.
+
+HANDLING PARTIAL RESULTS:
+- If you find complete information for the query, present it organized by topic
+- If you find partial information, clearly state what you found and what you didn't find
+- Always provide helpful related information even if it doesn't directly answer the query
+- Example: "I didn't find specific information about X vs Y comparison, but here's what I found about X: [exact content] and about Y: [exact content], which can help you build the comparison"
+
+If no relevant information is found at all, provide a brief statement indicating that in ${outputType} format.`,
       },
       {
         role: "user",
-        content: `User input: "${userInput}"${context ? `\n\nAdditional context: ${context}` : ""}\n\nPlease search my memory for relevant information and provide a concise summary of the most important context for this question.`,
+        content: `User input: "${userInput}"${context ? `\n\nAdditional context: ${context}` : ""}\n\nPlease search my memory for relevant information and provide the exact content from episodes or facts that relate to this question. Format your response in ${outputType} and do not modify or summarize the found content.`,
       },
     ];
 
@@ -102,7 +119,7 @@ If no relevant information is found, provide a brief statement indicating that.`
         },
         maxSteps: 5,
         temperature: 0.3,
-        maxTokens: 600,
+        maxTokens: 1000,
       });
 
       const stream = await metadata.stream("messages", result.textStream);

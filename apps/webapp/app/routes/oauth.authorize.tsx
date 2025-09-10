@@ -235,7 +235,7 @@ export default function OAuthAuthorize() {
           <div className="flex items-center justify-center gap-4">
             {getIconForAuthorise(client.name, 40, client.logoUrl)}
             <ArrowRightLeft size={16} />
-            <Logo width={40} height={40} />
+            <Logo size={40} />
           </div>
           <div className="mt-4 space-y-4">
             <div className="flex items-center justify-center space-x-3 text-center">

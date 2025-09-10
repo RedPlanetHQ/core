@@ -123,6 +123,8 @@ model IngestionQueue {
   status   IngestionStatus
   priority Int             @default(0)
 
+  type String?
+
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id])
 

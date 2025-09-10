@@ -5,6 +5,7 @@ import { extensionSearch } from "~/trigger/extension/search";
 
 export const ExtensionSearchBodyRequest = z.object({
   input: z.string().min(1, "Input text is required"),
+  outputType: z.string().default("markdown"),
 });
 
 const { action, loader } = createActionApiRoute(
@@ -21,6 +22,7 @@ const { action, loader } = createActionApiRoute(
     const trigger = await extensionSearch.trigger({
       userInput: body.input,
       userId: authentication.userId,
+      outputType: body.outputType,
     });
 
     return json(trigger);

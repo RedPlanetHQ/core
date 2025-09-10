@@ -297,6 +297,8 @@ export class KnowledgeGraphService {
         previousEpisodes,
       );
 
+      console.log(extractedNodes.map((node) => node.name));
+
       const extractedTime = Date.now();
       logger.log(`Extracted entities in ${extractedTime - normalizedTime} ms`);
 
@@ -440,6 +442,7 @@ export class KnowledgeGraphService {
     let entities: EntityNode[] = [];
 
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
+
     if (outputMatch && outputMatch[1]) {
       responseText = outputMatch[1].trim();
       const extractedEntities = JSON.parse(responseText || "{}").entities || [];

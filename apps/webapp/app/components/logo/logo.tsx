@@ -1,13 +1,14 @@
 export interface LogoProps {
-  width: number;
-  height: number;
+  size: number;
+  className?: string;
 }
 
-export default function StaticLogo({ width, height }: LogoProps) {
+export default function StaticLogo({ size, className }: LogoProps) {
   return (
     <svg
-      width={width}
-      height={height}
+      width={size}
+      height={size}
+      className={className}
       viewBox="0 0 282 282"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"

@@ -41,7 +41,7 @@ export const LogOptions = ({ id }: LogOptionsProps) => {
 
   useEffect(() => {
     if (deleteFetcher.state === "idle" && deleteFetcher.data?.success) {
-      redirect(`/home/logs`);
+      redirect(`/home/inbox`);
     }
   }, [deleteFetcher.state, deleteFetcher.data]);
 

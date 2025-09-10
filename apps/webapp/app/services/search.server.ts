@@ -46,7 +46,7 @@ export class SearchService {
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
       endTime: options.endTime || new Date(),
-      includeInvalidated: options.includeInvalidated || false,
+      includeInvalidated: options.includeInvalidated || true,
       entityTypes: options.entityTypes || [],
       predicateTypes: options.predicateTypes || [],
       scoreThreshold: options.scoreThreshold || 0.7,
