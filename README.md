@@ -115,9 +115,11 @@ Ask questions like "What are my writing preferences?" with instant insights from
 ![chat-with-memory](https://github.com/user-attachments/assets/d798802f-bd51-4daf-b2b5-46de7d206f66)
 
 
-### ⚡ **Auto-Sync from Apps**: 
+### ⚡ **Auto-Sync from Apps**:
 
 Automatically capture relevant context from Linear, Slack, Notion, GitHub and other connected apps into your CORE memory
+
+📖 **[View All Integrations](./integrations/README.md)** - Complete list of supported services and their features
 
 ![core-slack](https://github.com/user-attachments/assets/d5fefe38-221e-4076-8a44-8ed673960f03)
 
