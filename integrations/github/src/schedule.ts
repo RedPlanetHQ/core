@@ -46,7 +46,7 @@ async function fetchUserInfo(accessToken: string) {
 /**
  * Processes GitHub notifications into activity messages
  */
-async function processNotifications(accessToken: string, lastSyncTime: string): Promise<any[]> {
+async function processNotifications(accessToken: string, lastSyncTime: string, username: string): Promise<any[]> {
   const activities = [];
   const allowedReasons = [
     'assign',
@@ -117,35 +117,36 @@ async function processNotifications(accessToken: string, lastSyncTime: string): 
 
           switch (notification.reason) {
             case 'assign':
-              title = `${isIssue ? 'Issue' : 'PR'} assigned to you: #${githubData.number} - ${githubData.title}`;
+              title = `${isIssue ? 'Issue' : 'PR'} #${githubData.number} assigned to ${username} in ${repository.full_name}: ${githubData.title}`;
               break;
 
             case 'author':
               if (isComment) {
-                title = `New comment on your ${isIssue ? 'issue' : 'PR'} by ${githubData.user?.login}: ${githubData.body}`;
+                title = `${githubData.user?.login} commented on ${username}'s ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.body}`;
               } else {
-                title = `You created this ${isIssue ? 'issue' : 'PR'}: #${githubData.number} - ${githubData.title}`;
+                title = `${username} created ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.title}`;
               }
               break;
 
             case 'comment':
-              title = `New comment by ${githubData.user?.login} in ${repository.full_name}: ${githubData.body}`;
+              title = `${githubData.user?.login} commented on ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.body}`;
               break;
 
             case 'manual':
-              title = `You subscribed to: #${githubData.number} - ${githubData.title}`;
+              title = `${username} subscribed to ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.title}`;
               break;
 
             case 'mention':
-              title = `@mentioned by ${githubData.user?.login} in ${repository.full_name}: ${githubData.body}`;
+              title = `${githubData.user?.login} mentioned ${username} in ${repository.full_name} ${isIssue ? 'issue' : 'PR'} #${githubData.number}: ${githubData.body}`;
               break;
 
             case 'review_requested':
-              title = `PR review requested in ${repository.full_name}: #${githubData.number} - ${githubData.title}`;
+              title = `${username} requested to review PR #${githubData.number} in ${repository.full_name}: ${githubData.title}`;
               break;
 
             case 'state_change': {
               let stateInfo = '';
+              let actor = githubData.user?.login || 'someone';
               if (githubData.state) {
                 stateInfo = `to ${githubData.state}`;
               } else if (githubData.merged) {
@@ -153,28 +154,28 @@ async function processNotifications(accessToken: string, lastSyncTime: string): 
               } else if (githubData.closed_at) {
                 stateInfo = 'to closed';
               }
-              title = `State changed ${stateInfo} in ${repository.full_name}: #${githubData.number} - ${githubData.title}`;
+              title = `${actor} changed ${isIssue ? 'issue' : 'PR'} #${githubData.number} state ${stateInfo} in ${repository.full_name}: ${githubData.title}`;
               break;
             }
 
             case 'subscribed':
               if (isComment) {
-                title = `New comment on watched ${isIssue ? 'issue' : 'PR'} in ${repository.full_name} by ${githubData.user?.login}: ${githubData.body}`;
+                title = `${githubData.user?.login} commented on watched ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.body}`;
               } else if (isPullRequest) {
-                title = `New PR created in watched repo ${repository.full_name}: #${githubData.number} - ${githubData.title}`;
+                title = `New PR #${githubData.number} created in watched repo ${repository.full_name}: ${githubData.title}`;
               } else if (isIssue) {
-                title = `New issue created in watched repo ${repository.full_name}: #${githubData.number} - ${githubData.title}`;
+                title = `New issue #${githubData.number} created in watched repo ${repository.full_name}: ${githubData.title}`;
               } else {
-                title = `Update in watched repo ${repository.full_name}: #${githubData.number} - ${githubData.title}`;
+                title = `Update on watched ${isIssue ? 'issue' : 'PR'} #${githubData.number} in ${repository.full_name}: ${githubData.title}`;
               }
               break;
 
             case 'team_mention':
-              title = `Your team was mentioned in ${repository.full_name}`;
+              title = `${username}'s team mentioned in ${repository.full_name} ${isIssue ? 'issue' : 'PR'} #${githubData.number}: ${githubData.title}`;
               break;
 
             default:
-              title = `GitHub notification: ${repository.full_name}`;
+              title = `GitHub notification for ${username} in ${repository.full_name}`;
               break;
           }
 
@@ -236,19 +237,19 @@ async function processUserEvents(
 
           switch (event.type) {
             case 'pr':
-              title = `You created PR #${event.number}: ${event.title}`;
+              title = `${username} created PR #${event.number}: ${event.title}`;
               break;
             case 'issue':
-              title = `You created issue #${event.number}: ${event.title}`;
+              title = `${username} created issue #${event.number}: ${event.title}`;
               break;
             case 'pr_comment':
-              title = `You commented on PR #${event.number}: ${event.title}`;
+              title = `${username} commented on PR #${event.number}: ${event.title}`;
               break;
             case 'issue_comment':
-              title = `You commented on issue #${event.number}: ${event.title}`;
+              title = `${username} commented on issue #${event.number}: ${event.title}`;
               break;
             case 'self_assigned_issue':
-              title = `You assigned yourself to issue #${event.number}: ${event.title}`;
+              title = `${username} assigned themselves to issue #${event.number}: ${event.title}`;
               break;
             default:
               title = `GitHub activity: ${event.title || 'Unknown'}`;
@@ -319,6 +320,7 @@ export async function handleSchedule(config: any, state: any) {
       const notificationActivities = await processNotifications(
         integrationConfiguration.access_token,
         lastSyncTime,
+        settings.username || 'user',
       );
       messages.push(...notificationActivities);
     } catch (error) {

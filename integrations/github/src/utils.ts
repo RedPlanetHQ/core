@@ -33,22 +33,22 @@ export async function getUserEvents(
     ] = await Promise.all([
       // Search for PRs created by user
       getGithubData(
-        `https://api.github.com/search/issues?q=author:${username}+type:pr+created:>${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=author:${username}+type:pr+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
         accessToken,
       ),
       // Search for issues created by user
       getGithubData(
-        `https://api.github.com/search/issues?q=author:${username}+type:issue+created:>${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=author:${username}+type:issue+created:>=${formattedDate}&sort=created&order=desc&page=${page}&per_page=10`,
         accessToken,
       ),
       // Search for issues/PRs the user commented on
       getGithubData(
-        `https://api.github.com/search/issues?q=commenter:${username}+updated:>${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=commenter:${username}+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
         accessToken,
       ),
       // Search for issues assigned to the user and authored by the user (self-assigned)
       getGithubData(
-        `https://api.github.com/search/issues?q=assignee:${username}+author:${username}+type:issue+updated:>${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
+        `https://api.github.com/search/issues?q=assignee:${username}+author:${username}+type:issue+updated:>=${formattedDate}&sort=updated&order=desc&page=${page}&per_page=10`,
         accessToken,
       ),
     ]);
@@ -58,17 +58,26 @@ export async function getUserEvents(
     console.log('Comments found:', commentsResponse?.items?.length || 0);
     console.log('Self-assigned issues found:', assignedIssuesResponse?.items?.length || 0);
 
+    // Filter function to exclude items older than the exact since timestamp
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const filterBySince = (item: any) => {
+      if (!since) return true;
+      const itemDate = new Date(item.created_at || item.updated_at);
+      const sinceDate = new Date(since);
+      return itemDate >= sinceDate;
+    };
+
     // Return simplified results - combine PRs, issues, commented items, and self-assigned issues
     const results = [
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(prsResponse?.items || []).map((item: any) => ({ ...item, type: 'pr' })),
+      ...(prsResponse?.items || []).filter(filterBySince).map((item: any) => ({ ...item, type: 'pr' })),
       ...(issuesResponse?.items || [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((item: any) => !item.pull_request)
+        .filter((item: any) => !item.pull_request && filterBySince(item))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((item: any) => ({ ...item, type: 'issue' })),
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ...(commentsResponse?.items || []).map((item: any) => ({
+      ...(commentsResponse?.items || []).filter(filterBySince).map((item: any) => ({
         ...item,
         type: item.pull_request ? 'pr_comment' : 'issue_comment',
       })),
@@ -76,9 +85,9 @@ export async function getUserEvents(
       ...(assignedIssuesResponse?.items || [])
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .filter((item: any) => {
-          // Only include if not already in issuesResponse (by id)
+          // Only include if not already in issuesResponse (by id) and passes since filter
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          return !(issuesResponse?.items || []).some((issue: any) => issue.id === item.id);
+          return !(issuesResponse?.items || []).some((issue: any) => issue.id === item.id) && filterBySince(item);
         })
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         .map((item: any) => ({

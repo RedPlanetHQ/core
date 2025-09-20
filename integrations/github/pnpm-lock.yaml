@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@redplanethq/sdk':
-        specifier: 0.1.1
-        version: 0.1.1
+        specifier: 0.1.2
+        version: 0.1.2
       axios:
         specifier: ^1.7.9
         version: 1.11.0
@@ -466,8 +466,8 @@ packages:
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@redplanethq/sdk@0.1.1':
-    resolution: {integrity: sha512-tfR1c9p7vNeCL5jsF9QlEZcRFLsihaHe/ZQWVKZYXzAZ6GugoIFBaayGfVvjNjyEnN3nlrl3usKBX+hhaKzg0g==}
+  '@redplanethq/sdk@0.1.2':
+    resolution: {integrity: sha512-Si+ae2OV0UNy7yvLECjJ1Y/6HHhRO0yU9svIFvBzMlaR/57SDP+KJZLyfWx/PJX+hOuWipyoYTLA9aYULt6z2w==}
     engines: {node: '>=18.0.0'}
 
   '@rollup/rollup-android-arm-eabi@4.46.2':
@@ -2455,7 +2455,7 @@ snapshots:
 
   '@pkgr/core@0.2.9': {}
 
-  '@redplanethq/sdk@0.1.1':
+  '@redplanethq/sdk@0.1.2':
     dependencies:
       commander: 14.0.0
 
