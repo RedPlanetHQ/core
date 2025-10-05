@@ -42,13 +42,26 @@ const { action, loader } = createActionApiRoute(
         throw new Error("User not found");
       }
 
+      // Validate workspace exists
+      if (!user.Workspace?.id) {
+        return json(
+          {
+            success: false,
+            error: "WORKSPACE_REQUIRED",
+            message: "Workspace not found for user. Please create a workspace before creating activities.",
+            userId: user.id,
+          },
+          { status: 400 }
+        );
+      }
+
       // Create the activity record
       const activity = await prisma.activity.create({
         data: {
           text: body.text,
           sourceURL: body.sourceURL,
           integrationAccountId: body.integrationAccountId,
-          workspaceId: user.Workspace?.id || "",
+          workspaceId: user.Workspace.id,
         },
       });
 

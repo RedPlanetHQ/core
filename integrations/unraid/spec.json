@@ -1,0 +1,27 @@
+{
+  "name": "Unraid extension",
+  "key": "unraid",
+  "description": "Monitor and track your Unraid server activity including Docker containers, VMs, array status, and system metrics.",
+  "icon": "server",
+  "schedule": {
+    "frequency": "*/5 * * * *"
+  },
+  "auth": {
+    "api_key": {
+      "type": "object",
+      "properties": {
+        "serverUrl": {
+          "type": "string",
+          "label": "Unraid Server URL",
+          "placeholder": "http://192.168.1.100"
+        },
+        "apiKey": {
+          "type": "string",
+          "label": "API Key",
+          "description": "Generate using 'unraid-api key' command on your Unraid server"
+        }
+      },
+      "required": ["serverUrl", "apiKey"]
+    }
+  }
+}

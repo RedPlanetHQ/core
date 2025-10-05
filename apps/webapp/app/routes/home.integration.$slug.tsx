@@ -449,7 +449,7 @@ export function IntegrationDetail({
   const hasApiKey = !!specData?.auth?.api_key;
   const hasOAuth2 = !!specData?.auth?.OAuth2;
   const hasMCPAuth = !!(
-    specData?.mcp.type === "http" && specData?.mcp.needsAuth
+    specData?.mcp?.type === "http" && specData?.mcp?.needsAuth
   );
   const Component = getIcon(integration.icon as IconType);
 

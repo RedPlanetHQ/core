@@ -23,6 +23,8 @@ import {
   saveMCPConfig,
 } from "../utils/message-utils";
 import { triggerIntegrationWebhook } from "../webhooks/integration-webhook-delivery";
+import { ingestCodeTask } from "../ingest/ingest-code";
+import { prisma } from "../utils/prisma";
 
 /**
  * Determines if a string is a URL.
@@ -270,6 +272,66 @@ async function handleAccountMessage(
   return integrationAccount;
 }
 
+async function handleCodeParseJobMessage(
+  messages: Message[],
+  integrationAccountId: string,
+  userId: string,
+  workspaceId: string,
+): Promise<any> {
+  const results = [];
+
+  for (const message of messages) {
+    const { data } = message;
+
+    // Get GitHub token from integration account
+    const integrationAccount = await prisma.integrationAccount.findUnique({
+      where: { id: integrationAccountId },
+    });
+
+    if (!integrationAccount) {
+      logger.error("Integration account not found", { integrationAccountId });
+      continue;
+    }
+
+    const config = integrationAccount.integrationConfiguration as any;
+    const github_token = config?.access_token;
+
+    if (!github_token) {
+      logger.error("GitHub token not found in integration config", {
+        integrationAccountId,
+      });
+      continue;
+    }
+
+    // Trigger code ingestion job
+    const jobPayload = {
+      body: {
+        ...data,
+        github_token,
+      },
+      userId,
+      workspaceId,
+      integrationId: integrationAccountId,
+    };
+
+    try {
+      const result = await ingestCodeTask.trigger(jobPayload);
+      results.push(result);
+      logger.info("Code parse job triggered", {
+        repository: data.repository,
+        filesCount: data.files?.length,
+      });
+    } catch (err: any) {
+      logger.error("Failed to trigger code parse job", {
+        error: err.message,
+        repository: data.repository,
+      });
+    }
+  }
+
+  return results;
+}
+
 /**
  * Handles CLI messages array and performs necessary actions based on message types
  */
@@ -345,10 +407,22 @@ async function handleMessageResponse(
       responses.account = account;
     }
 
+    // Handle "code_parse_job" messages
+    if (grouped["code_parse_job"]) {
+      const codeJobs = await handleCodeParseJobMessage(
+        grouped["code_parse_job"],
+        integrationAccountId as string,
+        userId,
+        workspaceId,
+      );
+
+      responses.codeJobs = codeJobs;
+    }
+
     const unhandled: Message[] = [];
     // Warn for unknown message types
     for (const type of Object.keys(grouped)) {
-      if (!["activity", "state", "identifier", "account"].includes(type)) {
+      if (!["activity", "state", "identifier", "account", "code_parse_job"].includes(type)) {
         responses.unhandled.push(grouped[type]);
       }
     }
@@ -395,7 +469,8 @@ export const integrationRun = task({
       );
 
       // Load the integration file from a URL or a local path
-      const integrationSource = integrationDefinition.url as string;
+      const spec = integrationDefinition.spec as any;
+      const integrationSource = spec?.integration_path || integrationDefinition.url as string;
       const integrationFile = await loadIntegrationSource(integrationSource);
       logger.info(`Loaded integration file from ${integrationSource}`);
 

@@ -10,6 +10,7 @@ import { SearchService } from "~/services/search.server";
 import { handleTransport } from "~/utils/mcp";
 import { SpaceService } from "~/services/space.server";
 import { EpisodeTypeEnum } from "@core/types";
+import { callCodeMemoryTool, codeMemoryTools } from "~/utils/mcp/code-memory";
 
 // Map to store transports by session ID with cleanup tracking
 const transports: {
@@ -120,7 +121,7 @@ const handleMCPRequest = async (
           try {
             const userId = authentication.userId;
 
-            const response = addToQueue(
+            const response = await addToQueue(
               {
                 episodeBody: args.message,
                 referenceTime: new Date().toISOString(),
@@ -167,6 +168,8 @@ const handleMCPRequest = async (
             const results = await searchService.search(args.query, userId, {
               startTime: args.startTime ? new Date(args.startTime) : undefined,
               endTime: args.endTime ? new Date(args.endTime) : undefined,
+              spaceIds: args.spaceIds || [],
+              validAt: args.validAt ? new Date(args.validAt) : undefined,
             });
 
             return {
@@ -229,6 +232,53 @@ const handleMCPRequest = async (
           }
         },
       );
+
+      // Register code memory tools
+      for (const tool of codeMemoryTools) {
+        server.registerTool(
+          tool.name,
+          {
+            title: tool.name,
+            description: tool.description,
+            inputSchema: tool.inputSchema,
+          },
+          async (args) => {
+            try {
+              const userId = authentication.userId;
+              const workspaceId = authentication.workspaceId;
+
+              const result = await callCodeMemoryTool(
+                tool.name,
+                args,
+                userId,
+                workspaceId,
+              );
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: JSON.stringify(result),
+                  },
+                ],
+                isError: false,
+              };
+            } catch (error) {
+              console.error(`Code memory tool error (${tool.name}):`, error);
+
+              return {
+                content: [
+                  {
+                    type: "text",
+                    text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+                  },
+                ],
+                isError: true,
+              };
+            }
+          },
+        );
+      }
 
       // Connect to the MCP server
       await server.connect(transport);

@@ -199,8 +199,11 @@ export async function getEmbedding(text: string) {
 
   if (model === "text-embedding-3-small") {
     // Use OpenAI embedding model when explicitly requested
+    const embeddingSize = parseInt(process.env.EMBEDDING_MODEL_SIZE || "1024", 10);
     const { embedding } = await embed({
-      model: openai.embedding("text-embedding-3-small"),
+      model: openai.embedding("text-embedding-3-small", {
+        dimensions: embeddingSize,
+      }),
       value: text,
     });
     return embedding;

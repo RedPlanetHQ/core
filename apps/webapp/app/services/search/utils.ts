@@ -134,7 +134,7 @@ export async function performVectorSearch(
     CALL db.index.vector.queryNodes('statement_embedding', $topk, $embedding)
     YIELD node AS s, score
     WHERE s.userId = $userId
-    AND score >= 0.7
+    AND score >= $scoreThreshold
     ${timeframeCondition}
     ${spaceCondition}
     OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(s)
@@ -148,6 +148,7 @@ export async function performVectorSearch(
       userId,
       validAt: options.endTime.toISOString(),
       topk: options.limit || 100,
+      scoreThreshold: options.scoreThreshold || 0.7,
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
       ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
     };
@@ -239,15 +240,22 @@ export async function bfsTraversal(
       `;
     }
 
-    // Use Neo4j's built-in path finding capabilities for efficient BFS
-    // This query implements BFS up to maxDepth and collects all statements along the way
+    // Implement true BFS with variable-length path traversal up to maxDepth
+    // Safeguard: Cap maxDepth to prevent performance issues
+    const safeMaxDepth = Math.min(Math.max(1, maxDepth), 10);
+
     const cypher = `
-      MATCH (e:Entity {uuid: $startEntityId})<-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement)
-      WHERE
-        (s.userId = $userId)
+      MATCH path = (startEntity:Entity {uuid: $startEntityId})
+        <-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE*1..${safeMaxDepth}]-
+        (s:Statement)
+
+      WHERE s.userId = $userId
         ${includeInvalidated ? 'AND s.validAt <= $validAt' : timeframeCondition}
         ${spaceCondition}
-      RETURN s as statement
+
+      RETURN DISTINCT s as statement
+      ORDER BY length(path) ASC, s.validAt DESC
+      LIMIT 500
     `;
 
     const params = {

@@ -42,17 +42,16 @@ export async function initializeStartupServices() {
 
   try {
     const triggerApiUrl = env.TRIGGER_API_URL;
-    if (triggerApiUrl) {
+    if (!triggerApiUrl) {
+      logger.warn("TRIGGER_API_URL is not set; skipping Trigger bootstrap.");
+    } else {
       await waitForTriggerLogin(triggerApiUrl);
       await addEnvVariablesInTrigger();
-    } else {
-      console.error("TRIGGER_API_URL is not set in environment variables.");
-      process.exit(1);
     }
   } catch (e) {
-    console.error(e);
-    console.error("Trigger is not configured");
-    process.exit(1);
+    logger.error("Trigger bootstrap failed; continuing without Trigger integration", {
+      error: e,
+    });
   }
 
   try {
@@ -122,6 +121,13 @@ export async function addEnvVariablesInTrigger() {
   } = env;
 
   const DATABASE_URL = getDatabaseUrl(POSTGRES_DB);
+
+  if (!TRIGGER_PROJECT_ID || !TRIGGER_SECRET_KEY || !TRIGGER_API_URL) {
+    logger.warn(
+      "Trigger credentials are incomplete; skipping environment variable sync.",
+    );
+    return;
+  }
 
   // Map of key to value from env, replacing 'localhost' as needed
   const envVars: Record<string, string> = {

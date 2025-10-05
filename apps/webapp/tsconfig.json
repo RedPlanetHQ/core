@@ -27,7 +27,6 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "strictPropertyInitialization": false,
-    "baseUrl": ".",
     "paths": {
       "~/*": ["./app/*"],
       "@/*": ["./*"]

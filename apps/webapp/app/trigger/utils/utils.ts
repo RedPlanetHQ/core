@@ -191,13 +191,24 @@ export const init = async ({ payload }: { payload: InitChatPayload }) => {
   // Set up axios interceptor for memory operations
   axios.interceptors.request.use((config) => {
     if (config.url?.startsWith("https://core::memory")) {
+      const originalUrl = config.url;
       // Handle both search and ingest endpoints
       if (config.url.includes("/search")) {
         config.url = `${process.env.API_BASE_URL}/api/v1/search`;
       } else if (config.url.includes("/add")) {
         config.url = `${process.env.API_BASE_URL}/api/v1/add`;
+      } else if (config.url.includes("/spaces")) {
+        config.url = `${process.env.API_BASE_URL}/api/v1/spaces`;
       }
       config.headers.Authorization = `Bearer ${pat.token}`;
+
+      logger.info("Axios interceptor transformed memory URL", {
+        originalUrl,
+        transformedUrl: config.url,
+        apiBaseUrl: process.env.API_BASE_URL,
+        hasToken: !!pat.token,
+        tokenPrefix: pat.token?.substring(0, 10)
+      });
     }
 
     return config;

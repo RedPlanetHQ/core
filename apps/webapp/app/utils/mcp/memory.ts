@@ -132,13 +132,28 @@ export async function callMemoryTool(
 // Handler for user_context
 async function handleUserProfile(userId: string) {
   try {
-    const space = await spaceService.getSpaceByName("Profile", userId);
+    const profileSpace = await spaceService.getSpaceByName("Profile", userId);
+
+    if (!profileSpace) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No profile information available",
+          },
+        ],
+        isError: false,
+      };
+    }
+
+    // Get full space data with summary from Neo4j
+    const spaceWithSummary = await spaceService.getSpace(profileSpace.id, userId);
 
     return {
       content: [
         {
           type: "text",
-          text: space?.summary || "No profile information available",
+          text: spaceWithSummary?.summary || "No profile information available",
         },
       ],
       isError: false,

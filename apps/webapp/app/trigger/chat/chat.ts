@@ -1,9 +1,10 @@
-import { ActionStatusEnum } from "@core/types";
-import { metadata, task, queue } from "@trigger.dev/sdk";
+import { ActionStatusEnum, EpisodeTypeEnum } from "@core/types";
+import { metadata, task, queue, logger } from "@trigger.dev/sdk";
 
 import { run } from "./chat-utils";
 import { MCP } from "../utils/mcp";
 import { type HistoryStep } from "../utils/types";
+import { prisma } from "../utils/prisma";
 import {
   createConversationHistoryForAgent,
   deductCredits,
@@ -132,6 +133,57 @@ export const chat = task({
         conversationStatus,
         payload.conversationId,
       );
+
+      // Auto-ingest conversation to knowledge graph (after successful completion)
+      try {
+        if (conversationStatus === "success" && init?.conversation.workspaceId) {
+          // Fetch complete conversation history for ingestion
+          const fullConversationHistory = await prisma.conversationHistory.findMany({
+            where: {
+              conversationId: payload.conversationId,
+              deleted: null,
+            },
+            orderBy: {
+              createdAt: "asc",
+            },
+          });
+
+          // Format conversation history as text
+          const conversationText = fullConversationHistory
+            .map((entry) => {
+              const userType = entry.userType === "User" ? "User" : "Assistant";
+              return `${userType}: ${entry.message}`;
+            })
+            .join("\n\n---\n\n");
+
+          // Add to ingestion queue
+          if (conversationText.trim()) {
+            const { addToQueue } = await import("~/lib/ingest.server");
+
+            await addToQueue(
+              {
+                episodeBody: conversationText,
+                referenceTime: new Date().toISOString(),
+                source: "web_chat",
+                type: EpisodeTypeEnum.CONVERSATION,
+              },
+              init.conversation.userId,
+            );
+
+            logger.info("Chat conversation auto-ingested", {
+              conversationId: payload.conversationId,
+              messageCount: fullConversationHistory.length,
+            });
+          }
+        }
+      } catch (ingestionError) {
+        // Log error but don't fail the conversation
+        logger.error("Failed to auto-ingest conversation", {
+          conversationId: payload.conversationId,
+          error: ingestionError,
+        });
+        // Continue execution - ingestion failure should not impact chat
+      }
 
       // Deduct credits for chat message
       if (init?.conversation.workspaceId) {

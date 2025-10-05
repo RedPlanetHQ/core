@@ -19,14 +19,23 @@ export interface AddMemoryParams {
 
 export const searchMemory = async (params: SearchMemoryParams) => {
   try {
+    logger.info("searchMemory called", { params, apiBaseUrl: process.env.API_BASE_URL });
     const response = await axios.post(
       "https://core::memory/api/v1/search",
       params,
     );
+    logger.info("searchMemory success", { status: response.status, dataKeys: Object.keys(response.data) });
     return response.data;
   } catch (error) {
-    logger.error("Memory search failed", { error, params });
-    return { error: "Memory search failed" };
+    logger.error("Memory search failed", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      params,
+      apiBaseUrl: process.env.API_BASE_URL,
+      axiosError: (error as any).response?.data,
+      statusCode: (error as any).response?.status
+    });
+    throw new Error(`Memory search failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
@@ -40,23 +49,40 @@ export const addMemory = async (params: AddMemoryParams) => {
       source: "CORE",
     };
 
+    logger.info("addMemory called", { memoryInput, apiBaseUrl: process.env.API_BASE_URL });
     const response = await axios.post(
       "https://core::memory/api/v1/add",
       memoryInput,
     );
+    logger.info("addMemory success", { status: response.status, dataKeys: Object.keys(response.data) });
     return response.data;
   } catch (error) {
-    logger.error("Memory storage failed", { error, params });
-    return { error: "Memory storage failed" };
+    logger.error("Memory storage failed", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      params,
+      apiBaseUrl: process.env.API_BASE_URL,
+      axiosError: (error as any).response?.data,
+      statusCode: (error as any).response?.status
+    });
+    throw new Error(`Memory storage failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 };
 
 export const searchSpaces = async () => {
   try {
-    const response = await axios.post("https://core::memory/api/v1/spaces");
+    logger.info("searchSpaces called", { apiBaseUrl: process.env.API_BASE_URL });
+    const response = await axios.get("https://core::memory/api/v1/spaces");
+    logger.info("searchSpaces success", { status: response.status, dataKeys: Object.keys(response.data) });
     return response.data;
   } catch (error) {
-    logger.error("Memory storage failed", { error });
-    return { error: "Memory storage failed" };
+    logger.error("Search spaces failed", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+      apiBaseUrl: process.env.API_BASE_URL,
+      axiosError: (error as any).response?.data,
+      statusCode: (error as any).response?.status
+    });
+    throw new Error(`Search spaces failed: ${error instanceof Error ? error.message : String(error)}`);
   }
 };

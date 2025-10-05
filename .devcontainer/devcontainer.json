@@ -1,0 +1,195 @@
+// For format details, see https://aka.ms/devcontainer.json. For config options, see the
+// README at: https://github.com/devcontainers/templates/tree/main/src/universal
+{
+	"name": "Default Linux Universal",
+	// Or use a Dockerfile or Docker Compose file. More info: https://containers.dev/guide/dockerfile
+	"image": "mcr.microsoft.com/devcontainers/universal:2-linux",
+	"features": {
+		"ghcr.io/devcontainers/features/common-utils:2": {
+			"installZsh": true,
+			"configureZshAsDefaultShell": true,
+			"installOhMyZsh": true,
+			"installOhMyZshConfig": true,
+			"upgradePackages": true,
+			"nonFreePackages": true,
+			"username": "devcontainer",
+			"userUid": "1001",
+			"userGid": "1001"
+		},
+		"ghcr.io/devcontainers/features/docker-in-docker:2": {
+			"moby": true,
+			"azureDnsAutoDetection": true,
+			"installDockerBuildx": true,
+			"installDockerComposeSwitch": true,
+			"disableIp6tables": true,
+			"version": "latest",
+			"dockerDashComposeVersion": "v2"
+		},
+		"ghcr.io/devcontainers/features/go:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/node:1": {
+			"nodeGypDependencies": true,
+			"installYarnUsingApt": true,
+			"version": "latest",
+			"pnpmVersion": "latest",
+			"nvmVersion": "latest"
+		},
+		"ghcr.io/devcontainers/features/python:1": {
+			"installTools": true,
+			"enableShared": true,
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers/features/sshd:1": {
+			"version": "latest",
+			"gatewayPorts": "yes"
+		},
+		"ghcr.io/meaningful-ooo/devcontainer-features/homebrew:2": {},
+		"ghcr.io/eitsupi/devcontainer-features/jq-likes:2": {
+			"allowJqRcVersion": true,
+			"jqVersion": "latest",
+			"yqVersion": "latest",
+			"gojqVersion": "latest",
+			"xqVersion": "latest",
+			"jaqVersion": "latest"
+		},
+		"ghcr.io/stuartleeks/dev-container-features/shell-history:0": {},
+		"ghcr.io/mikaello/devcontainer-features/modern-shell-utils:2": {},
+		"ghcr.io/jsburckhardt/devcontainer-features/codex:1": {},
+		"ghcr.io/swift-server-community/swift-devcontainer-features/sqlite:1": {},
+		"ghcr.io/sonikro/devcontainer-features/semgrep:1": {},
+		"ghcr.io/devcontainers-community/features/direnv:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-community/npm-features/prettier:1": {
+			"version": "latest"
+		},
+		"ghcr.io/joshuanianji/devcontainer-features/github-cli-persistence:1": {},
+		"ghcr.io/joshuanianji/devcontainer-features/mount-pnpm-store:1": {},
+		"ghcr.io/robbert229/devcontainer-features/postgresql-client:1": {
+			"version": "16"
+		},
+		"ghcr.io/schlich/devcontainer-features/playwright:0": {},
+		"ghcr.io/georgofenbeck/features/thefuck-homebrew:1": {},
+		"ghcr.io/devcontainers-extra/features/apt-packages:1": {
+			"clean_ppas": true,
+			"preserve_apt_list": true,
+			"packages": "build-essential",
+			"ppas": "ppa:deadsnakes/ppa"
+		},
+		"ghcr.io/devcontainers-extra/features/btop-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/devcontainers-cli:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/fd:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/fkill:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/gh-release:1": {
+			"repo": "digitalocean/doctl",
+			"binaryNames": "gh"
+		},
+		"ghcr.io/devcontainers-extra/features/mise:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/mypy:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ncdu:1": {},
+		"ghcr.io/devcontainers-extra/features/nmap-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/nnn-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/pre-commit:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/rclone:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/redis-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ripgrep:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ruff:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/starship:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/tailscale:1": {},
+		"ghcr.io/devcontainers-extra/features/tldr:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/ts-node:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/tsx:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/turborepo-npm:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/typescript:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/uv:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/vault-asdf:2": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/vscode-cli:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/vscode-server:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainers-extra/features/wget-homebrew:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainer-community/devcontainer-features/bun.sh:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainer-community/devcontainer-features/chezmoi.io:1": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainer-community/devcontainer-features/feature-installer:0": {
+			"version": "latest"
+		},
+		"ghcr.io/devcontainer-community/devcontainer-features/opencode.ai:1": {
+			"version": "latest"
+		},
+		"ghcr.io/roul/devcontainer-features/bitwarden-cli:1": {}
+	},
+	"customizations": {
+		"vscode": {
+			"extensions": [
+				"Anthropic.claude-code",
+				"openai.chatgpt"
+			]
+		}
+	}
+
+	// Features to add to the dev container. More info: https://containers.dev/features.
+	// "features": {},
+
+	// Use 'forwardPorts' to make a list of ports inside the container available locally.
+	// "forwardPorts": [],
+
+	// Use 'postCreateCommand' to run commands after the container is created.
+	// "postCreateCommand": "uname -a",
+
+	// Configure tool-specific properties.
+	// "customizations": {},
+
+	// Uncomment to connect as root instead. More info: https://aka.ms/dev-containers-non-root.
+	// "remoteUser": "root"
+}

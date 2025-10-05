@@ -46,10 +46,12 @@ RUN corepack enable
 COPY --from=pruner --chown=node:node /core/out/full/ .
 COPY --from=dev-deps --chown=node:node /core/ .
 COPY --chown=node:node turbo.json turbo.json
+COPY --chown=node:node scripts ./scripts
 COPY --chown=node:node docker/scripts ./scripts
 RUN chmod +x ./scripts/wait-for-it.sh
 RUN chmod +x ./scripts/entrypoint.sh
 COPY --chown=node:node .configs/tsconfig.base.json .configs/tsconfig.base.json
+COPY --chown=node:node integrations ./integrations
 RUN pnpm run generate
 RUN pnpm run build --filter=webapp...
 
@@ -68,6 +70,7 @@ COPY --from=builder --chown=node:node /core/apps/webapp/server.js ./apps/webapp/
 COPY --from=builder --chown=node:node /core/apps/webapp/build ./apps/webapp/build
 COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /core/scripts ./scripts
+COPY --from=builder --chown=node:node /core/integrations ./integrations
 
 EXPOSE 3000
 

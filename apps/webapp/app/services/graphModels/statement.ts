@@ -114,7 +114,8 @@ export async function findContradictoryStatements({
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const query = `
       MATCH (subject:Entity {uuid: $subjectId}), (predicate:Entity {uuid: $predicateId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(statement:Statement)-[:HAS_PREDICATE]->(predicate)
+      MATCH (statement:Statement)-[:HAS_SUBJECT]->(subject)
+      MATCH (statement)-[:HAS_PREDICATE]->(predicate)
       WHERE statement.userId = $userId
         AND statement.invalidAt IS NULL
       RETURN statement
@@ -135,8 +136,8 @@ export async function findContradictoryStatements({
       validAt: new Date(statement.validAt),
       invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
       invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
+      attributes: statement.attributes
+        ? JSON.parse(statement.attributes)
         : {},
       userId: statement.userId,
     };
@@ -160,7 +161,8 @@ export async function findStatementsWithSameSubjectObject({
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const query = `
       MATCH (subject:Entity {uuid: $subjectId}), (object:Entity {uuid: $objectId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(statement:Statement)-[:HAS_OBJECT]->(object)
+      MATCH (statement:Statement)-[:HAS_SUBJECT]->(subject)
+      MATCH (statement)-[:HAS_OBJECT]->(object)
       MATCH (statement)-[:HAS_PREDICATE]->(predicate:Entity)
       WHERE statement.userId = $userId
         AND statement.invalidAt IS NULL
@@ -189,8 +191,8 @@ export async function findStatementsWithSameSubjectObject({
       validAt: new Date(statement.validAt),
       invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
       invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
+      attributes: statement.attributes
+        ? JSON.parse(statement.attributes)
         : {},
       userId: statement.userId,
     };
@@ -244,8 +246,8 @@ export async function findSimilarStatements({
       validAt: new Date(statement.validAt),
       invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
       invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
+      attributes: statement.attributes
+        ? JSON.parse(statement.attributes)
         : {},
       userId: statement.userId,
     };
@@ -259,9 +261,9 @@ export async function getTripleForStatement({
 }): Promise<Triple | null> {
   const query = `
       MATCH (statement:Statement {uuid: $statementId})
-      MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
-      MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
-      MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
+      MATCH (statement)-[:HAS_SUBJECT]->(subject:Entity)
+      MATCH (statement)-[:HAS_PREDICATE]->(predicate:Entity)
+      MATCH (statement)-[:HAS_OBJECT]->(object:Entity)
       OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
       RETURN statement, subject, predicate, object, episode
     `;
@@ -290,8 +292,8 @@ export async function getTripleForStatement({
       ? new Date(statementProps.invalidAt)
       : null,
     invalidatedBy: statementProps.invalidatedBy || undefined,
-    attributes: statementProps.attributesJson
-      ? JSON.parse(statementProps.attributesJson)
+    attributes: statementProps.attributes
+      ? JSON.parse(statementProps.attributes)
       : {},
     userId: statementProps.userId,
   };
@@ -302,8 +304,8 @@ export async function getTripleForStatement({
     type: subjectProps.type,
     nameEmbedding: subjectProps.nameEmbedding,
     typeEmbedding: subjectProps.typeEmbedding,
-    attributes: subjectProps.attributesJson
-      ? JSON.parse(subjectProps.attributesJson)
+    attributes: subjectProps.attributes
+      ? JSON.parse(subjectProps.attributes)
       : {},
     createdAt: new Date(subjectProps.createdAt),
     userId: subjectProps.userId,
@@ -315,8 +317,8 @@ export async function getTripleForStatement({
     type: predicateProps.type,
     nameEmbedding: predicateProps.nameEmbedding,
     typeEmbedding: predicateProps.typeEmbedding,
-    attributes: predicateProps.attributesJson
-      ? JSON.parse(predicateProps.attributesJson)
+    attributes: predicateProps.attributes
+      ? JSON.parse(predicateProps.attributes)
       : {},
     createdAt: new Date(predicateProps.createdAt),
     userId: predicateProps.userId,
@@ -328,8 +330,8 @@ export async function getTripleForStatement({
     type: objectProps.type,
     nameEmbedding: objectProps.nameEmbedding,
     typeEmbedding: objectProps.typeEmbedding,
-    attributes: objectProps.attributesJson
-      ? JSON.parse(objectProps.attributesJson)
+    attributes: objectProps.attributes
+      ? JSON.parse(objectProps.attributes)
       : {},
     createdAt: new Date(objectProps.createdAt),
     userId: objectProps.userId,
@@ -443,8 +445,8 @@ export async function searchStatementsByEmbedding(params: {
       validAt: new Date(statement.validAt),
       invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
       invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
+      attributes: statement.attributes
+        ? JSON.parse(statement.attributes)
         : {},
       userId: statement.userId,
     };

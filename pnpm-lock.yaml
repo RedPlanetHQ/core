@@ -24,6 +24,9 @@ importers:
       prettier:
         specifier: ^3.5.3
         version: 3.5.3
+      tsx:
+        specifier: ^4.20.6
+        version: 4.20.6
       turbo:
         specifier: ^2.5.3
         version: 2.5.4
@@ -11685,6 +11688,11 @@ packages:
 
   tsx@4.20.4:
     resolution: {integrity: sha512-yyxBKfORQ7LuRt/BQKBXrpcq59ZvSW0XxwfjAt3w2/8PmdxaFzijtMhTawprSHhpzeM5BgU2hXHG3lklIERZXg==}
+    engines: {node: '>=18.0.0'}
+    hasBin: true
+
+  tsx@4.20.6:
+    resolution: {integrity: sha512-ytQKuwgmrrkDTFP4LjR0ToE2nqgy886GpvRSpU0JAnrdBYppuY5rLkRUYPU1yCryb24SsKBTL/hlDQAEFVwtZg==}
     engines: {node: '>=18.0.0'}
     hasBin: true
 
@@ -25913,6 +25921,13 @@ snapshots:
       fsevents: 2.3.3
 
   tsx@4.20.4:
+    dependencies:
+      esbuild: 0.25.5
+      get-tsconfig: 4.10.1
+    optionalDependencies:
+      fsevents: 2.3.3
+
+  tsx@4.20.6:
     dependencies:
       esbuild: 0.25.5
       get-tsconfig: 4.10.1

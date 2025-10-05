@@ -86,9 +86,13 @@ export async function callbackHandler(params: CallbackParams) {
   const integrationConfig = integrationDefinition.config as any;
   const integrationSpec = integrationDefinition.spec as any;
 
+  // Fall back to spec.auth.OAuth2 if config is not set
+  const clientId = integrationConfig?.clientId || integrationSpec.auth?.OAuth2?.client_id;
+  const clientSecret = integrationConfig?.clientSecret || integrationSpec.auth?.OAuth2?.client_secret;
+
   if (template.token_request_auth_method === "basic") {
     headers["Authorization"] = `Basic ${Buffer.from(
-      `${integrationConfig?.clientId}:${integrationConfig.clientSecret}`,
+      `${clientId}:${clientSecret}`,
     ).toString("base64")}`;
   }
 
@@ -106,8 +110,8 @@ export async function callbackHandler(params: CallbackParams) {
     const simpleOAuthClient = new simpleOauth2.AuthorizationCode(
       getSimpleOAuth2ClientConfig(
         {
-          client_id: integrationConfig.clientId,
-          client_secret: integrationConfig.clientSecret,
+          client_id: clientId,
+          client_secret: clientSecret,
           scopes: scopes.join(","),
         },
         template,
@@ -201,12 +205,16 @@ export async function getRedirectURL(
 
   const integrationConfig = integrationDefinition.config as any;
 
+  // Fall back to spec.auth.OAuth2 if config is not set
+  const clientId = integrationConfig?.clientId || externalConfig.client_id;
+  const clientSecret = integrationConfig?.clientSecret || externalConfig.client_secret;
+
   try {
     const simpleOAuthClient = new simpleOauth2.AuthorizationCode(
       getSimpleOAuth2ClientConfig(
         {
-          client_id: integrationConfig.clientId,
-          client_secret: integrationConfig.clientSecret,
+          client_id: clientId,
+          client_secret: clientSecret,
           scopes: scopesString,
         },
         template,

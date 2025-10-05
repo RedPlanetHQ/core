@@ -1,5 +1,7 @@
 import { handleSchedule } from './schedule';
 import { integrationCreate } from './account-create';
+import { handleWebhookIdentify } from './webhook-identify';
+import { handleWebhookProcess } from './webhook-process';
 
 import {
   IntegrationCLI,
@@ -15,6 +17,12 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
     case IntegrationEventType.SYNC:
       return await handleSchedule(eventPayload.config, eventPayload.state);
+
+    case IntegrationEventType.IDENTIFY:
+      return await handleWebhookIdentify(eventPayload.eventBody);
+
+    case IntegrationEventType.PROCESS:
+      return await handleWebhookProcess(eventPayload.eventBody, eventPayload.config);
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };
@@ -51,7 +59,7 @@ class GitHubCLI extends IntegrationCLI {
             'read:org',
             'repo_hooks',
           ],
-          scope_separator: ',',
+          scope_separator: ' ',
         },
       },
     };

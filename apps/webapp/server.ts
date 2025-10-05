@@ -11,10 +11,21 @@ let remixHandler;
 
 async function init() {
   if (process.env.NODE_ENV !== "production") {
-    const vite = await import("vite");
-    viteDevServer = await vite.createServer({
-      server: { middlewareMode: true },
-    });
+    try {
+      const vite = await import("vite");
+      viteDevServer = await vite.createServer({
+        server: { middlewareMode: true },
+      });
+    } catch (error) {
+      const notFound = (error as NodeJS.ErrnoException)?.code === "ERR_MODULE_NOT_FOUND";
+      if (!notFound) {
+        throw error;
+      }
+
+      console.warn(
+        "Vite dev server unavailable; continuing with prebuilt Remix assets.",
+      );
+    }
   }
 
   const build: any = viteDevServer
