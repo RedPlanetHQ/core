@@ -12,6 +12,7 @@ import { DocumentDifferentialService } from "~/services/documentDiffer.server";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
 import { prisma } from "../utils/prisma";
 import { ingestTask } from "./ingest";
+import type { DocumentIngestionOutput } from "./types";
 
 const documentIngestionQueue = queue({
   name: "document-ingestion-queue",
@@ -219,28 +220,30 @@ export const ingestDocumentTask = task({
         chunksToProcess.length,
       );
 
+      const documentOutput: DocumentIngestionOutput = {
+        documentUuid: document.uuid,
+        version: versionInfo.newVersion,
+        totalChunks: chunkedDocument.chunks.length,
+        chunksProcessed: chunksToProcess.length,
+        chunksSkipped: costSavings.chunksSkipped,
+        processingMode,
+        differentialStrategy: differentialDecision.strategy,
+        estimatedSavings: `${costSavings.estimatedSavingsPercentage.toFixed(1)}%`,
+        statementInvalidation: invalidationResults
+          ? {
+              totalAnalyzed: invalidationResults.totalStatementsAnalyzed,
+              invalidated: invalidationResults.invalidatedStatements.length,
+              preserved: invalidationResults.preservedStatements.length,
+            }
+          : null,
+        episodes: [],
+        episodeHandlers,
+      };
+
       await prisma.ingestionQueue.update({
         where: { id: payload.queueId },
         data: {
-          output: {
-            documentUuid: document.uuid,
-            version: versionInfo.newVersion,
-            totalChunks: chunkedDocument.chunks.length,
-            chunksProcessed: chunksToProcess.length,
-            chunksSkipped: costSavings.chunksSkipped,
-            processingMode,
-            differentialStrategy: differentialDecision.strategy,
-            estimatedSavings: `${costSavings.estimatedSavingsPercentage.toFixed(1)}%`,
-            statementInvalidation: invalidationResults
-              ? {
-                  totalAnalyzed: invalidationResults.totalStatementsAnalyzed,
-                  invalidated: invalidationResults.invalidatedStatements.length,
-                  preserved: invalidationResults.preservedStatements.length,
-                }
-              : null,
-            episodes: [],
-            episodeHandlers,
-          },
+          output: documentOutput as any,
           status: IngestionStatus.PROCESSING,
         },
       });

@@ -1,4 +1,4 @@
-import ReactMarkdown, {type  Components } from "react-markdown";
+import ReactMarkdown, { type Components } from "react-markdown";
 import { cn } from "~/lib/utils";
 
 const markdownComponents: Components = {
@@ -74,7 +74,7 @@ const markdownComponents: Components = {
   ol: ({ className, ...props }) => (
     <ol
       className={cn(
-        "my-1 ml-5 list-decimal space-y-0 marker:text-gray-700 dark:marker:text-gray-400",
+        "my-1 ml-5 flex list-decimal flex-col space-y-0 marker:text-gray-700 dark:marker:text-gray-400",
         className,
       )}
       {...props}

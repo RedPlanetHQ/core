@@ -10,6 +10,10 @@ import { prisma } from "../utils/prisma";
 import { EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "../utils/utils";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
+import type {
+  DocumentIngestionOutput,
+  IngestionQueueOutput,
+} from "./types";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
@@ -111,41 +115,53 @@ export const ingestTask = task({
         }
       }
 
-      let finalOutput = episodeDetails;
+      let finalOutput: IngestionQueueOutput = episodeDetails;
       let episodeUuids: string[] = episodeDetails.episodeUuid
         ? [episodeDetails.episodeUuid]
         : [];
       let currentStatus: IngestionStatus = IngestionStatus.COMPLETED;
+
       if (episodeBody.type === EpisodeType.DOCUMENT) {
-        const currentOutput = ingestionQueue.output as any;
-        currentOutput.episodes.push(episodeDetails);
-        episodeUuids = currentOutput.episodes.map(
-          (episode: any) => episode.episodeUuid,
-        );
+        // Get current output and ensure it has the document structure
+        const documentOutput = ingestionQueue.output as DocumentIngestionOutput | null;
+        if (documentOutput) {
+          // Add current episode to episodes array
+          documentOutput?.episodes.push(episodeDetails);
 
-        finalOutput = {
-          ...currentOutput,
-        };
+          // Collect all episode UUIDs
+          episodeUuids = documentOutput.episodes
+            .map((episode) => episode.episodeUuid)
+            .filter((uuid): uuid is string => uuid !== undefined);
 
-        if (currentOutput.episodes.length !== currentOutput.totalChunks) {
-          currentStatus = IngestionStatus.PROCESSING;
+          finalOutput = documentOutput;
+
+          // Check if all chunks have been processed
+          if (documentOutput.episodes.length !== documentOutput.totalChunks) {
+            currentStatus = IngestionStatus.PROCESSING;
+          }
         }
       }
 
       await prisma.ingestionQueue.update({
         where: { id: payload.queueId },
         data: {
-          output: finalOutput,
+          output: finalOutput as any,
           status: currentStatus,
         },
       });
 
       // Deduct credits for episode creation
-      if (currentStatus === IngestionStatus.COMPLETED) {
+      if (episodeDetails.statementsCreated > 0) {
+        logger.info(`Deducting credits for episode creation`, {
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+          statementsCreated: episodeDetails.statementsCreated,
+        });
+
         await deductCredits(
           payload.workspaceId,
           "addEpisode",
-          finalOutput.statementsCreated,
+          episodeDetails.statementsCreated,
         );
       }
 

@@ -9,7 +9,6 @@ import {
   getSpaceEpisodeCount,
 } from "~/services/graphModels/space";
 import { triggerSpaceSummary } from "./space-summary";
-import { triggerSpacePattern } from "./space-pattern";
 import {
   updateMultipleSpaceStatuses,
   SPACE_STATUS,
@@ -33,7 +32,6 @@ interface EpisodeData {
   originalContent: string;
   source: string;
   createdAt: Date;
-  metadata: any;
 }
 
 interface SpaceData {
@@ -347,34 +345,29 @@ async function getEpisodesToAnalyze(
     // For new space: analyze all recent episodes
     query = `
       MATCH (e:Episode {userId: $userId})
-      RETURN e
-      ORDER BY e.createdAt DESC
-      LIMIT 1000
+      RETURN e.uuid as uuid, e.content as content, e.originalContent as originalContent, e.source as source, e.createdAt as createdAt
+      ORDER BY e.createdAt ASC
     `;
   } else {
     // For episode mode: analyze specific episodes
     query = `
       UNWIND $episodeIds AS episodeId
       MATCH (e:Episode {uuid: episodeId, userId: $userId})
-      RETURN e
-      ORDER BY e.createdAt DESC
+      RETURN e.uuid as uuid, e.content as content, e.originalContent as originalContent, e.source as source, e.createdAt as createdAt
+      ORDER BY e.createdAt ASC
     `;
     params.episodeIds = options.episodeIds;
   }
 
   const result = await runQuery(query, params);
 
-  return result.map((record) => {
-    const episode = record.get("e").properties;
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      source: episode.source,
-      createdAt: new Date(episode.createdAt),
-      metadata: JSON.parse(episode.metadata || "{}"),
-    };
-  });
+  return result.map((record) => ({
+    uuid: record.get("uuid"),
+    content: record.get("content"),
+    originalContent: record.get("originalContent"),
+    source: record.get("source"),
+    createdAt: new Date(record.get("createdAt")),
+  }));
 }
 
 async function processBatchAI(
@@ -795,7 +788,7 @@ async function createLLMPrompt(
   const episodesDescription = episodes
     .map(
       (ep) =>
-        `ID: ${ep.uuid}\nCONTENT: ${ep.content}\nSOURCE: ${ep.source}\nMETADATA: ${JSON.stringify(ep.metadata)}`,
+        `ID: ${ep.uuid}\nCONTENT: ${ep.content}\nSOURCE: ${ep.source}}`,
     )
     .join("\n\n");
 

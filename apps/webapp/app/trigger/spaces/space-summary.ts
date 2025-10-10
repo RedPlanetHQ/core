@@ -439,6 +439,7 @@ CRITICAL RULES:
 3. Write in a factual, neutral tone - avoid promotional language ("pivotal", "invaluable", "cutting-edge")
 4. Be specific and concrete - reference actual content, patterns, and insights found in the episodes
 5. If episodes are insufficient for meaningful insights, state that more data is needed
+6. Episodes are presented in chronological order (oldest to newest) - use this to identify evolution, progression, and how understanding/focus changed over time
 
 INTENT-DRIVEN SUMMARIZATION:
 Your summary should SERVE the space's intended purpose. Examples:
@@ -601,7 +602,7 @@ async function getSpaceEpisodes(
     MATCH (space:Space {uuid: $spaceId, userId: $userId})-[:HAS_EPISODE]->(e:Episode {userId: $userId})
     WHERE e IS NOT NULL ${dateCondition}
     RETURN DISTINCT e
-    ORDER BY e.createdAt DESC
+    ORDER BY e.createdAt ASC
   `;
 
   const result = await runQuery(query, params);
