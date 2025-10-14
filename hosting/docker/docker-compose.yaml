@@ -207,7 +207,7 @@ services:
 
   clickhouse:
     container_name: trigger-clickhouse
-    image: bitnami/clickhouse:${CLICKHOUSE_IMAGE_TAG:-latest}
+    image: clickhouse:${CLICKHOUSE_IMAGE_TAG:-latest}
     restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging-config
     ports:
