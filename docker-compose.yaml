@@ -207,7 +207,7 @@ services:
 
   clickhouse:
     container_name: trigger-clickhouse
-    image: bitnami/clickhouse:${CLICKHOUSE_IMAGE_TAG:-latest}
+    image: clickhouse:${CLICKHOUSE_IMAGE_TAG:-latest}
     restart: ${RESTART_POLICY:-unless-stopped}
     logging: *logging-config
     ports:
@@ -217,8 +217,8 @@ services:
       CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_USER:-default}
       CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_PASSWORD:-password}
     volumes:
-      - clickhouse:/bitnami/clickhouse
-      - ../clickhouse/override.xml:/bitnami/clickhouse/etc/config.d/override.xml:ro
+      - clickhouse:/clickhouse
+      - ../clickhouse/override.xml:/clickhouse/etc/config.d/override.xml:ro
     networks:
       - webapp
     healthcheck:
