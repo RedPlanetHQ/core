@@ -1,0 +1,162 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+    name: postgres
+  clusterIP: None
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: redis
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+    name: redis
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: neo4j
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: neo4j
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: neo4j
+  ports:
+  - port: 7474
+    targetPort: 7474
+    name: http
+  - port: 7687
+    targetPort: 7687
+    name: bolt
+  clusterIP: None
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: clickhouse
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: clickhouse
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: clickhouse
+  ports:
+  - port: 8123
+    targetPort: 8123
+    name: http
+  - port: 9000
+    targetPort: 9000
+    name: native
+  clusterIP: None
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: core-app
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: app
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: app
+  ports:
+  - port: 3033
+    targetPort: 3000
+    name: http
+  type: ClusterIP
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: trigger-webapp
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-webapp
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-webapp
+  ports:
+  - port: 8030
+    targetPort: 3000
+    name: http
+  type: ClusterIP
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: trigger-electric
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-electric
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-electric
+  ports:
+  - port: 3000
+    targetPort: 3000
+    name: http
+  clusterIP: None
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: trigger-supervisor
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-supervisor
+spec:
+  selector:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-supervisor
+  ports:
+  - port: 8020
+    targetPort: 8020
+    name: http
+  clusterIP: None

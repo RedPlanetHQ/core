@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: clickhouse
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: clickhouse
+spec:
+  serviceName: clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+      app.kubernetes.io/component: clickhouse
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: clickhouse
+    spec:
+      containers:
+      - name: clickhouse
+        image: bitnami/clickhouse:latest
+        ports:
+        - containerPort: 8123
+          name: http
+        - containerPort: 9000
+          name: native
+        env:
+        - name: CLICKHOUSE_ADMIN_USER
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: CLICKHOUSE_USER
+        - name: CLICKHOUSE_ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: CLICKHOUSE_PASSWORD
+        volumeMounts:
+        - name: clickhouse-storage
+          mountPath: /bitnami/clickhouse
+        - name: clickhouse-config
+          mountPath: /bitnami/clickhouse/etc/config.d/override.xml
+          subPath: override.xml
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - clickhouse-client
+            - --host
+            - localhost
+            - --port
+            - "9000"
+            - --user
+            - default
+            - --password
+            - password
+            - --query
+            - "SELECT 1"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - clickhouse-client
+            - --host
+            - localhost
+            - --port
+            - "9000"
+            - --user
+            - default
+            - --password
+            - password
+            - --query
+            - "SELECT 1"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: clickhouse-config
+        configMap:
+          name: clickhouse-config
+  volumeClaimTemplates:
+  - metadata:
+      name: clickhouse-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      # storageClassName: standard # Uncomment if you need to specify a storage class
+      resources:
+        requests:
+          storage: 50Gi

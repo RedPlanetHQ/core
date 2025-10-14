@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: clickhouse-config
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: clickhouse
+data:
+  override.xml: |
+    <?xml version="1.0"?>
+    <yandex>
+        <!-- ClickHouse configuration override -->
+        <logger>
+            <level>information</level>
+            <console>true</console>
+        </logger>
+        
+        <!-- Memory settings -->
+        <memory>
+            <max_server_memory_usage_percentage>85</max_server_memory_usage_percentage>
+        </memory>
+        
+        <!-- Performance settings -->
+        <max_threads>8</max_threads>
+        <max_concurrent_queries>100</max_concurrent_queries>
+        
+        <!-- Network settings -->
+        <listen_host>::</listen_host>
+        <http_port>8123</http_port>
+        <tcp_port>9000</tcp_port>
+        
+        <!-- Replication settings (if needed in future) -->
+        <replication>
+            <use_replicated_merge_tree>1</use_replicated_merge_tree>
+        </replication>
+        
+        <!-- Zookeeper settings (if using replication in future) -->
+        <!-- 
+        <zookeeper>
+            <node>
+                <host>zookeeper</host>
+                <port>2181</port>
+            </node>
+        </zookeeper>
+        -->
+    </yandex>

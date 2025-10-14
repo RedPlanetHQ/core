@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: core-config
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: config
+data:
+  VERSION: "0.1.24"
+  DB_HOST: "postgres"
+  DB_PORT: "5432"
+  POSTGRES_USER: "docker"
+  POSTGRES_PASSWORD: "docker"
+  POSTGRES_DB: "core"
+  DATABASE_URL: "postgresql://docker:docker@postgres:5432/core?schema=core"
+  DIRECT_URL: "postgresql://docker:docker@postgres:5432/core?schema=core"
+  REMIX_APP_PORT: "3033"
+  APP_ENV: "production"
+  NODE_ENV: "production"
+  CORE_APP_ORIGIN: "http://localhost:3033"
+  API_BASE_URL: "http://localhost:3033"
+  CORE_LOGIN_ORIGIN: "http://localhost:3033"
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+  REDIS_TLS_DISABLED: "true"
+  ENABLE_EMAIL_LOGIN: "true"
+  NEO4J_URI: "bolt://neo4j:7687"
+  NEO4J_USERNAME: "neo4j"
+  EMBEDDING_MODEL: "text-embedding-3-small"
+  MODEL: "gpt-4.1-2025-04-14"
+  OLLAMA_URL: ""
+  TRIGGER_PROJECT_ID: "proj_mqwudvjcukvybqxyjkjv"
+  TRIGGER_IMAGE_TAG: "v4-beta"
+  TRIGGER_DB: "trigger"
+  TRIGGER_DATABASE_URL: "postgresql://docker:docker@postgres:5432/trigger?schema=public&sslmode=disable"
+  TRIGGER_DIRECT_URL: "postgresql://docker:docker@postgres:5432/trigger?schema=public&sslmode=disable"
+  ELECTRIC_DATABASE_URL: "postgresql://docker:docker@postgres/trigger"
+  TRIGGER_TASKS_IMAGE: "redplanethq/proj_core:latest"
+  APP_ORIGIN: "http://localhost:8030"
+  LOGIN_ORIGIN: "http://localhost:8030"
+  API_ORIGIN: "http://trigger-webapp:3000"
+  DEV_OTEL_EXPORTER_OTLP_ENDPOINT: "http://localhost:8030/otel"
+  CLICKHOUSE_USER: "default"
+  DOCKER_REGISTRY_URL: "docker.io"
+  LOGGING_DRIVER: "local"
+  LOGGING_MAX_SIZE: "20m"
+  LOGGING_MAX_FILES: "5"
+  LOGGING_COMPRESS: "true"
+  RESTART_POLICY: "unless-stopped"

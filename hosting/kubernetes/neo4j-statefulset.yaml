@@ -1,0 +1,100 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: neo4j
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: neo4j
+spec:
+  serviceName: neo4j
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+      app.kubernetes.io/component: neo4j
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: neo4j
+    spec:
+      containers:
+      - name: neo4j
+        image: neo4j:5
+        ports:
+        - containerPort: 7474
+          name: http
+        - containerPort: 7687
+          name: bolt
+        env:
+        - name: NEO4J_AUTH
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: NEO4J_AUTH
+        - name: NEO4J_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: NEO4J_USERNAME
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: NEO4J_PASSWORD
+        - name: NEO4J_dbms_security_procedures_unrestricted
+          value: "gds.*,apoc.*"
+        - name: NEO4J_dbms_security_procedures_allowlist
+          value: "gds.*,apoc.*"
+        - name: NEO4J_apoc_export_file_enabled
+          value: "true"
+        - name: NEO4J_apoc_import_file_enabled
+          value: "true"
+        - name: NEO4J_apoc_import_file_use_neo4j_config
+          value: "true"
+        - name: NEO4J_server_memory_heap_initial__size
+          value: "2G"
+        - name: NEO4J_server_memory_heap_max__size
+          value: "4G"
+        volumeMounts:
+        - name: neo4j-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "1000m"
+        livenessProbe:
+          exec:
+            command:
+            - cypher-shell
+            - -u
+            - $(NEO4J_USERNAME)
+            - -p
+            - $(NEO4J_PASSWORD)
+            - "RETURN 1"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - cypher-shell
+            - -u
+            - $(NEO4J_USERNAME)
+            - -p
+            - $(NEO4J_PASSWORD)
+            - "RETURN 1"
+          initialDelaySeconds: 10
+          periodSeconds: 5
+  volumeClaimTemplates:
+  - metadata:
+      name: neo4j-storage
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      # storageClassName: standard # Uncomment if you need to specify a storage class
+      resources:
+        requests:
+          storage: 30Gi

@@ -1,0 +1,38 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: core-ingress
+  namespace: RedPlanetHQcore
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: "letsencrypt-prod" # Uncomment if using cert-manager
+spec:
+  tls:
+  - hosts:
+    - core.example.com
+    - trigger.example.com
+    secretName: core-tls # Uncomment if using TLS
+  rules:
+  - host: core.example.com
+    http:
+      paths:
+      - path: /?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: core-app
+            port:
+              number: 3033
+  - host: trigger.example.com
+    http:
+      paths:
+      - path: /?(.*)
+        pathType: Prefix
+        backend:
+          service:
+            name: trigger-webapp
+            port:
+              number: 8030

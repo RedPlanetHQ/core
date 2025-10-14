@@ -1,0 +1,61 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: trigger-init
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-init
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: trigger-init
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: trigger-init
+        image: redplanethq/init:0.1.24
+        env:
+        - name: VERSION
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: VERSION
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DB_PORT
+        - name: TRIGGER_DB
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: TRIGGER_DB
+        - name: POSTGRES_USER
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: POSTGRES_USER
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: POSTGRES_PASSWORD
+        - name: TRIGGER_TASKS_IMAGE
+          value: "redplanethq/proj_core:latest"
+        - name: NODE_ENV
+          value: "production"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "250m"
