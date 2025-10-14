@@ -33,7 +33,7 @@
     <img src="https://github.com/user-attachments/assets/89066cdd-204b-46c2-8ad4-4935f5ca9edd" width="200px" alt="CORE logo" />
   </a>
 
-### CORE: Your Perosnal Memory Layer for AI Apps
+### CORE: Your Personal Memory Layer for AI Apps
 
 <p align="center">
     <a href="https://deepwiki.com/RedPlanetHQ/core">
@@ -245,6 +245,7 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
 
