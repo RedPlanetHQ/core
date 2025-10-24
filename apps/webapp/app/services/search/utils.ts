@@ -51,6 +51,7 @@ export async function performBM25Search(
           ${spaceCondition}
         OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(s)
         WITH s, score, count(episode) as provenanceCount
+        WHERE score >= 0.5
         RETURN s, score, provenanceCount
         ORDER BY score DESC
       `;
@@ -71,6 +72,12 @@ export async function performBM25Search(
         typeof provenanceCountValue === "bigint"
           ? Number(provenanceCountValue)
           : (provenanceCountValue?.toNumber?.() ?? provenanceCountValue ?? 0);
+
+      const scoreValue = record.get("score");
+      (statement as any).bm25Score =
+        typeof scoreValue === "number"
+          ? scoreValue
+          : (scoreValue?.toNumber?.() ?? 0);
       return statement;
     });
   } catch (error) {
@@ -163,6 +170,14 @@ export async function performVectorSearch(
         typeof provenanceCountValue === "bigint"
           ? Number(provenanceCountValue)
           : (provenanceCountValue?.toNumber?.() ?? provenanceCountValue ?? 0);
+
+      // Preserve vector similarity score for empty result detection
+      const scoreValue = record.get("score");
+      (statement as any).vectorScore =
+        typeof scoreValue === "number"
+          ? scoreValue
+          : (scoreValue?.toNumber?.() ?? 0);
+
       return statement;
     });
   } catch (error) {
@@ -179,12 +194,10 @@ export async function performBfsSearch(
   query: string,
   embedding: Embedding,
   userId: string,
+  entities: EntityNode[],
   options: Required<SearchOptions>,
 ): Promise<StatementNode[]> {
   try {
-    // 1. Extract potential entities from query using chunked embeddings
-    const entities = await extractEntitiesFromQuery(query, userId);
-
     if (entities.length === 0) {
       return [];
     }
@@ -224,7 +237,7 @@ async function bfsTraversal(
   const RELEVANCE_THRESHOLD = 0.5;
   const EXPLORATION_THRESHOLD = 0.3;
 
-  const allStatements = new Map<string, number>(); // uuid -> relevance
+  const allStatements = new Map<string, { relevance: number; hopDistance: number }>(); // uuid -> {relevance, hopDistance}
   const visitedEntities = new Set<string>();
 
   // Track entities per level for iterative BFS
@@ -268,14 +281,14 @@ async function bfsTraversal(
       ...(startTime && { startTime: startTime.toISOString() }),
     });
 
-    // Store statement relevance scores
+    // Store statement relevance scores and hop distance
     const currentLevelStatementUuids: string[] = [];
     for (const record of records) {
       const uuid = record.get("uuid");
       const relevance = record.get("relevance");
 
       if (!allStatements.has(uuid)) {
-        allStatements.set(uuid, relevance);
+        allStatements.set(uuid, { relevance, hopDistance: depth + 1 }); // Store hop distance (1-indexed)
         currentLevelStatementUuids.push(uuid);
       }
     }
@@ -304,14 +317,15 @@ async function bfsTraversal(
   }
 
   // Filter by relevance threshold and fetch full statements
-  const relevantUuids = Array.from(allStatements.entries())
-    .filter(([_, relevance]) => relevance >= RELEVANCE_THRESHOLD)
-    .sort((a, b) => b[1] - a[1])
-    .map(([uuid]) => uuid);
+  const relevantResults = Array.from(allStatements.entries())
+    .filter(([_, data]) => data.relevance >= RELEVANCE_THRESHOLD)
+    .sort((a, b) => b[1].relevance - a[1].relevance);
 
-  if (relevantUuids.length === 0) {
+  if (relevantResults.length === 0) {
     return [];
   }
+
+  const relevantUuids = relevantResults.map(([uuid]) => uuid);
 
   const fetchCypher = `
     MATCH (s:Statement{userId: $userId})
@@ -319,10 +333,29 @@ async function bfsTraversal(
     RETURN s
   `;
   const fetchRecords = await runQuery(fetchCypher, { uuids: relevantUuids, userId });
-  const statements = fetchRecords.map(r => r.get("s").properties as StatementNode);
+  const statementMap = new Map(
+    fetchRecords.map(r => [r.get("s").properties.uuid, r.get("s").properties as StatementNode])
+  );
+
+  // Attach hop distance to statements
+  const statements = relevantResults.map(([uuid, data]) => {
+    const statement = statementMap.get(uuid)!;
+    // Add bfsHopDistance and bfsRelevance as metadata
+    (statement as any).bfsHopDistance = data.hopDistance;
+    (statement as any).bfsRelevance = data.relevance;
+    return statement;
+  });
+
+  const hopCounts = statements.reduce((acc, s) => {
+    const hop = (s as any).bfsHopDistance;
+    acc[hop] = (acc[hop] || 0) + 1;
+    return acc;
+  }, {} as Record<number, number>);
 
   logger.info(
-    `BFS: explored ${allStatements.size} statements across ${maxDepth} hops, returning ${statements.length} (≥${RELEVANCE_THRESHOLD})`
+    `BFS: explored ${allStatements.size} statements across ${maxDepth} hops, ` +
+    `returning ${statements.length} (≥${RELEVANCE_THRESHOLD}) - ` +
+    `1-hop: ${hopCounts[1] || 0}, 2-hop: ${hopCounts[2] || 0}, 3-hop: ${hopCounts[3] || 0}, 4-hop: ${hopCounts[4] || 0}`
   );
 
   return statements;
@@ -361,15 +394,22 @@ function generateQueryChunks(query: string): string[] {
 export async function extractEntitiesFromQuery(
   query: string,
   userId: string,
+  startEntities: string[] = [],
 ): Promise<EntityNode[]> {
   try {
-    // Generate chunks from query
-    const chunks = generateQueryChunks(query);
-
-    // Get embeddings for each chunk
-    const chunkEmbeddings = await Promise.all(
-      chunks.map(chunk => getEmbedding(chunk))
-    );
+    let chunkEmbeddings: Embedding[] = [];
+    if (startEntities.length === 0) {
+      // Generate chunks from query
+      const chunks = generateQueryChunks(query);
+      // Get embeddings for each chunk
+      chunkEmbeddings = await Promise.all(
+        chunks.map(chunk => getEmbedding(chunk))
+      );
+    } else {
+      chunkEmbeddings = await Promise.all(
+        startEntities.map(chunk => getEmbedding(chunk))
+      );
+    }
 
     // Search for entities matching each chunk embedding
     const allEntitySets = await Promise.all(
@@ -424,4 +464,281 @@ export async function getEpisodesByStatements(
 
   const records = await runQuery(cypher, params);
   return records.map((record) => record.get("e").properties as EpisodicNode);
+}
+
+/**
+ * Episode Graph Search Result
+ */
+export interface EpisodeGraphResult {
+  episode: EpisodicNode;
+  statements: StatementNode[];
+  score: number;
+  metrics: {
+    entityMatchCount: number;
+    totalStatementCount: number;
+    avgRelevance: number;
+    connectivityScore: number;
+  };
+}
+
+/**
+ * Perform episode-centric graph search
+ * Finds episodes with dense subgraphs of statements connected to query entities
+ */
+export async function performEpisodeGraphSearch(
+  query: string,
+  queryEntities: EntityNode[],
+  queryEmbedding: Embedding,
+  userId: string,
+  options: Required<SearchOptions>,
+): Promise<EpisodeGraphResult[]> {
+  try {
+    // If no entities extracted, return empty
+    if (queryEntities.length === 0) {
+      logger.info("Episode graph search: no entities extracted from query");
+      return [];
+    }
+
+    const queryEntityIds = queryEntities.map(e => e.uuid);
+    logger.info(`Episode graph search: ${queryEntityIds.length} query entities`, {
+      entities: queryEntities.map(e => e.name).join(', ')
+    });
+
+    // Timeframe condition for temporal filtering
+    let timeframeCondition = `
+      AND s.validAt <= $validAt
+      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+    `;
+    if (options.startTime) {
+      timeframeCondition += ` AND s.validAt >= $startTime`;
+    }
+
+    // Space filtering if provided
+    let spaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      spaceCondition = `
+        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
+      `;
+    }
+
+    const cypher = `
+      // Step 1: Find statements connected to query entities
+      MATCH (queryEntity:Entity)-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement)
+      WHERE queryEntity.uuid IN $queryEntityIds
+        AND queryEntity.userId = $userId
+        AND s.userId = $userId
+        ${timeframeCondition}
+        ${spaceCondition}
+
+      // Step 2: Find episodes containing these statements
+      MATCH (s)<-[:HAS_PROVENANCE]-(ep:Episode)
+
+      // Step 3: Collect all statements from these episodes (for metrics only)
+      MATCH (ep)-[:HAS_PROVENANCE]->(epStatement:Statement)
+      WHERE epStatement.validAt <= $validAt
+        AND (epStatement.invalidAt IS NULL OR epStatement.invalidAt > $validAt)
+        ${spaceCondition.replace(/s\./g, 'epStatement.')}
+
+      // Step 4: Calculate episode-level metrics
+      WITH ep,
+           collect(DISTINCT s) as entityMatchedStatements,
+           collect(DISTINCT epStatement) as allEpisodeStatements,
+           collect(DISTINCT queryEntity) as matchedEntities
+
+      // Step 5: Calculate semantic relevance for all episode statements
+      WITH ep,
+           entityMatchedStatements,
+           allEpisodeStatements,
+           matchedEntities,
+           [stmt IN allEpisodeStatements |
+             gds.similarity.cosine(stmt.factEmbedding, $queryEmbedding)
+           ] as statementRelevances
+
+      // Step 6: Calculate aggregate scores
+      WITH ep,
+           entityMatchedStatements,
+           size(matchedEntities) as entityMatchCount,
+           size(entityMatchedStatements) as entityStmtCount,
+           size(allEpisodeStatements) as totalStmtCount,
+           reduce(sum = 0.0, score IN statementRelevances | sum + score) /
+             CASE WHEN size(statementRelevances) = 0 THEN 1 ELSE size(statementRelevances) END as avgRelevance
+
+      // Step 7: Calculate connectivity score
+      WITH ep,
+           entityMatchedStatements,
+           entityMatchCount,
+           entityStmtCount,
+           totalStmtCount,
+           avgRelevance,
+           (toFloat(entityStmtCount) / CASE WHEN totalStmtCount = 0 THEN 1 ELSE totalStmtCount END) *
+             entityMatchCount as connectivityScore
+
+      // Step 8: Filter for quality episodes
+      WHERE entityMatchCount >= 1
+        AND avgRelevance >= 0.5
+        AND totalStmtCount >= 1
+
+      // Step 9: Calculate final episode score
+      WITH ep,
+           entityMatchedStatements,
+           entityMatchCount,
+           totalStmtCount,
+           avgRelevance,
+           connectivityScore,
+           // Prioritize: entity matches (2.0x) + connectivity + semantic relevance
+           (entityMatchCount * 2.0) + connectivityScore + avgRelevance as episodeScore
+
+      // Step 10: Return ranked episodes with ONLY entity-matched statements
+      RETURN ep,
+             entityMatchedStatements as statements,
+             entityMatchCount,
+             totalStmtCount,
+             avgRelevance,
+             connectivityScore,
+             episodeScore
+
+      ORDER BY episodeScore DESC, entityMatchCount DESC, totalStmtCount DESC
+      LIMIT 20
+    `;
+
+    const params = {
+      queryEntityIds,
+      userId,
+      queryEmbedding,
+      validAt: options.endTime.toISOString(),
+      ...(options.startTime && { startTime: options.startTime.toISOString() }),
+      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+    };
+
+    const records = await runQuery(cypher, params);
+
+    const results: EpisodeGraphResult[] = records.map((record) => {
+      const episode = record.get("ep").properties as EpisodicNode;
+      const statements = record.get("statements").map((s: any) => s.properties as StatementNode);
+      const entityMatchCount = typeof record.get("entityMatchCount") === 'bigint'
+        ? Number(record.get("entityMatchCount"))
+        : record.get("entityMatchCount");
+      const totalStmtCount = typeof record.get("totalStmtCount") === 'bigint'
+        ? Number(record.get("totalStmtCount"))
+        : record.get("totalStmtCount");
+      const avgRelevance = record.get("avgRelevance");
+      const connectivityScore = record.get("connectivityScore");
+      const episodeScore = record.get("episodeScore");
+
+      return {
+        episode,
+        statements,
+        score: episodeScore,
+        metrics: {
+          entityMatchCount,
+          totalStatementCount: totalStmtCount,
+          avgRelevance,
+          connectivityScore,
+        },
+      };
+    });
+
+    // Log statement counts for debugging
+    results.forEach((result, idx) => {
+      logger.info(
+        `Episode ${idx + 1}: entityMatches=${result.metrics.entityMatchCount}, ` +
+        `totalStmtCount=${result.metrics.totalStatementCount}, ` +
+        `returnedStatements=${result.statements.length}`
+      );
+    });
+
+    logger.info(
+      `Episode graph search: found ${results.length} episodes, ` +
+      `top score: ${results[0]?.score.toFixed(2) || 'N/A'}`
+    );
+
+    return results;
+  } catch (error) {
+    logger.error("Episode graph search error:", { error });
+    return [];
+  }
+}
+
+/**
+ * Get episode IDs for statements in batch (efficient, no N+1 queries)
+ */
+export async function getEpisodeIdsForStatements(
+  statementUuids: string[]
+): Promise<Map<string, string>> {
+  if (statementUuids.length === 0) {
+    return new Map();
+  }
+
+  const cypher = `
+    MATCH (s:Statement)<-[:HAS_PROVENANCE]-(e:Episode)
+    WHERE s.uuid IN $statementUuids
+    RETURN s.uuid as statementUuid, e.uuid as episodeUuid
+  `;
+
+  const records = await runQuery(cypher, { statementUuids });
+
+  const map = new Map<string, string>();
+  records.forEach(record => {
+    map.set(record.get('statementUuid'), record.get('episodeUuid'));
+  });
+
+  return map;
+}
+
+/**
+ * Group statements by their episode IDs efficiently
+ */
+export async function groupStatementsByEpisode(
+  statements: StatementNode[]
+): Promise<Map<string, StatementNode[]>> {
+  const grouped = new Map<string, StatementNode[]>();
+
+  if (statements.length === 0) {
+    return grouped;
+  }
+
+  // Batch fetch episode IDs for all statements
+  const episodeIdMap = await getEpisodeIdsForStatements(
+    statements.map(s => s.uuid)
+  );
+
+  // Group statements by episode ID
+  statements.forEach((statement) => {
+    const episodeId = episodeIdMap.get(statement.uuid);
+    if (episodeId) {
+      if (!grouped.has(episodeId)) {
+        grouped.set(episodeId, []);
+      }
+      grouped.get(episodeId)!.push(statement);
+    }
+  });
+
+  return grouped;
+}
+
+/**
+ * Fetch episode objects by their UUIDs in batch
+ */
+export async function getEpisodesByUuids(
+  episodeUuids: string[]
+): Promise<Map<string, EpisodicNode>> {
+  if (episodeUuids.length === 0) {
+    return new Map();
+  }
+
+  const cypher = `
+    MATCH (e:Episode)
+    WHERE e.uuid IN $episodeUuids
+    RETURN e
+  `;
+
+  const records = await runQuery(cypher, { episodeUuids });
+
+  const map = new Map<string, EpisodicNode>();
+  records.forEach(record => {
+    const episode = record.get('e').properties as EpisodicNode;
+    map.set(episode.uuid, episode);
+  });
+
+  return map;
 }
