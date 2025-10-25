@@ -17,27 +17,107 @@ import {
   sessionCompactionWorker,
   closeAllWorkers,
 } from "./workers";
+import {
+  ingestQueue,
+  documentIngestQueue,
+  conversationTitleQueue,
+  deepSearchQueue,
+  sessionCompactionQueue,
+} from "./queues";
+import {
+  setupWorkerLogging,
+  startPeriodicMetricsLogging,
+} from "./utils/worker-logger";
 
-export async function startWorkers() {}
+let metricsInterval: NodeJS.Timeout | null = null;
 
-// Handle graceful shutdown
-process.on("SIGTERM", async () => {
-  logger.log("SIGTERM received, closing workers gracefully...");
+/**
+ * Initialize and start all BullMQ workers with comprehensive logging
+ */
+export async function initWorkers(): Promise<void> {
+  // Setup comprehensive logging for all workers
+  setupWorkerLogging(ingestWorker, ingestQueue, "ingest-episode");
+  setupWorkerLogging(
+    documentIngestWorker,
+    documentIngestQueue,
+    "ingest-document",
+  );
+  setupWorkerLogging(
+    conversationTitleWorker,
+    conversationTitleQueue,
+    "conversation-title",
+  );
+  setupWorkerLogging(deepSearchWorker, deepSearchQueue, "deep-search");
+  setupWorkerLogging(
+    sessionCompactionWorker,
+    sessionCompactionQueue,
+    "session-compaction",
+  );
+
+  // Start periodic metrics logging (every 60 seconds)
+  metricsInterval = startPeriodicMetricsLogging(
+    [
+      { worker: ingestWorker, queue: ingestQueue, name: "ingest-episode" },
+      {
+        worker: documentIngestWorker,
+        queue: documentIngestQueue,
+        name: "ingest-document",
+      },
+      {
+        worker: conversationTitleWorker,
+        queue: conversationTitleQueue,
+        name: "conversation-title",
+      },
+      { worker: deepSearchWorker, queue: deepSearchQueue, name: "deep-search" },
+      {
+        worker: sessionCompactionWorker,
+        queue: sessionCompactionQueue,
+        name: "session-compaction",
+      },
+    ],
+    60000, // Log metrics every 60 seconds
+  );
+
+  // Log worker startup
+  logger.log("\n🚀 Starting BullMQ workers...");
+  logger.log("─".repeat(80));
+  logger.log(`✓ Ingest worker: ${ingestWorker.name} (concurrency: 5)`);
+  logger.log(
+    `✓ Document ingest worker: ${documentIngestWorker.name} (concurrency: 3)`,
+  );
+  logger.log(
+    `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
+  );
+  logger.log(`✓ Deep search worker: ${deepSearchWorker.name} (concurrency: 5)`);
+  logger.log(
+    `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
+  );
+  logger.log("─".repeat(80));
+  logger.log("✅ All BullMQ workers started and listening for jobs");
+  logger.log("📊 Metrics will be logged every 60 seconds\n");
+}
+
+/**
+ * Shutdown all workers gracefully
+ */
+export async function shutdownWorkers(): Promise<void> {
+  logger.log("Shutdown signal received, closing workers gracefully...");
+  if (metricsInterval) {
+    clearInterval(metricsInterval);
+  }
   await closeAllWorkers();
-  process.exit(0);
-});
+}
 
-process.on("SIGINT", async () => {
-  logger.log("SIGINT received, closing workers gracefully...");
-  await closeAllWorkers();
-  process.exit(0);
-});
+// If running as standalone script, initialize workers
+if (import.meta.url === `file://${process.argv[1]}`) {
+  initWorkers();
 
-// Log worker startup
-logger.log("Starting BullMQ workers...");
-logger.log(`- Ingest worker: ${ingestWorker.name}`);
-logger.log(`- Document ingest worker: ${documentIngestWorker.name}`);
-logger.log(`- Conversation title worker: ${conversationTitleWorker.name}`);
-logger.log(`- Deep search worker: ${deepSearchWorker.name}`);
-logger.log(`- Session compaction worker: ${sessionCompactionWorker.name}`);
-logger.log("All BullMQ workers started and listening for jobs");
+  // Handle graceful shutdown
+  const shutdown = async () => {
+    await shutdownWorkers();
+    process.exit(0);
+  };
+
+  process.on("SIGTERM", shutdown);
+  process.on("SIGINT", shutdown);
+}

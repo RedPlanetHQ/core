@@ -2,7 +2,7 @@ import { logger } from "~/services/logger.service";
 import { fetchAndSaveStdioIntegrations } from "~/trigger/utils/mcp";
 import { initNeo4jSchemaOnce } from "~/lib/neo4j.server";
 import { env } from "~/env.server";
-import { startWorkers } from "~/bullmq/start-workers";
+import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
 
 // Global flag to ensure startup only runs once per server process
@@ -47,7 +47,11 @@ export async function initializeStartupServices() {
       const triggerApiUrl = env.TRIGGER_API_URL;
       // At this point, env validation should have already ensured these are present
       // But we add a runtime check for safety
-      if (!triggerApiUrl || !env.TRIGGER_PROJECT_ID || !env.TRIGGER_SECRET_KEY) {
+      if (
+        !triggerApiUrl ||
+        !env.TRIGGER_PROJECT_ID ||
+        !env.TRIGGER_SECRET_KEY
+      ) {
         console.error(
           "TRIGGER_API_URL, TRIGGER_PROJECT_ID, and TRIGGER_SECRET_KEY must be set when QUEUE_PROVIDER=trigger",
         );
@@ -61,7 +65,16 @@ export async function initializeStartupServices() {
       process.exit(1);
     }
   } else {
-    await startWorkers();
+    await initWorkers();
+
+    // Handle graceful shutdown
+    process.on("SIGTERM", async () => {
+      await shutdownWorkers();
+    });
+    process.on("SIGINT", async () => {
+      await shutdownWorkers();
+      process.exit(0);
+    });
   }
 
   try {

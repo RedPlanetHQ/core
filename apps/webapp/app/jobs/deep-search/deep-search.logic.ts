@@ -6,7 +6,6 @@ import {
   getOrCreatePersonalAccessToken,
 } from "~/trigger/utils/utils";
 import { getReActPrompt } from "~/trigger/deep-search/prompt";
-import { type DeepSearchPayload, type DeepSearchResponse } from "~/trigger/deep-search/types";
 import { createSearchMemoryTool } from "~/trigger/deep-search/utils";
 import { run } from "~/trigger/deep-search/deep-search-utils";
 import { AgentMessageType } from "~/trigger/chat/types";

@@ -1,15 +1,15 @@
 import { type z } from "zod";
-import crypto from "crypto";
 
 import { IngestionStatus } from "@core/database";
 import { EpisodeTypeEnum } from "@core/types";
 import { logger } from "~/services/logger.service";
 import { saveDocument } from "~/services/graphModels/document";
-import { type IngestBodyRequest } from "~/lib/ingest.server";
+
 import { DocumentVersioningService } from "~/services/documentVersioning.server";
 import { DocumentDifferentialService } from "~/services/documentDiffer.server";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
 import { prisma } from "~/trigger/utils/prisma";
+import { type IngestBodyRequest } from "./ingest-episode.logic";
 
 export interface IngestDocumentPayload {
   body: z.infer<typeof IngestBodyRequest>;
@@ -140,9 +140,7 @@ export async function processDocumentIngestion(
       });
     }
 
-    logger.log(
-      `Document chunked into ${chunkedDocument.chunks.length} chunks`,
-    );
+    logger.log(`Document chunked into ${chunkedDocument.chunks.length} chunks`);
 
     // Step 4: Process chunks based on differential strategy
     let chunksToProcess = chunkedDocument.chunks;
@@ -286,10 +284,7 @@ export async function processDocumentIngestion(
       },
     });
 
-    logger.error(
-      `Error processing document for user ${payload.userId}:`,
-      err,
-    );
+    logger.error(`Error processing document for user ${payload.userId}:`, err);
     return { success: false, error: err.message };
   }
 }

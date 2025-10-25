@@ -7,7 +7,6 @@ import { prisma } from "~/trigger/utils/prisma";
 import { EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
-import { trackEvent, trackError } from "~/services/telemetry.server";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),

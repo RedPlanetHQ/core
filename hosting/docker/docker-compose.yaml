@@ -84,7 +84,7 @@ services:
 
   neo4j:
     container_name: core-neo4j
-    image: core-neo4j:0.1.0
+    image: neo4j:5
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
@@ -94,6 +94,7 @@ services:
       - NEO4J_apoc_import_file_use_neo4j_config=true
       - NEO4J_server_memory_heap_initial__size=2G
       - NEO4J_server_memory_heap_max__size=4G
+      - NEO4JLABS_PLUGINS=apoc,graph-data-science
     ports:
       - "7474:7474"
       - "7687:7687"
