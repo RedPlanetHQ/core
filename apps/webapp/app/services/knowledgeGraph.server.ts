@@ -10,7 +10,6 @@ import {
   type EpisodeType,
 } from "@core/types";
 import { logger } from "./logger.service";
-import { ClusteringService } from "./clustering.server";
 import crypto from "crypto";
 import { dedupeNodes, extractEntities } from "./prompts/nodes";
 import {
@@ -50,12 +49,6 @@ import { type PrismaClient } from "@prisma/client";
 const DEFAULT_EPISODE_WINDOW = 5;
 
 export class KnowledgeGraphService {
-  private clusteringService: ClusteringService;
-
-  constructor() {
-    this.clusteringService = new ClusteringService();
-  }
-
   async getEmbedding(text: string) {
     return getEmbedding(text);
   }
@@ -564,9 +557,9 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.high.input += usage.promptTokens;
-          tokenMetrics.high.output += usage.completionTokens;
-          tokenMetrics.high.total += usage.totalTokens;
+          tokenMetrics.high.input += usage.promptTokens as number;
+          tokenMetrics.high.output += usage.completionTokens as number;
+          tokenMetrics.high.total += usage.totalTokens as number;
         }
       },
       undefined,

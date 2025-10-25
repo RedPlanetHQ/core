@@ -47,8 +47,16 @@ const EnvironmentSchema = z
     POSTHOG_PROJECT_KEY: z
       .string()
       .default("phc_SwfGIzzX5gh5bazVWoRxZTBhkr7FwvzArS0NRyGXm1a"),
-    TELEMETRY_ENABLED: z.coerce.boolean().default(true),
-    TELEMETRY_ANONYMOUS: z.coerce.boolean().default(false),
+    TELEMETRY_ENABLED: z
+      .string()
+      .optional()
+      .default("true")
+      .transform((val) => val !== "false" && val !== "0"),
+    TELEMETRY_ANONYMOUS: z
+      .string()
+      .optional()
+      .default("false")
+      .transform((val) => val === "true" || val === "1"),
 
     //storage
     ACCESS_KEY_ID: z.string().optional(),
@@ -59,12 +67,20 @@ const EnvironmentSchema = z
     AUTH_GOOGLE_CLIENT_ID: z.string().optional(),
     AUTH_GOOGLE_CLIENT_SECRET: z.string().optional(),
 
-    ENABLE_EMAIL_LOGIN: z.coerce.boolean().default(true),
+    ENABLE_EMAIL_LOGIN: z
+      .string()
+      .optional()
+      .default("true")
+      .transform((val) => val !== "false" && val !== "0"),
 
     //Redis
     REDIS_HOST: z.string().default("localhost"),
     REDIS_PORT: z.coerce.number().default(6379),
-    REDIS_TLS_DISABLED: z.coerce.boolean().default(true),
+    REDIS_TLS_DISABLED: z
+      .string()
+      .optional()
+      .default("true")
+      .transform((val) => val !== "false" && val !== "0"),
 
     //Neo4j
     NEO4J_URI: z.string(),
@@ -72,8 +88,9 @@ const EnvironmentSchema = z
     NEO4J_PASSWORD: z.string(),
 
     //OpenAI
-    OPENAI_API_KEY: z.string(),
+    OPENAI_API_KEY: z.string().optional(),
     ANTHROPIC_API_KEY: z.string().optional(),
+    GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
 
     EMAIL_TRANSPORT: z.string().optional(),
     FROM_EMAIL: z.string().optional(),
@@ -81,7 +98,10 @@ const EnvironmentSchema = z
     RESEND_API_KEY: z.string().optional(),
     SMTP_HOST: z.string().optional(),
     SMTP_PORT: z.coerce.number().optional(),
-    SMTP_SECURE: z.coerce.boolean().optional(),
+    SMTP_SECURE: z
+      .string()
+      .optional()
+      .transform((val) => val === "true" || val === "1"),
     SMTP_USER: z.string().optional(),
     SMTP_PASSWORD: z.string().optional(),
 

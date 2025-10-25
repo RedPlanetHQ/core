@@ -18,10 +18,7 @@ import {
   processConversationTitleCreation,
   type CreateConversationTitlePayload,
 } from "~/jobs/conversation/create-title.logic";
-import {
-  processDeepSearch,
-  type ProcessDeepSearchPayload,
-} from "~/jobs/deep-search/deep-search.logic";
+
 import {
   processSessionCompaction,
   type SessionCompactionPayload,
@@ -58,14 +55,6 @@ export const ingestWorker = new Worker(
   },
 );
 
-ingestWorker.on("completed", (job) => {
-  logger.log(`Job ${job.id} completed`);
-});
-
-ingestWorker.on("failed", (job, error) => {
-  logger.error(`Job ${job?.id} failed: ${error}`);
-});
-
 /**
  * Document ingestion worker
  * Handles document-level ingestion with differential processing
@@ -89,14 +78,6 @@ export const documentIngestWorker = new Worker(
   },
 );
 
-documentIngestWorker.on("completed", (job) => {
-  logger.log(`Document job ${job.id} completed`);
-});
-
-documentIngestWorker.on("failed", (job, error) => {
-  logger.error(`Document job ${job?.id} failed: ${error}`);
-});
-
 /**
  * Conversation title creation worker
  */
@@ -111,37 +92,6 @@ export const conversationTitleWorker = new Worker(
     concurrency: 10, // Process up to 10 title creations in parallel
   },
 );
-
-conversationTitleWorker.on("completed", (job) => {
-  logger.log(`Conversation title job ${job.id} completed`);
-});
-
-conversationTitleWorker.on("failed", (job, error) => {
-  logger.error(`Conversation title job ${job?.id} failed: ${error}`);
-});
-
-/**
- * Deep search worker (non-streaming version for BullMQ)
- */
-export const deepSearchWorker = new Worker(
-  "deep-search-queue",
-  async (job) => {
-    const payload = job.data as ProcessDeepSearchPayload;
-    return await processDeepSearch(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 5, // Process up to 5 searches in parallel
-  },
-);
-
-deepSearchWorker.on("completed", (job) => {
-  logger.log(`Deep search job ${job.id} completed`);
-});
-
-deepSearchWorker.on("failed", (job, error) => {
-  logger.error(`Deep search job ${job?.id} failed: ${error}`);
-});
 
 /**
  * Session compaction worker
@@ -158,14 +108,6 @@ export const sessionCompactionWorker = new Worker(
   },
 );
 
-sessionCompactionWorker.on("completed", (job) => {
-  logger.log(`Session compaction job ${job.id} completed`);
-});
-
-sessionCompactionWorker.on("failed", (job, error) => {
-  logger.error(`Session compaction job ${job?.id} failed: ${error}`);
-});
-
 /**
  * Graceful shutdown handler
  */
@@ -174,7 +116,7 @@ export async function closeAllWorkers(): Promise<void> {
     ingestWorker.close(),
     documentIngestWorker.close(),
     conversationTitleWorker.close(),
-    deepSearchWorker.close(),
+
     sessionCompactionWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");

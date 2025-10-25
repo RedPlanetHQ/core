@@ -73,27 +73,6 @@ export const conversationTitleQueue = new Queue("conversation-title-queue", {
 });
 
 /**
- * Deep search queue
- */
-export const deepSearchQueue = new Queue("deep-search-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-});
-
-/**
  * Session compaction queue
  */
 export const sessionCompactionQueue = new Queue("session-compaction-queue", {

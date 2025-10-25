@@ -14,7 +14,6 @@ import { env } from "~/env.server";
 import type { z } from "zod";
 import type { IngestBodyRequest } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
-import type { ProcessDeepSearchPayload } from "~/jobs/deep-search/deep-search.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 
 type QueueProvider = "trigger" | "bullmq";
@@ -109,35 +108,6 @@ export async function enqueueCreateConversationTitle(
         backoff: { type: "exponential", delay: 2000 },
       },
     );
-    return { id: job.id };
-  }
-}
-
-/**
- * Enqueue deep search job
- */
-export async function enqueueDeepSearch(
-  payload: ProcessDeepSearchPayload,
-): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { deepSearch } = await import("~/trigger/deep-search");
-    const handler = await deepSearch.trigger({
-      content: payload.content,
-      userId: payload.userId,
-      stream: true,
-      metadata: payload.metadata,
-      intentOverride: payload.intentOverride,
-    });
-    return { id: handler.id };
-  } else {
-    // BullMQ
-    const { deepSearchQueue } = await import("~/bullmq/queues");
-    const job = await deepSearchQueue.add("deep-search", payload, {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 2000 },
-    });
     return { id: job.id };
   }
 }

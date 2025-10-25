@@ -13,7 +13,6 @@ import {
   ingestWorker,
   documentIngestWorker,
   conversationTitleWorker,
-  deepSearchWorker,
   sessionCompactionWorker,
   closeAllWorkers,
 } from "./workers";
@@ -21,7 +20,6 @@ import {
   ingestQueue,
   documentIngestQueue,
   conversationTitleQueue,
-  deepSearchQueue,
   sessionCompactionQueue,
 } from "./queues";
 import {
@@ -47,7 +45,7 @@ export async function initWorkers(): Promise<void> {
     conversationTitleQueue,
     "conversation-title",
   );
-  setupWorkerLogging(deepSearchWorker, deepSearchQueue, "deep-search");
+
   setupWorkerLogging(
     sessionCompactionWorker,
     sessionCompactionQueue,
@@ -68,7 +66,7 @@ export async function initWorkers(): Promise<void> {
         queue: conversationTitleQueue,
         name: "conversation-title",
       },
-      { worker: deepSearchWorker, queue: deepSearchQueue, name: "deep-search" },
+
       {
         worker: sessionCompactionWorker,
         queue: sessionCompactionQueue,
@@ -88,7 +86,7 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
   );
-  logger.log(`✓ Deep search worker: ${deepSearchWorker.name} (concurrency: 5)`);
+
   logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
   );

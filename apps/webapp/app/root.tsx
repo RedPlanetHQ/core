@@ -117,6 +117,7 @@ export function ErrorBoundary() {
 function App() {
   const { posthogProjectKey, telemetryEnabled } =
     useTypedLoaderData<typeof loader>();
+
   usePostHog(posthogProjectKey, telemetryEnabled);
   const [theme] = useTheme();
 

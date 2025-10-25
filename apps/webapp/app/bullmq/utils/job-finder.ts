@@ -18,7 +18,6 @@ async function getAllQueues() {
     ingestQueue,
     documentIngestQueue,
     conversationTitleQueue,
-    deepSearchQueue,
     sessionCompactionQueue,
   } = await import("../queues");
 
@@ -26,7 +25,6 @@ async function getAllQueues() {
     ingestQueue,
     documentIngestQueue,
     conversationTitleQueue,
-    deepSearchQueue,
     sessionCompactionQueue,
   ];
 }

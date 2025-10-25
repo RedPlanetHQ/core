@@ -1,8 +1,8 @@
-import { LLMMappings } from "@core/types";
-import { generate } from "~/trigger/chat/stream-utils";
 import { conversationTitlePrompt } from "~/trigger/conversation/prompt";
 import { prisma } from "~/trigger/utils/prisma";
 import { logger } from "~/services/logger.service";
+import { generateText, type LanguageModel } from "ai";
+import { getModel } from "~/lib/model.server";
 
 export interface CreateConversationTitlePayload {
   conversationId: string;
@@ -24,8 +24,9 @@ export async function processConversationTitleCreation(
 ): Promise<CreateConversationTitleResult> {
   try {
     let conversationTitleResponse = "";
-    const gen = generate(
-      [
+    const { text } = await generateText({
+      model: getModel() as LanguageModel,
+      messages: [
         {
           role: "user",
           content: conversationTitlePrompt.replace(
@@ -34,24 +35,9 @@ export async function processConversationTitleCreation(
           ),
         },
       ],
-      false,
-      () => {},
-      undefined,
-      "",
-      LLMMappings.GPT41,
-    );
+    });
 
-    for await (const chunk of gen) {
-      if (typeof chunk === "string") {
-        conversationTitleResponse += chunk;
-      } else if (chunk && typeof chunk === "object" && chunk.message) {
-        conversationTitleResponse += chunk.message;
-      }
-    }
-
-    const outputMatch = conversationTitleResponse.match(
-      /<output>(.*?)<\/output>/s,
-    );
+    const outputMatch = text.match(/<output>(.*?)<\/output>/s);
 
     logger.info(`Conversation title data: ${JSON.stringify(outputMatch)}`);
 

@@ -13,33 +13,26 @@ import { Form, useSubmit, useActionData } from "@remix-run/react";
 
 interface ConversationTextareaProps {
   defaultValue?: string;
-  conversationId: string;
   placeholder?: string;
   isLoading?: boolean;
   className?: string;
   onChange?: (text: string) => void;
   disabled?: boolean;
-  onConversationCreated?: (conversation: any) => void;
+  onConversationCreated?: (message: string) => void;
+  stop?: () => void;
 }
 
 export function ConversationTextarea({
   defaultValue,
   isLoading = false,
   placeholder,
-  conversationId,
   onChange,
   onConversationCreated,
+  stop,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const [editor, setEditor] = useState<Editor>();
   const submit = useSubmit();
-  const actionData = useActionData<{ conversation?: any }>();
-
-  useEffect(() => {
-    if (actionData?.conversation && onConversationCreated) {
-      onConversationCreated(actionData.conversation);
-    }
-  }, [actionData]);
 
   const onUpdate = (editor: Editor) => {
     setText(editor.getHTML());
@@ -51,134 +44,99 @@ export function ConversationTextarea({
       return;
     }
 
-    const data = isLoading ? {} : { message: text, conversationId };
-
-    // When conversationId exists and not stopping, submit to current route
-    // When isLoading (stopping), submit to the specific conversation route
-    submit(data as any, {
-      action: isLoading
-        ? `/home/conversation/${conversationId}`
-        : conversationId
-          ? `/home/conversation/${conversationId}`
-          : "/home/conversation",
-      method: "post",
-    });
+    onConversationCreated && onConversationCreated(text);
 
     editor?.commands.clearContent(true);
     setText("");
   }, [editor, text]);
 
-  // Send message to API
-  const submitForm = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
-      const data = isLoading
-        ? {}
-        : { message: text, title: text, conversationId };
-
-      submit(data as any, {
-        action: isLoading
-          ? `/home/conversation/${conversationId}`
-          : conversationId
-            ? `/home/conversation/${conversationId}`
-            : "/home/conversation",
-        method: "post",
-      });
-
-      editor?.commands.clearContent(true);
-      setText("");
-      e.preventDefault();
-    },
-    [text, conversationId],
-  );
-
   return (
-    <Form
-      action="/home/conversation"
-      method="post"
-      onSubmit={(e) => submitForm(e)}
-      className="pt-2"
-    >
-      <div className="bg-background-3 rounded-lg border-1 border-gray-300 py-2">
-        <EditorRoot>
-          <EditorContent
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            initialContent={defaultValue as any}
-            extensions={[
-              Document,
-              Paragraph,
-              Text,
-              HardBreak.configure({
-                keepMarks: true,
-              }),
+    <div className="bg-background-3 rounded-lg border-1 border-gray-300 py-2">
+      <EditorRoot>
+        <EditorContent
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          initialContent={defaultValue as any}
+          extensions={[
+            Document,
+            Paragraph,
+            Text,
+            HardBreak.configure({
+              keepMarks: true,
+            }),
 
-              Placeholder.configure({
-                placeholder: () => placeholder ?? "Ask sol...",
-                includeChildren: true,
-              }),
-              History,
-            ]}
-            onCreate={async ({ editor }) => {
-              setEditor(editor);
-              await new Promise((resolve) => setTimeout(resolve, 100));
-              editor.commands.focus("end");
-            }}
-            onUpdate={({ editor }) => {
-              onUpdate(editor);
-            }}
-            shouldRerenderOnTransaction={false}
-            editorProps={{
-              attributes: {
-                class: `prose prose-lg dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full`,
-              },
-              handleKeyDown(view, event) {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                  const target = event.target as any;
-                  if (target.innerHTML.includes("suggestion")) {
-                    return false;
-                  }
-                  event.preventDefault();
-                  if (text) {
-                    handleSend();
-                  }
-                  return true;
+            Placeholder.configure({
+              placeholder: () => placeholder ?? "Ask sol...",
+              includeChildren: true,
+            }),
+            History,
+          ]}
+          onCreate={async ({ editor }) => {
+            setEditor(editor);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+            editor.commands.focus("end");
+          }}
+          onUpdate={({ editor }) => {
+            onUpdate(editor);
+          }}
+          shouldRerenderOnTransaction={false}
+          editorProps={{
+            attributes: {
+              class: `prose prose-lg dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full`,
+            },
+            handleKeyDown(view, event) {
+              if (event.key === "Enter" && !event.shiftKey) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const target = event.target as any;
+                if (target.innerHTML.includes("suggestion")) {
+                  return false;
                 }
+                event.preventDefault();
+                if (text) {
+                  handleSend();
+                }
+                return true;
+              }
 
-                if (event.key === "Enter" && event.shiftKey) {
-                  view.dispatch(
-                    view.state.tr.replaceSelectionWith(
-                      view.state.schema.nodes.hardBreak.create(),
-                    ),
-                  );
-                  return true;
-                }
-                return false;
-              },
-            }}
-            immediatelyRender={false}
-            className={cn(
-              "editor-container text-md max-h-[400px] min-h-[40px] w-full min-w-full overflow-auto rounded-lg px-3",
-            )}
-          />
-        </EditorRoot>
-        <div className="mb-1 flex justify-end px-3">
-          <Button
-            variant="default"
-            className="gap-1 shadow-none transition-all duration-500 ease-in-out"
-            type="submit"
-            size="lg"
-          >
-            {isLoading ? (
-              <>
-                <LoaderCircle size={18} className="mr-1 animate-spin" />
-                Stop
-              </>
-            ) : (
-              <>Chat</>
-            )}
-          </Button>
-        </div>
+              if (event.key === "Enter" && event.shiftKey) {
+                view.dispatch(
+                  view.state.tr.replaceSelectionWith(
+                    view.state.schema.nodes.hardBreak.create(),
+                  ),
+                );
+                return true;
+              }
+              return false;
+            },
+          }}
+          immediatelyRender={false}
+          className={cn(
+            "editor-container text-md max-h-[400px] min-h-[40px] w-full min-w-full overflow-auto rounded-lg px-3",
+          )}
+        />
+      </EditorRoot>
+      <div className="mb-1 flex justify-end px-3">
+        <Button
+          variant="default"
+          className="gap-1 shadow-none transition-all duration-500 ease-in-out"
+          onClick={() => {
+            if (!isLoading) {
+              handleSend();
+            } else {
+              stop && stop();
+            }
+          }}
+          size="lg"
+        >
+          {isLoading ? (
+            <>
+              <LoaderCircle size={18} className="mr-1 animate-spin" />
+              Stop
+            </>
+          ) : (
+            <>Chat</>
+          )}
+        </Button>
       </div>
-    </Form>
+    </div>
   );
 }

@@ -320,6 +320,14 @@ export async function getOrCreatePersonalAccessToken({
   };
 }
 
+export async function deletePersonalAccessToken(tokenId: string) {
+  return await prisma.personalAccessToken.delete({
+    where: {
+      id: tokenId,
+    },
+  });
+}
+
 /** Created a new PersonalAccessToken, and return the token. We only ever return the unencrypted token once. */
 export async function createPersonalAccessToken({
   name,
