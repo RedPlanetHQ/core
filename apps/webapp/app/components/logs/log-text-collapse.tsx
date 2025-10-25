@@ -74,7 +74,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
           <div className={cn("flex w-full min-w-[0px] shrink flex-col")}>
             <div className="flex w-full items-center justify-between gap-4">
               <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start">
-                <div className={cn("truncate text-left")}>
+                <div className={cn("truncate text-left text-base")}>
                   {text.replace(/<[^>]+>/g, "")}
                 </div>
               </div>
@@ -97,7 +97,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 font-light">
               {getIconForAuthorise(log.source.toLowerCase(), 12, undefined)}
               {log.source.toLowerCase()}
             </div>

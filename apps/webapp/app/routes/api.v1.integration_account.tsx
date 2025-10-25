@@ -8,6 +8,7 @@ import { logger } from "~/services/logger.service";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 import { tasks } from "@trigger.dev/sdk";
 import { type scheduler } from "~/trigger/integrations/scheduler";
+import { isTriggerDeployment } from "~/lib/queue-adapter.server";
 
 // Schema for creating an integration account with API key
 const IntegrationAccountBodySchema = z.object({
@@ -59,6 +60,13 @@ const { action, loader } = createHybridActionApiRoute(
       if (!setupResult.account || !setupResult.account.id) {
         return json(
           { error: "Failed to setup integration with the provided API key" },
+          { status: 400 },
+        );
+      }
+
+      if (!isTriggerDeployment()) {
+        return json(
+          { error: "Integrations don't work in non trigger deployment" },
           { status: 400 },
         );
       }

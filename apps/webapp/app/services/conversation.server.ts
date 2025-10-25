@@ -2,10 +2,11 @@ import { UserTypeEnum } from "@core/types";
 
 import { auth, runs, tasks } from "@trigger.dev/sdk/v3";
 import { prisma } from "~/db.server";
-import { createConversationTitle } from "~/trigger/conversation/create-conversation-title";
+import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 
 import { z } from "zod";
 import { type ConversationHistory } from "@prisma/client";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 
 export const CreateConversationSchema = z.object({
   message: z.string(),
@@ -55,6 +56,9 @@ export async function createConversation(
       { tags: [conversationHistory.id, workspaceId, conversationId] },
     );
 
+    // Track conversation message
+    trackFeatureUsage("conversation_message_sent", userId).catch(console.error);
+
     return {
       id: handler.id,
       token: handler.publicAccessToken,
@@ -87,14 +91,10 @@ export async function createConversation(
   const context = await getConversationContext(conversationHistory.id);
 
   // Trigger conversation title task
-  await tasks.trigger<typeof createConversationTitle>(
-    createConversationTitle.id,
-    {
-      conversationId: conversation.id,
-      message: conversationData.message,
-    },
-    { tags: [conversation.id, workspaceId] },
-  );
+  await enqueueCreateConversationTitle({
+    conversationId: conversation.id,
+    message: conversationData.message,
+  });
 
   const handler = await tasks.trigger(
     "chat",
@@ -105,6 +105,9 @@ export async function createConversation(
     },
     { tags: [conversationHistory.id, workspaceId, conversation.id] },
   );
+
+  // Track new conversation creation
+  trackFeatureUsage("conversation_created", userId).catch(console.error);
 
   return {
     id: handler.id,

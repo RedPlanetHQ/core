@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { json } from "@remix-run/node";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { deepSearch } from "~/trigger/deep-search";
+import { enqueueDeepSearch } from "~/lib/queue-adapter.server";
 import { runs } from "@trigger.dev/sdk";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 
 const DeepSearchBodySchema = z.object({
   content: z.string().min(1, "Content is required"),
@@ -28,9 +29,12 @@ const { action, loader } = createActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
+    // Track deep search
+    trackFeatureUsage("deep_search_performed", authentication.userId).catch(console.error);
+
     let trigger;
     if (!body.stream) {
-      trigger = await deepSearch.trigger({
+      trigger = await enqueueDeepSearch({
         content: body.content,
         userId: authentication.userId,
         stream: body.stream,
@@ -40,7 +44,7 @@ const { action, loader } = createActionApiRoute(
 
       return json(trigger);
     } else {
-      const runHandler = await deepSearch.trigger({
+      const runHandler = await enqueueDeepSearch({
         content: body.content,
         userId: authentication.userId,
         stream: body.stream,

@@ -3,6 +3,7 @@ import type { GoogleProfile } from "@coji/remix-auth-google";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { runQuery } from "~/lib/neo4j.server";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 export type { User } from "@core/database";
 
 type FindOrCreateMagicLink = {
@@ -72,9 +73,16 @@ export async function findOrCreateMagicLinkUser(
     },
   });
 
+  const isNewUser = !existingUser;
+
+  // Track new user registration
+  if (isNewUser) {
+    trackFeatureUsage("user_registered", user.id).catch(console.error);
+  }
+
   return {
     user,
-    isNewUser: !existingUser,
+    isNewUser,
   };
 }
 
@@ -160,9 +168,16 @@ export async function findOrCreateGoogleUser({
     },
   });
 
+  const isNewUser = !existingUser;
+
+  // Track new user registration
+  if (isNewUser) {
+    trackFeatureUsage("user_registered", user.id).catch(console.error);
+  }
+
   return {
     user,
-    isNewUser: !existingUser,
+    isNewUser,
   };
 }
 

@@ -5,6 +5,7 @@ import {
 } from "~/services/routeBuilders/apiBuilder.server";
 import { SearchService } from "~/services/search.server";
 import { json } from "@remix-run/node";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 
 export const SearchBodyRequest = z.object({
   query: z.string(),
@@ -51,6 +52,10 @@ const { action, loader } = createHybridActionApiRoute(
         structured: body.structured,
       },
     );
+
+    // Track search
+    trackFeatureUsage("search_performed", authentication.userId).catch(console.error);
+
     return json(results);
   },
 );

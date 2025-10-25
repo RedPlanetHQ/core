@@ -1,21 +1,155 @@
-import { queue, task } from "@trigger.dev/sdk/v3";
+import { logger } from "~/services/logger.service";
+import type { CoreMessage } from "ai";
+import { z } from "zod";
+import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import {
-  processSessionCompaction,
-  type SessionCompactionPayload,
-} from "~/jobs/session/session-compaction.logic";
+  getCompactedSessionBySessionId,
+  linkEpisodesToCompact,
+  getSessionEpisodes,
+  type CompactedSessionNode,
+  type SessionEpisodeData,
+  saveCompactedSession,
+} from "~/services/graphModels/compactedSession";
 
-export const sessionCompactionQueue = queue({
-  name: "session-compaction-queue",
-  concurrencyLimit: 1,
+export interface SessionCompactionPayload {
+  userId: string;
+  sessionId: string;
+  source: string;
+  triggerSource?: "auto" | "manual" | "threshold";
+}
+
+export interface SessionCompactionResult {
+  success: boolean;
+  compactionResult?: {
+    compactUuid: string;
+    sessionId: string;
+    summary: string;
+    episodeCount: number;
+    startTime: Date;
+    endTime: Date;
+    confidence: number;
+    compressionRatio: number;
+  };
+  reason?: string;
+  episodeCount?: number;
+  error?: string;
+}
+
+// Zod schema for LLM response validation
+const CompactionResultSchema = z.object({
+  summary: z.string().describe("Consolidated narrative of the entire session"),
+  confidence: z
+    .number()
+    .min(0)
+    .max(1)
+    .describe("Confidence score of the compaction quality"),
 });
 
-export const sessionCompactionTask = task({
-  id: "session-compaction",
-  queue: sessionCompactionQueue,
-  run: async (payload: SessionCompactionPayload) => {
-    return await processSessionCompaction(payload);
-  },
-});
+const CONFIG = {
+  minEpisodesForCompaction: 5, // Minimum episodes to trigger compaction
+  compactionThreshold: 1, // Trigger after N new episodes
+  maxEpisodesPerBatch: 50, // Process in batches if needed
+};
+
+/**
+ * Core business logic for session compaction
+ * This is shared between Trigger.dev and BullMQ implementations
+ */
+export async function processSessionCompaction(
+  payload: SessionCompactionPayload,
+): Promise<SessionCompactionResult> {
+  const { userId, sessionId, source, triggerSource = "auto" } = payload;
+
+  logger.info(`Starting session compaction`, {
+    userId,
+    sessionId,
+    source,
+    triggerSource,
+  });
+
+  try {
+    // Check if compaction already exists
+    const existingCompact = await getCompactedSessionBySessionId(
+      sessionId,
+      userId,
+    );
+
+    // Fetch all episodes for this session
+    const episodes = await getSessionEpisodes(
+      sessionId,
+      userId,
+      existingCompact?.endTime,
+    );
+
+    console.log("episodes", episodes.length);
+    // Check if we have enough episodes
+    if (!existingCompact && episodes.length < CONFIG.minEpisodesForCompaction) {
+      logger.info(`Not enough episodes for compaction`, {
+        sessionId,
+        episodeCount: episodes.length,
+        minRequired: CONFIG.minEpisodesForCompaction,
+      });
+      return {
+        success: false,
+        reason: "insufficient_episodes",
+        episodeCount: episodes.length,
+      };
+    } else if (
+      existingCompact &&
+      episodes.length <
+        CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold
+    ) {
+      logger.info(`Not enough new episodes for compaction`, {
+        sessionId,
+        episodeCount: episodes.length,
+        minRequired:
+          CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold,
+      });
+      return {
+        success: false,
+        reason: "insufficient_new_episodes",
+        episodeCount: episodes.length,
+      };
+    }
+
+    // Generate or update compaction
+    const compactionResult = existingCompact
+      ? await updateCompaction(existingCompact, episodes, userId)
+      : await createCompaction(sessionId, episodes, userId, source);
+
+    logger.info(`Session compaction completed`, {
+      sessionId,
+      compactUuid: compactionResult.uuid,
+      episodeCount: compactionResult.episodeCount,
+      compressionRatio: compactionResult.compressionRatio,
+    });
+
+    return {
+      success: true,
+      compactionResult: {
+        compactUuid: compactionResult.uuid,
+        sessionId: compactionResult.sessionId,
+        summary: compactionResult.summary,
+        episodeCount: compactionResult.episodeCount,
+        startTime: compactionResult.startTime,
+        endTime: compactionResult.endTime,
+        confidence: compactionResult.confidence,
+        compressionRatio: compactionResult.compressionRatio,
+      },
+    };
+  } catch (error) {
+    logger.error(`Session compaction failed`, {
+      sessionId,
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
 
 /**
  * Create new compaction
@@ -24,9 +158,12 @@ async function createCompaction(
   sessionId: string,
   episodes: SessionEpisodeData[],
   userId: string,
-  source: string
+  source: string,
 ): Promise<CompactedSessionNode> {
-  logger.info(`Creating new compaction`, { sessionId, episodeCount: episodes.length });
+  logger.info(`Creating new compaction`, {
+    sessionId,
+    episodeCount: episodes.length,
+  });
 
   // Generate compaction using LLM
   const compactionData = await generateCompaction(episodes, null);
@@ -63,7 +200,10 @@ async function createCompaction(
   await saveCompactedSession(compactNode);
   await linkEpisodesToCompact(compactUuid, episodeUuids, userId);
 
-  logger.info(`Compaction created`, { compactUuid, episodeCount: episodes.length });
+  logger.info(`Compaction created`, {
+    compactUuid,
+    episodeCount: episodes.length,
+  });
 
   return compactNode;
 }
@@ -74,7 +214,7 @@ async function createCompaction(
 async function updateCompaction(
   existingCompact: CompactedSessionNode,
   newEpisodes: SessionEpisodeData[],
-  userId: string
+  userId: string,
 ): Promise<CompactedSessionNode> {
   logger.info(`Updating existing compaction`, {
     compactUuid: existingCompact.uuid,
@@ -82,7 +222,10 @@ async function updateCompaction(
   });
 
   // Generate updated compaction using LLM (merging)
-  const compactionData = await generateCompaction(newEpisodes, existingCompact.summary);
+  const compactionData = await generateCompaction(
+    newEpisodes,
+    existingCompact.summary,
+  );
 
   // Generate new embedding for updated summary
   const summaryEmbedding = await getEmbedding(compactionData.summary);
@@ -93,8 +236,6 @@ async function updateCompaction(
   const totalEpisodeCount = existingCompact.episodeCount + newEpisodes.length;
   const compressionRatio = totalEpisodeCount / 1;
   const episodeUuids = newEpisodes.map((e) => e.uuid);
-
-
 
   const updatedNode: CompactedSessionNode = {
     ...existingCompact,
@@ -109,7 +250,6 @@ async function updateCompaction(
   };
 
   // Use graph model functions
-  const { saveCompactedSession } = await import("~/services/graphModels/compactedSession");
   await saveCompactedSession(updatedNode);
   await linkEpisodesToCompact(existingCompact.uuid, episodeUuids, userId);
 
@@ -126,7 +266,7 @@ async function updateCompaction(
  */
 async function generateCompaction(
   episodes: SessionEpisodeData[],
-  existingSummary: string | null
+  existingSummary: string | null,
 ): Promise<z.infer<typeof CompactionResultSchema>> {
   const systemPrompt = createCompactionSystemPrompt();
   const userPrompt = createCompactionUserPrompt(episodes, existingSummary);
@@ -206,30 +346,6 @@ This summary will be retrieved by AI agents when the user references this sessio
 
 Your response MUST be valid JSON wrapped in <output></output> tags.
 
-## EXAMPLE TRANSFORMATION
-
-Input Episodes:
-1. "Need to implement authentication for web app. Considering JWT vs session-based auth."
-2. "JWT is stateless, good for distributed systems. Session-based simpler but needs server storage."
-3. "Going with JWT for microservices. Deciding on token lifetime strategy."
-4. "Chose 15-minute access tokens + 7-day refresh tokens for security."
-5. "Implemented using jsonwebtoken library, storing refresh tokens in Redis."
-6. "Testing complete: login, protected routes, token refresh, logout all working."
-
-Output:
-<output>
-{
-  "summary": "Session focused on implementing authentication for a web application. Initial consideration was between JWT and session-based authentication approaches. JWT was selected over session-based auth due to its stateless nature and better fit for distributed microservices architecture, despite session-based being simpler to implement.
-
-For token strategy, decided on a dual-token approach: 15-minute access tokens paired with 7-day refresh tokens to balance security and user experience. This prevents long-lived token exposure while minimizing re-authentication friction.
-
-Implementation used the jsonwebtoken library for token generation and validation. Refresh tokens are stored in Redis with user association for token revocation capability. Access tokens contain userId and role claims for authorization. Tokens delivered via httpOnly cookies to prevent XSS attacks.
-
-Testing validated all authentication flows: user login, accessing protected routes with access tokens, automatic token refresh using refresh tokens, and proper logout with token cleanup. System is production-ready with complete authentication lifecycle working correctly.",
-  "confidence": 0.95
-}
-</output>
-
 ## KEY PRINCIPLES
 
 - Write for an AI agent that needs to help the user in future conversations
@@ -247,7 +363,7 @@ Testing validated all authentication flows: user login, accessing protected rout
  */
 function createCompactionUserPrompt(
   episodes: SessionEpisodeData[],
-  existingSummary: string | null
+  existingSummary: string | null,
 ): string {
   let prompt = "";
 
@@ -279,7 +395,9 @@ function createCompactionUserPrompt(
 /**
  * Parse LLM response for compaction
  */
-function parseCompactionResponse(response: string): z.infer<typeof CompactionResultSchema> {
+function parseCompactionResponse(
+  response: string,
+): z.infer<typeof CompactionResultSchema> {
   try {
     // Extract content from <output> tags
     const outputMatch = response.match(/<output>([\s\S]*?)<\/output>/);
@@ -314,9 +432,12 @@ function parseCompactionResponse(response: string): z.infer<typeof CompactionRes
  */
 export async function shouldTriggerCompaction(
   sessionId: string,
-  userId: string
+  userId: string,
 ): Promise<boolean> {
-  const existingCompact = await getCompactedSessionBySessionId(sessionId, userId);
+  const existingCompact = await getCompactedSessionBySessionId(
+    sessionId,
+    userId,
+  );
 
   if (!existingCompact) {
     // Check if we have enough episodes for initial compaction
@@ -325,13 +446,10 @@ export async function shouldTriggerCompaction(
   }
 
   // Check if we have enough new episodes to update
-  const newEpisodes = await getSessionEpisodes(sessionId, userId, existingCompact.endTime);
+  const newEpisodes = await getSessionEpisodes(
+    sessionId,
+    userId,
+    existingCompact.endTime,
+  );
   return newEpisodes.length >= CONFIG.compactionThreshold;
-}
-
-/**
- * Trigger compaction for a session
- */
-export async function triggerSessionCompaction(payload: SessionCompactionPayload) {
-  return await sessionCompactionTask.trigger(payload);
 }

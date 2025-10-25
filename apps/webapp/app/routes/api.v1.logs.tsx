@@ -1,4 +1,4 @@
-import { type LoaderFunctionArgs, json } from "@remix-run/node";
+import { json } from "@remix-run/node";
 import { z } from "zod";
 import { prisma } from "~/db.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
