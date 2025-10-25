@@ -40,7 +40,7 @@ export default function InboxNotSelected() {
       <PageHeader
         title="Episode"
         showTrigger={false}
-        actionsNode={<LogOptions id={log.id} />}
+        actionsNode={<LogOptions id={log.id} status={log.status} />}
       />
 
       <LogDetails log={log as any} />

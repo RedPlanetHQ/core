@@ -84,7 +84,7 @@ services:
 
   neo4j:
     container_name: core-neo4j
-    image: neo4j:5
+    image: core-neo4j:0.1.0
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*

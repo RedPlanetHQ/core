@@ -9,11 +9,13 @@ import {
   enqueueIngestDocument,
   enqueueIngestEpisode,
 } from "~/lib/queue-adapter.server";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 
 export const addToQueue = async (
   rawBody: z.infer<typeof IngestBodyRequest>,
   userId: string,
   activityId?: string,
+  ingestionQueueId?: string,
 ) => {
   const body = { ...rawBody, source: rawBody.source.toLowerCase() };
   const user = await prisma.user.findFirst({
@@ -41,8 +43,18 @@ export const addToQueue = async (
     throw new Error("no credits");
   }
 
-  const queuePersist = await prisma.ingestionQueue.create({
-    data: {
+  // Upsert: update existing or create new ingestion queue entry
+  const queuePersist = await prisma.ingestionQueue.upsert({
+    where: {
+      id: ingestionQueueId || "non-existent-id", // Use provided ID or dummy ID to force create
+    },
+    update: {
+      data: body,
+      type: body.type,
+      status: IngestionStatus.PENDING,
+      error: null,
+    },
+    create: {
       data: body,
       type: body.type,
       status: IngestionStatus.PENDING,
@@ -60,6 +72,9 @@ export const addToQueue = async (
       workspaceId: user.Workspace.id,
       queueId: queuePersist.id,
     });
+
+    // Track document ingestion
+    trackFeatureUsage("document_ingested", userId).catch(console.error);
   } else if (body.type === EpisodeType.CONVERSATION) {
     handler = await enqueueIngestEpisode({
       body,
@@ -67,6 +82,9 @@ export const addToQueue = async (
       workspaceId: user.Workspace.id,
       queueId: queuePersist.id,
     });
+
+    // Track episode ingestion
+    trackFeatureUsage("episode_ingested", userId).catch(console.error);
   }
 
   return { id: handler?.id, publicAccessToken: handler?.token };

@@ -120,6 +120,7 @@
     "ollama-ai-provider": "1.2.0",
     "openai": "^5.12.2",
     "posthog-js": "^1.116.6",
+    "posthog-node": "^5.10.3",
     "react": "^18.2.0",
     "react-calendar-heatmap": "^1.10.0",
     "react-dom": "^18.2.0",

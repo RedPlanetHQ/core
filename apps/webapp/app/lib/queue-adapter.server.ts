@@ -194,3 +194,7 @@ export async function enqueueSpaceAssignment(payload: {
     console.warn("Space assignment not implemented for BullMQ yet");
   }
 }
+
+export const isTriggerDeployment = () => {
+  return env.QUEUE_PROVIDER === "trigger";
+};

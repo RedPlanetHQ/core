@@ -3,6 +3,7 @@ import { fetchAndSaveStdioIntegrations } from "~/trigger/utils/mcp";
 import { initNeo4jSchemaOnce } from "~/lib/neo4j.server";
 import { env } from "~/env.server";
 import { startWorkers } from "~/bullmq/start-workers";
+import { trackConfig } from "~/services/telemetry.server";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
@@ -44,13 +45,16 @@ export async function initializeStartupServices() {
   if (env.QUEUE_PROVIDER === "trigger") {
     try {
       const triggerApiUrl = env.TRIGGER_API_URL;
-      if (triggerApiUrl) {
-        await waitForTriggerLogin(triggerApiUrl);
-        await addEnvVariablesInTrigger();
-      } else {
-        console.error("TRIGGER_API_URL is not set in environment variables.");
+      // At this point, env validation should have already ensured these are present
+      // But we add a runtime check for safety
+      if (!triggerApiUrl || !env.TRIGGER_PROJECT_ID || !env.TRIGGER_SECRET_KEY) {
+        console.error(
+          "TRIGGER_API_URL, TRIGGER_PROJECT_ID, and TRIGGER_SECRET_KEY must be set when QUEUE_PROVIDER=trigger",
+        );
         process.exit(1);
       }
+      await waitForTriggerLogin(triggerApiUrl);
+      await addEnvVariablesInTrigger();
     } catch (e) {
       console.error(e);
       console.error("Trigger is not configured");
@@ -69,6 +73,10 @@ export async function initializeStartupServices() {
 
     await fetchAndSaveStdioIntegrations();
     logger.info("Stdio integrations initialization completed");
+
+    // Track system configuration once at startup
+    await trackConfig();
+    logger.info("System configuration tracked");
 
     startupInitialized = true;
     logger.info("Application initialization completed successfully");
@@ -125,6 +133,14 @@ export async function addEnvVariablesInTrigger() {
     TRIGGER_API_URL,
     TRIGGER_SECRET_KEY,
   } = env;
+
+  // These should always be present when this function is called
+  // but we add a runtime check for type safety
+  if (!TRIGGER_PROJECT_ID || !TRIGGER_API_URL || !TRIGGER_SECRET_KEY) {
+    throw new Error(
+      "TRIGGER_PROJECT_ID, TRIGGER_API_URL, and TRIGGER_SECRET_KEY are required",
+    );
+  }
 
   const DATABASE_URL = getDatabaseUrl(POSTGRES_DB);
 

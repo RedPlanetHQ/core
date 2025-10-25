@@ -99,7 +99,7 @@ export const SpaceOptions = ({ id, name, description }: SpaceOptionsProps) => {
         <DropdownMenuContent align="end">
           <DropdownMenuItem onClick={handleCopy}>
             <Button variant="link" size="sm" className="gap-2 rounded">
-              <Copy size={15} /> Copy ID
+              <Copy size={15} /> Copy Id
             </Button>
           </DropdownMenuItem>
           <DropdownMenuItem onClick={() => setEditDialogOpen(true)}>

@@ -1,0 +1,28 @@
+FROM neo4j:5
+
+# Set environment variables for plugin versions
+# GDS 2.13 is compatible with Neo4j 5.26
+# APOC 5.26.14 is the latest for Neo4j 5.x
+ENV GDS_VERSION=2.13.0
+ENV APOC_VERSION=5.26.0
+
+# Install GDS and APOC plugins
+RUN apt-get update && apt-get install -y curl && \
+    curl -L https://github.com/neo4j/graph-data-science/releases/download/${GDS_VERSION}/neo4j-graph-data-science-${GDS_VERSION}.jar \
+    -o /var/lib/neo4j/plugins/neo4j-graph-data-science-${GDS_VERSION}.jar && \
+    curl -L https://github.com/neo4j/apoc/releases/download/${APOC_VERSION}/apoc-${APOC_VERSION}-core.jar \
+    -o /var/lib/neo4j/plugins/apoc-${APOC_VERSION}-core.jar && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set proper permissions
+RUN chown -R neo4j:neo4j /var/lib/neo4j/plugins
+
+# Default configuration for GDS and APOC
+ENV NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+ENV NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
+ENV NEO4J_apoc_export_file_enabled=true
+ENV NEO4J_apoc_import_file_enabled=true
+ENV NEO4J_apoc_import_file_use_neo4j_config=true
+
+EXPOSE 7474 7687

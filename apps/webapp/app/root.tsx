@@ -51,6 +51,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const { getTheme } = await themeSessionResolver(request);
 
   const posthogProjectKey = env.POSTHOG_PROJECT_KEY;
+  const telemetryEnabled = env.TELEMETRY_ENABLED;
   const user = await getUser(request);
   const usageSummary = await getUsageSummary(user?.Workspace?.id as string);
 
@@ -62,6 +63,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       toastMessage,
       theme: getTheme(),
       posthogProjectKey,
+      telemetryEnabled,
       appEnv: env.APP_ENV,
       appOrigin: env.APP_ORIGIN,
     },
@@ -113,8 +115,9 @@ export function ErrorBoundary() {
 }
 
 function App() {
-  const { posthogProjectKey } = useTypedLoaderData<typeof loader>();
-  usePostHog(posthogProjectKey);
+  const { posthogProjectKey, telemetryEnabled } =
+    useTypedLoaderData<typeof loader>();
+  usePostHog(posthogProjectKey, telemetryEnabled);
   const [theme] = useTheme();
 
   return (

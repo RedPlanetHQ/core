@@ -6,6 +6,7 @@ import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 
 import { z } from "zod";
 import { type ConversationHistory } from "@prisma/client";
+import { trackFeatureUsage } from "~/services/telemetry.server";
 
 export const CreateConversationSchema = z.object({
   message: z.string(),
@@ -55,6 +56,9 @@ export async function createConversation(
       { tags: [conversationHistory.id, workspaceId, conversationId] },
     );
 
+    // Track conversation message
+    trackFeatureUsage("conversation_message_sent", userId).catch(console.error);
+
     return {
       id: handler.id,
       token: handler.publicAccessToken,
@@ -101,6 +105,9 @@ export async function createConversation(
     },
     { tags: [conversationHistory.id, workspaceId, conversation.id] },
   );
+
+  // Track new conversation creation
+  trackFeatureUsage("conversation_created", userId).catch(console.error);
 
   return {
     id: handler.id,
