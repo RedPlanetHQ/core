@@ -101,6 +101,12 @@ export async function processDocumentIngestion(
     // Early return for unchanged documents
     if (differentialDecision.strategy === "skip_processing") {
       logger.log("Document content unchanged, skipping processing");
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          status: IngestionStatus.COMPLETED,
+        },
+      });
       return {
         success: true,
       };

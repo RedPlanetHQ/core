@@ -108,6 +108,25 @@ services:
       retries: 10
       start_period: 20s
 
+  ollama:
+    container_name: core-ollama
+    image: ollama/ollama:0.12.6
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+      - ./scripts/ollama-init.sh:/usr/local/bin/ollama-init.sh:ro
+    networks:
+      - core
+    entrypoint: ["/bin/bash", "/usr/local/bin/ollama-init.sh"]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 90s
+    restart: unless-stopped
+
 networks:
   core:
     name: core
@@ -117,3 +136,4 @@ volumes:
   postgres_data:
   neo4j_data:
   shared:
+  ollama_data:
