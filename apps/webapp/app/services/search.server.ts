@@ -13,6 +13,7 @@ import {
 import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { runQuery } from "~/lib/neo4j.server";
+import { encode } from "gpt-tokenizer/encoding/o200k_base";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -162,25 +163,6 @@ export class SearchService {
         `confidence: ${qualityFilter.confidence.toFixed(2)}`,
     );
 
-    // Log recall asynchronously (don't await to avoid blocking response)
-    const responseTime = Date.now() - startTime;
-    this.logRecallAsync(
-      query,
-      userId,
-      filteredResults.map((item) => item.statement),
-      opts,
-      responseTime,
-      source,
-    ).catch((error) => {
-      logger.error("Failed to log recall event:", error);
-    });
-
-    this.updateRecallCount(
-      userId,
-      episodes,
-      filteredResults.map((item) => item.statement),
-    );
-
     // Replace session episodes with compacts automatically
     const unifiedEpisodes = await this.replaceWithCompacts(episodes, userId);
 
@@ -191,6 +173,41 @@ export class SearchService {
       relevantScore: statement.score,
     }));
 
+    // Calculate response content for token counting
+    let responseContent: string;
+    if (opts.structured) {
+      responseContent = JSON.stringify({
+        episodes: unifiedEpisodes,
+        facts: factsData,
+      });
+    } else {
+      responseContent = this.formatAsMarkdown(unifiedEpisodes, factsData);
+    }
+
+    // Estimate token count (rough approximation: 1 token ≈ 4 characters)
+    const tokenCount = encode(responseContent).length;
+
+    // Update the async log with token count
+    const responseTime = Date.now() - startTime;
+
+    this.updateRecallCount(
+      userId,
+      episodes,
+      filteredResults.map((item) => item.statement),
+    );
+
+    this.logRecallAsync(
+      query,
+      userId,
+      episodes.length,
+      opts,
+      responseTime,
+      source,
+      tokenCount,
+    ).catch((error) => {
+      logger.error("Failed to log recall event:", error);
+    });
+
     // Return markdown by default, structured JSON if requested
     if (opts.structured) {
       return {
@@ -200,45 +217,25 @@ export class SearchService {
     }
 
     // Return markdown formatted context
-    return this.formatAsMarkdown(unifiedEpisodes, factsData);
+    return responseContent;
   }
 
   private async logRecallAsync(
     query: string,
     userId: string,
-    results: StatementNode[],
+    episodeCount: number,
     options: Required<SearchOptions>,
     responseTime: number,
     source?: string,
+    tokenCount?: number,
   ): Promise<void> {
     try {
-      // Determine target type based on results
+      // Determine target type based on episode count
       let targetType = "mixed_results";
-      if (results.length === 1) {
-        targetType = "statement";
-      } else if (results.length === 0) {
+      if (episodeCount === 1) {
+        targetType = "episodic";
+      } else if (episodeCount === 0) {
         targetType = "no_results";
-      }
-
-      // Calculate average similarity score if available
-      let averageSimilarityScore: number | null = null;
-      const scoresWithValues = results
-        .map((result) => {
-          // Try to extract score from various possible score fields
-          const score =
-            (result as any).rrfScore ||
-            (result as any).mmrScore ||
-            (result as any).crossEncoderScore ||
-            (result as any).finalScore ||
-            (result as any).score;
-          return score && typeof score === "number" ? score : null;
-        })
-        .filter((score): score is number => score !== null);
-
-      if (scoresWithValues.length > 0) {
-        averageSimilarityScore =
-          scoresWithValues.reduce((sum, score) => sum + score, 0) /
-          scoresWithValues.length;
       }
 
       await prisma.recallLog.create({
@@ -249,8 +246,8 @@ export class SearchService {
           searchMethod: "hybrid", // BM25 + Vector + BFS
           minSimilarity: options.scoreThreshold,
           maxResults: options.limit,
-          resultCount: results.length,
-          similarityScore: averageSimilarityScore,
+          resultCount: episodeCount,
+          similarityScore: null,
           context: JSON.stringify({
             entityTypes: options.entityTypes,
             predicateTypes: options.predicateTypes,
@@ -262,12 +259,15 @@ export class SearchService {
           }),
           source: source ?? "search_api",
           responseTimeMs: responseTime,
+          metadata: {
+            tokenCount: tokenCount || 0,
+          },
           userId,
         },
       });
 
       logger.debug(
-        `Logged recall event for user ${userId}: ${results.length} results in ${responseTime}ms`,
+        `Logged recall event for user ${userId}: ${episodeCount} episodes, ${tokenCount} tokens in ${responseTime}ms`,
       );
     } catch (error) {
       logger.error("Error creating recall log entry:", { error });
