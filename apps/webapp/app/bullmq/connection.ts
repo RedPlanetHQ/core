@@ -16,6 +16,7 @@ export function getRedisConnection() {
   const redisConfig: RedisOptions = {
     host: process.env.REDIS_HOST,
     port: parseInt(process.env.REDIS_PORT as string),
+    password: process.env.REDIS_PASSWORD,
     maxRetriesPerRequest: null, // Required for BullMQ
     enableReadyCheck: false, // Required for BullMQ
   };
