@@ -36,7 +36,7 @@ const DeepSearchBodySchema = z.object({
     .optional(),
 });
 
-export function createSearchMemoryTool(token: string) {
+function createSearchMemoryTool(token: string) {
   return tool({
     description:
       "Search the user's memory for relevant facts and episodes. Use this tool multiple times with different queries to gather comprehensive context.",

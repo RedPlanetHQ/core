@@ -6,6 +6,62 @@ import * as path from "path";
 
 import { prisma } from "./prisma";
 
+export const configureStdioMCPEnvironment = (
+  spec: any,
+  account: any,
+): { env: Record<string, string>; args: any[] } => {
+  if (!spec.mcp) {
+    return { env: {}, args: [] };
+  }
+
+  const mcpSpec = spec.mcp;
+  const configuredMCP = { ...mcpSpec };
+
+  // Replace config placeholders in environment variables
+  if (configuredMCP.env) {
+    for (const [key, value] of Object.entries(configuredMCP.env)) {
+      if (typeof value === "string" && value.includes("${config:")) {
+        // Extract the config key from the placeholder
+        const configKey = value.match(/\$\{config:(.*?)\}/)?.[1];
+        if (
+          configKey &&
+          account.integrationConfiguration &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (account.integrationConfiguration as any)[configKey]
+        ) {
+          configuredMCP.env[key] = value.replace(
+            `\${config:${configKey}}`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (account.integrationConfiguration as any)[configKey],
+          );
+        }
+      }
+
+      if (typeof value === "string" && value.includes("${integrationConfig:")) {
+        // Extract the config key from the placeholder
+        const configKey = value.match(/\$\{integrationConfig:(.*?)\}/)?.[1];
+        if (
+          configKey &&
+          account.integrationDefinition.config &&
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (account.integrationDefinition.config as any)[configKey]
+        ) {
+          configuredMCP.env[key] = value.replace(
+            `\${integrationConfig:${configKey}}`,
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (account.integrationDefinition.config as any)[configKey],
+          );
+        }
+      }
+    }
+  }
+
+  return {
+    env: configuredMCP.env || {},
+    args: Array.isArray(configuredMCP.args) ? configuredMCP.args : [],
+  };
+};
+
 export const fetchAndSaveStdioIntegrations = async () => {
   try {
     logger.info("Starting stdio integrations fetch and save process");
