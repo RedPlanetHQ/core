@@ -29,7 +29,6 @@ The self-hosted version of CORE is composed of several containers that you run o
 - **Webapp**: The main application container, responsible for serving the user interface and orchestrating memory operations.
 - **PostgreSQL**: Stores metadata, user accounts, and configuration data.
 - **Neo4j**: Graph database used for storing and querying the memory graph.
-- **[Trigger](https://trigger.dev/)**: Manages background jobs and workflows, such as data ingestion and memory formation. We use Trigger to reliably handle all background processing.
 - **Redis**: Provides caching and session management.
 
 This modular architecture allows you to scale each service as needed and gives you full control over your deployment.

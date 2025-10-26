@@ -48,10 +48,16 @@ Environment variables for the CORE webapp container.
 | `MODEL`                                 | No       | gpt-4-turbo-2024-04-09                         | Default language model                                                                           |
 | `EMBEDDING_MODEL`                       | No       | text-embedding-3-small                         | Model for text embeddings                                                                        |
 | `OLLAMA_URL`                            | No       | http://ollama:11434                            | Ollama server URL for local models                                                               |
-| **Background Jobs - Trigger.dev**       |          |                                                |                                                                                                 |
-| `TRIGGER_PROJECT_ID`                    | Yes      | —                                              | Trigger.dev project identifier                                                                   |
-| `TRIGGER_SECRET_KEY`                    | Yes      | —                                              | Trigger.dev authentication secret                                                                |
-| `TRIGGER_API_URL`                       | Yes      | http://host.docker.internal:8030               | Trigger.dev API endpoint (use localhost:8030 for local, api.trigger.dev for cloud)             |
+| **Background Jobs**                     |          |                                                |                                                                                                 |
+| `QUEUE_PROVIDER`                        | No       | trigger                                        | Queue provider: "trigger" for Trigger.dev or "bullmq" for BullMQ (Redis-based)                  |
+| `TRIGGER_PROJECT_ID`                    | Conditional | —                                           | Trigger.dev project identifier (required only when QUEUE_PROVIDER=trigger)                       |
+| `TRIGGER_SECRET_KEY`                    | Conditional | —                                           | Trigger.dev authentication secret (required only when QUEUE_PROVIDER=trigger)                    |
+| `TRIGGER_API_URL`                       | Conditional | http://host.docker.internal:8030            | Trigger.dev API endpoint (required only when QUEUE_PROVIDER=trigger)                             |
+| `TRIGGER_DB`                            | No       | trigger                                        | Database name for Trigger.dev                                                                    |
+| **Telemetry**                           |          |                                                |                                                                                                 |
+| `POSTHOG_PROJECT_KEY`                   | No       | phc_SwfGIzzX5gh5bazVWoRxZTBhkr7FwvzArS0NRyGXm1a | PostHog project key for usage analytics                                                       |
+| `TELEMETRY_ENABLED`                     | No       | true                                           | Enable (true) or disable (false) telemetry collection                                            |
+| `TELEMETRY_ANONYMOUS`                   | No       | false                                          | Send anonymous telemetry (true) or include user email (false)                                    |
 
 
 ## Security Considerations
