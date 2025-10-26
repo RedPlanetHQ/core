@@ -55,9 +55,10 @@ export default function SingleConversation() {
       },
     }),
   });
+  console.log("new", messages);
 
   React.useEffect(() => {
-    if (conversation.ConversationHistory.length === 1) {
+    if (messages.length === 1) {
       regenerate();
     }
   }, []);
@@ -96,7 +97,7 @@ export default function SingleConversation() {
             <div className="w-full max-w-[80ch] px-1 pr-2">
               <ConversationTextarea
                 className="bg-background-3 w-full border-1 border-gray-300"
-                isLoading={status === "streaming"}
+                isLoading={status === "streaming" || status === "submitted"}
                 onConversationCreated={(message) => {
                   if (message) {
                     sendMessage({ text: message });

@@ -10,6 +10,15 @@ interface AIConversationItemProps {
   message: UIMessage;
 }
 
+function getMessage(message: string) {
+  let finalMessage = message.replace("<final_response>", "");
+  finalMessage = finalMessage.replace("</final_response>", "");
+  finalMessage = finalMessage.replace("<question_response>", "");
+  finalMessage = finalMessage.replace("</question_response>", "");
+
+  return finalMessage;
+}
+
 const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
@@ -17,12 +26,12 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
     editable: false,
-    content: textPart ? textPart.text : "",
+    content: textPart ? getMessage(textPart.text) : "",
   });
 
   useEffect(() => {
     if (textPart) {
-      editor?.commands.setContent(textPart.text);
+      editor?.commands.setContent(getMessage(textPart.text));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);

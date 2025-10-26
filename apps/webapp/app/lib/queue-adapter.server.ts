@@ -15,6 +15,7 @@ import type { z } from "zod";
 import type { IngestBodyRequest } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
+import { type SpaceAssignmentPayload } from "~/trigger/spaces/space-assignment";
 
 type QueueProvider = "trigger" | "bullmq";
 
@@ -145,12 +146,9 @@ export async function enqueueSessionCompaction(
  * Enqueue space assignment job
  * (Helper for common job logic to call)
  */
-export async function enqueueSpaceAssignment(payload: {
-  userId: string;
-  workspaceId: string;
-  mode: "episode";
-  episodeIds: string[];
-}): Promise<void> {
+export async function enqueueSpaceAssignment(
+  payload: SpaceAssignmentPayload,
+): Promise<void> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {

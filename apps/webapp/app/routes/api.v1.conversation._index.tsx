@@ -6,7 +6,6 @@ import {
   experimental_createMCPClient as createMCPClient,
   generateId,
   stepCountIs,
-  StopCondition,
 } from "ai";
 import { z } from "zod";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -21,7 +20,11 @@ import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
 import { nanoid } from "nanoid";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
-import { hasAnswer, hasQuestion, REACT_SYSTEM_PROMPT } from "~/lib/prompt.server";
+import {
+  hasAnswer,
+  hasQuestion,
+  REACT_SYSTEM_PROMPT,
+} from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { env } from "~/env.server";
 
@@ -109,8 +112,6 @@ const { loader, action } = createHybridActionApiRoute(
       messages: finalMessages,
     });
 
-
-
     const result = streamText({
       model: getModel() as LanguageModel,
       messages: [
@@ -121,7 +122,7 @@ const { loader, action } = createHybridActionApiRoute(
         ...convertToModelMessages(validatedMessages),
       ],
       tools,
-      stopWhen: [stepCountIs(10), hasAnswer,hasQuestion],
+      stopWhen: [stepCountIs(10), hasAnswer, hasQuestion],
     });
 
     result.consumeStream(); // no await
@@ -129,7 +130,6 @@ const { loader, action } = createHybridActionApiRoute(
     return result.toUIMessageStreamResponse({
       originalMessages: validatedMessages,
       onFinish: async ({ messages }) => {
-        console.log(JSON.stringify(messages));
         const lastMessage = messages.pop();
         let message = "";
         lastMessage?.parts.forEach((part) => {

@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { json } from "@remix-run/node";
-import { triggerSpaceAssignment } from "~/trigger/spaces/space-assignment";
 import { prisma } from "~/db.server";
+import { enqueueSpaceAssignment } from "~/lib/queue-adapter.server";
 
 // Schema for manual assignment trigger
 const ManualAssignmentSchema = z.object({
@@ -38,7 +38,7 @@ const { action } = createActionApiRoute(
       let taskRun;
 
       // Direct LLM assignment trigger
-      taskRun = await triggerSpaceAssignment({
+      taskRun = await enqueueSpaceAssignment({
         userId,
         workspaceId: user?.Workspace?.id as string,
         mode: body.mode,
@@ -49,7 +49,7 @@ const { action } = createActionApiRoute(
       return json({
         success: true,
         message: `${body.mode} assignment task triggered successfully`,
-        taskId: taskRun.id,
+
         payload: {
           userId,
           mode: body.mode,

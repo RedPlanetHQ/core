@@ -42,6 +42,9 @@ services:
       - FROM_EMAIL=${FROM_EMAIL}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - COHERE_API_KEY=${COHERE_API_KEY}
+      - QUEUE_PROVIDER=${QUEUE_PROVIDER}
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED}
+      - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
     ports:
       - "3033:3000"
     depends_on:
@@ -84,7 +87,7 @@ services:
 
   neo4j:
     container_name: core-neo4j
-    image: neo4j:5
+    image: redplanethq/neo4j:0.1.0
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
@@ -94,7 +97,6 @@ services:
       - NEO4J_apoc_import_file_use_neo4j_config=true
       - NEO4J_server_memory_heap_initial__size=2G
       - NEO4J_server_memory_heap_max__size=4G
-      - NEO4JLABS_PLUGINS=apoc,graph-data-science
     ports:
       - "7474:7474"
       - "7687:7687"

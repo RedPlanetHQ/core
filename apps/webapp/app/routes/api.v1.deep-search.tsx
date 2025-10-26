@@ -10,7 +10,6 @@ import {
 
 import {
   convertToModelMessages,
-  type CoreMessage,
   generateId,
   generateText,
   type LanguageModel,
@@ -109,11 +108,17 @@ const { action, loader } = createActionApiRoute(
       const tools = {
         searchMemory: searchTool,
       };
+
       // Build initial messages with ReAct prompt
       const initialMessages = [
         {
           role: "user",
-          parts: [{ type: "text", text: `CONTENT TO ANALYZE:\n${body.content}\n\nPlease search my memory for relevant context and synthesize what you find.` }],
+          parts: [
+            {
+              type: "text",
+              text: `CONTENT TO ANALYZE:\n${body.content}\n\nPlease search my memory for relevant context and synthesize what you find.`,
+            },
+          ],
           id: generateId(),
         },
       ];
@@ -134,7 +139,7 @@ const { action, loader } = createActionApiRoute(
             ...convertToModelMessages(validatedMessages),
           ],
           tools,
-          stopWhen: [stepCountIs(10), hasAnswer],
+          stopWhen: [hasAnswer, stepCountIs(10)],
         });
 
         return result.toUIMessageStreamResponse({
@@ -151,7 +156,7 @@ const { action, loader } = createActionApiRoute(
             ...convertToModelMessages(validatedMessages),
           ],
           tools,
-          stopWhen: [stepCountIs(10), hasAnswer],
+          stopWhen: [hasAnswer, stepCountIs(10)],
         });
 
         await deletePersonalAccessToken(pat?.id);

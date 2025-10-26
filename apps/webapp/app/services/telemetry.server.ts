@@ -128,6 +128,7 @@ export async function trackEvent(
       modelProvider: getModelProvider(),
       embeddingModel: env.EMBEDDING_MODEL,
       appEnv: env.APP_ENV,
+      appOrigin: env.APP_ORIGIN,
       timestamp: new Date().toISOString(),
     };
 
@@ -175,6 +176,7 @@ export async function trackFeatureUsage(
       event: feature,
       properties: {
         ...properties,
+        appOrigin: env.APP_ORIGIN,
         timestamp: new Date().toISOString(),
       },
     });
@@ -204,6 +206,7 @@ export async function trackConfig(): Promise<void> {
         appEnv: env.APP_ENV,
         nodeEnv: env.NODE_ENV,
         timestamp: new Date().toISOString(),
+        appOrigin: env.APP_ORIGIN,
       },
     });
   } catch (error) {
@@ -231,6 +234,7 @@ export async function trackError(
       properties: {
         errorType: error.name,
         errorMessage: error.message,
+        appOrigin: env.APP_ORIGIN,
         stackTrace: error.stack,
         ...context,
         timestamp: new Date().toISOString(),

@@ -1,5 +1,4 @@
-import { StopCondition, tool } from "ai";
-import z from "zod";
+import { type StopCondition } from "ai";
 
 export const hasAnswer: StopCondition<any> = ({ steps }) => {
   return (
@@ -9,8 +8,7 @@ export const hasAnswer: StopCondition<any> = ({ steps }) => {
 
 export const hasQuestion: StopCondition<any> = ({ steps }) => {
   return (
-    steps.some((step) => step.text?.includes("</question_response>")) ??
-    false
+    steps.some((step) => step.text?.includes("</question_response>")) ?? false
   );
 };
 
@@ -162,19 +160,6 @@ CRITICAL:
 - Always indicate your information sources (memory, and/or knowledge)
 </communication>
 `;
-
-export const fixedTools = {
-  progressUpdate: tool({
-    description:
-      "Send a progress update to the user about what has been discovered or will be done next in a crisp and user friendly way no technical terms",
-    inputSchema: z.object({
-      message: z.string(),
-    }),
-    execute: async ({ message }: { message: string }) => ({
-      message,
-    }),
-  }),
-};
 
 export function getReActPrompt(
   metadata?: { source?: string; url?: string; pageTitle?: string },
