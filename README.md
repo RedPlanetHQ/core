@@ -66,6 +66,10 @@ CORE is an open-source unified, persistent memory layer for all your AI tools. Y
 ## 🚀 CORE Self-Hosting
 Want to run CORE on your own infrastructure? Self-hosting gives you complete control over your data and deployment.
 
+**Quick Deploy Options:**
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/6aEd9C?referralCode=LHvbIb&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
 **Prerequisites**:
 
 - Docker (20.10.0+) and Docker Compose (2.20.0+) installed
