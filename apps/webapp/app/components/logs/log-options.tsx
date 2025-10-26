@@ -1,10 +1,4 @@
-import { EllipsisVertical, Trash, Copy } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
+import { Trash, Copy, RotateCw } from "lucide-react";
 import { Button } from "../ui/button";
 import {
   AlertDialog,
@@ -22,11 +16,13 @@ import { toast } from "~/hooks/use-toast";
 
 interface LogOptionsProps {
   id: string;
+  status?: string;
 }
 
-export const LogOptions = ({ id }: LogOptionsProps) => {
+export const LogOptions = ({ id, status }: LogOptionsProps) => {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const deleteFetcher = useFetcher<{ success: boolean }>();
+  const retryFetcher = useFetcher<{ success: boolean }>();
   const navigate = useNavigate();
 
   const handleDelete = () => {
@@ -58,22 +54,54 @@ export const LogOptions = ({ id }: LogOptionsProps) => {
     }
   };
 
+  const handleRetry = () => {
+    retryFetcher.submit(
+      {},
+      {
+        method: "POST",
+        action: `/api/v1/logs/${id}/retry`,
+      },
+    );
+  };
+
   useEffect(() => {
     if (deleteFetcher.state === "idle" && deleteFetcher.data?.success) {
       navigate(`/home/inbox`);
     }
   }, [deleteFetcher.state, deleteFetcher.data]);
 
+  useEffect(() => {
+    if (retryFetcher.state === "idle" && retryFetcher.data?.success) {
+      toast({
+        title: "Success",
+        description: "Episode retry initiated",
+      });
+      // Reload the page to reflect the new status
+      window.location.reload();
+    }
+  }, [retryFetcher.state, retryFetcher.data]);
+
   return (
     <>
       <div className="flex items-center gap-2">
+        {status === "FAILED" && (
+          <Button
+            variant="secondary"
+            size="sm"
+            className="gap-2 rounded"
+            onClick={handleRetry}
+            disabled={retryFetcher.state !== "idle"}
+          >
+            <RotateCw size={15} /> Retry
+          </Button>
+        )}
         <Button
           variant="secondary"
           size="sm"
           className="gap-2 rounded"
           onClick={handleCopy}
         >
-          <Copy size={15} /> Copy ID
+          <Copy size={15} /> Copy Id
         </Button>
         <Button
           variant="secondary"

@@ -11,7 +11,7 @@ import { getSpace, updateSpace } from "../utils/space-utils";
 
 import { EpisodeType } from "@core/types";
 import { getSpaceEpisodeCount } from "~/services/graphModels/space";
-import { addToQueue } from "../utils/queue";
+import { addToQueue } from "~/lib/ingest.server";
 
 interface SpaceSummaryPayload {
   userId: string;

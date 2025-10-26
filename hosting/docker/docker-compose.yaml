@@ -42,6 +42,9 @@ services:
       - FROM_EMAIL=${FROM_EMAIL}
       - RESEND_API_KEY=${RESEND_API_KEY}
       - COHERE_API_KEY=${COHERE_API_KEY}
+      - QUEUE_PROVIDER=${QUEUE_PROVIDER}
+      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED}
+      - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
     ports:
       - "3033:3000"
     depends_on:
@@ -84,7 +87,7 @@ services:
 
   neo4j:
     container_name: core-neo4j
-    image: neo4j:5
+    image: redplanethq/neo4j:0.1.0
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
@@ -108,249 +111,33 @@ services:
       retries: 10
       start_period: 20s
 
-  webapp:
-    container_name: trigger-webapp
-    image: ghcr.io/triggerdotdev/trigger.dev:v4.0.4
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging-config
-    ports:
-      - ${WEBAPP_PUBLISH_IP:-0.0.0.0}:8030:3000
-    depends_on:
-      clickhouse:
-        condition: service_started
-      init:
-        condition: service_started
-    networks:
-      - webapp
-      - supervisor
-      - core
-    volumes:
-      - shared:/home/node/shared
-    # Only needed for bootstrap
-    user: root
-    # Only needed for bootstrap
-    command: sh -c "chown -R node:node /home/node/shared && sleep 5 && exec ./scripts/entrypoint.sh"
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "http.get('http://localhost:3000/healthcheck', res => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-    environment:
-      APP_ORIGIN: ${APP_ORIGIN:-http://localhost:8030}
-      LOGIN_ORIGIN: ${LOGIN_ORIGIN:-http://localhost:8030}
-      API_ORIGIN: ${API_ORIGIN:-http://localhost:8030}
-      ELECTRIC_ORIGIN: http://electric:3000
-      DATABASE_URL: ${TRIGGER_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/main?schema=public&sslmode=disable}
-      DIRECT_URL: ${TRIGGER_DIRECT_URL:-postgresql://postgres:postgres@postgres:5432/main?schema=public&sslmode=disable}
-      SESSION_SECRET: ${SESSION_SECRET}
-      MAGIC_LINK_SECRET: ${MAGIC_LINK_SECRET}
-      ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      MANAGED_WORKER_SECRET: ${MANAGED_WORKER_SECRET}
-      REDIS_HOST: core-redis
-      REDIS_PORT: 6379
-      REDIS_TLS_DISABLED: true
-      APP_LOG_LEVEL: info
-      DEV_OTEL_EXPORTER_OTLP_ENDPOINT: ${DEV_OTEL_EXPORTER_OTLP_ENDPOINT:-http://localhost:8030/otel}
-      DEPLOY_REGISTRY_HOST: ${DOCKER_REGISTRY_URL:-localhost:5000}
-      DEPLOY_REGISTRY_NAMESPACE: ${DOCKER_REGISTRY_NAMESPACE:-trigger}
-      OBJECT_STORE_BASE_URL: ${OBJECT_STORE_BASE_URL:-http://minio:9000}
-      OBJECT_STORE_ACCESS_KEY_ID: ${OBJECT_STORE_ACCESS_KEY_ID}
-      OBJECT_STORE_SECRET_ACCESS_KEY: ${OBJECT_STORE_SECRET_ACCESS_KEY}
-      GRACEFUL_SHUTDOWN_TIMEOUT: 1000
-      # Bootstrap - this will automatically set up a worker group for you
-      # This will NOT work for split deployments
-      TRIGGER_BOOTSTRAP_ENABLED: 1
-      TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME: bootstrap
-      TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH: /home/node/shared/worker_token
-      # ClickHouse configuration
-      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-http://default:password@clickhouse:8123?secure=false}
-      CLICKHOUSE_LOG_LEVEL: ${CLICKHOUSE_LOG_LEVEL:-info}
-      # Run replication
-      RUN_REPLICATION_ENABLED: ${RUN_REPLICATION_ENABLED:-1}
-      RUN_REPLICATION_CLICKHOUSE_URL: ${RUN_REPLICATION_CLICKHOUSE_URL:-http://default:password@clickhouse:8123}
-      RUN_REPLICATION_LOG_LEVEL: ${RUN_REPLICATION_LOG_LEVEL:-info}
-      # Limits
-      # TASK_PAYLOAD_OFFLOAD_THRESHOLD: 524288 # 512KB
-      # TASK_PAYLOAD_MAXIMUM_SIZE: 3145728 # 3MB
-      # BATCH_TASK_PAYLOAD_MAXIMUM_SIZE: 1000000 # 1MB
-      # TASK_RUN_METADATA_MAXIMUM_SIZE: 262144 # 256KB
-      # DEFAULT_ENV_EXECUTION_CONCURRENCY_LIMIT: 100
-      # DEFAULT_ORG_EXECUTION_CONCURRENCY_LIMIT: 100
-      # Internal OTEL configuration
-      INTERNAL_OTEL_TRACE_LOGGING_ENABLED: ${INTERNAL_OTEL_TRACE_LOGGING_ENABLED:-0}
-
-  electric:
-    container_name: trigger-electric
-    image: electricsql/electric:${ELECTRIC_IMAGE_TAG:-1.0.10}
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging-config
-    networks:
-      - webapp
-      - core
-    environment:
-      DATABASE_URL: ${ELECTRIC_DATABASE_URL:-postgresql://postgres:postgres@postgres:5432/main?schema=public&sslmode=disable}
-      ELECTRIC_INSECURE: true
-      ELECTRIC_USAGE_REPORTING: false
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/v1/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  clickhouse:
-    container_name: trigger-clickhouse
-    image: bitnami/clickhouse:${CLICKHOUSE_IMAGE_TAG:-latest}
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging-config
-    ports:
-      - ${CLICKHOUSE_PUBLISH_IP:-127.0.0.1}:9123:8123
-      - ${CLICKHOUSE_PUBLISH_IP:-127.0.0.1}:9090:9000
-    environment:
-      CLICKHOUSE_ADMIN_USER: ${CLICKHOUSE_USER:-default}
-      CLICKHOUSE_ADMIN_PASSWORD: ${CLICKHOUSE_PASSWORD:-password}
-    volumes:
-      - clickhouse:/bitnami/clickhouse
-      - ../clickhouse/override.xml:/bitnami/clickhouse/etc/config.d/override.xml:ro
-    networks:
-      - webapp
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "clickhouse-client",
-          "--host",
-          "localhost",
-          "--port",
-          "9000",
-          "--user",
-          "default",
-          "--password",
-          "password",
-          "--query",
-          "SELECT 1",
-        ]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-      start_period: 10s
-
-  # Worker related
-  supervisor:
-    container_name: trigger-supervisor
-    image: ghcr.io/triggerdotdev/supervisor:v4.0.4
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging-config
-    depends_on:
-      - docker-proxy
-    networks:
-      - supervisor
-      - docker-proxy
-      - webapp
-      - core
-    volumes:
-      - shared:/home/node/shared
-    # Only needed for bootstrap
-    user: root
-    # Only needed for bootstrap
-    command: sh -c "chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start"
-    environment:
-      # This needs to match the token of the worker group you want to connect to
-      TRIGGER_WORKER_TOKEN: ${TRIGGER_WORKER_TOKEN}
-      # Use the bootstrap token created by the webapp
-      # TRIGGER_WORKER_TOKEN: file:///home/node/shared/worker_token
-      MANAGED_WORKER_SECRET: ${MANAGED_WORKER_SECRET}
-      TRIGGER_API_URL: ${TRIGGER_API_URL:-http://trigger-webapp:3000}
-      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://trigger-webapp:3000/otel}
-      TRIGGER_WORKLOAD_API_DOMAIN: supervisor
-      TRIGGER_WORKLOAD_API_PORT_EXTERNAL: 8020
-      # Optional settings
-      DEBUG: 1
-      ENFORCE_MACHINE_PRESETS: 1
-      TRIGGER_DEQUEUE_INTERVAL_MS: 1000
-      DOCKER_HOST: tcp://docker-proxy:2375
-      DOCKER_RUNNER_NETWORKS: webapp,supervisor,core
-      DOCKER_REGISTRY_URL: ${DOCKER_REGISTRY_URL:-localhost:5000}
-      DOCKER_REGISTRY_USERNAME: ${DOCKER_REGISTRY_USERNAME:-}
-      DOCKER_REGISTRY_PASSWORD: ${DOCKER_REGISTRY_PASSWORD:-}
-      DOCKER_AUTOREMOVE_EXITED_CONTAINERS: 0
-    healthcheck:
-      test:
-        [
-          "CMD",
-          "node",
-          "-e",
-          "http.get('http://localhost:8020/health', res => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))",
-        ]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 10s
-
-  init:
-    container_name: trigger-init
-    image: redplanethq/init:${VERSION}
-    restart: "no" # prevent retries
-    environment:
-      - VERSION=${VERSION}
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - TRIGGER_DB=${TRIGGER_DB}
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - TRIGGER_TASKS_IMAGE=${TRIGGER_TASKS_IMAGE}
-      - NODE_ENV=production
-    networks:
-      - webapp
-      - core
-    depends_on:
-      - postgres
-
-  docker-proxy:
-    container_name: trigger-docker-proxy
-    image: tecnativa/docker-socket-proxy:${DOCKER_PROXY_IMAGE_TAG:-latest}
-    restart: ${RESTART_POLICY:-unless-stopped}
-    logging: *logging-config
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-    networks:
-      - docker-proxy
-    environment:
-      - LOG_LEVEL=info
-      - POST=1
-      - CONTAINERS=1
-      - IMAGES=1
-      - INFO=1
-      - NETWORKS=1
-    healthcheck:
-      test: ["CMD", "nc", "-z", "127.0.0.1", "2375"]
-      interval: 30s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
+  # Uncomment this if you want to use a local embedding modal
+  # ollama:
+  #   container_name: core-ollama
+  #   image: ollama/ollama:0.12.6
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #     - ./scripts/ollama-init.sh:/usr/local/bin/ollama-init.sh:ro
+  #   networks:
+  #     - core
+  #   entrypoint: ["/bin/bash", "/usr/local/bin/ollama-init.sh"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 90s
+  #   restart: unless-stopped
 
 networks:
   core:
     name: core
-    driver: bridge
-  docker-proxy:
-    name: docker-proxy
-  supervisor:
-    name: supervisor
-  webapp:
-    name: webapp
     driver: bridge
 
 volumes:
   postgres_data:
   neo4j_data:
   shared:
-  clickhouse:
-  minio:
+  ollama_data:

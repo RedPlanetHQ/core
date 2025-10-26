@@ -7,6 +7,7 @@ import { SpaceService } from "~/services/space.server";
 import { json } from "@remix-run/node";
 import { prisma } from "~/db.server";
 import { apiCors } from "~/utils/apiCors";
+import { isTriggerDeployment } from "~/lib/queue-adapter.server";
 
 const spaceService = new SpaceService();
 
@@ -39,6 +40,13 @@ const { action } = createHybridActionApiRoute(
         Workspace: true,
       },
     });
+
+    if (!isTriggerDeployment()) {
+      return json(
+        { error: "Spaces don't work in non trigger deployment" },
+        { status: 400 },
+      );
+    }
 
     if (!user?.Workspace?.id) {
       throw new Error(

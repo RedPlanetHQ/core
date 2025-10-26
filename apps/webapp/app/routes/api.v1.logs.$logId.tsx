@@ -1,5 +1,4 @@
 import { json } from "@remix-run/node";
-import { runs } from "@trigger.dev/sdk";
 import { z } from "zod";
 import { deleteEpisodeWithRelatedNodes } from "~/services/graphModels/episode";
 import {
@@ -11,6 +10,7 @@ import {
   createHybridActionApiRoute,
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
+import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
 
 // Schema for space ID parameter
 const LogParamsSchema = z.object({
@@ -59,19 +59,15 @@ const { action } = createHybridActionApiRoute(
       }
 
       const output = ingestionQueue.output as any;
-      const runningTasks = await runs.list({
-        tag: [authentication.userId, ingestionQueue.id],
+      const runningTasks = await findRunningJobs({
+        tags: [authentication.userId, ingestionQueue.id],
         taskIdentifier: "ingest-episode",
       });
 
-      const latestTask = runningTasks.data.find(
-        (task) =>
-          task.tags.includes(authentication.userId) &&
-          task.tags.includes(ingestionQueue.id),
-      );
+      const latestTask = runningTasks[0];
 
-      if (latestTask && !latestTask?.isCompleted) {
-        runs.cancel(latestTask?.id);
+      if (latestTask && !latestTask.isCompleted) {
+        await cancelJob(latestTask.id);
       }
 
       let result;

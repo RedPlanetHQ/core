@@ -17,6 +17,7 @@ import { renderToPipeableStream } from "react-dom/server";
 import { initializeStartupServices } from "./utils/startup";
 import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
+import { trackError } from "~/services/telemetry.server";
 
 const ABORT_DELAY = 5_000;
 
@@ -26,6 +27,42 @@ async function init() {
 }
 
 init();
+
+/**
+ * Global error handler for all server-side errors
+ * This catches errors from loaders, actions, and rendering
+ * Automatically tracks all errors to telemetry
+ */
+export function handleError(
+  error: unknown,
+  { request }: { request: Request },
+): void {
+  // Don't track 404s or aborted requests as errors
+  if (
+    error instanceof Response &&
+    (error.status === 404 || error.status === 304)
+  ) {
+    return;
+  }
+
+  // Track error to telemetry
+  if (error instanceof Error) {
+    const url = new URL(request.url);
+    trackError(error, {
+      url: request.url,
+      path: url.pathname,
+      method: request.method,
+      userAgent: request.headers.get("user-agent") || "unknown",
+      referer: request.headers.get("referer") || undefined,
+    }).catch((trackingError) => {
+      // If telemetry tracking fails, just log it - don't break the app
+      console.error("Failed to track error:", trackingError);
+    });
+  }
+
+  // Always log to console for development/debugging
+  console.error(error);
+}
 
 export default function handleRequest(
   request: Request,

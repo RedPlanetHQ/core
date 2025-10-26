@@ -3,7 +3,7 @@ import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.
 import { SpaceService } from "~/services/space.server";
 import { json } from "@remix-run/node";
 import { logger } from "~/services/logger.service";
-import { triggerSpaceAssignment } from "~/trigger/spaces/space-assignment";
+import { enqueueSpaceAssignment } from "~/lib/queue-adapter.server";
 
 // Schema for space ID parameter
 const SpaceParamsSchema = z.object({
@@ -31,7 +31,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Trigger automatic episode assignment for the reset space
     try {
-      await triggerSpaceAssignment({
+      await enqueueSpaceAssignment({
         userId: userId,
         workspaceId: space.workspaceId,
         mode: "new_space",

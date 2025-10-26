@@ -18,7 +18,7 @@ import type { CoreMessage } from "ai";
 import { z } from "zod";
 import { type Space } from "@prisma/client";
 
-interface SpaceAssignmentPayload {
+export interface SpaceAssignmentPayload {
   userId: string;
   workspaceId: string;
   mode: "new_space" | "episode";

@@ -6,6 +6,7 @@ import { useOptionalUser, useUserChanged } from "./useUser";
 
 export const usePostHog = (
   apiKey?: string,
+  telemetryEnabled = true,
   logging = false,
   debug = false,
 ): void => {
@@ -15,6 +16,8 @@ export const usePostHog = (
 
   //start PostHog once
   useEffect(() => {
+    // Respect telemetry settings
+    if (!telemetryEnabled) return;
     if (apiKey === undefined || apiKey === "") return;
     if (postHogInitialized.current === true) return;
     if (logging) console.log("Initializing PostHog");
@@ -27,19 +30,26 @@ export const usePostHog = (
         if (logging) console.log("PostHog loaded");
         if (user !== undefined) {
           if (logging) console.log("Loaded: Identifying user", user);
-          posthog.identify(user.id, { email: user.email });
+          posthog.identify(user.id, {
+            email: user.email,
+            name: user.name,
+          });
         }
       },
     });
     postHogInitialized.current = true;
-  }, [apiKey, logging, user]);
+  }, [apiKey, telemetryEnabled, logging, user]);
 
   useUserChanged((user) => {
     if (postHogInitialized.current === false) return;
+    if (!telemetryEnabled) return;
     if (logging) console.log("User changed");
     if (user) {
       if (logging) console.log("Identifying user", user);
-      posthog.identify(user.id, { email: user.email });
+      posthog.identify(user.id, {
+        email: user.email,
+        name: user.name,
+      });
     } else {
       if (logging) console.log("Resetting user");
       posthog.reset();

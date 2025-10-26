@@ -1,38 +1,42 @@
 import { EditorContent, useEditor } from "@tiptap/react";
 
 import { useEffect, memo } from "react";
-import { UserTypeEnum } from "@core/types";
-import { type ConversationHistory } from "@core/database";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
 import { skillExtension } from "../editor/skill-extension";
+import { type UIMessage } from "ai";
 
 interface AIConversationItemProps {
-  conversationHistory: ConversationHistory;
+  message: UIMessage;
 }
 
-const ConversationItemComponent = ({
-  conversationHistory,
-}: AIConversationItemProps) => {
-  const isUser =
-    conversationHistory.userType === UserTypeEnum.User ||
-    conversationHistory.userType === UserTypeEnum.System;
+function getMessage(message: string) {
+  let finalMessage = message.replace("<final_response>", "");
+  finalMessage = finalMessage.replace("</final_response>", "");
+  finalMessage = finalMessage.replace("<question_response>", "");
+  finalMessage = finalMessage.replace("</question_response>", "");
 
-  const id = `a${conversationHistory.id.replace(/-/g, "")}`;
+  return finalMessage;
+}
+
+const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
+  const isUser = message.role === "user" || false;
+  const textPart = message.parts.find((part) => part.type === "text");
 
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
     editable: false,
-    content: conversationHistory.message,
+    content: textPart ? getMessage(textPart.text) : "",
   });
 
   useEffect(() => {
-    editor?.commands.setContent(conversationHistory.message);
-
+    if (textPart) {
+      editor?.commands.setContent(getMessage(textPart.text));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [id, conversationHistory.message]);
+  }, [message]);
 
-  if (!conversationHistory.message) {
+  if (!message) {
     return null;
   }
 
@@ -51,10 +55,10 @@ const ConversationItemComponent = ({
 };
 
 // Memoize to prevent unnecessary re-renders
-export const ConversationItem = memo(ConversationItemComponent, (prevProps, nextProps) => {
-  // Only re-render if the conversation history ID or message changed
-  return (
-    prevProps.conversationHistory.id === nextProps.conversationHistory.id &&
-    prevProps.conversationHistory.message === nextProps.conversationHistory.message
-  );
-});
+export const ConversationItem = memo(
+  ConversationItemComponent,
+  (prevProps, nextProps) => {
+    // Only re-render if the conversation history ID or message changed
+    return prevProps.message === nextProps.message;
+  },
+);

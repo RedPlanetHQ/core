@@ -43,8 +43,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const conversation = await createConversation(workspace?.id, userId, {
     message: submission.value.message,
-    title: submission.value.title,
-    conversationId: submission.value.conversationId,
+    title: submission.value.title ?? "Untitled",
   });
 
   // If conversationId exists in submission, return the conversation data (don't redirect)

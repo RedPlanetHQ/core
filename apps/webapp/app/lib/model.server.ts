@@ -1,31 +1,23 @@
-import {
-  type CoreMessage,
-  type LanguageModelV1,
-  embed,
-  generateText,
-  streamText,
-} from "ai";
+import { type CoreMessage, embed, generateText, streamText } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { logger } from "~/services/logger.service";
 
-import { createOllama, type OllamaProvider } from "ollama-ai-provider";
+import { createOllama } from "ollama-ai-provider-v2";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
-import { createAmazonBedrock } from "@ai-sdk/amazon-bedrock";
-import { fromNodeProviderChain } from "@aws-sdk/credential-providers";
 
-export type ModelComplexity = 'high' | 'low';
+export type ModelComplexity = "high" | "low";
 
 /**
  * Get the appropriate model for a given complexity level.
  * HIGH complexity uses the configured MODEL.
  * LOW complexity automatically downgrades to cheaper variants if possible.
  */
-export function getModelForTask(complexity: ModelComplexity = 'high'): string {
-  const baseModel = process.env.MODEL || 'gpt-4.1-2025-04-14';
+export function getModelForTask(complexity: ModelComplexity = "high"): string {
+  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
 
   // HIGH complexity - always use the configured model
-  if (complexity === 'high') {
+  if (complexity === "high") {
     return baseModel;
   }
 
@@ -33,29 +25,73 @@ export function getModelForTask(complexity: ModelComplexity = 'high'): string {
   // If already using a cheap model, keep it
   const downgrades: Record<string, string> = {
     // OpenAI downgrades
-    'gpt-5-2025-08-07': 'gpt-5-mini-2025-08-07',
-    'gpt-4.1-2025-04-14': 'gpt-4.1-mini-2025-04-14',
+    "gpt-5-2025-08-07": "gpt-5-mini-2025-08-07",
+    "gpt-4.1-2025-04-14": "gpt-4.1-mini-2025-04-14",
 
     // Anthropic downgrades
-    'claude-sonnet-4-5': 'claude-3-5-haiku-20241022',
-    'claude-3-7-sonnet-20250219': 'claude-3-5-haiku-20241022',
-    'claude-3-opus-20240229': 'claude-3-5-haiku-20241022',
+    "claude-sonnet-4-5": "claude-3-5-haiku-20241022",
+    "claude-3-7-sonnet-20250219": "claude-3-5-haiku-20241022",
+    "claude-3-opus-20240229": "claude-3-5-haiku-20241022",
 
     // Google downgrades
-    'gemini-2.5-pro-preview-03-25': 'gemini-2.5-flash-preview-04-17',
-    'gemini-2.0-flash': 'gemini-2.0-flash-lite',
+    "gemini-2.5-pro-preview-03-25": "gemini-2.5-flash-preview-04-17",
+    "gemini-2.0-flash": "gemini-2.0-flash-lite",
 
     // AWS Bedrock downgrades (keep same model - already cost-optimized)
-    'us.amazon.nova-premier-v1:0': 'us.amazon.nova-premier-v1:0',
+    "us.amazon.nova-premier-v1:0": "us.amazon.nova-premier-v1:0",
   };
 
   return downgrades[baseModel] || baseModel;
 }
 
+export const getModel = (takeModel?: string) => {
+  let model = takeModel;
+
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  let ollamaUrl = process.env.OLLAMA_URL;
+  model = model || process.env.MODEL || "gpt-4.1-2025-04-14";
+
+  let modelInstance;
+  let modelTemperature = Number(process.env.MODEL_TEMPERATURE) || 1;
+  ollamaUrl = undefined;
+
+  // First check if Ollama URL exists and use Ollama
+  if (ollamaUrl) {
+    const ollama = createOllama({
+      baseURL: ollamaUrl,
+    });
+    modelInstance = ollama(model || "llama2"); // Default to llama2 if no model specified
+  } else {
+    // If no Ollama, check other models
+
+    if (model.includes("claude")) {
+      if (!anthropicKey) {
+        throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
+      }
+      modelInstance = anthropic(model);
+      modelTemperature = 0.5;
+    } else if (model.includes("gemini")) {
+      if (!googleKey) {
+        throw new Error("No Google API key found. Set GOOGLE_API_KEY");
+      }
+      modelInstance = google(model);
+    } else {
+      if (!openaiKey) {
+        throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
+      }
+      modelInstance = openai(model);
+    }
+
+    return modelInstance;
+  }
+};
+
 export interface TokenUsage {
-  promptTokens: number;
-  completionTokens: number;
-  totalTokens: number;
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
 }
 
 export async function makeModelCall(
@@ -63,69 +99,13 @@ export async function makeModelCall(
   messages: CoreMessage[],
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
   options?: any,
-  complexity: ModelComplexity = 'high',
+  complexity: ModelComplexity = "high",
 ) {
-  let modelInstance: LanguageModelV1 | undefined;
   let model = getModelForTask(complexity);
-  const ollamaUrl = process.env.OLLAMA_URL;
-  let ollama: OllamaProvider | undefined;
+  logger.info(`complexity: ${complexity}, model: ${model}`);
 
-  if (ollamaUrl) {
-    ollama = createOllama({
-      baseURL: ollamaUrl,
-    });
-  }
-
-  const bedrock = createAmazonBedrock({
-    region: process.env.AWS_REGION || 'us-east-1',
-    credentialProvider: fromNodeProviderChain(),
-  });
-
-  const generateTextOptions: any = {}
-
-  logger.info(
-    `complexity: ${complexity}, model: ${model}`,
-  );
-  switch (model) {
-    case "gpt-4.1-2025-04-14":
-    case "gpt-4.1-mini-2025-04-14":
-    case "gpt-5-mini-2025-08-07":
-    case "gpt-5-2025-08-07":
-    case "gpt-4.1-nano-2025-04-14":
-      modelInstance = openai(model, { ...options });
-      generateTextOptions.temperature = 1
-      break;
-
-    case "claude-3-7-sonnet-20250219":
-    case "claude-3-opus-20240229":
-    case "claude-3-5-haiku-20241022":
-      modelInstance = anthropic(model, { ...options });
-      break;
-
-    case "gemini-2.5-flash-preview-04-17":
-    case "gemini-2.5-pro-preview-03-25":
-    case "gemini-2.0-flash":
-    case "gemini-2.0-flash-lite":
-      modelInstance = google(model, { ...options });
-      break;
-
-    case "us.meta.llama3-3-70b-instruct-v1:0":
-    case "us.deepseek.r1-v1:0":
-    case "qwen.qwen3-32b-v1:0":
-    case "openai.gpt-oss-120b-1:0":
-    case "us.mistral.pixtral-large-2502-v1:0":
-    case "us.amazon.nova-premier-v1:0":
-      modelInstance = bedrock(`${model}`);
-      generateTextOptions.maxTokens = 100000
-      break;
-
-    default:
-      if (ollama) {
-        modelInstance = ollama(model);
-      }
-      logger.warn(`Unsupported model type: ${model}`);
-      break;
-  }
+  const modelInstance = getModel(model);
+  const generateTextOptions: any = {};
 
   if (!modelInstance) {
     throw new Error(`Unsupported model type: ${model}`);
@@ -135,16 +115,21 @@ export async function makeModelCall(
     return streamText({
       model: modelInstance,
       messages,
+      ...options,
       ...generateTextOptions,
       onFinish: async ({ text, usage }) => {
-        const tokenUsage = usage ? {
-          promptTokens: usage.promptTokens,
-          completionTokens: usage.completionTokens,
-          totalTokens: usage.totalTokens,
-        } : undefined;
+        const tokenUsage = usage
+          ? {
+              promptTokens: usage.inputTokens,
+              completionTokens: usage.outputTokens,
+              totalTokens: usage.totalTokens,
+            }
+          : undefined;
 
         if (tokenUsage) {
-          logger.log(`[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens})`);
+          logger.log(
+            `[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens})`,
+          );
         }
 
         onFinish(text, model, tokenUsage);
@@ -158,14 +143,18 @@ export async function makeModelCall(
     ...generateTextOptions,
   });
 
-  const tokenUsage = usage ? {
-    promptTokens: usage.promptTokens,
-    completionTokens: usage.completionTokens,
-    totalTokens: usage.totalTokens,
-  } : undefined;
+  const tokenUsage = usage
+    ? {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+      }
+    : undefined;
 
   if (tokenUsage) {
-    logger.log(`[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens})`);
+    logger.log(
+      `[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens})`,
+    );
   }
 
   onFinish(text, model, tokenUsage);
@@ -177,19 +166,22 @@ export async function makeModelCall(
  * Determines if a given model is proprietary (OpenAI, Anthropic, Google, Grok)
  * or open source (accessed via Bedrock, Ollama, etc.)
  */
-export function isProprietaryModel(modelName?: string, complexity: ModelComplexity = 'high'): boolean {
+export function isProprietaryModel(
+  modelName?: string,
+  complexity: ModelComplexity = "high",
+): boolean {
   const model = modelName || getModelForTask(complexity);
   if (!model) return false;
 
   // Proprietary model patterns
   const proprietaryPatterns = [
-    /^gpt-/,           // OpenAI models
-    /^claude-/,        // Anthropic models
-    /^gemini-/,        // Google models
-    /^grok-/,          // xAI models
+    /^gpt-/, // OpenAI models
+    /^claude-/, // Anthropic models
+    /^gemini-/, // Google models
+    /^grok-/, // xAI models
   ];
 
-  return proprietaryPatterns.some(pattern => pattern.test(model));
+  return proprietaryPatterns.some((pattern) => pattern.test(model));
 }
 
 export async function getEmbedding(text: string) {

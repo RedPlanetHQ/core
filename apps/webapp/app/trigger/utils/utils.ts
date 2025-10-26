@@ -8,11 +8,9 @@ import {
   type Workspace,
 } from "@prisma/client";
 
-import { logger } from "@trigger.dev/sdk/v3";
 import { type CoreMessage } from "ai";
 
 import { type HistoryStep } from "./types";
-import axios from "axios";
 import nodeCrypto from "node:crypto";
 import { customAlphabet, nanoid } from "nanoid";
 import { prisma } from "./prisma";
@@ -147,58 +145,6 @@ export interface RunChatPayload {
   pat: string;
   isContinuation?: boolean;
 }
-
-export const init = async ({ payload }: { payload: InitChatPayload }) => {
-  logger.info("Loading init");
-  const conversationHistory = await prisma.conversationHistory.findUnique({
-    where: { id: payload.conversationHistoryId },
-    include: { conversation: true },
-  });
-
-  const conversation = conversationHistory?.conversation as Conversation;
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: conversation.workspaceId as string },
-  });
-
-  if (!workspace) {
-    return { conversation, conversationHistory };
-  }
-
-  const randomKeyName = `chat_${nanoid(10)}`;
-  const pat = await getOrCreatePersonalAccessToken({
-    name: randomKeyName,
-    userId: workspace.userId as string,
-  });
-
-  const user = await prisma.user.findFirst({
-    where: { id: workspace.userId as string },
-  });
-
-  // Set up axios interceptor for memory operations
-  axios.interceptors.request.use((config) => {
-    if (config.url?.startsWith("https://core::memory")) {
-      // Handle both search and ingest endpoints
-      config.url = config.url.replace(
-        "https://core::memory",
-        process.env.API_BASE_URL ?? "",
-      );
-
-      config.headers.Authorization = `Bearer ${pat.token}`;
-    }
-
-    return config;
-  });
-
-  return {
-    conversation,
-    conversationHistory,
-    tokenId: pat.id,
-    token: pat.token,
-    userId: user?.id,
-    userName: user?.name,
-  };
-};
 
 export const createConversationHistoryForAgent = async (
   conversationId: string,

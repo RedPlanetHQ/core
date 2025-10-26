@@ -1,36 +1,8 @@
 import { queue, task } from "@trigger.dev/sdk/v3";
-import { logger } from "~/services/logger.service";
-import { runQuery } from "~/lib/neo4j.server";
-import type { CoreMessage } from "ai";
-import { z } from "zod";
-import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import {
-  getCompactedSessionBySessionId,
-  linkEpisodesToCompact,
-  getSessionEpisodes,
-  type CompactedSessionNode,
-  type SessionEpisodeData,
-  saveCompactedSession,
-} from "~/services/graphModels/compactedSession";
-
-interface SessionCompactionPayload {
-  userId: string;
-  sessionId: string;
-  source: string;
-  triggerSource?: "auto" | "manual" | "threshold";
-}
-
-// Zod schema for LLM response validation
-const CompactionResultSchema = z.object({
-  summary: z.string().describe("Consolidated narrative of the entire session"),
-  confidence: z.number().min(0).max(1).describe("Confidence score of the compaction quality"),
-});
-
-const CONFIG = {
-  minEpisodesForCompaction: 5, // Minimum episodes to trigger compaction
-  compactionThreshold: 1, // Trigger after N new episodes
-  maxEpisodesPerBatch: 50, // Process in batches if needed
-};
+  processSessionCompaction,
+  type SessionCompactionPayload,
+} from "~/jobs/session/session-compaction.logic";
 
 export const sessionCompactionQueue = queue({
   name: "session-compaction-queue",
@@ -41,82 +13,7 @@ export const sessionCompactionTask = task({
   id: "session-compaction",
   queue: sessionCompactionQueue,
   run: async (payload: SessionCompactionPayload) => {
-    const { userId, sessionId, source, triggerSource = "auto" } = payload;
-
-    logger.info(`Starting session compaction`, {
-      userId,
-      sessionId,
-      source,
-      triggerSource,
-    });
-
-    try {
-      // Check if compaction already exists
-      const existingCompact = await getCompactedSessionBySessionId(sessionId, userId);
-
-      // Fetch all episodes for this session
-      const episodes = await getSessionEpisodes(sessionId, userId, existingCompact?.endTime);
-
-      console.log("episodes", episodes.length);
-      // Check if we have enough episodes
-      if (!existingCompact && episodes.length < CONFIG.minEpisodesForCompaction) {
-        logger.info(`Not enough episodes for compaction`, {
-          sessionId,
-          episodeCount: episodes.length,
-          minRequired: CONFIG.minEpisodesForCompaction,
-        });
-        return {
-          success: false,
-          reason: "insufficient_episodes",
-          episodeCount: episodes.length,
-        };
-      } else if (existingCompact && episodes.length < CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold) {
-        logger.info(`Not enough new episodes for compaction`, {
-          sessionId,
-          episodeCount: episodes.length,
-          minRequired: CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold,
-        });
-        return {
-          success: false,
-          reason: "insufficient_new_episodes",
-          episodeCount: episodes.length,
-        };
-      }
-
-      // Generate or update compaction
-      const compactionResult = existingCompact
-        ? await updateCompaction(existingCompact, episodes, userId)
-        : await createCompaction(sessionId, episodes, userId, source);
-
-      logger.info(`Session compaction completed`, {
-        sessionId,
-        compactUuid: compactionResult.uuid,
-        episodeCount: compactionResult.episodeCount,
-        compressionRatio: compactionResult.compressionRatio,
-      });
-
-      return {
-        success: true,
-        compactionResult: {
-          compactUuid: compactionResult.uuid,
-          sessionId: compactionResult.sessionId,
-          summary: compactionResult.summary,
-          episodeCount: compactionResult.episodeCount,
-          startTime: compactionResult.startTime,
-          endTime: compactionResult.endTime,
-          confidence: compactionResult.confidence,
-          compressionRatio: compactionResult.compressionRatio,
-        },
-      };
-    } catch (error) {
-      logger.error(`Session compaction failed`, {
-        sessionId,
-        userId,
-        error: error instanceof Error ? error.message : String(error),
-      });
-
-      throw error;
-    }
+    return await processSessionCompaction(payload);
   },
 });
 

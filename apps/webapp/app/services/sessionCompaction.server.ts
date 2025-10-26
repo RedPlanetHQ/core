@@ -5,7 +5,7 @@ import {
   getSessionEpisodes,
   type CompactedSessionNode,
 } from "~/services/graphModels/compactedSession";
-import { tasks } from "@trigger.dev/sdk/v3";
+import { enqueueSessionCompaction } from "~/lib/queue-adapter.server";
 
 /**
  * Configuration for session compaction
@@ -144,7 +144,7 @@ export class SessionCompactionService {
         reason: check.reason,
       });
 
-      const handle = await tasks.trigger("session-compaction", {
+      const handle = await enqueueSessionCompaction({
         userId,
         sessionId,
         source,

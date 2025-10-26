@@ -6,7 +6,7 @@ import {
   deleteIngestionQueue,
   getIngestionQueue,
 } from "~/services/ingestionLogs.server";
-import { runs, tasks } from "@trigger.dev/sdk";
+import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
 
 export const DeleteEpisodeBodyRequest = z.object({
   id: z.string(),
@@ -37,19 +37,15 @@ const { action, loader } = createHybridActionApiRoute(
       }
 
       const output = ingestionQueue.output as any;
-      const runningTasks = await runs.list({
-        tag: [authentication.userId, ingestionQueue.id],
+      const runningTasks = await findRunningJobs({
+        tags: [authentication.userId, ingestionQueue.id],
         taskIdentifier: "ingest-episode",
       });
 
-      const latestTask = runningTasks.data.find(
-        (task) =>
-          task.tags.includes(authentication.userId) &&
-          task.tags.includes(ingestionQueue.id),
-      );
+      const latestTask = runningTasks[0];
 
-      if (latestTask && !latestTask?.isCompleted) {
-        runs.cancel(latestTask?.id as string);
+      if (latestTask && !latestTask.isCompleted) {
+        await cancelJob(latestTask.id);
       }
 
       let result;
