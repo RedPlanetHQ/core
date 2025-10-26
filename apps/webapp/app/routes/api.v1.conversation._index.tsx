@@ -5,6 +5,8 @@ import {
   type LanguageModel,
   experimental_createMCPClient as createMCPClient,
   generateId,
+  stepCountIs,
+  StopCondition,
 } from "ai";
 import { z } from "zod";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -19,7 +21,7 @@ import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
 import { nanoid } from "nanoid";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
-import { REACT_SYSTEM_PROMPT } from "~/lib/prompt.server";
+import { hasAnswer, hasQuestion, REACT_SYSTEM_PROMPT } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { env } from "~/env.server";
 
@@ -84,7 +86,7 @@ const { loader, action } = createHybridActionApiRoute(
       await createConversationHistory(message, body.id, UserTypeEnum.User);
     }
 
-    const messages = conversationHistory.map((history) => {
+    const messages = conversationHistory.map((history: any) => {
       return {
         parts: [{ text: history.message, type: "text" }],
         role: "user",
@@ -93,8 +95,6 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     const tools = { ...(await mcpClient.tools()) };
-
-    // console.log(tools);
 
     const finalMessages = [
       ...messages,
@@ -109,6 +109,8 @@ const { loader, action } = createHybridActionApiRoute(
       messages: finalMessages,
     });
 
+
+
     const result = streamText({
       model: getModel() as LanguageModel,
       messages: [
@@ -119,6 +121,7 @@ const { loader, action } = createHybridActionApiRoute(
         ...convertToModelMessages(validatedMessages),
       ],
       tools,
+      stopWhen: [stepCountIs(10), hasAnswer,hasQuestion],
     });
 
     result.consumeStream(); // no await

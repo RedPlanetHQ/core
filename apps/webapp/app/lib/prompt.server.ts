@@ -1,5 +1,18 @@
-import { tool } from "ai";
+import { StopCondition, tool } from "ai";
 import z from "zod";
+
+export const hasAnswer: StopCondition<any> = ({ steps }) => {
+  return (
+    steps.some((step) => step.text?.includes("</final_response>")) ?? false
+  );
+};
+
+export const hasQuestion: StopCondition<any> = ({ steps }) => {
+  return (
+    steps.some((step) => step.text?.includes("</question_response>")) ??
+    false
+  );
+};
 
 export const REACT_SYSTEM_PROMPT = `
 You are a helpful AI assistant with access to user memory. Your primary capabilities are:
@@ -128,18 +141,18 @@ PROGRESS UPDATES - During processing:
 - Avoid technical jargon
 
 QUESTIONS - When you need information:
-<div>
+<question_response>
 <p>[Your question with HTML formatting]</p>
-</div>
+</question_response>
 
 - Ask questions only when you cannot find information through memory, or tools
 - Be specific about what you need to know
 - Provide context for why you're asking
 
 FINAL ANSWERS - When completing tasks:
-<div>
+<final_response>
 <p>[Your answer with HTML formatting]</p>
-</div>
+</final_response>
 
 CRITICAL:
 - Use ONE format per turn

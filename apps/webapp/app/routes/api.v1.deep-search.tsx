@@ -11,15 +11,17 @@ import {
 import {
   convertToModelMessages,
   type CoreMessage,
+  generateId,
   generateText,
   type LanguageModel,
+  stepCountIs,
   streamText,
   tool,
   validateUIMessages,
 } from "ai";
 import axios from "axios";
 import { logger } from "~/services/logger.service";
-import { getReActPrompt } from "~/lib/prompt.server";
+import { getReActPrompt, hasAnswer } from "~/lib/prompt.server";
 import { getModel } from "~/lib/model.server";
 
 const DeepSearchBodySchema = z.object({
@@ -39,7 +41,7 @@ export function createSearchMemoryTool(token: string) {
   return tool({
     description:
       "Search the user's memory for relevant facts and episodes. Use this tool multiple times with different queries to gather comprehensive context.",
-    parameters: z.object({
+    inputSchema: z.object({
       query: z
         .string()
         .describe(
@@ -50,21 +52,14 @@ export function createSearchMemoryTool(token: string) {
       try {
         const response = await axios.post(
           `${process.env.API_BASE_URL || "https://core.heysol.ai"}/api/v1/search`,
-          { query },
+          { query, structured: false },
           {
             headers: {
               Authorization: `Bearer ${token}`,
             },
           },
         );
-
-        const searchResult = response.data;
-
-        return {
-          facts: searchResult.facts || [],
-          episodes: searchResult.episodes || [],
-          summary: `Found ${searchResult.episodes?.length || 0} relevant memories`,
-        };
+        return response.data;
       } catch (error) {
         logger.error(`SearchMemory tool error: ${error}`);
         return {
@@ -115,14 +110,11 @@ const { action, loader } = createActionApiRoute(
         searchMemory: searchTool,
       };
       // Build initial messages with ReAct prompt
-      const initialMessages: CoreMessage[] = [
-        {
-          role: "system",
-          content: getReActPrompt(body.metadata, body.intentOverride),
-        },
+      const initialMessages = [
         {
           role: "user",
-          content: `CONTENT TO ANALYZE:\n${body.content}\n\nPlease search my memory for relevant context and synthesize what you find.`,
+          parts: [{ type: "text", text: `CONTENT TO ANALYZE:\n${body.content}\n\nPlease search my memory for relevant context and synthesize what you find.` }],
+          id: generateId(),
         },
       ];
 
@@ -134,7 +126,15 @@ const { action, loader } = createActionApiRoute(
       if (body.stream) {
         const result = streamText({
           model: getModel() as LanguageModel,
-          messages: convertToModelMessages(validatedMessages),
+          messages: [
+            {
+              role: "system",
+              content: getReActPrompt(body.metadata, body.intentOverride),
+            },
+            ...convertToModelMessages(validatedMessages),
+          ],
+          tools,
+          stopWhen: [stepCountIs(10), hasAnswer],
         });
 
         return result.toUIMessageStreamResponse({
@@ -143,7 +143,15 @@ const { action, loader } = createActionApiRoute(
       } else {
         const { text } = await generateText({
           model: getModel() as LanguageModel,
-          messages: convertToModelMessages(validatedMessages),
+          messages: [
+            {
+              role: "system",
+              content: getReActPrompt(body.metadata, body.intentOverride),
+            },
+            ...convertToModelMessages(validatedMessages),
+          ],
+          tools,
+          stopWhen: [stepCountIs(10), hasAnswer],
         });
 
         await deletePersonalAccessToken(pat?.id);
