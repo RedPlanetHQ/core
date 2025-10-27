@@ -120,12 +120,13 @@ export const getClusteredGraphData = async (userId: string) => {
        WHERE episodeCount > 1
        WITH collect(entity.uuid) as validEntityUuids
 
-       // Build Episode -> Entity relationships for valid entities
-       MATCH (e:Episode{userId: $userId})-[r:HAS_PROVENANCE]->(s:Statement {userId: $userId})-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
+       // Get all episodes and optionally connect to valid entities
+       MATCH (e:Episode {userId: $userId})
+       WITH e, validEntityUuids,
+            CASE WHEN size(e.spaceIds) > 0 THEN e.spaceIds[0] ELSE null END as clusterId
+
+       OPTIONAL MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
        WHERE entity.uuid IN validEntityUuids
-       WITH DISTINCT e, entity, type(r) as relType,
-            CASE WHEN size(e.spaceIds) > 0 THEN e.spaceIds[0] ELSE null END as clusterId,
-            s.createdAt as createdAt
 
        RETURN DISTINCT
          e.uuid as sourceUuid,
@@ -134,9 +135,9 @@ export const getClusteredGraphData = async (userId: string) => {
          entity.uuid as targetUuid,
          entity.name as targetName,
          'Entity' as targetNodeType,
-         relType as edgeType,
+         type(r) as edgeType,
          clusterId,
-         createdAt`,
+         s.createdAt as createdAt`,
       { userId },
     );
 
