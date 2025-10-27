@@ -3,11 +3,7 @@ title: "Obsidian"
 description: "Sync your Obsidian notes with CORE and get memory-aware answers directly inside Obsidian"
 ---
 
-# Obsidian CORE Sync Plugin
-
 > Sync your Obsidian notes with [CORE](https://heysol.ai/core) (Contextual Observation & Recall Engine) and get **memory-aware answers** directly inside Obsidian.
-
----
 
 ## ✨ What it does
 
@@ -16,50 +12,44 @@ description: "Sync your Obsidian notes with CORE and get memory-aware answers di
 - **Frontmatter Control**: Decide which notes to sync by adding simple YAML flags.
 - **Offline Safe**: Failed syncs are queued locally and retried automatically.
 
----
-
 ## 🚀 Installation
 
-### Local development
+**Local development**
 
-1. Download the latest release assets from [core-obsidian v0.1.0](https://github.com/RedPlanetHQ/core-obsidian/releases/tag/0.1.0) and extract them into your Obsidian vault under `.obsidian/plugins/obsidian-core-sync/`:
-    - Ensure the directory contains `main.js`, `style.css`, and `manifest.json`.
+1. Download the latest release assets from [core-obsidian v0.1.1](https://github.com/RedPlanetHQ/core-obsidian/releases/tag/0.1.1) and extract them into your Obsidian vault under `.obsidian/plugins/obsidian-core-sync/`:
+
+   - Ensure the directory contains `main.js`, `style.css`, and `manifest.json`.
+
+   > If .obsidian folder is hidden Use `CMD + SHIFT + .` to show hidden files and then add above files in `.obsidian/plugins/obsidian-core-sync/`
 
 2. Enable the plugin in Obsidian:
    - Go to **Settings** → **Community plugins**
    - Find "CORE Sync" and toggle it on
 
-
-### Community Installation
+**Community Installation**
 
 > Note: A pull request for community installation is pending approval. You can track its progress [here](https://github.com/obsidianmd/obsidian-releases/pull/7683).
 
----
-
 ## ⚙️ Configuration
 
-### Step 1: Get Your API Key
+**Step 1: Get Your API Key**
 
 1. Login to CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
 2. Navigate to **Settings** (bottom left)
    ![CORE Settings](/images/core-settings.png)
 3. Go to **API Key** → **Generate new key** → Name it "obsidian"
-   ![Create API Key](/images/create-api-key.png)
 4. Copy the generated API key
 
-### Step 2: Configure Plugin Settings
+**Step 2: Configure Plugin Settings**
 
 1. In Obsidian, go to **Settings** → **CORE Sync**
 2. Configure the following:
    - **CORE Endpoint**: Your CORE ingest/search API (default: `https://core.heysol.ai`)
    - **API Key**: Paste the API key from Step 1
-   - **Auto-sync on modify**: If enabled, every note edit will sync automatically
-
----
 
 ## 🛠️ Usage
 
-### Mark Notes for Sync
+**Mark Notes for Sync**
 
 Add the following frontmatter at the top of a note to mark it for synchronization:
 
@@ -69,14 +59,14 @@ core.sync: true
 ---
 ```
 
-### Manual Sync Commands
+** Manual Sync Commands**
 
 Open the command palette (**Cmd/Ctrl + P**) and run:
 
 - **"Sync current note to CORE"** - Sync the currently open note
 - **"Sync all notes with core.sync=true"** - Sync all notes marked for synchronization
 
-### CORE Panel
+**CORE Panel with Deep Search**
 
 1. Open the CORE Panel by running **"Open CORE Panel"** from the command palette
 2. This opens a new tab on the right side of Obsidian
@@ -85,66 +75,28 @@ Open the command palette (**Cmd/Ctrl + P**) and run:
    - Display relevant memories, links, and summaries
    - Show related notes from your vault
 
----
+The **Deep Search** feature proactively surfaces relevant context from your notes while you work:
 
-## 🎯 Features
+**Example Use Cases:**
 
-### Smart Sync
-- **Incremental Updates**: Only syncs changed content to avoid duplicates
-- **Conflict Resolution**: Handles simultaneous edits gracefully
-- **Queue Management**: Failed syncs are queued and retried automatically
+- **Meeting Prep**: Open your daily note before a 1:1 meeting, and the sidebar automatically shows relevant notes from past meetings with that person
+- **Project Context**: Switch to a project document, and see related discussions, decisions, and action items from previous sessions
+- **Travel Planning**: Update your packing list, and CORE shows you what you forgot on past trips or useful tips from previous travel notes
+- **Research Continuity**: Work on a research note, and get automatic cross-references to related concepts and sources from your vault
 
-### Context-Aware Panel
-- **Related Memories**: Shows relevant content from your CORE memory
-- **Cross-References**: Links to related notes in your vault
-- **AI Summaries**: Get AI-generated summaries of your note's context
-
-
----
-
-
-## 💡 Use Cases
-
-### Research & Knowledge Management
-- Automatically sync research notes to build a searchable knowledge base
-- Get contextual suggestions while writing based on your existing notes
-- Cross-reference information across different projects and topics
-
-### Meeting & Project Notes
-- Sync meeting notes with `core.tags: ["meetings", "project-name"]`
-- Access relevant context from previous meetings when taking new notes
-- Build project timelines and track decisions over time
-
-### Personal Knowledge System
-- Create a personal Wikipedia from your notes
-- Get AI-powered insights on connections between ideas
-- Build upon previous thoughts and research automatically
-
----
+Deep Search transforms your notes from passive storage into active assistance, providing in-the-moment retrieval without manual searching.
 
 ## 🛠️ Troubleshooting
 
-### Common Issues
-
 **API Key not working?**
+
 - Verify the key is correctly copied from CORE dashboard
-- Check that the API key has proper permissions
-- Try regenerating the key if issues persist
 
 **Notes not syncing?**
+
 - Ensure `core.sync: true` is in the frontmatter
-- Check internet connection
-- Look for error messages in Developer Console (Ctrl+Shift+I)
-
-**Panel not loading?**
-- Restart Obsidian
-- Check that the API endpoint is correct
-- Verify CORE service is accessible
-
----
 
 ## 🤝 Support
 
 - **GitHub Issues**: Report bugs and feature requests
 - **Discord Community**: Join our [Discord](https://discord.gg/YGUZcvDjUa) and ask questions in **#core-support**
-- **Documentation**: Visit [core.heysol.ai](https://core.heysol.ai) for more resources
