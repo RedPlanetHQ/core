@@ -45,72 +45,113 @@ Before connecting CORE to Kilo-Code, ensure you have:
 
 ## Enable Automatic Memory Integration (Recommended)
 
-### Option 1: Using Agents.md (Recommended)
+### Option 1: Using AGENTS.md (Recommended)
 
 This approach provides comprehensive memory instructions that work across multiple AI tools.
 
-1. **Create Agents configuration** in your project root:
-   ```bash
-   mkdir -p .kilo-code
-   touch .kilo-code/Agents.md
-   ```
+Create `AGENTS.md` in your project root (if it doesn't exist, just append if it already exists):
 
-2. **Add memory instructions** - Open `.kilo-code/Agents.md` and add the following:
+```bash
+touch AGENTS.md
+```
+
+Add the following to `AGENTS.md`:
 
 ```markdown
-I am an AI coding assistant with access to a sophisticated memory system. While I don't retain information between separate conversations, I have access to CORE Memory - a persistent knowledge system that maintains project context, learnings, and continuity across all coding sessions.
+⚠️ **CRITICAL: READ THIS FIRST - MANDATORY MEMORY PROTOCOL** ⚠️
 
-**IMPORTANT: You MUST use these memory tools automatically as described below. This is not optional.**
+You are an AI coding assistant with access to CORE Memory - a persistent knowledge system that maintains project context, learnings, and continuity across all coding sessions.
 
-## Memory Tools Integration
+## 🔴 MANDATORY STARTUP SEQUENCE - DO NOT SKIP 🔴
 
-### Memory Search (`memory_search`)
+**BEFORE RESPONDING TO ANY USER MESSAGE, YOU MUST EXECUTE THESE TOOLS IN ORDER:**
 
-**AUTOMATIC BEHAVIOR:** At the start of EVERY conversation, BEFORE responding to the user, you MUST search memory for:
+### STEP 1 (REQUIRED): Search for Relevant Context
+
+EXECUTE THIS TOOL FIRST:
+`memory_search`
+
 - Previous discussions about the current topic
-- Related project context and decisions
-- User preferences and patterns
-- Similar problems solved before
+- Related project decisions and implementations
+- User preferences and work patterns
+- Similar problems and their solutions
 
-**Also search when:**
-- User mentions past work or previous discussions
-- Working on ongoing projects that have history
-- You need context to provide better assistance
+**Additional search triggers:**
 
-**Cognitive approach:**
-- **Surface Layer**: Query for specific knowledge about the topic
-- **Pattern Layer**: Search for how the user usually thinks, works, or prefers things
-- **Wisdom Layer**: Look for lessons learned from similar situations
+- User mentions "previously", "before", "last time", or "we discussed"
+- User references past work or project history
+- Working on the CORE project (this repository)
+- User asks about preferences, patterns, or past decisions
+- Starting work on any feature or bug that might have history
 
-**Search triggers:**
-- Starting any new conversation or task
-- User mentions past work or previous discussions
-- Working on ongoing projects that have history
-- Maintaining continuity across sessions
+**How to search effectively:**
 
-**Quality questions to ask yourself:**
-- "What don't I know that I should?"
-- "What does this user care about that I might miss?"
-- "What went right/wrong in similar situations?"
+- Write complete semantic queries, NOT keyword fragments
+- Good: `"Manoj's preferences for API design and error handling"`
+- Bad: `"manoj api preferences"`
+- Ask: "What context am I missing that would help?"
+- Consider: "What has the user told me before that I should remember?"
 
-### Memory Ingest (`memory_ingest`)
+### Query Patterns for Memory Search
 
-**AUTOMATIC BEHAVIOR:** At the END of EVERY conversation, AFTER fully responding to the user, you MUST store the conversation in memory. This is the FINAL action before completing your response.
+**Entity-Centric Queries** (Best for graph search):
 
-**Storage protocol:**
-- MANDATORY: Execute after completing every interaction
-- This is NON-NEGOTIABLE - you must always store conversation context
-- Memory storage happens as the last step, not during the conversation
+- ✅ GOOD: `"Manoj's preferences for product positioning and messaging"`
+- ✅ GOOD: `"CORE project authentication implementation decisions"`
+- ❌ BAD: `"manoj product positioning"`
+- Format: `[Person/Project] + [relationship/attribute] + [context]`
 
-**What to capture:**
+**Multi-Entity Relationship Queries** (Excellent for episode graph):
 
-FROM USER:
-- Their specific question, request, or problem statement
-- Project context and situation they provided
+- ✅ GOOD: `"Manoj and Harshith discussions about BFS search implementation"`
+- ✅ GOOD: `"relationship between entity extraction and recall quality in CORE"`
+- ❌ BAD: `"manoj harshith bfs"`
+- Format: `[Entity1] + [relationship type] + [Entity2] + [context]`
+
+**Semantic Question Queries** (Good for vector search):
+
+- ✅ GOOD: `"What causes BFS search to return empty results? What are the requirements for BFS traversal?"`
+- ✅ GOOD: `"How does episode graph search improve recall quality compared to traditional search?"`
+- ❌ BAD: `"bfs empty results"`
+- Format: Complete natural questions with full context
+
+**Concept Exploration Queries** (Good for BFS traversal):
+
+- ✅ GOOD: `"concepts and ideas related to semantic relevance in knowledge graph search"`
+- ✅ GOOD: `"topics connected to hop distance weighting and graph topology in BFS"`
+- ❌ BAD: `"semantic relevance concepts"`
+- Format: `[concept] + related/connected + [domain/context]`
+
+**Temporal Queries** (Good for recent work):
+
+- ✅ GOOD: `"recent changes to search implementation and reranking logic"`
+- ✅ GOOD: `"latest discussions about entity extraction and semantic relevance"`
+- ❌ BAD: `"recent search changes"`
+- Format: `[temporal marker] + [specific topic] + [additional context]`
+
+## 🔴 MANDATORY SHUTDOWN SEQUENCE - DO NOT SKIP 🔴
+
+**AFTER FULLY RESPONDING TO THE USER, YOU MUST EXECUTE THIS TOOL:**
+
+### FINAL STEP (REQUIRED): Store Conversation Memory
+
+EXECUTE THIS TOOL LAST:
+`memory_ingest`
+Include the spaceId parameter using the ID from your initial memory_get_space call.
+
+⚠️ **THIS IS NON-NEGOTIABLE** - You must ALWAYS store conversation context as your final action.
+
+**What to capture in the message parameter:**
+
+From User:
+
+- Specific question, request, or problem statement
+- Project context and situation provided
 - What they're trying to accomplish
 - Technical challenges or constraints mentioned
 
-FROM ASSISTANT:
+From Assistant:
+
 - Detailed explanation of solution/approach taken
 - Step-by-step processes and methodologies
 - Technical concepts and principles explained
@@ -118,13 +159,8 @@ FROM ASSISTANT:
 - Alternative approaches discussed
 - Problem-solving methodologies applied
 
-**Exclude from storage:**
-- Code blocks and code snippets
-- File contents or file listings
-- Command examples or CLI commands
-- Raw data or logs
-
 **Include in storage:**
+
 - All conceptual explanations and theory
 - Technical discussions and analysis
 - Problem-solving approaches and reasoning
@@ -132,29 +168,28 @@ FROM ASSISTANT:
 - Implementation strategies (described conceptually)
 - Learning insights and patterns
 
-**Quality check:**
-- Can I quickly understand project context from memory alone?
+**Exclude from storage:**
+
+- Code blocks and code snippets
+- File contents or file listings
+- Command examples or CLI commands
+- Raw data or logs
+
+**Quality check before storing:**
+
+- Can someone quickly understand project context from memory alone?
 - Would this information help provide better assistance in future sessions?
 - Does stored context capture key decisions and reasoning?
 
-### Project Space Context (`memory_get_space`)
+---
 
-**AUTOMATIC BEHAVIOR:** At the start of EVERY session, you MUST retrieve the current project's space context:
+## Summary: Your Mandatory Protocol
 
-1. **Identify the project:** Look at the working directory path, git repo name, or conversation context
-2. **Get space context:** Use `memory_get_space` with `spaceName: core`
-3. **Use as foundation:** The space summary is a living document that's continuously updated - it contains the most current, comprehensive context about this project
+1. **FIRST ACTION**: Execute `memory_search` with semantic query about the user's request
+2. **RESPOND**: Help the user with their request
+3. **FINAL ACTION**: Execute `memory_ingest` with conversation summary and spaceId
 
-**What spaces provide:**
-- Live, evolving documentation that updates with every interaction
-- Consolidated project knowledge and current state
-- Organized context specific to this domain
-- Most up-to-date understanding of the project
-
-**Also retrieve space context when:**
-- User asks about a specific project or domain
-- You need comprehensive context about a topic
-- Switching between different work areas
+**If you skip any of these steps, you are not following the project requirements.**
 ```
 
 ### Option 2: Using Kilo-Code Rules

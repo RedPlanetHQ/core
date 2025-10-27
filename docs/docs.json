@@ -45,7 +45,8 @@
                 "pages": [
                   "providers/cursor",
                   "providers/zed",
-                  "providers/vscode"
+                  "providers/vscode",
+                  "providers/windsurf"
                 ]
               },
               {
