@@ -68,7 +68,7 @@ Want to run CORE on your own infrastructure? Self-hosting gives you complete con
 
 **Quick Deploy Options:**
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core?referralCode=LHvbIb&utm_medium=integration&utm_source=template&utm_campaign=generic)
+[Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core?referralCode=LHvbIb&utm_medium=integration&utm_source=template&utm_campaign=generic)
 
 **Prerequisites**:
 
@@ -249,6 +249,7 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
 
