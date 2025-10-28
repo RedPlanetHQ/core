@@ -46,6 +46,43 @@ export async function createSpace(
 }
 
 /**
+ * Get all active spaces for a user
+ */
+export async function getAllSpacesForUser(
+  userId: string,
+): Promise<SpaceNode[]> {
+  const query = `
+    MATCH (s:Space {userId: $userId})
+    WHERE s.isActive = true
+
+    // Count episodes assigned to each space
+    OPTIONAL MATCH (s)-[:HAS_EPISODE]->(e:Episode {userId: $userId})
+
+    WITH s, count(e) as episodeCount
+    RETURN s, episodeCount
+    ORDER BY s.createdAt DESC
+  `;
+
+  const result = await runQuery(query, { userId });
+
+  return result.map((record) => {
+    const spaceData = record.get("s").properties;
+    const episodeCount = record.get("episodeCount") || 0;
+
+    return {
+      uuid: spaceData.uuid,
+      name: spaceData.name,
+      description: spaceData.description,
+      userId: spaceData.userId,
+      createdAt: new Date(spaceData.createdAt),
+      updatedAt: new Date(spaceData.updatedAt),
+      isActive: spaceData.isActive,
+      contextCount: Number(episodeCount),
+    };
+  });
+}
+
+/**
  * Get a specific space by ID
  */
 export async function getSpace(

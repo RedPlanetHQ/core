@@ -1,4 +1,3 @@
-import { type SpacePattern } from "@core/types";
 import { prisma } from "./prisma";
 
 export const getSpace = async (spaceId: string) => {
@@ -9,22 +8,6 @@ export const getSpace = async (spaceId: string) => {
   });
 
   return space;
-};
-
-export const createSpacePattern = async (
-  spaceId: string,
-  allPatterns: Omit<
-    SpacePattern,
-    "id" | "createdAt" | "updatedAt" | "spaceId"
-  >[],
-) => {
-  return await prisma.spacePattern.createMany({
-    data: allPatterns.map((pattern) => ({
-      ...pattern,
-      spaceId,
-      userConfirmed: pattern.userConfirmed as any, // Temporary cast until Prisma client is regenerated
-    })),
-  });
 };
 
 export const updateSpace = async (summaryData: {
@@ -41,7 +24,7 @@ export const updateSpace = async (summaryData: {
       summary: summaryData.summary,
       themes: summaryData.themes,
       contextCount: summaryData.contextCount,
-      summaryGeneratedAt: new Date().toISOString()
+      summaryGeneratedAt: new Date().toISOString(),
     },
   });
 };

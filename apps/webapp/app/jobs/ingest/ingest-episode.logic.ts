@@ -61,6 +61,7 @@ export async function processEpisodeIngestion(
   }) => Promise<any>,
   enqueueBertTopicAnalysis?: (params: {
     userId: string;
+    workspaceId: string;
     minTopicSize?: number;
     nrTopics?: number;
   }) => Promise<any>,
@@ -281,6 +282,7 @@ export async function processEpisodeIngestion(
 
           await enqueueBertTopicAnalysis({
             userId: payload.userId,
+            workspaceId: payload.workspaceId,
             minTopicSize: 10,
           });
 

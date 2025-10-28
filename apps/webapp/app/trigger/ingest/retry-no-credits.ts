@@ -1,9 +1,9 @@
 import { task } from "@trigger.dev/sdk";
 import { z } from "zod";
-import { IngestionQueue, IngestionStatus } from "@core/database";
+import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "../utils/prisma";
-import { IngestBodyRequest, ingestTask } from "./ingest";
+import { type IngestBodyRequest, ingestTask } from "./ingest";
 
 export const RetryNoCreditBodyRequest = z.object({
   workspaceId: z.string(),
@@ -43,9 +43,7 @@ export const retryNoCreditsTask = task({
         };
       }
 
-      logger.log(
-        `Found ${noCreditItems.length} NO_CREDITS episodes to retry`,
-      );
+      logger.log(`Found ${noCreditItems.length} NO_CREDITS episodes to retry`);
 
       const results = {
         total: noCreditItems.length,

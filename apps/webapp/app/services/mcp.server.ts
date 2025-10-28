@@ -58,6 +58,7 @@ async function createMcpServer(
     // Handle memory tools and integration meta-tools
     if (
       name.startsWith("memory_") ||
+      name === "get_session_id" ||
       name === "get_integrations" ||
       name === "get_integration_actions" ||
       name === "execute_integration_action"

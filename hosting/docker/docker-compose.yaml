@@ -8,55 +8,55 @@ x-logging: &logging-config
 version: "3.8"
 
 services:
-  core:
-    container_name: core-app
-    image: redplanethq/core:${VERSION}
-    environment:
-      - NODE_ENV=${NODE_ENV}
-      - DATABASE_URL=${DATABASE_URL}
-      - DIRECT_URL=${DIRECT_URL}
-      - SESSION_SECRET=${SESSION_SECRET}
-      - ENCRYPTION_KEY=${ENCRYPTION_KEY}
-      - MAGIC_LINK_SECRET=${MAGIC_LINK_SECRET}
-      - LOGIN_ORIGIN=${CORE_LOGIN_ORIGIN}
-      - APP_ORIGIN=${CORE_APP_ORIGIN}
-      - REDIS_HOST=${REDIS_HOST}
-      - REDIS_PORT=${REDIS_PORT}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_TLS_DISABLED=${REDIS_TLS_DISABLED}
-      - NEO4J_URI=${NEO4J_URI}
-      - NEO4J_USERNAME=${NEO4J_USERNAME}
-      - NEO4J_PASSWORD=${NEO4J_PASSWORD}
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - AUTH_GOOGLE_CLIENT_ID=${AUTH_GOOGLE_CLIENT_ID}
-      - AUTH_GOOGLE_CLIENT_SECRET=${AUTH_GOOGLE_CLIENT_SECRET}
-      - ENABLE_EMAIL_LOGIN=${ENABLE_EMAIL_LOGIN}
-      - OLLAMA_URL=${OLLAMA_URL}
-      - EMBEDDING_MODEL=${EMBEDDING_MODEL}
-      - MODEL=${MODEL}
-      - TRIGGER_PROJECT_ID=${TRIGGER_PROJECT_ID}
-      - TRIGGER_SECRET_KEY=${TRIGGER_SECRET_KEY}
-      - TRIGGER_API_URL=${API_ORIGIN}
-      - POSTGRES_DB=${POSTGRES_DB}
-      - EMAIL_TRANSPORT=${EMAIL_TRANSPORT}
-      - REPLY_TO_EMAIL=${REPLY_TO_EMAIL}
-      - FROM_EMAIL=${FROM_EMAIL}
-      - RESEND_API_KEY=${RESEND_API_KEY}
-      - COHERE_API_KEY=${COHERE_API_KEY}
-      - QUEUE_PROVIDER=${QUEUE_PROVIDER}
-      - TELEMETRY_ENABLED=${TELEMETRY_ENABLED}
-      - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
-    ports:
-      - "3033:3000"
-    depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_started
-      neo4j:
-        condition: service_healthy
-    networks:
-      - core
+  # core:
+  #   container_name: core-app
+  #   image: redplanethq/core:${VERSION}
+  #   environment:
+  #     - NODE_ENV=${NODE_ENV}
+  #     - DATABASE_URL=${DATABASE_URL}
+  #     - DIRECT_URL=${DIRECT_URL}
+  #     - SESSION_SECRET=${SESSION_SECRET}
+  #     - ENCRYPTION_KEY=${ENCRYPTION_KEY}
+  #     - MAGIC_LINK_SECRET=${MAGIC_LINK_SECRET}
+  #     - LOGIN_ORIGIN=${CORE_LOGIN_ORIGIN}
+  #     - APP_ORIGIN=${CORE_APP_ORIGIN}
+  #     - REDIS_HOST=${REDIS_HOST}
+  #     - REDIS_PORT=${REDIS_PORT}
+  #     - REDIS_PASSWORD=${REDIS_PASSWORD}
+  #     - REDIS_TLS_DISABLED=${REDIS_TLS_DISABLED}
+  #     - NEO4J_URI=${NEO4J_URI}
+  #     - NEO4J_USERNAME=${NEO4J_USERNAME}
+  #     - NEO4J_PASSWORD=${NEO4J_PASSWORD}
+  #     - OPENAI_API_KEY=${OPENAI_API_KEY}
+  #     - AUTH_GOOGLE_CLIENT_ID=${AUTH_GOOGLE_CLIENT_ID}
+  #     - AUTH_GOOGLE_CLIENT_SECRET=${AUTH_GOOGLE_CLIENT_SECRET}
+  #     - ENABLE_EMAIL_LOGIN=${ENABLE_EMAIL_LOGIN}
+  #     - OLLAMA_URL=${OLLAMA_URL}
+  #     - EMBEDDING_MODEL=${EMBEDDING_MODEL}
+  #     - MODEL=${MODEL}
+  #     - TRIGGER_PROJECT_ID=${TRIGGER_PROJECT_ID}
+  #     - TRIGGER_SECRET_KEY=${TRIGGER_SECRET_KEY}
+  #     - TRIGGER_API_URL=${API_ORIGIN}
+  #     - POSTGRES_DB=${POSTGRES_DB}
+  #     - EMAIL_TRANSPORT=${EMAIL_TRANSPORT}
+  #     - REPLY_TO_EMAIL=${REPLY_TO_EMAIL}
+  #     - FROM_EMAIL=${FROM_EMAIL}
+  #     - RESEND_API_KEY=${RESEND_API_KEY}
+  #     - COHERE_API_KEY=${COHERE_API_KEY}
+  #     - QUEUE_PROVIDER=${QUEUE_PROVIDER}
+  #     - TELEMETRY_ENABLED=${TELEMETRY_ENABLED}
+  #     - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
+  #   ports:
+  #     - "3033:3000"
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_started
+  #     neo4j:
+  #       condition: service_healthy
+  #   networks:
+  #     - core
 
   postgres:
     container_name: core-postgres

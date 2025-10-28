@@ -19,7 +19,10 @@ import {
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
 import { nanoid } from "nanoid";
-import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
+import {
+  deletePersonalAccessToken,
+  getOrCreatePersonalAccessToken,
+} from "~/services/personalAccessToken.server";
 import {
   hasAnswer,
   hasQuestion,
@@ -126,6 +129,7 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     result.consumeStream(); // no await
+    await deletePersonalAccessToken(pat?.id);
 
     return result.toUIMessageStreamResponse({
       originalMessages: validatedMessages,

@@ -55,7 +55,7 @@ CORE memory achieves **88.24%** average accuracy in Locomo dataset across all re
 
 ## Overview
 
-**Problem** 
+**Problem**
 
 Developers waste time re-explaining context to AI tools. Hit token limits in Claude? Start fresh and lose everything. Switch from ChatGPT/Claude to Cursor? Explain your context again. Your conversations, decisions, and insights vanish between sessions. With every new AI tool, the cost of context switching grows.
 
@@ -64,6 +64,7 @@ Developers waste time re-explaining context to AI tools. Hit token limits in Cla
 CORE is an open-source unified, persistent memory layer for all your AI tools. Your context follows you from Cursor to Claude to ChatGPT to Claude Code. One knowledge graph remembers who said what, when, and why. Connect once, remember everywhere. Stop managing context and start building.
 
 ## 🚀 CORE Self-Hosting
+
 Want to run CORE on your own infrastructure? Self-hosting gives you complete control over your data and deployment.
 
 **Quick Deploy Options:**
@@ -80,15 +81,20 @@ Want to run CORE on your own infrastructure? Self-hosting gives you complete con
 ### Setup
 
 1. Clone the repository:
+
 ```
 git clone https://github.com/RedPlanetHQ/core.git
 cd core
 ```
+
 2. Configure environment variables in `core/.env`:
+
 ```
 OPENAI_API_KEY=your_openai_api_key
 ```
+
 3. Start the service
+
 ```
 docker-compose up -d
 ```
@@ -100,6 +106,7 @@ Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start
 Note: We tried open-source models like Ollama or GPT OSS but facts generation were not good, we are still figuring out how to improve on that and then will also support OSS models.
 
 ## 🚀 CORE Cloud
+
 **Build your unified memory graph in 5 minutes:**
 
 Don't want to manage infrastructure? CORE Cloud lets you build your personal memory system instantly - no setup, no servers, just memory that works.
@@ -115,24 +122,24 @@ Don't want to manage infrastructure? CORE Cloud lets you build your personal mem
 
 ## 🧩 Key Features
 
-### 🧠 **Unified, Portable Memory**: 
+### 🧠 **Unified, Portable Memory**:
+
 Add and recall your memory across **Cursor, Windsurf, Claude Desktop, Claude Code, Gemini CLI, AWS's Kiro, VS Code, and Roo Code** via MCP
 
 ![core-claude](https://github.com/user-attachments/assets/56c98288-ee87-4cd0-8b02-860aca1c7f9a)
 
-
-### 🕸️ **Temporal + Reified Knowledge Graph**: 
+### 🕸️ **Temporal + Reified Knowledge Graph**:
 
 Remember the story behind every fact—track who said what, when, and why with rich relationships and full provenance, not just flat storage
 
 ![core-memory-graph](https://github.com/user-attachments/assets/5d1ee659-d519-4624-85d1-e0497cbdd60a)
 
-
-### 🌐 **Browser Extension**: 
+### 🌐 **Browser Extension**:
 
 Save conversations and content from ChatGPT, Grok, Gemini, Twitter, YouTube, blog posts, and any webpage directly into your CORE memory.
 
 **How to Use Extension**
+
 1. [Download the Extension](https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc) from the Chrome Web Store.
 2. Login to [CORE dashboard](https://core.heysol.ai)
    - Navigate to Settings (bottom left)
@@ -141,12 +148,11 @@ Save conversations and content from ChatGPT, Grok, Gemini, Twitter, YouTube, blo
 
 https://github.com/user-attachments/assets/6e629834-1b9d-4fe6-ae58-a9068986036a
 
+### 💬 **Chat with Memory**:
 
-### 💬 **Chat with Memory**: 
 Ask questions like "What are my writing preferences?" with instant insights from your connected knowledge
 
 ![chat-with-memory](https://github.com/user-attachments/assets/d798802f-bd51-4daf-b2b5-46de7d206f66)
-
 
 ### ⚡ **Auto-Sync from Apps**:
 
@@ -156,15 +162,11 @@ Automatically capture relevant context from Linear, Slack, Notion, GitHub and ot
 
 ![core-slack](https://github.com/user-attachments/assets/d5fefe38-221e-4076-8a44-8ed673960f03)
 
-
-### 🔗 **MCP Integration Hub**: 
+### 🔗 **MCP Integration Hub**:
 
 Connect Linear, Slack, GitHub, Notion once to CORE—then use all their tools in Claude, Cursor, or any MCP client with a single URL
 
-
 ![core-linear-claude](https://github.com/user-attachments/assets/7d59d92b-8c56-4745-a7ab-9a3c0341aa32)
-
-
 
 ## How CORE create memory
 
@@ -178,7 +180,6 @@ CORE’s ingestion pipeline has four phases designed to capture evolving context
 4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph that links facts to their context and history, turning isolated data into a living web of knowledge agents can actually use.
 
 The Result: Instead of a flat database, CORE gives you a memory that grows and changes with you - preserving context, evolution, and ownership so agents can actually use it.
-
 
 ![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
 
@@ -204,7 +205,7 @@ Explore our documentation to get the most out of CORE
 - [Connect Core MCP with Claude](https://docs.heysol.ai/providers/claude)
 - [Connect Core MCP with Cursor](https://docs.heysol.ai/providers/cursor)
 - [Connect Core MCP with Claude Code](https://docs.heysol.ai/providers/claude-code)
-- [Connect Core MCP with Codex](https://docs.heysol.ai/providers/codex) 
+- [Connect Core MCP with Codex](https://docs.heysol.ai/providers/codex)
 
 - [Basic Concepts](https://docs.heysol.ai/overview)
 - [API Reference](https://docs.heysol.ai/api-reference/get-user-profile)
@@ -249,21 +250,11 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+<<<<<<< Updated upstream
 
+<<<<<<< HEAD
 
+# =======
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+> > > > > > > Stashed changes
+> > > > > > > 62db6c1 (feat: automatic space identification)

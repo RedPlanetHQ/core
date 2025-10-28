@@ -15,7 +15,8 @@ import type { z } from "zod";
 import type { IngestBodyRequest } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
-import { type SpaceAssignmentPayload } from "~/trigger/spaces/space-assignment";
+import type { SpaceAssignmentPayload } from "~/jobs/spaces/space-assignment.logic";
+import type { SpaceSummaryPayload } from "~/jobs/spaces/space-summary.logic";
 
 type QueueProvider = "trigger" | "bullmq";
 
@@ -144,22 +145,53 @@ export async function enqueueSessionCompaction(
 
 /**
  * Enqueue space assignment job
- * (Helper for common job logic to call)
  */
 export async function enqueueSpaceAssignment(
   payload: SpaceAssignmentPayload,
-): Promise<void> {
+): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
     const { triggerSpaceAssignment } = await import(
       "~/trigger/spaces/space-assignment"
     );
-    await triggerSpaceAssignment(payload);
+    const handler = await triggerSpaceAssignment(payload);
+    return { id: handler.id };
   } else {
-    // For BullMQ, space assignment is not implemented yet
-    // You can add it later when needed
-    console.warn("Space assignment not implemented for BullMQ yet");
+    // BullMQ
+    const { spaceAssignmentQueue } = await import("~/bullmq/queues");
+    const job = await spaceAssignmentQueue.add("space-assignment", payload, {
+      jobId: `space-assignment-${payload.userId}-${payload.mode}-${Date.now()}`,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue space summary job
+ */
+export async function enqueueSpaceSummary(
+  payload: SpaceSummaryPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { triggerSpaceSummary } = await import(
+      "~/trigger/spaces/space-summary"
+    );
+    const handler = await triggerSpaceSummary(payload);
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { spaceSummaryQueue } = await import("~/bullmq/queues");
+    const job = await spaceSummaryQueue.add("space-summary", payload, {
+      jobId: `space-summary-${payload.spaceId}-${Date.now()}`,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
   }
 }
 
@@ -168,6 +200,7 @@ export async function enqueueSpaceAssignment(
  */
 export async function enqueueBertTopicAnalysis(payload: {
   userId: string;
+  workspaceId: string;
   minTopicSize?: number;
   nrTopics?: number;
 }): Promise<{ id?: string }> {
@@ -190,7 +223,6 @@ export async function enqueueBertTopicAnalysis(payload: {
       jobId: `bert-${payload.userId}-${Date.now()}`,
       attempts: 2, // Only 2 attempts for expensive operations
       backoff: { type: "exponential", delay: 5000 },
-      timeout: 300000, // 5 minute timeout
     });
     return { id: job.id };
   }

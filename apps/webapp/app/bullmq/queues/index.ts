@@ -105,13 +105,56 @@ export const bertTopicQueue = new Queue("bert-topic-queue", {
       type: "exponential",
       delay: 5000,
     },
-    timeout: 300000, // 5 minute timeout
     removeOnComplete: {
       age: 7200, // Keep completed jobs for 2 hours
       count: 100,
     },
     removeOnFail: {
       age: 172800, // Keep failed jobs for 48 hours (for debugging)
+    },
+  },
+});
+
+/**
+ * Space assignment queue
+ * Handles assigning episodes to spaces based on semantic matching
+ */
+export const spaceAssignmentQueue = new Queue("space-assignment-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
+ * Space summary queue
+ * Handles generating summaries for spaces
+ */
+export const spaceSummaryQueue = new Queue("space-summary-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400,
     },
   },
 });
