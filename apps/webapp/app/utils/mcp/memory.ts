@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { EpisodeTypeEnum } from "@core/types";
 import { addToQueue } from "~/lib/ingest.server";
 import { logger } from "~/services/logger.service";
@@ -19,24 +20,24 @@ const SearchParamsSchema = {
       description:
         "Search query optimized for knowledge graph retrieval. Choose the right query structure based on your search intent:\n\n" +
         "1. **Entity-Centric Queries** (Best for graph search):\n" +
-        "   - ✅ GOOD: \"User's preferences for code style and formatting\"\n" +
-        "   - ✅ GOOD: \"Project authentication implementation decisions\"\n" +
-        "   - ❌ BAD: \"user code style\"\n" +
+        '   - ✅ GOOD: "User\'s preferences for code style and formatting"\n' +
+        '   - ✅ GOOD: "Project authentication implementation decisions"\n' +
+        '   - ❌ BAD: "user code style"\n' +
         "   - Format: [Person/Project] + [relationship/attribute] + [context]\n\n" +
         "2. **Multi-Entity Relationship Queries** (Excellent for episode graph):\n" +
-        "   - ✅ GOOD: \"User and team discussions about API design patterns\"\n" +
-        "   - ✅ GOOD: \"relationship between database schema and performance optimization\"\n" +
-        "   - ❌ BAD: \"user team api design\"\n" +
+        '   - ✅ GOOD: "User and team discussions about API design patterns"\n' +
+        '   - ✅ GOOD: "relationship between database schema and performance optimization"\n' +
+        '   - ❌ BAD: "user team api design"\n' +
         "   - Format: [Entity1] + [relationship type] + [Entity2] + [context]\n\n" +
         "3. **Semantic Question Queries** (Good for vector search):\n" +
-        "   - ✅ GOOD: \"What causes authentication errors in production? What are the security requirements?\"\n" +
-        "   - ✅ GOOD: \"How does caching improve API response times compared to direct database queries?\"\n" +
-        "   - ❌ BAD: \"auth errors production\"\n" +
+        '   - ✅ GOOD: "What causes authentication errors in production? What are the security requirements?"\n' +
+        '   - ✅ GOOD: "How does caching improve API response times compared to direct database queries?"\n' +
+        '   - ❌ BAD: "auth errors production"\n' +
         "   - Format: Complete natural questions with full context\n\n" +
         "4. **Concept Exploration Queries** (Good for BFS traversal):\n" +
-        "   - ✅ GOOD: \"concepts and ideas related to database indexing and query optimization\"\n" +
-        "   - ✅ GOOD: \"topics connected to user authentication and session management\"\n" +
-        "   - ❌ BAD: \"database indexing concepts\"\n" +
+        '   - ✅ GOOD: "concepts and ideas related to database indexing and query optimization"\n' +
+        '   - ✅ GOOD: "topics connected to user authentication and session management"\n' +
+        '   - ❌ BAD: "database indexing concepts"\n' +
         "   - Format: [concept] + related/connected + [domain/context]\n\n" +
         "Avoid keyword soup queries - use complete phrases with proper context for best results.",
     },
@@ -151,6 +152,20 @@ export const memoryTools = [
     },
   },
   {
+    name: "get_session_id",
+    description:
+      "Get a new session ID for the MCP connection. USE THIS TOOL: When you need a session ID and don't have one yet. This generates a unique UUID to identify your MCP session. IMPORTANT: If any other tool requires a sessionId parameter and you don't have one, call this tool first to get a session ID. Returns: A UUID string to use as sessionId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        new: {
+          type: "boolean",
+          description: "Set to true to get a new sessionId.",
+        },
+      },
+    },
+  },
+  {
     name: "get_integrations",
     description:
       "List all connected integrations (GitHub, Linear, Slack, etc.). USE THIS TOOL: Before using integration actions to see what's available. WORKFLOW: 1) Call this to see available integrations, 2) Call get_integration_actions with a slug to see what you can do, 3) Call execute_integration_action to do it. Returns: Array with slug, name, accountId, and hasMcp for each integration.",
@@ -162,7 +177,7 @@ export const memoryTools = [
   {
     name: "get_integration_actions",
     description:
-      "Get list of actions available for a specific integration. USE THIS TOOL: After get_integrations to see what operations you can perform. For example, GitHub integration has actions like 'get_pr', 'get_issues', 'create_issue'. HOW TO USE: Provide the integrationSlug from get_integrations (like 'github', 'linear', 'slack'). Returns: Array of actions with name, description, and inputSchema for each.",
+      "Get list of actions available for a specific integration. USE THIS TOOL: After get_integrations to see what operations you can perform. For example, GitHub integration has actions like 'get_pr', 'get_issues', 'create_issue'. HOW TO USE: Provide the integrationSlug from get_integrations (like 'github', 'linear', 'slack').",
     inputSchema: {
       type: "object",
       properties: {
@@ -178,7 +193,7 @@ export const memoryTools = [
   {
     name: "execute_integration_action",
     description:
-      "Execute an action on an integration (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set integrationSlug (like 'github'), 2) Set action name (like 'get_pr'), 3) Set arguments object with required parameters from the action's inputSchema. Returns: Result of the action execution.",
+      "Execute an action on an integration (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set integrationSlug (like 'github'), 2) Set action name (like 'get_pr'), 3) Set arguments object with required parameters from the action's inputSchema.",
     inputSchema: {
       type: "object",
       properties: {
@@ -243,6 +258,8 @@ export async function callMemoryTool(
         return await handleUserProfile(userId);
       case "memory_get_space":
         return await handleGetSpace({ ...args, userId });
+      case "get_session_id":
+        return await handleGetSessionId();
       case "get_integrations":
         return await handleGetIntegrations({ ...args, userId });
       case "get_integration_actions":
@@ -482,6 +499,35 @@ async function handleGetSpace(args: any) {
         {
           type: "text",
           text: `Error getting space: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// Handler for get_session_id
+async function handleGetSessionId() {
+  try {
+    const sessionId = randomUUID();
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ sessionId }),
+        },
+      ],
+      isError: false,
+    };
+  } catch (error) {
+    logger.error(`MCP get session id error: ${error}`);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error generating session ID: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

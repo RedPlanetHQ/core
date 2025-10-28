@@ -1,12 +1,37 @@
 import { logger } from "~/services/logger.service";
 import { fetchAndSaveStdioIntegrations } from "~/trigger/utils/mcp";
-import { initNeo4jSchemaOnce } from "~/lib/neo4j.server";
+import { initNeo4jSchemaOnce, verifyConnectivity } from "~/lib/neo4j.server";
 import { env } from "~/env.server";
 import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
+
+/**
+ * Wait for Neo4j to be ready before initializing schema
+ */
+async function waitForNeo4j(maxRetries = 30, retryDelay = 2000) {
+  logger.info("Waiting for Neo4j to be ready...");
+
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      const connected = await verifyConnectivity();
+      if (connected) {
+        logger.info("✓ Neo4j is ready!");
+        return true;
+      }
+    } catch (error) {
+      // Connection failed, will retry
+    }
+
+    logger.info(`Neo4j not ready, retrying... (${i + 1}/${maxRetries})`);
+    await new Promise((resolve) => setTimeout(resolve, retryDelay));
+  }
+
+  logger.error("Failed to connect to Neo4j after maximum retries");
+  throw new Error("Failed to connect to Neo4j after maximum retries");
+}
 
 /**
  * Initialize all startup services once per server process
@@ -79,6 +104,9 @@ export async function initializeStartupServices() {
 
   try {
     logger.info("Starting application initialization...");
+
+    // Wait for Neo4j to be ready
+    await waitForNeo4j();
 
     // Initialize Neo4j schema
     await initNeo4jSchemaOnce();

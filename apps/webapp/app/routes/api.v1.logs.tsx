@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { prisma } from "~/db.server";
+import { discoverThematicSpaces } from "~/services/clustering.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 // Schema for logs search parameters
@@ -28,6 +29,15 @@ export const loader = createHybridLoaderApiRoute(
     const type = searchParams.type;
     const sessionId = searchParams.sessionId;
     const skip = (page - 1) * limit;
+
+    // Simple - just pass userId
+    const result = await discoverThematicSpaces({
+      userId: "cmc1w8xke000xo51vffqcn2mt",
+    });
+
+    // Access the results
+    console.log(result.proposals); // Space proposals from LLM
+    console.log(result.stats); // Overall statistics
 
     // Get user and workspace in one query
     const user = await prisma.user.findUnique({
