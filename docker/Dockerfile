@@ -79,11 +79,11 @@ COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/pub
 COPY --from=builder --chown=node:node /core/scripts ./scripts
 
 # Install BERT Python dependencies
-COPY --chown=node:node apps/webapp/app/bert/requirements.txt ./apps/webapp/app/bert/requirements.txt
-RUN pip3 install --no-cache-dir -r ./apps/webapp/app/bert/requirements.txt
+COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt
+RUN pip3 install --no-cache-dir -r ./apps/webapp/python/requirements.txt
 
 # Copy BERT scripts
-COPY --chown=node:node apps/webapp/app/bert/main.py ./apps/webapp/app/bert/main.py
+COPY --chown=node:node apps/webapp/python/main.py ./apps/webapp/python/main.py
 
 EXPOSE 3000
 

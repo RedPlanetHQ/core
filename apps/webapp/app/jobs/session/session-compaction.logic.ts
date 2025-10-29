@@ -36,7 +36,7 @@ export interface SessionCompactionResult {
 }
 
 // Zod schema for LLM response validation
-const CompactionResultSchema = z.object({
+export const CompactionResultSchema = z.object({
   summary: z.string().describe("Consolidated narrative of the entire session"),
   confidence: z
     .number()
@@ -45,7 +45,7 @@ const CompactionResultSchema = z.object({
     .describe("Confidence score of the compaction quality"),
 });
 
-const CONFIG = {
+export const CONFIG = {
   minEpisodesForCompaction: 5, // Minimum episodes to trigger compaction
   compactionThreshold: 1, // Trigger after N new episodes
   maxEpisodesPerBatch: 50, // Process in batches if needed

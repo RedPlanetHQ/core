@@ -24,7 +24,7 @@ async function runBertWithTriggerPython(
     `[BERT Topic Analysis] Running with Trigger.dev Python: args=${args.join(" ")}`,
   );
 
-  const result = await python.runScript("./apps/webapp/app/bert/main.py", args);
+  const result = await python.runScript("./python/main.py", args);
   return result.stdout;
 }
 

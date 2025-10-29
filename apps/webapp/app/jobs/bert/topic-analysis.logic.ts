@@ -32,7 +32,7 @@ async function runBertWithExec(
   minTopicSize: number,
   nrTopics?: number,
 ): Promise<string> {
-  let command = `python3 /core/apps/webapp/app/bert/main.py ${userId} --json`;
+  let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
 
   if (minTopicSize) {
     command += ` --min-topic-size ${minTopicSize}`;

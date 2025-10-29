@@ -76,6 +76,11 @@ const IngestSchema = {
       description:
         "The conversation text to store. Include both what the user asked and what you answered. Keep it concise but complete.",
     },
+    sessionId: {
+      type: "string",
+      description:
+        "IMPORTANT: Session ID (UUID) is required to track the conversation session. If you don't have a sessionId in your context, you MUST call the get_session_id tool first to obtain one before calling memory_ingest.",
+    },
     spaceIds: {
       type: "array",
       items: {
@@ -85,14 +90,14 @@ const IngestSchema = {
         "Optional: Array of space UUIDs (from memory_get_spaces). Add this to organize the memory by project. Example: If discussing 'core' project, include the 'core' space ID. Leave empty to store in general memory.",
     },
   },
-  required: ["message"],
+  required: ["message", "sessionId"],
 };
 
 export const memoryTools = [
   {
     name: "memory_ingest",
     description:
-      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
+      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one in your context, call get_session_id tool first to obtain it. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
     inputSchema: IngestSchema,
   },
   {
@@ -177,7 +182,7 @@ export const memoryTools = [
   {
     name: "get_integration_actions",
     description:
-      "Get list of actions available for a specific integration. USE THIS TOOL: After get_integrations to see what operations you can perform. For example, GitHub integration has actions like 'get_pr', 'get_issues', 'create_issue'. HOW TO USE: Provide the integrationSlug from get_integrations (like 'github', 'linear', 'slack').",
+      "Get list of actions available for a specific integration. USE THIS TOOL: After get_integrations to see what operations you can perform. For example, GitHub integration has actions like 'get_pr', 'get_issues', 'create_issue'. HOW TO USE: Provide the integrationSlug from get_integrations (like 'github', 'linear', 'slack'). Returns: Array of actions with name, description, and inputSchema for each.",
     inputSchema: {
       type: "object",
       properties: {
@@ -193,7 +198,7 @@ export const memoryTools = [
   {
     name: "execute_integration_action",
     description:
-      "Execute an action on an integration (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set integrationSlug (like 'github'), 2) Set action name (like 'get_pr'), 3) Set arguments object with required parameters from the action's inputSchema.",
+      "Execute an action on an integration (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set integrationSlug (like 'github'), 2) Set action name (like 'get_pr'), 3) Set arguments object with required parameters from the action's inputSchema. Returns: Result of the action execution.",
     inputSchema: {
       type: "object",
       properties: {
@@ -351,6 +356,7 @@ async function handleMemoryIngest(args: any) {
         source: args.source,
         type: EpisodeTypeEnum.CONVERSATION,
         spaceIds,
+        sessionId: args.sessionId,
       },
       args.userId,
     );
