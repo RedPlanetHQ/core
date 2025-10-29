@@ -80,7 +80,7 @@
     "@tiptap/pm": "^2.11.9",
     "@tiptap/react": "^2.11.9",
     "@tiptap/starter-kit": "2.11.9",
-    "@trigger.dev/python": "^4.0.5",
+    "@trigger.dev/python": "4.0.4",
     "@trigger.dev/react-hooks": "4.0.4",
     "@trigger.dev/sdk": "4.0.4",
     "ai": "5.0.78",

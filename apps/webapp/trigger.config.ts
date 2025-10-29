@@ -4,7 +4,7 @@ import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 import { pythonExtension } from "@trigger.dev/python/extension";
 
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID as string,
+  project: "proj_dtctdgjvszcisssppudu",
   runtime: "node",
   logLevel: "log",
   // The max compute seconds a task is allowed to run. If the task run exceeds this duration, it will be stopped.
@@ -24,6 +24,9 @@ export default defineConfig({
   dirs: ["./app/trigger"],
   build: {
     extensions: [
+      pythonExtension({
+        scripts: ["./python/*.py"],
+      }),
       syncEnvVars(() => ({
         // ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY as string,
         // API_BASE_URL: process.env.API_BASE_URL as string,
@@ -38,10 +41,6 @@ export default defineConfig({
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",
-      }),
-      pythonExtension({
-        scripts: ["./app/bert/**/*.py"],
-        requirementsFile: "./app/bert/requirements.txt",
       }),
     ],
   },

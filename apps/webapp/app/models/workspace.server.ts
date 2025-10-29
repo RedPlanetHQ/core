@@ -29,12 +29,6 @@ Exclude:
 • Anything not explicitly consented to share
 don't store anything the user did not explicitly consent to share.`;
 
-const githubDescription = `Everything related to my GitHub work - repos I'm working on, projects I contribute to, code I'm writing, PRs I'm reviewing. Basically my coding life on GitHub.`;
-
-const healthDescription = `My health and wellness stuff - how I'm feeling, what I'm learning about my body, experiments I'm trying, patterns I notice. Whatever matters to me about staying healthy.`;
-
-const fitnessDescription = `My workouts and training - what I'm doing at the gym, runs I'm going on, progress I'm making, goals I'm chasing. Anything related to physical exercise and getting stronger.`;
-
 export async function createWorkspace(
   input: CreateWorkspaceDto,
 ): Promise<Workspace> {
@@ -56,32 +50,7 @@ export async function createWorkspace(
   await ensureBillingInitialized(workspace.id);
 
   // Create default spaces
-  await Promise.all([
-    spaceService.createSpace({
-      name: "Profile",
-      description: profileRule,
-      userId: input.userId,
-      workspaceId: workspace.id,
-    }),
-    spaceService.createSpace({
-      name: "GitHub",
-      description: githubDescription,
-      userId: input.userId,
-      workspaceId: workspace.id,
-    }),
-    spaceService.createSpace({
-      name: "Health",
-      description: healthDescription,
-      userId: input.userId,
-      workspaceId: workspace.id,
-    }),
-    spaceService.createSpace({
-      name: "Fitness",
-      description: fitnessDescription,
-      userId: input.userId,
-      workspaceId: workspace.id,
-    }),
-  ]);
+  await Promise.all([]);
 
   try {
     const response = await sendEmail({ email: "welcome", to: user.email });

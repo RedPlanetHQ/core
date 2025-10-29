@@ -152,15 +152,12 @@ export async function processTopicAnalysis(
             // Create new space (creates in both PostgreSQL and Neo4j)
             // Skip automatic space assignment since we're manually assigning from BERT topics
             const spaceService = new SpaceService();
-            const newSpace = await spaceService.createSpace(
-              {
-                name: proposal.name,
-                description: proposal.intent,
-                userId,
-                workspaceId,
-              },
-              { skipAutoAssignment: true },
-            );
+            const newSpace = await spaceService.createSpace({
+              name: proposal.name,
+              description: proposal.intent,
+              userId,
+              workspaceId,
+            });
             spaceId = newSpace.id;
             logger.info("[BERT Topic Analysis] Created new space", {
               spaceName: proposal.name,

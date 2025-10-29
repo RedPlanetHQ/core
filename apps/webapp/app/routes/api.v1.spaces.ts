@@ -7,7 +7,10 @@ import { SpaceService } from "~/services/space.server";
 import { json } from "@remix-run/node";
 import { prisma } from "~/db.server";
 import { apiCors } from "~/utils/apiCors";
-import { isTriggerDeployment } from "~/lib/queue-adapter.server";
+import {
+  enqueueSpaceAssignment,
+  isTriggerDeployment,
+} from "~/lib/queue-adapter.server";
 
 const spaceService = new SpaceService();
 
@@ -72,6 +75,14 @@ const { action } = createHybridActionApiRoute(
         description: body.description,
         userId: authentication.userId,
         workspaceId: user.Workspace.id,
+      });
+
+      await enqueueSpaceAssignment({
+        userId: user.id,
+        workspaceId: user.Workspace.id,
+        mode: "new_space",
+        newSpaceId: space.id,
+        batchSize: 25, // Analyze recent statements for the new space
       });
 
       return json({ space, success: true });

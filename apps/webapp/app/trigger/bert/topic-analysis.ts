@@ -14,13 +14,15 @@ async function runBertWithTriggerPython(
   minTopicSize: number,
   nrTopics?: number,
 ): Promise<string> {
-  const args = [userId, "--json", "--min-topic-size", String(minTopicSize)];
+  const args = [userId, "--json"];
 
   if (nrTopics) {
     args.push("--nr-topics", String(nrTopics));
   }
 
-  console.log(`[BERT Topic Analysis] Running with Trigger.dev Python: args=${args.join(" ")}`);
+  console.log(
+    `[BERT Topic Analysis] Running with Trigger.dev Python: args=${args.join(" ")}`,
+  );
 
   const result = await python.runScript("./apps/webapp/app/bert/main.py", args);
   return result.stdout;

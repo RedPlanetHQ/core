@@ -17,16 +17,12 @@ import {
 } from "./graphModels/space";
 import { prisma } from "~/trigger/utils/prisma";
 import { trackFeatureUsage } from "./telemetry.server";
-import { enqueueSpaceAssignment } from "~/lib/queue-adapter.server";
 
 export class SpaceService {
   /**
    * Create a new space for a user
    */
-  async createSpace(
-    params: CreateSpaceParams,
-    options?: { skipAutoAssignment?: boolean },
-  ): Promise<Space> {
+  async createSpace(params: CreateSpaceParams): Promise<Space> {
     logger.info(`Creating space "${params.name}" for user ${params.userId}`);
 
     // Validate input
@@ -69,27 +65,6 @@ export class SpaceService {
 
     // Track space creation
     trackFeatureUsage("space_created", params.userId).catch(console.error);
-
-    // Trigger automatic LLM assignment for the new space (unless skipped)
-    if (!options?.skipAutoAssignment) {
-      try {
-        await enqueueSpaceAssignment({
-          userId: params.userId,
-          workspaceId: params.workspaceId,
-          mode: "new_space",
-          newSpaceId: space.id,
-          batchSize: 25, // Analyze recent statements for the new space
-        });
-
-        logger.info(`Triggered LLM space assignment for new space ${space.id}`);
-      } catch (error) {
-        // Don't fail space creation if LLM assignment fails
-        logger.warn(
-          `Failed to trigger LLM assignment for space ${space.id}:`,
-          error as Record<string, unknown>,
-        );
-      }
-    }
 
     return space;
   }
