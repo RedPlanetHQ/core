@@ -24,9 +24,14 @@ import {
   type SessionCompactionPayload,
 } from "~/jobs/session/session-compaction.logic";
 import {
+  processTopicAnalysis,
+  type TopicAnalysisPayload,
+} from "~/jobs/bert/topic-analysis.logic";
+import {
   enqueueIngestEpisode,
   enqueueSpaceAssignment,
   enqueueSessionCompaction,
+  enqueueBertTopicAnalysis,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 
@@ -47,6 +52,7 @@ export const ingestWorker = new Worker(
       // Callbacks to enqueue follow-up jobs
       enqueueSpaceAssignment,
       enqueueSessionCompaction,
+      enqueueBertTopicAnalysis,
     );
   },
   {
@@ -109,6 +115,22 @@ export const sessionCompactionWorker = new Worker(
 );
 
 /**
+ * BERT topic analysis worker
+ * Handles CPU-intensive topic modeling
+ */
+export const bertTopicWorker = new Worker(
+  "bert-topic-queue",
+  async (job) => {
+    const payload = job.data as TopicAnalysisPayload;
+    return await processTopicAnalysis(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 2, // Process up to 2 analyses in parallel (CPU-intensive)
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -116,8 +138,8 @@ export async function closeAllWorkers(): Promise<void> {
     ingestWorker.close(),
     documentIngestWorker.close(),
     conversationTitleWorker.close(),
-
     sessionCompactionWorker.close(),
+    bertTopicWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

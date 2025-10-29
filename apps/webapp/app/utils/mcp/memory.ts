@@ -19,24 +19,24 @@ const SearchParamsSchema = {
       description:
         "Search query optimized for knowledge graph retrieval. Choose the right query structure based on your search intent:\n\n" +
         "1. **Entity-Centric Queries** (Best for graph search):\n" +
-        "   - ✅ GOOD: \"User's preferences for code style and formatting\"\n" +
-        "   - ✅ GOOD: \"Project authentication implementation decisions\"\n" +
-        "   - ❌ BAD: \"user code style\"\n" +
+        '   - ✅ GOOD: "User\'s preferences for code style and formatting"\n' +
+        '   - ✅ GOOD: "Project authentication implementation decisions"\n' +
+        '   - ❌ BAD: "user code style"\n' +
         "   - Format: [Person/Project] + [relationship/attribute] + [context]\n\n" +
         "2. **Multi-Entity Relationship Queries** (Excellent for episode graph):\n" +
-        "   - ✅ GOOD: \"User and team discussions about API design patterns\"\n" +
-        "   - ✅ GOOD: \"relationship between database schema and performance optimization\"\n" +
-        "   - ❌ BAD: \"user team api design\"\n" +
+        '   - ✅ GOOD: "User and team discussions about API design patterns"\n' +
+        '   - ✅ GOOD: "relationship between database schema and performance optimization"\n' +
+        '   - ❌ BAD: "user team api design"\n' +
         "   - Format: [Entity1] + [relationship type] + [Entity2] + [context]\n\n" +
         "3. **Semantic Question Queries** (Good for vector search):\n" +
-        "   - ✅ GOOD: \"What causes authentication errors in production? What are the security requirements?\"\n" +
-        "   - ✅ GOOD: \"How does caching improve API response times compared to direct database queries?\"\n" +
-        "   - ❌ BAD: \"auth errors production\"\n" +
+        '   - ✅ GOOD: "What causes authentication errors in production? What are the security requirements?"\n' +
+        '   - ✅ GOOD: "How does caching improve API response times compared to direct database queries?"\n' +
+        '   - ❌ BAD: "auth errors production"\n' +
         "   - Format: Complete natural questions with full context\n\n" +
         "4. **Concept Exploration Queries** (Good for BFS traversal):\n" +
-        "   - ✅ GOOD: \"concepts and ideas related to database indexing and query optimization\"\n" +
-        "   - ✅ GOOD: \"topics connected to user authentication and session management\"\n" +
-        "   - ❌ BAD: \"database indexing concepts\"\n" +
+        '   - ✅ GOOD: "concepts and ideas related to database indexing and query optimization"\n' +
+        '   - ✅ GOOD: "topics connected to user authentication and session management"\n' +
+        '   - ❌ BAD: "database indexing concepts"\n' +
         "   - Format: [concept] + related/connected + [domain/context]\n\n" +
         "Avoid keyword soup queries - use complete phrases with proper context for best results.",
     },
@@ -462,7 +462,7 @@ async function handleGetSpace(args: any) {
     const spaceDetails = {
       id: space.id,
       name: space.name,
-      description: space.description,
+      summary: space.summary,
     };
 
     return {

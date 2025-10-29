@@ -163,6 +163,39 @@ export async function enqueueSpaceAssignment(
   }
 }
 
+/**
+ * Enqueue BERT topic analysis job
+ */
+export async function enqueueBertTopicAnalysis(payload: {
+  userId: string;
+  minTopicSize?: number;
+  nrTopics?: number;
+}): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { bertTopicAnalysisTask } = await import(
+      "~/trigger/bert/topic-analysis"
+    );
+    const handler = await bertTopicAnalysisTask.trigger(payload, {
+      queue: "bert-topic-analysis",
+      concurrencyKey: payload.userId,
+      tags: [payload.userId, "bert-analysis"],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { bertTopicQueue } = await import("~/bullmq/queues");
+    const job = await bertTopicQueue.add("topic-analysis", payload, {
+      jobId: `bert-${payload.userId}-${Date.now()}`,
+      attempts: 2, // Only 2 attempts for expensive operations
+      backoff: { type: "exponential", delay: 5000 },
+      timeout: 300000, // 5 minute timeout
+    });
+    return { id: job.id };
+  }
+}
+
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };

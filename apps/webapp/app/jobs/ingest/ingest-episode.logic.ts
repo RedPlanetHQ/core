@@ -7,6 +7,10 @@ import { prisma } from "~/trigger/utils/prisma";
 import { EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
+import {
+  shouldTriggerTopicAnalysis,
+  updateLastTopicAnalysisTime,
+} from "~/services/bertTopicAnalysis.server";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
@@ -54,6 +58,11 @@ export async function processEpisodeIngestion(
     userId: string;
     sessionId: string;
     source: string;
+  }) => Promise<any>,
+  enqueueBertTopicAnalysis?: (params: {
+    userId: string;
+    minTopicSize?: number;
+    nrTopics?: number;
   }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
   try {
@@ -247,6 +256,43 @@ export async function processEpisodeIngestion(
         error: compactionError,
         userId: payload.userId,
         sessionId: episodeBody.sessionId,
+      });
+    }
+
+    // Auto-trigger BERT topic analysis if threshold met (20+ new episodes)
+    try {
+      if (
+        currentStatus === IngestionStatus.COMPLETED &&
+        enqueueBertTopicAnalysis
+      ) {
+        const shouldTrigger = await shouldTriggerTopicAnalysis(
+          payload.userId,
+          payload.workspaceId,
+        );
+
+        if (shouldTrigger) {
+          logger.info(
+            `Triggering BERT topic analysis after reaching 20+ new episodes`,
+            {
+              userId: payload.userId,
+              workspaceId: payload.workspaceId,
+            },
+          );
+
+          await enqueueBertTopicAnalysis({
+            userId: payload.userId,
+            minTopicSize: 10,
+          });
+
+          // Update the last analysis timestamp
+          await updateLastTopicAnalysisTime(payload.workspaceId);
+        }
+      }
+    } catch (topicAnalysisError) {
+      // Don't fail the ingestion if topic analysis fails
+      logger.warn(`Failed to trigger topic analysis after ingestion:`, {
+        error: topicAnalysisError,
+        userId: payload.userId,
       });
     }
 

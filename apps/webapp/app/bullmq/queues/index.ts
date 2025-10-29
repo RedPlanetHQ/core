@@ -92,3 +92,26 @@ export const sessionCompactionQueue = new Queue("session-compaction-queue", {
     },
   },
 });
+
+/**
+ * BERT topic analysis queue
+ * Handles CPU-intensive topic modeling on user episodes
+ */
+export const bertTopicQueue = new Queue("bert-topic-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 2, // Only 2 attempts due to long runtime
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    timeout: 300000, // 5 minute timeout
+    removeOnComplete: {
+      age: 7200, // Keep completed jobs for 2 hours
+      count: 100,
+    },
+    removeOnFail: {
+      age: 172800, // Keep failed jobs for 48 hours (for debugging)
+    },
+  },
+});
