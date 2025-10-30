@@ -18,24 +18,39 @@ import {
   processConversationTitleCreation,
   type CreateConversationTitlePayload,
 } from "~/jobs/conversation/create-title.logic";
-
 import {
   processSessionCompaction,
   type SessionCompactionPayload,
 } from "~/jobs/session/session-compaction.logic";
 import {
+  processTopicAnalysis,
+  type TopicAnalysisPayload,
+} from "~/jobs/bert/topic-analysis.logic";
+
+import {
   enqueueIngestEpisode,
   enqueueSpaceAssignment,
   enqueueSessionCompaction,
+  enqueueBertTopicAnalysis,
+  enqueueSpaceSummary,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
+import {
+  processSpaceAssignment,
+  type SpaceAssignmentPayload,
+} from "~/jobs/spaces/space-assignment.logic";
+import {
+  processSpaceSummary,
+  type SpaceSummaryPayload,
+} from "~/jobs/spaces/space-summary.logic";
 
 /**
  * Episode ingestion worker
- * Processes individual episode ingestion jobs with per-user concurrency
+ * Processes individual episode ingestion jobs with global concurrency
  *
- * Note: Per-user concurrency is achieved by using userId as part of the jobId
- * when adding jobs to the queue, ensuring only one job per user runs at a time
+ * Note: BullMQ uses global concurrency limit (5 jobs max).
+ * Trigger.dev uses per-user concurrency via concurrencyKey.
+ * For most open-source deployments, global concurrency is sufficient.
  */
 export const ingestWorker = new Worker(
   "ingest-queue",
@@ -47,11 +62,12 @@ export const ingestWorker = new Worker(
       // Callbacks to enqueue follow-up jobs
       enqueueSpaceAssignment,
       enqueueSessionCompaction,
+      enqueueBertTopicAnalysis,
     );
   },
   {
     connection: getRedisConnection(),
-    concurrency: 5, // Process up to 5 jobs in parallel
+    concurrency: 1, // Global limit: process up to 1 jobs in parallel
   },
 );
 
@@ -109,6 +125,65 @@ export const sessionCompactionWorker = new Worker(
 );
 
 /**
+ * BERT topic analysis worker
+ * Handles CPU-intensive topic modeling
+ */
+export const bertTopicWorker = new Worker(
+  "bert-topic-queue",
+  async (job) => {
+    const payload = job.data as TopicAnalysisPayload;
+    return await processTopicAnalysis(
+      payload,
+      // Callback to enqueue space summary
+      enqueueSpaceSummary,
+    );
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 2, // Process up to 2 analyses in parallel (CPU-intensive)
+  },
+);
+
+/**
+ * Space assignment worker
+ * Handles assigning episodes to spaces based on semantic matching
+ *
+ * Note: Global concurrency of 1 ensures sequential processing.
+ * Trigger.dev uses per-user concurrency via concurrencyKey.
+ */
+export const spaceAssignmentWorker = new Worker(
+  "space-assignment-queue",
+  async (job) => {
+    const payload = job.data as SpaceAssignmentPayload;
+    return await processSpaceAssignment(
+      payload,
+      // Callback to enqueue space summary
+      enqueueSpaceSummary,
+    );
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 1, // Global limit: process one job at a time
+  },
+);
+
+/**
+ * Space summary worker
+ * Handles generating summaries for spaces
+ */
+export const spaceSummaryWorker = new Worker(
+  "space-summary-queue",
+  async (job) => {
+    const payload = job.data as SpaceSummaryPayload;
+    return await processSpaceSummary(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 1, // Process one space summary at a time
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -116,8 +191,10 @@ export async function closeAllWorkers(): Promise<void> {
     ingestWorker.close(),
     documentIngestWorker.close(),
     conversationTitleWorker.close(),
-
     sessionCompactionWorker.close(),
+    bertTopicWorker.close(),
+    spaceSummaryWorker.close(),
+    spaceAssignmentWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

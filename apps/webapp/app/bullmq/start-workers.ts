@@ -66,7 +66,6 @@ export async function initWorkers(): Promise<void> {
         queue: conversationTitleQueue,
         name: "conversation-title",
       },
-
       {
         worker: sessionCompactionWorker,
         queue: sessionCompactionQueue,

@@ -694,6 +694,8 @@ model Workspace {
   slug String  @unique
   icon String?
 
+  metadata Json @default("{}")
+
   integrations String[]
 
   userId                  String?                   @unique

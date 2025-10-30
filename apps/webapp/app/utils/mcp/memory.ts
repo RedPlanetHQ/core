@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { EpisodeTypeEnum } from "@core/types";
 import { addToQueue } from "~/lib/ingest.server";
 import { logger } from "~/services/logger.service";
@@ -19,24 +20,24 @@ const SearchParamsSchema = {
       description:
         "Search query optimized for knowledge graph retrieval. Choose the right query structure based on your search intent:\n\n" +
         "1. **Entity-Centric Queries** (Best for graph search):\n" +
-        "   - ✅ GOOD: \"User's preferences for code style and formatting\"\n" +
-        "   - ✅ GOOD: \"Project authentication implementation decisions\"\n" +
-        "   - ❌ BAD: \"user code style\"\n" +
+        '   - ✅ GOOD: "User\'s preferences for code style and formatting"\n' +
+        '   - ✅ GOOD: "Project authentication implementation decisions"\n' +
+        '   - ❌ BAD: "user code style"\n' +
         "   - Format: [Person/Project] + [relationship/attribute] + [context]\n\n" +
         "2. **Multi-Entity Relationship Queries** (Excellent for episode graph):\n" +
-        "   - ✅ GOOD: \"User and team discussions about API design patterns\"\n" +
-        "   - ✅ GOOD: \"relationship between database schema and performance optimization\"\n" +
-        "   - ❌ BAD: \"user team api design\"\n" +
+        '   - ✅ GOOD: "User and team discussions about API design patterns"\n' +
+        '   - ✅ GOOD: "relationship between database schema and performance optimization"\n' +
+        '   - ❌ BAD: "user team api design"\n' +
         "   - Format: [Entity1] + [relationship type] + [Entity2] + [context]\n\n" +
         "3. **Semantic Question Queries** (Good for vector search):\n" +
-        "   - ✅ GOOD: \"What causes authentication errors in production? What are the security requirements?\"\n" +
-        "   - ✅ GOOD: \"How does caching improve API response times compared to direct database queries?\"\n" +
-        "   - ❌ BAD: \"auth errors production\"\n" +
+        '   - ✅ GOOD: "What causes authentication errors in production? What are the security requirements?"\n' +
+        '   - ✅ GOOD: "How does caching improve API response times compared to direct database queries?"\n' +
+        '   - ❌ BAD: "auth errors production"\n' +
         "   - Format: Complete natural questions with full context\n\n" +
         "4. **Concept Exploration Queries** (Good for BFS traversal):\n" +
-        "   - ✅ GOOD: \"concepts and ideas related to database indexing and query optimization\"\n" +
-        "   - ✅ GOOD: \"topics connected to user authentication and session management\"\n" +
-        "   - ❌ BAD: \"database indexing concepts\"\n" +
+        '   - ✅ GOOD: "concepts and ideas related to database indexing and query optimization"\n' +
+        '   - ✅ GOOD: "topics connected to user authentication and session management"\n' +
+        '   - ❌ BAD: "database indexing concepts"\n' +
         "   - Format: [concept] + related/connected + [domain/context]\n\n" +
         "Avoid keyword soup queries - use complete phrases with proper context for best results.",
     },
@@ -75,6 +76,11 @@ const IngestSchema = {
       description:
         "The conversation text to store. Include both what the user asked and what you answered. Keep it concise but complete.",
     },
+    sessionId: {
+      type: "string",
+      description:
+        "IMPORTANT: Session ID (UUID) is required to track the conversation session. If you don't have a sessionId in your context, you MUST call the get_session_id tool first to obtain one before calling memory_ingest.",
+    },
     spaceIds: {
       type: "array",
       items: {
@@ -84,14 +90,14 @@ const IngestSchema = {
         "Optional: Array of space UUIDs (from memory_get_spaces). Add this to organize the memory by project. Example: If discussing 'core' project, include the 'core' space ID. Leave empty to store in general memory.",
     },
   },
-  required: ["message"],
+  required: ["message", "sessionId"],
 };
 
 export const memoryTools = [
   {
     name: "memory_ingest",
     description:
-      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
+      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one in your context, call get_session_id tool first to obtain it. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
     inputSchema: IngestSchema,
   },
   {
@@ -146,6 +152,20 @@ export const memoryTools = [
           type: "string",
           description:
             "Name of the space (easier option). Examples: 'core', 'Profile', 'GitHub', 'Health'",
+        },
+      },
+    },
+  },
+  {
+    name: "get_session_id",
+    description:
+      "Get a new session ID for the MCP connection. USE THIS TOOL: When you need a session ID and don't have one yet. This generates a unique UUID to identify your MCP session. IMPORTANT: If any other tool requires a sessionId parameter and you don't have one, call this tool first to get a session ID. Returns: A UUID string to use as sessionId.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        new: {
+          type: "boolean",
+          description: "Set to true to get a new sessionId.",
         },
       },
     },
@@ -243,6 +263,8 @@ export async function callMemoryTool(
         return await handleUserProfile(userId);
       case "memory_get_space":
         return await handleGetSpace({ ...args, userId });
+      case "get_session_id":
+        return await handleGetSessionId();
       case "get_integrations":
         return await handleGetIntegrations({ ...args, userId });
       case "get_integration_actions":
@@ -334,6 +356,7 @@ async function handleMemoryIngest(args: any) {
         source: args.source,
         type: EpisodeTypeEnum.CONVERSATION,
         spaceIds,
+        sessionId: args.sessionId,
       },
       args.userId,
     );
@@ -462,7 +485,7 @@ async function handleGetSpace(args: any) {
     const spaceDetails = {
       id: space.id,
       name: space.name,
-      description: space.description,
+      summary: space.summary,
     };
 
     return {
@@ -482,6 +505,35 @@ async function handleGetSpace(args: any) {
         {
           type: "text",
           text: `Error getting space: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// Handler for get_session_id
+async function handleGetSessionId() {
+  try {
+    const sessionId = randomUUID();
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify({ sessionId }),
+        },
+      ],
+      isError: false,
+    };
+  } catch (error) {
+    logger.error(`MCP get session id error: ${error}`);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error generating session ID: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

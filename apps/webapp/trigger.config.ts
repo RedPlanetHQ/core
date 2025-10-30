@@ -1,6 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
+import { pythonExtension } from "@trigger.dev/python/extension";
 
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_ID as string,
@@ -23,6 +24,9 @@ export default defineConfig({
   dirs: ["./app/trigger"],
   build: {
     extensions: [
+      pythonExtension({
+        scripts: ["./python/*.py"],
+      }),
       syncEnvVars(() => ({
         // ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY as string,
         // API_BASE_URL: process.env.API_BASE_URL as string,

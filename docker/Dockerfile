@@ -55,7 +55,16 @@ RUN pnpm run build --filter=webapp...
 
 # Runner
 FROM ${NODE_IMAGE} AS runner
-RUN apt-get update && apt-get install -y openssl netcat-openbsd ca-certificates
+RUN apt-get update && apt-get install -y \
+    openssl \
+    netcat-openbsd \
+    ca-certificates \
+    python3 \
+    python3-pip \
+    python3-venv \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /core
 RUN corepack enable
 ENV NODE_ENV production
@@ -68,6 +77,13 @@ COPY --from=builder --chown=node:node /core/apps/webapp/server.js ./apps/webapp/
 COPY --from=builder --chown=node:node /core/apps/webapp/build ./apps/webapp/build
 COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /core/scripts ./scripts
+
+# Install BERT Python dependencies
+COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt
+RUN pip3 install --no-cache-dir -r ./apps/webapp/python/requirements.txt
+
+# Copy BERT scripts
+COPY --chown=node:node apps/webapp/python/main.py ./apps/webapp/python/main.py
 
 EXPOSE 3000
 

@@ -16,8 +16,6 @@ import {
   updateSpace,
 } from "./graphModels/space";
 import { prisma } from "~/trigger/utils/prisma";
-import { trackFeatureUsage } from "./telemetry.server";
-import { enqueueSpaceAssignment } from "~/lib/queue-adapter.server";
 
 export class SpaceService {
   /**
@@ -65,26 +63,7 @@ export class SpaceService {
     logger.info(`Created space ${space.id} successfully`);
 
     // Track space creation
-    trackFeatureUsage("space_created", params.userId).catch(console.error);
-
-    // Trigger automatic LLM assignment for the new space
-    try {
-      await enqueueSpaceAssignment({
-        userId: params.userId,
-        workspaceId: params.workspaceId,
-        mode: "new_space",
-        newSpaceId: space.id,
-        batchSize: 25, // Analyze recent statements for the new space
-      });
-
-      logger.info(`Triggered LLM space assignment for new space ${space.id}`);
-    } catch (error) {
-      // Don't fail space creation if LLM assignment fails
-      logger.warn(
-        `Failed to trigger LLM assignment for space ${space.id}:`,
-        error as Record<string, unknown>,
-      );
-    }
+    // trackFeatureUsage("space_created", params.userId).catch(console.error);
 
     return space;
   }
@@ -196,9 +175,6 @@ export class SpaceService {
     } catch (e) {
       logger.info(`Nothing to update to graph`);
     }
-
-    // Track space update
-    trackFeatureUsage("space_updated", userId).catch(console.error);
 
     logger.info(`Updated space ${spaceId} successfully`);
     return space;
