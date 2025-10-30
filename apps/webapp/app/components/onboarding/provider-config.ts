@@ -1,6 +1,13 @@
 import { Provider, type ProviderConfig } from "./types";
 
 export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
+  [Provider.CHATGPT]: {
+    id: Provider.CHATGPT,
+    name: "ChatGPT",
+    description: "Connect ChatGPT to CORE's memory system via browser extension",
+    docsUrl: "https://docs.heysol.ai/providers/browser-extension",
+    icon: "chatgpt",
+  },
   [Provider.CLAUDE_CODE]: {
     id: Provider.CLAUDE_CODE,
     name: "Claude Code CLI",
@@ -15,12 +22,26 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     docsUrl: "https://docs.heysol.ai/providers/claude",
     icon: "claude",
   },
+  [Provider.CODEX]: {
+    id: Provider.CODEX,
+    name: "Codex",
+    description: "Connect your Codex CLI to CORE's memory system",
+    docsUrl: "https://docs.heysol.ai/providers/codex",
+    icon: "codex",
+  },
   [Provider.CURSOR]: {
     id: Provider.CURSOR,
     name: "Cursor",
     description: "Connect your Cursor Desktop app to CORE's memory system",
     docsUrl: "https://docs.heysol.ai/providers/cursor",
     icon: "cursor",
+  },
+  [Provider.GEMINI]: {
+    id: Provider.GEMINI,
+    name: "Gemini",
+    description: "Connect Gemini to CORE's memory system via browser extension",
+    docsUrl: "https://docs.heysol.ai/providers/browser-extension",
+    icon: "gemini",
   },
   [Provider.KILO_CODE]: {
     id: Provider.KILO_CODE,
@@ -35,6 +56,13 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     description: "Connect your VS Code editor to CORE's memory system via MCP",
     docsUrl: "https://docs.heysol.ai/providers/vscode",
     icon: "vscode",
+  },
+  [Provider.WINDSURF]: {
+    id: Provider.WINDSURF,
+    name: "Windsurf",
+    description: "Connect your Windsurf editor to CORE's memory system via MCP",
+    docsUrl: "https://docs.heysol.ai/providers/windsurf",
+    icon: "windsurf",
   },
   [Provider.ZED]: {
     id: Provider.ZED,
