@@ -6,6 +6,7 @@ import { IngestionStep } from "./ingestion-step";
 import { VerificationStep } from "./verification-step";
 import { PROVIDER_CONFIGS } from "./provider-config";
 import { Progress } from "../ui/progress";
+import { Button } from "../ui/button";
 
 interface OnboardingModalProps {
   isOpen: boolean;
@@ -108,7 +109,20 @@ export function OnboardingModal({
   };
 
   const handleComplete = () => {
+    // Mark onboarding as completed in localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("onboarding_completed", "true");
+    }
     setCurrentStep(OnboardingStep.COMPLETE);
+    onComplete();
+    onClose();
+  };
+
+  const handleSkip = () => {
+    // Mark onboarding as completed in localStorage
+    if (typeof window !== "undefined") {
+      localStorage.setItem("onboarding_completed", "true");
+    }
     onComplete();
     onClose();
   };
@@ -179,7 +193,17 @@ export function OnboardingModal({
       <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto p-4">
         <DialogHeader>
           <div className="space-y-3">
-            <DialogTitle className="text-2xl">Welcome to Core</DialogTitle>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-2xl">Welcome to Core</DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleSkip}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                Skip
+              </Button>
+            </div>
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <p className="text-muted-foreground text-sm">
