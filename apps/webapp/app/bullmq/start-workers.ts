@@ -15,12 +15,18 @@ import {
   conversationTitleWorker,
   sessionCompactionWorker,
   closeAllWorkers,
+  bertTopicWorker,
+  spaceAssignmentWorker,
+  spaceSummaryWorker,
 } from "./workers";
 import {
   ingestQueue,
   documentIngestQueue,
   conversationTitleQueue,
   sessionCompactionQueue,
+  bertTopicQueue,
+  spaceAssignmentQueue,
+  spaceSummaryQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -52,6 +58,16 @@ export async function initWorkers(): Promise<void> {
     "session-compaction",
   );
 
+  setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
+
+  setupWorkerLogging(
+    spaceAssignmentWorker,
+    spaceAssignmentQueue,
+    "space-assignment",
+  );
+
+  setupWorkerLogging(spaceSummaryWorker, spaceSummaryQueue, "space-summary");
+
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
     [
@@ -70,6 +86,24 @@ export async function initWorkers(): Promise<void> {
         worker: sessionCompactionWorker,
         queue: sessionCompactionQueue,
         name: "session-compaction",
+      },
+
+      {
+        worker: bertTopicWorker,
+        queue: bertTopicQueue,
+        name: "bert-topic",
+      },
+
+      {
+        worker: spaceAssignmentWorker,
+        queue: spaceAssignmentQueue,
+        name: "space-assignment",
+      },
+
+      {
+        worker: spaceSummaryWorker,
+        queue: spaceAssignmentQueue,
+        name: "space-summary",
       },
     ],
     60000, // Log metrics every 60 seconds
