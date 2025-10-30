@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-webapp:
-    runs-on: [self-hosted, aws, spot]
+    runs-on: self-hosted
 
     steps:
       - uses: actions/checkout@v4
