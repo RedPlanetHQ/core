@@ -1,9 +1,13 @@
 export enum Provider {
+  CHATGPT = "chatgpt",
   CLAUDE_CODE = "claude-code",
   CLAUDE = "claude",
+  CODEX = "codex",
   CURSOR = "cursor",
+  GEMINI = "gemini",
   KILO_CODE = "kilo-code",
   VSCODE = "vscode",
+  WINDSURF = "windsurf",
   ZED = "zed",
 }
 

@@ -9,6 +9,10 @@ import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
 import { Claude } from "./icons/claude";
 import { Cline } from "./icons/cline";
+import { Codex } from "./icons/codex";
+import { ChatGPT } from "./icons/chatgpt";
+import { Gemini } from "./icons/gemini";
+import { Windsurf } from "./icons/windsurf";
 import { VSCode } from "./icons/vscode";
 import { Obsidian } from "./icons/obsidian";
 import { Figma } from "./icons/figma";
@@ -25,6 +29,10 @@ export const ICON_MAPPING = {
   cursor: Cursor,
   claude: Claude,
   cline: Cline,
+  codex: Codex,
+  chatgpt: ChatGPT,
+  gemini: Gemini,
+  windsurf: Windsurf,
   vscode: VSCode,
   obsidian: Obsidian,
   figma: Figma,
