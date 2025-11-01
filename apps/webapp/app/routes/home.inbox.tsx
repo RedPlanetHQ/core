@@ -38,7 +38,14 @@ export default function LogsAll() {
 
   useEffect(() => {
     if (!isLoading && logs && logs.length === 1) {
-      setOnboarding(true);
+      // Check if onboarding has been completed before
+      const hasCompletedOnboarding =
+        typeof window !== "undefined" &&
+        localStorage.getItem("onboarding_completed") === "true";
+
+      if (!hasCompletedOnboarding) {
+        setOnboarding(true);
+      }
     }
   }, [logs.length, isLoading]);
 
