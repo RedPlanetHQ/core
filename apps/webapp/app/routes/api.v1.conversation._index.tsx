@@ -50,8 +50,18 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const randomKeyName = `chat_${nanoid(10)}`;
-    const pat = await getOrCreatePersonalAccessToken({
+    const randomKeyName = `chat_local`;
+
+    let pat = await getOrCreatePersonalAccessToken({
+      name: randomKeyName,
+      userId: authentication.userId,
+    });
+
+    if (!pat.token) {
+      await deletePersonalAccessToken(pat.id);
+    }
+
+    pat = await getOrCreatePersonalAccessToken({
       name: randomKeyName,
       userId: authentication.userId,
     });
