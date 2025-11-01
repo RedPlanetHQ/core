@@ -59,6 +59,7 @@ const { loader, action } = createHybridActionApiRoute(
     const message = body.message.parts[0].text;
     const id = body.message.id;
     const apiEndpoint = `${env.APP_ORIGIN}/api/v1/mcp?source=core`;
+    console.log(apiEndpoint);
     const url = new URL(apiEndpoint);
 
     const mcpClient = await createMCPClient({

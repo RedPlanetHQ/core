@@ -6,7 +6,6 @@ import {
 } from "~/jobs/ingest/ingest-episode.logic";
 import { triggerSpaceAssignment } from "../spaces/space-assignment";
 import { triggerSessionCompaction } from "../session/session-compaction";
-import { bertTopicAnalysisTask } from "../bert/topic-analysis";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
@@ -34,13 +33,7 @@ export const ingestTask = task({
         await triggerSessionCompaction(params);
       },
       // Callback for BERT topic analysis
-      async (params) => {
-        await bertTopicAnalysisTask.trigger(params, {
-          queue: "bert-topic-analysis",
-          concurrencyKey: params.userId,
-          tags: [params.userId, "bert-analysis"],
-        });
-      },
+      async () => {},
     );
   },
 });

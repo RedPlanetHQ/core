@@ -10,7 +10,7 @@ version: "3.8"
 services:
   core:
     container_name: core-app
-    image: redplanethq/core:${VERSION}
+    image: core
     environment:
       - NODE_ENV=${NODE_ENV}
       - DATABASE_URL=${DATABASE_URL}
@@ -54,8 +54,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
-      neo4j:
-        condition: service_healthy
     networks:
       - core
 
@@ -87,31 +85,31 @@ services:
     networks:
       - core
 
-  neo4j:
-    container_name: core-neo4j
-    image: redplanethq/neo4j:0.1.0
-    environment:
-      - NEO4J_AUTH=${NEO4J_AUTH}
-      - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
-      - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
-      - NEO4J_apoc_export_file_enabled=true # Enable file export
-      - NEO4J_apoc_import_file_enabled=true # Enable file import
-      - NEO4J_apoc_import_file_use_neo4j_config=true
-      - NEO4J_server_memory_heap_initial__size=2G
-      - NEO4J_server_memory_heap_max__size=4G
-    ports:
-      - "7474:7474"
-      - "7687:7687"
-    volumes:
-      - neo4j_data:/data
-    networks:
-      - core
-    healthcheck:
-      test: ["CMD-SHELL", "cypher-shell -u $NEO4J_USERNAME -p $NEO4J_PASSWORD 'RETURN 1'"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
+  # neo4j:
+  #   container_name: core-neo4j
+  #   image: redplanethq/neo4j:0.1.0
+  #   environment:
+  #     - NEO4J_AUTH=${NEO4J_AUTH}
+  #     - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+  #     - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
+  #     - NEO4J_apoc_export_file_enabled=true # Enable file export
+  #     - NEO4J_apoc_import_file_enabled=true # Enable file import
+  #     - NEO4J_apoc_import_file_use_neo4j_config=true
+  #     - NEO4J_server_memory_heap_initial__size=2G
+  #     - NEO4J_server_memory_heap_max__size=4G
+  #   ports:
+  #     - "7474:7474"
+  #     - "7687:7687"
+  #   volumes:
+  #     - neo4j_data:/data
+  #   networks:
+  #     - core
+  #   healthcheck:
+  #     test: ["CMD-SHELL", "cypher-shell -u $NEO4J_USERNAME -p $NEO4J_PASSWORD 'RETURN 1'"]
+  #     interval: 10s
+  #     timeout: 5s
+  #     retries: 10
+  #     start_period: 20s
 
   # Uncomment this if you want to use a local embedding modal
   # ollama:
