@@ -46,7 +46,7 @@ export const CompactionResultSchema = z.object({
 });
 
 export const CONFIG = {
-  minEpisodesForCompaction: 5, // Minimum episodes to trigger compaction
+  minEpisodesForCompaction: 3, // Minimum episodes to trigger compaction
   compactionThreshold: 1, // Trigger after N new episodes
   maxEpisodesPerBatch: 50, // Process in batches if needed
 };

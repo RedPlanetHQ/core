@@ -55,7 +55,6 @@ export default function SingleConversation() {
       },
     }),
   });
-  console.log("new", messages);
 
   React.useEffect(() => {
     if (messages.length === 1) {

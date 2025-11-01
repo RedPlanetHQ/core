@@ -36,6 +36,35 @@ import {
 let metricsInterval: NodeJS.Timeout | null = null;
 
 /**
+ * Initialize and start only BERT topic worker
+ * Used when QUEUE_PROVIDER=trigger but we still need BERT analysis to run in BullMQ
+ */
+export async function initAlwaysOnWorkers(): Promise<void> {
+  // Setup logging for BERT topic worker
+  setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
+
+  // Start periodic metrics logging for BERT worker (every 60 seconds)
+  metricsInterval = startPeriodicMetricsLogging(
+    [
+      {
+        worker: bertTopicWorker,
+        queue: bertTopicQueue,
+        name: "bert-topic",
+      },
+    ],
+    60000, // Log metrics every 60 seconds
+  );
+
+  // Log worker startup
+  logger.log("\n🚀 Starting always-on BullMQ workers...");
+  logger.log("─".repeat(80));
+  logger.log(`✓ BERT topic worker: ${bertTopicWorker.name} (concurrency: 1)`);
+  logger.log("─".repeat(80));
+  logger.log("✅ Always-on BullMQ workers started and listening for jobs");
+  logger.log("📊 Metrics will be logged every 60 seconds\n");
+}
+
+/**
  * Initialize and start all BullMQ workers with comprehensive logging
  */
 export async function initWorkers(): Promise<void> {
@@ -57,8 +86,6 @@ export async function initWorkers(): Promise<void> {
     sessionCompactionQueue,
     "session-compaction",
   );
-
-  setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
 
   setupWorkerLogging(
     spaceAssignmentWorker,
@@ -86,12 +113,6 @@ export async function initWorkers(): Promise<void> {
         worker: sessionCompactionWorker,
         queue: sessionCompactionQueue,
         name: "session-compaction",
-      },
-
-      {
-        worker: bertTopicWorker,
-        queue: bertTopicQueue,
-        name: "bert-topic",
       },
 
       {
@@ -137,6 +158,20 @@ export async function shutdownWorkers(): Promise<void> {
     clearInterval(metricsInterval);
   }
   await closeAllWorkers();
+}
+
+/**
+ * Shutdown always-on workers (BERT topic) gracefully
+ */
+export async function shutdownAlwaysOnWorkers(): Promise<void> {
+  logger.log(
+    "Shutdown signal received, closing always-on workers gracefully...",
+  );
+  if (metricsInterval) {
+    clearInterval(metricsInterval);
+  }
+  await bertTopicWorker.close();
+  logger.log("✅ Always-on workers shut down gracefully");
 }
 
 // If running as standalone script, initialize workers

@@ -32,7 +32,7 @@ export interface CompactedSessionNode {
  * Save or update a compacted session
  */
 export async function saveCompactedSession(
-  compact: CompactedSessionNode
+  compact: CompactedSessionNode,
 ): Promise<string> {
   const query = `
     MERGE (cs:CompactedSession {uuid: $uuid})
@@ -86,7 +86,7 @@ export async function saveCompactedSession(
  * Get a compacted session by UUID
  */
 export async function getCompactedSession(
-  uuid: string
+  uuid: string,
 ): Promise<CompactedSessionNode | null> {
   const query = `
     MATCH (cs:CompactedSession {uuid: $uuid})
@@ -105,7 +105,7 @@ export async function getCompactedSession(
  */
 export async function getCompactedSessionBySessionId(
   sessionId: string,
-  userId: string
+  userId: string,
 ): Promise<CompactedSessionNode | null> {
   const query = `
     MATCH (cs:CompactedSession {sessionId: $sessionId, userId: $userId})
@@ -125,7 +125,7 @@ export async function getCompactedSessionBySessionId(
  * Get all episodes linked to a compacted session
  */
 export async function getCompactedSessionEpisodes(
-  compactUuid: string
+  compactUuid: string,
 ): Promise<string[]> {
   const query = `
     MATCH (cs:CompactedSession {uuid: $compactUuid})-[:COMPACTS]->(e:Episode)
@@ -143,7 +143,7 @@ export async function getCompactedSessionEpisodes(
 export async function linkEpisodesToCompact(
   compactUuid: string,
   episodeUuids: string[],
-  userId: string
+  userId: string,
 ): Promise<void> {
   const query = `
     MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId})
@@ -163,7 +163,7 @@ export async function searchCompactedSessionsByEmbedding(
   embedding: number[],
   userId: string,
   limit: number = 10,
-  minScore: number = 0.7
+  minScore: number = 0.7,
 ): Promise<Array<{ compact: CompactedSessionNode; score: number }>> {
   const query = `
     MATCH (cs:CompactedSession {userId: $userId})
@@ -194,7 +194,7 @@ export async function searchCompactedSessionsByEmbedding(
  */
 export async function getUserCompactedSessions(
   userId: string,
-  limit: number = 50
+  limit: number = 50,
 ): Promise<CompactedSessionNode[]> {
   const query = `
     MATCH (cs:CompactedSession {userId: $userId})
@@ -264,11 +264,11 @@ export async function getCompactionStats(userId: string): Promise<{
 export async function getSessionEpisodes(
   sessionId: string,
   userId: string,
-  afterTime?: Date
+  afterTime?: Date,
 ): Promise<SessionEpisodeData[]> {
   const query = `
     MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
-    ${afterTime ? "WHERE e.createdAt > datetime($afterTime)" : ""}
+    ${afterTime ? "WHERE e.createdAt > $afterTime" : ""}
     RETURN e
     ORDER BY e.createdAt ASC
   `;
@@ -288,7 +288,7 @@ export async function getSessionEpisodes(
 export async function getSessionEpisodeCount(
   sessionId: string,
   userId: string,
-  afterTime?: Date
+  afterTime?: Date,
 ): Promise<number> {
   const episodes = await getSessionEpisodes(sessionId, userId, afterTime);
   return episodes.length;
@@ -312,8 +312,9 @@ function parseCompactedSessionNode(raw: any): CompactedSessionNode {
     userId: raw.userId,
     source: raw.source,
     compressionRatio: raw.compressionRatio || 1,
-    metadata: typeof raw.metadata === "string"
-      ? JSON.parse(raw.metadata)
-      : raw.metadata || {},
+    metadata:
+      typeof raw.metadata === "string"
+        ? JSON.parse(raw.metadata)
+        : raw.metadata || {},
   };
 }

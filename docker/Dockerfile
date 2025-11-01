@@ -1,17 +1,20 @@
 ARG NODE_IMAGE=node:20.11.1-bullseye-slim@sha256:5a5a92b3a8d392691c983719dbdc65d9f30085d6dcd65376e7a32e6fe9bf4cbe
 
-# Separate Python stage for BERTopic dependencies
-FROM python:3.11-slim AS python-deps
+# Python dependencies build stage - using Python 3.9 to match Debian Bullseye
+FROM python:3.9-slim-bullseye AS python-builder
 WORKDIR /python-build
 COPY apps/webapp/python/requirements.txt .
-RUN --mount=type=cache,target=/root/.cache/pip,sharing=locked \
-    mkdir -p /python-install && \
-    pip3 install --prefix=/python-install --prefer-binary --no-compile -r requirements.txt && \
-    # Install BERTopic WITHOUT sentence-transformers (we use pre-computed embeddings)
-    pip3 install --prefix=/python-install --no-deps --prefer-binary --no-compile 'bertopic>=0.16.0' && \
-    # Clean up to reduce size
-    find /python-install -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true && \
-    find /python-install -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true
+
+# Install build dependencies and Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip3 install --no-cache-dir --target=/python-install -r requirements.txt \
+    && find /python-install -type d -name 'tests' -exec rm -rf {} + 2>/dev/null || true \
+    && find /python-install -type d -name '__pycache__' -exec rm -rf {} + 2>/dev/null || true \
+    && find /python-install -name '*.pyc' -delete \
+    && find /python-install -name '*.pyo' -delete
 
 FROM ${NODE_IMAGE} AS pruner
 
@@ -25,7 +28,6 @@ RUN find . -name "node_modules" -type d -prune -exec rm -rf '{}' +
 FROM ${NODE_IMAGE} AS base
 RUN apt-get update && apt-get install -y openssl dumb-init
 WORKDIR /core
-COPY --chown=node:node .gitignore .gitignore
 COPY --from=pruner --chown=node:node /core/out/json/ .
 COPY --from=pruner --chown=node:node /core/out/pnpm-lock.yaml ./pnpm-lock.yaml
 COPY --from=pruner --chown=node:node /core/out/pnpm-workspace.yaml ./pnpm-workspace.yaml
@@ -75,15 +77,13 @@ RUN apt-get update && apt-get install -y \
     netcat-openbsd \
     ca-certificates \
     python3 \
-    python3-pip \
-    python3-venv \
-    gcc \
-    g++ \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /core
 RUN corepack enable
 ENV NODE_ENV production
 
+# Set PYTHONPATH to include our custom package location
+ENV PYTHONPATH=/opt/python-packages
 
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=pruner --chown=node:node /core/out/full/ .
@@ -93,8 +93,8 @@ COPY --from=builder --chown=node:node /core/apps/webapp/build ./apps/webapp/buil
 COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /core/scripts ./scripts
 
-# Copy Python dependencies from python-deps stage
-COPY --from=python-deps --chown=node:node /python-install /usr/local
+# Copy pre-built Python dependencies from python-builder stage
+COPY --from=python-builder --chown=node:node /python-install /opt/python-packages
 
 # Copy BERT scripts
 COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt

@@ -79,7 +79,7 @@ const IngestSchema = {
     sessionId: {
       type: "string",
       description:
-        "IMPORTANT: Session ID (UUID) is required to track the conversation session. If you don't have a sessionId in your context, you MUST call the get_session_id tool first to obtain one before calling memory_ingest.",
+        "IMPORTANT: Session ID (UUID) is required to track the conversation session. If you don't have a sessionId in your context, you MUST call the initialize_conversation_session tool first to obtain one before calling memory_ingest.",
     },
     spaceIds: {
       type: "array",
@@ -97,7 +97,7 @@ export const memoryTools = [
   {
     name: "memory_ingest",
     description:
-      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one in your context, call get_session_id tool first to obtain it. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
+      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one, call initialize_conversation_session tool FIRST to obtain it at the start of the conversation, then use that SAME sessionId for all memory_ingest calls. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
     inputSchema: IngestSchema,
   },
   {
@@ -157,15 +157,15 @@ export const memoryTools = [
     },
   },
   {
-    name: "get_session_id",
+    name: "initialize_conversation_session",
     description:
-      "Get a new session ID for the MCP connection. USE THIS TOOL: When you need a session ID and don't have one yet. This generates a unique UUID to identify your MCP session. IMPORTANT: If any other tool requires a sessionId parameter and you don't have one, call this tool first to get a session ID. Returns: A UUID string to use as sessionId.",
+      "Initialize a session for this conversation. MUST be called FIRST at the start of every conversation before any memory_ingest calls. This generates a unique UUID that tracks the entire conversation session. IMPORTANT: One conversation = one session. Call this tool once at the beginning, store the returned sessionId, and use that SAME sessionId for ALL memory_ingest operations throughout this conversation. DO NOT create custom session IDs. Returns: A UUID string to use as sessionId for all subsequent memory operations.",
     inputSchema: {
       type: "object",
       properties: {
         new: {
           type: "boolean",
-          description: "Set to true to get a new sessionId.",
+          description: "Set to true to initialize a new conversation session.",
         },
       },
     },
@@ -263,7 +263,7 @@ export async function callMemoryTool(
         return await handleUserProfile(userId);
       case "memory_get_space":
         return await handleGetSpace({ ...args, userId });
-      case "get_session_id":
+      case "initialize_conversation_session":
         return await handleGetSessionId();
       case "get_integrations":
         return await handleGetIntegrations({ ...args, userId });
