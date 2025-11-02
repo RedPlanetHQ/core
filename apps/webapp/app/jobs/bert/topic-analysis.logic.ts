@@ -5,6 +5,10 @@ import { assignEpisodesToSpace } from "~/services/graphModels/space";
 import { logger } from "~/services/logger.service";
 import { SpaceService } from "~/services/space.server";
 import { prisma } from "~/trigger/utils/prisma";
+import {
+  ensureBertPackagesInstalled,
+  getBertPythonPath,
+} from "~/lib/bert-installer.server";
 
 const execAsync = promisify(exec);
 
@@ -44,9 +48,16 @@ async function runBertWithExec(
 
   console.log(`[BERT Topic Analysis] Executing: ${command}`);
 
+  // Set PYTHONPATH to include packages from persistent volume
+  const pythonPath = getBertPythonPath();
+
   const { stdout, stderr } = await execAsync(command, {
     timeout: 300000, // 5 minutes
     maxBuffer: 10 * 1024 * 1024, // 10MB buffer for large outputs
+    env: {
+      ...process.env,
+      PYTHONPATH: pythonPath,
+    },
   });
 
   if (stderr) {
@@ -82,6 +93,16 @@ export async function processTopicAnalysis(
   console.log(
     `[BERT Topic Analysis] Parameters: minTopicSize=${minTopicSize}, nrTopics=${nrTopics || "auto"}`,
   );
+
+  // Check if BertTopic packages are installed (only if using default exec runner)
+  if (!pythonRunner) {
+    const isInstalled = await ensureBertPackagesInstalled();
+    if (!isInstalled) {
+      throw new Error(
+        "BertTopic packages are being installed in the background. Job will retry.",
+      );
+    }
+  }
 
   try {
     const startTime = Date.now();

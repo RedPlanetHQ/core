@@ -100,10 +100,10 @@ export const sessionCompactionQueue = new Queue("session-compaction-queue", {
 export const bertTopicQueue = new Queue("bert-topic-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
-    attempts: 2, // Only 2 attempts due to long runtime
+    attempts: 3, // Retry up to 3 times (allows for package installation on first run)
     backoff: {
       type: "exponential",
-      delay: 5000,
+      delay: 30000, // 30s initial delay (packages may be installing in background)
     },
     removeOnComplete: {
       age: 7200, // Keep completed jobs for 2 hours
