@@ -198,21 +198,43 @@ export const handleMCPRequest = async (
       // Use existing session
       const sessionData = TransportManager.getSessionInfo(sessionId);
       if (!sessionData.exists) {
-        // Session exists in DB but not in memory, recreate transport
-        logger.log(`Recreating transport for session ${sessionId}`);
-        const sessionDetails = await MCPSessionManager.getSession(sessionId);
-        if (sessionDetails) {
-          transport = await createTransport(
-            sessionId,
-            sessionDetails.source,
-            sessionDetails.integrations,
-            noIntegrations,
-            userId,
-            workspaceId,
-            spaceId,
+        // Session exists in DB but not in memory (server restarted)
+        // For initialize requests, we can try to recreate the transport
+        // For other requests, return 404 to force client to reinitialize
+        if (isInitializeRequest(body)) {
+          logger.log(
+            `Session ${sessionId} found in DB but not in memory. Recreating transport after server restart.`,
           );
+          const sessionDetails = await MCPSessionManager.getSession(sessionId);
+          if (sessionDetails) {
+            transport = await createTransport(
+              sessionId,
+              sessionDetails.source,
+              sessionDetails.integrations,
+              noIntegrations,
+              userId,
+              workspaceId,
+              spaceId,
+            );
+            logger.log(`Successfully recreated session ${sessionId}`);
+          } else {
+            // Session was in DB but couldn't be retrieved - return 404
+            return res.status(404).json({
+              error: "session_not_found",
+              error_description:
+                "Session not found in database. Please initialize a new session.",
+            });
+          }
         } else {
-          throw new Error("Session not found in database");
+          // Non-initialize request with session not in memory - return 404
+          logger.log(
+            `Session ${sessionId} not in memory for non-initialize request. Returning 404.`,
+          );
+          return res.status(404).json({
+            error: "session_not_in_memory",
+            error_description:
+              "Session not found in server memory. Server may have restarted. Please initialize a new session.",
+          });
         }
       } else {
         transport = sessionData.mainTransport as StreamableHTTPServerTransport;
@@ -229,9 +251,20 @@ export const handleMCPRequest = async (
         workspaceId,
         spaceId,
       );
+    } else if (sessionId && !isInitializeRequest(body)) {
+      // Session ID provided but session not active - return 404
+      return res.status(404).json({
+        error: "session_not_found",
+        error_description:
+          "Session not found or expired. Please initialize a new session.",
+      });
     } else {
-      // Invalid request
-      throw new Error("No session id");
+      // No session ID and not an initialize request - invalid
+      return res.status(400).json({
+        error: "invalid_request",
+        error_description:
+          "Missing session ID. Please send an initialize request first.",
+      });
     }
 
     // Handle the request through existing transport utility
@@ -250,28 +283,52 @@ export const handleSessionRequest = async (
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
   const workspace = await getWorkspaceByUser(userId);
 
-  if (
-    sessionId &&
-    (await MCPSessionManager.isSessionActive(
-      sessionId,
-      workspace?.id as string,
-    ))
-  ) {
-    await ensureBillingInitialized(workspace?.id as string);
-
-    const sessionData = TransportManager.getSessionInfo(sessionId);
-
-    if (sessionData.exists) {
-      const transport =
-        sessionData.mainTransport as StreamableHTTPServerTransport;
-
-      await transport.handleRequest(req, res);
-    } else {
-      res.status(401).send("Invalid or missing session ID");
-      return;
-    }
-  } else {
-    res.status(400).send("Invalid or missing session ID");
+  if (!sessionId) {
+    // No session ID provided - client should send initialize request instead
+    res.status(400).json({
+      error: "invalid_request",
+      error_description:
+        "Missing mcp-session-id header. Please send an initialize request to create a new session.",
+    });
     return;
   }
+
+  // Check if session is active in database
+  const isActive = await MCPSessionManager.isSessionActive(
+    sessionId,
+    workspace?.id as string,
+  );
+
+  if (!isActive) {
+    // Session terminated, expired, or never existed
+    // Return 404 to signal client to start a new session
+    res.status(404).json({
+      error: "session_not_found",
+      error_description:
+        "Session not found. The server may have restarted or the session expired. Please initialize a new session.",
+    });
+    return;
+  }
+
+  await ensureBillingInitialized(workspace?.id as string);
+
+  const sessionData = TransportManager.getSessionInfo(sessionId);
+
+  if (!sessionData.exists) {
+    // Session exists in DB but not in memory (server restarted)
+    // Return 404 to signal client to start a new session
+    logger.log(
+      `Session ${sessionId} found in DB but not in memory. Returning 404 to trigger new session initialization.`,
+    );
+    res.status(404).json({
+      error: "session_not_in_memory",
+      error_description:
+        "Session exists in database but not in server memory. Server may have restarted. Please initialize a new session.",
+    });
+    return;
+  }
+
+  // Session exists and is active, handle the request
+  const transport = sessionData.mainTransport as StreamableHTTPServerTransport;
+  await transport.handleRequest(req, res);
 };
