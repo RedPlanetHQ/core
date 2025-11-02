@@ -60,7 +60,15 @@ async function init() {
     );
 
     if (!authenticationResult) {
-      res.status(401).json({ error: "Authentication required" });
+      // Step 1: Initial 401 handshake with WWW-Authenticate header
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer realm="mcp", resource_metadata="${process.env.APP_ORIGIN}/.well-known/oauth-protected-resource"`
+      );
+      res.status(401).json({
+        error: "unauthorized",
+        error_description: "Authentication required. See WWW-Authenticate header for authorization information."
+      });
       return;
     }
 
@@ -76,7 +84,15 @@ async function init() {
     );
 
     if (!authenticationResult) {
-      res.status(401).json({ error: "Authentication required" });
+      // Step 1: Initial 401 handshake with WWW-Authenticate header
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer realm="mcp", resource_metadata="${process.env.APP_ORIGIN}/.well-known/oauth-protected-resource"`
+      );
+      res.status(401).json({
+        error: "unauthorized",
+        error_description: "Authentication required. See WWW-Authenticate header for authorization information."
+      });
       return;
     }
 
@@ -111,7 +127,15 @@ async function init() {
     );
 
     if (!authenticationResult) {
-      res.status(401).json({ error: "Authentication required" });
+      // Step 1: Initial 401 handshake with WWW-Authenticate header
+      res.setHeader(
+        "WWW-Authenticate",
+        `Bearer realm="mcp", resource_metadata="${process.env.APP_ORIGIN}/.well-known/oauth-protected-resource"`
+      );
+      res.status(401).json({
+        error: "unauthorized",
+        error_description: "Authentication required. See WWW-Authenticate header for authorization information."
+      });
       return;
     }
 
@@ -122,13 +146,25 @@ async function init() {
     res.json({});
   });
 
+  // Step 2: Protected Resource Metadata (PRM) endpoint
+  app.get("/.well-known/oauth-protected-resource", (req, res) => {
+    res.json({
+      resource: `${process.env.APP_ORIGIN}/api/v1/mcp`,
+      authorization_servers: [process.env.APP_ORIGIN],
+      scopes_supported: ["mcp", "mcp:read", "mcp:write", "mcp.read", "mcp.write"],
+      bearer_methods_supported: ["header"],
+      resource_signing_alg_values_supported: ["HS256"],
+    });
+  });
+
+  // Step 3: Authorization Server Metadata endpoint
   app.get("/.well-known/oauth-authorization-server", (req, res) => {
     res.json({
       issuer: process.env.APP_ORIGIN,
       authorization_endpoint: `${process.env.APP_ORIGIN}/oauth/authorize`,
       token_endpoint: `${process.env.APP_ORIGIN}/oauth/token`,
       registration_endpoint: `${process.env.APP_ORIGIN}/oauth/register`,
-      scopes_supported: ["mcp"],
+      scopes_supported: ["mcp", "mcp:read", "mcp:write", "mcp.read", "mcp.write"],
       response_types_supported: ["code"],
       grant_types_supported: [
         "authorization_code",
