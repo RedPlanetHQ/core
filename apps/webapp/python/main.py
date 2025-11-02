@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-BERT Topic Modeling CLI for Echo Episodes
+BERT Topic Modeling CLI for Core Episodes
 
 This CLI tool connects to Neo4j, retrieves episodes with their embeddings for a given userId,
 and performs topic modeling using BERTopic to discover thematic clusters.

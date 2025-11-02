@@ -83,6 +83,15 @@
             ]
           },
           {
+            "group": "Writing Integrations",
+            "pages": [
+              "integrations/building-integrations",
+              "integrations/schedule-based-guide",
+              "integrations/webhook-based-guide",
+              "integrations/mcp-hub-guide"
+            ]
+          },
+          {
             "group": "Self hosting",
             "pages": [
               "self-hosting/overview",

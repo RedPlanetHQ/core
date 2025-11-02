@@ -48,23 +48,7 @@ const { loader, action } = createHybridActionApiRoute(
     },
     corsStrategy: "all",
   },
-  async ({ body, authentication }) => {
-    const randomKeyName = `chat_local`;
-
-    let pat = await getOrCreatePersonalAccessToken({
-      name: randomKeyName,
-      userId: authentication.userId,
-    });
-
-    if (!pat.token) {
-      await deletePersonalAccessToken(pat.id);
-    }
-
-    pat = await getOrCreatePersonalAccessToken({
-      name: randomKeyName,
-      userId: authentication.userId,
-    });
-
+  async ({ body, authentication, request }) => {
     const message = body.message.parts[0].text;
     const id = body.message.id;
     const apiEndpoint = `${env.APP_ORIGIN}/api/v1/mcp?source=core`;
@@ -74,11 +58,9 @@ const { loader, action } = createHybridActionApiRoute(
     const mcpClient = await createMCPClient({
       transport: new StreamableHTTPClientTransport(url, {
         requestInit: {
-          headers: pat.token
-            ? {
-                Authorization: `Bearer ${pat.token}`,
-              }
-            : {},
+          headers: {
+            Cookie: request.headers.get("Cookie") || "",
+          },
         },
       }),
     });

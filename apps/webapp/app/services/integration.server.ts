@@ -1,4 +1,4 @@
-import { tasks } from "@trigger.dev/sdk/v3";
+import { runs, tasks } from "@trigger.dev/sdk/v3";
 
 import { logger } from "./logger.service";
 import { type integrationRun } from "~/trigger/integrations/integration-run";
@@ -58,7 +58,7 @@ export async function runIntegrationTrigger(
     },
   );
 
-  const response = await tasks.triggerAndPoll<typeof integrationRun>(
+  const response = await tasks.trigger<typeof integrationRun>(
     "integration-run",
     {
       integrationDefinition,
@@ -70,9 +70,34 @@ export async function runIntegrationTrigger(
     },
   );
 
-  if (response.status === "COMPLETED") {
-    return response.output;
+  let run = await runs.retrieve(response.id);
+  const maxAttempts = 150; // 5 minutes with 2s intervals
+  let attempts = 0;
+
+  while (run.status !== "COMPLETED" && run.status !== "FAILED") {
+    attempts++;
+
+    if (attempts >= maxAttempts) {
+      logger.error(`Integration run timed out after ${maxAttempts} attempts`, {
+        runId: response.id,
+        status: run.status,
+        integrationSlug: integrationDefinition.slug,
+      });
+      throw new Error(`Integration run timed out after ${maxAttempts * 2} seconds`);
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
+    run = await runs.retrieve(response.id);
+    logger.info(`Task status: ${run.status} (attempt ${attempts}/${maxAttempts})`);
   }
 
-  throw new Error(`Integration trigger failed with status: ${response.status}`);
+  if (run.status === "FAILED") {
+    logger.error(`Integration run failed`, {
+      runId: response.id,
+      integrationSlug: integrationDefinition.slug,
+    });
+    throw new Error(`Integration run failed`);
+  }
+
+  return run.output;
 }

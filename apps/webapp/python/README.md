@@ -1,6 +1,6 @@
-# BERT Topic Modeling CLI for Echo Episodes
+# BERT Topic Modeling CLI for Core Episodes
 
-This CLI tool performs topic modeling on Echo episodes using BERTopic. It connects to Neo4j, retrieves episodes with their pre-computed embeddings for a given user, and discovers thematic clusters using HDBSCAN clustering.
+This CLI tool performs topic modeling on Core episodes using BERTopic. It connects to Neo4j, retrieves episodes with their pre-computed embeddings for a given user, and discovers thematic clusters using HDBSCAN clustering.
 
 ## Features
 
@@ -101,6 +101,7 @@ python main.py <user_id> [OPTIONS]
    ```
 
 4. **Using Docker compose Neo4j:**
+
    ```bash
    python main.py user-123 \
      --neo4j-uri bolt://localhost:7687 \
@@ -108,11 +109,13 @@ python main.py <user_id> [OPTIONS]
    ```
 
 5. **With space proposals:**
+
    ```bash
    python main.py user-123 --propose-spaces
    ```
 
 6. **JSON output mode (for programmatic use):**
+
    ```bash
    python main.py user-123 --json
    ```
@@ -216,6 +219,7 @@ When using the `--json` flag, the tool outputs only a clean JSON object with no 
 ```
 
 **JSON Output Structure:**
+
 - `topics`: Dictionary of topic IDs with keywords and episode UUIDs
 - `spaces`: Array of space proposals (only if `--propose-spaces` is used)
   - `name`: Space name (2-5 words)
@@ -225,6 +229,7 @@ When using the `--json` flag, the tool outputs only a clean JSON object with no 
   - `estimatedEpisodes`: Estimated number of episodes in this space
 
 **Use Cases for JSON Mode:**
+
 - Programmatic consumption by other tools
 - Piping output to jq or other JSON processors
 - Integration with CI/CD pipelines
@@ -296,4 +301,4 @@ ORDER BY e.createdAt DESC
 
 ## License
 
-Part of the Echo project.
+Part of the Core project.

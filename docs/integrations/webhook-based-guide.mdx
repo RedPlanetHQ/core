@@ -1,0 +1,490 @@
+---
+title: Webhook based
+---
+
+
+# Webhook-Based Integrations
+
+Webhook-based integrations receive HTTP callbacks from external services whenever events occur. This enables real-time synchronization with minimal latency. This guide uses Slack as the primary example.
+
+## When to Use Webhooks
+
+Choose webhook-based integrations when:
+
+- The service provides real-time webhook events
+- You need instant synchronization (chat messages, notifications)
+- Events are user-triggered and need immediate capture
+- The service has robust webhook infrastructure
+
+## Architecture Overview
+
+```
+External Service (Slack)
+        ↓
+    Webhook Event
+        ↓
+    Core Webhook Endpoint
+        ↓
+    Integration IDENTIFY → Extract user ID
+        ↓
+    Integration PROCESS → Create activity
+        ↓
+    Knowledge Graph
+```
+
+## Event Flow
+
+### 1. SETUP Event
+
+When a user connects their account via OAuth:
+
+```typescript
+// account-create.ts
+export async function integrationCreate(data: any) {
+  const { oauthResponse } = data;
+
+  // Get user info from service
+  const user = await getSlackUserInfo(oauthResponse.access_token);
+
+  return [{
+    type: 'account',
+    data: {
+      accountId: user.user_id,
+      config: {
+        access_token: oauthResponse.access_token,
+        refresh_token: oauthResponse.refresh_token,
+        // Pass token to MCP tools
+        mcp: { tokens: { access_token: oauthResponse.access_token } }
+      },
+      settings: {
+        username: user.user,
+        team_id: user.team_id
+      }
+    }
+  }];
+}
+```
+
+### 2. IDENTIFY Event
+
+When a webhook event arrives, extract the user identifier for routing:
+
+```typescript
+// index.ts
+case IntegrationEventType.IDENTIFY:
+  // Extract user ID from Slack event
+  return [{
+    type: 'identifier',
+    data: eventPayload.eventBody.event.event.user ||
+          eventPayload.eventBody.event.event.message.user
+  }];
+```
+
+This tells Core which user's knowledge graph to update with the activity.
+
+### 3. PROCESS Event
+
+Process the webhook event and create activity messages:
+
+```typescript
+// create-activity.ts
+export const createActivityEvent = async (eventData: any, config: any) => {
+  const event = eventData.event;
+  const accessToken = config.access_token;
+
+  // Handle different event types
+  if (event.type === 'reaction_added' && event.reaction === 'eyes') {
+    // User reacted with 👀 emoji - capture for knowledge graph
+
+    // 1. Get the original message
+    const message = await getMessage(accessToken, event.item.channel, event.item.ts);
+
+    // 2. Get user details and channel info
+    const [userDetails, channelInfo] = await Promise.all([
+      getUserDetails([message.user], accessToken),
+      getConversationInfo(accessToken, event.item.channel)
+    ]);
+
+    // 3. Build contextual description
+    const text = `User ${userDetails[0].real_name} reacted with eyes emoji ` +
+                 `in channel ${channelInfo.name}. Content: '${message.text}'`;
+
+    // 4. Get permalink for deep linking
+    const permalink = await getPermalink(accessToken, event.item.channel, event.item.ts);
+
+    // 5. Return activity message
+    return [{
+      type: 'activity',
+      data: {
+        text,
+        sourceURL: permalink.data.permalink
+      }
+    }];
+  }
+
+  if (event.type === 'message') {
+    // Handle message events
+    const text = `Message in channel: '${event.text}'`;
+    const permalink = await getPermalink(accessToken, event.channel, event.ts);
+
+    return [{
+      type: 'activity',
+      data: {
+        text,
+        sourceURL: permalink.data.permalink
+      }
+    }];
+  }
+
+  // Return empty array for unhandled events
+  return [];
+};
+```
+
+## Full Example: Slack Integration
+
+### spec.json
+
+```json
+{
+  "name": "Slack extension",
+  "key": "slack",
+  "description": "Connect your workspace to Slack",
+  "icon": "slack",
+
+  "auth": {
+    "OAuth2": {
+      "token_url": "https://slack.com/api/oauth.v2.access",
+      "authorization_url": "https://slack.com/oauth/v2/authorize",
+      "scopes": [
+        "channels:read",
+        "channels:history",
+        "chat:write",
+        "reactions:read",
+        "reactions:write",
+        "users:read",
+        "users.profile:read"
+      ],
+      "scope_identifier": "user_scope",
+      "scope_separator": ","
+    }
+  },
+
+  "mcp": {
+    "type": "stdio",
+    "url": "https://integrations.heysol.ai/slack/mcp/slack-mcp-server",
+    "args": [],
+    "env": {
+      "SLACK_MCP_XOXP_TOKEN": "${config:access_token}",
+      "SLACK_MCP_ADD_MESSAGE_TOOL": true
+    }
+  }
+}
+```
+
+### index.ts
+
+```typescript
+import { integrationCreate } from './account-create';
+import { createActivityEvent } from './create-activity';
+import {
+  IntegrationCLI,
+  IntegrationEventPayload,
+  IntegrationEventType,
+  Spec,
+} from '@redplanethq/sdk';
+
+export async function run(eventPayload: IntegrationEventPayload) {
+  switch (eventPayload.event) {
+    case IntegrationEventType.SETUP:
+      return await integrationCreate(eventPayload.eventBody);
+
+    case IntegrationEventType.IDENTIFY:
+      // Extract user ID from Slack event
+      return [{
+        type: 'identifier',
+        data: eventPayload.eventBody.event.event.user ||
+              eventPayload.eventBody.event.event.message.user,
+      }];
+
+    case IntegrationEventType.PROCESS:
+      // Process webhook event
+      return createActivityEvent(
+        eventPayload.eventBody.eventData,
+        eventPayload.config
+      );
+
+    default:
+      return [{ type: 'error', data: `Unknown event type: ${eventPayload.event}` }];
+  }
+}
+
+class SlackCLI extends IntegrationCLI {
+  constructor() {
+    super('slack', '1.0.0');
+  }
+
+  protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
+    return await run(eventPayload);
+  }
+
+  protected async getSpec(): Promise<Spec> {
+    // Return spec configuration
+    return {
+      name: 'Slack extension',
+      key: 'slack',
+      // ... rest of spec
+    };
+  }
+}
+
+function main() {
+  const slackCLI = new SlackCLI();
+  slackCLI.parse();
+}
+
+main();
+```
+
+### create-activity.ts
+
+```typescript
+import axios from 'axios';
+
+interface SlackActivityCreateParams {
+  text: string;
+  sourceURL: string;
+}
+
+function createActivityMessage(params: SlackActivityCreateParams) {
+  return {
+    type: 'activity',
+    data: {
+      text: params.text,
+      sourceURL: params.sourceURL,
+    },
+  };
+}
+
+async function getMessage(accessToken: string, channel: string, ts: string) {
+  const result = await axios.get('https://slack.com/api/conversations.history', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    params: {
+      channel,
+      latest: ts,
+      inclusive: true,
+      limit: 1,
+    },
+  });
+
+  return result.data.messages?.[0];
+}
+
+async function getConversationInfo(accessToken: string, channel: string) {
+  const result = await axios.get('https://slack.com/api/conversations.info', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+    params: { channel },
+  });
+
+  return result.data.channel;
+}
+
+async function getPermalink(accessToken: string, channel: string, ts: string) {
+  return await axios.get(
+    `https://slack.com/api/chat.getPermalink?channel=${channel}&message_ts=${ts}`,
+    {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    }
+  );
+}
+
+export const createActivityEvent = async (eventData: any, config: any) {
+  const event = eventData.event;
+
+  if (!config) {
+    throw new Error('Integration configuration not found');
+  }
+
+  const accessToken = config.access_token;
+
+  // Handle reaction_added events
+  if (event.type === 'reaction_added' && event.reaction === 'eyes') {
+    const channel = event.item.channel;
+    const ts = event.item.ts;
+
+    // Fetch message and context
+    const [eventMessage, conversationInfo] = await Promise.all([
+      getMessage(accessToken, channel, ts),
+      getConversationInfo(accessToken, channel)
+    ]);
+
+    // Build activity text
+    const text = `User reacted with eyes emoji in channel ${conversationInfo.name}. ` +
+                 `Content: '${eventMessage.text}'`;
+
+    // Get permalink
+    const permalinkResponse = await getPermalink(accessToken, channel, ts);
+
+    return [createActivityMessage({
+      text,
+      sourceURL: permalinkResponse.data.permalink
+    })];
+  }
+
+  // Handle message events
+  if (event.type === 'message') {
+    const text = `Message in channel: '${event.text}'`;
+    const permalinkResponse = await getPermalink(accessToken, event.channel, event.ts);
+
+    return [createActivityMessage({
+      text,
+      sourceURL: permalinkResponse.data.permalink
+    })];
+  }
+
+  // Return empty array for unhandled events
+  return [];
+};
+```
+
+## Best Practices
+
+### 1. Event Filtering
+
+Only process events that are relevant to the user's knowledge graph:
+
+```typescript
+// Good: Filter for specific reactions that indicate importance
+if (event.type === 'reaction_added' && event.reaction === 'eyes') {
+  // This is important, capture it
+}
+
+// Good: Filter for direct messages
+if (conversationInfo.is_im) {
+  // Direct message is usually important
+}
+
+// Bad: Capture every message (too noisy)
+if (event.type === 'message') {
+  // This creates too much noise
+}
+```
+
+### 2. Context Enrichment
+
+Provide rich context by fetching related data:
+
+```typescript
+// Fetch related data in parallel for efficiency
+const [userDetails, channelInfo, message] = await Promise.all([
+  getUserDetails([userId], accessToken),
+  getConversationInfo(accessToken, channelId),
+  getMessage(accessToken, channelId, timestamp)
+]);
+
+// Build descriptive activity
+const text = `${userDetails[0].real_name} mentioned you in ` +
+             `${channelInfo.is_private ? 'private' : 'public'} channel ` +
+             `${channelInfo.name}: "${message.text}"`;
+```
+
+### 3. Deep Linking
+
+Always provide sourceURL for navigation back to the original content:
+
+```typescript
+const permalinkResponse = await axios.get(
+  `https://slack.com/api/chat.getPermalink?channel=${channel}&message_ts=${ts}`,
+  { headers: { Authorization: `Bearer ${accessToken}` } }
+);
+
+return [{
+  type: 'activity',
+  data: {
+    text,
+    sourceURL: permalinkResponse.data.permalink // Essential!
+  }
+}];
+```
+
+### 4. Error Handling
+
+Handle errors gracefully without breaking the integration:
+
+```typescript
+export const createActivityEvent = async (eventData: any, config: any) => {
+  try {
+    // Process event
+    const activities = await processEvent(eventData, config);
+    return activities;
+  } catch (error) {
+    console.error('Error processing webhook:', error);
+    // Return empty array instead of throwing
+    return [];
+  }
+};
+```
+
+### 5. User Identification
+
+Properly extract user IDs for different event types:
+
+```typescript
+case IntegrationEventType.IDENTIFY:
+  // Handle different event structures
+  const userId = eventPayload.eventBody.event.event.user ||      // reactions, messages
+                 eventPayload.eventBody.event.event.message.user || // threaded messages
+                 eventPayload.eventBody.event.event.item.user;      // other events
+
+  return [{ type: 'identifier', data: userId }];
+```
+
+## Testing Webhooks Locally
+
+To test webhooks during development:
+
+1. **Use ngrok** for local tunneling:
+   ```bash
+   ngrok http 3000
+   ```
+
+2. **Configure webhook URL** in service (Slack):
+   ```
+   https://your-ngrok-url.ngrok.io/webhooks/slack
+   ```
+
+3. **Test events** by triggering actions in Slack
+4. **Check logs** for event payloads and processing
+
+## Common Event Types
+
+### Slack
+
+- `message` - New message posted
+- `reaction_added` - Emoji reaction added
+- `reaction_removed` - Emoji reaction removed
+- `member_joined_channel` - User joined channel
+- `app_mention` - Bot was mentioned
+
+### Discord
+
+- `MESSAGE_CREATE` - New message
+- `MESSAGE_REACTION_ADD` - Reaction added
+- `GUILD_MEMBER_ADD` - Member joined server
+
+### Linear
+
+- `Issue` - Issue created/updated
+- `Comment` - Comment added
+- `IssueLabel` - Label changed
+
+## Next Steps
+
+- [Build a Schedule-Based Integration](/integrations/schedule-based-guide)
+- [Add MCP Tools to Your Integration](/integrations/mcp-hub-guide)
+- [View Full SDK Reference](https://github.com/redplanethq/sdk)
