@@ -49,6 +49,8 @@ services:
       - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
     ports:
       - "3033:3000"
+    volumes:
+      - bert_packages:/opt/bert-packages
     depends_on:
       postgres:
         condition: service_healthy
@@ -141,3 +143,4 @@ volumes:
   neo4j_data:
   shared:
   ollama_data:
+  bert_packages:

@@ -32,6 +32,7 @@ import {
   setupWorkerLogging,
   startPeriodicMetricsLogging,
 } from "./utils/worker-logger";
+import { ensureBertPackagesInstalled } from "~/lib/bert-installer.server";
 
 let metricsInterval: NodeJS.Timeout | null = null;
 
@@ -42,6 +43,8 @@ let metricsInterval: NodeJS.Timeout | null = null;
 export async function initAlwaysOnWorkers(): Promise<void> {
   // Setup logging for BERT topic worker
   setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
+
+  await ensureBertPackagesInstalled();
 
   // Start periodic metrics logging for BERT worker (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
