@@ -69,11 +69,11 @@ export async function saveTriple(triple: Triple): Promise<string> {
   MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
   
   MERGE (episode)-[prov:HAS_PROVENANCE]->(statement)
-    ON CREATE SET prov.uuid = $provenanceEdgeUuid, prov.createdAt = $createdAt
+    ON CREATE SET prov.uuid = $provenanceEdgeUuid, prov.createdAt = $createdAt, prov.userId = $userId
   MERGE (statement)-[subj:HAS_SUBJECT]->(subject)
-    ON CREATE SET subj.uuid = $subjectEdgeUuid, subj.createdAt = $createdAt
+    ON CREATE SET subj.uuid = $subjectEdgeUuid, subj.createdAt = $createdAt, subj.userId = $userId
   MERGE (statement)-[pred:HAS_PREDICATE]->(predicate)
-    ON CREATE SET pred.uuid = $predicateEdgeUuid, pred.createdAt = $createdAt
+    ON CREATE SET pred.uuid = $predicateEdgeUuid, pred.createdAt = $createdAt, pred.userId = $userId
   MERGE (statement)-[obj:HAS_OBJECT]->(object)
     ON CREATE SET obj.uuid = $objectEdgeUuid, obj.createdAt = $createdAt
   
