@@ -312,6 +312,16 @@ const initializeSchema = async () => {
       "CREATE INDEX episode_user_id IF NOT EXISTS FOR (n:Episode) ON (n.userId)",
     );
 
+    // Composite temporal index for efficient time-range queries
+    await runQuery(
+      "CREATE INDEX statement_user_temporal IF NOT EXISTS FOR (n:Statement) ON (n.userId, n.validAt, n.invalidAt)",
+    );
+
+    // Session-based episode lookups
+    await runQuery(
+      "CREATE INDEX episode_session_id IF NOT EXISTS FOR (n:Episode) ON (n.sessionId)",
+    );
+    
     // Create vector indexes for semantic search (if using Neo4j 5.0+)
     await runQuery(`
       CREATE VECTOR INDEX entity_embedding IF NOT EXISTS FOR (n:Entity) ON n.nameEmbedding
@@ -347,6 +357,25 @@ const initializeSchema = async () => {
           \`fulltext.analyzer\`: 'english'
         }
       }
+    `);
+
+    // Create relationship indexes for faster traversal
+    await runQuery(`
+      CREATE INDEX rel_has_provenance IF NOT EXISTS
+      FOR ()-[r:HAS_PROVENANCE]-()
+      ON (r.userId)
+    `);
+
+    await runQuery(`
+      CREATE INDEX rel_has_subject IF NOT EXISTS
+      FOR ()-[r:HAS_SUBJECT]-()
+      ON (r.userId)
+    `);
+
+    await runQuery(`
+      CREATE INDEX rel_has_object IF NOT EXISTS
+      FOR ()-[r:HAS_OBJECT]-()
+      ON (r.userId)
     `);
 
     logger.info("Neo4j schema initialized successfully");

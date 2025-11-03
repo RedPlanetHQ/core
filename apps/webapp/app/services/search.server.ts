@@ -6,8 +6,6 @@ import {
   performVectorSearch,
   performEpisodeGraphSearch,
   extractEntitiesFromQuery,
-  groupStatementsByEpisode,
-  getEpisodesByUuids,
   type EpisodeGraphResult,
 } from "./search/utils";
 import { getEmbedding, makeModelCall } from "~/lib/model.server";
@@ -43,7 +41,7 @@ export class SearchService {
       spaceIds: string[];
       isCompact?: boolean;
     }[];
-    facts: {
+    invalidatedFacts: {
       fact: string;
       validAt: Date;
       invalidAt: Date | null;
@@ -54,8 +52,8 @@ export class SearchService {
     // Default options
 
     const opts: Required<SearchOptions> = {
-      limit: options.limit || 100,
-      maxBfsDepth: options.maxBfsDepth || 4,
+      limit: options.limit || 20, // Maximum episodes in final response
+      maxBfsDepth: options.maxBfsDepth || 3,
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
       endTime: options.endTime || new Date(),
@@ -82,11 +80,35 @@ export class SearchService {
     logger.info(`Extracted entities ${entities.map((e: EntityNode) => e.name).join(', ')}`);
 
     // 1. Run parallel search methods (including episode graph search) using enhanced query
+    const searchStartTime = Date.now();
+    const searchTimings = {
+      bm25: 0,
+      vector: 0,
+      bfs: 0,
+      episodeGraph: 0,
+    };
+    
     const [bm25Results, vectorResults, bfsResults, episodeGraphResults] = await Promise.all([
-      performBM25Search(query, userId, opts),
-      performVectorSearch(queryVector, userId, opts),
-      performBfsSearch(query, queryVector, userId, entities, opts),
-      performEpisodeGraphSearch(query, entities, queryVector, userId, opts),
+      performBM25Search(query, userId, opts).then(r => {
+        searchTimings.bm25 = Date.now() - searchStartTime;
+        logger.info(`BM25 search completed in ${searchTimings.bm25}ms`);
+        return r;
+      }),
+      performVectorSearch(queryVector, userId, opts).then(r => {
+        searchTimings.vector = Date.now() - searchStartTime;
+        logger.info(`Vector search completed in ${searchTimings.vector}ms`);
+        return r;
+      }),
+      performBfsSearch(query, queryVector, userId, entities, opts).then(r => {
+        searchTimings.bfs = Date.now() - searchStartTime;
+        logger.info(`BFS search completed in ${searchTimings.bfs}ms`);
+        return r;
+      }),
+      performEpisodeGraphSearch(entities, queryVector, userId, opts).then(r => {
+        searchTimings.episodeGraph = Date.now() - searchStartTime;
+        logger.info(`Episode graph search completed in ${searchTimings.episodeGraph}ms`);
+        return r;
+      }),
     ]);
 
     logger.info(
@@ -118,7 +140,7 @@ export class SearchService {
       return opts.structured
         ? {
             episodes: [],
-            facts: [],
+            invalidatedFacts: [],
           }
         : this.formatAsMarkdown([], []);
     }
@@ -145,13 +167,22 @@ export class SearchService {
 
       if (finalEpisodes.length === 0) {
         logger.info('LLM validation rejected all episodes, returning empty');
-        return opts.structured ? { episodes: [], facts: [] } : this.formatAsMarkdown([], []);
+        return opts.structured ? { episodes: [], invalidatedFacts: [] } : this.formatAsMarkdown([], []);
       }
     }
 
+    // Apply limit to final episodes
+    const limitedEpisodes = finalEpisodes.slice(0, opts.limit);
+
+    if (finalEpisodes.length > opts.limit) {
+      logger.warn(
+        `Limiting episodes from ${finalEpisodes.length} to ${opts.limit} (limit option)`
+      );
+    }
+
     // Extract episodes and statements for response
-    const episodes = finalEpisodes.map((ep) => ep.episode);
-    const filteredResults = finalEpisodes.flatMap((ep) =>
+    const episodes = limitedEpisodes.map((ep) => ep.episode);
+    const filteredResults = limitedEpisodes.flatMap((ep) =>
       ep.statements.map((s) => ({
         statement: s.statement,
         score: Number((ep.firstLevelScore || 0).toFixed(2)),
@@ -166,19 +197,27 @@ export class SearchService {
     // Replace session episodes with compacts automatically
     const unifiedEpisodes = await this.replaceWithCompacts(episodes, userId);
 
-    const factsData = filteredResults.map((statement) => ({
-      fact: statement.statement.fact,
-      validAt: statement.statement.validAt,
-      invalidAt: statement.statement.invalidAt || null,
-      relevantScore: statement.score,
-    }));
+    // Only include invalidated facts (valid facts are already in episode content)
+    // Filter for statements that have a valid invalidAt date (not null, undefined, or empty string)
+    const factsData = filteredResults
+      .filter((statement) => {
+        const invalidAt = statement.statement.invalidAt;
+        // Check if invalidAt is a valid date (not null, undefined, empty string, or invalid date)
+        return invalidAt && invalidAt !== null
+      })
+      .map((statement) => ({
+        fact: statement.statement.fact,
+        validAt: statement.statement.validAt,
+        invalidAt: statement.statement.invalidAt,
+        relevantScore: statement.score,
+      }));
 
     // Calculate response content for token counting
     let responseContent: string;
     if (opts.structured) {
       responseContent = JSON.stringify({
         episodes: unifiedEpisodes,
-        facts: factsData,
+        invalidatedFacts: factsData,
       });
     } else {
       responseContent = this.formatAsMarkdown(unifiedEpisodes, factsData);
@@ -204,6 +243,7 @@ export class SearchService {
       responseTime,
       source,
       tokenCount,
+      searchTimings,
     ).catch((error) => {
       logger.error("Failed to log recall event:", error);
     });
@@ -212,7 +252,7 @@ export class SearchService {
     if (opts.structured) {
       return {
         episodes: unifiedEpisodes,
-        facts: factsData,
+        invalidatedFacts: factsData,
       };
     }
 
@@ -228,6 +268,7 @@ export class SearchService {
     responseTime: number,
     source?: string,
     tokenCount?: number,
+    searchTimings?: { bm25: number; vector: number; bfs: number; episodeGraph: number },
   ): Promise<void> {
     try {
       // Determine target type based on episode count
@@ -256,6 +297,14 @@ export class SearchService {
             validAt: options.validAt.toISOString(),
             startTime: options.startTime?.toISOString() || null,
             endTime: options.endTime.toISOString(),
+            ...(searchTimings && {
+              searchTimings: {
+                bm25Ms: searchTimings.bm25,
+                vectorMs: searchTimings.vector,
+                bfsMs: searchTimings.bfs,
+                episodeGraphMs: searchTimings.episodeGraph,
+              },
+            }),
           }),
           source: source ?? "search_api",
           responseTimeMs: responseTime,
@@ -348,9 +397,9 @@ export class SearchService {
       });
     }
 
-    // Add facts section
+    // Add invalidated facts section (only showing facts that are no longer valid)
     if (facts.length > 0) {
-      sections.push("## Key Facts\n");
+      sections.push("## Invalidated Facts\n");
 
       facts.forEach((fact) => {
         const validDate = fact.validAt.toLocaleString("en-US", {
@@ -358,12 +407,12 @@ export class SearchService {
           day: "numeric",
           year: "numeric",
         });
-        const invalidInfo = fact.invalidAt
-          ? ` → Invalidated ${fact.invalidAt.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+        const invalidDate = fact.invalidAt
+          ? fact.invalidAt.toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })
           : "";
 
         sections.push(`- ${fact.fact}`);
-        sections.push(`  *Valid from ${validDate}${invalidInfo}*`);
+        sections.push(`  *Valid: ${validDate} → Invalidated: ${invalidDate}*`);
       });
       sections.push(""); // Empty line after facts
     }
@@ -474,186 +523,130 @@ export class SearchService {
    */
   private async extractEpisodesWithProvenance(sources: {
     episodeGraph: EpisodeGraphResult[];
-    bfs: StatementNode[];
-    vector: StatementNode[];
-    bm25: StatementNode[];
+    bfs: import("./search/utils").EpisodeSearchResult[];
+    vector: import("./search/utils").EpisodeSearchResult[];
+    bm25: import("./search/utils").EpisodeSearchResult[];
   }): Promise<EpisodeWithProvenance[]> {
     const episodeMap = new Map<string, EpisodeWithProvenance>();
 
-    // Process Episode Graph results (already episode-grouped)
+    // Helper function to merge episode into map
+    const mergeEpisode = (
+      episode: EpisodicNode,
+      score: number,
+      source: 'episodeGraph' | 'bfs' | 'vector' | 'bm25',
+      statementCount: number,
+      topStatements: StatementNode[],
+      invalidatedStatements: StatementNode[],
+      entityMatches?: number,
+    ) => {
+      if (!episodeMap.has(episode.uuid)) {
+        episodeMap.set(episode.uuid, {
+          episode,
+          statements: [],
+          episodeGraphScore: 0,
+          bfsScore: 0,
+          vectorScore: 0,
+          bm25Score: 0,
+          sourceBreakdown: { fromEpisodeGraph: 0, fromBFS: 0, fromVector: 0, fromBM25: 0 },
+        });
+      }
+
+      const ep = episodeMap.get(episode.uuid)!;
+
+      // Set score for this source
+      if (source === 'episodeGraph') {
+        ep.episodeGraphScore = score;
+        ep.sourceBreakdown.fromEpisodeGraph = statementCount;
+      } else if (source === 'bfs') {
+        ep.bfsScore = score;
+        ep.sourceBreakdown.fromBFS = statementCount;
+      } else if (source === 'vector') {
+        ep.vectorScore = score;
+        ep.sourceBreakdown.fromVector = statementCount;
+      } else if (source === 'bm25') {
+        ep.bm25Score = score;
+        ep.sourceBreakdown.fromBM25 = statementCount;
+      }
+
+      // Store top statements and invalidated statements (merge, avoid duplicates)
+      const existingUuids = new Set(ep.statements.map(s => s.statement.uuid));
+
+      topStatements.forEach(stmt => {
+        if (!existingUuids.has(stmt.uuid)) {
+          ep.statements.push({
+            statement: stmt,
+            sources: source === 'episodeGraph' && entityMatches
+              ? { episodeGraph: { score, entityMatches } }
+              : { [source]: { score } },
+            primarySource: source,
+          });
+          existingUuids.add(stmt.uuid);
+        }
+      });
+
+      // Also include invalidated statements (needed for final response)
+      invalidatedStatements.forEach(stmt => {
+        if (!existingUuids.has(stmt.uuid)) {
+          ep.statements.push({
+            statement: stmt,
+            sources: { [source]: { score } },
+            primarySource: source,
+          });
+          existingUuids.add(stmt.uuid);
+        }
+      });
+    };
+
+    // Process Episode Graph results
     sources.episodeGraph.forEach((result) => {
-      const episodeId = result.episode.uuid;
-
-      if (!episodeMap.has(episodeId)) {
-        episodeMap.set(episodeId, {
-          episode: result.episode,
-          statements: [],
-          episodeGraphScore: result.score,
-          bfsScore: 0,
-          vectorScore: 0,
-          bm25Score: 0,
-          sourceBreakdown: { fromEpisodeGraph: 0, fromBFS: 0, fromVector: 0, fromBM25: 0 },
-        });
-      }
-
-      const ep = episodeMap.get(episodeId)!;
-      result.statements.forEach((statement) => {
-        ep.statements.push({
-          statement,
-          sources: {
-            episodeGraph: {
-              score: result.score,
-              entityMatches: result.metrics.entityMatchCount,
-            },
-          },
-          primarySource: 'episodeGraph',
-        });
-        ep.sourceBreakdown.fromEpisodeGraph++;
-      });
+      mergeEpisode(
+        result.episode,
+        result.score,
+        'episodeGraph',
+        result.statements.length,
+        result.statements,
+        result.statements.filter(s => s.invalidAt !== null),
+        result.metrics.entityMatchCount,
+      );
     });
 
-    // Process BFS statements (need to group by episode)
-    const bfsStatementsByEpisode = await groupStatementsByEpisode(sources.bfs);
-    const bfsEpisodeIds = Array.from(bfsStatementsByEpisode.keys());
-    const bfsEpisodes = await getEpisodesByUuids(bfsEpisodeIds);
-
-    bfsStatementsByEpisode.forEach((statements, episodeId) => {
-      if (!episodeMap.has(episodeId)) {
-        const episode = bfsEpisodes.get(episodeId);
-        if (!episode) return;
-
-        episodeMap.set(episodeId, {
-          episode,
-          statements: [],
-          episodeGraphScore: 0,
-          bfsScore: 0,
-          vectorScore: 0,
-          bm25Score: 0,
-          sourceBreakdown: { fromEpisodeGraph: 0, fromBFS: 0, fromVector: 0, fromBM25: 0 },
-        });
-      }
-
-      const ep = episodeMap.get(episodeId)!;
-      statements.forEach((statement) => {
-        const hopDistance = (statement as any).bfsHopDistance || 4;
-        const bfsRelevance = (statement as any).bfsRelevance || 0;
-
-        // Check if this statement already exists (from episode graph)
-        const existing = ep.statements.find((s) => s.statement.uuid === statement.uuid);
-        if (existing) {
-          // Add BFS source to existing statement
-          existing.sources.bfs = { score: bfsRelevance, hopDistance, relevance: bfsRelevance };
-        } else {
-          // New statement from BFS
-          ep.statements.push({
-            statement,
-            sources: { bfs: { score: bfsRelevance, hopDistance, relevance: bfsRelevance } },
-            primarySource: 'bfs',
-          });
-          ep.sourceBreakdown.fromBFS++;
-        }
-
-        // Aggregate BFS score for episode with hop multiplier
-        const hopMultiplier =
-          hopDistance === 1 ? 2.0 : hopDistance === 2 ? 1.3 : hopDistance === 3 ? 1.0 : 0.8;
-        ep.bfsScore += bfsRelevance * hopMultiplier;
-      });
-
-      // Average BFS score
-      if (statements.length > 0) {
-        ep.bfsScore /= statements.length;
-      }
+    // Process BFS results (episodes already grouped by Neo4j!)
+    sources.bfs.forEach((result) => {
+      mergeEpisode(
+        result.episode,
+        result.score,
+        'bfs',
+        result.statementCount,
+        result.topStatements,
+        result.invalidatedStatements,
+      );
     });
 
-    // Process Vector statements
-    const vectorStatementsByEpisode = await groupStatementsByEpisode(sources.vector);
-    const vectorEpisodeIds = Array.from(vectorStatementsByEpisode.keys());
-    const vectorEpisodes = await getEpisodesByUuids(vectorEpisodeIds);
-
-    vectorStatementsByEpisode.forEach((statements, episodeId) => {
-      if (!episodeMap.has(episodeId)) {
-        const episode = vectorEpisodes.get(episodeId);
-        if (!episode) return;
-
-        episodeMap.set(episodeId, {
-          episode,
-          statements: [],
-          episodeGraphScore: 0,
-          bfsScore: 0,
-          vectorScore: 0,
-          bm25Score: 0,
-          sourceBreakdown: { fromEpisodeGraph: 0, fromBFS: 0, fromVector: 0, fromBM25: 0 },
-        });
-      }
-
-      const ep = episodeMap.get(episodeId)!;
-      statements.forEach((statement) => {
-        const vectorScore = (statement as any).vectorScore || (statement as any).similarity || 0;
-
-        const existing = ep.statements.find((s) => s.statement.uuid === statement.uuid);
-        if (existing) {
-          existing.sources.vector = { score: vectorScore, similarity: vectorScore };
-        } else {
-          ep.statements.push({
-            statement,
-            sources: { vector: { score: vectorScore, similarity: vectorScore } },
-            primarySource: 'vector',
-          });
-          ep.sourceBreakdown.fromVector++;
-        }
-
-        ep.vectorScore += vectorScore;
-      });
-
-      if (statements.length > 0) {
-        ep.vectorScore /= statements.length;
-      }
+    // Process Vector results (episodes already grouped by Neo4j!)
+    sources.vector.forEach((result) => {
+      mergeEpisode(
+        result.episode,
+        result.score,
+        'vector',
+        result.statementCount,
+        result.topStatements,
+        result.invalidatedStatements,
+      );
     });
 
-    // Process BM25 statements
-    const bm25StatementsByEpisode = await groupStatementsByEpisode(sources.bm25);
-    const bm25EpisodeIds = Array.from(bm25StatementsByEpisode.keys());
-    const bm25Episodes = await getEpisodesByUuids(bm25EpisodeIds);
-
-    bm25StatementsByEpisode.forEach((statements, episodeId) => {
-      if (!episodeMap.has(episodeId)) {
-        const episode = bm25Episodes.get(episodeId);
-        if (!episode) return;
-
-        episodeMap.set(episodeId, {
-          episode,
-          statements: [],
-          episodeGraphScore: 0,
-          bfsScore: 0,
-          vectorScore: 0,
-          bm25Score: 0,
-          sourceBreakdown: { fromEpisodeGraph: 0, fromBFS: 0, fromVector: 0, fromBM25: 0 },
-        });
-      }
-
-      const ep = episodeMap.get(episodeId)!;
-      statements.forEach((statement) => {
-        const bm25Score = (statement as any).bm25Score || (statement as any).score || 0;
-
-        const existing = ep.statements.find((s) => s.statement.uuid === statement.uuid);
-        if (existing) {
-          existing.sources.bm25 = { score: bm25Score, rank: statements.indexOf(statement) };
-        } else {
-          ep.statements.push({
-            statement,
-            sources: { bm25: { score: bm25Score, rank: statements.indexOf(statement) } },
-            primarySource: 'bm25',
-          });
-          ep.sourceBreakdown.fromBM25++;
-        }
-
-        ep.bm25Score += bm25Score;
-      });
-
-      if (statements.length > 0) {
-        ep.bm25Score /= statements.length;
-      }
+    // Process BM25 results (episodes already grouped by Neo4j!)
+    sources.bm25.forEach((result) => {
+      mergeEpisode(
+        result.episode,
+        result.score,
+        'bm25',
+        result.statementCount,
+        result.topStatements,
+        result.invalidatedStatements,
+      );
     });
+
+    logger.info(`Merged ${episodeMap.size} unique episodes from all sources`);
 
     return Array.from(episodeMap.values());
   }
