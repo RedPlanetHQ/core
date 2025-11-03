@@ -1,4 +1,5 @@
 import type { EntityNode, StatementNode, EpisodicNode } from "@core/types";
+import { EPISODIC_NODE_PROPERTIES } from "@core/types";
 import type { SearchOptions } from "../search.server";
 import type { Embedding } from "ai";
 import { logger } from "../logger.service";
@@ -70,15 +71,15 @@ export async function performBM25Search(
         WITH s, score
         ORDER BY score DESC
         LIMIT ${STATEMENT_LIMIT}
-        MATCH (e:Episode {userId: $userId})-[:HAS_PROVENANCE]->(s)
-        WITH e, 
+        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
+        WITH e,
              COLLECT(s) as statements,
              COLLECT(score) as scores
         WITH e,
              statements,
              reduce(sum = 0.0, sc IN scores | sum + sc) / size(scores) as avgScore,
              size(statements) as stmtCount
-        RETURN e,
+        RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
                avgScore as score,
                stmtCount,
                statements[0..5] as topStatements,
@@ -96,7 +97,7 @@ export async function performBM25Search(
 
     const records = await runQuery(cypher, params);
     return records.map((record) => {
-      const episode = record.get("e").properties as EpisodicNode;
+      const episode = record.get("episode") as EpisodicNode;
       const scoreValue = record.get("score");
       const stmtCountValue = record.get("stmtCount");
       const topStatementsRaw = record.get("topStatements") || [];
@@ -171,26 +172,25 @@ export async function performVectorSearch(
 
     // Internal statement limit (not exposed to users)
     const STATEMENT_LIMIT = 100;
-    // 1. Use vector index for efficient ANN search (10-100x faster than full scan)
-    // Query up to 3x the limit from vector index, then filter by userId and temporal constraints
-    const vectorSearchLimit = Math.min(STATEMENT_LIMIT * 3, 300);
 
-    // Combined query: search statements and group by episode in one pass
+    // Pure GDS similarity search (for testing - may be slower than hybrid approach)
     const cypher = `
-    CALL db.index.vector.queryNodes('statement_embedding', $vectorSearchLimit, $embedding)
-    YIELD node AS s, score
-    WHERE s.userId = $userId
-      AND score >= 0.5
-    ${timeframeCondition}
-    ${spaceCondition}
+    MATCH (s:Statement{userId: $userId})
+    WHERE s.validAt <= $validAt
+      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+      ${options.startTime ? 'AND s.validAt >= $startTime' : ''}
+      ${spaceCondition}
+    WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
+    WHERE score >= 0.5
     WITH s, score
+    ORDER BY score DESC
     LIMIT ${STATEMENT_LIMIT}
-    MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode{userId: $userId})
+    MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
     WITH e,
          COLLECT({stmt: s, score: score}) as allStatements,
          AVG(score) as avgScore,
          COUNT(s) as stmtCount
-    RETURN e,
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
            avgScore as score,
            stmtCount,
            [item IN allStatements | item.stmt][0..5] as topStatements,
@@ -200,7 +200,6 @@ export async function performVectorSearch(
 
     const params = {
       embedding: query,
-      vectorSearchLimit,
       userId,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
@@ -209,7 +208,7 @@ export async function performVectorSearch(
 
     const records = await runQuery(cypher, params);
     return records.map((record) => {
-      const episode = record.get("e").properties as EpisodicNode;
+      const episode = record.get("episode") as EpisodicNode;
       const scoreValue = record.get("score");
       const stmtCountValue = record.get("stmtCount");
       const topStatementsRaw = record.get("topStatements") || [];
@@ -293,14 +292,14 @@ export async function performBfsSearch(
     const cypher = `
       MATCH (e:Episode{userId: $userId})
       WHERE e.uuid IN $episodeIds
-      RETURN e
+      RETURN ${EPISODIC_NODE_PROPERTIES} as episode
     `;
 
     const records = await runQuery(cypher, { episodeIds, userId });
 
     // Build results with aggregated scores (in-memory aggregation)
     return records.map((record) => {
-      const episode = record.get("e").properties as EpisodicNode;
+      const episode = record.get("episode") as EpisodicNode;
       const episodeData = episodeStatementsMap.get(episode.uuid)!;
 
       const avgScore = episodeData.reduce((sum, d) => sum + d.score, 0) / episodeData.length;
@@ -685,7 +684,7 @@ export async function performEpisodeGraphSearch(
         AND totalStmtCount >= 1
 
       // Step 7: Calculate final score and return
-      RETURN ep,
+      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, 'ep.')} as episode,
              entityMatchedStatements as statements,
              entityMatchCount,
              totalStmtCount,
@@ -709,7 +708,7 @@ export async function performEpisodeGraphSearch(
     const records = await runQuery(cypher, params);
 
     const results: EpisodeGraphResult[] = records.map((record) => {
-      const episode = record.get("ep").properties as EpisodicNode;
+      const episode = record.get("episode") as EpisodicNode;
       const statements = record.get("statements").map((s: any) => s.properties as StatementNode);
       const entityMatchCount = typeof record.get("entityMatchCount") === 'bigint'
         ? Number(record.get("entityMatchCount"))
