@@ -390,7 +390,8 @@ export async function getSpaceEpisodeCount(
   `;
 
   const result = await runQuery(query, { spaceId, userId });
-  return Number(result[0]?.get("episodeCount") || 0);
+  const count = result[0]?.get("episodeCount");
+  return count?.toNumber ? count.toNumber() : Number(count || 0);
 }
 
 /**

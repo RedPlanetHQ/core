@@ -2,6 +2,8 @@ export interface SpaceNode {
   uuid: string;
   name: string;
   description?: string;
+  summary?: string;
+  summaryType?: string;
   userId: string;
   createdAt: Date;
   updatedAt: Date;
@@ -13,6 +15,8 @@ export interface SpaceNode {
 export interface CreateSpaceParams {
   name: string;
   description?: string;
+  summary?: string;
+  summaryType?: string;
   userId: string;
   workspaceId: string;
 }

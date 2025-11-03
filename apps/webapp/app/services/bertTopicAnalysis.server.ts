@@ -59,7 +59,8 @@ export async function shouldTriggerTopicAnalysis(
     return episodeCount >= 20;
   } catch (error) {
     logger.error(
-      `[Topic Analysis Check] Error checking episode count: ${error}`,
+      `[Topic Analysis Check] Error checking episode count:`,
+      {error},
     );
     return false;
   }
@@ -99,7 +100,8 @@ export async function updateLastTopicAnalysisTime(
     );
   } catch (error) {
     logger.error(
-      `[Topic Analysis] Error updating last analysis timestamp: ${error}`,
+      `[Topic Analysis] Error updating last analysis timestamp:`,
+      {error},
     );
   }
 }
