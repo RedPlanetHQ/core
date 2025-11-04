@@ -31,7 +31,7 @@ let schemaInitialized = false;
 // Test the connection
 const verifyConnectivity = async () => {
   try {
-    await driver.verifyConnectivity();
+    await driver.getServerInfo();
     logger.info("Connected to Neo4j database");
     return true;
   } catch (error) {
@@ -321,7 +321,6 @@ const initializeSchema = async () => {
     await runQuery(
       "CREATE INDEX episode_session_id IF NOT EXISTS FOR (n:Episode) ON (n.sessionId)",
     );
-    
     // Create vector indexes for semantic search (if using Neo4j 5.0+)
     await runQuery(`
       CREATE VECTOR INDEX entity_embedding IF NOT EXISTS FOR (n:Entity) ON n.nameEmbedding

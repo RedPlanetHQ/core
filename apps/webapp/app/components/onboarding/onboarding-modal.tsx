@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { type Provider, OnboardingStep } from "./types";
 import { ProviderSelectionStep } from "./provider-selection-step";
@@ -12,17 +12,21 @@ interface OnboardingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onComplete: () => void;
+  preselectedProvider?: Provider;
 }
 
 export function OnboardingModal({
   isOpen,
   onClose,
   onComplete,
+  preselectedProvider,
 }: OnboardingModalProps) {
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(
     OnboardingStep.PROVIDER_SELECTION,
   );
-  const [selectedProvider, setSelectedProvider] = useState<Provider>();
+  const [selectedProvider, setSelectedProvider] = useState<
+    Provider | undefined
+  >(preselectedProvider);
   const [ingestionStatus, setIngestionStatus] = useState<
     "idle" | "waiting" | "processing" | "complete" | "error"
   >("idle");
@@ -190,7 +194,7 @@ export function OnboardingModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto p-4">
+      <DialogContent className="max-h-[70vh] max-w-3xl overflow-y-auto p-4">
         <DialogHeader>
           <div className="space-y-3">
             <div className="flex items-center justify-between">
@@ -199,7 +203,7 @@ export function OnboardingModal({
                 variant="ghost"
                 size="sm"
                 onClick={handleSkip}
-                className="text-muted-foreground hover:text-foreground"
+                className="text-muted-foreground hover:text-foreground rounded"
               >
                 Skip
               </Button>

@@ -9,7 +9,6 @@ import { SpaceEpisodesList } from "~/components/spaces/space-episodes-list";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
 import { getLogByEpisode } from "~/services/ingestionLogs.server";
-import { Button } from "~/components/ui";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -98,7 +97,7 @@ export default function Episodes() {
               hasMore={false} // TODO: Implement real pagination
               loadMore={loadMore}
               isLoading={false}
-              spaceId={space.id}
+              spaceId={space.id as string}
             />
           )}
         </ClientOnly>

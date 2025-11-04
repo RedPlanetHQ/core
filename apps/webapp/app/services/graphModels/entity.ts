@@ -1,10 +1,11 @@
-import type { EntityNode } from "@core/types";
+import { ENTITY_NODE_PROPERTIES, type EntityNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
 
 export async function saveEntity(entity: EntityNode): Promise<string> {
   // Build query conditionally based on whether typeEmbedding exists
-  const hasTypeEmbedding = entity.typeEmbedding && entity.typeEmbedding.length > 0;
-  
+  const hasTypeEmbedding =
+    entity.typeEmbedding && entity.typeEmbedding.length > 0;
+
   const query = `
     MERGE (n:Entity {uuid: $uuid})
       ON CREATE SET
@@ -12,7 +13,7 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
         n.type = $type,
         n.attributes = $attributes,
         n.nameEmbedding = $nameEmbedding,
-        ${hasTypeEmbedding ? 'n.typeEmbedding = $typeEmbedding,' : ''}
+        ${hasTypeEmbedding ? "n.typeEmbedding = $typeEmbedding," : ""}
         n.createdAt = $createdAt,
         n.userId = $userId,
         n.space = $space
@@ -21,7 +22,7 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
         n.type = $type,
         n.attributes = $attributes,
         n.nameEmbedding = $nameEmbedding,
-        ${hasTypeEmbedding ? 'n.typeEmbedding = $typeEmbedding,' : ''}
+        ${hasTypeEmbedding ? "n.typeEmbedding = $typeEmbedding," : ""}
         n.space = $space
       RETURN n.uuid as uuid
     `;
@@ -29,18 +30,9 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
   const params: any = {
     uuid: entity.uuid,
     name: entity.name,
-    type: entity.type || "",
-    attributes: JSON.stringify(entity.attributes || {}),
-    nameEmbedding: entity.nameEmbedding,
     createdAt: entity.createdAt.toISOString(),
     userId: entity.userId,
-    space: entity.space || null,
   };
-
-  // Add typeEmbedding to params only if it exists
-  if (hasTypeEmbedding) {
-    params.typeEmbedding = entity.typeEmbedding;
-  }
 
   const result = await runQuery(query, params);
   return result[0].get("uuid");
@@ -59,13 +51,10 @@ export async function getEntity(uuid: string): Promise<EntityNode | null> {
   return {
     uuid: entity.uuid,
     name: entity.name,
-    type: entity.type || null,
-    attributes: JSON.parse(entity.attributes || "{}"),
     nameEmbedding: entity.nameEmbedding,
     typeEmbedding: entity.typeEmbedding || null,
     createdAt: new Date(entity.createdAt),
     userId: entity.userId,
-    space: entity.space,
   };
 }
 
@@ -85,7 +74,7 @@ export async function findSimilarEntities(params: {
   RETURN entity, score
   ORDER BY score DESC
   LIMIT ${limit}
-  `
+  `;
 
   const result = await runQuery(query, { ...params });
   return result.map((record) => {
@@ -96,8 +85,6 @@ export async function findSimilarEntities(params: {
       name: entity.name,
       type: entity.type,
       attributes: JSON.parse(entity.attributes || "{}"),
-      nameEmbedding: entity.nameEmbedding,
-      typeEmbedding: entity.typeEmbedding,
       createdAt: new Date(entity.createdAt),
       userId: entity.userId,
       space: entity.space,

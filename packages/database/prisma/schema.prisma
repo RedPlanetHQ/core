@@ -119,6 +119,9 @@ model IngestionQueue {
   status   IngestionStatus
   priority Int             @default(0)
 
+  source String?
+  title  String?
+
   type String?
 
   workspaceId String

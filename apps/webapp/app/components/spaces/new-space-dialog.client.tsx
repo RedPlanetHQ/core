@@ -88,7 +88,7 @@ export function NewSpaceDialog({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="space-description">Rule</Label>
+            <Label htmlFor="space-description">Description</Label>
             <div className="bg-grayAlpha-100 rounded-lg border border-gray-300 p-1">
               <EditorRoot>
                 <EditorContent
@@ -100,7 +100,7 @@ export function NewSpaceDialog({
                       keepMarks: true,
                     }),
                     Placeholder.configure({
-                      placeholder: "Enter a rule for this space...",
+                      placeholder: "Enter a description for this space...",
                       includeChildren: true,
                     }),
                     History,

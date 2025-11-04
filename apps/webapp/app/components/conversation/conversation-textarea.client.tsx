@@ -110,13 +110,13 @@ export function ConversationTextarea({
           }}
           immediatelyRender={false}
           className={cn(
-            "editor-container text-md max-h-[400px] min-h-[40px] w-full min-w-full overflow-auto rounded-lg px-3",
+            "editor-container max-h-[400px] min-h-[40px] w-full min-w-full overflow-auto rounded-lg px-3 text-base",
           )}
         />
       </EditorRoot>
       <div className="mb-1 flex justify-end px-3">
         <Button
-          variant="default"
+          variant="secondary"
           className="gap-1 shadow-none transition-all duration-500 ease-in-out"
           onClick={() => {
             if (!isLoading) {

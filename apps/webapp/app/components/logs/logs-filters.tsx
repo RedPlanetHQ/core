@@ -33,7 +33,7 @@ const typeOptions = [
 type FilterStep = "main" | "source" | "status" | "type";
 
 export function LogsFilters({
-  availableSources,
+  availableSources = [],
   selectedSource,
   selectedStatus,
   selectedType,
@@ -43,9 +43,6 @@ export function LogsFilters({
 }: LogsFiltersProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [step, setStep] = useState<FilterStep>("main");
-
-  // Only show first two sources, or "All sources" if none
-  const limitedSources = availableSources.slice(0, 2);
 
   const selectedSourceName = availableSources.find(
     (s) => s.slug === selectedSource,
@@ -120,7 +117,7 @@ export function LogsFilters({
                 >
                   All sources
                 </Button>
-                {limitedSources.map((source) => (
+                {availableSources.map((source) => (
                   <Button
                     key={source.slug}
                     variant="ghost"
@@ -195,9 +192,7 @@ export function LogsFilters({
                     className="w-full justify-start"
                     onClick={() => {
                       onTypeChange(
-                        type.value === selectedType
-                          ? undefined
-                          : type.value,
+                        type.value === selectedType ? undefined : type.value,
                       );
                       setPopoverOpen(false);
                       setStep("main");

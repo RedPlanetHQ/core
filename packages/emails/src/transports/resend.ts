@@ -19,7 +19,7 @@ export class ResendMailTransport implements MailTransport {
     const result = await this.#client.emails.send({
       from: from,
       to,
-      reply_to: replyTo,
+      replyTo: replyTo,
       subject,
       react,
     });
@@ -37,7 +37,7 @@ export class ResendMailTransport implements MailTransport {
     const result = await this.#client.emails.send({
       from: from,
       to,
-      reply_to: replyTo,
+      replyTo: replyTo,
       subject,
       text,
     });

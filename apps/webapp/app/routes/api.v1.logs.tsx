@@ -1,6 +1,7 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { prisma } from "~/db.server";
+import { type LogItem } from "~/hooks/use-logs";
 
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
@@ -63,19 +64,8 @@ export const loader = createHybridLoaderApiRoute(
       };
     }
 
-    // If source filter is provided, filter by integration source
-    if (source) {
-      whereClause.activity = {
-        integrationAccount: {
-          integrationDefinition: {
-            slug: source,
-          },
-        },
-      };
-    }
-
-    // Use select to fetch only required fields for logs
-    const [logs, totalCount, availableSources] = await Promise.all([
+    // Fetch paginated logs directly from database
+    const [allLogs, totalCount] = await Promise.all([
       prisma.ingestionQueue.findMany({
         where: whereClause,
         select: {
@@ -87,6 +77,7 @@ export const loader = createHybridLoaderApiRoute(
           type: true,
           output: true,
           data: true,
+          // title: true,
           activity: {
             select: {
               text: true,
@@ -107,38 +98,71 @@ export const loader = createHybridLoaderApiRoute(
         orderBy: {
           createdAt: "desc",
         },
-        skip,
+        skip: skip,
         take: limit,
       }),
-
       prisma.ingestionQueue.count({
         where: whereClause,
       }),
-
-      prisma.integrationDefinitionV2.findMany({
-        where: {
-          IntegrationAccount: {
-            some: {
-              workspaceId: user.Workspace.id,
-            },
-          },
-        },
-        select: {
-          name: true,
-          slug: true,
-        },
-      }),
     ]);
 
-    // Format the response
-    const formattedLogs = logs.map((log) => {
+    // Get unique session IDs from logs
+    const sessionIds = [
+      ...new Set(
+        allLogs
+          .map((log: LogItem) => (log.data as any)?.sessionId)
+          .filter((id: string) => id != null),
+      ),
+    ] as string[];
+
+    // Fetch episode counts for each session
+    const sessionEpisodeCounts: Record<string, number> = {};
+    if (sessionIds.length > 0) {
+      const counts = await Promise.all(
+        sessionIds.map(async (sessionId: string) => {
+          const count = await prisma.ingestionQueue.count({
+            where: {
+              data: {
+                path: ["sessionId"],
+                equals: sessionId,
+              },
+            },
+          });
+          return { sessionId: sessionId as string, count: count as number };
+        }),
+      );
+
+      counts.forEach(({ sessionId, count }) => {
+        sessionEpisodeCounts[sessionId] = count;
+      });
+    }
+
+    // Format logs
+    const formattedLogs = allLogs.map((log: any) => {
       const integrationDef =
         log.activity?.integrationAccount?.integrationDefinition;
       const logData = log.data as any;
+      const episodeUUID = (log.output as any)?.episodeUuid;
+      const type = logData?.type || "CONVERSATION";
+      const sessionId = logData?.sessionId;
+
+      // Build episodes array based on type
+      let episodes: string[] = [];
+      if (type === "DOCUMENT") {
+        // DOCUMENT type: use episodes array from output
+        const outputEpisodes = (log.output as any)?.episodes || [];
+        episodes = outputEpisodes.map((e: any) => e.episodeUuid);
+      } else {
+        // CONVERSATION type: use episodeUuid if exists
+        if (episodeUUID) {
+          episodes = [episodeUUID];
+        }
+      }
 
       return {
         id: log.id,
         source: integrationDef?.name || logData?.source || "Unknown",
+        title: log.title || "Untitled",
         ingestText:
           log.activity?.text ||
           logData?.episodeBody ||
@@ -146,12 +170,19 @@ export const loader = createHybridLoaderApiRoute(
           "No content",
         time: log.createdAt,
         processedAt: log.processedAt,
-        episodeUUID: (log.output as any)?.episodeUuid,
+        episodeUUID,
         status: log.status,
         error: log.error,
         sourceURL: log.activity?.sourceURL,
         integrationSlug: integrationDef?.slug,
         data: log.data,
+        sessionId,
+        type,
+        episodes,
+        isSessionGroup: !!sessionId,
+        sessionEpisodeCount: sessionId
+          ? sessionEpisodeCounts[sessionId]
+          : undefined,
       };
     });
 
@@ -160,8 +191,7 @@ export const loader = createHybridLoaderApiRoute(
       totalCount,
       page,
       limit,
-      hasMore: skip + logs.length < totalCount,
-      availableSources,
+      hasMore: skip + formattedLogs.length < totalCount,
     });
   },
 );

@@ -462,9 +462,9 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.high.input += usage.promptTokens;
-          tokenMetrics.high.output += usage.completionTokens;
-          tokenMetrics.high.total += usage.totalTokens;
+          tokenMetrics.high.input += usage.promptTokens as number;
+          tokenMetrics.high.output += usage.completionTokens as number;
+          tokenMetrics.high.total += usage.totalTokens as number;
         }
       },
       undefined,
@@ -769,7 +769,7 @@ export class KnowledgeGraphService {
     const similarEntitiesResults = await Promise.all(
       nonPredicates.map(async (entity) => {
         const similarEntities = await findSimilarEntities({
-          queryEmbedding: entity.nameEmbedding,
+          queryEmbedding: entity.nameEmbedding as number[],
           limit: 5,
           threshold: 0.7,
           userId: episode.userId,
@@ -836,9 +836,9 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.low.input += usage.promptTokens;
-          tokenMetrics.low.output += usage.completionTokens;
-          tokenMetrics.low.total += usage.totalTokens;
+          tokenMetrics.low.input += usage.promptTokens as number;
+          tokenMetrics.low.output += usage.completionTokens as number;
+          tokenMetrics.low.total += usage.totalTokens as number;
         }
       },
       undefined,
@@ -1091,9 +1091,9 @@ export class KnowledgeGraphService {
         (text, _model, usage) => {
           responseText = text;
           if (usage) {
-            tokenMetrics.low.input += usage.promptTokens;
-            tokenMetrics.low.output += usage.completionTokens;
-            tokenMetrics.low.total += usage.totalTokens;
+            tokenMetrics.low.input += usage.promptTokens as number;
+            tokenMetrics.low.output += usage.completionTokens as number;
+            tokenMetrics.low.total += usage.totalTokens as number;
           }
         },
         undefined,
@@ -1227,9 +1227,9 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.low.input += usage.promptTokens;
-          tokenMetrics.low.output += usage.completionTokens;
-          tokenMetrics.low.total += usage.totalTokens;
+          tokenMetrics.low.input += usage.promptTokens as number;
+          tokenMetrics.low.output += usage.completionTokens as number;
+          tokenMetrics.low.total += usage.totalTokens as number;
         }
       },
       undefined,

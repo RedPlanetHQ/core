@@ -1,5 +1,4 @@
 import { prisma } from "~/db.server";
-import { getEpisode } from "./graphModels/episode";
 import { getSpacesForEpisodes } from "./graphModels/space";
 
 export async function getIngestionLogs(
@@ -60,8 +59,8 @@ export const getIngestionQueueForFrontend = async (
   userId: string,
 ) => {
   // Fetch the specific log by logId
-  const log = await prisma.ingestionQueue.findUnique({
-    where: { id: id },
+  let log = await prisma.ingestionQueue.findUnique({
+    where: { id },
     select: {
       id: true,
       createdAt: true,
@@ -91,8 +90,49 @@ export const getIngestionQueueForFrontend = async (
     },
   });
 
+  // If not found by ID, try to find by episode UUID
   if (!log) {
-    throw new Response("Log not found", { status: 404 });
+    const logByEpisode = await getLogByEpisode(id);
+
+    if (!logByEpisode) {
+      throw new Response("Log not found", { status: 404 });
+    }
+
+    // Fetch the full log data using the found log's ID
+    log = await prisma.ingestionQueue.findUnique({
+      where: { id: logByEpisode.id },
+      select: {
+        id: true,
+        createdAt: true,
+        processedAt: true,
+        status: true,
+        error: true,
+        type: true,
+        output: true,
+        data: true,
+        workspaceId: true,
+        activity: {
+          select: {
+            text: true,
+            sourceURL: true,
+            integrationAccount: {
+              select: {
+                integrationDefinition: {
+                  select: {
+                    name: true,
+                    slug: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!log) {
+      throw new Response("Log not found", { status: 404 });
+    }
   }
 
   // Format the response
@@ -118,6 +158,10 @@ export const getIngestionQueueForFrontend = async (
     data: log.data,
   };
 
+  // Add sessionId and isSessionGroup flag
+  formattedLog.sessionId = logData?.sessionId;
+  formattedLog.isSessionGroup = !!logData?.sessionId;
+
   // Fetch space data based on log type
   if (logData?.type === "CONVERSATION" && formattedLog?.episodeUUID) {
     // For CONVERSATION type: get spaceIds for the single episode
@@ -126,37 +170,7 @@ export const getIngestionQueueForFrontend = async (
       userId,
     );
     formattedLog.spaceIds = spacesMap[formattedLog.episodeUUID] || [];
-  } else if (
-    logData?.type === "DOCUMENT" &&
-    (log.output as any)?.episodes?.length > 0
-  ) {
-    // For DOCUMENT type: get episode details and space information for all episodes
-    const episodeIds = (log.output as any)?.episodes.map(
-      (e: any) => e.episodeUuid,
-    );
-
-    // Fetch all episode details in parallel
-    const episodeDetailsPromises = episodeIds.map((episodeId: string) =>
-      getEpisode(episodeId).catch(() => null),
-    );
-    const episodeDetails = await Promise.all(episodeDetailsPromises);
-
-    // Get spaceIds for all episodes
-    const spacesMap = await getSpacesForEpisodes(episodeIds, userId);
-
-    // Combine episode details with space information
-    formattedLog.episodeDetails = episodeIds.map(
-      (episodeId: string, index: number) => {
-        const episode = episodeDetails[index];
-        return {
-          uuid: episodeId,
-          content: episode?.content || episode?.originalContent || "No content",
-          spaceIds: spacesMap[episodeId] || [],
-        };
-      },
-    );
   }
-
   return formattedLog;
 };
 

@@ -1,5 +1,5 @@
 import { redirect } from "@remix-run/node";
-import { getUserById, getUserLeftCredits } from "~/models/user.server";
+import { getUserById } from "~/models/user.server";
 import { sessionStorage } from "./sessionStorage.server";
 import { getImpersonationId } from "./impersonation.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";

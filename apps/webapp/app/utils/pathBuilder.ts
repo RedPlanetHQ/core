@@ -10,12 +10,12 @@ export function homePath() {
   return `/home`;
 }
 
-export function dashboardPath() {
-  return `/home/dashboard`;
+export function graphPath() {
+  return `/home/graph`;
 }
 
-export function inboxPath() {
-  return `/home/inbox`;
+export function episodesPath() {
+  return `/home/episodes`;
 }
 
 export function conversationPath() {

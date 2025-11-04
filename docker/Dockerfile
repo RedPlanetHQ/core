@@ -78,8 +78,9 @@ COPY --from=builder --chown=node:node /core/apps/webapp/build ./apps/webapp/buil
 COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /core/scripts ./scripts
 
-# Copy BERT scripts (packages will be installed on first use to /opt/bert-packages volume)
+# Copy BERT scripts and install Python requirements
 COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt
+RUN pip3 install --no-cache-dir -r ./apps/webapp/python/requirements.txt
 COPY --chown=node:node apps/webapp/python/main.py ./apps/webapp/python/main.py
 
 # Create /opt/bert-packages directory with node user ownership

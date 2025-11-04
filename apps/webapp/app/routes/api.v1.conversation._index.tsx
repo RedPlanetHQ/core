@@ -19,10 +19,6 @@ import {
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
 import {
-  deletePersonalAccessToken,
-  getOrCreatePersonalAccessToken,
-} from "~/services/personalAccessToken.server";
-import {
   hasAnswer,
   hasQuestion,
   REACT_SYSTEM_PROMPT,
@@ -52,7 +48,7 @@ const { loader, action } = createHybridActionApiRoute(
     const message = body.message.parts[0].text;
     const id = body.message.id;
     const apiEndpoint = `${env.APP_ORIGIN}/api/v1/mcp?source=core`;
-    console.log(apiEndpoint);
+
     const url = new URL(apiEndpoint);
 
     const mcpClient = await createMCPClient({
@@ -72,7 +68,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const conversationHistory = conversation?.ConversationHistory ?? [];
 
-    if (conversationHistory.length === 0) {
+    if (conversationHistory.length === 1) {
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
         conversationId: body.id,
@@ -132,6 +128,7 @@ const { loader, action } = createHybridActionApiRoute(
             message += part.text;
           }
         });
+        await mcpClient.close();
 
         await createConversationHistory(message, body.id, UserTypeEnum.Agent);
       },

@@ -1,8 +1,10 @@
-import type {
-  EntityNode,
-  EpisodicNode,
-  StatementNode,
-  Triple,
+import {
+  EPISODIC_NODE_PROPERTIES,
+  STATEMENT_NODE_PROPERTIES,
+  type EntityNode,
+  type EpisodicNode,
+  type StatementNode,
+  type Triple,
 } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
 import { saveEntity } from "./entity";
@@ -117,7 +119,7 @@ export async function findContradictoryStatements({
       MATCH (subject)<-[:HAS_SUBJECT]-(statement:Statement)-[:HAS_PREDICATE]->(predicate)
       WHERE statement.userId = $userId
         AND statement.invalidAt IS NULL
-      RETURN statement
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
   const result = await runQuery(query, { subjectId, predicateId, userId });
@@ -165,7 +167,7 @@ export async function findStatementsWithSameSubjectObject({
       WHERE statement.userId = $userId
         AND statement.invalidAt IS NULL
         ${excludePredicateId ? "AND predicate.uuid <> $excludePredicateId" : ""}
-      RETURN statement
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
   const params = {
@@ -217,7 +219,7 @@ export async function findSimilarStatements({
       WHERE statement.factEmbedding IS NOT NULL
       WITH statement, gds.similarity.cosine(statement.factEmbedding, $factEmbedding) AS score
       WHERE score >= $threshold
-      RETURN statement, score
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
       ORDER BY score DESC
       LIMIT ${limit}
     `;
@@ -262,7 +264,7 @@ export async function getTripleForStatement({
       MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
       MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
       OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
-      RETURN statement, subject, predicate, object, episode
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement, subject, predicate, object, ${EPISODIC_NODE_PROPERTIES} as statement
     `;
 
   const result = await runQuery(query, { statementId });
@@ -372,7 +374,7 @@ export async function invalidateStatement({
       MATCH (statement:Statement {uuid: $statementId})
       SET statement.invalidAt = $invalidAt
       ${invalidatedBy ? "SET statement.invalidatedBy = $invalidatedBy" : ""}
-      RETURN statement
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
   const params = {
@@ -415,7 +417,7 @@ export async function searchStatementsByEmbedding(params: {
   WHERE statement.factEmbedding IS NOT NULL
   WITH statement, gds.similarity.cosine(statement.factEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
-  RETURN statement, score
+  RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
   ORDER BY score DESC
   LIMIT ${limit}
 `;

@@ -1,11 +1,16 @@
-import type { EntityNode, StatementNode, EpisodicNode, EpisodeSearchResult, SearchOptions } from "@core/types";
-import { EPISODIC_NODE_PROPERTIES } from "@core/types";
+import {
+  EPISODIC_NODE_PROPERTIES,
+  type EntityNode,
+  type StatementNode,
+  type EpisodicNode,
+  type EpisodeSearchResult,
+  type SearchOptions,
+} from "@core/types";
 import type { Embedding } from "ai";
 import { logger } from "../logger.service";
 import { runQuery } from "~/lib/neo4j.server";
 import { getEmbedding } from "~/lib/model.server";
 import { findSimilarEntities } from "../graphModels/entity";
-
 
 /**
  * Perform BM25 keyword-based search on statements
@@ -22,14 +27,14 @@ export async function performBM25Search(
     // Build the WHERE clause based on timeframe options
     let timeframeCondition = `
       AND s.validAt <= $validAt
-      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
     `;
 
     // If startTime is provided, add condition to filter by validAt >= startTime
     if (options.startTime) {
       timeframeCondition = `
         AND s.validAt <= $validAt
-        ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
         AND s.validAt >= $startTime
       `;
     }
@@ -94,11 +99,17 @@ export async function performBM25Search(
 
       return {
         episode,
-        score: typeof scoreValue === "number" ? scoreValue : (scoreValue?.toNumber?.() ?? 0),
-        statementCount: typeof stmtCountValue === "bigint"
-          ? Number(stmtCountValue)
-          : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
-        topStatements: topStatementsRaw.map((s: any) => s.properties as StatementNode),
+        score:
+          typeof scoreValue === "number"
+            ? scoreValue
+            : (scoreValue?.toNumber?.() ?? 0),
+        statementCount:
+          typeof stmtCountValue === "bigint"
+            ? Number(stmtCountValue)
+            : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
+        topStatements: topStatementsRaw.map(
+          (s: any) => s.properties as StatementNode,
+        ),
         invalidatedStatements: [], // Will be filtered at the end in search.server.ts
       };
     });
@@ -140,14 +151,14 @@ export async function performVectorSearch(
     // Build the WHERE clause based on timeframe options
     let timeframeCondition = `
       AND s.validAt <= $validAt
-      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
     `;
 
     // If startTime is provided, add condition to filter by validAt >= startTime
     if (options.startTime) {
       timeframeCondition = `
         AND s.validAt <= $validAt
-        ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
         AND s.validAt >= $startTime
       `;
     }
@@ -169,8 +180,8 @@ export async function performVectorSearch(
     MATCH (s:Statement{userId: $userId})
     WHERE s.factEmbedding IS NOT NULL
       AND s.validAt <= $validAt
-      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
-      ${options.startTime ? 'AND s.validAt >= $startTime' : ''}
+      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
+      ${options.startTime ? "AND s.validAt >= $startTime" : ""}
     WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
     WHERE score >= 0.5
     WITH s, score
@@ -207,11 +218,17 @@ export async function performVectorSearch(
 
       return {
         episode,
-        score: typeof scoreValue === "number" ? scoreValue : (scoreValue?.toNumber?.() ?? 0),
-        statementCount: typeof stmtCountValue === "bigint"
-          ? Number(stmtCountValue)
-          : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
-        topStatements: topStatementsRaw.map((s: any) => s.properties as StatementNode),
+        score:
+          typeof scoreValue === "number"
+            ? scoreValue
+            : (scoreValue?.toNumber?.() ?? 0),
+        statementCount:
+          typeof stmtCountValue === "bigint"
+            ? Number(stmtCountValue)
+            : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
+        topStatements: topStatementsRaw.map(
+          (s: any) => s.properties as StatementNode,
+        ),
         invalidatedStatements: [], // Will be filtered at the end in search.server.ts
       };
     });
@@ -254,15 +271,22 @@ export async function performBfsSearch(
 
     // Group by episode IN MEMORY (fastest approach!)
     // Calculate scores with hop multipliers using pre-computed BFS relevance
-    const episodeStatementsMap = new Map<string, Array<{ statement: StatementNode; score: number }>>();
+    const episodeStatementsMap = new Map<
+      string,
+      Array<{ statement: StatementNode; score: number }>
+    >();
 
-    statements.forEach(s => {
+    statements.forEach((s) => {
       const episodeIds = (s as any).episodeIds || [];
       const hopDistance = hopDistanceMap.get(s.uuid) || 4;
       const hopMultiplier =
-        hopDistance === 1 ? 2.0 :
-        hopDistance === 2 ? 1.3 :
-        hopDistance === 3 ? 1.0 : 0.8;
+        hopDistance === 1
+          ? 2.0
+          : hopDistance === 2
+            ? 1.3
+            : hopDistance === 3
+              ? 1.0
+              : 0.8;
 
       const relevance = (s as any).bfsRelevance || 0.5;
       const score = relevance * hopMultiplier;
@@ -305,30 +329,32 @@ export async function performBfsSearch(
     });
 
     // Build results with aggregated scores (in-memory aggregation)
-    return records.map((record) => {
-      const episode = record.get("episode") as EpisodicNode;
-      const episodeData = episodeStatementsMap.get(episode.uuid)!;
+    return records
+      .map((record) => {
+        const episode = record.get("episode") as EpisodicNode;
+        const episodeData = episodeStatementsMap.get(episode.uuid)!;
 
-      const avgScore = episodeData.reduce((sum, d) => sum + d.score, 0) / episodeData.length;
-      const topStatements = episodeData
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map(d => d.statement);
+        const avgScore =
+          episodeData.reduce((sum, d) => sum + d.score, 0) / episodeData.length;
+        const topStatements = episodeData
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+          .map((d) => d.statement);
 
-      return {
-        episode,
-        score: avgScore,
-        statementCount: episodeData.length,
-        topStatements,
-        invalidatedStatements: [], // Will be filtered at the end in search.server.ts
-      };
-    }).sort((a, b) => b.score - a.score);
+        return {
+          episode,
+          score: avgScore,
+          statementCount: episodeData.length,
+          topStatements,
+          invalidatedStatements: [], // Will be filtered at the end in search.server.ts
+        };
+      })
+      .sort((a, b) => b.score - a.score);
   } catch (error) {
     logger.error("BFS search error:", { error });
     return [];
   }
 }
-
 
 /**
  * Iterative BFS traversal - explores up to 3 hops level-by-level using Neo4j cosine similarity
@@ -341,20 +367,26 @@ async function bfsTraversal(
   userId: string,
   includeInvalidated: boolean,
   startTime: Date | null,
-): Promise<{ statements: StatementNode[]; hopDistanceMap: Map<string, number> }> {
+): Promise<{
+  statements: StatementNode[];
+  hopDistanceMap: Map<string, number>;
+}> {
   const RELEVANCE_THRESHOLD = 0.65;
   const EXPLORATION_THRESHOLD = 0.3;
 
-  const allStatements = new Map<string, { relevance: number; hopDistance: number }>(); // uuid -> {relevance, hopDistance}
+  const allStatements = new Map<
+    string,
+    { relevance: number; hopDistance: number }
+  >(); // uuid -> {relevance, hopDistance}
   const visitedEntities = new Set<string>();
 
   // Track entities per level for iterative BFS
-  let currentLevelEntities = startEntities.map(e => e.uuid);
+  let currentLevelEntities = startEntities.map((e) => e.uuid);
 
   // Timeframe condition for temporal filtering
   let timeframeCondition = `
     AND s.validAt <= $validAt
-    ${includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+    ${includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
   `;
   if (startTime) {
     timeframeCondition += ` AND s.validAt >= $startTime`;
@@ -365,7 +397,7 @@ async function bfsTraversal(
     if (currentLevelEntities.length === 0) break;
 
     // Mark entities as visited at this depth
-    currentLevelEntities.forEach(id => visitedEntities.add(`${id}`));
+    currentLevelEntities.forEach((id) => visitedEntities.add(`${id}`));
 
     // Get statements for current level entities with cosine similarity calculated in Neo4j
     // Optimized: userId in MATCH for index usage + named rel variable for relationship index
@@ -413,14 +445,13 @@ async function bfsTraversal(
 
       const nextRecords = await runQuery(nextCypher, {
         statementUuids: currentLevelStatementUuids,
-        userId
+        userId,
       });
 
       // Filter out already visited entities
       currentLevelEntities = nextRecords
-        .map(r => r.get("entityId"))
-        .filter(id => !visitedEntities.has(`${id}`));
-
+        .map((r) => r.get("entityId"))
+        .filter((id) => !visitedEntities.has(`${id}`));
     } else {
       currentLevelEntities = [];
     }
@@ -445,13 +476,16 @@ async function bfsTraversal(
     WITH s, collect(e.uuid) as episodeIds
     RETURN s, episodeIds
   `;
-  const fetchRecords = await runQuery(fetchCypher, { uuids: relevantUuids, userId });
+  const fetchRecords = await runQuery(fetchCypher, {
+    uuids: relevantUuids,
+    userId,
+  });
   const statementMap = new Map(
-    fetchRecords.map(r => {
+    fetchRecords.map((r) => {
       const stmt = r.get("s").properties as StatementNode;
       const episodeIds = r.get("episodeIds") || [];
       return [stmt.uuid, { statement: stmt, episodeIds }];
-    })
+    }),
   );
 
   // Create hop distance and relevance maps for later use
@@ -467,30 +501,33 @@ async function bfsTraversal(
     return statement;
   });
 
-  const hopCounts = statements.reduce((acc, s) => {
-    const hop = hopDistanceMap.get(s.uuid) || 0;
-    acc[hop] = (acc[hop] || 0) + 1;
-    return acc;
-  }, {} as Record<number, number>);
+  const hopCounts = statements.reduce(
+    (acc, s) => {
+      const hop = hopDistanceMap.get(s.uuid) || 0;
+      acc[hop] = (acc[hop] || 0) + 1;
+      return acc;
+    },
+    {} as Record<number, number>,
+  );
 
   logger.info(
     `BFS: explored ${allStatements.size} statements across ${maxDepth} hops, ` +
-    `returning ${statements.length} (≥${RELEVANCE_THRESHOLD}) - ` +
-    `1-hop: ${hopCounts[1] || 0}, 2-hop: ${hopCounts[2] || 0}, 3-hop: ${hopCounts[3] || 0}, 4-hop: ${hopCounts[4] || 0}`
+      `returning ${statements.length} (≥${RELEVANCE_THRESHOLD}) - ` +
+      `1-hop: ${hopCounts[1] || 0}, 2-hop: ${hopCounts[2] || 0}, 3-hop: ${hopCounts[3] || 0}, 4-hop: ${hopCounts[4] || 0}`,
   );
 
   return { statements, hopDistanceMap };
 }
 
-
 /**
  * Generate query chunks (individual words and bigrams) for entity extraction
  */
 function generateQueryChunks(query: string): string[] {
-  const words = query.toLowerCase()
+  const words = query
+    .toLowerCase()
     .trim()
     .split(/\s+/)
-    .filter(word => word.length > 0);
+    .filter((word) => word.length > 0);
 
   const chunks: string[] = [];
 
@@ -524,11 +561,11 @@ export async function extractEntitiesFromQuery(
       const chunks = generateQueryChunks(query);
       // Get embeddings for each chunk
       chunkEmbeddings = await Promise.all(
-        chunks.map(chunk => getEmbedding(chunk))
+        chunks.map((chunk) => getEmbedding(chunk)),
       );
     } else {
       chunkEmbeddings = await Promise.all(
-        startEntities.map(chunk => getEmbedding(chunk))
+        startEntities.map((chunk) => getEmbedding(chunk)),
       );
     }
 
@@ -538,16 +575,16 @@ export async function extractEntitiesFromQuery(
         return await findSimilarEntities({
           queryEmbedding: embedding,
           limit: 3,
-          threshold: 0.7,
+          threshold: 0.5,
           userId,
         });
-      })
+      }),
     );
 
     // Flatten and deduplicate entities by ID
     const allEntities = allEntitySets.flat();
     const uniqueEntities = Array.from(
-      new Map(allEntities.map(e => [e.uuid, e])).values()
+      new Map(allEntities.map((e) => [e.uuid, e])).values(),
     );
 
     return uniqueEntities;
@@ -619,15 +656,18 @@ export async function performEpisodeGraphSearch(
       return [];
     }
 
-    const queryEntityIds = queryEntities.map(e => e.uuid);
-    logger.info(`Episode graph search: ${queryEntityIds.length} query entities`, {
-      entities: queryEntities.map(e => e.name).join(', ')
-    });
+    const queryEntityIds = queryEntities.map((e) => e.uuid);
+    logger.info(
+      `Episode graph search: ${queryEntityIds.length} query entities`,
+      {
+        entities: queryEntities.map((e) => e.name).join(", "),
+      },
+    );
 
     // Timeframe condition for temporal filtering
     let timeframeCondition = `
       AND s.validAt <= $validAt
-      ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
+      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
     `;
     if (options.startTime) {
       timeframeCondition += ` AND s.validAt >= $startTime`;
@@ -694,7 +734,7 @@ export async function performEpisodeGraphSearch(
         AND totalStmtCount >= 1
 
       // Step 7: Calculate final score and return
-      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, 'ep.')} as episode,
+      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "ep.")} as episode,
              entityMatchedStatements as statements,
              entityMatchCount,
              totalStmtCount,
@@ -719,13 +759,17 @@ export async function performEpisodeGraphSearch(
 
     const results: EpisodeGraphResult[] = records.map((record) => {
       const episode = record.get("episode") as EpisodicNode;
-      const statements = record.get("statements").map((s: any) => s.properties as StatementNode);
-      const entityMatchCount = typeof record.get("entityMatchCount") === 'bigint'
-        ? Number(record.get("entityMatchCount"))
-        : record.get("entityMatchCount");
-      const totalStmtCount = typeof record.get("totalStmtCount") === 'bigint'
-        ? Number(record.get("totalStmtCount"))
-        : record.get("totalStmtCount");
+      const statements = record
+        .get("statements")
+        .map((s: any) => s.properties as StatementNode);
+      const entityMatchCount =
+        typeof record.get("entityMatchCount") === "bigint"
+          ? Number(record.get("entityMatchCount"))
+          : record.get("entityMatchCount");
+      const totalStmtCount =
+        typeof record.get("totalStmtCount") === "bigint"
+          ? Number(record.get("totalStmtCount"))
+          : record.get("totalStmtCount");
       const avgRelevance = record.get("avgRelevance");
       const connectivityScore = record.get("connectivityScore");
       const episodeScore = record.get("episodeScore");
@@ -745,12 +789,12 @@ export async function performEpisodeGraphSearch(
 
     logger.info(
       `Episode graph search: found ${results.length} episodes, ` +
-      `top score: ${results[0]?.score.toFixed(2) || 'N/A'}` +
-      (results.length > 0
-        ? `, top episode: ${results[0].metrics.entityMatchCount} entities, ` +
-          `${results[0].statements.length} matched stmts, ` +
-          `avgRelevance: ${results[0].metrics.avgRelevance.toFixed(3)}`
-        : '')
+        `top score: ${results[0]?.score.toFixed(2) || "N/A"}` +
+        (results.length > 0
+          ? `, top episode: ${results[0].metrics.entityMatchCount} entities, ` +
+            `${results[0].statements.length} matched stmts, ` +
+            `avgRelevance: ${results[0].metrics.avgRelevance.toFixed(3)}`
+          : ""),
     );
 
     return results;
@@ -764,7 +808,7 @@ export async function performEpisodeGraphSearch(
  * Get episode IDs for statements in batch (efficient, no N+1 queries)
  */
 export async function getEpisodeIdsForStatements(
-  statementUuids: string[]
+  statementUuids: string[],
 ): Promise<Map<string, string>> {
   if (statementUuids.length === 0) {
     return new Map();
@@ -780,8 +824,8 @@ export async function getEpisodeIdsForStatements(
   const records = await runQuery(cypher, { statementUuids });
 
   const map = new Map<string, string>();
-  records.forEach(record => {
-    map.set(record.get('statementUuid'), record.get('episodeUuid'));
+  records.forEach((record) => {
+    map.set(record.get("statementUuid"), record.get("episodeUuid"));
   });
 
   return map;
@@ -792,7 +836,7 @@ export async function getEpisodeIdsForStatements(
  * This is 15,000x faster than the old approach that queried Neo4j
  */
 export function groupStatementsByEpisodeInMemory(
-  statements: StatementNode[]
+  statements: StatementNode[],
 ): Map<string, StatementNode[]> {
   const grouped = new Map<string, StatementNode[]>();
 
@@ -821,7 +865,7 @@ export function groupStatementsByEpisodeInMemory(
  * Use groupStatementsByEpisodeInMemory instead for 15,000x speedup
  */
 export async function groupStatementsByEpisode(
-  statements: StatementNode[]
+  statements: StatementNode[],
 ): Promise<Map<string, StatementNode[]>> {
   const grouped = new Map<string, StatementNode[]>();
 
@@ -831,7 +875,7 @@ export async function groupStatementsByEpisode(
 
   // Batch fetch episode IDs for all statements
   const episodeIdMap = await getEpisodeIdsForStatements(
-    statements.map(s => s.uuid)
+    statements.map((s) => s.uuid),
   );
 
   // Group statements by episode ID
@@ -852,7 +896,7 @@ export async function groupStatementsByEpisode(
  * Fetch episode objects by their UUIDs in batch
  */
 export async function getEpisodesByUuids(
-  episodeUuids: string[]
+  episodeUuids: string[],
 ): Promise<Map<string, EpisodicNode>> {
   if (episodeUuids.length === 0) {
     return new Map();
@@ -867,8 +911,8 @@ export async function getEpisodesByUuids(
   const records = await runQuery(cypher, { episodeUuids });
 
   const map = new Map<string, EpisodicNode>();
-  records.forEach(record => {
-    const episode = record.get('e').properties as EpisodicNode;
+  records.forEach((record) => {
+    const episode = record.get("e").properties as EpisodicNode;
     map.set(episode.uuid, episode);
   });
 

@@ -137,11 +137,13 @@ export const ConversationList = ({
         <div key={key} style={style}>
           <div className="px-1 pr-2">
             <Button
-              variant="ghost"
+              variant={
+                currentConversationId === conversation.id
+                  ? "secondary"
+                  : "ghost"
+              }
               className={cn(
-                "border-border h-auto w-full justify-start rounded p-2 py-1 text-left",
-                currentConversationId === conversation.id &&
-                  "bg-accent font-semibold",
+                "border-border h-auto w-fit max-w-[200px] justify-start rounded p-2 py-1 text-left",
               )}
               onClick={() => {
                 navigate(`/home/conversation/${conversation.id}`);
@@ -151,12 +153,14 @@ export const ConversationList = ({
                 currentConversationId === conversation.id ? "page" : undefined
               }
             >
-              <div className="flex w-full items-start space-x-3">
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className={cn("text-foreground truncate font-normal")}>
-                      {conversation.title || "Untitled Conversation"}
-                    </p>
+              <div className="border-border flex w-full min-w-[0px] shrink flex-col gap-1">
+                <div className={cn("flex w-full min-w-[0px] shrink flex-col")}>
+                  <div className="flex w-full items-center gap-4">
+                    <div className="inline-flex min-w-[0px] shrink items-center justify-start gap-2">
+                      <div className={cn("truncate text-left text-base")}>
+                        {conversation.title || "Untitled Conversation"}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

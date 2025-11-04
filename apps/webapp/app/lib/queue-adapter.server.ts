@@ -191,14 +191,25 @@ export async function enqueueBertTopicAnalysis(payload: {
   minTopicSize?: number;
   nrTopics?: number;
 }): Promise<{ id?: string }> {
-  // Always use BullMQ for BERT topic analysis
-  const { bertTopicQueue } = await import("~/bullmq/queues");
-  const job = await bertTopicQueue.add("topic-analysis", payload, {
-    jobId: `bert-${payload.userId}-${Date.now()}`,
-    attempts: 2, // Only 2 attempts for expensive operations
-    backoff: { type: "exponential", delay: 5000 },
-  });
-  return { id: job.id };
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { bertTopicAnalysisTask } = await import("~/trigger/bert/bert");
+    const handler = await bertTopicAnalysisTask.trigger(payload, {
+      concurrencyKey: payload.userId,
+      tags: [payload.userId, "bert-analysis"],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { bertTopicQueue } = await import("~/bullmq/queues");
+    const job = await bertTopicQueue.add("topic-analysis", payload, {
+      jobId: `bert-${payload.userId}-${Date.now()}`,
+      attempts: 2, // Only 2 attempts for expensive operations
+      backoff: { type: "exponential", delay: 5000 },
+    });
+    return { id: job.id };
+  }
 }
 
 export const isTriggerDeployment = () => {
