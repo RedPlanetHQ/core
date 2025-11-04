@@ -210,6 +210,7 @@ export class SearchService {
         validAt: statement.statement.validAt,
         invalidAt: statement.statement.invalidAt,
         relevantScore: statement.score,
+        factUuid: statement.statement.uuid,
       }));
 
     // Calculate response content for token counting
@@ -467,6 +468,7 @@ export class SearchService {
       createdAt: Date;
       spaceIds: string[];
       isCompact?: boolean;
+      episodeUuid: string;
     }> = [];
 
     // Add non-session episodes first
@@ -475,6 +477,7 @@ export class SearchService {
         content: episode.originalContent,
         createdAt: episode.createdAt,
         spaceIds: episode.spaceIds || [],
+        episodeUuid: episode.uuid,
       });
     }
 
@@ -496,6 +499,7 @@ export class SearchService {
           createdAt: compact.startTime, // Use session start time
           spaceIds: [], // Compacts don't have spaceIds directly
           isCompact: true,
+          episodeUuid: compact.uuid,
         });
 
         logger.info(`Replaced ${sessionEps.length} episodes with compact`, {
@@ -509,6 +513,7 @@ export class SearchService {
             content: episode.originalContent,
             createdAt: episode.createdAt,
             spaceIds: episode.spaceIds || [],
+            episodeUuid: episode.uuid,
           });
         }
       }

@@ -630,6 +630,20 @@ SUPERSEDING EVOLUTION (mark as contradictions - old statement becomes invalid):
    - "Caroline living in Boston" vs "Caroline moved to Seattle" (location change)
    - "Project using Python" vs "Project rewritten in TypeScript" (language migration)
 
+SEMANTIC EQUIVALENCE (do NOT mark as contradictions or superseding evolution):
+   These are statements that express the SAME UNDERLYING CONCEPT with different wording:
+   - Same preference restated: "User allows lowercase only for Email Newsletter" vs "Lowercase exclusively for Email Newsletter" (same rule, different phrasing)
+   - Same fact rephrased: "John lives in New York" vs "John's residence is New York City" (same location, different words)
+   - Reciprocal relationships: "Mike manages Sarah" vs "Sarah reports to Mike" (same relationship, different perspective)
+   - Same rule different words: "Email requires standard capitalization" vs "Use normal case for emails" (same requirement, rephrased)
+   - Equivalent values: "Project uses PostgreSQL" vs "Database is PostgreSQL" (same technology, different expression)
+   - Guideline restatements: "Avoid corporate style" vs "Don't use corporate language" (same guideline, rephrased)
+   - Same requirement variations: "Normal Case required for General Communication" vs "Standard capitalization for general communication" (same rule)
+
+   CRITICAL TEST: If the underlying CONCEPT, INTENT, or TRUTH VALUE is the same, do NOT treat as contradiction.
+   Ask yourself: "Could both statements be true at the same time?" If YES → treat as DUPLICATE, not contradiction.
+   Only mark as contradiction if there's an ACTUAL CHANGE in state or CONFLICTING information.
+
 NOT CONTRADICTIONS (do NOT mark as contradictions):
    - "Caroline researching adoption agencies" vs "Caroline finalized adoption agency" (research → decision progression)
    - "Caroline planning camping next week" vs "Caroline went camping" (planning → execution progression)
@@ -664,10 +678,12 @@ CRITICAL FORMATTING RULES:
 - Return valid JSON array with all statement IDs from NEW_STATEMENTS
 - If the new statement is a duplicate, include the UUID of the duplicate statement
 - For TRUE contradictions AND superseding evolution, list statement UUIDs that the new statement contradicts
-- If a statement is both a contradiction AND a duplicate (rare case), mark it as a duplicate  
+- If a statement is both a contradiction AND a duplicate (rare case), mark it as a duplicate
 - DO NOT mark progressions, temporal sequences, or cumulative developments as contradictions
+- DO NOT mark semantic equivalence (same concept, different wording) as contradictions - treat as duplicates
 - MARK superseding evolution (technology/job/location changes) as contradictions to invalidate old state
 - ONLY mark genuine mutually exclusive facts and superseding evolution as contradictions
+- When in doubt, ask: "Could both be true?" If yes → duplicate, not contradiction
 `,
     },
     {

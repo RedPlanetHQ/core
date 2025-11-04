@@ -212,8 +212,11 @@ export async function findSimilarStatements({
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const limit = 100;
+  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
+  // 20x multiplier to account for userId filtering and invalidAt exclusion
+  const candidateMultiplier = 20;
   const query = `
-      CALL db.index.vector.queryNodes('statement_embedding', ${limit*2}, $factEmbedding)
+      CALL db.index.vector.queryNodes('statement_embedding', ${limit * candidateMultiplier}, $factEmbedding)
       YIELD node AS statement
       WHERE statement.userId = $userId
         AND statement.invalidAt IS NULL
@@ -413,8 +416,11 @@ export async function searchStatementsByEmbedding(params: {
   minSimilarity?: number;
 }) {
   const limit = params.limit || 100;
+  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
+  // 20x multiplier to account for userId filtering and invalidAt exclusion
+  const candidateMultiplier = 20;
   const query = `
-  CALL db.index.vector.queryNodes('statement_embedding', ${limit*2}, $embedding)
+  CALL db.index.vector.queryNodes('statement_embedding', ${limit * candidateMultiplier}, $embedding)
   YIELD node AS statement
   WHERE statement.userId = $userId
     AND statement.invalidAt IS NULL
