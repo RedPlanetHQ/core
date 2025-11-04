@@ -17,6 +17,10 @@ export interface LogItem {
   data?: any;
   spaceIds?: string[];
   episodeDetails?: any;
+  sessionId?: string;
+  isSessionGroup?: boolean;
+  sessionEpisodeCount?: number;
+  episodes?: string[]; // Array of episode UUIDs
 }
 
 export interface LogsResponse {

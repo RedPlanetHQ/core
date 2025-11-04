@@ -57,6 +57,7 @@ export const addToQueue = async (
     create: {
       data: body,
       type: body.type,
+      source: body.source,
       status: IngestionStatus.PENDING,
       priority: 1,
       workspaceId: user.Workspace.id,
@@ -75,7 +76,7 @@ export const addToQueue = async (
 
     // Track document ingestion
     trackFeatureUsage("document_ingested", userId).catch(console.error);
-  } else if (body.type === EpisodeType.CONVERSATION) {
+  } else {
     handler = await enqueueIngestEpisode({
       body,
       userId,

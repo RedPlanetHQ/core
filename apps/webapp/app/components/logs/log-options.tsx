@@ -66,7 +66,7 @@ export const LogOptions = ({ id, status }: LogOptionsProps) => {
 
   useEffect(() => {
     if (deleteFetcher.state === "idle" && deleteFetcher.data?.success) {
-      navigate(`/home/inbox`);
+      navigate(`/home/episodes`);
     }
   }, [deleteFetcher.state, deleteFetcher.data]);
 

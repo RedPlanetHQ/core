@@ -1,5 +1,5 @@
-import { LayoutGrid } from "lucide-react";
 import { SpaceCard } from "./space-card";
+import { Project } from "../icons/project";
 
 interface SpacesGridProps {
   spaces: Array<{
@@ -19,7 +19,7 @@ export function SpacesGrid({ spaces }: SpacesGridProps) {
   if (spaces.length === 0) {
     return (
       <div className="mt-20 flex flex-col items-center justify-center">
-        <LayoutGrid className="text-muted-foreground mb-2 h-10 w-10" />
+        <Project className="text-muted-foreground mb-2 h-10 w-10" />
         <h3 className="text-lg">No spaces found</h3>
       </div>
     );

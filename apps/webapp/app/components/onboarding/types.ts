@@ -24,6 +24,10 @@ export interface ProviderConfig {
   description: string;
   docsUrl: string;
   icon: string;
+  installationSteps: Array<{
+    title: string;
+    component: React.ReactNode;
+  }>;
 }
 
 export interface OnboardingState {

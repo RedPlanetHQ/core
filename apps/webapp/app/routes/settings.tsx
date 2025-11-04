@@ -1,4 +1,4 @@
-import { ArrowLeft, Code, Webhook, Cable, CreditCard, User } from "lucide-react";
+import { ArrowLeft, Code, Webhook, CreditCard, User } from "lucide-react";
 
 import {
   Sidebar,
@@ -45,7 +45,6 @@ export default function Settings() {
       { name: "Billing", icon: CreditCard },
       { name: "API", icon: Code },
       { name: "Webhooks", icon: Webhook },
-      { name: "MCP", icon: Cable },
     ],
   };
   const navigate = useNavigate();

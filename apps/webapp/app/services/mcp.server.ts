@@ -201,39 +201,28 @@ export const handleMCPRequest = async (
         // Session exists in DB but not in memory (server restarted)
         // For initialize requests, we can try to recreate the transport
         // For other requests, return 404 to force client to reinitialize
-        if (isInitializeRequest(body)) {
-          logger.log(
-            `Session ${sessionId} found in DB but not in memory. Recreating transport after server restart.`,
+
+        logger.log(
+          `Session ${sessionId} found in DB but not in memory. Recreating transport after server restart.`,
+        );
+        const sessionDetails = await MCPSessionManager.getSession(sessionId);
+        if (sessionDetails) {
+          transport = await createTransport(
+            sessionId,
+            sessionDetails.source,
+            sessionDetails.integrations,
+            noIntegrations,
+            userId,
+            workspaceId,
+            spaceId,
           );
-          const sessionDetails = await MCPSessionManager.getSession(sessionId);
-          if (sessionDetails) {
-            transport = await createTransport(
-              sessionId,
-              sessionDetails.source,
-              sessionDetails.integrations,
-              noIntegrations,
-              userId,
-              workspaceId,
-              spaceId,
-            );
-            logger.log(`Successfully recreated session ${sessionId}`);
-          } else {
-            // Session was in DB but couldn't be retrieved - return 404
-            return res.status(404).json({
-              error: "session_not_found",
-              error_description:
-                "Session not found in database. Please initialize a new session.",
-            });
-          }
+          logger.log(`Successfully recreated session ${sessionId}`);
         } else {
-          // Non-initialize request with session not in memory - return 404
-          logger.log(
-            `Session ${sessionId} not in memory for non-initialize request. Returning 404.`,
-          );
+          // Session was in DB but couldn't be retrieved - return 404
           return res.status(404).json({
-            error: "session_not_in_memory",
+            error: "session_not_found",
             error_description:
-              "Session not found in server memory. Server may have restarted. Please initialize a new session.",
+              "Session not found in database. Please initialize a new session.",
           });
         }
       } else {

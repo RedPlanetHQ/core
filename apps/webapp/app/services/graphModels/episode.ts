@@ -3,6 +3,7 @@ import {
   type StatementNode,
   type EntityNode,
   type EpisodicNode,
+  EPISODIC_NODE_PROPERTIES,
 } from "@core/types";
 
 export async function saveEpisode(episode: EpisodicNode): Promise<string> {
@@ -138,6 +139,36 @@ export async function getRecentEpisodes(params: {
   });
 }
 
+// Get all episodes for a session ordered by createdAt
+export async function getEpisodesBySession(params: {
+  sessionId: string;
+  userId: string;
+}): Promise<EpisodicNode[]> {
+  const query = `
+    MATCH (e:Episode {userId: $userId, sessionId: $sessionId})
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY e.createdAt ASC
+  `;
+
+  const result = await runQuery(query, {
+    userId: params.userId,
+    sessionId: params.sessionId,
+  });
+
+  return result.map((record) => {
+    const episode = record.get("episode");
+    return {
+      uuid: episode.uuid,
+      content: episode.content,
+      originalContent: episode.originalContent,
+      createdAt: new Date(episode.createdAt),
+      userId: episode.userId,
+      sessionId: episode.sessionId,
+      spaceIds: episode.spaceIds,
+    } as EpisodicNode;
+  });
+}
+
 export async function searchEpisodesByEmbedding(params: {
   embedding: number[];
   userId: string;
@@ -150,7 +181,7 @@ export async function searchEpisodesByEmbedding(params: {
   WHERE episode.contentEmbedding IS NOT NULL
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
-  RETURN episode, score
+  RETURN ${EPISODIC_NODE_PROPERTIES} as episode, score
   ORDER BY score DESC
   LIMIT ${limit}`;
 
@@ -166,7 +197,6 @@ export async function searchEpisodesByEmbedding(params: {
 
   return result.map((record) => {
     const episode = record.get("episode").properties;
-    const score = record.get("score");
 
     return {
       uuid: episode.uuid,

@@ -5,6 +5,9 @@ import { getIconForAuthorise } from "../icon-utils";
 import { useNavigate, useParams } from "@remix-run/react";
 import { getStatusColor, getStatusValue } from "./utils";
 import { File, MessageSquare } from "lucide-react";
+import { format, isThisYear } from "date-fns";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { TooltipPortal } from "@radix-ui/react-tooltip";
 
 interface LogTextCollapseProps {
   text?: string;
@@ -52,11 +55,22 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
   const getIngestType = (log: LogItem) => {
     const type = log.type ?? log.data.type ?? "CONVERSATION";
 
-    return type === "CONVERSATION" ? (
-      <MessageSquare size={14} />
-    ) : (
-      <File size={14} />
-    );
+    return {
+      label: type === "CONVERSATION" ? "Conversation" : "Document",
+      icon:
+        type === "CONVERSATION" ? (
+          <MessageSquare size={14} />
+        ) : (
+          <File size={14} />
+        ),
+    };
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return isThisYear(date)
+      ? format(date, "MMM d")
+      : format(date, "MMM d, yyyy");
   };
 
   return (
@@ -67,49 +81,78 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
           logId === log.id && "bg-grayAlpha-200",
         )}
         onClick={() => {
-          navigate(`/home/inbox/${log.id}`);
+          navigate(`/home/episode/${log.id}`);
         }}
       >
         <div className="border-border flex w-full min-w-[0px] shrink flex-col gap-1 border-b py-2">
           <div className={cn("flex w-full min-w-[0px] shrink flex-col")}>
-            <div className="flex w-full items-center justify-between gap-4">
-              <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start">
+            <div className="flex w-full items-center gap-4">
+              <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start gap-2">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div>
+                      {getIconForAuthorise(
+                        log.source.toLowerCase(),
+                        14,
+                        undefined,
+                      )}
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipPortal>
+                    <TooltipContent>
+                      <p>{log.source}</p>
+                    </TooltipContent>
+                  </TooltipPortal>
+                </Tooltip>
                 <div className={cn("truncate text-left text-base")}>
                   {text.replace(/<[^>]+>/g, "")}
                 </div>
               </div>
 
-              {showStatus(log) && (
-                <div className="text-muted-foreground flex shrink-0 items-center justify-end text-xs">
-                  <div className="flex items-center">
+              <div className="flex grow gap-1">
+                {log.isSessionGroup &&
+                  log.sessionEpisodeCount &&
+                  log.sessionEpisodeCount > 1 && (
+                    <Badge
+                      variant="secondary"
+                      className={cn("shrink-0 rounded")}
+                    >
+                      {log.sessionEpisodeCount} episodes
+                    </Badge>
+                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Badge
                       className={cn(
-                        "!bg-grayAlpha-100 text-muted-foreground rounded text-xs",
+                        "text-foreground shrink-0 rounded !bg-transparent text-xs",
                       )}
                     >
-                      <BadgeColor className={cn(getStatusColor(log.status))} />
-                      {getStatusValue(log.status)}
+                      {getIngestType(log).icon}
                     </Badge>
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
+                  </TooltipTrigger>
+                  <TooltipPortal>
+                    <TooltipContent>
+                      <p>{getIngestType(log).label}</p>
+                    </TooltipContent>
+                  </TooltipPortal>
+                </Tooltip>
+              </div>
 
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1 font-light">
-              {getIconForAuthorise(log.source.toLowerCase(), 12, undefined)}
-              {log.source.toLowerCase()}
-            </div>
-
-            <div className="flex items-center gap-1">
-              <Badge
-                className={cn(
-                  "text-muted-foreground rounded !bg-transparent text-xs",
+              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-xs">
+                {showStatus(log) && (
+                  <Badge
+                    className={cn(
+                      "!bg-grayAlpha-100 text-muted-foreground rounded text-xs",
+                    )}
+                  >
+                    <BadgeColor className={cn(getStatusColor(log.status))} />
+                    {getStatusValue(log.status)}
+                  </Badge>
                 )}
-              >
-                {getIngestType(log)}
-              </Badge>
+                <div className="text-muted-foreground text-xs">
+                  {formatDate(log.time)}
+                </div>
+              </div>
             </div>
           </div>
         </div>

@@ -10,13 +10,16 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  Columns3,
   Inbox,
   LayoutGrid,
-  LoaderCircle,
   MessageSquare,
   Network,
   Plus,
+  MessageCircle,
+  BookOpen,
+  Mail,
+  Phone,
+  FileText,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -25,15 +28,21 @@ import Logo from "../logo/logo";
 import { ConversationList } from "../conversation";
 import { Button } from "../ui";
 import { Project } from "../icons/project";
-import { AddMemoryCommand } from "../command-bar/add-memory-command";
-import { AddMemoryDialog } from "../command-bar/memory-dialog.client";
+import { CommandBar } from "../command-bar/command-bar";
+import { useParams } from "@remix-run/react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 
 const data = {
   navMain: [
     {
-      title: "Inbox",
-      url: "/home/inbox",
-      icon: Inbox,
+      title: "Episodes",
+      url: "/home/episodes",
+      icon: FileText,
     },
     {
       title: "Chat",
@@ -41,8 +50,8 @@ const data = {
       icon: MessageSquare,
     },
     {
-      title: "Memory",
-      url: "/home/dashboard",
+      title: "Graph",
+      url: "/home/graph",
       icon: Network,
     },
     {
@@ -60,13 +69,14 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useUser();
+  const { conversationId } = useParams();
 
-  const [showAddMemory, setShowAddMemory] = React.useState(false);
+  const [commandBar, setCommandBar] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
   useHotkeys("meta+k", (e) => {
     e.preventDefault();
-    setShowAddMemory(true);
+    setCommandBar(true);
   });
 
   return (
@@ -89,7 +99,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 isActive
                 size="sm"
                 className="rounded"
-                onClick={() => setShowAddMemory(true)}
+                onClick={() => setCommandBar(true)}
               >
                 <Plus size={16} />
               </Button>
@@ -100,18 +110,56 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <NavMain items={data.navMain} />
           <div className="mt-4 flex h-full flex-col">
             <h2 className="text-muted-foreground px-4 text-sm"> History </h2>
-            <ConversationList />
+            <ConversationList currentConversationId={conversationId} />
           </div>
         </SidebarContent>
 
-        <SidebarFooter className="flex flex-col px-2">
+        <SidebarFooter className="flex flex-col gap-2 px-2">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="secondary"
+                className="w-full justify-start gap-2 rounded"
+                size="lg"
+              >
+                <MessageCircle size={16} />
+                Help
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent side="top" align="start" className="w-[200px]">
+              <DropdownMenuItem
+                className="flex gap-2 rounded"
+                onClick={() => window.open("https://docs.heysol.ai", "_blank")}
+              >
+                <BookOpen size={16} />
+                Documentation
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex gap-2 rounded"
+                onClick={() =>
+                  (window.location.href = "mailto:support@heysol.ai")
+                }
+              >
+                <Mail size={16} />
+                Email Us
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className="flex gap-2 rounded"
+                onClick={() =>
+                  (window.location.href = "https://cal.com/core-memory/15min")
+                }
+              >
+                <Phone size={16} />
+                Book a call
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
 
-      {showAddMemory && (
-        <AddMemoryDialog open={showAddMemory} onOpenChange={setShowAddMemory} />
-      )}
+      <CommandBar open={commandBar} onOpenChange={setCommandBar} />
     </>
   );
 }

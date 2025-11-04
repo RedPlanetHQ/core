@@ -46,7 +46,7 @@ export interface EpisodicNode {
  * Episodic node without embeddings for query responses
  * Use this type when returning episodes from Cypher queries to avoid loading large embedding arrays
  */
-export type EpisodicNodeWithoutEmbeddings = Omit<EpisodicNode, 'contentEmbedding'>;
+export type EpisodicNodeWithoutEmbeddings = Omit<EpisodicNode, "contentEmbedding">;
 
 /**
  * Helper to get episodic node properties for Cypher RETURN clause (excludes embeddings)
@@ -62,6 +62,25 @@ export const EPISODIC_NODE_PROPERTIES = `{
   spaceIds: e.spaceIds
 }`;
 
+export const STATEMENT_NODE_PROPERTIES = `{
+  uuid: s.uuid,
+  fact: s.fact,
+  createdAt: s.createdAt,
+  userId: s.userId,
+  validAt: s.validAt,
+  invalidAt: s.invalidAt,
+  invalidatedBy: s.invalidatedBy,
+  attributes: s.attributes
+}`;
+
+export const ENTITY_NODE_PROPERTIES = `{
+  uuid: e.uuid,
+  name: e.name,
+  createdAt: e.createdAt,
+  userId: e.userId,
+  attributes: e.attributes,
+}`;
+
 /**
  * Interface for entity node in the reified knowledge graph
  * Entities represent subjects, objects, or predicates in statements
@@ -70,12 +89,10 @@ export interface EntityNode {
   uuid: string;
   name: string;
   type?: string; // Optional type - can be inferred from statements
-  attributes: Record<string, any>;
-  nameEmbedding: number[];
+  nameEmbedding?: number[];
   typeEmbedding?: number[]; // Optional since type is optional
   createdAt: Date;
   userId: string;
-  space?: string;
 }
 
 /**

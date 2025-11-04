@@ -1,8 +1,5 @@
 import { z } from "zod";
-import {
-  createActionApiRoute,
-  createHybridActionApiRoute,
-} from "~/services/routeBuilders/apiBuilder.server";
+import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { SearchService } from "~/services/search.server";
 import { json } from "@remix-run/node";
 import { trackFeatureUsage } from "~/services/telemetry.server";
@@ -20,9 +17,9 @@ export const SearchBodyRequest = z.object({
   entityTypes: z.array(z.string()).optional(),
   scoreThreshold: z.number().optional(),
   minResults: z.number().optional(),
-  adaptiveFiltering: z.boolean().optional(),
+  adaptiveFiltering: z.boolean().default(true),
   structured: z.boolean().default(true),
-  sortBy: z.enum(['relevance', 'recency']).optional(),
+  sortBy: z.enum(["relevance", "recency"]).optional(),
 });
 
 const searchService = new SearchService();
@@ -56,7 +53,9 @@ const { action, loader } = createHybridActionApiRoute(
     );
 
     // Track search
-    trackFeatureUsage("search_performed", authentication.userId).catch(console.error);
+    trackFeatureUsage("search_performed", authentication.userId).catch(
+      console.error,
+    );
 
     return json(results);
   },

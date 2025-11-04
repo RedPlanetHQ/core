@@ -102,7 +102,7 @@ export const ConversationNew = ({
                     }}
                     immediatelyRender={false}
                     className={cn(
-                      "editor-container text-md max-h-[400px] min-h-[30px] w-full min-w-full overflow-auto px-3 pt-1 sm:rounded-lg",
+                      "editor-container max-h-[400px] min-h-[30px] w-full min-w-full overflow-auto px-3 pt-1 text-base sm:rounded-lg",
                     )}
                     onUpdate={({ editor }: { editor: any }) => {
                       const html = editor.getHTML();

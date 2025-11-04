@@ -17,6 +17,8 @@ import { VSCode } from "./icons/vscode";
 import { Obsidian } from "./icons/obsidian";
 import { Figma } from "./icons/figma";
 import StaticLogo from "./logo/logo";
+import { Zed } from "./icons/zed";
+import { Kilo } from "./icons/kilo";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -28,6 +30,7 @@ export const ICON_MAPPING = {
   linear: LinearIcon,
   cursor: Cursor,
   claude: Claude,
+  "claude-code": Claude,
   cline: Cline,
   codex: Codex,
   chatgpt: ChatGPT,
@@ -37,6 +40,8 @@ export const ICON_MAPPING = {
   obsidian: Obsidian,
   figma: Figma,
   core: StaticLogo,
+  zed: Zed,
+  kilo: Kilo,
 
   // Default icon
   integration: LayoutGrid,

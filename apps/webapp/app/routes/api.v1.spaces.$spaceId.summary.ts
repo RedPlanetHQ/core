@@ -8,7 +8,7 @@ import { apiCors } from "~/utils/apiCors";
 import { triggerSpaceSummary } from "~/trigger/spaces/space-summary";
 import { SpaceService } from "~/services/space.server";
 import { addToQueue } from "~/lib/ingest.server";
-import { EpisodeType ,type  DocumentNode } from "@core/types";
+import { EpisodeType, type DocumentNode } from "@core/types";
 import * as crypto from "crypto";
 import { saveDocument } from "~/services/graphModels/document";
 import { logger } from "~/services/logger.service";
@@ -38,9 +38,12 @@ const { action } = createHybridActionApiRoute(
       try {
         // Get the markdown content from request body
         const markdownContent = await request.text();
-        
+
         if (!markdownContent || markdownContent.trim().length === 0) {
-          return json({ error: "Empty summary content provided" }, { status: 400 });
+          return json(
+            { error: "Empty summary content provided" },
+            { status: 400 },
+          );
         }
 
         // Get space details
@@ -54,7 +57,7 @@ const { action } = createHybridActionApiRoute(
           spaceId,
           userId,
           space.name,
-          markdownContent
+          markdownContent,
         );
 
         // Queue document for ingestion
@@ -62,10 +65,12 @@ const { action } = createHybridActionApiRoute(
           documentUuid,
           spaceId,
           userId,
-          markdownContent
+          markdownContent,
         );
 
-        logger.info(`Updated space summary document ${documentUuid} for space ${spaceId}`);
+        logger.info(
+          `Updated space summary document ${documentUuid} for space ${spaceId}`,
+        );
 
         return json({
           success: true,
@@ -76,10 +81,13 @@ const { action } = createHybridActionApiRoute(
           },
         });
       } catch (error) {
-        logger.error(`Error updating space summary for ${spaceId}:`, error as Record<string, unknown>);
+        logger.error(
+          `Error updating space summary for ${spaceId}:`,
+          error as Record<string, unknown>,
+        );
         return json(
           { error: "Failed to update space summary" },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
@@ -99,16 +107,12 @@ const { action } = createHybridActionApiRoute(
         });
 
         if (!user?.Workspace?.id) {
-          return json(
-            { error: "Workspace not found" },
-            { status: 400 }
-          );
+          return json({ error: "Workspace not found" }, { status: 400 });
         }
 
         // Trigger space summary generation using existing infrastructure
         const result = await triggerSpaceSummary({
           userId,
-          workspaceId: user.Workspace.id,
           spaceId,
           triggerSource: "manual",
         });
@@ -123,10 +127,13 @@ const { action } = createHybridActionApiRoute(
           },
         });
       } catch (error) {
-        logger.error(`Error generating space summary for ${spaceId}:`, error as Record<string, unknown>);
+        logger.error(
+          `Error generating space summary for ${spaceId}:`,
+          error as Record<string, unknown>,
+        );
         return json(
           { error: "Failed to generate space summary" },
-          { status: 500 }
+          { status: 500 },
         );
       }
     }
@@ -169,11 +176,11 @@ const loader = createHybridLoaderApiRoute(
         },
       });
     } catch (error) {
-      logger.error(`Error fetching space summary for ${params.spaceId}:`, error as Record<string, unknown>);
-      return json(
-        { error: "Failed to fetch space summary" },
-        { status: 500 }
+      logger.error(
+        `Error fetching space summary for ${params.spaceId}:`,
+        error as Record<string, unknown>,
       );
+      return json({ error: "Failed to fetch space summary" }, { status: 500 });
     }
   },
 );
@@ -185,11 +192,14 @@ async function createUpdatedSummaryDocument(
   spaceId: string,
   userId: string,
   spaceName: string,
-  markdownContent: string
+  markdownContent: string,
 ): Promise<string> {
   const documentUuid = crypto.randomUUID();
-  const contentHash = crypto.createHash('sha256').update(markdownContent).digest('hex');
-  
+  const contentHash = crypto
+    .createHash("sha256")
+    .update(markdownContent)
+    .digest("hex");
+
   const document: DocumentNode = {
     uuid: documentUuid,
     title: `${spaceName} - Space Summary (Updated)`,
@@ -224,7 +234,7 @@ async function queueSummaryDocumentIngestion(
   documentUuid: string,
   spaceId: string,
   userId: string,
-  markdownContent: string
+  markdownContent: string,
 ): Promise<void> {
   const ingestBody = {
     episodeBody: markdownContent,
@@ -242,8 +252,10 @@ async function queueSummaryDocumentIngestion(
   };
 
   await addToQueue(ingestBody, userId);
-  
-  logger.info(`Queued updated space summary document ${documentUuid} for ingestion`);
+
+  logger.info(
+    `Queued updated space summary document ${documentUuid} for ingestion`,
+  );
 }
 
 export { action, loader };

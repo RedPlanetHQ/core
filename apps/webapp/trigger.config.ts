@@ -1,6 +1,7 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
+import { pythonExtension } from "@trigger.dev/python/extension";
 
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_ID as string,
@@ -37,6 +38,9 @@ export default defineConfig({
       })),
       prismaExtension({
         schema: "prisma/schema.prisma",
+      }),
+      pythonExtension({
+        scripts: ["./python/*.py"],
       }),
     ],
   },

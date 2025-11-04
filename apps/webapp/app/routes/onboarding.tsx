@@ -24,7 +24,7 @@ import { parse } from "@conform-to/zod";
 import { type RawTriplet } from "~/components/graph/type";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
-import { inboxPath } from "~/utils/pathBuilder";
+import { episodesPath } from "~/utils/pathBuilder";
 
 const schema = z.object({
   answers: z.string(),
@@ -34,7 +34,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
 
   if (user.onboardingComplete) {
-    return redirect(inboxPath());
+    return redirect(episodesPath());
   }
 
   return json({ user });
@@ -69,14 +69,14 @@ export async function action({ request }: ActionFunctionArgs) {
     await addToQueue(
       {
         episodeBody: episodeText,
-        source: "Onboarding",
+        source: "Core",
         referenceTime: new Date().toISOString(),
         type: EpisodeType.CONVERSATION,
       },
       userId,
     );
 
-    return redirect("/home/inbox");
+    return redirect("/home/episodes");
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }

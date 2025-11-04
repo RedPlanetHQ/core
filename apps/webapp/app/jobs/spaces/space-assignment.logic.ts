@@ -14,6 +14,7 @@ import {
 } from "~/trigger/utils/space-status";
 import type { CoreMessage } from "ai";
 import { type Space } from "@prisma/client";
+import { EPISODIC_NODE_PROPERTIES, type EpisodicNode } from "@core/types";
 
 export interface SpaceAssignmentPayload {
   userId: string;
@@ -137,9 +138,7 @@ export async function processSpaceAssignment(
     });
 
     if (episodes.length === 0) {
-      logger.info(
-        `No episodes to analyze for user ${userId} in ${mode} mode`,
-      );
+      logger.info(`No episodes to analyze for user ${userId} in ${mode} mode`);
       return {
         success: true,
         mode,
@@ -163,14 +162,11 @@ export async function processSpaceAssignment(
     const affectedSpaces = new Set<string>(); // Track spaces that received new episodes
 
     if (shouldUseBatchAPI) {
-      logger.info(
-        `Using Batch AI processing for ${episodes.length} episodes`,
-        {
-          mode,
-          userId,
-          batchSize,
-        },
-      );
+      logger.info(`Using Batch AI processing for ${episodes.length} episodes`, {
+        mode,
+        userId,
+        batchSize,
+      });
 
       const batchResult = await processBatchAI(
         episodes,
@@ -360,7 +356,7 @@ async function getEpisodesToAnalyze(
     // For new space: analyze all recent episodes
     query = `
       MATCH (e:Episode {userId: $userId})
-      RETURN e
+      RETURN ${EPISODIC_NODE_PROPERTIES} as episode
       ORDER BY e.createdAt DESC
       LIMIT 1000
     `;
@@ -369,7 +365,7 @@ async function getEpisodesToAnalyze(
     query = `
       UNWIND $episodeIds AS episodeId
       MATCH (e:Episode {uuid: episodeId, userId: $userId})
-      RETURN e
+      RETURN ${EPISODIC_NODE_PROPERTIES} as episode
       ORDER BY e.createdAt DESC
     `;
     params.episodeIds = options.episodeIds;
@@ -377,17 +373,7 @@ async function getEpisodesToAnalyze(
 
   const result = await runQuery(query, params);
 
-  return result.map((record) => {
-    const episode = record.get("e").properties;
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      source: episode.source,
-      createdAt: new Date(episode.createdAt),
-      metadata: JSON.parse(episode.metadata || "{}"),
-    };
-  });
+  return result.map((record) => record.get("episode") as EpisodicNode);
 }
 
 async function processBatchAI(

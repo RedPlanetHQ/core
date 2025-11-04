@@ -2,12 +2,7 @@ import { logger } from "~/services/logger.service";
 import { fetchAndSaveStdioIntegrations } from "~/trigger/utils/mcp";
 import { initNeo4jSchemaOnce, verifyConnectivity } from "~/lib/neo4j.server";
 import { env } from "~/env.server";
-import {
-  initWorkers,
-  shutdownWorkers,
-  initAlwaysOnWorkers,
-  shutdownAlwaysOnWorkers,
-} from "~/bullmq/start-workers";
+import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
 
 // Global flag to ensure startup only runs once per server process
@@ -71,17 +66,6 @@ export async function initializeStartupServices() {
     );
     process.exit(1);
   }
-
-  await initAlwaysOnWorkers();
-
-  // Handle graceful shutdown for always-on workers
-  process.on("SIGTERM", async () => {
-    await shutdownAlwaysOnWorkers();
-  });
-  process.on("SIGINT", async () => {
-    await shutdownAlwaysOnWorkers();
-    process.exit(0);
-  });
 
   if (env.QUEUE_PROVIDER === "trigger") {
     try {

@@ -1,8 +1,9 @@
-import { Check, ExternalLink } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { Button } from "../ui";
 import { PROVIDER_CONFIGS } from "./provider-config";
 import { type Provider } from "./types";
 import { getIconForAuthorise } from "../icon-utils";
+import { type InstallationStep, InstallationSteps } from "./installation-steps";
 
 interface ProviderSelectionStepProps {
   selectedProvider?: Provider;
@@ -16,6 +17,15 @@ export function ProviderSelectionStep({
   onContinue,
 }: ProviderSelectionStepProps) {
   const providers = Object.values(PROVIDER_CONFIGS);
+
+  // Example installation steps for when a provider is selected
+  // This can be customized per provider
+  const getInstallationSteps = (provider: Provider): InstallationStep[] => {
+    const providerConfig = PROVIDER_CONFIGS[provider];
+
+    // Example steps - customize based on the provider
+    return providerConfig.installationSteps;
+  };
 
   return (
     <div className="space-y-2">
@@ -53,21 +63,20 @@ export function ProviderSelectionStep({
       </div>
 
       {selectedProvider && (
-        <div className="bg-grayAlpha-100 space-y-4 rounded-lg p-4">
-          <div className="space-y-3">
-            <h3 className="font-medium">Next Steps</h3>
-            <p className="text-muted-foreground text-sm">
-              Follow our setup guide to connect{" "}
-              {PROVIDER_CONFIGS[selectedProvider].name} with Core. Once you've
-              completed the setup, come back here to continue.
-            </p>
+        <div className="mt-4 space-y-4 border-t border-gray-300 p-4">
+          <InstallationSteps
+            title={`Connect Core in ${PROVIDER_CONFIGS[selectedProvider].name}`}
+            steps={getInstallationSteps(selectedProvider)}
+          />
+
+          <div className="mt-4 flex items-center gap-2 border-t border-gray-200 pt-4">
             <a
               href={PROVIDER_CONFIGS[selectedProvider].docsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="bg-primary text-primary-foreground hover:bg-primary/90 inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium transition-colors"
+              className="hover:bg-grayAlpha-200 inline-flex items-center gap-2 rounded-md border border-gray-300 px-4 py-2 text-sm font-medium transition-colors"
             >
-              Open Setup Guide
+              View Full Documentation
               <ExternalLink className="h-4 w-4" />
             </a>
           </div>

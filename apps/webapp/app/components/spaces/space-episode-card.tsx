@@ -1,9 +1,7 @@
 import { Calendar } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
-import type { StatementNode } from "@core/types";
 import { cn } from "~/lib/utils";
 import { useNavigate } from "@remix-run/react";
-import Markdown from "react-markdown";
 import { StyledMarkdown } from "../common/styled-markdown";
 import { SpaceEpisodeActions } from "./space-episode-actions";
 
@@ -38,7 +36,7 @@ export function SpaceEpisodeCard({ episode, spaceId }: SpaceFactCardProps) {
   const displayText = episode.originalContent;
 
   const onClick = () => {
-    navigate(`/home/inbox/${episode.logId}`);
+    navigate(`/home/episode/${episode.logId}`);
   };
 
   return (
@@ -64,7 +62,10 @@ export function SpaceEpisodeCard({ episode, spaceId }: SpaceFactCardProps) {
                   <Calendar className="h-3 w-3" />
                   {formatDate(episode.validAt)}
                 </Badge>
-                <SpaceEpisodeActions episodeId={episode.uuid} spaceId={spaceId} />
+                <SpaceEpisodeActions
+                  episodeId={episode.uuid}
+                  spaceId={spaceId}
+                />
               </div>
             </div>
           </div>
