@@ -77,8 +77,11 @@ export async function findSimilarEntities(params: {
   userId: string;
 }): Promise<EntityNode[]> {
   const limit = params.limit || 5;
+  // Hybrid approach: Vector index (HNSW fast search) + GDS (accurate scoring)
+  // Higher multiplier (20x) to account for userId filtering in multi-tenant setup
+  const candidateMultiplier = 20;
   const query = `
-          CALL db.index.vector.queryNodes('entity_embedding', ${limit*2}, $queryEmbedding)
+          CALL db.index.vector.queryNodes('entity_embedding', ${limit * candidateMultiplier}, $queryEmbedding)
           YIELD node AS entity
           WHERE entity.userId = $userId
           WITH entity, gds.similarity.cosine(entity.nameEmbedding, $queryEmbedding) AS score
@@ -114,8 +117,11 @@ export async function findSimilarEntitiesWithSameType(params: {
   userId: string;
 }): Promise<EntityNode[]> {
   const limit = params.limit || 5;
+  // Hybrid approach with higher multiplier due to double filtering (userId + type)
+  // Using 20x because we filter by both userId AND entityType
+  const candidateMultiplier = 20;
   const query = `
-          CALL db.index.vector.queryNodes('entity_embedding', ${limit*2}, $queryEmbedding)
+          CALL db.index.vector.queryNodes('entity_embedding', ${limit * candidateMultiplier}, $queryEmbedding)
           YIELD node AS entity
           WHERE entity.userId = $userId
           AND entity.type = $entityType

@@ -173,10 +173,15 @@ export async function performVectorSearch(
     // Internal statement limit (not exposed to users)
     const STATEMENT_LIMIT = 100;
 
-    // Pure GDS similarity search (for testing - may be slower than hybrid approach)
+    // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
+    // 20x multiplier accounts for userId, temporal, and space filtering
+    const candidateMultiplier = 20;
+
     const cypher = `
-    MATCH (s:Statement{userId: $userId})
-    WHERE s.validAt <= $validAt
+    CALL db.index.vector.queryNodes('statement_embedding', ${STATEMENT_LIMIT * candidateMultiplier}, $embedding)
+    YIELD node AS s
+    WHERE s.userId = $userId
+      AND s.validAt <= $validAt
       ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
       ${options.startTime ? 'AND s.validAt >= $startTime' : ''}
       ${spaceCondition}
@@ -371,7 +376,7 @@ async function bfsTraversal(
       WHERE relevance >= $explorationThreshold
       RETURN s.uuid AS uuid, relevance
       ORDER BY relevance DESC
-      LIMIT 100  // Reduced from 200 to limit BFS statement count
+      LIMIT 200
     `;
 
     const records = await runQuery(cypher, {
@@ -693,7 +698,7 @@ export async function performEpisodeGraphSearch(
              (entityMatchCount * 2.0) + connectivityScore + avgRelevance as episodeScore
 
       ORDER BY episodeScore DESC, entityMatchCount DESC, totalStmtCount DESC
-      LIMIT 20
+      LIMIT 50
     `;
 
     const params = {
@@ -731,15 +736,6 @@ export async function performEpisodeGraphSearch(
           connectivityScore,
         },
       };
-    });
-
-    // Log statement counts for debugging
-    results.forEach((result, idx) => {
-      logger.info(
-        `Episode ${idx + 1}: entityMatches=${result.metrics.entityMatchCount}, ` +
-        `totalStmtCount=${result.metrics.totalStatementCount}, ` +
-        `returnedStatements=${result.statements.length}`
-      );
     });
 
     logger.info(
