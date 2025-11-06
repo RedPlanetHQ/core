@@ -212,15 +212,9 @@ export async function findSimilarStatements({
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const limit = 100;
-  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
-  // 20x multiplier to account for userId filtering and invalidAt exclusion
-  const candidateMultiplier = 20;
   const query = `
-      CALL db.index.vector.queryNodes('statement_embedding', ${limit * candidateMultiplier}, $factEmbedding)
-      YIELD node AS statement
-      WHERE statement.userId = $userId
-        AND statement.invalidAt IS NULL
-        ${excludeIds.length > 0 ? "AND NOT statement.uuid IN $excludeIds" : ""}
+      MATCH (statement:Statement{userId: $userId})
+      WHERE statement.factEmbedding IS NOT NULL
       WITH statement, gds.similarity.cosine(statement.factEmbedding, $factEmbedding) AS score
       WHERE score >= $threshold
       RETURN statement, score
@@ -416,14 +410,9 @@ export async function searchStatementsByEmbedding(params: {
   minSimilarity?: number;
 }) {
   const limit = params.limit || 100;
-  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
-  // 20x multiplier to account for userId filtering and invalidAt exclusion
-  const candidateMultiplier = 20;
   const query = `
-  CALL db.index.vector.queryNodes('statement_embedding', ${limit * candidateMultiplier}, $embedding)
-  YIELD node AS statement
-  WHERE statement.userId = $userId
-    AND statement.invalidAt IS NULL
+  MATCH (statement:Statement{userId: $userId})
+  WHERE statement.factEmbedding IS NOT NULL
   WITH statement, gds.similarity.cosine(statement.factEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN statement, score

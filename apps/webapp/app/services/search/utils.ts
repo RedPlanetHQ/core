@@ -173,14 +173,9 @@ export async function performVectorSearch(
     // Internal statement limit (not exposed to users)
     const STATEMENT_LIMIT = 100;
 
-    // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
-    // 20x multiplier accounts for userId, temporal, and space filtering
-    const candidateMultiplier = 20;
-
     const cypher = `
-    CALL db.index.vector.queryNodes('statement_embedding', ${STATEMENT_LIMIT * candidateMultiplier}, $embedding)
-    YIELD node AS s
-    WHERE s.userId = $userId
+    MATCH (s:Statement{userId: $userId})
+    WHERE s.factEmbedding IS NOT NULL
       AND s.validAt <= $validAt
       ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
       ${options.startTime ? 'AND s.validAt >= $startTime' : ''}

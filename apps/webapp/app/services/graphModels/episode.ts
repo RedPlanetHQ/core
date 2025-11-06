@@ -145,13 +145,9 @@ export async function searchEpisodesByEmbedding(params: {
   minSimilarity?: number;
 }) {
   const limit = params.limit || 100;
-  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
-  // 20x multiplier to account for userId filtering in multi-tenant setup
-  const candidateMultiplier = 20;
   const query = `
-  CALL db.index.vector.queryNodes('episode_embedding', ${limit * candidateMultiplier}, $embedding)
-  YIELD node AS episode
-  WHERE episode.userId = $userId
+  MATCH (episode:Episode{userId: $userId})
+  WHERE episode.contentEmbedding IS NOT NULL
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN episode, score
@@ -293,13 +289,9 @@ export async function getRelatedEpisodesEntities(params: {
   minSimilarity?: number;
 }) {
   const limit = params.limit || 100;
-  // Hybrid approach: Vector index (HNSW) + GDS for accurate scoring
-  // 20x multiplier to account for userId filtering in multi-tenant setup
-  const candidateMultiplier = 20;
   const query = `
-  CALL db.index.vector.queryNodes('episode_embedding', ${limit * candidateMultiplier}, $embedding)
-  YIELD node AS episode
-  WHERE episode.userId = $userId
+  MATCH (episode:Episode{userId: $userId})
+  WHERE episode.contentEmbedding IS NOT NULL
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)-[:HAS_SUBJECT|HAS_OBJECT]->(entity:Entity)
