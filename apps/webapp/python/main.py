@@ -11,7 +11,8 @@ Container size: ~500MB (vs 9GB with BERTopic)
 import os
 import sys
 import json
-from typing import List, Tuple, Dict, Any
+from typing import List, Tuple, Dict, Any, Optional
+from datetime import datetime
 import click
 import numpy as np
 from neo4j import GraphDatabase
@@ -53,21 +54,45 @@ class Neo4jConnection:
             if not self.quiet:
                 click.echo("✓ Neo4j connection closed")
 
-    def get_episodes_with_embeddings(self, user_id: str) -> Tuple[List[str], List[str], np.ndarray]:
-        """Fetch all episodes with their embeddings for a given user.
+    def get_episodes_with_embeddings(
+        self,
+        user_id: str,
+        start_time: Optional[str] = None,
+        end_time: Optional[str] = None
+    ) -> Tuple[List[str], List[str], np.ndarray]:
+        """Fetch episodes with their embeddings for a given user, optionally filtered by time range.
 
         Args:
             user_id: The user ID to fetch episodes for
+            start_time: Optional ISO format datetime string (e.g., '2024-01-01T00:00:00Z') - filter episodes created after this time
+            end_time: Optional ISO format datetime string (e.g., '2024-12-31T23:59:59Z') - filter episodes created before this time
 
         Returns:
             Tuple of (episode_uuids, episode_contents, embeddings_array)
         """
-        query = """
-        MATCH (e:Episode {userId: $userId})
-        WHERE e.contentEmbedding IS NOT NULL
-          AND size(e.contentEmbedding) > 0
-          AND e.content IS NOT NULL
-          AND e.content <> ''
+        # Build WHERE clause with time filters
+        where_conditions = [
+            "e.contentEmbedding IS NOT NULL",
+            "size(e.contentEmbedding) > 0",
+            "e.content IS NOT NULL",
+            "e.content <> ''"
+        ]
+
+        params = {"userId": user_id}
+
+        if start_time:
+            where_conditions.append("e.createdAt >= $startTime")
+            params["startTime"] = start_time
+
+        if end_time:
+            where_conditions.append("e.createdAt <= $endTime")
+            params["endTime"] = end_time
+
+        where_clause = " AND ".join(where_conditions)
+
+        query = f"""
+        MATCH (e:Episode {{userId: $userId}})
+        WHERE {where_clause}
         RETURN e.uuid as uuid,
                e.content as content,
                e.contentEmbedding as embedding,
@@ -76,7 +101,7 @@ class Neo4jConnection:
         """
 
         with self.driver.session() as session:
-            result = session.run(query, userId=user_id)
+            result = session.run(query, **params)
             records = list(result)
 
             if not records:
@@ -159,7 +184,7 @@ def run_hdbscan_clustering(
         click.echo(f"✓ Clustering complete - Found {unique_clusters} clusters")
         click.echo(f"  Outliers (noise): {noise_count} episodes")
 
-    # Step 3: Extract keywords for each cluster using   + TF-IDF
+    # Step 3: Extract keywords for each cluster using CountVectorizer + TF-IDF
     if not quiet:
         click.echo(f"\n🔍 Extracting keywords for each cluster...")
 
@@ -354,6 +379,18 @@ def build_json_output(
     help='Minimum samples for core points (default: 3, lower = more sensitive)'
 )
 @click.option(
+    '--start-time',
+    type=str,
+    default=None,
+    help='Filter episodes created after this time (ISO format: 2024-01-01T00:00:00Z)'
+)
+@click.option(
+    '--end-time',
+    type=str,
+    default=None,
+    help='Filter episodes created before this time (ISO format: 2024-12-31T23:59:59Z)'
+)
+@click.option(
     '--neo4j-uri',
     envvar='NEO4J_URI',
     default='bolt://localhost:7687',
@@ -378,8 +415,9 @@ def build_json_output(
     default=False,
     help='Output only final results in JSON format (suppresses all other output)'
 )
-def main(user_id: str, min_cluster_size: int, min_samples: int, neo4j_uri: str,
-         neo4j_username: str, neo4j_password: str, json_output: bool):
+def main(user_id: str, min_cluster_size: int, min_samples: int, start_time: Optional[str],
+         end_time: Optional[str], neo4j_uri: str, neo4j_username: str, neo4j_password: str,
+         json_output: bool):
     """
     Run HDBSCAN clustering on episodes for a given USER_ID.
 
@@ -396,6 +434,9 @@ def main(user_id: str, min_cluster_size: int, min_samples: int, neo4j_uri: str,
         # With custom cluster size
         python sample.py user-123 --min-cluster-size 8
 
+        # Filter by time range
+        python sample.py user-123 --start-time 2024-01-01T00:00:00Z --end-time 2024-12-31T23:59:59Z
+
         # JSON output for programmatic use
         python sample.py user-123 --json
 
@@ -410,14 +451,20 @@ def main(user_id: str, min_cluster_size: int, min_samples: int, neo4j_uri: str,
         click.echo(f"User ID: {user_id}")
         click.echo(f"Min Cluster Size: {min_cluster_size}")
         click.echo(f"Min Samples: {min_samples}")
+        if start_time:
+            click.echo(f"Start Time: {start_time}")
+        if end_time:
+            click.echo(f"End Time: {end_time}")
         click.echo(f"{'='*80}\n")
 
     # Connect to Neo4j (quiet mode if JSON output)
     neo4j_conn = Neo4jConnection(neo4j_uri, neo4j_username, neo4j_password, quiet=json_output)
 
     try:
-        # Fetch episodes with embeddings
-        uuids, contents, embeddings = neo4j_conn.get_episodes_with_embeddings(user_id)
+        # Fetch episodes with embeddings (with optional time filtering)
+        uuids, contents, embeddings = neo4j_conn.get_episodes_with_embeddings(
+            user_id, start_time, end_time
+        )
 
         # Run HDBSCAN clustering
         labels, probs, keywords = run_hdbscan_clustering(

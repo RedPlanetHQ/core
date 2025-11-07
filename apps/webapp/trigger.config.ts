@@ -24,6 +24,9 @@ export default defineConfig({
   dirs: ["./app/trigger"],
   build: {
     extensions: [
+      pythonExtension({
+        scripts: ["./python/*.py"],
+      }),
       syncEnvVars(() => ({
         // ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY as string,
         // API_BASE_URL: process.env.API_BASE_URL as string,

@@ -20,6 +20,7 @@ const SpaceParamsSchema = z.object({
 const UpdateSpaceSchema = z.object({
   name: z.string().optional(),
   description: z.string().optional(),
+  summaryStructure: z.string().optional(),
 });
 
 const { action } = createHybridActionApiRoute(
@@ -55,6 +56,9 @@ const { action } = createHybridActionApiRoute(
 
       if (parseResult.data.description !== undefined)
         updates.description = parseResult.data.description;
+
+      if (parseResult.data.summaryStructure !== undefined)
+        updates.summaryStructure = parseResult.data.summaryStructure;
 
       const space = await spaceService.updateSpace(spaceId, updates, userId);
       return json({ space, success: true });

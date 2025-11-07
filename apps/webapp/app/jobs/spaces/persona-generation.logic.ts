@@ -1,17 +1,61 @@
+import { exec } from "child_process";
+import { promisify } from "util";
 import { logger } from "~/services/logger.service";
 import type { CoreMessage } from "ai";
 import { createBatch, getBatch } from "~/lib/batch.server";
 import { z } from "zod";
 import { getUserContext, type UserContext } from "~/services/user-context.server";
-import {
-  analyzeEpisodesAlgorithmically,
-  type PersonaAnalytics,
-} from "~/services/persona-analytics.server";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
-import { python } from "@trigger.dev/python";
+import { getBertPythonPath } from "~/lib/bert-installer.server";
 import type { EpisodicNode } from "@core/types";
+import { SpaceService } from "~/services/space.server";
+import { runQuery } from "~/lib/neo4j.server";
+import { getEpisodesByUserId } from "~/services/graphModels/episode";
+import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 
-interface BERTopicOutput {
+const execAsync = promisify(exec);
+
+// Payload for BullMQ worker
+export interface PersonaGenerationPayload {
+  userId: string;
+  workspaceId: string;
+  spaceId: string;
+  mode: "full" | "incremental";
+  startTime?: string;
+}
+
+export interface PersonaAnalytics {
+  totalEpisodes: number;
+  lexicon: Record<string, number>; // term -> frequency
+  style: StyleMetrics;
+  sources: Record<string, number>; // source -> percentage
+  temporal: TemporalMetrics;
+  receipts: string[]; // Explicit metrics/numbers found
+}
+
+export interface StyleMetrics {
+  avgSentenceLength: number;
+  avgParagraphLength: number;
+  episodesWithBullets: number;
+  episodesWithCode: number;
+}
+
+export interface TemporalMetrics {
+  oldestEpisode: Date;
+  newestEpisode: Date;
+  timeSpanDays: number;
+  episodesPerMonth: number;
+}
+
+export interface PersonaGenerationResult {
+  success: boolean;
+  spaceId: string;
+  mode: string;
+  summaryLength: number;
+  episodesProcessed: number;
+}
+
+interface ClusteringOutput {
   topics: Record<
     string,
     {
@@ -21,7 +65,7 @@ interface BERTopicOutput {
   >;
 }
 
-interface BERTopicCluster {
+interface ClusterData {
   topicId: string;
   keywords: string[];
   episodeIds: string[];
@@ -38,7 +82,7 @@ const PersonaSummarySchema = z.object({
  * Pipeline stages:
  * 1. Get user context (onboarding → inferred → generic)
  * 2. Algorithmic analytics on ALL episodes (quantitative data)
- * 3. BERTopic clustering + intelligent filtering (persona-relevant topics only)
+ * 3. HDBSCAN clustering + intelligent filtering (persona-relevant topics only)
  * 4. Build adaptive prompt based on user context
  * 5. Generate via Batch API
  * 6. Assign episodes to space for traceability
@@ -49,6 +93,9 @@ export async function generatePersonaSummary(
   existingSummary: string | null,
   userId: string,
   spaceId: string,
+  startTime?: string,
+  clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
+  analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<string> {
   logger.info("Starting persona generation pipeline", {
     episodeCount: episodes.length,
@@ -56,6 +103,7 @@ export async function generatePersonaSummary(
     hasExistingSummary: !!existingSummary,
     userId,
     spaceId,
+    startTime,
   });
 
   // Stage 1: Get user context (onboarding → inferred → generic)
@@ -67,22 +115,21 @@ export async function generatePersonaSummary(
     toolsCount: userContext.tools?.length || 0,
   });
 
-  // Stage 2: Algorithmic analytics on ALL episodes (no sampling)
-  const analytics = await analyzeEpisodesAlgorithmically(episodes);
-  logger.info("Algorithmic analytics complete", {
+  // Stage 2: Python-based analytics extraction (TF-IDF, pattern analysis)
+  const analytics = await extractPersonaAnalytics(userId, startTime, analyticsRunner);
+  logger.info("Python analytics complete", {
     lexiconTerms: Object.keys(analytics.lexicon).length,
     avgSentenceLength: analytics.style.avgSentenceLength,
     timeSpanDays: analytics.temporal.timeSpanDays,
   });
 
-  // Stage 3: Intelligent episode filtering via BERTopic
+  // Stage 3: Intelligent episode filtering via HDBSCAN clustering
   let filteredEpisodes = episodes;
   if (episodes.length > 50) {
-    // Always run BERTopic for larger datasets
+    // Always run HDBSCAN clustering for larger datasets
     try {
-      const clusters = await clusterEpisodes(userId);
-      const personaClusters = filterPersonaRelevantTopics(clusters);
-
+      const clusters = await clusterEpisodes(userId, startTime, clusteringRunner);
+      const personaClusters = await filterPersonaRelevantTopics(clusters, episodes);
       // Extract episode IDs from persona-relevant clusters
       const personaEpisodeIds = new Set<string>();
       for (const cluster of personaClusters) {
@@ -91,17 +138,17 @@ export async function generatePersonaSummary(
 
       filteredEpisodes = episodes.filter((e) => personaEpisodeIds.has(e.uuid));
 
-      logger.info("BERTopic filtering complete", {
+      logger.info("HDBSCAN clustering filtering complete", {
         totalClusters: Object.keys(clusters.topics).length,
         personaClusters: personaClusters.length,
         originalEpisodes: episodes.length,
         filteredEpisodes: filteredEpisodes.length,
       });
     } catch (error) {
-      logger.warn("BERTopic filtering failed, using all episodes", {
+      logger.warn("HDBSCAN clustering failed, using all episodes", {
         error: error instanceof Error ? error.message : "Unknown error",
       });
-      // Fall back to using all episodes if BERTopic fails
+      // Fall back to using all episodes if clustering fails
     }
   }
 
@@ -148,128 +195,115 @@ export async function generatePersonaSummary(
 }
 
 /**
- * Run BERTopic clustering via Python script using Trigger.dev Python runner
+ * Run HDBSCAN clustering via Python script using exec (for BullMQ/Docker)
  */
-async function clusterEpisodes(userId: string): Promise<BERTopicOutput> {
-  const args = [
-    userId,
-    "--min-topic-size", "10",
-    "--neo4j-uri", process.env.NEO4J_URI || "",
-    "--neo4j-user", process.env.NEO4J_USERNAME || "",
-    "--neo4j-password", process.env.NEO4J_PASSWORD || "",
-    "--quiet"
-  ];
+async function runClusteringWithExec(
+  userId: string,
+  startTime?: string
+): Promise<string> {
+  let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
 
-  logger.info("Running BERTopic clustering with Trigger.dev Python", { userId });
+  // Add time filter if provided
+  if (startTime) {
+    command += ` --start-time "${startTime}"`;
+  }
 
-  const result = await python.runScript("./python/persona_topics.py", args);
-  return JSON.parse(result.stdout);
+  logger.info("Running HDBSCAN clustering with exec", { userId, startTime });
+
+  const pythonPath = getBertPythonPath();
+
+  const { stdout, stderr } = await execAsync(command, {
+    timeout: 300000, // 5 minutes
+    maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    env: {
+      ...process.env,
+      PYTHONPATH: pythonPath,
+    },
+  });
+
+  if (stderr) {
+    logger.warn("HDBSCAN clustering warnings", { stderr });
+  }
+
+  return stdout;
 }
 
 /**
- * Filter BERTopic clusters to only persona-relevant topics
- * Excludes project-specific topics (CORE architecture, SOL tasks, etc.)
+ * Run persona analytics via Python script using exec (for BullMQ/Docker)
  */
-function filterPersonaRelevantTopics(clusters: BERTopicOutput): BERTopicCluster[] {
-  const PERSONA_KEYWORDS = [
-    "email",
-    "message",
-    "communication",
-    "writing",
-    "tone",
-    "outreach",
-    "style",
-    "workflow",
-    "process",
-    "routine",
-    "schedule",
-    "productivity",
-    "habit",
-    "ritual",
-    "tool",
-    "software",
-    "platform",
-    "framework",
-    "preference",
-    "setup",
-    "config",
-    "decide",
-    "choice",
-    "priority",
-    "strategy",
-    "principle",
-    "approach",
-    "method",
-    "team",
-    "collaborate",
-    "feedback",
-    "review",
-    "meeting",
-    "stakeholder",
-    "learn",
-    "study",
-    "practice",
-    "documentation",
-    "research",
-    "skill",
-    "believe",
-    "value",
-    "mindset",
-    "philosophy",
-    "opinion",
-    "perspective",
-    "profile",
-    "health",
-    "personal",
-    "interest",
-    "background",
-    "experience",
-    "hobby",
-  ];
+async function runAnalyticsWithExec(
+  userId: string,
+  startTime?: string
+): Promise<string> {
+  let command = `python3 /core/apps/webapp/python/persona_analytics.py ${userId} --json`;
 
-  const PROJECT_KEYWORDS = [
-    "core",
-    "architecture",
-    "memory",
-    "graph",
-    "neo4j",
-    "prisma",
-    "sol",
-    "task",
-    "feature",
-    "bug",
-    "implementation",
-    "deployment",
-    "github",
-    "runner",
-    "docker",
-    "build",
-    "ci",
-    "cd",
-    "terraform",
-    "aws",
-  ];
+  // Add time filter if provided
+  if (startTime) {
+    command += ` --start-time "${startTime}"`;
+  }
 
-  return Object.entries(clusters.topics)
-    .map(([topicId, data]) => ({
-      topicId,
-      keywords: data.keywords,
-      episodeIds: data.episodeIds,
-    }))
-    .filter((cluster) => {
-      // Calculate persona relevance score
-      const personaScore = cluster.keywords.filter((kw) =>
-        PERSONA_KEYWORDS.some((pk) => kw.toLowerCase().includes(pk))
-      ).length;
+  logger.info("Running persona analytics with exec", { userId, startTime });
 
-      // Calculate project-specific score (penalty)
-      const projectScore = cluster.keywords.filter((kw) =>
-        PROJECT_KEYWORDS.some((prk) => kw.toLowerCase().includes(prk))
-      ).length;
+  const pythonPath = getBertPythonPath();
 
-      // Keep if: ≥2 persona keywords AND fewer project keywords
-      return personaScore >= 2 && projectScore < personaScore;
-    });
+  const { stdout, stderr } = await execAsync(command, {
+    timeout: 300000, // 5 minutes
+    maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    env: {
+      ...process.env,
+      PYTHONPATH: pythonPath,
+      NEO4J_URI: process.env.NEO4J_URI || "",
+      NEO4J_USERNAME: process.env.NEO4J_USERNAME || "",
+      NEO4J_PASSWORD: process.env.NEO4J_PASSWORD || "",
+    },
+  });
+
+  if (stderr) {
+    logger.warn("Persona analytics warnings", { stderr });
+  }
+
+  return stdout;
+}
+
+/**
+ * Run HDBSCAN clustering via Python script
+ * Accepts optional pythonRunner for Trigger.dev compatibility
+ */
+async function clusterEpisodes(
+  userId: string,
+  startTime?: string,
+  pythonRunner?: (userId: string, startTime?: string) => Promise<string>
+): Promise<ClusteringOutput> {
+  logger.info("Running HDBSCAN clustering", { userId, startTime });
+
+  // Use provided runner (Trigger.dev) or fallback to exec (BullMQ)
+  const runner = pythonRunner || runClusteringWithExec;
+  const stdout = await runner(userId, startTime);
+
+  const rawOutput = JSON.parse(stdout);
+
+  // Convert main.py format {clusterId: {...}} to expected format {topics: {topicId: {...}}}
+  return { topics: rawOutput };
+}
+
+/**
+ * Run persona analytics via Python script
+ * Uses same pythonRunner as clustering but calls persona_analytics.py
+ */
+async function extractPersonaAnalytics(
+  userId: string,
+  startTime?: string,
+  pythonRunner?: (userId: string, startTime?: string) => Promise<string>
+): Promise<PersonaAnalytics> {
+  logger.info("Running persona analytics", { userId, startTime });
+
+  // Use provided runner (Trigger.dev) or fallback to exec (BullMQ)
+  const runner = pythonRunner || runAnalyticsWithExec;
+  const stdout = await runner(userId, startTime);
+
+  const analytics = JSON.parse(stdout) as PersonaAnalytics;
+
+  return analytics;
 }
 
 /**
@@ -412,7 +446,8 @@ async function generatePersonaSummaryBatch(
     patterns,
     existingSummary,
     mode,
-    userContext
+    userContext,
+    analytics
   );
 
   return finalSummary;
@@ -557,26 +592,31 @@ function buildAnalyticsSection(analytics: PersonaAnalytics): string {
     .join("\n");
 
   return `
-## Quantitative Analysis (from ${analytics.totalEpisodes} episodes):
+## Quantitative Foundation (from ${analytics.totalEpisodes} episodes):
 
-### Lexicon (top terms):
+### Lexicon (top terms by TF-IDF):
 ${topLexicon}
 
-### Style Metrics:
+### Structural Metrics (objective counts):
 - Average sentence length: ${analytics.style.avgSentenceLength} words
-- Bullet list usage: ${analytics.style.bulletUsage}%
-- Code block frequency: ${analytics.style.codeBlockFrequency}%
-- Emphasis: ${analytics.style.emphasisPatterns.bold} bold, ${analytics.style.emphasisPatterns.italic} italic, ${analytics.style.emphasisPatterns.caps} CAPS
+- Average paragraph length: ${analytics.style.avgParagraphLength} sentences
+- Episodes with bullets: ${analytics.style.episodesWithBullets} (${Math.round((analytics.style.episodesWithBullets / analytics.totalEpisodes) * 100)}%)
+- Episodes with code blocks: ${analytics.style.episodesWithCode} (${Math.round((analytics.style.episodesWithCode / analytics.totalEpisodes) * 100)}%)
 
 ### Source Distribution:
 ${sourceDistribution}
 
-### Temporal:
+### Temporal Stats:
 - Time span: ${analytics.temporal.timeSpanDays} days
 - Episodes per month: ${analytics.temporal.episodesPerMonth}
 
-### Receipts (explicit metrics):
-${analytics.receipts.join(", ") || "None found"}
+**IMPORTANT - How to Use These Analytics:**
+1. **LEXICON section**: Use the TF-IDF terms above (with frequencies) as the foundation. Add context from episodes.
+2. **STYLE_GUIDE section**: Use the structural metrics above (sentence/paragraph length, bullets, code blocks) as quantitative grounding. Add qualitative observations from episodes.
+3. **SOURCE distribution**: Reference this when noting communication patterns (e.g., "38% GitHub issues suggests technical communication").
+4. **TEMPORAL patterns**: Use time span and frequency to contextualize evolution/consistency.
+
+DO NOT re-calculate these metrics from episodes - they are already computed. Your job is to INTERPRET and CONTEXTUALIZE them using episode content.
   `.trim();
 }
 
@@ -639,16 +679,25 @@ function buildPatternExtractionPrompt(
 ): CoreMessage {
   const episodesText = formatEpisodesForPrompt(episodes);
   const contextSection = buildContextSection(userContext);
+  const analyticsSection = buildAnalyticsSection(analytics);
+  const systemPrompt = getSystemPrompt("full"); // Use full mode for consistent extraction principles
+  const roleGuidance = getRoleGuidance(userContext.role);
 
   const content = `
-You are analyzing a chunk of conversation episodes to extract behavioral and communication patterns.
+${systemPrompt}
+
+CHUNK ANALYSIS MODE: You are analyzing ONE chunk of a larger dataset. Other chunks are being processed separately.
 
 ${contextSection}
 
+${analyticsSection}
+
+${roleGuidance}
+
 TASK: Extract patterns from this chunk of ${episodes.length} episodes. Focus on:
-1. LEXICON: Frequently used terms (note frequency)
-2. STYLE: Writing mechanics (sentence length, structure, formatting)
-3. VOICE: Communication style qualities
+1. LEXICON: Add qualitative CONTEXT for terms already identified in analytics (DON'T re-extract frequencies)
+2. STYLE: Add qualitative observations that complement the structural metrics above
+3. VOICE: Communication style qualities (tone, formality, analytical balance)
 4. BELIEFS: Core principles (if stated multiple times)
 5. PREFERENCES: Clear DO/DON'T patterns
 
@@ -657,11 +706,11 @@ ${episodesText}
 
 OUTPUT: Return patterns found in this chunk. Use this format:
 
-# LEXICON_PATTERNS
-- [term]: [frequency in this chunk] - [usage context]
+# LEXICON_CONTEXT
+- [term from analytics]: [usage context in this chunk]
 
-# STYLE_PATTERNS
-- [pattern]: [observation]
+# STYLE_OBSERVATIONS
+- [qualitative pattern]: [evidence from this chunk]
 
 # VOICE_PATTERNS
 - [quality]: [evidence]
@@ -678,7 +727,11 @@ DON'T:
 # EXAMPLES
 - [concrete example from chunk]
 
-IMPORTANT: Only include patterns with sufficient evidence (3+ mentions in chunk).
+IMPORTANT:
+- Use analytics as foundation - DON'T re-calculate frequencies or metrics
+- Focus on adding CONTEXT and QUALITATIVE insights to the quantitative data
+- CHUNK-AWARE: Since you're seeing only part of the data, include patterns even with 2+ mentions in this chunk (synthesis will aggregate)
+- Follow the extraction principles above (prescriptive > descriptive, quantify when possible, source-aware)
   `.trim();
 
   return {
@@ -694,63 +747,71 @@ async function synthesizePatternsIntoPersona(
   patterns: string[],
   existingSummary: string | null,
   mode: "full" | "incremental",
-  userContext: UserContext
+  userContext: UserContext,
+  analytics: PersonaAnalytics
 ): Promise<string> {
   const allPatterns = patterns.join("\n\n---\n\n");
   const contextSection = buildContextSection(userContext);
+  const analyticsSection = buildAnalyticsSection(analytics);
   const roleGuidance = getRoleGuidance(userContext.role);
+  const systemPrompt = getSystemPrompt(mode);
 
   const synthesisPrompt = existingSummary
     ? `
-You are synthesizing patterns from multiple episode chunks into a cohesive persona document.
+${systemPrompt}
 
 ${contextSection}
+
+${analyticsSection}
 
 EXISTING PERSONA:
 ${existingSummary}
 
-NEW PATTERNS FROM CHUNKS:
+PATTERNS FROM CHUNKS (qualitative context for analytics):
 ${allPatterns}
 
 TASK: Update the existing persona by:
-1. Merging new patterns with existing ones
-2. Resolving conflicts (prefer higher frequency patterns)
-3. Maintaining the standard persona format (STYLE_GUIDE, LEXICON_USE, VOICE_TONE, etc.)
-4. Marking significantly updated sections with [UPDATED]
+1. Use analytics above as quantitative foundation
+2. Merge pattern context from chunks with existing persona
+3. Resolve conflicts (prefer higher frequency patterns from analytics)
+4. Maintain the standard persona format (STYLE_GUIDE, LEXICON_USE, VOICE_TONE, etc.)
+5. Mark significantly updated sections with [UPDATED]
 
 ${roleGuidance}
 
 Output the complete updated persona document following the standard template.
     `.trim()
     : `
-You are synthesizing patterns from multiple episode chunks into a cohesive persona document.
+${systemPrompt}
 
 ${contextSection}
 
-PATTERNS FROM CHUNKS:
+${analyticsSection}
+
+PATTERNS FROM CHUNKS (qualitative context for analytics):
 ${allPatterns}
 
 TASK: Create a complete persona document by:
-1. Aggregating patterns across all chunks
-2. Calculating overall frequencies
-3. Identifying strongest patterns
-4. Organizing into standard persona format
+1. Use analytics above as quantitative foundation (lexicon frequencies, style metrics, etc.)
+2. Integrate qualitative pattern context from chunks
+3. Combine quantitative + qualitative into cohesive persona sections
+4. Organize into standard persona format
 
 ${roleGuidance}
 
 Use this format:
 
 # STYLE_GUIDE
-[Writing mechanics and formatting]
+[Use structural metrics from analytics + qualitative observations from chunks]
 
 # LEXICON_USE
-[Domain terms with aggregated frequencies]
+[Use TF-IDF terms from analytics + usage context from chunks]
 
 # VOICE_TONE
-[Communication style parameters]
+[Communication style parameters from pattern observations]
 
 # WORLDVIEW
-[Core beliefs and principles]
+[Core beliefs and principles from chunks]
 
 # RECEIPTS
 [Achievements and metrics]
@@ -836,27 +897,34 @@ Good: "Sentence length: 12-18 words; 1 short punch/paragraph"
 
 EXTRACTION PRINCIPLES:
 
-1. FREQUENCY MATTERS
+1. USE PROVIDED ANALYTICS AS FOUNDATION
+   - You will receive pre-computed TF-IDF lexicon, structural metrics, source distribution, and temporal stats
+   - DO NOT re-calculate these metrics from episodes
+   - USE them as quantitative grounding and ADD qualitative context from episodes
+   - Example: Given "startup: 200×" in lexicon → "startup (200+ mentions): Focus on early-stage companies, MVP development..."
+
+2. FREQUENCY MATTERS
    - If term appears 10+ times → Add to LEXICON
    - If pattern appears 5+ times → Add to section
    - Rare mentions → Ignore (noise)
 
-2. PRESCRIPTIVE > DESCRIPTIVE
+3. PRESCRIPTIVE > DESCRIPTIVE
    - Extract rules: "Always X", "Never Y", "Prefer Z"
    - Extract preferences: "Use X instead of Y"
    - Extract patterns: "When doing X, then Y"
 
-3. QUANTIFY WHEN POSSIBLE
-   - Style metrics: sentence length, paragraph length
+4. QUANTIFY WHEN POSSIBLE
+   - Style metrics: Use provided averages (sentence length, paragraph length) + add qualitative observations
    - Tone sliders: formality (1-5), analytical (1-5)
-   - Frequency: "mentioned 15 times across 50 episodes"
+   - Frequency: Use provided TF-IDF counts + context
 
-4. CONTEXT MATTERS
+5. CONTEXT MATTERS
    - Note if patterns vary by context (technical vs personal)
    - Track evolution: "Previously X, now Y"
    - Identify contradictions: "Says X but does Y"
 
-5. SOURCE-AWARE EXTRACTION
+6. SOURCE-AWARE EXTRACTION
+   - Use provided source distribution percentages
    - Weight authored content (Obsidian docs, GitHub issues) higher for style analysis
    - Agent conversations show interaction patterns
    - Multi-source consistency indicates strong pattern
@@ -875,7 +943,7 @@ ${mode === "incremental" ? "\nFor incremental updates: Focus on NEW patterns, pr
 function formatEpisodesForPrompt(episodes: EpisodicNode[]): string {
   return episodes
     .map((episode, index) => {
-      const date = episode.createdAt.toISOString().split("T")[0];
+      const date = new Date(episode.createdAt).toISOString().split("T")[0];
       const source = episode.source || "unknown";
 
       return `
@@ -884,4 +952,121 @@ ${episode.content}
       `.trim();
     })
     .join("\n\n");
+}
+
+/**
+ * Process persona generation job (BullMQ worker entry point)
+ * Orchestrates fetching data, calling generation logic, and updating database
+ *
+ * @param pythonRunner - Optional Python runner for Trigger.dev compatibility
+ */
+export async function processPersonaGeneration(
+  payload: PersonaGenerationPayload,
+  clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
+  analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
+): Promise<PersonaGenerationResult> {
+  const { userId, workspaceId, spaceId, mode, startTime } = payload;
+
+  logger.info("Starting persona generation", {
+    userId,
+    workspaceId,
+    spaceId,
+    mode,
+    startTime,
+  });
+
+  const spaceService = new SpaceService();
+
+  try {
+    // Get persona space
+    const personaSpace = await spaceService.getSpace(spaceId, userId);
+
+    if (!personaSpace) {
+      throw new Error(`Persona space not found: ${spaceId}`);
+    }
+
+    // Get all episodes for persona generation
+    const episodes = await getEpisodesByUserId({userId, startTime});
+
+    if (episodes.length === 0) {
+      logger.warn("No episodes found for persona generation", {
+        userId,
+        spaceId,
+      });
+      return {
+        success: true,
+        spaceId,
+        mode,
+        summaryLength: 0,
+        episodesProcessed: 0,
+      };
+    }
+
+    logger.info("Generating persona summary", {
+      userId,
+      spaceId,
+      episodeCount: episodes.length,
+      mode,
+    });
+
+    // Generate persona summary (calls Python analytics + clustering + LLM logic)
+    const summary = await generatePersonaSummary(
+      episodes,
+      mode,
+      personaSpace.summary || null,
+      userId,
+      spaceId,
+      startTime,
+      clusteringRunner,
+      analyticsRunner
+    );
+
+    // Update persona space with new summary
+    await spaceService.updateSpace(spaceId, { summary }, userId);
+
+    // Update episode count tracking for threshold checking
+    const totalEpisodesQuery = `
+      MATCH (e:Episode {userId: $userId})
+      RETURN count(e) as totalCount
+    `;
+    const countResult = await runQuery(totalEpisodesQuery, { userId });
+    const currentTotalCount = countResult[0]?.get("totalCount").toNumber() || 0;
+
+    const updateCountQuery = `
+      MATCH (space:Space {uuid: $spaceId, userId: $userId})
+      SET space.episodeCountAtLastSummary = $currentCount,
+          space.summaryGeneratedAt = datetime(),
+          space.updatedAt = datetime()
+      RETURN space
+    `;
+    await runQuery(updateCountQuery, {
+      spaceId,
+      userId,
+      currentCount: currentTotalCount,
+    });
+
+    logger.info("Persona generation completed", {
+      userId,
+      spaceId,
+      mode,
+      summaryLength: summary.length,
+      episodesProcessed: episodes.length,
+    });
+
+    return {
+      success: true,
+      spaceId,
+      mode,
+      summaryLength: summary.length,
+      episodesProcessed: episodes.length,
+    };
+  } catch (error) {
+    logger.error("Error in persona generation:", {
+      error,
+      userId,
+      spaceId,
+      mode,
+    });
+    throw error;
+  }
 }

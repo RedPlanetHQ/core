@@ -43,6 +43,10 @@ import {
   processSpaceSummary,
   type SpaceSummaryPayload,
 } from "~/jobs/spaces/space-summary.logic";
+import {
+  processPersonaGeneration,
+  type PersonaGenerationPayload,
+} from "~/jobs/spaces/persona-generation.logic";
 
 /**
  * Episode ingestion worker
@@ -180,6 +184,22 @@ export const spaceSummaryWorker = new Worker(
 );
 
 /**
+ * Persona generation worker
+ * Handles CPU-intensive persona generation with HDBSCAN clustering
+ */
+export const personaGenerationWorker = new Worker(
+  "persona-generation-queue",
+  async (job) => {
+    const payload = job.data as PersonaGenerationPayload;
+    return await processPersonaGeneration(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 1, // Process one persona generation at a time (CPU-intensive)
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -191,6 +211,7 @@ export async function closeAllWorkers(): Promise<void> {
     bertTopicWorker.close(),
     spaceSummaryWorker.close(),
     spaceAssignmentWorker.close(),
+    personaGenerationWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

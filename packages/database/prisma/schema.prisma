@@ -471,13 +471,16 @@ model RecallLog {
 }
 
 model Space {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  autoMode     Boolean  @default(false)
-  summary      String?
-  themes       String[]
-  contextCount Int? // Count of context items in this space (episodes, statements, etc.)
+  id               String   @id @default(cuid())
+  name             String
+  description      String?
+  type             String?  // Space type: "classification", "persona", "evolution"
+  autoMode         Boolean  @default(false)
+  summary          String?
+  summaryStructure String? // Custom summary template (markdown format)
+  topicKeywords    Json? // LLM-generated keywords for BERT topic matching
+  themes           String[]
+  contextCount     Int? // Count of context items in this space (episodes, statements, etc.)
 
   status String?
 

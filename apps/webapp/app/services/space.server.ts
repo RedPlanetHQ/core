@@ -3,6 +3,9 @@ import {
   type SpaceNode,
   type CreateSpaceParams,
   type UpdateSpaceParams,
+  SpaceType,
+  SpaceTypeEnum,
+  SpaceStatus,
 } from "@core/types";
 import { type Space } from "@prisma/client";
 
@@ -48,8 +51,10 @@ export class SpaceService {
       data: {
         name: params.name.trim(),
         description: params.description?.trim(),
+        summaryStructure: params.summaryStructure?.trim(),
+        type: params.type,
         workspaceId: params.workspaceId,
-        status: "ready",
+        status: SpaceStatus.Created,
       },
     });
 
@@ -58,6 +63,8 @@ export class SpaceService {
       params.name.trim(),
       params.description?.trim(),
       params.userId,
+      params.summaryStructure?.trim(),
+      params.type,
     );
 
     logger.info(`Created space ${space.id} successfully`);
@@ -166,6 +173,9 @@ export class SpaceService {
       data: {
         name: updates.name,
         description: updates.description,
+        type: updates.type,
+        summaryStructure: updates.summaryStructure,
+        summary: updates.summary,
         icon: updates.icon,
         status: updates.status,
       },
@@ -229,6 +239,8 @@ export class SpaceService {
       space.name.trim(),
       space.description?.trim(),
       userId,
+      space.summaryStructure?.trim(),
+      space.type || undefined,
     );
 
     // Reset all summary and metadata fields in PostgreSQL

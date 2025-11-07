@@ -306,6 +306,7 @@ async function generateSpaceSummary(
         episodes,
         existingSummary?.summary || null,
         existingSummary?.themes || [],
+        space.summaryStructure || null, // Pass custom structure if provided
       );
     }
 
@@ -344,6 +345,7 @@ async function generateUnifiedSummary(
   episodes: EpisodicNode[],
   previousSummary: string | null = null,
   previousThemes: string[] = [],
+  summaryStructure: string | null = null, // NEW: Custom summary structure
 ): Promise<{
   summary: string;
   themes: string[];
@@ -357,6 +359,7 @@ async function generateUnifiedSummary(
       episodes,
       previousSummary,
       previousThemes,
+      summaryStructure, // Pass custom structure to prompt builder
     );
 
     // Space summary generation requires HIGH complexity (creative synthesis, narrative generation)
@@ -387,6 +390,7 @@ function createUnifiedSummaryPrompt(
   episodes: EpisodicNode[],
   previousSummary: string | null,
   previousThemes: string[],
+  summaryStructure: string | null = null, // NEW: Custom summary structure
 ): CoreMessage[] {
   // If there are no episodes and no previous summary, we cannot generate a meaningful summary
   if (episodes.length === 0 && previousSummary === null) {
@@ -421,6 +425,18 @@ function createUnifiedSummaryPrompt(
 
   const isUpdate = previousSummary !== null;
 
+  // NEW: Build custom structure section if provided
+  const customStructureSection = summaryStructure
+    ? `
+CUSTOM SUMMARY STRUCTURE:
+The user has specified a custom structure for this space summary. You MUST organize the summary according to this structure:
+
+${summaryStructure}
+
+IMPORTANT: Follow the custom structure exactly. Organize your summary content to match the sections/format specified above.
+`
+    : "";
+
   return [
     {
       role: "system",
@@ -432,6 +448,9 @@ CRITICAL RULES:
 3. Write in a factual, neutral tone - avoid promotional language ("pivotal", "invaluable", "cutting-edge")
 4. Be specific and concrete - reference actual content, patterns, and insights found in the episodes
 5. If episodes are insufficient for meaningful insights, state that more data is needed
+${summaryStructure ? "6. FOLLOW THE CUSTOM STRUCTURE provided by the user exactly" : ""}
+
+${customStructureSection}
 
 INTENT-DRIVEN SUMMARIZATION:
 Your summary should SERVE the space's intended purpose. Examples:
@@ -539,6 +558,8 @@ ${
 ${topEntities.join(", ")}`
     : ""
 }
+
+${customStructureSection ? `\nREMINDER: Structure your summary according to the CUSTOM SUMMARY STRUCTURE specified above.\n` : ""}
 
 ${
   isUpdate

@@ -11,6 +11,7 @@ import {
   enqueueSpaceAssignment,
   isTriggerDeployment,
 } from "~/lib/queue-adapter.server";
+import { SpaceTypeEnum } from "@core/types";
 
 const spaceService = new SpaceService();
 
@@ -18,6 +19,7 @@ const spaceService = new SpaceService();
 const CreateSpaceSchema = z.object({
   name: z.string(),
   description: z.string().optional(),
+  summaryStructure: z.string().optional(),
 });
 
 // Search query schema
@@ -73,7 +75,9 @@ const { action } = createHybridActionApiRoute(
       const space = await spaceService.createSpace({
         name: body.name,
         description: body.description,
+        summaryStructure: body.summaryStructure,
         userId: authentication.userId,
+        type: SpaceTypeEnum.Classification,
         workspaceId: user.Workspace.id,
       });
 

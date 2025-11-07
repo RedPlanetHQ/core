@@ -158,3 +158,25 @@ export const spaceSummaryQueue = new Queue("space-summary-queue", {
     },
   },
 });
+
+/**
+ * Persona generation queue
+ * Handles CPU-intensive persona generation with HDBSCAN clustering
+ */
+export const personaGenerationQueue = new Queue("persona-generation-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 2, // Only 2 attempts for expensive operations
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      age: 7200, // Keep completed jobs for 2 hours
+      count: 100,
+    },
+    removeOnFail: {
+      age: 172800, // Keep failed jobs for 48 hours (for debugging)
+    },
+  },
+});

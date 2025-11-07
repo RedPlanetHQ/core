@@ -11,6 +11,7 @@ import {
   shouldTriggerTopicAnalysis,
   updateLastTopicAnalysisTime,
 } from "~/services/bertTopicAnalysis.server";
+import { checkAndTriggerPersonaUpdate } from "../spaces/persona-trigger.logic";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
@@ -294,6 +295,19 @@ export async function processEpisodeIngestion(
       // Don't fail the ingestion if topic analysis fails
       logger.warn(`Failed to trigger topic analysis after ingestion:`, {
         error: topicAnalysisError,
+        userId: payload.userId,
+      });
+    }
+
+    // Check and trigger persona update if threshold met (50+ new episodes)
+    try {
+      if (currentStatus === IngestionStatus.COMPLETED) {
+        await checkAndTriggerPersonaUpdate(payload.userId, payload.workspaceId);
+      }
+    } catch (personaTriggerError) {
+      // Don't fail the ingestion if persona trigger fails
+      logger.warn(`Failed to check persona trigger after ingestion:`, {
+        error: personaTriggerError,
         userId: payload.userId,
       });
     }

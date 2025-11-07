@@ -212,6 +212,36 @@ export async function enqueueBertTopicAnalysis(payload: {
   }
 }
 
+/**
+ * Enqueue persona generation job
+ */
+export async function enqueuePersonaGeneration(payload: {
+  userId: string;
+  workspaceId: string;
+  spaceId: string;
+  mode: "full" | "incremental";
+  startTime?: string;
+}): Promise<{ id?: string; token?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { personaGenerationTask } = await import(
+      "~/trigger/spaces/persona-generation"
+    );
+    const handler = await personaGenerationTask.trigger(payload);
+    return { id: handler.id, token: handler.publicAccessToken };
+  } else {
+    // BullMQ
+    const { personaGenerationQueue } = await import("~/bullmq/queues");
+    const job = await personaGenerationQueue.add("persona-generation", payload, {
+      jobId: `persona-${payload.userId}-${Date.now()}`,
+      attempts: 2, // Only 2 attempts for expensive operations
+      backoff: { type: "exponential", delay: 5000 },
+    });
+    return { id: job.id };
+  }
+}
+
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
