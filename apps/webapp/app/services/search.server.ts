@@ -127,8 +127,21 @@ export class SearchService {
 
     logger.info(`Extracted ${episodesWithProvenance.length} unique episodes from all sources`);
 
+    // Stage 1.5: Add entity match counts and filter by minimum entity matches
+    const episodesWithEntityCounts = await this.addEntityMatchCounts(
+      episodesWithProvenance,
+      entities,
+      userId
+    );
+    const entityFilteredEpisodes = this.filterByEntityMatches(episodesWithEntityCounts, entities.length);
+
+    logger.info(
+      `Entity filtering: ${entityFilteredEpisodes.length}/${episodesWithProvenance.length} episodes kept ` +
+      `(${entities.length} query entities extracted)`
+    );
+
     // Stage 2: Rate episodes by source hierarchy (EpisodeGraph > BFS > Vector > BM25)
-    const ratedEpisodes = this.rateEpisodesBySource(episodesWithProvenance);
+    const ratedEpisodes = this.rateEpisodesBySource(entityFilteredEpisodes);
 
     // Stage 3: Filter by quality (not by model capability)
     const qualityThreshold = opts.qualityThreshold || QUALITY_THRESHOLDS.HIGH_QUALITY_EPISODE;
@@ -523,6 +536,122 @@ export class SearchService {
   }
 
   /**
+   * Add entity match counts to episodes by querying all entities in each episode
+   * Uses batch query for efficiency
+   */
+  private async addEntityMatchCounts(
+    episodes: EpisodeWithProvenance[],
+    queryEntities: EntityNode[],
+    userId: string
+  ): Promise<EpisodeWithProvenanceAndEntityCount[]> {
+    // If no query entities, skip entity counting
+    if (queryEntities.length === 0) {
+      logger.info('No query entities - skipping entity match counting');
+      return episodes.map(ep => ({ ...ep, entityMatchCount: 0 }));
+    }
+
+    // If no episodes, return empty
+    if (episodes.length === 0) {
+      return [];
+    }
+
+    const queryEntityIds = new Set(queryEntities.map(e => e.uuid));
+    const episodeUuids = episodes.map(ep => ep.episode.uuid);
+
+    logger.info(`Fetching entities for ${episodeUuids.length} episodes to calculate match counts`);
+
+    // Batch query to get all entities for all episodes
+    const cypher = `
+      UNWIND $episodeUuids AS epUuid
+      MATCH (ep:Episode {uuid: epUuid, userId: $userId})-[provRel:HAS_PROVENANCE]->(s:Statement)
+      MATCH (s)-[entityRel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
+      WHERE entity.userId = $userId
+      RETURN ep.uuid as episodeUuid, COLLECT(DISTINCT entity.uuid) as entityUuids
+    `;
+
+    const records = await runQuery(cypher, { episodeUuids, userId });
+
+    // Build map of episode UUID -> entity UUIDs
+    const episodeEntityMap = new Map<string, string[]>();
+    records.forEach(record => {
+      const episodeUuid = record.get('episodeUuid');
+      const entityUuids = record.get('entityUuids') || [];
+      episodeEntityMap.set(episodeUuid, entityUuids);
+    });
+
+    // Calculate entity match count for each episode
+    const episodesWithCounts = episodes.map(ep => {
+      const episodeEntities = episodeEntityMap.get(ep.episode.uuid) || [];
+      const matchCount = episodeEntities.filter(entityId => queryEntityIds.has(entityId)).length;
+
+      return {
+        ...ep,
+        entityMatchCount: matchCount,
+      };
+    });
+
+    logger.info(
+      `Entity match counts calculated: ` +
+      `avg=${(episodesWithCounts.reduce((sum, ep) => sum + ep.entityMatchCount, 0) / episodesWithCounts.length).toFixed(1)}, ` +
+      `max=${Math.max(...episodesWithCounts.map(ep => ep.entityMatchCount))}, ` +
+      `min=${Math.min(...episodesWithCounts.map(ep => ep.entityMatchCount))}`
+    );
+
+    return episodesWithCounts;
+  }
+
+  /**
+   * Filter episodes by minimum entity match count
+   * Strategy:
+   * - If 1 query entity: require at least 1 match
+   * - If 2+ query entities: require at least 1 match (can adjust threshold later)
+   * - If no query entities: keep all (fallback to semantic/keyword search)
+   */
+  private filterByEntityMatches(
+    episodes: EpisodeWithProvenanceAndEntityCount[],
+    queryEntityCount: number
+  ): EpisodeWithProvenanceAndEntityCount[] {
+    // If no entities extracted, skip entity filtering
+    if (queryEntityCount === 0) {
+      logger.info('No query entities - skipping entity match filtering');
+      return episodes;
+    }
+
+    // Require at least 1 entity match
+    const minEntityMatches = 1;
+
+    const filtered = episodes.filter(ep => ep.entityMatchCount >= minEntityMatches);
+
+    // Log episodes that were filtered out
+    const filteredOut = episodes.filter(ep => ep.entityMatchCount < minEntityMatches);
+    if (filteredOut.length > 0) {
+      logger.info(
+        `Filtered out ${filteredOut.length} episodes with <${minEntityMatches} entity matches:\n` +
+        filteredOut.slice(0, 5).map(ep =>
+          `  - Episode ${ep.episode.uuid.slice(0, 8)}: ${ep.entityMatchCount} matches, ` +
+          `first-level-score would be: ${ep.firstLevelScore?.toFixed(2) || 'N/A'}, ` +
+          `sources: EG=${ep.sourceBreakdown.fromEpisodeGraph}, BFS=${ep.sourceBreakdown.fromBFS}, ` +
+          `Vec=${ep.sourceBreakdown.fromVector}, BM25=${ep.sourceBreakdown.fromBM25}`
+        ).join('\n')
+      );
+    }
+
+    // Log kept episodes with their match counts
+    if (filtered.length > 0) {
+      logger.info(
+        `Kept ${filtered.length} episodes with >=${minEntityMatches} entity matches (top 5):\n` +
+        filtered.slice(0, 5).map(ep =>
+          `  - Episode ${ep.episode.uuid.slice(0, 8)}: ${ep.entityMatchCount} matches, ` +
+          `sources: EG=${ep.sourceBreakdown.fromEpisodeGraph}, BFS=${ep.sourceBreakdown.fromBFS}, ` +
+          `Vec=${ep.sourceBreakdown.fromVector}, BM25=${ep.sourceBreakdown.fromBM25}`
+        ).join('\n')
+      );
+    }
+
+    return filtered;
+  }
+
+  /**
    * Extract episodes with provenance tracking from all search sources
    * Deduplicates episodes and tracks which statements came from which source
    */
@@ -658,8 +787,11 @@ export class SearchService {
 
   /**
    * Rate episodes by source hierarchy: Episode Graph > BFS > Vector > BM25
+   * Now also boosts episodes by entity match count
    */
-  private rateEpisodesBySource(episodes: EpisodeWithProvenance[]): EpisodeWithProvenance[] {
+  private rateEpisodesBySource(
+    episodes: EpisodeWithProvenanceAndEntityCount[]
+  ): EpisodeWithProvenanceAndEntityCount[] {
     return episodes
       .map((ep) => {
         // Hierarchical scoring: EpisodeGraph > BFS > Vector > BM25
@@ -690,6 +822,19 @@ export class SearchService {
         const concentrationBonus = Math.log(1 + ep.statements.length) * 0.3;
         firstLevelScore *= 1 + concentrationBonus;
 
+        // Entity match boost: More matching entities = higher relevance
+        // Multiplicative boost to ensure episodes with more entity matches rank significantly higher
+        const entityMatchMultiplier = 1 + (ep.entityMatchCount * 0.5);
+        firstLevelScore *= entityMatchMultiplier;
+
+        logger.debug(
+          `Episode ${ep.episode.uuid.slice(0, 8)}: ` +
+          `baseScore=${(firstLevelScore / entityMatchMultiplier).toFixed(2)}, ` +
+          `entityMatches=${ep.entityMatchCount}, ` +
+          `multiplier=${entityMatchMultiplier.toFixed(2)}, ` +
+          `finalScore=${firstLevelScore.toFixed(2)}`
+        );
+
         return {
           ...ep,
           firstLevelScore,
@@ -703,7 +848,7 @@ export class SearchService {
    * Returns empty if no high-quality matches found
    */
   private filterByQuality(
-    ratedEpisodes: EpisodeWithProvenance[],
+    ratedEpisodes: EpisodeWithProvenanceAndEntityCount[],
     query: string,
     baseQualityThreshold: number = QUALITY_THRESHOLDS.HIGH_QUALITY_EPISODE,
   ): QualityFilterResult {
@@ -787,7 +932,7 @@ export class SearchService {
    * IMPORTANT: BM25 is NEVER considered dominant - it's a fallback, not a quality signal.
    * When only Vector+BM25 exist, Vector is dominant.
    */
-  private calculateConfidence(filteredEpisodes: EpisodeWithProvenance[]): number {
+  private calculateConfidence(filteredEpisodes: EpisodeWithProvenanceAndEntityCount[]): number {
     if (filteredEpisodes.length === 0) return 0;
 
     const avgScore =
@@ -896,9 +1041,9 @@ export class SearchService {
    */
   private async validateEpisodesWithLLM(
     query: string,
-    episodes: EpisodeWithProvenance[],
+    episodes: EpisodeWithProvenanceAndEntityCount[],
     maxEpisodes: number = 20,
-  ): Promise<EpisodeWithProvenance[]> {
+  ): Promise<EpisodeWithProvenanceAndEntityCount[]> {
     const candidatesForValidation = episodes.slice(0, maxEpisodes);
 
     const prompt = `Given user query, validate which episodes are truly relevant.
@@ -1052,10 +1197,17 @@ interface EpisodeWithProvenance {
 }
 
 /**
+ * Episode with provenance tracking AND entity match count
+ */
+interface EpisodeWithProvenanceAndEntityCount extends EpisodeWithProvenance {
+  entityMatchCount: number;
+}
+
+/**
  * Quality filtering result
  */
 interface QualityFilterResult {
-  episodes: EpisodeWithProvenance[];
+  episodes: EpisodeWithProvenanceAndEntityCount[];
   confidence: number;
   message: string;
 }
