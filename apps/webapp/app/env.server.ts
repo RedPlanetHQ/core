@@ -116,8 +116,14 @@ const EnvironmentSchema = z
     EMBEDDING_MODEL: z.string().default("mxbai-embed-large"),
     EMBEDDING_MODEL_SIZE: z.string().default("1024"),
     OLLAMA_URL: z.string().optional(),
+
+    // Reranking configuration
+    RERANK_PROVIDER: z.enum(["cohere", "ollama", "none"]).default("none"),
     COHERE_API_KEY: z.string().optional(),
+    COHERE_RERANK_MODEL: z.string().default("rerank-english-v3.0"),
     COHERE_SCORE_THRESHOLD: z.string().default("0.3"),
+    OLLAMA_RERANK_MODEL: z.string().default("dengcao/Qwen3-Reranker-8B:Q4_K_M"),
+    OLLAMA_SCORE_THRESHOLD: z.string().default("0.3"),
 
     AWS_ACCESS_KEY_ID: z.string().optional(),
     AWS_SECRET_ACCESS_KEY: z.string().optional(),
