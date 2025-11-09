@@ -1,23 +1,11 @@
-import type { EntityNode, StatementNode, EpisodicNode } from "@core/types";
+import type { EntityNode, StatementNode, EpisodicNode, EpisodeSearchResult, SearchOptions } from "@core/types";
 import { EPISODIC_NODE_PROPERTIES } from "@core/types";
-import type { SearchOptions } from "../search.server";
 import type { Embedding } from "ai";
 import { logger } from "../logger.service";
 import { runQuery } from "~/lib/neo4j.server";
 import { getEmbedding } from "~/lib/model.server";
 import { findSimilarEntities } from "../graphModels/entity";
 
-/**
- * Episode search result with aggregated scores and sample statements
- * Returned by BM25, Vector, and BFS searches
- */
-export interface EpisodeSearchResult {
-  episode: EpisodicNode;
-  score: number;  // Aggregated score from this search method
-  statementCount: number;  // Total statements found for this episode
-  topStatements: StatementNode[];  // Top 5 statements for LLM validation
-  invalidatedStatements: StatementNode[];  // For final response
-}
 
 /**
  * Perform BM25 keyword-based search on statements
@@ -661,14 +649,16 @@ export async function performEpisodeGraphSearch(
 
       // Step 5: Calculate all metrics in one pass (optimized: fewer WITH clauses)
       // Direct reduce without intermediate array creation
+      // IMPORTANT: avgRelevance now computed from entityMatchedStatements ONLY (not all statements)
+      // This prevents irrelevant statements from diluting the relevance score
       WITH ep,
            entityMatchedStatements,
            size(matchedEntities) as entityMatchCount,
            size(entityMatchedStatements) as entityStmtCount,
            size(allEpisodeStatements) as totalStmtCount,
-           reduce(sum = 0.0, stmt IN allEpisodeStatements |
+           reduce(sum = 0.0, stmt IN entityMatchedStatements |
              sum + gds.similarity.cosine(stmt.factEmbedding, $queryEmbedding)
-           ) / CASE WHEN size(allEpisodeStatements) = 0 THEN 1 ELSE size(allEpisodeStatements) END as avgRelevance
+           ) / CASE WHEN size(entityMatchedStatements) = 0 THEN 1 ELSE size(entityMatchedStatements) END as avgRelevance
 
       // Step 6: Calculate connectivity and filter
       WITH ep,
@@ -735,7 +725,12 @@ export async function performEpisodeGraphSearch(
 
     logger.info(
       `Episode graph search: found ${results.length} episodes, ` +
-      `top score: ${results[0]?.score.toFixed(2) || 'N/A'}`
+      `top score: ${results[0]?.score.toFixed(2) || 'N/A'}` +
+      (results.length > 0
+        ? `, top episode: ${results[0].metrics.entityMatchCount} entities, ` +
+          `${results[0].statements.length} matched stmts, ` +
+          `avgRelevance: ${results[0].metrics.avgRelevance.toFixed(3)}`
+        : '')
     );
 
     return results;

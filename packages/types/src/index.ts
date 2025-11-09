@@ -6,3 +6,4 @@ export * from "./integration";
 export * from "./user";
 export * from "./space";
 export * from "./pattern";
+export * from "./search";
