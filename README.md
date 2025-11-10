@@ -29,39 +29,273 @@
 </div>
 
 <div align="center">
-  <a href="https://core.heysol.ai">
+  <a href="https://heysol.ai">
     <img src="https://github.com/user-attachments/assets/89066cdd-204b-46c2-8ad4-4935f5ca9edd" width="200px" alt="CORE logo" />
   </a>
 
 ### CORE: Your Personal Memory Layer for AI Apps
 
 <p align="center">
-    <a href="https://deepwiki.com/RedPlanetHQ/core">
-        <img src="https://deepwiki.com/badge.svg" alt="DeepWiki Badge" />
+    <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
+        <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" />
     </a>
 </p>
 <p align="center">
-    <a href="https://docs.heysol.ai/introduction"><b>Documentation</b></a> •
-    <a href="https://discord.gg/YGUZcvDjUa"><b>Discord</b></a>
+    <a href="https://heysol.ai">
+        <img src="https://img.shields.io/badge/Website-heysol.ai-c15e50" alt="Website" />
+    </a>
+    <a href="https://docs.heysol.ai">
+        <img src="https://img.shields.io/badge/Docs-docs.heysol.ai-green" alt="Docs" />
+    </a>  
+    <a href="https://discord.gg/YGUZcvDjUa">
+        <img src="https://img.shields.io/badge/Discord-community-purple" alt="Discord" />
+    </a>    
 </p>
 </div>
 
-## 🔥 Research Highlights
 
-CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers. Check out this [blog](https://blog.heysol.ai/core-build-memory-knowledge-graph-for-individuals-and-achieved-sota-on-locomo-benchmark/) for more info.
+## ❌ Without CORE
+LLMs lose context every time you switch tools or end conversation. You get:
 
-<img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
-(1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
+- ❌ Re-explain your project context to each AI tool
+- ❌ Lost conversations and decisions across ChatGPT, Claude, Cursor
+- ❌ No memory of past discussions, preferences, or project history
 
-## Overview
 
-**Problem**
+## ✅ With CORE
+CORE creates a unified memory layer across all your AI tools — placing persistent context directly into your LLM's awareness.
 
-Developers waste time re-explaining context to AI tools. Hit token limits in Claude? Start fresh and lose everything. Switch from ChatGPT/Claude to Cursor? Explain your context again. Your conversations, decisions, and insights vanish between sessions. With every new AI tool, the cost of context switching grows.
+Add CORE to your workflow:
 
-**Solution** - **CORE** (**Contextual Observation & Recall Engine**)
+Add `search core memory` to your prompt in Cursor:
 
-CORE is an open-source unified, persistent memory layer for all your AI tools. Your context follows you from Cursor to Claude to ChatGPT to Claude Code. One knowledge graph remembers who said what, when, and why. Connect once, remember everywhere. Stop managing context and start building.
+```txt
+What were the architecture decisions we made for the 
+payment service last week?. Search core memory 
+```
+
+Add `add to core memory` to your prompt in Cursor:
+
+```txt
+Set up authentication for my API service using JWT tokens. 
+Remember my preference for TypeScript strict mode. Add to core memory
+```
+CORE builds a temporal knowledge graph that remembers everything and makes it available across claude code, windsurf, cursor, claude and any MCP-compatible tool.
+
+- 1️⃣ Connect CORE to your AI tools via MCP
+- 2️⃣ Work naturally, your context gets captured automatically
+- 3️⃣ Get persistent memory across all sessions and tools
+
+No context loss, no re-explaining projects, no forgotten decisions.
+
+## Why CORE?
+1. **Persistent Memory Across Tools**: Your conversations in ChatGPT become available in Cursor. Decisions made in Claude are recalled in your next coding session. One unified memory graph.
+2. **Temporal Knowledge Graph**: Not just storage — CORE tracks who said what, when, and why. Full provenance tracking means you can see how decisions evolved over time.
+3. **88.24% Benchmark Accuracy**: State-of-the-art performance on the LoCoMo benchmark — outperforming competitors by 20+ percentage points in multi-hop and temporal reasoning.
+4. **Your Data, Your Control**: Open-source, self-hostable, and designed for user ownership. Your memory belongs to you.
+
+## 🛠️ Installation
+
+### CLIs
+
+<details>
+<summary><b>Install in Claude Code CLI</b></summary>
+
+1. Run this command in your terminal to connect CORE with Claude Code:
+
+```sh
+
+claude mcp add --transport http core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+
+```
+
+2. Type `/mcp` and open core-memory MCP for authentication
+
+</details>
+
+<details>
+<summary><b>Install in Codex CLI</b></summary>
+
+Add the following to your `~/.codex/config.toml` file:
+
+```toml
+model = "gpt-5-codex"
+model_reasoning_effort = "medium"
+trust_level = "trusted"
+
+[features]
+rmcp_client=true
+
+[mcp_servers.memory]
+url = "https://core.heysol.ai/api/v1/mcp?source=codex"
+```
+
+</details>
+
+<details>
+<summary><b>Install in Gemini CLI</b></summary>
+
+See [Gemini CLI Configuration](https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html) for details.
+
+1.  Open the Gemini CLI settings file. The location is `~/.gemini/settings.json` (where `~` is your home directory).
+2.  Add the following to the `mcpServers` object in your `settings.json` file:
+
+```json
+{
+  "mcpServers": {
+    "corememory": {
+      "httpUrl": "[http://localhost:3000/mcp](https://core.heysol.ai/api/v1/mcp?source=geminicli)",
+      "timeout": 5000
+    }
+  }
+}
+```
+If the `mcpServers` object does not exist, create it.
+
+</details>
+
+
+### IDEs
+
+<details>
+<summary><b>Install in Cursor</b></summary>
+
+> Since Cursor 1.0, you can click the install button below for instant one-click installation.
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
+
+OR
+
+1. Go to: `Settings` -> `Tools &thank you Integrations` -> `Add Custom MCP` 
+2. Enter the below in `mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=cursor",
+      "headers": {}
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in VS Code</b></summary>
+
+Enter the below in `mcp.json` file:
+
+```json
+{
+  "servers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
+      "type": "http"
+    }
+  }
+}
+```
+
+</details>
+
+</details>
+
+<details>
+<summary><b>Install in Windsurf</b></summary>
+
+Enter the below in `mcp_config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "serverUrl": "https://core.heysol.ai/api/v1/mcp/source=windsurf",
+      "headers": {
+        "Authorization": "Bearer <YOUR_API_KEY>"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Zed</b></summary>
+
+1. Go to `Settings` in Agent Panel -> `Add Custom Server` 
+2. Enter below code in configuraiton file and click on `Add server` button
+
+```json
+{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Zed"]
+  }
+}
+```
+
+</details>
+
+
+### Coding Agents
+
+<details>
+<summary><b>Install in Kilo Code</b></summary>
+
+1. Go to `Settings` → `MCP Servers` → `Installed tab` → click `Edit Global MCP` to edit your configuration.
+2. Add the following to your MCP config file:
+
+```json
+{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code"]
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Qwen Code</b></summary>
+
+See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/tools/mcp-server/#how-to-set-up-your-mcp-server) for details.
+
+1.  Open the Qwen Coder settings file. The location is `~/.qwen/settings.json` (where `~` is your home directory).
+2.  Add the following to the `mcpServers` object in your `settings.json` file:
+
+```json
+{
+  "mcpServers": {
+    "corememory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Qwen-Code"
+    }
+  }
+}
+```
+</details>
+
+
+
+
+### Desktop Apps
+
+
+## 🔨 Available Tools
+
+CORE Memory MCP provides the following tools that LLMs can use:
+
+- `mcp__core-memory__memory_search`: Search relevant context from CORE Memory.
+- `mcp__core-memory__memory_ingest`: Add an episode in CORE Memory.
+- `mcp__core-memory__memory_about_user`: Fetches user persona from CORE Memory.
+- `mcp__core-memory__initialise_conversation_session`: Initialise conversation and assign session id to a conversation.
+- `mcp__core-memory__get_integrations`: Fetches what relevant integration should be used from the connected integrations.
+- `mcp__core-memory__get_integrations_actions`: Fetches what tool to be used from that integrations tools for the task.
+- `mcp__core-memory__execute_integrations_actions`: Execute the tool for that integration .
+
 
 ## 🚀 CORE Self-Hosting
 
@@ -120,6 +354,42 @@ Don't want to manage infrastructure? CORE Cloud lets you build your personal mem
    - [Add Browser Extension](https://docs.heysol.ai/providers/browser-extension) - bring your memory to any website
    - [Linear](https://docs.heysol.ai/integrations/linear), [Github](https://docs.heysol.ai/integrations/github) - add project context automatically
 
+## 🔥 Research Highlights
+
+CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers. Check out this [blog](https://blog.heysol.ai/core-build-memory-knowledge-graph-for-individuals-and-achieved-sota-on-locomo-benchmark/) for more info.
+
+<img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
+(1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
+
+
+## How CORE create memory
+
+<img width="12885" height="3048" alt="memory-ingest-diagram" src="https://github.com/user-attachments/assets/c51679de-8260-4bee-bebf-aff32c6b8e13" />
+
+CORE’s ingestion pipeline has four phases designed to capture evolving context:
+
+1. **Normalization**: Links new information to recent context, breaks long documents into coherent chunks while keeping cross-references, and standardizes terms so by the time CORE extracts knowledge, it’s working with clean, contextualized input instead of messy text.
+2. **Extraction**: Pulls meaning from normalized text by identifying entities (people, tools, projects, concepts), turning them into statements with context, source, and time, and mapping relationships. For example, “We wrote CORE in Next.js” becomes: Entities (Core, Next.js), Statement (CORE was developed using Next.js), and Relationship (was developed using).
+3. **Resolution**: Detects contradictions, tracks how preferences evolve, and preserves multiple perspectives with provenance instead of overwriting them so memory reflects your full journey, not just the latest snapshot.
+4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph that links facts to their context and history, turning isolated data into a living web of knowledge agents can actually use.
+
+The Result: Instead of a flat database, CORE gives you a memory that grows and changes with you - preserving context, evolution, and ownership so agents can actually use it.
+
+![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
+
+## How CORE recalls from memory
+
+<img width="10610" height="3454" alt="memory-search-diagram" src="https://github.com/user-attachments/assets/3541893e-f7c9-42b9-8fad-6dabf138dbeb" />
+
+When you ask CORE a question, it doesn’t just look up text - it digs into your whole knowledge graph to find the most useful answers.
+
+1. **Search**: CORE looks through memory from multiple angles at once - keyword search for exact matches, semantic search for related ideas even if phrased differently, and graph traversal to follow links between connected concepts.
+2. **Re-Rank**: The retrieved results are reordered to highlight the most relevant and diverse ones, ensuring you don’t just see obvious matches but also deeper connections.
+3. **Filtering**: CORE applies smart filters based on time, reliability, and relationship strength, so only the most meaningful knowledge surfaces.
+4. **Output**: You get back both facts (clear statements) and episodes (the original context they came from), so recall is always grounded in context, time, and story.
+
+The result: CORE doesn’t just recall facts - it recalls them in the right context, time, and story, so agents can respond the way you would remember.
+
 ## 🧩 Key Features
 
 ### 🧠 **Unified, Portable Memory**:
@@ -168,33 +438,6 @@ Connect Linear, Slack, GitHub, Notion once to CORE—then use all their tools in
 
 ![core-linear-claude](https://github.com/user-attachments/assets/7d59d92b-8c56-4745-a7ab-9a3c0341aa32)
 
-## How CORE create memory
-
-<img width="12885" height="3048" alt="memory-ingest-diagram" src="https://github.com/user-attachments/assets/c51679de-8260-4bee-bebf-aff32c6b8e13" />
-
-CORE’s ingestion pipeline has four phases designed to capture evolving context:
-
-1. **Normalization**: Links new information to recent context, breaks long documents into coherent chunks while keeping cross-references, and standardizes terms so by the time CORE extracts knowledge, it’s working with clean, contextualized input instead of messy text.
-2. **Extraction**: Pulls meaning from normalized text by identifying entities (people, tools, projects, concepts), turning them into statements with context, source, and time, and mapping relationships. For example, “We wrote CORE in Next.js” becomes: Entities (Core, Next.js), Statement (CORE was developed using Next.js), and Relationship (was developed using).
-3. **Resolution**: Detects contradictions, tracks how preferences evolve, and preserves multiple perspectives with provenance instead of overwriting them so memory reflects your full journey, not just the latest snapshot.
-4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph that links facts to their context and history, turning isolated data into a living web of knowledge agents can actually use.
-
-The Result: Instead of a flat database, CORE gives you a memory that grows and changes with you - preserving context, evolution, and ownership so agents can actually use it.
-
-![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
-
-## How CORE recalls from memory
-
-<img width="10610" height="3454" alt="memory-search-diagram" src="https://github.com/user-attachments/assets/3541893e-f7c9-42b9-8fad-6dabf138dbeb" />
-
-When you ask CORE a question, it doesn’t just look up text - it digs into your whole knowledge graph to find the most useful answers.
-
-1. **Search**: CORE looks through memory from multiple angles at once - keyword search for exact matches, semantic search for related ideas even if phrased differently, and graph traversal to follow links between connected concepts.
-2. **Re-Rank**: The retrieved results are reordered to highlight the most relevant and diverse ones, ensuring you don’t just see obvious matches but also deeper connections.
-3. **Filtering**: CORE applies smart filters based on time, reliability, and relationship strength, so only the most meaningful knowledge surfaces.
-4. **Output**: You get back both facts (clear statements) and episodes (the original context they came from), so recall is always grounded in context, time, and story.
-
-The result: CORE doesn’t just recall facts - it recalls them in the right context, time, and story, so agents can respond the way you would remember.
 
 ## Documentation
 
@@ -250,11 +493,5 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
-<<<<<<< Updated upstream
 
-<<<<<<< HEAD
 
-# =======
-
-> > > > > > > Stashed changes
-> > > > > > > 62db6c1 (feat: automatic space identification)
