@@ -34,18 +34,20 @@ export async function performBM25Search(
       `;
     }
 
-    // Add space filtering if spaceIds are provided
-    let spaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      spaceCondition = `
-        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
-      `;
-    }
-
     // Use Neo4j's built-in fulltext search capabilities with provenance count
     // Optimized: Single query to avoid expensive UNWIND + MATCH pattern
     // BM25 gets 3x limit since keyword matching is less precise than semantic search
     const STATEMENT_LIMIT = 150;
+
+    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
+    let episodeSpaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      episodeSpaceCondition = `
+        AND e.spaceIds IS NOT NULL
+        AND size(e.spaceIds) > 0
+        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+      `;
+    }
 
     // Combined query: search statements and group by episode in one pass
     // Use statement uuid for indexed lookup instead of node reference
@@ -55,11 +57,11 @@ export async function performBM25Search(
         WHERE s.userId = $userId
           AND score >= 0.5
           ${timeframeCondition}
-          ${spaceCondition}
         WITH s, score
         ORDER BY score DESC
         LIMIT ${STATEMENT_LIMIT}
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
+        WHERE true ${episodeSpaceCondition}
         WITH e,
              COLLECT(s) as statements,
              COLLECT(score) as scores
@@ -150,16 +152,18 @@ export async function performVectorSearch(
       `;
     }
 
-    // Add space filtering if spaceIds are provided
-    let spaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      spaceCondition = `
-        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
-      `;
-    }
-
     // Internal statement limit (not exposed to users)
     const STATEMENT_LIMIT = 100;
+
+    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
+    let episodeSpaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      episodeSpaceCondition = `
+        AND e.spaceIds IS NOT NULL
+        AND size(e.spaceIds) > 0
+        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+      `;
+    }
 
     const cypher = `
     MATCH (s:Statement{userId: $userId})
@@ -167,13 +171,13 @@ export async function performVectorSearch(
       AND s.validAt <= $validAt
       ${options.includeInvalidated ? '' : 'AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)'}
       ${options.startTime ? 'AND s.validAt >= $startTime' : ''}
-      ${spaceCondition}
     WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
     WHERE score >= 0.5
     WITH s, score
     ORDER BY score DESC
     LIMIT ${STATEMENT_LIMIT}
     MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
+    WHERE true ${episodeSpaceCondition}
     WITH e,
          COLLECT({stmt: s, score: score}) as allStatements,
          AVG(score) as avgScore,
@@ -277,13 +281,28 @@ export async function performBfsSearch(
       return [];
     }
 
+    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
+    let episodeSpaceCondition = "";
+    if (options.spaceIds.length > 0) {
+      episodeSpaceCondition = `
+        AND e.spaceIds IS NOT NULL
+        AND size(e.spaceIds) > 0
+        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+      `;
+    }
+
     const cypher = `
       MATCH (e:Episode{userId: $userId})
       WHERE e.uuid IN $episodeIds
+        ${episodeSpaceCondition}
       RETURN ${EPISODIC_NODE_PROPERTIES} as episode
     `;
 
-    const records = await runQuery(cypher, { episodeIds, userId });
+    const records = await runQuery(cypher, {
+      episodeIds,
+      userId,
+      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+    });
 
     // Build results with aggregated scores (in-memory aggregation)
     return records.map((record) => {
@@ -323,7 +342,7 @@ async function bfsTraversal(
   includeInvalidated: boolean,
   startTime: Date | null,
 ): Promise<{ statements: StatementNode[]; hopDistanceMap: Map<string, number> }> {
-  const RELEVANCE_THRESHOLD = 0.5;
+  const RELEVANCE_THRESHOLD = 0.65;
   const EXPLORATION_THRESHOLD = 0.3;
 
   const allStatements = new Map<string, { relevance: number; hopDistance: number }>(); // uuid -> {relevance, hopDistance}
@@ -614,11 +633,13 @@ export async function performEpisodeGraphSearch(
       timeframeCondition += ` AND s.validAt >= $startTime`;
     }
 
-    // Space filtering if provided
-    let spaceCondition = "";
+    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
+    let episodeSpaceCondition = "";
     if (options.spaceIds.length > 0) {
-      spaceCondition = `
-        AND s.spaceIds IS NOT NULL AND ANY(spaceId IN $spaceIds WHERE spaceId IN s.spaceIds)
+      episodeSpaceCondition = `
+        AND ep.spaceIds IS NOT NULL
+        AND size(ep.spaceIds) > 0
+        AND ANY(spaceId IN $spaceIds WHERE spaceId IN ep.spaceIds)
       `;
     }
 
@@ -628,18 +649,17 @@ export async function performEpisodeGraphSearch(
       MATCH (queryEntity:Entity{userId: $userId})-[rel1:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
       WHERE queryEntity.uuid IN $queryEntityIds
         ${timeframeCondition}
-        ${spaceCondition}
 
-      // Step 2: Find episodes containing these statements
+      // Step 2: Find episodes containing these statements and filter by spaceIds
       // Optimized: Named rel for HAS_PROVENANCE index
       MATCH (s)<-[provRel:HAS_PROVENANCE]-(ep:Episode)
+      WHERE true ${episodeSpaceCondition}
 
       // Step 3: Collect all statements from these episodes (for metrics only)
       // Optimized: userId filter + named rel for relationship index
       MATCH (ep)-[provRel2:HAS_PROVENANCE]->(epStatement:Statement{userId: $userId})
       WHERE epStatement.validAt <= $validAt
         AND (epStatement.invalidAt IS NULL OR epStatement.invalidAt > $validAt)
-        ${spaceCondition.replace(/s\./g, 'epStatement.')}
 
       // Step 4: Calculate episode-level metrics
       WITH ep,

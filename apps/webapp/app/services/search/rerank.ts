@@ -363,7 +363,7 @@ export async function applyMultiFactorReranking(
 
     return normalized.map(ep => ({
       ...ep,
-      rerankScore: ep.normalizedScore,
+      rerankScore: Number(ep.normalizedScore.toFixed(2)),
     }));
 }
 
@@ -423,7 +423,7 @@ export async function applyEpisodeReranking(
       // Map cohereScore to rerankScore for consistency
       return cohereResults.map((ep: any) => ({
         ...ep,
-        rerankScore: ep.cohereScore,
+        rerankScore: Number(ep.cohereScore.toFixed(2)),
       }));
     } catch (error) {
       logger.error("Cohere reranking failed, falling back to original algorithm:", {error});
@@ -488,28 +488,41 @@ function normalizeOriginalScores<T extends { originalScore?: number }>(
   ): EpisodeWithProvenance[] {
     return episodes
       .map((ep) => {
+        // Helper to safely convert to number (handle BigInt from Neo4j)
+        const toNum = (val: any): number => {
+          if (typeof val === 'bigint') return Number(val);
+          if (typeof val === 'number') return val;
+          return 0;
+        };
+
+        // Convert all scores to numbers upfront
+        const episodeGraphScore = toNum(ep.episodeGraphScore);
+        const bfsScore = toNum(ep.bfsScore);
+        const vectorScore = toNum(ep.vectorScore);
+        const bm25Score = toNum(ep.bm25Score);
+
         // Hierarchical scoring: EpisodeGraph > BFS > Vector > BM25
         let firstLevelScore = 0;
 
         // Episode Graph: Highest weight (5.0)
-        if (ep.episodeGraphScore > 0) {
-          firstLevelScore += ep.episodeGraphScore * 5.0;
+        if (episodeGraphScore > 0) {
+          firstLevelScore += episodeGraphScore * 5.0;
         }
 
         // BFS: Second highest (3.0), already hop-weighted in extraction
-        if (ep.bfsScore > 0) {
-          firstLevelScore += ep.bfsScore * 3.0;
+        if (bfsScore > 0) {
+          firstLevelScore += bfsScore * 3.0;
         }
 
         // Vector: Third (1.5)
-        if (ep.vectorScore > 0) {
-          firstLevelScore += ep.vectorScore * 1.5;
+        if (vectorScore > 0) {
+          firstLevelScore += vectorScore * 1.5;
         }
 
         // BM25: Lowest (0.2), only significant if others missing
         // Reduced from 0.5 to 0.2 to prevent keyword noise from dominating
-        if (ep.bm25Score > 0) {
-          firstLevelScore += ep.bm25Score * 0.2;
+        if (bm25Score > 0) {
+          firstLevelScore += bm25Score * 0.2;
         }
 
         // Concentration bonus: More statements = higher confidence
@@ -518,14 +531,15 @@ function normalizeOriginalScores<T extends { originalScore?: number }>(
 
         // Entity match boost: More matching entities = higher relevance
         // Multiplicative boost to ensure episodes with more entity matches rank significantly higher
-        // const entityMatchMultiplier = 1 + (ep.entityMatchCount * 0.5);
-        // firstLevelScore *= entityMatchMultiplier;
+        const entityMatchCount = toNum(ep.entityMatchCount || 0);
+        const entityMatchMultiplier = 1 + (entityMatchCount * 0.5);
+        firstLevelScore *= entityMatchMultiplier;
 
         logger.debug(
           `Episode ${ep.episode.uuid.slice(0, 8)}: ` +
-          `baseScore=${(firstLevelScore).toFixed(2)}, ` +
-          // `entityMatches=${ep.entityMatchCount}, ` +
-          // `multiplier=${entityMatchMultiplier.toFixed(2)}, ` +
+          `baseScore=${(firstLevelScore / entityMatchMultiplier).toFixed(2)}, ` +
+          `entityMatches=${entityMatchCount}, ` +
+          `multiplier=${entityMatchMultiplier.toFixed(2)}, ` +
           `finalScore=${firstLevelScore.toFixed(2)}`
         );
 
@@ -630,25 +644,32 @@ function normalizeOriginalScores<T extends { originalScore?: number }>(
   function calculateConfidence(filteredEpisodes: EpisodeWithProvenance[]): number {
     if (filteredEpisodes.length === 0) return 0;
 
+    // Helper to ensure numeric values (handle potential BigInt from Neo4j)
+    const toNumber = (val: any): number => {
+      if (typeof val === 'bigint') return Number(val);
+      if (typeof val === 'number') return val;
+      return 0;
+    };
+
     const avgScore =
-      filteredEpisodes.reduce((sum, ep) => sum + (ep.firstLevelScore || 0), 0) /
+      filteredEpisodes.reduce((sum, ep) => sum + toNumber(ep.firstLevelScore || 0), 0) /
       filteredEpisodes.length;
 
     // Calculate average contribution from each source (weighted)
     const avgEpisodeGraphScore =
-      filteredEpisodes.reduce((sum, ep) => sum + (ep.episodeGraphScore || 0), 0) /
+      filteredEpisodes.reduce((sum, ep) => sum + toNumber(ep.episodeGraphScore || 0), 0) /
       filteredEpisodes.length;
 
     const avgBFSScore =
-      filteredEpisodes.reduce((sum, ep) => sum + (ep.bfsScore || 0), 0) /
+      filteredEpisodes.reduce((sum, ep) => sum + toNumber(ep.bfsScore || 0), 0) /
       filteredEpisodes.length;
 
     const avgVectorScore =
-      filteredEpisodes.reduce((sum, ep) => sum + (ep.vectorScore || 0), 0) /
+      filteredEpisodes.reduce((sum, ep) => sum + toNumber(ep.vectorScore || 0), 0) /
       filteredEpisodes.length;
 
     const avgBM25Score =
-      filteredEpisodes.reduce((sum, ep) => sum + (ep.bm25Score || 0), 0) /
+      filteredEpisodes.reduce((sum, ep) => sum + toNumber(ep.bm25Score || 0), 0) /
       filteredEpisodes.length;
 
     // Determine which source is dominant (weighted contribution to final score)

@@ -49,12 +49,24 @@ const SearchParamsSchema = {
     startTime: {
       type: "string",
       description:
-        "Optional: ISO timestamp (like '2024-01-01T00:00:00Z'). Only find memories created after this time. Use with endTime to search a specific time period.",
+        "Optional: ISO timestamp (like '2024-01-01T00:00:00Z'). Only find memories created AFTER this time. " +
+        "USE WHEN: User asks for 'recent', 'this week', 'last month', 'since X date' queries. " +
+        "EXAMPLES: " +
+        "- 'recent work' → set startTime to 7 days ago; " +
+        "- 'this week' → set startTime to start of current week; " +
+        "- 'since January' → set startTime to '2025-01-01T00:00:00Z'. " +
+        "IMPORTANT: Calculate relative dates from today's date (see system context). Combine with sortBy='recency' for chronological timeline.",
     },
     endTime: {
       type: "string",
       description:
-        "Optional: ISO timestamp (like '2024-12-31T23:59:59Z'). Only find memories created before this time. Use with startTime to search a specific time period.",
+        "Optional: ISO timestamp (like '2024-12-31T23:59:59Z'). Only find memories created BEFORE this time. " +
+        "USE WHEN: User asks for historical queries like 'before X date', 'until last month', or specific time ranges. " +
+        "EXAMPLES: " +
+        "- 'work from last month' → set startTime to first day of last month, endTime to last day of last month; " +
+        "- 'before March' → set endTime to '2025-03-01T00:00:00Z'; " +
+        "- 'between Jan and Mar' → set startTime='2025-01-01T00:00:00Z', endTime='2025-03-31T23:59:59Z'. " +
+        "IMPORTANT: Use with startTime to define time windows. Always use ISO format with timezone (Z for UTC).",
     },
     spaceIds: {
       type: "array",
@@ -63,6 +75,12 @@ const SearchParamsSchema = {
       },
       description:
         "Optional: Array of space UUIDs to search within. Leave empty to search all spaces.",
+    },
+    sortBy: {
+      type: "string",
+      enum: ["relevance", "recency"],
+      description:
+        "Optional: Sort results by 'relevance' (default, best semantic matches ranked by rerank score) or 'recency' (chronological order, newest first). Use 'relevance' for conceptual questions and 'recency' for timeline/recent activity queries.",
     },
   },
   required: ["query"],
@@ -400,6 +418,7 @@ async function handleMemorySearch(args: any) {
         startTime: args.startTime ? new Date(args.startTime) : undefined,
         endTime: args.endTime ? new Date(args.endTime) : undefined,
         spaceIds,
+        sortBy: args.sortBy as 'relevance' | 'recency' | undefined,
       },
       args.source,
     );
