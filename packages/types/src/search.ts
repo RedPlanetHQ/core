@@ -20,6 +20,7 @@ export interface SearchOptions {
   useLLMValidation?: boolean; // Use LLM to validate episodes for borderline confidence cases (default: false)
   qualityThreshold?: number; // Minimum episode score to be considered high-quality (default: 5.0)
   maxEpisodesForLLM?: number; // Maximum episodes to send for LLM validation (default: 20)
+  sortBy?: 'relevance' | 'recency'; // Sort results by relevance (default) or recency (newest first)
 }
 
 /**
@@ -56,6 +57,9 @@ export interface EpisodeWithProvenance {
     fromVector: number;
     fromBM25: number;
   };
+
+  // Entity matching (number of query entities that match episode entities)
+  entityMatchCount?: number;
 
   // First-level rating score (hierarchical)
   firstLevelScore?: number;

@@ -8,12 +8,13 @@ import {
   extractEntitiesFromQuery,
   type EpisodeGraphResult,
 } from "./search/utils";
-import { applyEpisodeReranking } from "./search/rerank";
+import { applyEpisodeReranking, applyMultiFactorReranking } from "./search/rerank";
 import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
 import { env } from "~/env.server";
+import { getCompactedSessionBySessionId } from "./graphModels/compactedSession";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -38,10 +39,12 @@ export class SearchService {
     source?: string,
   ): Promise<string | {
     episodes: {
+      uuid: string;
       content: string;
       createdAt: Date;
       spaceIds: string[];
       isCompact?: boolean;
+      relevanceScore?: number;
     }[];
     invalidatedFacts: {
       fact: string;
@@ -54,7 +57,7 @@ export class SearchService {
     // Default options
 
     const opts: Required<SearchOptions> = {
-      limit: options.limit || 20, // Maximum episodes in final response
+      limit: options.limit || 100, // Maximum episodes in final response
       maxBfsDepth: options.maxBfsDepth || 3,
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
@@ -70,6 +73,7 @@ export class SearchService {
       useLLMValidation: options.useLLMValidation || true,
       qualityThreshold: options.qualityThreshold || 0.3,
       maxEpisodesForLLM: options.maxEpisodesForLLM || 20,
+      sortBy: options.sortBy || 'relevance',
     };
 
     // Enhance query with LLM to transform keyword soup into semantic query
@@ -120,7 +124,7 @@ export class SearchService {
     // 2. TWO-STAGE RANKING PIPELINE: Quality-based filtering with hierarchical scoring
 
     // Stage 1: Extract episodes with provenance tracking
-    const episodesWithProvenance = await this.extractEpisodesWithProvenance({
+    let episodesWithProvenance = await this.extractEpisodesWithProvenance({
       episodeGraph: episodeGraphResults,
       bfs: bfsResults,
       vector: vectorResults,
@@ -129,25 +133,63 @@ export class SearchService {
 
     logger.info(`Extracted ${episodesWithProvenance.length} unique episodes from all sources`);
 
+    // Batch-fetch entity match counts for all episodes (for reranking boost)
+    const queryEntityIds = entities.map((e: EntityNode) => e.uuid);
+    const entityMatchCounts = await this.fetchEntityMatchCounts(
+      episodesWithProvenance,
+      queryEntityIds,
+      userId
+    );
+
+    // Assign entity match counts to episodes
+    episodesWithProvenance.forEach(ep => {
+      ep.entityMatchCount = entityMatchCounts.get(ep.episode.uuid) || 0;
+    });
+
+    logger.info(
+      `Entity matching: ${episodesWithProvenance.filter(ep => ep.entityMatchCount! > 0).length}/${episodesWithProvenance.length} ` +
+      `episodes have matching entities`
+    );
+
+    // Filter episodes with 0 entity matches (only if query has entities)
+    // This removes irrelevant episodes that have no semantic connection to the query
+    if (queryEntityIds.length > 0) {
+      const beforeFilter = episodesWithProvenance.length;
+      episodesWithProvenance = episodesWithProvenance.filter(ep =>
+        (ep.entityMatchCount || 0) > 0
+      );
+
+      logger.info(
+        `Entity filtering: ${episodesWithProvenance.length}/${beforeFilter} episodes kept ` +
+        `(removed ${beforeFilter - episodesWithProvenance.length} episodes with 0 entity matches)`
+      );
+
+      // If filtering removed everything, log warning but continue
+      // (reranking will handle empty results gracefully)
+      if (episodesWithProvenance.length === 0) {
+        logger.warn(`Entity filtering removed all episodes - no episodes matched query entities`);
+      }
+    } else {
+      logger.info(`Skipping entity filtering: no entities extracted from query (semantic/abstract query)`);
+    }
+
     // Build reranking configuration from environment
     const thresholdValue = parseFloat(
       env.RERANK_PROVIDER === 'cohere'
         ? env.COHERE_SCORE_THRESHOLD
         : env.RERANK_PROVIDER === 'ollama'
           ? env.OLLAMA_SCORE_THRESHOLD
-          : '0'
+          : '0.2'
     );
 
     const rerankConfig: RerankConfig = {
       provider: (env.RERANK_PROVIDER || 'none') as 'cohere' | 'ollama' | 'none',
-      // provider: "ollama",
       limit: Math.min(episodesWithProvenance.length, 100),
       threshold: isNaN(thresholdValue) ? 0.3 : thresholdValue,
       cohereApiKey: env.COHERE_API_KEY,
       cohereModel: env.COHERE_RERANK_MODEL,
       ollamaUrl: env.OLLAMA_URL,
       ollamaModel: env.OLLAMA_RERANK_MODEL,
-      // ollamaModel: "qllama/bge-reranker-v2-m3:f16",
     };
 
     logger.info(
@@ -173,16 +215,35 @@ export class SearchService {
         logger.info(
           `Reranking (${rerankConfig.provider}): ${reranked.length} episodes reranked, ` +
           `${finalEpisodes.length} passed threshold (>=${rerankConfig.threshold}), ` +
-          `top score: ${reranked[0]?.rerankScore.toFixed(3) || 'N/A'}`
+          `top score: ${reranked[0]?.rerankScore || 'N/A'}`
         );
 
-        if (finalEpisodes.length === 0) {
+        if (finalEpisodes.length === 0 && Math.abs(reranked[0].rerankScore - 0.00) > Number.EPSILON) {
           logger.warn(
-            `No episodes passed ${rerankConfig.provider} threshold ${rerankConfig.threshold} for query: "${query}"`
+            `No episodes passed ${rerankConfig.provider} threshold ${rerankConfig.threshold} for query: "${query}". ` +
+            `Falling back to original multi-stage reranking algorithm.`
           );
-          return opts.structured
-            ? { episodes: [], invalidatedFacts: [] }
-            : this.formatAsMarkdown([], []);
+
+          // Fallback to original multi-stage algorithm
+          const fallbackReranked = await applyMultiFactorReranking(
+            query,
+            episodesWithProvenance,
+            Math.min(episodesWithProvenance.length, 100),
+            opts
+          );
+
+          logger.info(
+            `Fallback reranking: ${fallbackReranked.length} episodes returned using original algorithm`
+          );
+          finalEpisodes = fallbackReranked.filter(ep => ep.rerankScore >= rerankConfig.threshold);
+
+          // If even the fallback returns nothing, then return empty
+          if (fallbackReranked.length === 0) {
+            logger.warn(`No episodes found even after fallback for query: "${query}"`);
+            return opts.structured
+              ? { episodes: [], invalidatedFacts: [] }
+              : this.formatAsMarkdown([], []);
+          }
         }
       } else {
         // No threshold filtering for 'none' provider
@@ -207,20 +268,32 @@ export class SearchService {
       );
     }
 
+    // Apply sorting based on sortBy option
+    let sortedEpisodes = limitedEpisodes;
+    if (opts.sortBy === 'recency') {
+      sortedEpisodes = [...limitedEpisodes].sort((a, b) =>
+        new Date(b.episode.createdAt).getTime() - new Date(a.episode.createdAt).getTime()
+      );
+      logger.info(`Sorted ${sortedEpisodes.length} episodes by recency (newest first)`);
+    } else {
+      // Already sorted by relevance from reranking
+      logger.info(`Using relevance-sorted order (default)`);
+    }
+
     // Extract episodes and statements for response
-    const filteredResults = limitedEpisodes.flatMap((ep) =>
+    const filteredResults = sortedEpisodes.flatMap((ep) =>
       ep.statements.map((s) => ({
         statement: s.statement,
-        score: Number((ep.rerankScore || 0).toFixed(2)),
+        score: ep.rerankScore || 0,
       })),
     );
 
     logger.info(
-      `Final results: ${limitedEpisodes.length} episodes, ${filteredResults.length} statements`
+      `Final results: ${sortedEpisodes.length} episodes, ${filteredResults.length} statements`
     );
 
     // Replace session episodes with compacts automatically (preserve rerank scores)
-    const unifiedEpisodes = await this.replaceWithCompacts(limitedEpisodes, userId);
+    const unifiedEpisodes = await this.replaceWithCompacts(sortedEpisodes, userId);
 
     // Only include invalidated facts (valid facts are already in episode content)
     // Filter for statements that have a valid invalidAt date (not null, undefined, or empty string)
@@ -378,10 +451,12 @@ export class SearchService {
    */
   private formatAsMarkdown(
     episodes: Array<{
+      uuid: string;
       content: string;
       createdAt: Date;
       spaceIds: string[];
       isCompact?: boolean;
+      rerankScore?: number;
     }>,
     facts: Array<{
       fact: string;
@@ -407,12 +482,21 @@ export class SearchService {
 
         if (episode.isCompact) {
           sections.push(`### 📦 Session Compact`);
-          sections.push(`**Created**: ${date}\n`);
+          sections.push(`**UUID**: ${episode.uuid}`);
+          sections.push(`**Created**: ${date}`);
+          if (episode.rerankScore !== undefined) {
+            sections.push(`**Relevance**: ${episode.rerankScore}`);
+          }
+          sections.push(""); // Empty line before content
           sections.push(episode.content);
           sections.push(""); // Empty line
         } else {
           sections.push(`### Episode ${index + 1}`);
+          sections.push(`**UUID**: ${episode.uuid}`);
           sections.push(`**Created**: ${date}`);
+          if (episode.rerankScore !== undefined) {
+            sections.push(`**Relevance**: ${episode.rerankScore}`);
+          }
           if (episode.spaceIds.length > 0) {
             sections.push(`**Spaces**: ${episode.spaceIds.join(", ")}`);
           }
@@ -459,10 +543,12 @@ export class SearchService {
     episodesWithScores: (EpisodeWithProvenance & { rerankScore: number })[],
     userId: string,
   ): Promise<Array<{
+    uuid: string;
     content: string;
     createdAt: Date;
     spaceIds: string[];
     isCompact?: boolean;
+    relevanceScore?: number;
   }>> {
     // Group by sessionId and track highest score per session
     const sessionGroups = new Map<string, {
@@ -487,11 +573,6 @@ export class SearchService {
       }
     });
 
-    // Fetch compacts for sessions
-    const { getCompactedSessionBySessionId } = await import(
-      "~/services/graphModels/compactedSession"
-    );
-
     const compactMap = new Map<string, any>();
     await Promise.all(
       Array.from(sessionGroups.keys()).map(async (sessionId) => {
@@ -504,11 +585,12 @@ export class SearchService {
 
     // Build result preserving order, using session's highest-scored position
     const result: Array<{
+      uuid: string;
       content: string;
       createdAt: Date;
       spaceIds: string[];
       isCompact?: boolean;
-      rerankScore?: number;
+      relevanceScore?: number;
       originalIndex: number;
     }> = [];
 
@@ -526,33 +608,40 @@ export class SearchService {
         const compact = compactMap.get(sessionId);
         if (compact) {
           const group = sessionGroups.get(sessionId)!;
+          // Collect unique spaceIds from all episodes in this session
+          const sessionSpaceIds = Array.from(new Set(
+            group.episodes.flatMap(ep => ep.episode.spaceIds || [])
+          ));
           result.push({
+            uuid: compact.id, // Use compact ID as uuid
             content: compact.summary,
             createdAt: compact.startTime,
-            spaceIds: [],
+            spaceIds: sessionSpaceIds,
             isCompact: true,
-            rerankScore: group.highestScore, // Use highest score from session episodes
+            relevanceScore: group.highestScore, // Use highest score from session episodes
             originalIndex: group.firstIndex, // Use position of first episode from this session
           });
           processedSessions.add(sessionId);
-          logger.debug(`Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}`);
+          logger.debug(`Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}, spaces: ${sessionSpaceIds.join(',')}`);
         } else {
           // No compact, keep episode
           result.push({
+            uuid: ep.episode.uuid,
             content: ep.episode.originalContent,
             createdAt: ep.episode.createdAt,
             spaceIds: ep.episode.spaceIds || [],
-            rerankScore: ep.rerankScore,
+            relevanceScore: ep.rerankScore,
             originalIndex: index,
           });
         }
       } else {
         // Non-session episode, keep as-is
         result.push({
+          uuid: ep.episode.uuid,
           content: ep.episode.originalContent,
           createdAt: ep.episode.createdAt,
           spaceIds: ep.episode.spaceIds || [],
-          rerankScore: ep.rerankScore,
+          relevanceScore: ep.rerankScore,
           originalIndex: index,
         });
       }
@@ -561,8 +650,8 @@ export class SearchService {
     // Sort by originalIndex to preserve reranking order
     result.sort((a, b) => a.originalIndex - b.originalIndex);
 
-    // Remove temporary fields
-    return result.map(({ rerankScore, originalIndex, ...rest }) => rest);
+    // Remove temporary originalIndex field but keep rerankScore
+    return result.map(({ originalIndex, ...rest }) => rest);
   }
 
   /**
@@ -601,19 +690,23 @@ export class SearchService {
 
       const ep = episodeMap.get(episode.uuid)!;
 
+      // Convert score to number (in case it's BigInt from Neo4j)
+      const numericScore = typeof score === 'bigint' ? Number(score) : score;
+      const numericStatementCount = typeof statementCount === 'bigint' ? Number(statementCount) : statementCount;
+
       // Set score for this source
       if (source === 'episodeGraph') {
-        ep.episodeGraphScore = score;
-        ep.sourceBreakdown.fromEpisodeGraph = statementCount;
+        ep.episodeGraphScore = numericScore;
+        ep.sourceBreakdown.fromEpisodeGraph = numericStatementCount;
       } else if (source === 'bfs') {
-        ep.bfsScore = score;
-        ep.sourceBreakdown.fromBFS = statementCount;
+        ep.bfsScore = numericScore;
+        ep.sourceBreakdown.fromBFS = numericStatementCount;
       } else if (source === 'vector') {
-        ep.vectorScore = score;
-        ep.sourceBreakdown.fromVector = statementCount;
+        ep.vectorScore = numericScore;
+        ep.sourceBreakdown.fromVector = numericStatementCount;
       } else if (source === 'bm25') {
-        ep.bm25Score = score;
-        ep.sourceBreakdown.fromBM25 = statementCount;
+        ep.bm25Score = numericScore;
+        ep.sourceBreakdown.fromBM25 = numericStatementCount;
       }
 
       // Store top statements and invalidated statements (merge, avoid duplicates)
@@ -624,8 +717,8 @@ export class SearchService {
           ep.statements.push({
             statement: stmt,
             sources: source === 'episodeGraph' && entityMatches
-              ? { episodeGraph: { score, entityMatches } }
-              : { [source]: { score } },
+              ? { episodeGraph: { score: numericScore, entityMatches } }
+              : { [source]: { score: numericScore } },
             primarySource: source,
           });
           existingUuids.add(stmt.uuid);
@@ -637,7 +730,7 @@ export class SearchService {
         if (!existingUuids.has(stmt.uuid)) {
           ep.statements.push({
             statement: stmt,
-            sources: { [source]: { score } },
+            sources: { [source]: { score: numericScore } },
             primarySource: source,
           });
           existingUuids.add(stmt.uuid);
@@ -697,5 +790,65 @@ export class SearchService {
     logger.info(`Merged ${episodeMap.size} unique episodes from all sources`);
 
     return Array.from(episodeMap.values());
+  }
+
+  /**
+   * Batch-fetch entity match counts for all episodes
+   * Counts how many query entities match entities in each episode
+   */
+  private async fetchEntityMatchCounts(
+    episodes: EpisodeWithProvenance[],
+    queryEntityIds: string[],
+    userId: string,
+  ): Promise<Map<string, number>> {
+    if (queryEntityIds.length === 0 || episodes.length === 0) {
+      return new Map();
+    }
+
+    const episodeIds = episodes.map(ep => ep.episode.uuid);
+
+    // Single efficient Cypher query to count entity matches for all episodes
+    const cypher = `
+      // Match episodes and their statements
+      MATCH (ep:Episode {userId: $userId})
+      WHERE ep.uuid IN $episodeIds
+
+      // Find all entities connected to episode statements
+      MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement)-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(entity:Entity {userId: $userId})
+      WHERE entity.uuid IN $queryEntityIds
+
+      // Count distinct matching entities per episode
+      WITH ep.uuid as episodeId, collect(DISTINCT entity.uuid) as matchedEntities
+      RETURN episodeId, size(matchedEntities) as entityMatchCount
+    `;
+
+    const params = {
+      episodeIds,
+      queryEntityIds,
+      userId,
+    };
+
+    const records = await runQuery(cypher, params);
+
+    const matchCounts = new Map<string, number>();
+    records.forEach((record) => {
+      const episodeId = record.get("episodeId");
+      const count = typeof record.get("entityMatchCount") === 'bigint'
+        ? Number(record.get("entityMatchCount"))
+        : record.get("entityMatchCount");
+      matchCounts.set(episodeId, count);
+    });
+
+    // Calculate total matches (ensure all values are numbers)
+    const totalMatches = Array.from(matchCounts.values()).reduce((sum, count) => {
+      return sum + (typeof count === 'number' ? count : Number(count));
+    }, 0);
+
+    logger.info(
+      `Fetched entity match counts for ${matchCounts.size}/${episodes.length} episodes ` +
+      `(${totalMatches} total matches)`
+    );
+
+    return matchCounts;
   }
 }

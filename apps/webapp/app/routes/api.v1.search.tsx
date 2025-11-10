@@ -22,6 +22,7 @@ export const SearchBodyRequest = z.object({
   minResults: z.number().optional(),
   adaptiveFiltering: z.boolean().optional(),
   structured: z.boolean().default(true),
+  sortBy: z.enum(['relevance', 'recency']).optional(),
 });
 
 const searchService = new SearchService();
@@ -50,6 +51,7 @@ const { action, loader } = createHybridActionApiRoute(
         spaceIds: body.spaceIds,
         adaptiveFiltering: body.adaptiveFiltering,
         structured: body.structured,
+        sortBy: body.sortBy,
       },
     );
 
