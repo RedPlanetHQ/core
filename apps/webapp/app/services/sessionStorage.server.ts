@@ -6,7 +6,7 @@ import { type AuthUser } from "./authUser";
 let SESSION_KEY = "user";
 
 // Check if origin uses HTTPS
-const isHttps = env.CORE_APP_ORIGIN?.startsWith("https://") ?? false;
+const isHttps = env.APP_ORIGIN?.startsWith("https://") ?? false;
 
 export const sessionStorage = createCookieSessionStorage<{
   [SESSION_KEY]: AuthUser;
