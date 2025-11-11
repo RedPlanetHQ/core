@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { Check, Plus, X } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Popover,
   PopoverContent,
@@ -19,6 +19,7 @@ import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import { useFetcher } from "@remix-run/react";
 import { Project } from "../icons/project";
+import { VariantProps } from "class-variance-authority";
 
 interface Space {
   id: string;
@@ -31,6 +32,7 @@ interface SpaceDropdownProps {
   selectedSpaceIds?: string[];
   onSpaceChange?: (spaceIds: string[]) => void;
   className?: string;
+  size?: VariantProps<typeof buttonVariants>["size"];
 }
 
 export function SpaceDropdown({
@@ -38,6 +40,7 @@ export function SpaceDropdown({
   selectedSpaceIds = [],
   onSpaceChange,
   className,
+  size = "sm",
 }: SpaceDropdownProps) {
   const [open, setOpen] = useState(false);
   const [selectedSpaces, setSelectedSpaces] =
@@ -122,7 +125,7 @@ export function SpaceDropdown({
         <PopoverTrigger asChild>
           <Button
             variant="secondary"
-            size="sm"
+            size={size}
             role="combobox"
             aria-expanded={open}
             className="h-7 gap-1 rounded"
