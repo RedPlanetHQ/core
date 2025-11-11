@@ -2,10 +2,6 @@ import { ENTITY_NODE_PROPERTIES, type EntityNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
 
 export async function saveEntity(entity: EntityNode): Promise<string> {
-  // Build query conditionally based on whether typeEmbedding exists
-  const hasTypeEmbedding =
-    entity.typeEmbedding && entity.typeEmbedding.length > 0;
-
   const query = `
     MERGE (n:Entity {uuid: $uuid})
       ON CREATE SET
@@ -13,26 +9,27 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
         n.type = $type,
         n.attributes = $attributes,
         n.nameEmbedding = $nameEmbedding,
-        ${hasTypeEmbedding ? "n.typeEmbedding = $typeEmbedding," : ""}
         n.createdAt = $createdAt,
-        n.userId = $userId,
-        n.space = $space
+        n.userId = $userId
       ON MATCH SET
         n.name = $name,
         n.type = $type,
         n.attributes = $attributes,
-        n.nameEmbedding = $nameEmbedding,
-        ${hasTypeEmbedding ? "n.typeEmbedding = $typeEmbedding," : ""}
-        n.space = $space
+        n.nameEmbedding = $nameEmbedding
       RETURN n.uuid as uuid
     `;
 
   const params: any = {
     uuid: entity.uuid,
     name: entity.name,
+    type: entity.type || "",
+    attributes: JSON.stringify(entity.attributes || {}),
+    nameEmbedding: entity.nameEmbedding,
     createdAt: entity.createdAt.toISOString(),
     userId: entity.userId,
   };
+
+  console.log("Saving entity:", params.name, params.type, params.attributes);
 
   const result = await runQuery(query, params);
   return result[0].get("uuid");
@@ -40,22 +37,14 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
 
 export async function getEntity(uuid: string): Promise<EntityNode | null> {
   const query = `
-    MATCH (entity:Entity {uuid: $uuid})
-    RETURN entity
+    MATCH (ent:Entity {uuid: $uuid})
+    RETURN ${ENTITY_NODE_PROPERTIES} as entity
   `;
 
   const result = await runQuery(query, { uuid });
   if (result.length === 0) return null;
 
-  const entity = result[0].get("entity").properties;
-  return {
-    uuid: entity.uuid,
-    name: entity.name,
-    nameEmbedding: entity.nameEmbedding,
-    typeEmbedding: entity.typeEmbedding || null,
-    createdAt: new Date(entity.createdAt),
-    userId: entity.userId,
-  };
+  return parseEntityNode(result[0].get("entity"));
 }
 
 // Find semantically similar entities
@@ -78,17 +67,7 @@ export async function findSimilarEntities(params: {
 
   const result = await runQuery(query, { ...params });
   return result.map((record) => {
-    const entity = record.get("entity").properties;
-
-    return {
-      uuid: entity.uuid,
-      name: entity.name,
-      type: entity.type,
-      attributes: JSON.parse(entity.attributes || "{}"),
-      createdAt: new Date(entity.createdAt),
-      userId: entity.userId,
-      space: entity.space,
-    };
+    return parseEntityNode(record.get("entity"));
   });
 }
 
@@ -112,19 +91,7 @@ export async function findSimilarEntitiesWithSameType(params: {
 
   const result = await runQuery(query, { ...params });
   return result.map((record) => {
-    const entity = record.get("entity").properties;
-
-    return {
-      uuid: entity.uuid,
-      name: entity.name,
-      type: entity.type,
-      attributes: JSON.parse(entity.attributes || "{}"),
-      nameEmbedding: entity.nameEmbedding,
-      typeEmbedding: entity.typeEmbedding,
-      createdAt: new Date(entity.createdAt),
-      userId: entity.userId,
-      space: entity.space,
-    };
+    return parseEntityNode(record.get("entity"));
   });
 }
 
@@ -134,28 +101,16 @@ export async function findExactPredicateMatches(params: {
   userId: string;
 }): Promise<EntityNode[]> {
   const query = `
-    MATCH (entity:Entity)
-    WHERE entity.type = 'Predicate' 
-      AND toLower(entity.name) = toLower($predicateName)
-      AND entity.userId = $userId
-    RETURN entity
+    MATCH (ent:Entity)
+    WHERE ent.type = 'Predicate' 
+      AND toLower(ent.name) = toLower($predicateName)
+      AND ent.userId = $userId
+    RETURN ${ENTITY_NODE_PROPERTIES} as entity
   `;
 
   const result = await runQuery(query, params);
   return result.map((record) => {
-    const entity = record.get("entity").properties;
-
-    return {
-      uuid: entity.uuid,
-      name: entity.name,
-      type: entity.type,
-      attributes: JSON.parse(entity.attributes || "{}"),
-      nameEmbedding: entity.nameEmbedding,
-      typeEmbedding: entity.typeEmbedding,
-      createdAt: new Date(entity.createdAt),
-      userId: entity.userId,
-      space: entity.space,
-    };
+    return parseEntityNode(record.get("entity"));
   });
 }
 
@@ -236,4 +191,19 @@ async function deleteEntityIfUnreferenced(entityUUID: string): Promise<void> {
   `;
 
   await runQuery(checkQuery, { entityUUID });
+}
+
+/**
+ * Helper to parse raw compact node from Neo4j
+ */
+export function parseEntityNode(raw: any): EntityNode {
+  return {
+    uuid: raw.uuid,
+    name: raw.name,
+    type: raw.type || null,
+    nameEmbedding: raw.nameEmbedding || [],
+    attributes: raw.attributes ? JSON.parse(raw.attributes) : {},
+    createdAt: new Date(raw.createdAt),
+    userId: raw.userId,
+  };
 }

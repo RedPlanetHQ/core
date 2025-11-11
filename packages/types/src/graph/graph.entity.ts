@@ -59,7 +59,10 @@ export const EPISODIC_NODE_PROPERTIES = `{
   createdAt: e.createdAt,
   userId: e.userId,
   sessionId: e.sessionId,
-  spaceIds: e.spaceIds
+  spaceIds: e.spaceIds,
+  validAt: e.validAt,
+  recallCount: e.recallCount,
+  chunkIndex: e.chunkIndex
 }`;
 
 export const STATEMENT_NODE_PROPERTIES = `{
@@ -70,15 +73,33 @@ export const STATEMENT_NODE_PROPERTIES = `{
   validAt: s.validAt,
   invalidAt: s.invalidAt,
   invalidatedBy: s.invalidatedBy,
-  attributes: s.attributes
+  attributes: s.attributes,
+  recallCount: s.recallCount,
+  provenanceCount: s.provenanceCount
 }`;
 
 export const ENTITY_NODE_PROPERTIES = `{
-  uuid: e.uuid,
-  name: e.name,
-  createdAt: e.createdAt,
-  userId: e.userId,
-  attributes: e.attributes,
+  uuid: ent.uuid,
+  name: ent.name,
+  createdAt: ent.createdAt,
+  userId: ent.userId,
+  attributes: ent.attributes
+}`;
+
+export const COMPACTED_SESSION_NODE_PROPERTIES = `{
+  uuid: cs.uuid,
+  sessionId: cs.sessionId,
+  summary: cs.summary,
+  episodeCount: cs.episodeCount,
+  startTime: cs.startTime,
+  endTime: cs.endTime,
+  createdAt: cs.createdAt,
+  updatedAt: cs.updatedAt,
+  confidence: cs.confidence,
+  userId: cs.userId,
+  source: cs.source,
+  compressionRatio: cs.compressionRatio,
+  metadata: cs.metadata
 }`;
 
 /**
@@ -90,7 +111,7 @@ export interface EntityNode {
   name: string;
   type?: string; // Optional type - can be inferred from statements
   nameEmbedding?: number[];
-  typeEmbedding?: number[]; // Optional since type is optional
+  attributes?: Record<string, any>;
   createdAt: Date;
   userId: string;
 }
@@ -168,3 +189,21 @@ export interface ExtractedTripleData {
   fact: string;
   attributes?: Record<string, any>;
 }
+
+export interface CompactedSessionNode {
+  uuid: string;
+  sessionId: string;
+  summary: string;
+  summaryEmbedding?: number[];
+  episodeCount: number;
+  startTime: Date;
+  endTime: Date;
+  createdAt: Date;
+  updatedAt?: Date;
+  confidence: number;
+  userId: string;
+  source: string;
+  compressionRatio?: number;
+  metadata?: Record<string, any>;
+}
+

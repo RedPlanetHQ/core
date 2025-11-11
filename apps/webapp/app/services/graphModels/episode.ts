@@ -4,7 +4,10 @@ import {
   type EntityNode,
   type EpisodicNode,
   EPISODIC_NODE_PROPERTIES,
+  ENTITY_NODE_PROPERTIES,
+  STATEMENT_NODE_PROPERTIES,
 } from "@core/types";
+import { parseEntityNode } from "./entity";
 
 export async function saveEpisode(episode: EpisodicNode): Promise<string> {
   const query = `
@@ -64,22 +67,7 @@ export async function getEpisode(uuid: string): Promise<EpisodicNode | null> {
   if (result.length === 0) return null;
 
   const episode = result[0].get("e").properties;
-  return {
-    uuid: episode.uuid,
-    content: episode.content,
-    originalContent: episode.originalContent,
-    contentEmbedding: episode.contentEmbedding,
-    metadata: JSON.parse(episode.metadata || "{}"),
-    source: episode.source,
-    createdAt: new Date(episode.createdAt),
-    validAt: new Date(episode.validAt),
-    labels: episode.labels,
-    userId: episode.userId,
-    space: episode.space,
-    sessionId: episode.sessionId,
-    recallCount: episode.recallCount,
-    spaceIds: episode.spaceIds,
-  };
+  return parseEpisodicNode(episode);
 }
 
 // Get recent episodes with optional filters
@@ -105,8 +93,8 @@ export async function getRecentEpisodes(params: {
     ${filters}
     MATCH (e)-[:HAS_PROVENANCE]->(s:Statement)
     WHERE s.invalidAt IS NULL
-    RETURN DISTINCT e
-    ORDER BY e.validAt DESC
+    RETURN DISTINCT ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY episode.validAt DESC
     LIMIT ${params.limit}
   `;
 
@@ -120,22 +108,13 @@ export async function getRecentEpisodes(params: {
   const result = await runQuery(query, queryParams);
 
   return result.map((record) => {
-    const episode = record.get("e").properties;
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      contentEmbedding: episode.contentEmbedding,
-      metadata: JSON.parse(episode.metadata || "{}"),
-      source: episode.source,
-      createdAt: new Date(episode.createdAt),
-      validAt: new Date(episode.validAt),
-      labels: episode.labels,
-      userId: episode.userId,
-      space: episode.space,
-      sessionId: episode.sessionId,
-      documentId: episode.documentId,
-    };
+    try {
+      const episode = record.get("episode");
+      return parseEpisodicNode(episode);
+    } catch (error) {
+      console.error("Error parsing episode:", error);
+      return {} as EpisodicNode;
+    }
   });
 }
 
@@ -156,16 +135,7 @@ export async function getEpisodesBySession(params: {
   });
 
   return result.map((record) => {
-    const episode = record.get("episode");
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      createdAt: new Date(episode.createdAt),
-      userId: episode.userId,
-      sessionId: episode.sessionId,
-      spaceIds: episode.spaceIds,
-    } as EpisodicNode;
+    return parseEpisodicNode(record.get("episode"));
   });
 }
 
@@ -181,7 +151,7 @@ export async function searchEpisodesByEmbedding(params: {
   WHERE episode.contentEmbedding IS NOT NULL
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
-  RETURN ${EPISODIC_NODE_PROPERTIES} as episode, score
+  RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode, score
   ORDER BY score DESC
   LIMIT ${limit}`;
 
@@ -196,21 +166,7 @@ export async function searchEpisodesByEmbedding(params: {
   }
 
   return result.map((record) => {
-    const episode = record.get("episode").properties;
-
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      contentEmbedding: episode.contentEmbedding,
-      createdAt: new Date(episode.createdAt),
-      validAt: new Date(episode.validAt),
-      invalidAt: episode.invalidAt ? new Date(episode.invalidAt) : null,
-      attributes: episode.attributesJson
-        ? JSON.parse(episode.attributesJson)
-        : {},
-      userId: episode.userId,
-      documentId: episode.documentId,
-    };
+    return parseEpisodicNode(record.get("episode"));
   });
 }
 
@@ -226,7 +182,7 @@ export async function deleteEpisodeWithRelatedNodes(params: {
 }> {
   // Step 1: Check if episode exists
   const episodeCheck = await runQuery(
-    `MATCH (e:Episode {uuid: $episodeUuid, userId: $userId}) RETURN e`,
+    `MATCH (e:Episode {uuid: $episodeUuid, userId: $userId}) RETURN ${EPISODIC_NODE_PROPERTIES} as episode`,
     { episodeUuid: params.episodeUuid, userId: params.userId },
   );
 
@@ -324,9 +280,9 @@ export async function getRelatedEpisodesEntities(params: {
   WHERE episode.contentEmbedding IS NOT NULL
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
-  OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)-[:HAS_SUBJECT|HAS_OBJECT]->(entity:Entity)
-  WHERE entity IS NOT NULL
-  RETURN DISTINCT entity
+  OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)-[:HAS_SUBJECT|HAS_OBJECT]->(ent:Entity)
+  WHERE ent IS NOT NULL
+  RETURN DISTINCT ${ENTITY_NODE_PROPERTIES} as entity
   LIMIT ${limit}`;
 
   const result = await runQuery(query, {
@@ -337,8 +293,7 @@ export async function getRelatedEpisodesEntities(params: {
 
   return result
     .map((record) => {
-      const entity = record.get("entity");
-      return entity ? (entity.properties as EntityNode) : null;
+      return parseEntityNode(record.get("entity"));
     })
     .filter((entity): entity is EntityNode => entity !== null);
 }
@@ -348,9 +303,9 @@ export async function getEpisodeStatements(params: {
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const query = `
-  MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(stmt:Statement)
-  WHERE stmt.invalidAt IS NULL
-  RETURN stmt
+  MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(s:Statement)
+  WHERE s.invalidAt IS NULL
+  RETURN ${STATEMENT_NODE_PROPERTIES} as statement
   `;
 
   const result = await runQuery(query, {
@@ -359,16 +314,16 @@ export async function getEpisodeStatements(params: {
   });
 
   return result.map((record) => {
-    const stmt = record.get("stmt").properties;
+    const statement = record.get("statement");
 
     return {
-      uuid: stmt.uuid,
-      fact: stmt.fact,
-      createdAt: new Date(stmt.createdAt),
-      validAt: new Date(stmt.validAt),
-      invalidAt: stmt.invalidAt ? new Date(stmt.invalidAt) : null,
-      attributes: stmt.attributesJson ? JSON.parse(stmt.attributesJson) : {},
-      userId: stmt.userId,
+      uuid: statement.uuid,
+      fact: statement.fact,
+      createdAt: new Date(statement.createdAt),
+      validAt: new Date(statement.validAt),
+      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
+      attributes: statement.attributes ? JSON.parse(statement.attributes) : {},
+      userId: statement.userId,
     };
   });
 }
@@ -378,8 +333,8 @@ export async function getStatementsInvalidatedByEpisode(params: {
   userId: string;
 }) {
   const query = `
-  MATCH (stmt:Statement {invalidatedBy: $episodeUuid})
-  RETURN stmt
+  MATCH (s:Statement {invalidatedBy: $episodeUuid})
+  RETURN ${STATEMENT_NODE_PROPERTIES} as statement
   `;
 
   const result = await runQuery(query, {
@@ -387,16 +342,36 @@ export async function getStatementsInvalidatedByEpisode(params: {
   });
 
   return result.map((record) => {
-    const stmt = record.get("stmt").properties;
+    const statement = record.get("statement");
     return {
-      uuid: stmt.uuid,
-      fact: stmt.fact,
-      factEmbedding: stmt.factEmbedding,
-      createdAt: new Date(stmt.createdAt),
-      validAt: new Date(stmt.validAt),
-      invalidAt: stmt.invalidAt ? new Date(stmt.invalidAt) : null,
-      attributes: stmt.attributesJson ? JSON.parse(stmt.attributesJson) : {},
-      userId: stmt.userId,
+      uuid: statement.uuid,
+      fact: statement.fact,
+      createdAt: new Date(statement.createdAt),
+      validAt: new Date(statement.validAt),
+      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
+      attributes: statement.attributes ? JSON.parse(statement.attributes) : {},
+      userId: statement.userId,
     };
   });
+}
+
+
+export function parseEpisodicNode(raw: any): EpisodicNode {
+  return {
+    uuid: raw.uuid,
+    content: raw.content,
+    contentEmbedding: raw.contentEmbedding || [],
+    originalContent: raw.originalContent,
+    source: raw.source,
+    metadata: raw.metadata ? JSON.parse(raw.metadata) : {},
+    createdAt: new Date(raw.createdAt),
+    validAt: new Date(raw.validAt),
+    userId: raw.userId,
+    labels: raw.labels || [],
+    space: raw.space || undefined,
+    sessionId: raw.sessionId || undefined,
+    recallCount: raw.recallCount || undefined,
+    chunkIndex: raw.chunkIndex || undefined,
+    spaceIds: raw.spaceIds || [],
+  };
 }

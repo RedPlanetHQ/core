@@ -7,22 +7,13 @@ import type { CoreMessage } from "ai";
 import { z } from "zod";
 import { getSpace, updateSpace } from "~/trigger/utils/space-utils";
 import { getSpaceEpisodeCount } from "~/services/graphModels/space";
+import { EPISODIC_NODE_PROPERTIES, EpisodicNode } from "@core/types";
+import { parseEpisodicNode } from "~/services/graphModels/episode";
 
 export interface SpaceSummaryPayload {
   userId: string;
   spaceId: string; // Single space only
   triggerSource?: "assignment" | "manual" | "scheduled";
-}
-
-interface SpaceEpisodeData {
-  uuid: string;
-  content: string;
-  originalContent: string;
-  source: string;
-  createdAt: Date;
-  validAt: Date;
-  metadata: any;
-  sessionId: string | null;
 }
 
 interface SpaceSummaryData {
@@ -260,7 +251,7 @@ async function generateSpaceSummary(
       );
 
       // Process in batches, each building on previous result
-      const batches: SpaceEpisodeData[][] = [];
+      const batches: EpisodicNode[][] = [];
       for (let i = 0; i < episodes.length; i += CONFIG.maxEpisodesForSummary) {
         batches.push(episodes.slice(i, i + CONFIG.maxEpisodesForSummary));
       }
@@ -350,7 +341,7 @@ async function generateSpaceSummary(
 async function generateUnifiedSummary(
   spaceName: string,
   spaceDescription: string | undefined,
-  episodes: SpaceEpisodeData[],
+  episodes: EpisodicNode[],
   previousSummary: string | null = null,
   previousThemes: string[] = [],
 ): Promise<{
@@ -393,7 +384,7 @@ async function generateUnifiedSummary(
 function createUnifiedSummaryPrompt(
   spaceName: string,
   spaceDescription: string | undefined,
-  episodes: SpaceEpisodeData[],
+  episodes: EpisodicNode[],
   previousSummary: string | null,
   previousThemes: string[],
 ): CoreMessage[] {
@@ -589,7 +580,7 @@ async function getSpaceEpisodes(
   spaceId: string,
   userId: string,
   sinceDate?: Date,
-): Promise<SpaceEpisodeData[]> {
+): Promise<EpisodicNode[]> {
   // Query episodes directly using Space-[:HAS_EPISODE]->Episode relationships
   const params: any = { spaceId, userId };
 
@@ -602,24 +593,14 @@ async function getSpaceEpisodes(
   const query = `
     MATCH (space:Space {uuid: $spaceId, userId: $userId})-[:HAS_EPISODE]->(e:Episode {userId: $userId})
     WHERE e IS NOT NULL ${dateCondition}
-    RETURN DISTINCT e
-    ORDER BY e.createdAt DESC
+    RETURN DISTINCT ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY episode.createdAt DESC
   `;
 
   const result = await runQuery(query, params);
 
   return result.map((record) => {
-    const episode = record.get("e").properties;
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      source: episode.source,
-      createdAt: new Date(episode.createdAt),
-      validAt: new Date(episode.validAt),
-      metadata: JSON.parse(episode.metadata || "{}"),
-      sessionId: episode.sessionId,
-    };
+    return parseEpisodicNode(record.get("episode"));
   });
 }
 
