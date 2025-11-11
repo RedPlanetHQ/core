@@ -1,5 +1,4 @@
-import { ReactNode } from "react";
-import { Check } from "lucide-react";
+import { type ReactNode } from "react";
 
 export interface InstallationStep {
   title: string;

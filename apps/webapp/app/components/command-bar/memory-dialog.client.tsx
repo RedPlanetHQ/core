@@ -1,4 +1,4 @@
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
+import { Dialog, DialogContent } from "../ui/dialog";
 import { useEditor, EditorContent } from "@tiptap/react";
 import {
   extensionsForConversation,
@@ -45,6 +45,8 @@ export function AddMemoryDialog({
       episodeBody: content,
       referenceTime: new Date().toISOString(),
       spaceIds: spaceIds,
+      type: "DOCUMENT",
+      sessionId: crypto.randomUUID(),
       source: "core",
     };
 
@@ -62,8 +64,8 @@ export function AddMemoryDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="pt-0 sm:max-w-[600px]">
-        <div className="overflow-hidden rounded-md">
+      <DialogContent className="pt-0 sm:max-w-[700px]">
+        <div className="overflow-y-auto rounded-md">
           <EditorContent editor={editor} />
         </div>
         <div className="flex justify-between gap-2 px-4 pb-4">

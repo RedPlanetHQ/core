@@ -132,11 +132,7 @@ export const bertTopicWorker = new Worker(
   "bert-topic-queue",
   async (job) => {
     const payload = job.data as TopicAnalysisPayload;
-    return await processTopicAnalysis(
-      payload,
-      // Callback to enqueue space summary
-      enqueueSpaceSummary,
-    );
+    return await processTopicAnalysis(payload);
   },
   {
     connection: getRedisConnection(),

@@ -14,45 +14,33 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
       {
         title: "Install Core Browser Extension",
         component: (
-          <StepCodeBlock>
-            <div className="space-y-2">
-              <div className="text-xs text-gray-500">
-                Install from Chrome Web Store or Firefox Add-ons
-              </div>
-              <Button
-                variant="default"
-                size="sm"
-                className="pointer-events-none"
-              >
+          <div className="space-y-2">
+            <a
+              href="https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="default" className="rounded">
                 Add Extension
               </Button>
-            </div>
-          </StepCodeBlock>
+            </a>
+          </div>
         ),
       },
       {
-        title: "Open ChatGPT",
+        title: "Generate and Add API Key from CORE Dashboard",
         component: (
           <p className="text-muted-foreground text-sm">
-            Navigate to ChatGPT in your browser at chat.openai.com
+            Go to Settings → API Key → Generate new key → Name it "extension"
           </p>
         ),
       },
       {
-        title: "Authenticate Core Extension",
+        title: "Add API Key in Core Extension",
         component: (
           <p className="text-muted-foreground text-sm">
-            Click on the Core extension icon and sign in to connect your
-            account.
-          </p>
-        ),
-      },
-      {
-        title: "Start using Core with ChatGPT",
-        component: (
-          <p className="text-muted-foreground text-sm">
-            Your ChatGPT conversations will now be captured by Core's memory
-            system.
+            Paste your API key and click Save. Once connected, you'll see API
+            key configured account.
           </p>
         ),
       },
@@ -61,34 +49,55 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
   [Provider.CLAUDE_CODE]: {
     id: Provider.CLAUDE_CODE,
     name: "Claude Code CLI",
-    description: "Connect your Claude Code CLI to CORE's memory system",
+    description: "Install CORE in Claude Code CLI",
     docsUrl: "https://docs.heysol.ai/providers/claude-code",
     icon: "claude",
     installationSteps: [
       {
-        title: "Install Core MCP Server",
+        title: "Copy setup command and run in your terminal",
         component: (
           <StepCodeBlock>
             <div className="space-y-2">
-              <div className="text-xs text-gray-500">Run in terminal:</div>
-              <code className="text-sm">npx @composio/core-mcp install</code>
+              <div>Run in terminal:</div>
+              <code className="text-sm">
+                claude mcp add --transport http core-memory
+                https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+              </code>
             </div>
           </StepCodeBlock>
         ),
       },
       {
-        title: "Authenticate Core",
+        title: "Run /mcp command in claude code",
         component: (
           <p className="text-muted-foreground text-sm">
-            Follow the authentication prompts in your terminal to connect Core.
+            Verify installation, you should see core-memory listed among MCP
+            servers.
           </p>
         ),
       },
       {
-        title: "Start using Core in Claude Code",
+        title: "Authenticate CORE MCP server",
         component: (
           <p className="text-muted-foreground text-sm">
-            Core is now available in your Claude Code CLI sessions.
+            Open core-memory server and cick on Authenticate
+          </p>
+        ),
+      },
+      {
+        title: "Enable automatic memory integration",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Create sub-agents from this{" "}
+            <a
+              href="https://docs.heysol.ai/providers/claude-code#enable-automatic-memory-integration-recommended"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              guide
+            </a>{" "}
+            to auto search and store memories from each session.
           </p>
         ),
       },
@@ -97,53 +106,52 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
   [Provider.CLAUDE]: {
     id: Provider.CLAUDE,
     name: "Claude",
-    description: "Connect your Claude Desktop app to CORE's memory system",
+    description: "Install CORE in Claude Desktop app",
     docsUrl: "https://docs.heysol.ai/providers/claude",
     icon: "claude",
     installationSteps: [
       {
-        title: "Open Claude Desktop App Settings",
-        component: (
-          <p className="text-muted-foreground text-sm">
-            Navigate to Settings in your Claude Desktop application.
-          </p>
-        ),
-      },
-      {
-        title: "Add Core MCP Server Configuration",
+        title: "Copy CORE MCP URL",
         component: (
           <StepCodeBlock>
             <div className="space-y-2">
-              <div className="text-xs text-gray-500">Add to MCP Settings:</div>
-              <pre className="text-xs">
-                {`{
-  "mcpServers": {
-    "core": {
-      "command": "npx",
-      "args": ["-y", "@composio/core-mcp"],
-      "env": {}
-    }
-  }
-}`}
-              </pre>
+              <code className="text-sm">
+                https://core.heysol.ai/api/v1/mcp?source=Claude
+              </code>
             </div>
           </StepCodeBlock>
         ),
       },
       {
-        title: "Restart Claude Desktop",
+        title: "Add CORE connector",
         component: (
           <p className="text-muted-foreground text-sm">
-            Close and reopen Claude Desktop for the changes to take effect.
+            Navigate to Settings → Connectors → Click Add custom connector
           </p>
         ),
       },
       {
-        title: "Authenticate Core",
+        title: "Authenticate with CORE",
         component: (
           <p className="text-muted-foreground text-sm">
-            Look for Core in your available tools and authenticate when
-            prompted.
+            Click on "Connect" and grant claude permission to acces CORE MCP
+          </p>
+        ),
+      },
+      {
+        title: "Enable automatic memory integration",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Add following instructions in preferences from this{" "}
+            <a
+              href="https://docs.heysol.ai/providers/claude#enable-automatic-memory-integration-recommended"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              guide
+            </a>{" "}
+            to auto search and store memories from each session.
           </p>
         ),
       },
@@ -152,41 +160,45 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
   [Provider.CODEX]: {
     id: Provider.CODEX,
     name: "Codex",
-    description: "Connect your Codex CLI to CORE's memory system",
+    description: "Install CORE in Codex CLI",
     docsUrl: "https://docs.heysol.ai/providers/codex",
     icon: "chatgpt",
     installationSteps: [
       {
-        title: "Add Core MCP Server to Codex Config",
+        title: "Add the following to your ~/.codex/config.toml file:",
         component: (
           <StepCodeBlock>
             <div className="space-y-2">
-              <div className="text-xs text-gray-500">
-                Add to ~/.codex/config.toml:
-              </div>
               <pre className="text-xs">
-                {`[[mcp_servers]]
-url = "https://core.heysol.ai/api/v1/mcp?source=Codex"
-type = "http"`}
+                {`model = "gpt-5-codex"
+model_reasoning_effort = "medium"
+trust_level = "trusted"
+
+[features]
+rmcp_client = true
+
+[mcp_servers.memory]
+url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               </pre>
             </div>
           </StepCodeBlock>
         ),
       },
+
       {
-        title: "Restart Codex CLI",
+        title: "Enable automatic memory integration",
         component: (
           <p className="text-muted-foreground text-sm">
-            Close and reopen your Codex CLI for the changes to take effect.
-          </p>
-        ),
-      },
-      {
-        title: "Authenticate Core",
-        component: (
-          <p className="text-muted-foreground text-sm">
-            Look for Core in your available tools and authenticate when
-            prompted.
+            Add the following instructions from this{" "}
+            <a
+              href="https://docs.heysol.ai/providers/codex#enable-automatic-memory-integration-recommended"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              guide
+            </a>{" "}
+            in AGENTS.md file
           </p>
         ),
       },
@@ -195,16 +207,22 @@ type = "http"`}
   [Provider.CURSOR]: {
     id: Provider.CURSOR,
     name: "Cursor",
-    description: "Connect your Cursor Desktop app to CORE's memory system",
+    description: "Install CORE in Cursor IDE",
     docsUrl: "https://docs.heysol.ai/providers/cursor",
     icon: "cursor",
     installationSteps: [
       {
         title: "Click on Add to Cursor",
         component: (
-          <Button variant="default" size="lg" className="pointer-events-none">
-            Add To Cursor
-          </Button>
+          <a
+            href="cursor://mcp/install?name=core-memory&type=streamableHttp&url=https://core.heysol.ai/api/v1/mcp?source=cursor"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button variant="default" size="lg">
+              Add To Cursor
+            </Button>
+          </a>
         ),
       },
       {
@@ -212,7 +230,7 @@ type = "http"`}
         component: (
           <StepCodeBlock>
             <div className="space-y-2">
-              <div className="text-xs text-gray-500">Install MCP Server?</div>
+              <div>Install MCP Server?</div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">Name:</span>
@@ -225,7 +243,7 @@ type = "http"`}
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-gray-400">URL:</span>
                   <span className="text-xs">
-                    https://core.composio.dev/mcp?agent=cursor
+                    https://core.heysol.ai/api/v1/mcp?source=cursor
                   </span>
                 </div>
               </div>
@@ -258,7 +276,7 @@ type = "http"`}
                 <span className="text-primary text-sm font-medium">C</span>
               </div>
               <div className="flex-1">
-                <div className="font-medium">core</div>
+                <div className="font-medium">core-memory</div>
                 <div className="flex items-center gap-1 text-xs text-yellow-600">
                   <div className="h-2 w-2 rounded-full bg-yellow-500" />
                   Needs login
@@ -269,61 +287,43 @@ type = "http"`}
           </StepInfoBox>
         ),
       },
-      {
-        title:
-          "Authenticate and start using 500+ apps with Core in Cursor chat.",
-        component: (
-          <p className="text-muted-foreground text-sm">
-            Once authenticated, you'll have access to all Core features within
-            Cursor.
-          </p>
-        ),
-      },
     ],
   },
   [Provider.GEMINI]: {
     id: Provider.GEMINI,
     name: "Gemini",
-    description: "Connect Gemini CLI to CORE's memory system via MCP",
-    docsUrl: "https://docs.heysol.ai/providers/gemini",
+    description: "Install CORE in Gemini via browser extension",
+    docsUrl: "https://docs.heysol.ai/providers/browser-extension",
     icon: "gemini",
     installationSteps: [
       {
-        title: "Add Core MCP Server to Gemini Config",
+        title: "Install Core Browser Extension",
         component: (
-          <StepCodeBlock>
-            <div className="space-y-2">
-              <div className="text-xs text-gray-500">
-                Add to ~/.gemini/settings.json:
-              </div>
-              <pre className="text-xs">
-                {`{
-  "mcpServers": {
-    "core": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Gemini",
-      "transport": "http"
-    }
-  }
-}`}
-              </pre>
-            </div>
-          </StepCodeBlock>
+          <div className="space-y-2">
+            <a
+              href="https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Button variant="default">Add Extension</Button>
+            </a>
+          </div>
         ),
       },
       {
-        title: "Restart Gemini CLI",
+        title: "Generate and Add API Key from CORE Dashboard",
         component: (
           <p className="text-muted-foreground text-sm">
-            Close and reopen your Gemini CLI for the changes to take effect.
+            Go to Settings → API Key → Generate new key → Name it “extension”
           </p>
         ),
       },
       {
-        title: "Authenticate Core",
+        title: "Add API Key in Core Extension",
         component: (
           <p className="text-muted-foreground text-sm">
-            Look for Core in your available tools and authenticate when
-            prompted.
+            Paste your API key and click Save. Once connected, you’ll see API
+            key configured account.
           </p>
         ),
       },
@@ -335,7 +335,38 @@ type = "http"`}
     description: "Connect Kilo Code Agent to CORE's memory system via MCP",
     docsUrl: "https://docs.heysol.ai/providers/kilo-code",
     icon: "kilo",
-    installationSteps: [],
+    installationSteps: [
+      {
+        title: "Open MCP Settings",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Go to Settings → MCP Servers → Installed tab → click Edit Global MCP
+            to edit your configuration.
+          </p>
+        ),
+      },
+      {
+        title: "Add CORE MCP Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your MCP config file:</div>
+              <pre className="text-xs">
+                {`{
+  "core-memory": {
+    "type": "streamable-http",
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code",
+    "headers": {
+      "Authorization": "Bearer your-token"
+    },
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
   },
   [Provider.VSCODE]: {
     id: Provider.VSCODE,
@@ -343,7 +374,31 @@ type = "http"`}
     description: "Connect your VS Code editor to CORE's memory system via MCP",
     docsUrl: "https://docs.heysol.ai/providers/vscode",
     icon: "vscode",
-    installationSteps: [],
+    installationSteps: [
+      {
+        title: "Add CORE MCP Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Enter the below in mcp.json file:</div>
+              <pre className="text-xs">
+                {`{
+  "servers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
+      "type": "http"
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
   },
   [Provider.WINDSURF]: {
     id: Provider.WINDSURF,
@@ -351,15 +406,696 @@ type = "http"`}
     description: "Connect your Windsurf editor to CORE's memory system via MCP",
     docsUrl: "https://docs.heysol.ai/providers/windsurf",
     icon: "windsurf",
-    installationSteps: [],
+    installationSteps: [
+      {
+        title: "Add CORE MCP Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Enter the below in mcp_config.json file:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "serverUrl": "https://core.heysol.ai/api/v1/mcp/source=windsurf",
+      "headers": {
+        "Authorization": "Bearer <YOUR_API_KEY>"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Generate and Add API Key from CORE Dashboard",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Go to Settings → API Key → Generate new key → Name it "windsurf"
+          </p>
+        ),
+      },
+      {
+        title: "Enable automatic memory integration",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Add the following instructions from this{" "}
+            <a
+              href="https://docs.heysol.ai/providers/windsurf#enable-automatic-memory-integration-recommended"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-primary hover:underline"
+            >
+              guide
+            </a>{" "}
+            in AGENTS.md file
+          </p>
+        ),
+      },
+    ],
   },
   [Provider.ZED]: {
     id: Provider.ZED,
     name: "Zed",
-    description: "Connect your Zed editor to CORE's memory system via MCP",
+    description: "Install CORE in Zed IDE",
     docsUrl: "https://docs.heysol.ai/providers/zed",
     icon: "zed",
-    installationSteps: [],
+    installationSteps: [
+      {
+        title: "Go to Settings in Agent Panel -> Add Custom Server",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Navigate to Settings in Agent Panel and click on Add Custom Server
+          </p>
+        ),
+      },
+      {
+        title: "Add CORE MCP Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>
+                Enter below code in configuration file and click on Add server
+                button:
+              </div>
+              <pre className="text-xs">
+                {`{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Zed"]
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.VSCODE_INSIDERS]: {
+    id: Provider.VSCODE_INSIDERS,
+    name: "VS Code Insiders",
+    description: "Install CORE in VS Code Insiders",
+    docsUrl: "https://docs.heysol.ai/providers/vscode-insiders",
+    icon: "vscode",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your VS Code Insiders MCP config:</div>
+              <pre className="text-xs">
+                {`"mcp": {
+  "servers": {
+    "core-memory": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=VSCode-Insiders",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Reload VS Code Insiders Window",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Press Cmd+Shift+P (Mac) or Ctrl+Shift+P (Windows/Linux) and run
+            "Developer: Reload Window"
+          </p>
+        ),
+      },
+    ],
+  },
+  [Provider.AMP]: {
+    id: Provider.AMP,
+    name: "Amp",
+    description: "Install CORE in Amp code editor",
+    docsUrl: "https://docs.heysol.ai/providers/amp",
+    icon: "amp",
+    installationSteps: [
+      {
+        title: "Copy setup command and run in your terminal",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Run in terminal:</div>
+              <code className="text-sm">
+                amp mcp add core-memory
+                https://core.heysol.ai/api/v1/mcp?source=amp
+              </code>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.AUGMENT_CODE]: {
+    id: Provider.AUGMENT_CODE,
+    name: "Augment Code",
+    description: "Install CORE in Augment Code",
+    docsUrl: "https://docs.heysol.ai/providers/augment-code",
+    icon: "augment-code",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Go to ~/.augment/settings.json</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=augment-code",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Generate and Add API Key from CORE Dashboard",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Go to Settings → API Key → Generate new key → Name it "augment-code"
+          </p>
+        ),
+      },
+    ],
+  },
+  [Provider.ROO_CODE]: {
+    id: Provider.ROO_CODE,
+    name: "Roo Code",
+    description: "Install CORE in Roo Code",
+    docsUrl: "https://docs.heysol.ai/providers/roo-code",
+    icon: "roo-code",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Roo Code MCP configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "type": "streamable-http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Roo-Code",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.OPENCODE]: {
+    id: Provider.OPENCODE,
+    name: "Opencode",
+    description: "Install CORE in Opencode",
+    docsUrl: "https://docs.heysol.ai/providers/opencode",
+    icon: "opencode",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Opencode configuration:</div>
+              <pre className="text-xs">
+                {`"mcp": {
+  "core-memory": {
+    "type": "remote",
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Opencode",
+    "headers": {
+      "Authorization": "Bearer YOUR_API_KEY"
+    },
+    "enabled": true
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.QWEN_CODER]: {
+    id: Provider.QWEN_CODER,
+    name: "Qwen Coder",
+    description: "Install CORE in Qwen Coder CLI",
+    docsUrl: "https://docs.heysol.ai/providers/qwen-coder",
+    icon: "qwen",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to ~/.qwen/settings.json:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=Qwen",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.COPILOT_CLI]: {
+    id: Provider.COPILOT_CLI,
+    name: "Copilot CLI",
+    description: "Install CORE in GitHub Copilot CLI",
+    docsUrl: "https://docs.heysol.ai/providers/copilot-cli",
+    icon: "github",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to ~/.copilot/mcp-config.json:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-CLI",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.COPILOT_CODING_AGENT]: {
+    id: Provider.COPILOT_CODING_AGENT,
+    name: "Copilot Coding Agent",
+    description: "Install CORE in GitHub Copilot Coding Agent",
+    docsUrl: "https://docs.heysol.ai/providers/copilot-coding-agent",
+    icon: "github",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>
+                Add to Repository Settings → Copilot → Coding agent → MCP
+                configuration:
+              </div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-Agent",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.WARP]: {
+    id: Provider.WARP,
+    name: "Warp",
+    description: "Install CORE in Warp terminal",
+    docsUrl: "https://docs.heysol.ai/providers/warp",
+    icon: "warp",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add in Settings → AI → Manage MCP servers:</div>
+              <pre className="text-xs">
+                {`{
+  "core": {
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
+    "headers": {
+      "Authorization": "Bearer YOUR_API_KEY"
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.ROVO_DEV]: {
+    id: Provider.ROVO_DEV,
+    name: "Rovo Dev CLI",
+    description: "Install CORE in Atlassian Rovo Dev CLI",
+    docsUrl: "https://docs.heysol.ai/providers/rovo-dev",
+    icon: "rovo",
+    installationSteps: [
+      {
+        title: "Edit mcp config",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            <pre className="text-xs">acli rovodev mcp</pre>
+          </p>
+        ),
+      },
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Rovo Dev MCP configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Rovo-Dev",
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.CLINE]: {
+    id: Provider.CLINE,
+    name: "Cline",
+    description: "Install CORE in Cline",
+    docsUrl: "https://docs.heysol.ai/providers/cline",
+    icon: "cline",
+    installationSteps: [
+      {
+        title: "Open Cline MCP Settings",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Open Cline and click the hamburger menu icon (☰) to enter the MCP
+            Servers section.
+          </p>
+        ),
+      },
+      {
+        title: "Navigate to Remote Servers",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Choose Remote Servers tab and click the Edit Configuration button.
+          </p>
+        ),
+      },
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Cline MCP configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Cline",
+      "type": "streamableHttp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Generate and Add API Key from CORE Dashboard",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Go to Settings → API Key → Generate new key → Name it "cline"
+          </p>
+        ),
+      },
+    ],
+  },
+  [Provider.KIRO]: {
+    id: Provider.KIRO,
+    name: "Kiro",
+    description: "Install CORE in Kiro",
+    docsUrl: "https://docs.heysol.ai/providers/kiro",
+    icon: "kiro",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add in Kiro → MCP Servers:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Kiro",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.TRAE]: {
+    id: Provider.TRAE,
+    name: "Trae",
+    description: "Install CORE in Trae",
+    docsUrl: "https://docs.heysol.ai/providers/trae",
+    icon: "trae",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Trae MCP configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Trae"
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+
+  [Provider.PERPLEXITY]: {
+    id: Provider.PERPLEXITY,
+    name: "Perplexity Desktop",
+    description: "Install CORE in Perplexity Desktop",
+    docsUrl: "https://docs.heysol.ai/providers/perplexity",
+    icon: "perplexity",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>
+                Add in Perplexity → Settings → Connectors → Add Connector →
+                Advanced:
+              </div>
+              <pre className="text-xs">
+                {`{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=perplexity"]
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Save Configuration",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Click Save to apply the changes.
+          </p>
+        ),
+      },
+      {
+        title: "Authenticate Core",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Core will be available in your Perplexity sessions.
+          </p>
+        ),
+      },
+    ],
+  },
+  [Provider.QODO_GEN]: {
+    id: Provider.QODO_GEN,
+    name: "Qodo Gen",
+    description: "Install CORE in Qodo Gen",
+    docsUrl: "https://docs.heysol.ai/providers/qodo-gen",
+    icon: "qodo",
+    installationSteps: [
+      {
+        title: "Open Qodo Gen Chat Panel",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Open Qodo Gen chat panel in VSCode or IntelliJ.
+          </p>
+        ),
+      },
+      {
+        title: "Connect More Tools",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Click Connect more tools, then click + Add new MCP.
+          </p>
+        ),
+      },
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add the following configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Qodo-Gen"
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.CRUSH]: {
+    id: Provider.CRUSH,
+    name: "Crush",
+    description: "Install CORE in Crush terminal",
+    docsUrl: "https://docs.heysol.ai/providers/crush",
+    icon: "crush",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server Configuration",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Add to your Crush configuration:</div>
+              <pre className="text-xs">
+                {`{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Crush",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}`}
+              </pre>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+    ],
+  },
+  [Provider.FACTORY]: {
+    id: Provider.FACTORY,
+    name: "Factory",
+    description: "Install CORE in Factory droid",
+    docsUrl: "https://docs.heysol.ai/providers/factory",
+    icon: "factory",
+    installationSteps: [
+      {
+        title: "Add CORE MCP Server via CLI",
+        component: (
+          <StepCodeBlock>
+            <div className="space-y-2">
+              <div>Run in terminal:</div>
+              <code className="text-sm">
+                droid mcp add core
+                https://core.heysol.ai/api/v1/mcp?source=Factory --type http
+                --header "Authorization: Bearer YOUR_API_KEY"
+              </code>
+            </div>
+          </StepCodeBlock>
+        ),
+      },
+      {
+        title: "Verify Installation",
+        component: (
+          <p className="text-muted-foreground text-sm">
+            Type /mcp within droid to manage servers and view available tools.
+          </p>
+        ),
+      },
+    ],
   },
 };
 

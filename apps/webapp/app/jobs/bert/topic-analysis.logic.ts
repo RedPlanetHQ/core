@@ -1,9 +1,10 @@
 import { exec } from "child_process";
 import { promisify } from "util";
+import { identifySpacesForTopics } from "~/jobs/spaces/space-identification.logic";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
 import { getEpisode } from "~/services/graphModels/episode";
-import { IngestionStatus } from "@core/database";
+import { makeModelCall } from "~/lib/model.server";
+import type { EpisodicNode } from "@core/types";
 
 const execAsync = promisify(exec);
 
@@ -14,6 +15,14 @@ export interface TopicAnalysisPayload {
   nrTopics?: number;
 }
 
+export interface DocumentSummary {
+  spaceName: string;
+  intent: string;
+  summary: string;
+  topics: string[];
+  episodeCount: number;
+}
+
 export interface TopicAnalysisResult {
   topics: {
     [topicId: string]: {
@@ -21,6 +30,7 @@ export interface TopicAnalysisResult {
       episodeIds: string[];
     };
   };
+  documentSummaries?: DocumentSummary[];
 }
 
 /**
@@ -51,6 +61,74 @@ async function runBertWithExec(
 }
 
 /**
+ * Create a document summary from episodes using LLM
+ *
+ * @param episodes - Array of episode objects to summarize
+ * @param intent - The intent/purpose of the document (from space proposal)
+ * @param spaceName - Name of the space this document represents
+ * @returns A cohesive summary document
+ */
+async function createDocumentSummaryFromEpisodes(
+  episodes: EpisodicNode[],
+  intent: string,
+  spaceName: string,
+): Promise<string> {
+  // Build the prompt for document summary generation
+  const episodeTexts = episodes
+    .map((ep, idx) => `### Episode ${idx + 1}\n${ep.content}`)
+    .join("\n\n");
+
+  const prompt = `You are creating a comprehensive summary document for a collection of related episodes.
+
+## Document Purpose
+**Space Name**: ${spaceName}
+**Intent**: ${intent}
+
+## Episodes to Summarize
+The following episodes have been identified as related to this topic:
+
+${episodeTexts}
+
+## Task
+Create a cohesive, well-structured summary document that:
+1. Synthesizes the key themes and insights from these episodes
+2. Organizes information in a logical, readable format
+3. Maintains the context and intent described above
+4. Highlights important patterns, concepts, or recurring themes
+5. Uses clear headings and structure for easy reference
+
+The summary should be comprehensive enough to capture the essence of all episodes while being concise and well-organized.
+
+Return ONLY the summary document content, no additional commentary.`;
+
+  logger.info("[Document Summary] Generating summary for space", {
+    spaceName,
+    episodeCount: episodes.length,
+    intent,
+  });
+
+  let summaryText = "";
+  await makeModelCall(
+    false, // not streaming
+    [{ role: "user", content: prompt }],
+    (text) => {
+      summaryText = text;
+    },
+    {
+      temperature: 0.7,
+    },
+    "high", // Use high complexity model for better summaries
+  );
+
+  logger.info("[Document Summary] Summary generated", {
+    spaceName,
+    summaryLength: summaryText.length,
+  });
+
+  return summaryText;
+}
+
+/**
  * Process BERT topic analysis on user's episodes
  * This is the common logic shared between Trigger.dev and BullMQ
  *
@@ -60,10 +138,6 @@ async function runBertWithExec(
  */
 export async function processTopicAnalysis(
   payload: TopicAnalysisPayload,
-  enqueueSpaceSummary?: (params: {
-    spaceId: string;
-    userId: string;
-  }) => Promise<any>,
   pythonRunner?: (
     userId: string,
     minTopicSize: number,
@@ -102,6 +176,8 @@ export async function processTopicAnalysis(
     );
 
     // Step 2: Identify spaces for topics using LLM
+    const documentSummaries: DocumentSummary[] = [];
+
     try {
       logger.info("[BERT Topic Analysis] Starting space identification", {
         userId,
@@ -118,48 +194,9 @@ export async function processTopicAnalysis(
         proposalCount: spaceProposals.length,
       });
 
-      // Step 3: Create or find spaces and assign episodes
-      // Get existing spaces from PostgreSQL
-      const existingSpacesFromDb = await prisma.space.findMany({
-        where: { workspaceId },
-      });
-      const existingSpacesByName = new Map(
-        existingSpacesFromDb.map((s) => [s.name.toLowerCase(), s]),
-      );
-
+      // Step 3: Generate document summaries for each space proposal
       for (const proposal of spaceProposals) {
         try {
-          // Check if space already exists (case-insensitive match)
-          let spaceId: string;
-          const existingSpace = existingSpacesByName.get(
-            proposal.name.toLowerCase(),
-          );
-
-          if (existingSpace) {
-            // Use existing space
-            spaceId = existingSpace.id;
-            logger.info("[BERT Topic Analysis] Using existing space", {
-              spaceName: proposal.name,
-              spaceId,
-            });
-          } else {
-            // Create new space (creates in both PostgreSQL and Neo4j)
-            // Skip automatic space assignment since we're manually assigning from BERT topics
-            const spaceService = new SpaceService();
-            const newSpace = await spaceService.createSpace({
-              name: proposal.name,
-              description: proposal.intent,
-              userId,
-              workspaceId,
-            });
-            spaceId = newSpace.id;
-            logger.info("[BERT Topic Analysis] Created new space", {
-              spaceName: proposal.name,
-              spaceId,
-              intent: proposal.intent,
-            });
-          }
-
           // Collect all episode IDs from the topics in this proposal
           const episodeIds: string[] = [];
           for (const topicId of proposal.topics) {
@@ -169,36 +206,84 @@ export async function processTopicAnalysis(
             }
           }
 
-          // Assign all episodes from these topics to the space
-          if (episodeIds.length > 0) {
-            await assignEpisodesToSpace(episodeIds, spaceId, userId);
-            logger.info("[BERT Topic Analysis] Assigned episodes to space", {
-              spaceName: proposal.name,
-              spaceId,
-              episodeCount: episodeIds.length,
-              topics: proposal.topics,
-            });
-
-            // Step 4: Trigger space summary if callback provided
-            if (enqueueSpaceSummary) {
-              await enqueueSpaceSummary({ spaceId, userId });
-              logger.info("[BERT Topic Analysis] Triggered space summary", {
+          if (episodeIds.length === 0) {
+            logger.warn(
+              "[BERT Topic Analysis] No episodes found for proposal",
+              {
                 spaceName: proposal.name,
-                spaceId,
-              });
-            }
+              },
+            );
+            continue;
           }
-        } catch (spaceError) {
+
+          // Fetch top 5-10 episodes for summary generation
+          const episodesToFetch = episodeIds.slice(0, 10);
+          const episodes = await Promise.all(
+            episodesToFetch.map((id) => getEpisode(id)),
+          );
+
+          // Filter out null episodes
+          const validEpisodes = episodes.filter(
+            (ep): ep is EpisodicNode => ep !== null,
+          );
+
+          if (validEpisodes.length === 0) {
+            logger.warn(
+              "[BERT Topic Analysis] No valid episodes found for proposal",
+              {
+                spaceName: proposal.name,
+              },
+            );
+            continue;
+          }
+
+          logger.info(
+            "[BERT Topic Analysis] Generating document summary for space",
+            {
+              spaceName: proposal.name,
+              episodeCount: validEpisodes.length,
+              totalEpisodes: episodeIds.length,
+              topics: proposal.topics,
+            },
+          );
+
+          // Generate document summary from episodes
+          const summary = await createDocumentSummaryFromEpisodes(
+            validEpisodes,
+            proposal.intent,
+            proposal.name,
+          );
+
+          documentSummaries.push({
+            spaceName: proposal.name,
+            intent: proposal.intent,
+            summary,
+            topics: proposal.topics,
+            episodeCount: episodeIds.length,
+          });
+
+          logger.info("[BERT Topic Analysis] Document summary created", {
+            spaceName: proposal.name,
+            summaryLength: summary.length,
+          });
+        } catch (summaryError) {
           logger.error(
-            "[BERT Topic Analysis] Failed to process space proposal",
+            "[BERT Topic Analysis] Failed to create document summary",
             {
               proposal,
-              error: spaceError,
+              error: summaryError,
             },
           );
           // Continue with other proposals
         }
       }
+
+      logger.info(
+        "[BERT Topic Analysis] Document summary generation completed",
+        {
+          summariesGenerated: documentSummaries.length,
+        },
+      );
     } catch (spaceIdentificationError) {
       logger.error(
         "[BERT Topic Analysis] Space identification failed, returning topics only",
@@ -209,6 +294,10 @@ export async function processTopicAnalysis(
       // Return topics even if space identification fails
     }
 
+    // Return topics and document summaries
+    result.documentSummaries = documentSummaries;
+
+    console.log(JSON.stringify(documentSummaries));
     return result;
   } catch (error) {
     console.error(`[BERT Topic Analysis] Error:`, error);

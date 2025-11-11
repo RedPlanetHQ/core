@@ -4,7 +4,6 @@ import {
   processTopicAnalysis,
   type TopicAnalysisPayload,
 } from "~/jobs/bert/topic-analysis.logic";
-import { spaceSummaryTask } from "~/trigger/spaces/space-summary";
 
 /**
  * Python runner for Trigger.dev using python.runScript
@@ -34,10 +33,6 @@ export const bertTopicAnalysisTask = task({
   run: async (payload: TopicAnalysisPayload) => {
     return await processTopicAnalysis(
       payload,
-      // Callback to enqueue space summary
-      async (params) => {
-        await spaceSummaryTask.trigger(params);
-      },
       // Python runner for Trigger.dev
       runBertWithTriggerPython,
     );
