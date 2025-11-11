@@ -1,4 +1,5 @@
 import {
+  ENTITY_NODE_PROPERTIES,
   EPISODIC_NODE_PROPERTIES,
   STATEMENT_NODE_PROPERTIES,
   type EntityNode,
@@ -7,8 +8,8 @@ import {
   type Triple,
 } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
-import { saveEntity } from "./entity";
-import { saveEpisode } from "./episode";
+import { parseEntityNode, saveEntity } from "./entity";
+import { parseEpisodicNode, saveEpisode } from "./episode";
 import crypto from "crypto";
 
 export async function saveTriple(triple: Triple): Promise<string> {
@@ -116,9 +117,9 @@ export async function findContradictoryStatements({
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const query = `
       MATCH (subject:Entity {uuid: $subjectId}), (predicate:Entity {uuid: $predicateId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(statement:Statement)-[:HAS_PREDICATE]->(predicate)
-      WHERE statement.userId = $userId
-        AND statement.invalidAt IS NULL
+      MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_PREDICATE]->(predicate)
+      WHERE s.userId = $userId
+        AND s.invalidAt IS NULL
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
@@ -129,19 +130,7 @@ export async function findContradictoryStatements({
   }
 
   return result.map((record) => {
-    const statement = record.get("statement").properties;
-    return {
-      uuid: statement.uuid,
-      fact: statement.fact,
-      createdAt: new Date(statement.createdAt),
-      validAt: new Date(statement.validAt),
-      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
-      invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
-        : {},
-      userId: statement.userId,
-    };
+    return parseStatementNode(record.get("statement"));
   });
 }
 
@@ -162,10 +151,10 @@ export async function findStatementsWithSameSubjectObject({
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const query = `
       MATCH (subject:Entity {uuid: $subjectId}), (object:Entity {uuid: $objectId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(statement:Statement)-[:HAS_OBJECT]->(object)
-      MATCH (statement)-[:HAS_PREDICATE]->(predicate:Entity)
-      WHERE statement.userId = $userId
-        AND statement.invalidAt IS NULL
+      MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_OBJECT]->(object)
+      MATCH (s)-[:HAS_PREDICATE]->(predicate:Entity)
+      WHERE s.userId = $userId
+        AND s.invalidAt IS NULL
         ${excludePredicateId ? "AND predicate.uuid <> $excludePredicateId" : ""}
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
@@ -183,19 +172,7 @@ export async function findStatementsWithSameSubjectObject({
   }
 
   return result.map((record) => {
-    const statement = record.get("statement").properties;
-    return {
-      uuid: statement.uuid,
-      fact: statement.fact,
-      createdAt: new Date(statement.createdAt),
-      validAt: new Date(statement.validAt),
-      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
-      invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
-        : {},
-      userId: statement.userId,
-    };
+    return parseStatementNode(record.get("statement"));
   });
 }
 
@@ -236,20 +213,7 @@ export async function findSimilarStatements({
   }
 
   return result.map((record) => {
-    const statement = record.get("statement").properties;
-
-    return {
-      uuid: statement.uuid,
-      fact: statement.fact,
-      createdAt: new Date(statement.createdAt),
-      validAt: new Date(statement.validAt),
-      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
-      invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
-        : {},
-      userId: statement.userId,
-    };
+    return parseStatementNode(record.get("statement"));
   });
 }
 
@@ -264,7 +228,11 @@ export async function getTripleForStatement({
       MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
       MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
       OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement, subject, predicate, object, ${EPISODIC_NODE_PROPERTIES} as statement
+      RETURN ${STATEMENT_NODE_PROPERTIES.replace(/s\./g, "statement.")} as statement, 
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "subject.")} as subject, 
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "predicate.")} as predicate, 
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "object.")} as object, 
+      ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
     `;
 
   const result = await runQuery(query, { statementId });
@@ -275,82 +243,22 @@ export async function getTripleForStatement({
 
   const record = result[0];
 
-  const statementProps = record.get("statement").properties;
-  const subjectProps = record.get("subject").properties;
-  const predicateProps = record.get("predicate").properties;
-  const objectProps = record.get("object").properties;
-  const episodeProps = record.get("episode")?.properties;
+  const statementProps = record.get("statement");
+  const subjectProps = record.get("subject");
+  const predicateProps = record.get("predicate");
+  const objectProps = record.get("object");
+  const episodeProps = record.get("episode");
 
-  const statement: StatementNode = {
-    uuid: statementProps.uuid,
-    fact: statementProps.fact,
-    factEmbedding: statementProps.factEmbedding,
-    createdAt: new Date(statementProps.createdAt),
-    validAt: new Date(statementProps.validAt),
-    invalidAt: statementProps.invalidAt
-      ? new Date(statementProps.invalidAt)
-      : null,
-    invalidatedBy: statementProps.invalidatedBy || undefined,
-    attributes: statementProps.attributesJson
-      ? JSON.parse(statementProps.attributesJson)
-      : {},
-    userId: statementProps.userId,
-  };
+  const statement: StatementNode = parseStatementNode(statementProps);
 
-  const subject: EntityNode = {
-    uuid: subjectProps.uuid,
-    name: subjectProps.name,
-    type: subjectProps.type,
-    nameEmbedding: subjectProps.nameEmbedding,
-    typeEmbedding: subjectProps.typeEmbedding,
-    attributes: subjectProps.attributesJson
-      ? JSON.parse(subjectProps.attributesJson)
-      : {},
-    createdAt: new Date(subjectProps.createdAt),
-    userId: subjectProps.userId,
-  };
+  const subject: EntityNode = parseEntityNode(subjectProps);
 
-  const predicate: EntityNode = {
-    uuid: predicateProps.uuid,
-    name: predicateProps.name,
-    type: predicateProps.type,
-    nameEmbedding: predicateProps.nameEmbedding,
-    typeEmbedding: predicateProps.typeEmbedding,
-    attributes: predicateProps.attributesJson
-      ? JSON.parse(predicateProps.attributesJson)
-      : {},
-    createdAt: new Date(predicateProps.createdAt),
-    userId: predicateProps.userId,
-  };
+  const predicate: EntityNode = parseEntityNode(predicateProps);
 
-  const object: EntityNode = {
-    uuid: objectProps.uuid,
-    name: objectProps.name,
-    type: objectProps.type,
-    nameEmbedding: objectProps.nameEmbedding,
-    typeEmbedding: objectProps.typeEmbedding,
-    attributes: objectProps.attributesJson
-      ? JSON.parse(objectProps.attributesJson)
-      : {},
-    createdAt: new Date(objectProps.createdAt),
-    userId: objectProps.userId,
-  };
+  const object: EntityNode = parseEntityNode(objectProps);
 
   // Episode might be null
-  const provenance: EpisodicNode = {
-    uuid: episodeProps.uuid,
-    content: episodeProps.content,
-    originalContent: episodeProps.originalContent,
-    source: episodeProps.source,
-    metadata: episodeProps.metadata,
-    createdAt: new Date(episodeProps.createdAt),
-    validAt: new Date(episodeProps.validAt),
-    contentEmbedding: episodeProps.contentEmbedding,
-    userId: episodeProps.userId,
-    labels: episodeProps.labels || [],
-    space: episodeProps.space,
-    sessionId: episodeProps.sessionId,
-  };
+  const provenance: EpisodicNode = parseEpisodicNode(episodeProps);
 
   return {
     statement,
@@ -371,9 +279,9 @@ export async function invalidateStatement({
   invalidatedBy?: string;
 }) {
   const query = `
-      MATCH (statement:Statement {uuid: $statementId})
-      SET statement.invalidAt = $invalidAt
-      ${invalidatedBy ? "SET statement.invalidatedBy = $invalidatedBy" : ""}
+      MATCH (s:Statement {uuid: $statementId})
+      SET s.invalidAt = $invalidAt
+      ${invalidatedBy ? "SET s.invalidatedBy = $invalidatedBy" : ""}
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
@@ -388,7 +296,7 @@ export async function invalidateStatement({
     return null;
   }
 
-  return result[0].get("statement").properties;
+  return result[0].get("statement");
 }
 
 export async function invalidateStatements({
@@ -434,20 +342,20 @@ export async function searchStatementsByEmbedding(params: {
   }
 
   return result.map((record) => {
-    const statement = record.get("statement").properties;
-
-    return {
-      uuid: statement.uuid,
-      fact: statement.fact,
-      factEmbedding: statement.factEmbedding,
-      createdAt: new Date(statement.createdAt),
-      validAt: new Date(statement.validAt),
-      invalidAt: statement.invalidAt ? new Date(statement.invalidAt) : null,
-      invalidatedBy: statement.invalidatedBy || undefined,
-      attributes: statement.attributesJson
-        ? JSON.parse(statement.attributesJson)
-        : {},
-      userId: statement.userId,
-    };
+    return parseStatementNode(record.get("statement"));
   });
+}
+
+export function parseStatementNode(node: Record<string, any>): StatementNode {
+  return {
+    uuid: node.uuid,
+    fact: node.fact,
+    factEmbedding: node.factEmbedding || [],
+    createdAt: new Date(node.createdAt),
+    validAt: new Date(node.validAt),
+    invalidAt: node.invalidAt ? new Date(node.invalidAt) : null,
+    invalidatedBy: node.invalidatedBy || undefined,
+    attributes: node.attributes ? JSON.parse(node.attributes) : {},
+    userId: node.userId,
+  };
 }

@@ -8,6 +8,7 @@ import {
   type Triple,
   EpisodeTypeEnum,
   type EpisodeType,
+  STATEMENT_NODE_PROPERTIES,
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";
@@ -32,6 +33,7 @@ import {
   findStatementsWithSameSubjectObject,
   getTripleForStatement,
   invalidateStatements,
+  parseStatementNode,
   saveTriple,
   searchStatementsByEmbedding,
 } from "./graphModels/statement";
@@ -157,8 +159,8 @@ export class KnowledgeGraphService {
   ): Promise<StatementNode[]> {
     const query = `
       MATCH (doc:Document {uuid: $documentUuid, userId: $userId})-[:CONTAINS_CHUNK]->(episode:Episode)
-      MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)
-      RETURN stmt
+      MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
+      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
 
     const result = await runQuery(query, {
@@ -167,17 +169,7 @@ export class KnowledgeGraphService {
     });
 
     return result.map((record) => {
-      const stmt = record.get("stmt").properties;
-      return {
-        uuid: stmt.uuid,
-        fact: stmt.fact,
-        factEmbedding: stmt.factEmbedding || [],
-        createdAt: new Date(stmt.createdAt),
-        validAt: new Date(stmt.validAt),
-        invalidAt: stmt.invalidAt ? new Date(stmt.invalidAt) : null,
-        attributes: stmt.attributesJson ? JSON.parse(stmt.attributesJson) : {},
-        userId: stmt.userId,
-      };
+      return parseStatementNode(record.get("statement"));
     });
   }
 
@@ -627,7 +619,6 @@ export class KnowledgeGraphService {
     // Update predicate embeddings
     uniquePredicates.forEach((predicate, index) => {
       predicate.nameEmbedding = predicateNameEmbeddings[index];
-      predicate.typeEmbedding = predicateTypeEmbeddings[index];
     });
 
     // Convert extracted triples to Triple objects with Statement nodes

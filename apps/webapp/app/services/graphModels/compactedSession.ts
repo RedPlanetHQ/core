@@ -1,32 +1,5 @@
+import { COMPACTED_SESSION_NODE_PROPERTIES, CompactedSessionNode, EPISODIC_NODE_PROPERTIES, EpisodicNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
-
-export interface SessionEpisodeData {
-  uuid: string;
-  content: string;
-  originalContent: string;
-  source: string;
-  createdAt: Date;
-  validAt: Date;
-  metadata: any;
-  sessionId: string;
-}
-
-export interface CompactedSessionNode {
-  uuid: string;
-  sessionId: string;
-  summary: string;
-  summaryEmbedding: number[];
-  episodeCount: number;
-  startTime: Date;
-  endTime: Date;
-  createdAt: Date;
-  updatedAt?: Date;
-  confidence: number;
-  userId: string;
-  source: string;
-  compressionRatio: number;
-  metadata: Record<string, any>;
-}
 
 /**
  * Save or update a compacted session
@@ -109,15 +82,15 @@ export async function getCompactedSessionBySessionId(
 ): Promise<CompactedSessionNode | null> {
   const query = `
     MATCH (cs:CompactedSession {sessionId: $sessionId, userId: $userId})
-    RETURN cs
-    ORDER BY cs.endTime DESC
+    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact
+    ORDER BY compact.endTime DESC
     LIMIT 1
   `;
 
   const result = await runQuery(query, { sessionId, userId });
   if (result.length === 0) return null;
 
-  const compact = result[0].get("cs").properties;
+  const compact = result[0].get("compact");
   return parseCompactedSessionNode(compact);
 }
 
@@ -171,7 +144,7 @@ export async function searchCompactedSessionsByEmbedding(
     WITH cs,
          gds.similarity.cosine(cs.summaryEmbedding, $embedding) AS score
     WHERE score >= $minScore
-    RETURN cs, score
+    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact, score
     ORDER BY score DESC
     LIMIT $limit
   `;
@@ -184,7 +157,7 @@ export async function searchCompactedSessionsByEmbedding(
   });
 
   return result.map((r) => ({
-    compact: parseCompactedSessionNode(r.get("cs").properties),
+    compact: parseCompactedSessionNode(r.get("compact")),
     score: r.get("score"),
   }));
 }
@@ -198,13 +171,13 @@ export async function getUserCompactedSessions(
 ): Promise<CompactedSessionNode[]> {
   const query = `
     MATCH (cs:CompactedSession {userId: $userId})
-    RETURN cs
-    ORDER BY cs.endTime DESC
+    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact
+    ORDER BY compact.endTime DESC
     LIMIT $limit
   `;
 
   const result = await runQuery(query, { userId, limit });
-  return result.map((r) => parseCompactedSessionNode(r.get("cs").properties));
+  return result.map((r) => parseCompactedSessionNode(r.get("compact")));
 }
 
 /**
@@ -265,12 +238,12 @@ export async function getSessionEpisodes(
   sessionId: string,
   userId: string,
   afterTime?: Date,
-): Promise<SessionEpisodeData[]> {
+): Promise<EpisodicNode[]> {
   const query = `
     MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
     ${afterTime ? "WHERE e.createdAt > $afterTime" : ""}
-    RETURN e
-    ORDER BY e.createdAt ASC
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY episode.createdAt ASC
   `;
 
   const result = await runQuery(query, {
@@ -279,7 +252,7 @@ export async function getSessionEpisodes(
     afterTime: afterTime?.toISOString(),
   });
 
-  return result.map((r) => r.get("e").properties);
+  return result.map((r) => r.get("episode"));
 }
 
 /**
