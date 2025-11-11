@@ -16,11 +16,11 @@ export interface TopicAnalysisPayload {
 }
 
 export interface DocumentSummary {
-  spaceName: string;
-  intent: string;
-  summary: string;
-  topics: string[];
-  episodeCount: number;
+  title: string; // Document title describing the theme
+  theme: string; // What this collection of topics is about
+  summary: string; // LLM-generated summary content
+  topics: string[]; // Topic IDs included in this document
+  episodeCount: number; // Total episodes covered
 }
 
 export interface TopicAnalysisResult {
@@ -64,47 +64,47 @@ async function runBertWithExec(
  * Create a document summary from episodes using LLM
  *
  * @param episodes - Array of episode objects to summarize
- * @param intent - The intent/purpose of the document (from space proposal)
- * @param spaceName - Name of the space this document represents
+ * @param theme - The main theme/subject of these episodes
+ * @param title - Document title describing what the user talks about
  * @returns A cohesive summary document
  */
 async function createDocumentSummaryFromEpisodes(
   episodes: EpisodicNode[],
-  intent: string,
-  spaceName: string,
+  theme: string,
+  title: string,
 ): Promise<string> {
   // Build the prompt for document summary generation
   const episodeTexts = episodes
     .map((ep, idx) => `### Episode ${idx + 1}\n${ep.content}`)
     .join("\n\n");
 
-  const prompt = `You are creating a comprehensive summary document for a collection of related episodes.
+  const prompt = `You are creating a comprehensive summary document about topics the user frequently discusses.
 
-## Document Purpose
-**Space Name**: ${spaceName}
-**Intent**: ${intent}
+## Document Theme
+**Title**: ${title}
+**Theme**: ${theme}
 
 ## Episodes to Summarize
-The following episodes have been identified as related to this topic:
+The following episodes represent conversations where the user discussed this topic:
 
 ${episodeTexts}
 
 ## Task
 Create a cohesive, well-structured summary document that:
-1. Synthesizes the key themes and insights from these episodes
-2. Organizes information in a logical, readable format
-3. Maintains the context and intent described above
-4. Highlights important patterns, concepts, or recurring themes
+1. Synthesizes what the user talks about regarding this theme
+2. Captures the key insights, patterns, and recurring concepts
+3. Organizes information in a logical, readable format
+4. Highlights the user's perspectives, experiences, or knowledge on this topic
 5. Uses clear headings and structure for easy reference
 
-The summary should be comprehensive enough to capture the essence of all episodes while being concise and well-organized.
+This document will help the user understand what they frequently discuss about "${title}" and serve as a reference for this topic area.
 
 Return ONLY the summary document content, no additional commentary.`;
 
-  logger.info("[Document Summary] Generating summary for space", {
-    spaceName,
+  logger.info("[Document Summary] Generating summary for topic theme", {
+    title,
     episodeCount: episodes.length,
-    intent,
+    theme,
   });
 
   let summaryText = "";
@@ -121,7 +121,7 @@ Return ONLY the summary document content, no additional commentary.`;
   );
 
   logger.info("[Document Summary] Summary generated", {
-    spaceName,
+    title,
     summaryLength: summaryText.length,
   });
 
@@ -129,7 +129,13 @@ Return ONLY the summary document content, no additional commentary.`;
 }
 
 /**
- * Process BERT topic analysis on user's episodes
+ * Process BERT topic analysis on user's episodes and generate document summaries
+ *
+ * Workflow:
+ * 1. BERT identifies topics from episode clusters (based on semantic similarity)
+ * 2. LLM analyzes topics to identify main themes the user talks about
+ * 3. For each theme, generates a comprehensive summary document from the episodes
+ *
  * This is the common logic shared between Trigger.dev and BullMQ
  *
  * NOTE: This function does NOT update workspace.metadata.lastTopicAnalysisAt
@@ -175,27 +181,29 @@ export async function processTopicAnalysis(
       `[BERT Topic Analysis] Found ${topicCount} topics covering ${totalEpisodes} episodes`,
     );
 
-    // Step 2: Identify spaces for topics using LLM
+    // Step 2: Identify topic themes using LLM (what the user talks about most)
     const documentSummaries: DocumentSummary[] = [];
 
     try {
-      logger.info("[BERT Topic Analysis] Starting space identification", {
+      logger.info("[BERT Topic Analysis] Identifying topic themes", {
         userId,
         topicCount,
       });
 
-      const spaceProposals = await identifySpacesForTopics({
+      // Note: Using identifySpacesForTopics for now, but it's actually identifying
+      // thematic groupings for document generation, not creating spaces
+      const themeProposals = await identifySpacesForTopics({
         userId,
         topics: result.topics,
       });
 
-      logger.info("[BERT Topic Analysis] Space identification completed", {
+      logger.info("[BERT Topic Analysis] Topic theme identification completed", {
         userId,
-        proposalCount: spaceProposals.length,
+        themeCount: themeProposals.length,
       });
 
-      // Step 3: Generate document summaries for each space proposal
-      for (const proposal of spaceProposals) {
+      // Step 3: Generate document summaries for each identified theme
+      for (const proposal of themeProposals) {
         try {
           // Collect all episode IDs from the topics in this proposal
           const episodeIds: string[] = [];
@@ -208,9 +216,9 @@ export async function processTopicAnalysis(
 
           if (episodeIds.length === 0) {
             logger.warn(
-              "[BERT Topic Analysis] No episodes found for proposal",
+              "[BERT Topic Analysis] No episodes found for theme",
               {
-                spaceName: proposal.name,
+                theme: proposal.name,
               },
             );
             continue;
@@ -229,18 +237,18 @@ export async function processTopicAnalysis(
 
           if (validEpisodes.length === 0) {
             logger.warn(
-              "[BERT Topic Analysis] No valid episodes found for proposal",
+              "[BERT Topic Analysis] No valid episodes found for theme",
               {
-                spaceName: proposal.name,
+                theme: proposal.name,
               },
             );
             continue;
           }
 
           logger.info(
-            "[BERT Topic Analysis] Generating document summary for space",
+            "[BERT Topic Analysis] Generating document summary about topic theme",
             {
-              spaceName: proposal.name,
+              title: proposal.name,
               episodeCount: validEpisodes.length,
               totalEpisodes: episodeIds.length,
               topics: proposal.topics,
@@ -255,15 +263,15 @@ export async function processTopicAnalysis(
           );
 
           documentSummaries.push({
-            spaceName: proposal.name,
-            intent: proposal.intent,
+            title: proposal.name,
+            theme: proposal.intent,
             summary,
             topics: proposal.topics,
             episodeCount: episodeIds.length,
           });
 
           logger.info("[BERT Topic Analysis] Document summary created", {
-            spaceName: proposal.name,
+            title: proposal.name,
             summaryLength: summary.length,
           });
         } catch (summaryError) {
@@ -281,17 +289,17 @@ export async function processTopicAnalysis(
       logger.info(
         "[BERT Topic Analysis] Document summary generation completed",
         {
-          summariesGenerated: documentSummaries.length,
+          documentsGenerated: documentSummaries.length,
         },
       );
-    } catch (spaceIdentificationError) {
+    } catch (themeIdentificationError) {
       logger.error(
-        "[BERT Topic Analysis] Space identification failed, returning topics only",
+        "[BERT Topic Analysis] Topic theme identification failed, returning topics only",
         {
-          error: spaceIdentificationError,
+          error: themeIdentificationError,
         },
       );
-      // Return topics even if space identification fails
+      // Return topics even if theme identification fails
     }
 
     // Return topics and document summaries
