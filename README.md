@@ -36,7 +36,7 @@
 ### CORE: Your Personal Memory Layer for AI Apps
 
 <p align="center">
-    <a href="cursor://anysphere.cursor-deeplink/mcp/install?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
+    <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
         <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" />
     </a>
 </p>
@@ -162,7 +162,7 @@ If the `mcpServers` object does not exist, create it.
 
 > Since Cursor 1.0, you can click the install button below for instant one-click installation.
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
 
 OR
 
@@ -493,6 +493,7 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
 
