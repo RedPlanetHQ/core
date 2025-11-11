@@ -288,13 +288,13 @@ See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/to
 
 CORE Memory MCP provides the following tools that LLMs can use:
 
-- `mcp__core-memory__memory_search`: Search relevant context from CORE Memory.
-- `mcp__core-memory__memory_ingest`: Add an episode in CORE Memory.
-- `mcp__core-memory__memory_about_user`: Fetches user persona from CORE Memory.
-- `mcp__core-memory__initialise_conversation_session`: Initialise conversation and assign session id to a conversation.
-- `mcp__core-memory__get_integrations`: Fetches what relevant integration should be used from the connected integrations.
-- `mcp__core-memory__get_integrations_actions`: Fetches what tool to be used from that integrations tools for the task.
-- `mcp__core-memory__execute_integrations_actions`: Execute the tool for that integration .
+- `memory_search`: Search relevant context from CORE Memory.
+- `memory_ingest`: Add an episode in CORE Memory.
+- `memory_about_user`: Fetches user persona from CORE Memory.
+- `initialise_conversation_session`: Initialise conversation and assign session id to a conversation.
+- `get_integrations`: Fetches what relevant integration should be used from the connected integrations.
+- `get_integrations_actions`: Fetches what tool to be used from that integrations tools for the task.
+- `execute_integrations_actions`: Execute the tool for that integration .
 
 
 ## 🚀 CORE Self-Hosting
@@ -493,5 +493,6 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
