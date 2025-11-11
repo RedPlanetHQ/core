@@ -57,7 +57,7 @@ export class SearchService {
     // Default options
 
     const opts: Required<SearchOptions> = {
-      limit: options.limit || 100, // Maximum episodes in final response
+      limit: options.limit || 20, // Maximum episodes in final response
       maxBfsDepth: options.maxBfsDepth || 3,
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
