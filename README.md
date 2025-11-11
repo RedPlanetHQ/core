@@ -53,16 +53,16 @@
 </p>
 </div>
 
-
 ## ❌ Without CORE
+
 LLMs lose context every time you switch tools or end conversation. You get:
 
 - ❌ Re-explain your project context to each AI tool
 - ❌ Lost conversations and decisions across ChatGPT, Claude, Cursor
 - ❌ No memory of past discussions, preferences, or project history
 
-
 ## ✅ With CORE
+
 CORE creates a unified memory layer across all your AI tools — placing persistent context directly into your LLM's awareness.
 
 Add CORE to your workflow:
@@ -70,16 +70,17 @@ Add CORE to your workflow:
 Add `search core memory` to your prompt in Cursor:
 
 ```txt
-What were the architecture decisions we made for the 
-payment service last week?. Search core memory 
+What were the architecture decisions we made for the
+payment service last week?. Search core memory
 ```
 
 Add `add to core memory` to your prompt in Cursor:
 
 ```txt
-Set up authentication for my API service using JWT tokens. 
+Set up authentication for my API service using JWT tokens.
 Remember my preference for TypeScript strict mode. Add to core memory
 ```
+
 CORE builds a temporal knowledge graph that remembers everything and makes it available across claude code, windsurf, cursor, claude and any MCP-compatible tool.
 
 - 1️⃣ Connect CORE to your AI tools via MCP
@@ -89,6 +90,7 @@ CORE builds a temporal knowledge graph that remembers everything and makes it av
 No context loss, no re-explaining projects, no forgotten decisions.
 
 ## Why CORE?
+
 1. **Persistent Memory Across Tools**: Your conversations in ChatGPT become available in Cursor. Decisions made in Claude are recalled in your next coding session. One unified memory graph.
 2. **Temporal Knowledge Graph**: Not just storage — CORE tracks who said what, when, and why. Full provenance tracking means you can see how decisions evolved over time.
 3. **88.24% Benchmark Accuracy**: State-of-the-art performance on the LoCoMo benchmark — outperforming competitors by 20+ percentage points in multi-hop and temporal reasoning.
@@ -144,16 +146,16 @@ See [Gemini CLI Configuration](https://google-gemini.github.io/gemini-cli/docs/t
 {
   "mcpServers": {
     "corememory": {
-      "httpUrl": "[http://localhost:3000/mcp](https://core.heysol.ai/api/v1/mcp?source=geminicli)",
+      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=geminicli",
       "timeout": 5000
     }
   }
 }
 ```
+
 If the `mcpServers` object does not exist, create it.
 
 </details>
-
 
 ### IDEs
 
@@ -166,7 +168,7 @@ If the `mcpServers` object does not exist, create it.
 
 OR
 
-1. Go to: `Settings` -> `Tools &thank you Integrations` -> `Add Custom MCP` 
+1. Go to: `Settings` -> `Tools &thank you Integrations` -> `Add Custom MCP`
 2. Enter the below in `mcp.json` file:
 
 ```json
@@ -225,7 +227,7 @@ Enter the below in `mcp_config.json` file:
 <details>
 <summary><b>Install in Zed</b></summary>
 
-1. Go to `Settings` in Agent Panel -> `Add Custom Server` 
+1. Go to `Settings` in Agent Panel -> `Add Custom Server`
 2. Enter below code in configuraiton file and click on `Add server` button
 
 ```json
@@ -238,7 +240,6 @@ Enter the below in `mcp_config.json` file:
 ```
 
 </details>
-
 
 ### Coding Agents
 
@@ -276,13 +277,10 @@ See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/to
   }
 }
 ```
+
 </details>
 
-
-
-
 ### Desktop Apps
-
 
 ## 🔨 Available Tools
 
@@ -295,7 +293,6 @@ CORE Memory MCP provides the following tools that LLMs can use:
 - `get_integrations`: Fetches what relevant integration should be used from the connected integrations.
 - `get_integrations_actions`: Fetches what tool to be used from that integrations tools for the task.
 - `execute_integrations_actions`: Execute the tool for that integration .
-
 
 ## 🚀 CORE Self-Hosting
 
@@ -360,7 +357,6 @@ CORE memory achieves **88.24%** average accuracy in Locomo dataset across all re
 
 <img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
 (1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
-
 
 ## How CORE create memory
 
@@ -438,7 +434,6 @@ Connect Linear, Slack, GitHub, Notion once to CORE—then use all their tools in
 
 ![core-linear-claude](https://github.com/user-attachments/assets/7d59d92b-8c56-4745-a7ab-9a3c0341aa32)
 
-
 ## Documentation
 
 Explore our documentation to get the most out of CORE
@@ -493,7 +488,3 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
-
-
-
-
