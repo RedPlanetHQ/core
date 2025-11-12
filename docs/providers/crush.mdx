@@ -1,0 +1,62 @@
+---
+title: "Crush"
+description: "Connect Crush terminal to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Crush terminal installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Configure CORE MCP Server
+
+Add the following to your Crush configuration:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Crush",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Step 2: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "crush"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the configuration above with your actual API key
+
+### Step 3: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Crush: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core appears in your MCP configuration
+3. **Test operations**: Ask Crush to store and retrieve information across sessions
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the configuration file is properly formatted with the correct schema
+- Restart Crush after configuration changes
+- Check that you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

@@ -1,0 +1,69 @@
+---
+title: "Perplexity Desktop"
+description: "Connect Perplexity Desktop to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Perplexity Desktop app installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Add CORE MCP Server Configuration
+
+1. Open Perplexity Desktop
+2. Navigate to **Settings** → **Connectors** → **Add Connector** → **Advanced**
+3. Add the following configuration:
+
+```json
+{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=perplexity"]
+  }
+}
+```
+
+### Step 2: Save Configuration
+
+1. Click **Save** to apply the changes
+2. The MCP server will be registered with Perplexity
+
+### Step 3: Authenticate with CORE
+
+1. After adding the CORE MCP server, Perplexity will prompt you to authenticate
+2. When the authentication window opens, grant Perplexity permission to access your CORE memory
+3. Complete the authentication flow
+
+### Step 4: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Perplexity: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core-memory appears as connected in your connectors
+3. **Test operations**: Ask Perplexity to store and retrieve information across sessions
+
+## What's Next?
+
+With CORE connected to Perplexity, your conversations will now:
+
+- **Automatically retrieve** relevant information from CORE memory
+- **Store important** context for future sessions
+- **Maintain continuity** across multiple conversations
+- **Share context** with other connected tools
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Ensure you have Node.js and npm installed (required for npx)
+- Check that the configuration is properly formatted
+- Restart Perplexity after configuration changes
+- Verify you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

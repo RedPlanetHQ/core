@@ -1,0 +1,63 @@
+---
+title: "Trae"
+description: "Connect Trae to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Trae installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Configure CORE MCP Server
+
+Add the following to your Trae MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Trae"
+    }
+  }
+}
+```
+
+### Step 2: Authenticate with CORE
+
+1. After adding the configuration, Trae will prompt you to authenticate
+2. When the authentication window opens, grant Trae permission to access your CORE memory
+3. Complete the authentication flow
+
+### Step 3: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Trae: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core appears in your MCP servers list
+3. **Test operations**: Ask Trae to store and retrieve information across sessions
+
+## What's Next?
+
+With CORE connected to Trae, your sessions will now:
+
+- **Automatically retrieve** relevant information from CORE memory
+- **Store important** context for future sessions
+- **Maintain continuity** across multiple conversations
+- **Share context** with other connected tools
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Ensure the configuration is properly formatted
+- Restart Trae after configuration changes
+- Verify you're logged into your CORE account
+- Check that Trae has the latest updates
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

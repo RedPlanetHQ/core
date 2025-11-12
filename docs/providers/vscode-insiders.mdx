@@ -1,0 +1,69 @@
+---
+title: "VS Code Insiders"
+description: "Connect VS Code Insiders to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- VS Code Insiders installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Configure CORE MCP Server
+
+Add the following to your VS Code Insiders MCP configuration:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "core-memory": {
+        "type": "http",
+        "url": "https://core.heysol.ai/api/v1/mcp?source=VSCode-Insiders",
+        "headers": {
+          "Authorization": "Bearer YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
+
+### Step 2: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "vscode-insiders"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the configuration above with your actual API key
+
+### Step 3: Reload VS Code Insiders Window
+
+1. Press `Cmd+Shift+P` (Mac) or `Ctrl+Shift+P` (Windows/Linux)
+2. Run **"Developer: Reload Window"**
+3. This will activate the MCP configuration
+
+### Step 4: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask the AI assistant: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core-memory appears in your MCP servers list
+3. **Test operations**: Ask the assistant to store and retrieve information across sessions
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the configuration file is properly formatted
+- Reload the window after configuration changes
+- Check that you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

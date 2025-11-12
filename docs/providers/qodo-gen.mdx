@@ -1,0 +1,73 @@
+---
+title: "Qodo Gen"
+description: "Connect Qodo Gen to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Qodo Gen installed (VSCode or IntelliJ plugin)
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Open Qodo Gen Chat Panel
+
+1. Open Qodo Gen chat panel in your IDE (VSCode or IntelliJ)
+2. The chat panel is where you'll configure MCP servers
+
+### Step 2: Connect More Tools
+
+1. In the Qodo Gen chat panel, click **Connect more tools**
+2. Then click **+ Add new MCP**
+
+### Step 3: Add CORE MCP Server Configuration
+
+Add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Qodo-Gen"
+    }
+  }
+}
+```
+
+### Step 4: Authenticate with CORE
+
+1. After adding the configuration, Qodo Gen will prompt you to authenticate
+2. When the authentication window opens, grant Qodo Gen permission to access your CORE memory
+3. Complete the authentication flow
+
+### Step 5: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Qodo Gen: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core-memory appears as connected
+3. **Test operations**: Ask Qodo Gen to store and retrieve information across sessions
+
+## What's Next?
+
+With CORE connected to Qodo Gen, your conversations will now:
+
+- **Automatically retrieve** relevant information from CORE memory
+- **Store important** context for future sessions
+- **Maintain continuity** across multiple coding sessions
+- **Share context** with other connected tools
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Ensure the configuration is properly formatted
+- Restart your IDE after configuration changes
+- Verify you're logged into your CORE account
+- Check that Qodo Gen has the latest updates
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

@@ -1,0 +1,71 @@
+---
+title: "Cline"
+description: "Connect Cline to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Cline installed (VS Code extension)
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Open Cline MCP Settings
+
+1. Open Cline in VS Code
+2. Click the **hamburger menu icon (☰)** to enter the MCP Servers section
+
+### Step 2: Navigate to Remote Servers
+
+1. Choose the **Remote Servers** tab
+2. Click the **Edit Configuration** button
+
+### Step 3: Add CORE MCP Server Configuration
+
+Add the following to your Cline MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Cline",
+      "type": "streamableHttp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Step 4: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "cline"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the configuration above with your actual API key
+
+### Step 5: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Cline: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core-memory appears as connected in your MCP servers
+3. **Test operations**: Ask Cline to store and retrieve information across sessions
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the configuration is properly formatted
+- Restart VS Code after configuration changes
+- Check that you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

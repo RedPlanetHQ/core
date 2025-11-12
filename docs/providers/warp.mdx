@@ -1,0 +1,58 @@
+---
+title: "Warp"
+description: "Connect Warp terminal to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Warp terminal installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Configure CORE MCP Server
+
+Add the following in Settings → AI → Manage MCP servers:
+
+```json
+{
+  "core": {
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
+    "headers": {
+      "Authorization": "Bearer YOUR_API_KEY"
+    }
+  }
+}
+```
+
+### Step 2: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "warp"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the configuration above with your actual API key
+
+### Step 3: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Warp AI: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core appears in your MCP servers list
+3. **Test operations**: Ask Warp AI to store and retrieve information across sessions
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the configuration is properly formatted
+- Restart Warp after configuration changes
+- Check that you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.
