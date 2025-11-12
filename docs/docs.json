@@ -46,20 +46,38 @@
                   "providers/cursor",
                   "providers/zed",
                   "providers/vscode",
+                  "providers/vscode-insiders",
                   "providers/windsurf"
                 ]
               },
               {
                 "group": "Coding Agents",
                 "pages": [
-                  "providers/kilo-code"
+                  "providers/amp",
+                  "providers/augment-code",
+                  "providers/cline",
+                  "providers/copilot-coding-agent",
+                  "providers/kilo-code",
+                  "providers/kiro",
+                  "providers/opencode",
+                  "providers/qodo-gen",
+                  "providers/qwen-coder",
+                  "providers/roo-code"
                 ]
               },
               {
                 "group": "CLI",
                 "pages": [
                   "providers/claude-code",
-                  "providers/codex"
+                  "providers/codex",
+                  "providers/copilot-cli"
+                ]
+              },
+              {
+                "group": "Terminals",
+                "pages": [
+                  "providers/crush",
+                  "providers/warp"
                 ]
               },
               {
@@ -67,8 +85,16 @@
                 "pages": [
                   "providers/browser-extension",
                   "providers/claude",
-                  "providers/obsidian"
-
+                  "providers/obsidian",
+                  "providers/perplexity"
+                ]
+              },
+              {
+                "group": "Development Tools",
+                "pages": [
+                  "providers/factory",
+                  "providers/rovo-dev",
+                  "providers/trae"
                 ]
               }
             ]
