@@ -8,7 +8,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     name: "ChatGPT",
     description:
       "Connect ChatGPT to CORE's memory system via browser extension",
-    docsUrl: "https://docs.heysol.ai/providers/browser-extension",
+    docsUrl: "https://docs.getcore.me/providers/browser-extension",
     icon: "chatgpt",
     installationSteps: [
       {
@@ -50,7 +50,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     id: Provider.CLAUDE_CODE,
     name: "Claude Code CLI",
     description: "Install CORE in Claude Code CLI",
-    docsUrl: "https://docs.heysol.ai/providers/claude-code",
+    docsUrl: "https://docs.getcore.me/providers/claude-code",
     icon: "claude",
     installationSteps: [
       {
@@ -90,7 +90,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
           <p className="text-muted-foreground text-sm">
             Create sub-agents from this{" "}
             <a
-              href="https://docs.heysol.ai/providers/claude-code#enable-automatic-memory-integration-recommended"
+              href="https://docs.getcore.me/providers/claude-code#enable-automatic-memory-integration-recommended"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
@@ -107,7 +107,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     id: Provider.CLAUDE,
     name: "Claude",
     description: "Install CORE in Claude Desktop app",
-    docsUrl: "https://docs.heysol.ai/providers/claude",
+    docsUrl: "https://docs.getcore.me/providers/claude",
     icon: "claude",
     installationSteps: [
       {
@@ -144,7 +144,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
           <p className="text-muted-foreground text-sm">
             Add following instructions in preferences from this{" "}
             <a
-              href="https://docs.heysol.ai/providers/claude#enable-automatic-memory-integration-recommended"
+              href="https://docs.getcore.me/providers/claude#enable-automatic-memory-integration-recommended"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
@@ -161,7 +161,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
     id: Provider.CODEX,
     name: "Codex",
     description: "Install CORE in Codex CLI",
-    docsUrl: "https://docs.heysol.ai/providers/codex",
+    docsUrl: "https://docs.getcore.me/providers/codex",
     icon: "chatgpt",
     installationSteps: [
       {
@@ -191,7 +191,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <p className="text-muted-foreground text-sm">
             Add the following instructions from this{" "}
             <a
-              href="https://docs.heysol.ai/providers/codex#enable-automatic-memory-integration-recommended"
+              href="https://docs.getcore.me/providers/codex#enable-automatic-memory-integration-recommended"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
@@ -208,7 +208,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.CURSOR,
     name: "Cursor",
     description: "Install CORE in Cursor IDE",
-    docsUrl: "https://docs.heysol.ai/providers/cursor",
+    docsUrl: "https://docs.getcore.me/providers/cursor",
     icon: "cursor",
     installationSteps: [
       {
@@ -293,7 +293,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.GEMINI,
     name: "Gemini",
     description: "Install CORE in Gemini via browser extension",
-    docsUrl: "https://docs.heysol.ai/providers/browser-extension",
+    docsUrl: "https://docs.getcore.me/providers/browser-extension",
     icon: "gemini",
     installationSteps: [
       {
@@ -333,7 +333,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.KILO_CODE,
     name: "Kilo-Code",
     description: "Connect Kilo Code Agent to CORE's memory system via MCP",
-    docsUrl: "https://docs.heysol.ai/providers/kilo-code",
+    docsUrl: "https://docs.getcore.me/providers/kilo-code",
     icon: "kilo",
     installationSteps: [
       {
@@ -372,7 +372,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.VSCODE,
     name: "VS Code (Github Copilot)",
     description: "Connect your VS Code editor to CORE's memory system via MCP",
-    docsUrl: "https://docs.heysol.ai/providers/vscode",
+    docsUrl: "https://docs.getcore.me/providers/vscode",
     icon: "vscode",
     installationSteps: [
       {
@@ -404,7 +404,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.WINDSURF,
     name: "Windsurf",
     description: "Connect your Windsurf editor to CORE's memory system via MCP",
-    docsUrl: "https://docs.heysol.ai/providers/windsurf",
+    docsUrl: "https://docs.getcore.me/providers/windsurf",
     icon: "windsurf",
     installationSteps: [
       {
@@ -443,7 +443,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <p className="text-muted-foreground text-sm">
             Add the following instructions from this{" "}
             <a
-              href="https://docs.heysol.ai/providers/windsurf#enable-automatic-memory-integration-recommended"
+              href="https://docs.getcore.me/providers/windsurf#enable-automatic-memory-integration-recommended"
               target="_blank"
               rel="noopener noreferrer"
               className="text-primary hover:underline"
@@ -460,7 +460,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.ZED,
     name: "Zed",
     description: "Install CORE in Zed IDE",
-    docsUrl: "https://docs.heysol.ai/providers/zed",
+    docsUrl: "https://docs.getcore.me/providers/zed",
     icon: "zed",
     installationSteps: [
       {
@@ -498,7 +498,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.VSCODE_INSIDERS,
     name: "VS Code Insiders",
     description: "Install CORE in VS Code Insiders",
-    docsUrl: "https://docs.heysol.ai/providers/vscode-insiders",
+    docsUrl: "https://docs.getcore.me/providers/vscode-insiders",
     icon: "vscode",
     installationSteps: [
       {
@@ -539,7 +539,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.AMP,
     name: "Amp",
     description: "Install CORE in Amp code editor",
-    docsUrl: "https://docs.heysol.ai/providers/amp",
+    docsUrl: "https://docs.getcore.me/providers/amp",
     icon: "amp",
     installationSteps: [
       {
@@ -562,7 +562,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.AUGMENT_CODE,
     name: "Augment Code",
     description: "Install CORE in Augment Code",
-    docsUrl: "https://docs.heysol.ai/providers/augment-code",
+    docsUrl: "https://docs.getcore.me/providers/augment-code",
     icon: "augment-code",
     installationSteps: [
       {
@@ -602,7 +602,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.ROO_CODE,
     name: "Roo Code",
     description: "Install CORE in Roo Code",
-    docsUrl: "https://docs.heysol.ai/providers/roo-code",
+    docsUrl: "https://docs.getcore.me/providers/roo-code",
     icon: "roo-code",
     installationSteps: [
       {
@@ -634,7 +634,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.OPENCODE,
     name: "Opencode",
     description: "Install CORE in Opencode",
-    docsUrl: "https://docs.heysol.ai/providers/opencode",
+    docsUrl: "https://docs.getcore.me/providers/opencode",
     icon: "opencode",
     installationSteps: [
       {
@@ -665,7 +665,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.QWEN_CODER,
     name: "Qwen Coder",
     description: "Install CORE in Qwen Coder CLI",
-    docsUrl: "https://docs.heysol.ai/providers/qwen-coder",
+    docsUrl: "https://docs.getcore.me/providers/qwen-coder",
     icon: "qwen",
     installationSteps: [
       {
@@ -697,7 +697,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.COPILOT_CLI,
     name: "Copilot CLI",
     description: "Install CORE in GitHub Copilot CLI",
-    docsUrl: "https://docs.heysol.ai/providers/copilot-cli",
+    docsUrl: "https://docs.getcore.me/providers/copilot-cli",
     icon: "github",
     installationSteps: [
       {
@@ -729,7 +729,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.COPILOT_CODING_AGENT,
     name: "Copilot Coding Agent",
     description: "Install CORE in GitHub Copilot Coding Agent",
-    docsUrl: "https://docs.heysol.ai/providers/copilot-coding-agent",
+    docsUrl: "https://docs.getcore.me/providers/copilot-coding-agent",
     icon: "github",
     installationSteps: [
       {
@@ -764,7 +764,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.WARP,
     name: "Warp",
     description: "Install CORE in Warp terminal",
-    docsUrl: "https://docs.heysol.ai/providers/warp",
+    docsUrl: "https://docs.getcore.me/providers/warp",
     icon: "warp",
     installationSteps: [
       {
@@ -793,7 +793,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.ROVO_DEV,
     name: "Rovo Dev CLI",
     description: "Install CORE in Atlassian Rovo Dev CLI",
-    docsUrl: "https://docs.heysol.ai/providers/rovo-dev",
+    docsUrl: "https://docs.getcore.me/providers/rovo-dev",
     icon: "rovo",
     installationSteps: [
       {
@@ -829,7 +829,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.CLINE,
     name: "Cline",
     description: "Install CORE in Cline",
-    docsUrl: "https://docs.heysol.ai/providers/cline",
+    docsUrl: "https://docs.getcore.me/providers/cline",
     icon: "cline",
     installationSteps: [
       {
@@ -886,7 +886,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.KIRO,
     name: "Kiro",
     description: "Install CORE in Kiro",
-    docsUrl: "https://docs.heysol.ai/providers/kiro",
+    docsUrl: "https://docs.getcore.me/providers/kiro",
     icon: "kiro",
     installationSteps: [
       {
@@ -917,7 +917,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.TRAE,
     name: "Trae",
     description: "Install CORE in Trae",
-    docsUrl: "https://docs.heysol.ai/providers/trae",
+    docsUrl: "https://docs.getcore.me/providers/trae",
     icon: "trae",
     installationSteps: [
       {
@@ -946,7 +946,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.PERPLEXITY,
     name: "Perplexity Desktop",
     description: "Install CORE in Perplexity Desktop",
-    docsUrl: "https://docs.heysol.ai/providers/perplexity",
+    docsUrl: "https://docs.getcore.me/providers/perplexity",
     icon: "perplexity",
     installationSteps: [
       {
@@ -992,7 +992,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.QODO_GEN,
     name: "Qodo Gen",
     description: "Install CORE in Qodo Gen",
-    docsUrl: "https://docs.heysol.ai/providers/qodo-gen",
+    docsUrl: "https://docs.getcore.me/providers/qodo-gen",
     icon: "qodo",
     installationSteps: [
       {
@@ -1036,7 +1036,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.CRUSH,
     name: "Crush",
     description: "Install CORE in Crush terminal",
-    docsUrl: "https://docs.heysol.ai/providers/crush",
+    docsUrl: "https://docs.getcore.me/providers/crush",
     icon: "crush",
     installationSteps: [
       {
@@ -1069,7 +1069,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
     id: Provider.FACTORY,
     name: "Factory",
     description: "Install CORE in Factory droid",
-    docsUrl: "https://docs.heysol.ai/providers/factory",
+    docsUrl: "https://docs.getcore.me/providers/factory",
     icon: "factory",
     installationSteps: [
       {

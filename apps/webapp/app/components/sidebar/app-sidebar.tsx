@@ -129,7 +129,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <DropdownMenuContent side="top" align="start" className="w-[200px]">
               <DropdownMenuItem
                 className="flex gap-2 rounded"
-                onClick={() => window.open("https://docs.heysol.ai", "_blank")}
+                onClick={() => window.open("https://docs.getcore.me", "_blank")}
               >
                 <BookOpen size={16} />
                 Documentation

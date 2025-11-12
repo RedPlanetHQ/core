@@ -50,7 +50,7 @@ export default function WelcomeEmail() {
               marginLeft: "4px",
               display: "inline-flex",
             }}
-            href="https://docs.heysol.ai/providers/claude"
+            href="https://docs.getcore.me/providers/claude"
           >
             claude
           </Link>
@@ -79,7 +79,7 @@ export default function WelcomeEmail() {
               marginLeft: "4px",
               display: "inline-flex",
             }}
-            href="https://docs.heysol.ai/providers/browser-extension"
+            href="https://docs.getcore.me/providers/browser-extension"
           >
             here
           </Link>

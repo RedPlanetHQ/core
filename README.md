@@ -44,8 +44,8 @@
     <a href="https://heysol.ai">
         <img src="https://img.shields.io/badge/Website-heysol.ai-c15e50" alt="Website" />
     </a>
-    <a href="https://docs.heysol.ai">
-        <img src="https://img.shields.io/badge/Docs-docs.heysol.ai-green" alt="Docs" />
+    <a href="https://docs.getcore.me">
+        <img src="https://img.shields.io/badge/Docs-docs.getcore.me-green" alt="Docs" />
     </a>  
     <a href="https://discord.gg/YGUZcvDjUa">
         <img src="https://img.shields.io/badge/Discord-community-purple" alt="Discord" />
@@ -332,7 +332,7 @@ docker-compose up -d
 
 Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start building your memory graph.
 
-👉 [View complete self-hosting guide](https://docs.heysol.ai/self-hosting/docker)
+👉 [View complete self-hosting guide](https://docs.getcore.me/self-hosting/docker)
 
 Note: We tried open-source models like Ollama or GPT OSS but facts generation were not good, we are still figuring out how to improve on that and then will also support OSS models.
 
@@ -346,10 +346,10 @@ Don't want to manage infrastructure? CORE Cloud lets you build your personal mem
 2. **Visualize your memory graph** and see how CORE automatically forms connections between facts
 3. **Test it out** - ask "What do you know about me?" in conversation section
 4. Connect to your tools:
-   - [Claude](https://docs.heysol.ai/providers/claude) & [Cursor](https://docs.heysol.ai/providers/cursor) - coding with context
-   - [CLaude Code CLI](https://docs.heysol.ai/providers/claude-code) & [Codex CLI](https://docs.heysol.ai/providers/codex) - terminal-based coding with memory
-   - [Add Browser Extension](https://docs.heysol.ai/providers/browser-extension) - bring your memory to any website
-   - [Linear](https://docs.heysol.ai/integrations/linear), [Github](https://docs.heysol.ai/integrations/github) - add project context automatically
+   - [Claude](https://docs.getcore.me/providers/claude) & [Cursor](https://docs.getcore.me/providers/cursor) - coding with context
+   - [CLaude Code CLI](https://docs.getcore.me/providers/claude-code) & [Codex CLI](https://docs.getcore.me/providers/codex) - terminal-based coding with memory
+   - [Add Browser Extension](https://docs.getcore.me/providers/browser-extension) - bring your memory to any website
+   - [Linear](https://docs.getcore.me/integrations/linear), [Github](https://docs.getcore.me/integrations/github) - add project context automatically
 
 ## 🔥 Research Highlights
 
@@ -438,15 +438,15 @@ Connect Linear, Slack, GitHub, Notion once to CORE—then use all their tools in
 
 Explore our documentation to get the most out of CORE
 
-- [Basic Concepts](https://docs.heysol.ai/concepts/memory_graph)
-- [Self Hosting](https://docs.heysol.ai/self-hosting/overview)
-- [Connect Core MCP with Claude](https://docs.heysol.ai/providers/claude)
-- [Connect Core MCP with Cursor](https://docs.heysol.ai/providers/cursor)
-- [Connect Core MCP with Claude Code](https://docs.heysol.ai/providers/claude-code)
-- [Connect Core MCP with Codex](https://docs.heysol.ai/providers/codex)
+- [Basic Concepts](https://docs.getcore.me/concepts/memory_graph)
+- [Self Hosting](https://docs.getcore.me/self-hosting/overview)
+- [Connect Core MCP with Claude](https://docs.getcore.me/providers/claude)
+- [Connect Core MCP with Cursor](https://docs.getcore.me/providers/cursor)
+- [Connect Core MCP with Claude Code](https://docs.getcore.me/providers/claude-code)
+- [Connect Core MCP with Codex](https://docs.getcore.me/providers/codex)
 
-- [Basic Concepts](https://docs.heysol.ai/overview)
-- [API Reference](https://docs.heysol.ai/api-reference/get-user-profile)
+- [Basic Concepts](https://docs.getcore.me/overview)
+- [API Reference](https://docs.getcore.me/api-reference/get-user-profile)
 
 ## 🔒 Security
 
@@ -464,7 +464,7 @@ For detailed security information, see our [Security Policy](SECURITY.md).
 Have questions or feedback? We're here to help:
 
 - Discord: [Join core-support channel](https://discord.gg/YGUZcvDjUa)
-- Documentation: [docs.heysol.ai](https://docs.heysol.ai)
+- Documentation: [docs.getcore.me](https://docs.getcore.me)
 - Email: manik@poozle.dev
 
 ## Usage Guidelines
