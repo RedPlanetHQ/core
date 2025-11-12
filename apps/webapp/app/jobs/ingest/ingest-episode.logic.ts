@@ -238,6 +238,7 @@ export async function processEpisodeIngestion(
       if (
         episodeBody.sessionId &&
         currentStatus === IngestionStatus.COMPLETED &&
+        episodeBody.type !== EpisodeType.DOCUMENT &&
         enqueueSessionCompaction
       ) {
         logger.info(`Checking if session compaction should be triggered`, {

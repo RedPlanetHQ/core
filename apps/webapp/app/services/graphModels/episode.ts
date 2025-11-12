@@ -23,7 +23,8 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.userId = $userId,
       e.labels = $labels,
       e.space = $space,
-      e.sessionId = $sessionId
+      e.sessionId = $sessionId,
+      e.documentId = $documentId
     ON MATCH SET
       e.content = $content,
       e.contentEmbedding = $contentEmbedding,
@@ -33,7 +34,8 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.validAt = $validAt,
       e.labels = $labels,
       e.space = $space,
-      e.sessionId = $sessionId
+      e.sessionId = $sessionId,
+      e.documentId = $documentId
     RETURN e.uuid as uuid
   `;
 
@@ -50,6 +52,7 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
     contentEmbedding: episode.contentEmbedding || [],
     space: episode.space || null,
     sessionId: episode.sessionId || null,
+    documentId: episode.documentId || null,
   };
 
   const result = await runQuery(query, params);
@@ -355,6 +358,40 @@ export async function getStatementsInvalidatedByEpisode(params: {
   });
 }
 
+export async function getEpisodesByUserId(params: {
+  userId: string;
+  startTime?: string;
+  endTime?: string;
+}): Promise<EpisodicNode[]> {
+
+  let whereClause = '';
+  const conditions: string[] = [];
+
+  if (params.startTime) {
+    conditions.push('e.createdAt >= datetime($startTime)');
+  }
+  if (params.endTime) {
+    conditions.push('e.createdAt <= datetime($endTime)');
+  }
+
+  if (conditions.length > 0) {
+    whereClause = `WHERE ${conditions.join(' AND ')}`;
+  }
+
+  const query = `
+  MATCH (e:Episode {userId: $userId})
+  ${whereClause}
+  RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+  `;
+
+  const result = await runQuery(query, {
+    userId: params.userId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+  });
+
+  return result.map((record) => record.get("episode") as EpisodicNode);
+}
 
 export function parseEpisodicNode(raw: any): EpisodicNode {
   return {

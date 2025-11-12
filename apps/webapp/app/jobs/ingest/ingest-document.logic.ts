@@ -196,6 +196,7 @@ export async function processDocumentIngestion(
           spaceIds: documentBody.spaceIds,
           sessionId: documentBody.sessionId,
           type: EpisodeTypeEnum.DOCUMENT,
+          documentId: document.uuid,
         };
 
         const episodeHandler = await enqueueEpisodeIngestion({

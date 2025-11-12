@@ -26,6 +26,7 @@ import { runQuery } from "~/lib/neo4j.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
 import { env } from "~/env.server";
 import { getCompactedSessionBySessionId } from "./graphModels/compactedSession";
+import { getDocument } from "./graphModels/document";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -598,8 +599,9 @@ export class SearchService {
   }
 
   /**
-   * Replace session episodes with compacts, preserving rerank ranking order
-   * Takes highest rerank score when multiple episodes from same session
+   * Replace session episodes with compacts and document chunk episodes with parent documents,
+   * preserving rerank ranking order. Takes highest rerank score when multiple episodes from
+   * same session/document.
    */
   private async replaceWithCompacts(
     episodesWithScores: (EpisodeWithProvenance & { rerankScore: number })[],
@@ -624,9 +626,22 @@ export class SearchService {
       }
     >();
 
+    // Group by documentId and track highest score per document
+    const documentGroups = new Map<
+      string,
+      {
+        episodes: typeof episodesWithScores;
+        highestScore: number;
+        firstIndex: number;
+      }
+    >();
+
     episodesWithScores.forEach((ep, index) => {
       const sessionId = ep.episode.sessionId;
-      if (sessionId && !ep.episode.metadata?.documentUuid) {
+      const documentId = ep.episode.documentId;
+
+      // Group session episodes (excluding document chunks)
+      if (sessionId && !documentId) {
         if (!sessionGroups.has(sessionId)) {
           sessionGroups.set(sessionId, {
             episodes: [],
@@ -638,14 +653,40 @@ export class SearchService {
         group.episodes.push(ep);
         group.highestScore = Math.max(group.highestScore, ep.rerankScore || 0);
       }
+
+      // Group document chunk episodes
+      if (documentId) {
+        if (!documentGroups.has(documentId)) {
+          documentGroups.set(documentId, {
+            episodes: [],
+            highestScore: ep.rerankScore || 0,
+            firstIndex: index,
+          });
+        }
+        const group = documentGroups.get(documentId)!;
+        group.episodes.push(ep);
+        group.highestScore = Math.max(group.highestScore, ep.rerankScore || 0);
+      }
     });
 
+    // Fetch session compacts
     const compactMap = new Map<string, any>();
     await Promise.all(
       Array.from(sessionGroups.keys()).map(async (sessionId) => {
         const compact = await getCompactedSessionBySessionId(sessionId, userId);
         if (compact) {
           compactMap.set(sessionId, compact);
+        }
+      }),
+    );
+
+    // Fetch parent documents
+    const documentMap = new Map<string, any>();
+    await Promise.all(
+      Array.from(documentGroups.keys()).map(async (documentId) => {
+        const document = await getDocument(documentId);
+        if (document) {
+          documentMap.set(documentId, document);
         }
       }),
     );
@@ -662,12 +703,52 @@ export class SearchService {
     }> = [];
 
     const processedSessions = new Set<string>();
+    const processedDocuments = new Set<string>();
 
     episodesWithScores.forEach((ep, index) => {
       const sessionId = ep.episode.sessionId;
+      const documentId = ep.episode.documentId;
 
+      // Document chunk episode
+      if (documentId) {
+        if (processedDocuments.has(documentId)) {
+          return; // Skip, already added parent document
+        }
+
+        const document = documentMap.get(documentId);
+        if (document) {
+          const group = documentGroups.get(documentId)!;
+          // Collect unique spaceIds from all chunks in this document
+          const documentSpaceIds = Array.from(
+            new Set(group.episodes.flatMap((ep) => ep.episode.spaceIds || [])),
+          );
+          result.push({
+            uuid: document.uuid, // Use document UUID
+            content: document.originalContent, // Use full document content
+            createdAt: document.createdAt,
+            spaceIds: documentSpaceIds,
+            isCompact: true, // Mark as compact/aggregated
+            relevanceScore: group.highestScore, // Use highest score from document chunks
+            originalIndex: group.firstIndex, // Use position of first chunk from this document
+          });
+          processedDocuments.add(documentId);
+          logger.debug(
+            `Replaced document ${documentId.slice(0, 8)} chunk episodes with parent document, score: ${group.highestScore.toFixed(3)}, spaces: ${documentSpaceIds.join(",")}`,
+          );
+        } else {
+          // No parent document found, keep chunk episode
+          result.push({
+            uuid: ep.episode.uuid,
+            content: ep.episode.originalContent,
+            createdAt: ep.episode.createdAt,
+            spaceIds: ep.episode.spaceIds || [],
+            relevanceScore: ep.rerankScore,
+            originalIndex: index,
+          });
+        }
+      }
       // Session episode
-      if (sessionId && !ep.episode.metadata?.documentUuid) {
+      else if (sessionId) {
         if (processedSessions.has(sessionId)) {
           return; // Skip, already added compact
         }
@@ -704,7 +785,7 @@ export class SearchService {
           });
         }
       } else {
-        // Non-session episode, keep as-is
+        // Standalone episode (no session, no document), keep as-is
         result.push({
           uuid: ep.episode.uuid,
           content: ep.episode.originalContent,

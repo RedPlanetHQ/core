@@ -29,8 +29,6 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
     userId: entity.userId,
   };
 
-  console.log("Saving entity:", params.name, params.type, params.attributes);
-
   const result = await runQuery(query, params);
   return result[0].get("uuid");
 }
@@ -57,7 +55,7 @@ export async function findSimilarEntities(params: {
   const limit = params.limit || 5;
   const query = `
   MATCH (entity:Entity{userId: $userId})
-  WHERE entity.nameEmbedding IS NOT NULL
+  WHERE entity.nameEmbedding IS NOT NULL and size(entity.nameEmbedding) > 0
   WITH entity, gds.similarity.cosine(entity.nameEmbedding, $queryEmbedding) AS score
   WHERE score >= $threshold
   RETURN entity, score
@@ -81,7 +79,7 @@ export async function findSimilarEntitiesWithSameType(params: {
   const limit = params.limit || 5;
   const query = `
     MATCH (entity:Entity{userId: $userId})
-    WHERE entity.nameEmbedding IS NOT NULL
+    WHERE entity.nameEmbedding IS NOT NULL and size(entity.nameEmbedding) > 0
     WITH entity, gds.similarity.cosine(entity.nameEmbedding, $queryEmbedding) AS score
     WHERE score >= $threshold
     RETURN entity, score

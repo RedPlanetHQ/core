@@ -40,6 +40,7 @@ export interface EpisodicNode {
   recallCount?: number;
   chunkIndex?: number; // Index of this chunk within the document
   spaceIds?: string[];
+  documentId?: string;
 }
 
 /**
@@ -62,7 +63,8 @@ export const EPISODIC_NODE_PROPERTIES = `{
   spaceIds: e.spaceIds,
   validAt: e.validAt,
   recallCount: e.recallCount,
-  chunkIndex: e.chunkIndex
+  chunkIndex: e.chunkIndex,
+  documentId: e.documentId
 }`;
 
 export const STATEMENT_NODE_PROPERTIES = `{
@@ -171,6 +173,7 @@ export type AddEpisodeParams = {
   spaceId?: string;
   sessionId?: string;
   type?: EpisodeType;
+  documentId?: string;
 };
 
 export type AddEpisodeResult = {

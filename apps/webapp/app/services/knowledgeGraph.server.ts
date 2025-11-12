@@ -286,6 +286,7 @@ export class KnowledgeGraphService {
         userId: params.userId,
         space: params.spaceId,
         sessionId: params.sessionId,
+        documentId: params.documentId,
       };
 
       // Step 3: Entity Extraction - Extract entities from the episode content

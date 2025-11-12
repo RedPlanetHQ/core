@@ -6,12 +6,12 @@ import { createBatch, getBatch } from "~/lib/batch.server";
 import { z } from "zod";
 import { getUserContext, type UserContext } from "~/services/user-context.server";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
-import { getBertPythonPath } from "~/lib/bert-installer.server";
-import type { EpisodicNode } from "@core/types";
+import { EpisodeType, type EpisodicNode } from "@core/types";
 import { SpaceService } from "~/services/space.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { getEpisodesByUserId } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
+import { addToQueue } from "~/lib/ingest.server";
 
 const execAsync = promisify(exec);
 
@@ -156,19 +156,19 @@ export async function generatePersonaSummary(
   const summary =
     filteredEpisodes.length <= 50 || mode === "incremental"
       ? await generatePersonaSummarySingle(
-          filteredEpisodes,
-          mode,
-          existingSummary,
-          userContext,
-          analytics
-        )
+        filteredEpisodes,
+        mode,
+        existingSummary,
+        userContext,
+        analytics
+      )
       : await generatePersonaSummaryBatch(
-          filteredEpisodes,
-          mode,
-          existingSummary,
-          userContext,
-          analytics
-        );
+        filteredEpisodes,
+        mode,
+        existingSummary,
+        userContext,
+        analytics
+      );
 
   // Stage 5: Assign episodes to space for traceability
   if (filteredEpisodes.length > 0) {
@@ -210,14 +210,11 @@ async function runClusteringWithExec(
 
   logger.info("Running HDBSCAN clustering with exec", { userId, startTime });
 
-  const pythonPath = getBertPythonPath();
-
   const { stdout, stderr } = await execAsync(command, {
     timeout: 300000, // 5 minutes
     maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     env: {
       ...process.env,
-      PYTHONPATH: pythonPath,
     },
   });
 
@@ -244,17 +241,11 @@ async function runAnalyticsWithExec(
 
   logger.info("Running persona analytics with exec", { userId, startTime });
 
-  const pythonPath = getBertPythonPath();
-
   const { stdout, stderr } = await execAsync(command, {
     timeout: 300000, // 5 minutes
     maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     env: {
       ...process.env,
-      PYTHONPATH: pythonPath,
-      NEO4J_URI: process.env.NEO4J_URI || "",
-      NEO4J_USERNAME: process.env.NEO4J_USERNAME || "",
-      NEO4J_PASSWORD: process.env.NEO4J_PASSWORD || "",
     },
   });
 
@@ -379,7 +370,7 @@ async function generatePersonaSummaryBatch(
   userContext: UserContext,
   analytics: PersonaAnalytics
 ): Promise<string> {
-  const chunkSize = 50;
+  const chunkSize = 20;
   const chunks: EpisodicNode[][] = [];
 
   for (let i = 0; i < episodes.length; i += chunkSize) {
@@ -986,7 +977,7 @@ export async function processPersonaGeneration(
     }
 
     // Get all episodes for persona generation
-    const episodes = await getEpisodesByUserId({userId, startTime});
+    const episodes = await getEpisodesByUserId({ userId, startTime });
 
     if (episodes.length === 0) {
       logger.warn("No episodes found for persona generation", {
@@ -1022,7 +1013,20 @@ export async function processPersonaGeneration(
     );
 
     // Update persona space with new summary
-    await spaceService.updateSpace(spaceId, { summary }, userId);
+    // await spaceService.updateSpace(spaceId, { summary }, userId);
+    const ingestDocumentData = { 
+      episodeBody: summary, 
+      referenceTime: new Date().toISOString(),
+      type: EpisodeType.DOCUMENT, 
+      source: "persona", 
+      sessionId: `persona-${workspaceId}`, 
+      metadata: { documentTitle: "Persona" } 
+    }
+
+    await addToQueue(
+      ingestDocumentData,
+      userId,
+    );
 
     // Update episode count tracking for threshold checking
     const totalEpisodesQuery = `
