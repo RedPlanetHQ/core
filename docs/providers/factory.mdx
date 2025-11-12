@@ -1,0 +1,70 @@
+---
+title: "Factory"
+description: "Connect Factory droid to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Factory (droid) installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Add CORE MCP Server via CLI
+
+Run the following command in your terminal:
+
+```bash
+droid mcp add core https://core.heysol.ai/api/v1/mcp?source=Factory --type http --header "Authorization: Bearer YOUR_API_KEY"
+```
+
+### Step 2: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "factory"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the command above with your actual API key
+
+### Step 3: Verify Installation
+
+Type the following command within droid to manage servers and view available tools:
+
+```bash
+/mcp
+```
+
+You should see **core** listed among your MCP servers.
+
+### Step 4: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask droid: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Run `/mcp` to verify core is connected
+3. **Test operations**: Ask droid to store and retrieve information across sessions
+
+## What's Next?
+
+With CORE connected to Factory, your droid sessions will now:
+
+- **Automatically retrieve** relevant information from CORE memory
+- **Store important** context for future sessions
+- **Maintain continuity** across multiple conversations
+- **Share context** with other connected tools
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the command syntax is correct
+- Check that droid is properly installed and up to date
+- Verify you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

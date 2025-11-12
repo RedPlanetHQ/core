@@ -1,0 +1,79 @@
+---
+title: "Rovo Dev CLI"
+description: "Connect Atlassian Rovo Dev CLI to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- Atlassian Rovo Dev CLI installed
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Edit MCP Config
+
+Run the following command to open the MCP configuration:
+
+```bash
+acli rovodev mcp
+```
+
+This will open the MCP configuration editor.
+
+### Step 2: Add CORE MCP Server Configuration
+
+Add the following to your Rovo Dev MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Rovo-Dev"
+    }
+  }
+}
+```
+
+### Step 3: Save Configuration
+
+1. Save the configuration file
+2. Exit the editor
+3. The MCP server will be registered with Rovo Dev
+
+### Step 4: Authenticate with CORE
+
+1. After adding the configuration, Rovo Dev will prompt you to authenticate
+2. When the authentication window opens, grant Rovo Dev permission to access your CORE memory
+3. Complete the authentication flow
+
+### Step 5: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Rovo Dev: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core-memory appears in your MCP servers
+3. **Test operations**: Ask Rovo Dev to store and retrieve information across sessions
+
+## What's Next?
+
+With CORE connected to Rovo Dev, your development sessions will now:
+
+- **Automatically retrieve** relevant information from CORE memory
+- **Store important** context for future sessions
+- **Maintain continuity** across multiple development sessions
+- **Share context** with other connected tools
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Ensure the configuration is properly formatted
+- Verify you have the latest version of Rovo Dev CLI
+- Check that you're logged into your CORE account
+- Restart Rovo Dev after configuration changes
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.

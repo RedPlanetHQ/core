@@ -1,0 +1,62 @@
+---
+title: "Copilot Coding Agent"
+description: "Connect GitHub Copilot Coding Agent to CORE's memory system via MCP"
+---
+
+### Prerequisites
+
+- GitHub Copilot Coding Agent access
+- Repository with Copilot Coding Agent enabled
+- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+
+### Step 1: Configure CORE MCP Server
+
+Add the following to your Repository Settings → Copilot → Coding agent → MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-Agent",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+### Step 2: Generate API Key
+
+1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+2. Navigate to **Settings** → **API Key**
+3. Click **Generate new key**
+4. Name it "copilot-agent"
+5. Copy the generated API key
+6. Replace `YOUR_API_KEY` in the configuration above with your actual API key
+
+### Step 3: Verify Connection
+
+Test your setup to ensure everything is working correctly:
+
+1. **Test memory search**:
+   Ask Copilot Coding Agent: `Can you search my memory for [something you've previously stored]?`
+
+2. **Check connection status**: Verify that core appears in your MCP servers list
+3. **Test operations**: Ask Copilot Coding Agent to store and retrieve information across sessions
+
+## Troubleshooting
+
+**Connection Issues:**
+
+- Verify your API key is correct and not expired
+- Ensure the configuration is properly formatted in repository settings
+- Check that Copilot Coding Agent is enabled for your repository
+- Verify you're logged into your CORE account
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+
+Our team and community members are ready to help you get the most out of CORE's memory capabilities.
