@@ -197,10 +197,13 @@ export async function processTopicAnalysis(
         topics: result.topics,
       });
 
-      logger.info("[BERT Topic Analysis] Topic theme identification completed", {
-        userId,
-        themeCount: themeProposals.length,
-      });
+      logger.info(
+        "[BERT Topic Analysis] Topic theme identification completed",
+        {
+          userId,
+          themeCount: themeProposals.length,
+        },
+      );
 
       // Step 3: Generate document summaries for each identified theme
       for (const proposal of themeProposals) {
@@ -215,12 +218,9 @@ export async function processTopicAnalysis(
           }
 
           if (episodeIds.length === 0) {
-            logger.warn(
-              "[BERT Topic Analysis] No episodes found for theme",
-              {
-                theme: proposal.name,
-              },
-            );
+            logger.warn("[BERT Topic Analysis] No episodes found for theme", {
+              theme: proposal.name,
+            });
             continue;
           }
 

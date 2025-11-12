@@ -159,7 +159,9 @@ export class SearchService {
     );
 
     // Batch-fetch entity match counts for all episodes (for reranking boost)
-    const queryEntityIds = entities.map((e: EntityNode) => e.uuid);
+    const queryEntityIds = entities
+      .map((e: EntityNode) => e.uuid)
+      .filter(Boolean);
     const entityMatchCounts = await this.fetchEntityMatchCounts(
       episodesWithProvenance,
       queryEntityIds,

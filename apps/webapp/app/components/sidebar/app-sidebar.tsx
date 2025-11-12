@@ -10,7 +10,6 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  Inbox,
   LayoutGrid,
   MessageSquare,
   Network,
@@ -20,6 +19,7 @@ import {
   Mail,
   Phone,
   FileText,
+  Search,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -36,6 +36,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
+import { AddMemoryDialog } from "../command-bar/memory-dialog.client";
 
 const data = {
   navMain: [
@@ -72,6 +73,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { conversationId } = useParams();
 
   const [commandBar, setCommandBar] = React.useState(false);
+  const [memoryAdd, setMemoryAdd] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
   useHotkeys("meta+k", (e) => {
@@ -94,15 +96,24 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                 C.O.R.E.
               </div>
 
-              <Button
-                variant="secondary"
-                isActive
-                size="sm"
-                className="rounded"
-                onClick={() => setCommandBar(true)}
-              >
-                <Plus size={16} />
-              </Button>
+              <div className="flex gap-1">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded"
+                  onClick={() => setCommandBar(true)}
+                >
+                  <Search size={16} />
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="rounded"
+                  onClick={() => setCommandBar(true)}
+                >
+                  <Plus size={16} />
+                </Button>
+              </div>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
@@ -158,6 +169,10 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
           <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
+
+      {memoryAdd && (
+        <AddMemoryDialog open={memoryAdd} onOpenChange={setMemoryAdd} />
+      )}
 
       <CommandBar open={commandBar} onOpenChange={setCommandBar} />
     </>

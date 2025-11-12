@@ -16,7 +16,7 @@ import click
 import numpy as np
 from neo4j import GraphDatabase
 from dotenv import load_dotenv
-from sklearn.feature_extraction.text import TfidfVectorizer,  
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer 
 from sklearn.preprocessing import normalize
 from hdbscan import HDBSCAN
 from umap import UMAP

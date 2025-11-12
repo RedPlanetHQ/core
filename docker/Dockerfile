@@ -67,9 +67,6 @@ WORKDIR /core
 RUN corepack enable
 ENV NODE_ENV production
 
-# Set PYTHONPATH for BertTopic packages (installed on first use to persistent volume)
-ENV PYTHONPATH=/opt/bert-packages
-
 COPY --from=base /usr/bin/dumb-init /usr/bin/dumb-init
 COPY --from=pruner --chown=node:node /core/out/full/ .
 COPY --from=production-deps --chown=node:node /core .
@@ -82,9 +79,6 @@ COPY --from=builder --chown=node:node /core/scripts ./scripts
 COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt
 RUN pip3 install --no-cache-dir -r ./apps/webapp/python/requirements.txt
 COPY --chown=node:node apps/webapp/python/main.py ./apps/webapp/python/main.py
-
-# Create /opt/bert-packages directory with node user ownership
-RUN mkdir -p /opt/bert-packages && chown -R node:node /opt/bert-packages
 
 EXPOSE 3000
 

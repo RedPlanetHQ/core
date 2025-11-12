@@ -38,7 +38,8 @@ export function AddMemoryDialog({
   });
 
   const handleAdd = async () => {
-    const content = editor?.getText();
+    const content = editor?.storage.markdown.getMarkdown();
+
     if (!content?.trim()) return;
 
     const payload = {

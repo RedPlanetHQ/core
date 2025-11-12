@@ -28,7 +28,7 @@ export default function InboxNotSelected() {
     return (
       <div className="flex h-full w-full flex-col">
         <PageHeader title="Episode" />
-        <div className="flex h-full flex-col items-center justify-center gap-2">
+        <div className="flex h-[calc(100vh_-_56px)] flex-col items-center justify-center gap-2 p-4">
           <Inbox size={30} />
           No episode data found
         </div>

@@ -192,9 +192,9 @@ export async function findSimilarStatements({
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const limit = 100;
   const query = `
-      MATCH (statement:Statement{userId: $userId})
-      WHERE statement.factEmbedding IS NOT NULL
-      WITH statement, gds.similarity.cosine(statement.factEmbedding, $factEmbedding) AS score
+      MATCH (s:Statement{userId: $userId})
+      WHERE s.factEmbedding IS NOT NULL
+      WITH s, gds.similarity.cosine(s.factEmbedding, $factEmbedding) AS score
       WHERE score >= $threshold
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
       ORDER BY score DESC
@@ -321,9 +321,9 @@ export async function searchStatementsByEmbedding(params: {
 }) {
   const limit = params.limit || 100;
   const query = `
-  MATCH (statement:Statement{userId: $userId})
-  WHERE statement.factEmbedding IS NOT NULL
-  WITH statement, gds.similarity.cosine(statement.factEmbedding, $embedding) AS score
+  MATCH (s:Statement{userId: $userId})
+  WHERE s.factEmbedding IS NOT NULL
+  WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
   ORDER BY score DESC

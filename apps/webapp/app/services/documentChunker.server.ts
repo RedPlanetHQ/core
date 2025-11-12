@@ -122,10 +122,7 @@ export class DocumentChunker {
     }
 
     // Add remaining content as final chunk
-    if (
-      currentChunk.trim() &&
-      encode(currentChunk).length >= this.MIN_PARAGRAPH_SIZE
-    ) {
+    if (currentChunk.trim()) {
       chunks.push(
         this.createChunk(
           currentChunk,
