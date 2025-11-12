@@ -106,9 +106,7 @@ No context loss, no re-explaining projects, no forgotten decisions.
 1. Run this command in your terminal to connect CORE with Claude Code:
 
 ```sh
-
 claude mcp add --transport http core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
-
 ```
 
 2. Type `/mcp` and open core-memory MCP for authentication
@@ -157,6 +155,27 @@ If the `mcpServers` object does not exist, create it.
 
 </details>
 
+<details>
+<summary><b>Install in Copilot CLI</b></summary>
+
+Add the following to your `~/.copilot/mcp-config.json` file:
+
+```json
+{
+  "mcpServers": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-CLI",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
 ### IDEs
 
 <details>
@@ -168,7 +187,7 @@ If the `mcpServers` object does not exist, create it.
 
 OR
 
-1. Go to: `Settings` -> `Tools &thank you Integrations` -> `Add Custom MCP`
+1. Go to: `Settings` -> `Tools & Integrations` -> `Add Custom MCP`
 2. Enter the below in `mcp.json` file:
 
 ```json
@@ -194,13 +213,37 @@ Enter the below in `mcp.json` file:
   "servers": {
     "core-memory": {
       "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
-      "type": "http"
+      "type": "http",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
     }
   }
 }
 ```
 
 </details>
+
+<details>
+<summary><b>Install in VS Code Insiders</b></summary>
+
+Add to your VS Code Insiders MCP config:
+
+```json
+{
+  "mcp": {
+    "servers": {
+      "core-memory": {
+        "type": "http",
+        "url": "https://core.heysol.ai/api/v1/mcp?source=VSCode-Insiders",
+        "headers": {
+          "Authorization": "Bearer YOUR_API_KEY"
+        }
+      }
+    }
+  }
+}
+```
 
 </details>
 
@@ -228,7 +271,7 @@ Enter the below in `mcp_config.json` file:
 <summary><b>Install in Zed</b></summary>
 
 1. Go to `Settings` in Agent Panel -> `Add Custom Server`
-2. Enter below code in configuraiton file and click on `Add server` button
+2. Enter below code in configuration file and click on `Add server` button
 
 ```json
 {
@@ -244,6 +287,61 @@ Enter the below in `mcp_config.json` file:
 ### Coding Agents
 
 <details>
+<summary><b>Install in Amp</b></summary>
+
+Run this command in your terminal:
+
+```sh
+amp mcp add core-memory https://core.heysol.ai/api/v1/mcp?source=amp
+```
+
+</details>
+
+<details>
+<summary><b>Install in Augment Code</b></summary>
+
+Add to your `~/.augment/settings.json` file:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=augment-code",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Cline</b></summary>
+
+1. Open Cline and click the hamburger menu icon (☰) to enter the MCP Servers section
+2. Choose Remote Servers tab and click the Edit Configuration button
+3. Add the following to your Cline MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Cline",
+      "type": "streamableHttp",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
 <summary><b>Install in Kilo Code</b></summary>
 
 1. Go to `Settings` → `MCP Servers` → `Installed tab` → click `Edit Global MCP` to edit your configuration.
@@ -252,8 +350,11 @@ Enter the below in `mcp_config.json` file:
 ```json
 {
   "core-memory": {
-    "command": "npx",
-    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code"]
+    "type": "streamable-http",
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code",
+    "headers": {
+      "Authorization": "Bearer your-token"
+    }
   }
 }
 ```
@@ -261,18 +362,166 @@ Enter the below in `mcp_config.json` file:
 </details>
 
 <details>
-<summary><b>Install in Qwen Code</b></summary>
+<summary><b>Install in Kiro</b></summary>
 
-See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/tools/mcp-server/#how-to-set-up-your-mcp-server) for details.
-
-1.  Open the Qwen Coder settings file. The location is `~/.qwen/settings.json` (where `~` is your home directory).
-2.  Add the following to the `mcpServers` object in your `settings.json` file:
+Add in Kiro → MCP Servers:
 
 ```json
 {
   "mcpServers": {
-    "corememory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Qwen-Code"
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Kiro",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Qwen Coder</b></summary>
+
+See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/tools/mcp-server/#how-to-set-up-your-mcp-server) for details.
+
+Add to `~/.qwen/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=Qwen",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY",
+        "Accept": "application/json, text/event-stream"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Roo Code</b></summary>
+
+Add to your Roo Code MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "type": "streamable-http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Roo-Code",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Opencode</b></summary>
+
+Add to your Opencode configuration:
+
+```json
+{
+  "mcp": {
+    "core-memory": {
+      "type": "remote",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Opencode",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      },
+      "enabled": true
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Copilot Coding Agent</b></summary>
+
+Add to Repository Settings → Copilot → Coding agent → MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-Agent",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Qodo Gen</b></summary>
+
+1. Open Qodo Gen chat panel in VSCode or IntelliJ
+2. Click Connect more tools, then click + Add new MCP
+3. Add the following configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Qodo-Gen"
+    }
+  }
+}
+```
+
+</details>
+
+### Terminals
+
+<details>
+<summary><b>Install in Warp</b></summary>
+
+Add in Settings → AI → Manage MCP servers:
+
+```json
+{
+  "core": {
+    "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
+    "headers": {
+      "Authorization": "Bearer YOUR_API_KEY"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Crush</b></summary>
+
+Add to your Crush configuration:
+
+```json
+{
+  "$schema": "https://charm.land/crush.json",
+  "mcp": {
+    "core": {
+      "type": "http",
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Crush",
+      "headers": {
+        "Authorization": "Bearer YOUR_API_KEY"
+      }
     }
   }
 }
@@ -281,6 +530,116 @@ See [Qwen Coder MCP Configuration](https://qwenlm.github.io/qwen-code-docs/en/to
 </details>
 
 ### Desktop Apps
+
+<details>
+<summary><b>Install in Claude Desktop</b></summary>
+
+1. Copy CORE MCP URL:
+
+```
+https://core.heysol.ai/api/v1/mcp?source=Claude
+```
+
+2. Navigate to Settings → Connectors → Click Add custom connector
+3. Click on "Connect" and grant Claude permission to access CORE MCP
+
+</details>
+
+<details>
+<summary><b>Install in ChatGPT</b></summary>
+
+Connect ChatGPT to CORE's memory system via browser extension:
+
+1. [Install Core Browser Extension](https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc)
+2. Generate API Key: Go to Settings → API Key → Generate new key → Name it "extension"
+3. Add API Key in Core Extension and click Save
+
+</details>
+
+<details>
+<summary><b>Install in Gemini</b></summary>
+
+Connect Gemini to CORE's memory system via browser extension:
+
+1. [Install Core Browser Extension](https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc)
+2. Generate API Key: Go to Settings → API Key → Generate new key → Name it "extension"
+3. Add API Key in Core Extension and click Save
+
+</details>
+
+<details>
+<summary><b>Install in Perplexity Desktop</b></summary>
+
+1. Add in Perplexity → Settings → Connectors → Add Connector → Advanced:
+
+```json
+{
+  "core-memory": {
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=perplexity"]
+  }
+}
+```
+
+2. Click Save to apply the changes
+3. Core will be available in your Perplexity sessions
+
+</details>
+
+### Development Tools
+
+<details>
+<summary><b>Install in Factory</b></summary>
+
+Run in terminal:
+
+```sh
+droid mcp add core https://core.heysol.ai/api/v1/mcp?source=Factory --type http --header "Authorization: Bearer YOUR_API_KEY"
+```
+
+Type /mcp within droid to manage servers and view available tools.
+
+</details>
+
+<details>
+<summary><b>Install in Rovo Dev CLI</b></summary>
+
+1. Edit mcp config:
+
+```sh
+acli rovodev mcp
+```
+
+2. Add to your Rovo Dev MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Rovo-Dev"
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Trae</b></summary>
+
+Add to your Trae MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "core": {
+      "url": "https://core.heysol.ai/api/v1/mcp?source=Trae"
+    }
+  }
+}
+```
+
+</details>
 
 ## 🔨 Available Tools
 
