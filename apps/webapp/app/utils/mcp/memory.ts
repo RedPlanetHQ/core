@@ -3,13 +3,11 @@ import { EpisodeTypeEnum } from "@core/types";
 import { addToQueue } from "~/lib/ingest.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "~/services/search.server";
-import { SpaceService } from "~/services/space.server";
 import { IntegrationLoader } from "./integration-loader";
 import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
 
 const searchService = new SearchService();
-const spaceService = new SpaceService();
 
 // Memory tool schemas (from existing memory endpoint)
 const SearchParamsSchema = {
@@ -311,7 +309,7 @@ export async function callMemoryTool(
 // Handler for user_context
 async function handleUserProfile(userId: string) {
   try {
-    const space = await spaceService.getSpaceByName("Profile", userId);
+    const space = {};
 
     return {
       content: [
@@ -363,9 +361,8 @@ async function handleMemoryIngest(args: any) {
       };
     }
 
-    // Use spaceIds from args if provided, otherwise use spaceId from query params
-    const spaceIds =
-      args.spaceIds || (args.spaceId ? [args.spaceId] : undefined);
+    const labelIds =
+      args.labelIds || (args.labelId ? [args.labelId] : undefined);
 
     const response = await addToQueue(
       {
@@ -373,7 +370,7 @@ async function handleMemoryIngest(args: any) {
         referenceTime: new Date().toISOString(),
         source: args.source,
         type: EpisodeTypeEnum.CONVERSATION,
-        spaceIds,
+        labelIds,
         sessionId: args.sessionId,
       },
       args.userId,
@@ -407,9 +404,8 @@ async function handleMemoryIngest(args: any) {
 // Handler for memory_search
 async function handleMemorySearch(args: any) {
   try {
-    // Use spaceIds from args if provided, otherwise use spaceId from query params
-    const spaceIds =
-      args.spaceIds || (args.spaceId ? [args.spaceId] : undefined);
+    const labelIds =
+      args.labelIds || (args.labelId ? [args.labelId] : undefined);
 
     const results = await searchService.search(
       args.query,
@@ -417,7 +413,7 @@ async function handleMemorySearch(args: any) {
       {
         startTime: args.startTime ? new Date(args.startTime) : undefined,
         endTime: args.endTime ? new Date(args.endTime) : undefined,
-        spaceIds,
+        labelIds,
         sortBy: args.sortBy as "relevance" | "recency" | undefined,
       },
       args.source,

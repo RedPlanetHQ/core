@@ -77,7 +77,7 @@ interface SearchPerformedProperties extends BaseEventProperties {
   query: string;
   resultsCount: number;
   searchType: "basic" | "deep";
-  spaceIds?: string[];
+  labelIds?: string[];
 }
 
 interface ConversationProperties extends BaseEventProperties {

@@ -1,5 +1,4 @@
 import { prisma } from "~/db.server";
-import { getSpacesForEpisodes } from "./graphModels/space";
 
 export async function getIngestionLogs(
   userId: string,
@@ -162,15 +161,6 @@ export const getIngestionQueueForFrontend = async (
   formattedLog.sessionId = logData?.sessionId;
   formattedLog.isSessionGroup = !!logData?.sessionId;
 
-  // Fetch space data based on log type
-  if (logData?.type === "CONVERSATION" && formattedLog?.episodeUUID) {
-    // For CONVERSATION type: get spaceIds for the single episode
-    const spacesMap = await getSpacesForEpisodes(
-      [formattedLog.episodeUUID],
-      userId,
-    );
-    formattedLog.spaceIds = spacesMap[formattedLog.episodeUUID] || [];
-  }
   return formattedLog;
 };
 

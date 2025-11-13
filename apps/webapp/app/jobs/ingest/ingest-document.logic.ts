@@ -193,7 +193,7 @@ export async function processDocumentIngestion(
             documentUuid: document.uuid,
           },
           source: documentBody.source,
-          spaceIds: documentBody.spaceIds,
+          labelIds: documentBody.labelIds,
           sessionId: documentBody.sessionId,
           type: EpisodeTypeEnum.DOCUMENT,
           documentId: document.uuid,

@@ -26,27 +26,23 @@ import {
   processTopicAnalysis,
   type TopicAnalysisPayload,
 } from "~/jobs/bert/topic-analysis.logic";
+import {
+  processLabelAssignment,
+  type LabelAssignmentPayload,
+} from "~/jobs/labels/label-assignment.logic";
+import {
+  processTitleGeneration,
+  type TitleGenerationPayload,
+} from "~/jobs/titles/title-generation.logic";
 
 import {
   enqueueIngestEpisode,
-  enqueueSpaceAssignment,
+  enqueueLabelAssignment,
+  enqueueTitleGeneration,
   enqueueSessionCompaction,
   enqueueBertTopicAnalysis,
-  enqueueSpaceSummary,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
-import {
-  processSpaceAssignment,
-  type SpaceAssignmentPayload,
-} from "~/jobs/spaces/space-assignment.logic";
-import {
-  processSpaceSummary,
-  type SpaceSummaryPayload,
-} from "~/jobs/spaces/space-summary.logic";
-import {
-  processPersonaGeneration,
-  type PersonaGenerationPayload,
-} from "~/jobs/spaces/persona-generation.logic";
 
 /**
  * Episode ingestion worker
@@ -64,7 +60,8 @@ export const ingestWorker = new Worker(
     return await processEpisodeIngestion(
       payload,
       // Callbacks to enqueue follow-up jobs
-      enqueueSpaceAssignment,
+      enqueueLabelAssignment,
+      enqueueTitleGeneration,
       enqueueSessionCompaction,
       enqueueBertTopicAnalysis,
     );
@@ -145,41 +142,34 @@ export const bertTopicWorker = new Worker(
 );
 
 /**
- * Space assignment worker
- * Handles assigning episodes to spaces based on semantic matching
- *
- * Note: Global concurrency of 1 ensures sequential processing.
- * Trigger.dev uses per-user concurrency via concurrencyKey.
+ * Label assignment worker
+ * Uses LLM to assign labels to ingested episodes
  */
-export const spaceAssignmentWorker = new Worker(
-  "space-assignment-queue",
+export const labelAssignmentWorker = new Worker(
+  "label-assignment-queue",
   async (job) => {
-    const payload = job.data as SpaceAssignmentPayload;
-    return await processSpaceAssignment(
-      payload,
-      // Callback to enqueue space summary
-      enqueueSpaceSummary,
-    );
+    const payload = job.data as LabelAssignmentPayload;
+    return await processLabelAssignment(payload);
   },
   {
     connection: getRedisConnection(),
-    concurrency: 1, // Global limit: process one job at a time
+    concurrency: 5, // Process up to 5 label assignments in parallel
   },
 );
 
 /**
- * Space summary worker
- * Handles generating summaries for spaces
+ * Title generation worker
+ * Uses LLM to generate titles for ingested episodes
  */
-export const spaceSummaryWorker = new Worker(
-  "space-summary-queue",
+export const titleGenerationWorker = new Worker(
+  "title-generation-queue",
   async (job) => {
-    const payload = job.data as SpaceSummaryPayload;
-    return await processSpaceSummary(payload);
+    const payload = job.data as TitleGenerationPayload;
+    return await processTitleGeneration(payload);
   },
   {
     connection: getRedisConnection(),
-    concurrency: 1, // Process one space summary at a time
+    concurrency: 10, // Process up to 10 title generations in parallel
   },
 );
 
@@ -209,9 +199,8 @@ export async function closeAllWorkers(): Promise<void> {
     conversationTitleWorker.close(),
     sessionCompactionWorker.close(),
     bertTopicWorker.close(),
-    spaceSummaryWorker.close(),
-    spaceAssignmentWorker.close(),
-    personaGenerationWorker.close(),
+    labelAssignmentWorker.close(),
+    titleGenerationWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

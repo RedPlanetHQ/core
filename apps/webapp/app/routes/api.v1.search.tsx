@@ -10,7 +10,7 @@ export const SearchBodyRequest = z.object({
   endTime: z.string().optional(),
 
   // These are not supported yet, but need to support these
-  spaceIds: z.array(z.string()).default([]),
+  labelIds: z.array(z.string()).default([]),
   limit: z.number().optional(),
   maxBfsDepth: z.number().optional(),
   includeInvalidated: z.boolean().optional(),
@@ -45,7 +45,7 @@ const { action, loader } = createHybridActionApiRoute(
         entityTypes: body.entityTypes,
         scoreThreshold: body.scoreThreshold,
         minResults: body.minResults,
-        spaceIds: body.spaceIds,
+        labelIds: body.labelIds,
         adaptiveFiltering: body.adaptiveFiltering,
         structured: body.structured,
         sortBy: body.sortBy,

@@ -4,8 +4,12 @@ import {
   IngestBodyRequest,
   type IngestEpisodePayload,
 } from "~/jobs/ingest/ingest-episode.logic";
-import { triggerSpaceAssignment } from "../spaces/space-assignment";
 import { triggerSessionCompaction } from "../session/session-compaction";
+import {
+  enqueueBertTopicAnalysis,
+  enqueueLabelAssignment,
+  enqueueTitleGeneration,
+} from "~/lib/queue-adapter.server";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
@@ -24,16 +28,22 @@ export const ingestTask = task({
     // Use common logic with Trigger-specific callbacks for follow-up jobs
     return await processEpisodeIngestion(
       payload,
-      // Callback for space assignment
+      // Callback for label assignment
       async (params) => {
-        await triggerSpaceAssignment(params);
+        await enqueueLabelAssignment(params);
+      },
+      // Callback for title generation
+      async (params) => {
+        await enqueueTitleGeneration(params);
       },
       // Callback for session compaction
       async (params) => {
         await triggerSessionCompaction(params);
       },
       // Callback for BERT topic analysis
-      async () => {},
+      async (params) => {
+        await enqueueBertTopicAnalysis(params);
+      },
     );
   },
 });

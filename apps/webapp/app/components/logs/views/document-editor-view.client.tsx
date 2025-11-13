@@ -1,18 +1,16 @@
 import { useState, useCallback, useEffect } from "react";
 import { useFetcher } from "@remix-run/react";
-import { Document } from "@tiptap/extension-document";
-import HardBreak from "@tiptap/extension-hard-break";
-import { History } from "@tiptap/extension-history";
-import { Paragraph } from "@tiptap/extension-paragraph";
-import { Text } from "@tiptap/extension-text";
 import { type Editor } from "@tiptap/react";
 import { EditorContent, EditorRoot } from "novel";
 import { type LogItem } from "~/hooks/use-logs";
-import { SpaceDropdown } from "~/components/spaces/space-dropdown";
-import { Button } from "~/components/ui/button";
+
 import { Badge } from "~/components/ui/badge";
-import { Save, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "~/lib/utils";
+import {
+  extensionsForConversation,
+  getPlaceholder,
+} from "~/components/conversation/editor-extensions";
 
 interface DocumentEditorViewProps {
   log: LogItem;
@@ -27,8 +25,18 @@ interface InvalidFact {
   attributes: any;
 }
 
+interface SessionEpisode {
+  uuid: string;
+  content: string;
+  originalContent: string;
+  createdAt: string;
+  labelIds?: string[];
+}
+
 export function DocumentEditorView({ log }: DocumentEditorViewProps) {
   const [editor, setEditor] = useState<Editor>();
+  const [episodes, setEpisodes] = useState<SessionEpisode[]>([]);
+  const [loading, setLoading] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   const [invalidFactsByEpisode, setInvalidFactsByEpisode] = useState<
     Record<string, InvalidFact[]>
@@ -37,32 +45,72 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
   const fetcher = useFetcher();
 
   const isLoading = fetcher.state === "submitting";
-  const episodeDetails = log.episodeDetails || [];
 
-  // Set initial content when editor is ready
   useEffect(() => {
-    if (editor && episodeDetails.length > 0) {
-      // Combine all episode contents into one document
-      const combinedContent = episodeDetails
-        .map((episode: any) => episode.content)
-        .join("\n\n---\n\n");
-      editor.commands.setContent(combinedContent);
+    if (!log.sessionId) {
+      setLoading(false);
+      return;
     }
-  }, [editor, episodeDetails]);
 
-  // Track changes
+    // Fetch all episodes for this session
+    fetch(`/api/v1/episodes/session/${log.data.sessionId}`)
+      .then((res) => {
+        if (!res.ok) {
+          throw new Error("Failed to fetch session episodes");
+        }
+        return res.json();
+      })
+      .then((data) => {
+        const fetchedEpisodes = data.episodes || [];
+        setEpisodes(fetchedEpisodes);
+        setLoading(false);
+
+        // Fetch invalidated facts for all episodes
+        if (fetchedEpisodes.length > 0) {
+          setFactsLoading(true);
+          const episodeIds = fetchedEpisodes
+            .map((ep: SessionEpisode) => ep.uuid)
+            .join(",");
+
+          fetch(
+            `/api/v1/episodes/facts?episodeIds=${encodeURIComponent(episodeIds)}`,
+          )
+            .then((res) => res.json())
+            .then((factsData) => {
+              if (factsData.success && factsData.results) {
+                const factsMap: Record<string, InvalidFact[]> = {};
+                factsData.results.forEach((result: any) => {
+                  factsMap[result.episodeId] = result.invalidFacts || [];
+                });
+                setInvalidFactsByEpisode(factsMap);
+              }
+              setFactsLoading(false);
+            })
+            .catch(() => {
+              setFactsLoading(false);
+            });
+        }
+      })
+      .catch((err) => {
+        setLoading(false);
+      });
+  }, [log.sessionId]);
+
   useEffect(() => {
-    if (!editor) return;
+    if (episodes.length > 0 && editor) {
+      editor.setEditable(true);
 
-    const handleUpdate = () => {
-      setHasChanges(true);
-    };
+      // Sort episodes by createdAt in descending order (latest first)
+      const sortedEpisodes = [...episodes].sort(
+        (a, b) =>
+          new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
 
-    editor.on("update", handleUpdate);
-    return () => {
-      editor.off("update", handleUpdate);
-    };
-  }, [editor]);
+      // Get the latest episode's content
+      const latestContent = sortedEpisodes[0]?.content || "";
+      editor.commands.setContent(latestContent);
+    }
+  }, [episodes, editor]);
 
   const handleSave = useCallback(() => {
     if (!editor) return;
@@ -92,76 +140,13 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
     }
   }, [fetcher.data, fetcher.state]);
 
-  // Fetch invalidated facts for all episodes
-  useEffect(() => {
-    if (episodeDetails.length === 0) return;
-
-    setFactsLoading(true);
-    const episodeIds = episodeDetails.map((ep: any) => ep.uuid).join(",");
-
-    fetch(`/api/v1/episodes/facts?episodeIds=${encodeURIComponent(episodeIds)}`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success && data.results) {
-          const factsMap: Record<string, InvalidFact[]> = {};
-          data.results.forEach((result: any) => {
-            factsMap[result.episodeId] = result.invalidFacts || [];
-          });
-          setInvalidFactsByEpisode(factsMap);
-        }
-        setFactsLoading(false);
-      })
-      .catch(() => {
-        setFactsLoading(false);
-      });
-  }, [episodeDetails]);
-
   return (
-    <div className="flex flex-col gap-4 p-4 pt-0">
-      {/* Space Assignment for all episodes */}
-      {episodeDetails.length > 0 && (
-        <div className="mb-2 flex items-start gap-2">
-          <span className="text-muted-foreground min-w-[120px] text-sm">
-            Spaces
-          </span>
-          <div className="flex flex-wrap gap-2">
-            {episodeDetails.map((episode: any, index: number) => (
-              <div key={episode.uuid} className="flex items-center gap-2">
-                <span className="text-muted-foreground text-xs">
-                  Episode {index + 1}
-                </span>
-                <SpaceDropdown
-                  episodeIds={[episode.uuid]}
-                  selectedSpaceIds={episode.spaceIds || []}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
+    <div className="flex w-full flex-col gap-4 p-4 pt-0">
       {/* Editor Section */}
       <div className="relative">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="text-sm font-medium">Document Content</span>
-          <Button
-            onClick={handleSave}
-            disabled={!hasChanges || isLoading}
-            size="sm"
-            className="gap-2"
-          >
-            {isLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
-            {isLoading ? "Saving..." : "Save Changes"}
-          </Button>
-        </div>
-
         <div
           className={cn(
-            "border-grayAlpha-200 rounded-md border bg-white p-4",
+            "mix-w-[400px] rounded-md p-4",
             hasChanges && "border-blue-500",
           )}
         >
@@ -172,10 +157,14 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
                   class: "prose prose-sm max-w-none focus:outline-none",
                 },
               }}
+              editable={false}
               onCreate={({ editor }) => {
                 setEditor(editor);
               }}
-              extensions={[Document, Paragraph, Text, History, HardBreak]}
+              extensions={[
+                ...extensionsForConversation,
+                getPlaceholder("Start writing here..."),
+              ]}
               immediatelyRender={false}
             />
           </EditorRoot>
@@ -188,62 +177,53 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
         )}
       </div>
 
-      {/* Episodes Info and Invalidated Facts */}
-      <div className="bg-grayAlpha-100 rounded-md p-3">
-        <div className="text-muted-foreground mb-3 text-xs">
-          This document contains {episodeDetails.length} episode
-          {episodeDetails.length !== 1 ? "s" : ""}
+      {/* Invalidated Facts by Episode */}
+      {factsLoading ? (
+        <div className="bg-grayAlpha-100 text-muted-foreground flex items-center gap-2 text-xs">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Loading invalidated facts...
         </div>
+      ) : (
+        <div className="bg-grayAlpha-100 flex flex-col gap-3">
+          {episodes.map((episode: any, index: number) => {
+            const facts = invalidFactsByEpisode[episode.uuid] || [];
+            if (facts.length === 0) return null;
 
-        {/* Invalidated Facts by Episode */}
-        {factsLoading ? (
-          <div className="text-muted-foreground flex items-center gap-2 text-xs">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Loading invalidated facts...
-          </div>
-        ) : (
-          <div className="flex flex-col gap-3">
-            {episodeDetails.map((episode: any, index: number) => {
-              const facts = invalidFactsByEpisode[episode.uuid] || [];
-              if (facts.length === 0) return null;
-
-              return (
-                <div
-                  key={episode.uuid}
-                  className="border-grayAlpha-200 border-t pt-3"
-                >
-                  <div className="mb-2 text-xs font-medium">
-                    Episode {index + 1} - Invalidated Facts ({facts.length})
-                  </div>
-                  <div className="flex flex-col gap-2">
-                    {facts.map((fact) => (
-                      <div
-                        key={fact.uuid}
-                        className="rounded-md border border-red-200 bg-red-50 p-2"
-                      >
-                        <p className="mb-1 text-xs">{fact.fact}</p>
-                        <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
-                          {fact.invalidAt && (
-                            <span>
-                              Invalid:{" "}
-                              {new Date(fact.invalidAt).toLocaleString()}
-                            </span>
-                          )}
-                          {Object.keys(fact.attributes).length > 0 && (
-                            <Badge variant="secondary" className="text-[10px]">
-                              {Object.keys(fact.attributes).length} attributes
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+            return (
+              <div
+                key={episode.uuid}
+                className="border-grayAlpha-200 border-t pt-3"
+              >
+                <div className="mb-2 text-xs font-medium">
+                  Episode {index + 1} - Invalidated Facts ({facts.length})
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                <div className="flex flex-col gap-2">
+                  {facts.map((fact) => (
+                    <div
+                      key={fact.uuid}
+                      className="rounded-md border border-red-200 bg-red-50 p-2"
+                    >
+                      <p className="mb-1 text-xs">{fact.fact}</p>
+                      <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+                        {fact.invalidAt && (
+                          <span>
+                            Invalid: {new Date(fact.invalidAt).toLocaleString()}
+                          </span>
+                        )}
+                        {Object.keys(fact.attributes).length > 0 && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {Object.keys(fact.attributes).length} attributes
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

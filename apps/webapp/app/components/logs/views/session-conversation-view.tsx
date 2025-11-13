@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { type LogItem } from "~/hooks/use-logs";
 import { StyledMarkdown } from "~/components/common/styled-markdown";
-import { SpaceDropdown } from "~/components/spaces/space-dropdown";
 import { Loader2 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 
@@ -14,7 +13,7 @@ interface SessionEpisode {
   content: string;
   originalContent: string;
   createdAt: string;
-  spaceIds?: string[];
+  labelIds?: string[];
 }
 
 interface InvalidFact {
@@ -129,12 +128,6 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
                     {new Date(episode.createdAt).toLocaleString()}
                   </span>
                 </div>
-              </div>
-              <div className="flex-shrink-0">
-                <SpaceDropdown
-                  episodeIds={[episode.uuid]}
-                  selectedSpaceIds={episode.spaceIds || []}
-                />
               </div>
             </div>
 
