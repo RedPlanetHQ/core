@@ -101,7 +101,8 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
             searchResults.length > 0 &&
             searchResults.map((episode: any, index: number) => (
               <CommandItem
-                key={episode.uuid || index}
+                key={index}
+                value={`${index}`}
                 onSelect={() => {
                   episode.uuid && handleEpisodeClick(episode.uuid);
                 }}

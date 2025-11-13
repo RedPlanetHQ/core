@@ -93,7 +93,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                     <div>
                       {getIconForAuthorise(
                         log.source.toLowerCase(),
-                        14,
+                        16,
                         undefined,
                       )}
                     </div>

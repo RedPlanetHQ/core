@@ -355,7 +355,6 @@ export async function getStatementsInvalidatedByEpisode(params: {
   });
 }
 
-
 export function parseEpisodicNode(raw: any): EpisodicNode {
   return {
     uuid: raw.uuid,
@@ -372,6 +371,6 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     sessionId: raw.sessionId || undefined,
     recallCount: raw.recallCount || undefined,
     chunkIndex: raw.chunkIndex || undefined,
-    spaceIds: raw.spaceIds || [],
+    labelIds: raw.labelIds || [],
   };
 }

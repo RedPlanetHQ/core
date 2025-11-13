@@ -20,7 +20,7 @@ import {
   applyEpisodeReranking,
   applyMultiFactorReranking,
 } from "./search/rerank";
-import { getEmbedding, makeModelCall } from "~/lib/model.server";
+import { getEmbedding } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
@@ -55,7 +55,7 @@ export class SearchService {
           uuid: string;
           content: string;
           createdAt: Date;
-          spaceIds: string[];
+          labelIds: string[];
           isCompact?: boolean;
           relevanceScore?: number;
         }[];
@@ -81,7 +81,7 @@ export class SearchService {
       predicateTypes: options.predicateTypes || [],
       scoreThreshold: options.scoreThreshold || 0.7,
       minResults: options.minResults || 10,
-      spaceIds: options.spaceIds || [],
+      labelIds: options.labelIds || [],
       adaptiveFiltering: options.adaptiveFiltering || false,
       structured: options.structured || false,
       useLLMValidation: options.useLLMValidation || true,
@@ -512,7 +512,7 @@ export class SearchService {
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       rerankScore?: number;
     }>,
@@ -555,8 +555,8 @@ export class SearchService {
           if (episode.rerankScore !== undefined) {
             sections.push(`**Relevance**: ${episode.rerankScore}`);
           }
-          if (episode.spaceIds.length > 0) {
-            sections.push(`**Spaces**: ${episode.spaceIds.join(", ")}`);
+          if (episode.labelIds.length > 0) {
+            sections.push(`**Labels**: ${episode.labelIds.join(", ")}`);
           }
           sections.push(""); // Empty line before content
           sections.push(episode.content);
@@ -609,7 +609,7 @@ export class SearchService {
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       relevanceScore?: number;
     }>
@@ -655,7 +655,7 @@ export class SearchService {
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       relevanceScore?: number;
       originalIndex: number;
@@ -675,22 +675,22 @@ export class SearchService {
         const compact = compactMap.get(sessionId);
         if (compact) {
           const group = sessionGroups.get(sessionId)!;
-          // Collect unique spaceIds from all episodes in this session
-          const sessionSpaceIds = Array.from(
-            new Set(group.episodes.flatMap((ep) => ep.episode.spaceIds || [])),
+          // Collect unique labelIds from all episodes in this session
+          const sessionLabelIds = Array.from(
+            new Set(group.episodes.flatMap((ep) => ep.episode.labelIds || [])),
           );
           result.push({
             uuid: compact.id, // Use compact ID as uuid
             content: compact.summary,
             createdAt: compact.startTime,
-            spaceIds: sessionSpaceIds,
+            labelIds: sessionLabelIds,
             isCompact: true,
             relevanceScore: group.highestScore, // Use highest score from session episodes
             originalIndex: group.firstIndex, // Use position of first episode from this session
           });
           processedSessions.add(sessionId);
           logger.debug(
-            `Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}, spaces: ${sessionSpaceIds.join(",")}`,
+            `Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}, labels: ${sessionLabelIds.join(",")}`,
           );
         } else {
           // No compact, keep episode
@@ -698,7 +698,7 @@ export class SearchService {
             uuid: ep.episode.uuid,
             content: ep.episode.originalContent,
             createdAt: ep.episode.createdAt,
-            spaceIds: ep.episode.spaceIds || [],
+            labelIds: ep.episode.labelIds || [],
             relevanceScore: ep.rerankScore,
             originalIndex: index,
           });
@@ -709,7 +709,7 @@ export class SearchService {
           uuid: ep.episode.uuid,
           content: ep.episode.originalContent,
           createdAt: ep.episode.createdAt,
-          spaceIds: ep.episode.spaceIds || [],
+          labelIds: ep.episode.labelIds || [],
           relevanceScore: ep.rerankScore,
           originalIndex: index,
         });

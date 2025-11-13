@@ -44,13 +44,13 @@ export async function performBM25Search(
     // BM25 gets 3x limit since keyword matching is less precise than semantic search
     const STATEMENT_LIMIT = 150;
 
-    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
-    let episodeSpaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      episodeSpaceCondition = `
-        AND e.spaceIds IS NOT NULL
-        AND size(e.spaceIds) > 0
-        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+    // Build episode label filter condition (hard filter: exclude episodes with no labels)
+    let episodeLabelCondition = "";
+    if (options.labelIds.length > 0) {
+      episodeLabelCondition = `
+        AND e.labelIds IS NOT NULL
+        AND size(e.labelIds) > 0
+        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
       `;
     }
 
@@ -66,7 +66,7 @@ export async function performBM25Search(
         ORDER BY score DESC
         LIMIT ${STATEMENT_LIMIT}
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-        WHERE true ${episodeSpaceCondition}
+        WHERE true ${episodeLabelCondition}
         WITH e,
              COLLECT(s) as statements,
              COLLECT(score) as scores
@@ -87,7 +87,7 @@ export async function performBM25Search(
       userId,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
     };
 
     const records = await runQuery(cypher, params);
@@ -166,13 +166,13 @@ export async function performVectorSearch(
     // Internal statement limit (not exposed to users)
     const STATEMENT_LIMIT = 100;
 
-    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
-    let episodeSpaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      episodeSpaceCondition = `
-        AND e.spaceIds IS NOT NULL
-        AND size(e.spaceIds) > 0
-        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+    // Build episode label filter condition (hard filter: exclude episodes with no labels)
+    let episodeLabelCondition = "";
+    if (options.labelIds.length > 0) {
+      episodeLabelCondition = `
+        AND e.labelIds IS NOT NULL
+        AND size(e.labelIds) > 0
+        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
       `;
     }
 
@@ -188,7 +188,7 @@ export async function performVectorSearch(
     ORDER BY score DESC
     LIMIT ${STATEMENT_LIMIT}
     MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-    WHERE true ${episodeSpaceCondition}
+    WHERE true ${episodeLabelCondition}
     WITH e,
          COLLECT({stmt: s, score: score}) as allStatements,
          AVG(score) as avgScore,
@@ -206,7 +206,7 @@ export async function performVectorSearch(
       userId,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
     };
 
     const records = await runQuery(cypher, params);
@@ -305,27 +305,27 @@ export async function performBfsSearch(
       return [];
     }
 
-    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
-    let episodeSpaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      episodeSpaceCondition = `
-        AND e.spaceIds IS NOT NULL
-        AND size(e.spaceIds) > 0
-        AND ANY(spaceId IN $spaceIds WHERE spaceId IN e.spaceIds)
+    // Build episode label filter condition (hard filter: exclude episodes with no labels)
+    let episodeLabelCondition = "";
+    if (options.labelIds.length > 0) {
+      episodeLabelCondition = `
+        AND e.labelIds IS NOT NULL
+        AND size(e.labelIds) > 0
+        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
       `;
     }
 
     const cypher = `
       MATCH (e:Episode{userId: $userId})
       WHERE e.uuid IN $episodeIds
-        ${episodeSpaceCondition}
+        ${episodeLabelCondition}
       RETURN ${EPISODIC_NODE_PROPERTIES} as episode
     `;
 
     const records = await runQuery(cypher, {
       episodeIds,
       userId,
-      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
     });
 
     // Build results with aggregated scores (in-memory aggregation)
@@ -673,13 +673,13 @@ export async function performEpisodeGraphSearch(
       timeframeCondition += ` AND s.validAt >= $startTime`;
     }
 
-    // Build episode space filter condition (hard filter: exclude episodes with no spaces)
-    let episodeSpaceCondition = "";
-    if (options.spaceIds.length > 0) {
-      episodeSpaceCondition = `
-        AND ep.spaceIds IS NOT NULL
-        AND size(ep.spaceIds) > 0
-        AND ANY(spaceId IN $spaceIds WHERE spaceId IN ep.spaceIds)
+    // Build episode label filter condition (hard filter: exclude episodes with no labels)
+    let episodeLabelCondition = "";
+    if (options.labelIds.length > 0) {
+      episodeLabelCondition = `
+        AND ep.labelIds IS NOT NULL
+        AND size(ep.labelIds) > 0
+        AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
       `;
     }
 
@@ -690,10 +690,10 @@ export async function performEpisodeGraphSearch(
       WHERE queryEntity.uuid IN $queryEntityIds
         ${timeframeCondition}
 
-      // Step 2: Find episodes containing these statements and filter by spaceIds
+      // Step 2: Find episodes containing these statements and filter by labelIds
       // Optimized: Named rel for HAS_PROVENANCE index
       MATCH (s)<-[provRel:HAS_PROVENANCE]-(ep:Episode)
-      WHERE true ${episodeSpaceCondition}
+      WHERE true ${episodeLabelCondition}
 
       // Step 3: Collect all statements from these episodes (for metrics only)
       // Optimized: userId filter + named rel for relationship index
@@ -752,7 +752,7 @@ export async function performEpisodeGraphSearch(
       queryEmbedding,
       validAt: options.endTime.toISOString(),
       ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.spaceIds.length > 0 && { spaceIds: options.spaceIds }),
+      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
     };
 
     const records = await runQuery(cypher, params);

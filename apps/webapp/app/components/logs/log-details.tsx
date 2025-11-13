@@ -16,7 +16,6 @@ import { ConversationView } from "./views/conversation-view";
 import { SessionConversationView } from "./views/session-conversation-view";
 import { DocumentEditorView } from "./views/document-editor-view.client";
 import { ClientOnly } from "remix-utils/client-only";
-import { SpaceDropdown } from "../spaces/space-dropdown";
 
 interface LogDetailsProps {
   log: LogItem;
@@ -92,9 +91,9 @@ function getStatusValue(status: string) {
 export function LogDetails({ log }: LogDetailsProps) {
   return (
     <div className="flex h-full w-full flex-col items-center overflow-auto">
-      <div className="max-w-4xl">
+      <div className="max-w-4xl min-w-3xl">
         <div className="mt-5 mb-5 px-4">
-          <div className="bg-grayAlpha-100 flex gap-2 rounded px-2 py-2">
+          <div className="bg-grayAlpha-100 flex gap-2 rounded-xl px-2 py-2">
             <PropertyItem
               label="Source"
               value={formatString(log.source?.toLowerCase())}
@@ -111,14 +110,6 @@ export function LogDetails({ log }: LogDetailsProps) {
                 value={getStatusValue(log.status)}
                 variant="status"
                 statusColor={log.status && getStatusColor(log.status)}
-              />
-            )}
-
-            {!log.isSessionGroup && log.data.type === "CONVERSATION" && (
-              <SpaceDropdown
-                className="px-0"
-                episodeIds={[log.data.episodeUUID]}
-                selectedSpaceIds={log.spaceIds || []}
               />
             )}
           </div>

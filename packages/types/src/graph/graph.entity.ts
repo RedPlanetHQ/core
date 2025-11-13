@@ -39,7 +39,7 @@ export interface EpisodicNode {
   sessionId?: string;
   recallCount?: number;
   chunkIndex?: number; // Index of this chunk within the document
-  spaceIds?: string[];
+  labelIds?: string[];
 }
 
 /**
@@ -59,7 +59,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   createdAt: e.createdAt,
   userId: e.userId,
   sessionId: e.sessionId,
-  spaceIds: e.spaceIds,
+  labelIds: e.labelIds,
   validAt: e.validAt,
   recallCount: e.recallCount,
   chunkIndex: e.chunkIndex
@@ -130,8 +130,8 @@ export interface StatementNode {
   invalidatedBy?: string; // UUID of the episode that invalidated this statement
   attributes: Record<string, any>;
   userId: string;
-  space?: string; // Legacy field - deprecated in favor of spaceIds
-  spaceIds?: string[]; // Array of space UUIDs this statement belongs to
+  space?: string; // Legacy field
+  labelIds?: string[]; // Array of space UUIDs this statement belongs to
   recallCount?: { low: number; high: number };
   provenanceCount?: number;
 }
@@ -206,4 +206,3 @@ export interface CompactedSessionNode {
   compressionRatio?: number;
   metadata?: Record<string, any>;
 }
-

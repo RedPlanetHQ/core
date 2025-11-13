@@ -1,7 +1,6 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import z from "zod";
 import { prisma } from "~/db.server";
-import { getSpacesForEpisodes } from "~/services/graphModels/space";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 // Schema for space ID parameter
@@ -43,6 +42,7 @@ export const loader = createHybridLoaderApiRoute(
             path: ["sessionId"],
             equals: sessionId,
           },
+          status: "COMPLETED",
         },
         select: {
           id: true,
@@ -62,36 +62,54 @@ export const loader = createHybridLoaderApiRoute(
 
       // Extract episode UUIDs and format episodes
       const episodes = ingestionQueueEntries
-        .map((entry) => {
+        .flatMap((entry) => {
           const logData = entry.data as any;
-          const episodeUUID = (entry.output as any)?.episodeUuid;
+          const output = entry.output as any;
 
-          if (!episodeUUID) return null;
+          // Handle CONVERSATION type - single episode
+          if (logData.type === "CONVERSATION") {
+            const episodeUUID = output?.episodeUuid;
+            if (!episodeUUID) return [];
 
-          return {
-            uuid: episodeUUID,
-            content:
-              entry.activity?.text ||
-              logData?.episodeBody ||
-              logData?.text ||
-              "No content",
-            createdAt: entry.createdAt.toISOString(),
-            ingestionQueueId: entry.id,
-          };
+            return [
+              {
+                uuid: episodeUUID,
+                id: entry.id,
+                content:
+                  entry.activity?.text ||
+                  logData?.episodeBody ||
+                  logData?.text ||
+                  "No content",
+                createdAt: entry.createdAt.toISOString(),
+                ingestionQueueId: entry.id,
+              },
+            ];
+          }
+
+          // Handle DOCUMENT type - multiple episodes
+          if (logData.type === "DOCUMENT") {
+            const episodeUUIDs = output?.episodes || [];
+            if (!Array.isArray(episodeUUIDs) || episodeUUIDs.length === 0)
+              return [];
+
+            return episodeUUIDs.map((episodeUUID: { episodeUuid: string }) => ({
+              uuid: episodeUUID.episodeUuid,
+              id: entry.id,
+              content:
+                entry.activity?.text ||
+                logData?.episodeBody ||
+                logData?.text ||
+                "No content",
+              createdAt: entry.createdAt.toISOString(),
+              ingestionQueueId: entry.id,
+            }));
+          }
+
+          return [];
         })
         .filter((ep) => ep !== null);
 
-      // Get space IDs for all episodes
-      const episodeIds = episodes.map((e) => e.uuid);
-      const spacesMap = await getSpacesForEpisodes(episodeIds, userId);
-
-      // Add space IDs to each episode
-      const episodesWithSpaces = episodes.map((episode) => ({
-        ...episode,
-        spaceIds: spacesMap[episode.uuid] || [],
-      }));
-
-      return json({ episodes: episodesWithSpaces });
+      return json({ episodes });
     } catch (error: any) {
       console.error("Error fetching session episodes:", error);
       return json({ error: error.message }, { status: 500 });
