@@ -120,13 +120,23 @@ export async function enqueueCreateConversationTitle(
 export async function enqueueSessionCompaction(
   payload: SessionCompactionPayload,
 ): Promise<{ id?: string }> {
-  // BullMQ
-  const { sessionCompactionQueue } = await import("~/bullmq/queues");
-  const job = await sessionCompactionQueue.add("session-compaction", payload, {
-    attempts: 3,
-    backoff: { type: "exponential", delay: 2000 },
-  });
-  return { id: job.id };
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { triggerSessionCompaction } = await import(
+      "~/trigger/session/session-compaction"
+    );
+    const handler = await triggerSessionCompaction(payload);
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { sessionCompactionQueue } = await import("~/bullmq/queues");
+    const job = await sessionCompactionQueue.add("session-compaction", payload, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
 }
 
 /**

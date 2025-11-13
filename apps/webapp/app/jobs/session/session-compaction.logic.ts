@@ -6,10 +6,9 @@ import {
   getCompactedSessionBySessionId,
   linkEpisodesToCompact,
   getSessionEpisodes,
-  type CompactedSessionNode,
-  type SessionEpisodeData,
   saveCompactedSession,
 } from "~/services/graphModels/compactedSession";
+import { CompactedSessionNode, EpisodicNode } from "@core/types";
 
 export interface SessionCompactionPayload {
   userId: string;
@@ -78,10 +77,9 @@ export async function processSessionCompaction(
     const episodes = await getSessionEpisodes(
       sessionId,
       userId,
-      existingCompact?.endTime,
+      existingCompact?.endTime ? new Date(existingCompact.endTime) : undefined,
     );
 
-    console.log("episodes", episodes.length);
     // Check if we have enough episodes
     if (!existingCompact && episodes.length < CONFIG.minEpisodesForCompaction) {
       logger.info(`Not enough episodes for compaction`, {
@@ -96,14 +94,12 @@ export async function processSessionCompaction(
       };
     } else if (
       existingCompact &&
-      episodes.length <
-        CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold
+      episodes.length < CONFIG.compactionThreshold
     ) {
       logger.info(`Not enough new episodes for compaction`, {
         sessionId,
         episodeCount: episodes.length,
-        minRequired:
-          CONFIG.minEpisodesForCompaction + CONFIG.compactionThreshold,
+        minRequired: CONFIG.compactionThreshold,
       });
       return {
         success: false,
@@ -134,7 +130,7 @@ export async function processSessionCompaction(
         startTime: compactionResult.startTime,
         endTime: compactionResult.endTime,
         confidence: compactionResult.confidence,
-        compressionRatio: compactionResult.compressionRatio,
+        compressionRatio: compactionResult.compressionRatio || 0,
       },
     };
   } catch (error) {
@@ -156,7 +152,7 @@ export async function processSessionCompaction(
  */
 async function createCompaction(
   sessionId: string,
-  episodes: SessionEpisodeData[],
+  episodes: EpisodicNode[],
   userId: string,
   source: string,
 ): Promise<CompactedSessionNode> {
@@ -213,7 +209,7 @@ async function createCompaction(
  */
 async function updateCompaction(
   existingCompact: CompactedSessionNode,
-  newEpisodes: SessionEpisodeData[],
+  newEpisodes: EpisodicNode[],
   userId: string,
 ): Promise<CompactedSessionNode> {
   logger.info(`Updating existing compaction`, {
@@ -232,7 +228,7 @@ async function updateCompaction(
 
   // Update CompactedSession node using graph model
   const now = new Date();
-  const endTime = newEpisodes[newEpisodes.length - 1].createdAt;
+  const endTime = new Date(newEpisodes[newEpisodes.length - 1].createdAt);
   const totalEpisodeCount = existingCompact.episodeCount + newEpisodes.length;
   const compressionRatio = totalEpisodeCount / 1;
   const episodeUuids = newEpisodes.map((e) => e.uuid);
@@ -265,7 +261,7 @@ async function updateCompaction(
  * Generate compaction using LLM (similar to Claude Code's compact approach)
  */
 async function generateCompaction(
-  episodes: SessionEpisodeData[],
+  episodes: EpisodicNode[],
   existingSummary: string | null,
 ): Promise<z.infer<typeof CompactionResultSchema>> {
   const systemPrompt = createCompactionSystemPrompt();
@@ -362,7 +358,7 @@ Your response MUST be valid JSON wrapped in <output></output> tags.
  * User prompt for compaction
  */
 function createCompactionUserPrompt(
-  episodes: SessionEpisodeData[],
+  episodes: EpisodicNode[],
   existingSummary: string | null,
 ): string {
   let prompt = "";
@@ -449,7 +445,7 @@ export async function shouldTriggerCompaction(
   const newEpisodes = await getSessionEpisodes(
     sessionId,
     userId,
-    existingCompact.endTime,
+    new Date(existingCompact.endTime),
   );
   return newEpisodes.length >= CONFIG.compactionThreshold;
 }

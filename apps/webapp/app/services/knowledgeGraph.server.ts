@@ -1112,7 +1112,12 @@ export class KnowledgeGraphService {
             );
             if (duplicateTriple) {
               logger.info(`Statement is a duplicate: ${triple.statement.fact}`);
-              resolvedStatements.push(duplicateTriple);
+              // Reuse existing subject, predicate, object, and statement
+              // Only update provenance to link new episode
+              resolvedStatements.push({
+                ...duplicateTriple,
+                provenance: triple.provenance,
+              });
               continue;
             }
           }
