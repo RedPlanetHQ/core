@@ -1,5 +1,4 @@
 import { logger } from "~/services/logger.service";
-import { SpaceService } from "~/services/space.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { enqueuePersonaGeneration } from "~/lib/queue-adapter.server";
 import { prisma } from "~/db.server";
@@ -9,7 +8,9 @@ interface WorkspaceMetadata {
   [key: string]: any;
 }
 
-async function updateLastPersonaGenerationTime(workspaceId: string): Promise<void> {
+async function updateLastPersonaGenerationTime(
+  workspaceId: string,
+): Promise<void> {
   try {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
@@ -39,7 +40,7 @@ async function updateLastPersonaGenerationTime(workspaceId: string): Promise<voi
   } catch (error) {
     logger.error(
       `[Persona Generation] Error updating last generation timestamp:`,
-      {error},
+      { error },
     );
   }
 }
@@ -52,10 +53,9 @@ async function updateLastPersonaGenerationTime(workspaceId: string): Promise<voi
  */
 export async function checkAndTriggerPersonaUpdate(
   userId: string,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<{ triggered: boolean; reason?: string }> {
   try {
-    const spaceService = new SpaceService();
     const personaSpace = await spaceService.getSpaceByName("Profile", userId);
 
     if (!personaSpace) {
@@ -78,16 +78,23 @@ export async function checkAndTriggerPersonaUpdate(
     const lastPersonaGenerationAt = metadata.lastPersonaGenerationAt;
 
     // Get current total episode count for user
-    const totalEpisodesQuery =  lastPersonaGenerationAt ? `
+    const totalEpisodesQuery = lastPersonaGenerationAt
+      ? `
       MATCH (e:Episode {userId: $userId})
       WHERE e.createdAt > datetime($lastPersonaGenerationAt)
       RETURN count(e) as newEpisodeCount
-    ` : `
+    `
+      : `
       MATCH (e:Episode {userId: $userId})
       RETURN count(e) as totalEpisodeCount
     `;
-    const countResult = await runQuery(totalEpisodesQuery, { userId, lastPersonaGenerationAt });
-    const episodeCount =  lastPersonaGenerationAt ? countResult[0]?.get("newEpisodeCount").toNumber() || 0 : countResult[0]?.get("totalEpisodeCount").toNumber() || 0;
+    const countResult = await runQuery(totalEpisodesQuery, {
+      userId,
+      lastPersonaGenerationAt,
+    });
+    const episodeCount = lastPersonaGenerationAt
+      ? countResult[0]?.get("newEpisodeCount").toNumber() || 0
+      : countResult[0]?.get("totalEpisodeCount").toNumber() || 0;
 
     logger.debug("Checking persona space update eligibility", {
       userId,

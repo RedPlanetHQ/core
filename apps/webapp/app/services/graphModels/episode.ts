@@ -358,6 +358,40 @@ export async function getStatementsInvalidatedByEpisode(params: {
   });
 }
 
+export async function getEpisodesByUserId(params: {
+  userId: string;
+  startTime?: string;
+  endTime?: string;
+}): Promise<EpisodicNode[]> {
+  let whereClause = "";
+  const conditions: string[] = [];
+
+  if (params.startTime) {
+    conditions.push("e.createdAt >= datetime($startTime)");
+  }
+  if (params.endTime) {
+    conditions.push("e.createdAt <= datetime($endTime)");
+  }
+
+  if (conditions.length > 0) {
+    whereClause = `WHERE ${conditions.join(" AND ")}`;
+  }
+
+  const query = `
+  MATCH (e:Episode {userId: $userId})
+  ${whereClause}
+  RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+  `;
+
+  const result = await runQuery(query, {
+    userId: params.userId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+  });
+
+  return result.map((record) => record.get("episode") as EpisodicNode);
+}
+
 export function parseEpisodicNode(raw: any): EpisodicNode {
   return {
     uuid: raw.uuid,

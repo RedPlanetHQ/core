@@ -4,10 +4,12 @@ import { logger } from "~/services/logger.service";
 import type { CoreMessage } from "ai";
 import { createBatch, getBatch } from "~/lib/batch.server";
 import { z } from "zod";
-import { getUserContext, type UserContext } from "~/services/user-context.server";
+import {
+  getUserContext,
+  type UserContext,
+} from "~/services/user-context.server";
 import { assignEpisodesToSpace } from "~/services/graphModels/space";
 import { EpisodeType, type EpisodicNode } from "@core/types";
-import { SpaceService } from "~/services/space.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { getEpisodesByUserId } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
@@ -116,7 +118,11 @@ export async function generatePersonaSummary(
   });
 
   // Stage 2: Python-based analytics extraction (TF-IDF, pattern analysis)
-  const analytics = await extractPersonaAnalytics(userId, startTime, analyticsRunner);
+  const analytics = await extractPersonaAnalytics(
+    userId,
+    startTime,
+    analyticsRunner,
+  );
   logger.info("Python analytics complete", {
     lexiconTerms: Object.keys(analytics.lexicon).length,
     avgSentenceLength: analytics.style.avgSentenceLength,
@@ -128,8 +134,15 @@ export async function generatePersonaSummary(
   if (episodes.length > 50) {
     // Always run HDBSCAN clustering for larger datasets
     try {
-      const clusters = await clusterEpisodes(userId, startTime, clusteringRunner);
-      const personaClusters = await filterPersonaRelevantTopics(clusters, episodes);
+      const clusters = await clusterEpisodes(
+        userId,
+        startTime,
+        clusteringRunner,
+      );
+      const personaClusters = await filterPersonaRelevantTopics(
+        clusters,
+        episodes,
+      );
       // Extract episode IDs from persona-relevant clusters
       const personaEpisodeIds = new Set<string>();
       for (const cluster of personaClusters) {
@@ -156,19 +169,19 @@ export async function generatePersonaSummary(
   const summary =
     filteredEpisodes.length <= 50 || mode === "incremental"
       ? await generatePersonaSummarySingle(
-        filteredEpisodes,
-        mode,
-        existingSummary,
-        userContext,
-        analytics
-      )
+          filteredEpisodes,
+          mode,
+          existingSummary,
+          userContext,
+          analytics,
+        )
       : await generatePersonaSummaryBatch(
-        filteredEpisodes,
-        mode,
-        existingSummary,
-        userContext,
-        analytics
-      );
+          filteredEpisodes,
+          mode,
+          existingSummary,
+          userContext,
+          analytics,
+        );
 
   // Stage 5: Assign episodes to space for traceability
   if (filteredEpisodes.length > 0) {
@@ -176,7 +189,7 @@ export async function generatePersonaSummary(
       await assignEpisodesToSpace(
         filteredEpisodes.map((e) => e.uuid),
         spaceId,
-        userId
+        userId,
       );
       logger.info("Episodes assigned to persona space", {
         episodeCount: filteredEpisodes.length,
@@ -199,7 +212,7 @@ export async function generatePersonaSummary(
  */
 async function runClusteringWithExec(
   userId: string,
-  startTime?: string
+  startTime?: string,
 ): Promise<string> {
   let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
 
@@ -230,7 +243,7 @@ async function runClusteringWithExec(
  */
 async function runAnalyticsWithExec(
   userId: string,
-  startTime?: string
+  startTime?: string,
 ): Promise<string> {
   let command = `python3 /core/apps/webapp/python/persona_analytics.py ${userId} --json`;
 
@@ -263,7 +276,7 @@ async function runAnalyticsWithExec(
 async function clusterEpisodes(
   userId: string,
   startTime?: string,
-  pythonRunner?: (userId: string, startTime?: string) => Promise<string>
+  pythonRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<ClusteringOutput> {
   logger.info("Running HDBSCAN clustering", { userId, startTime });
 
@@ -284,7 +297,7 @@ async function clusterEpisodes(
 async function extractPersonaAnalytics(
   userId: string,
   startTime?: string,
-  pythonRunner?: (userId: string, startTime?: string) => Promise<string>
+  pythonRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<PersonaAnalytics> {
   logger.info("Running persona analytics", { userId, startTime });
 
@@ -305,14 +318,14 @@ async function generatePersonaSummarySingle(
   mode: "full" | "incremental",
   existingSummary: string | null,
   userContext: UserContext,
-  analytics: PersonaAnalytics
+  analytics: PersonaAnalytics,
 ): Promise<string> {
   const prompt = buildAdaptivePersonaPrompt(
     episodes,
     mode,
     existingSummary,
     userContext,
-    analytics
+    analytics,
   );
 
   const batchRequest = {
@@ -343,7 +356,7 @@ async function generatePersonaSummarySingle(
   const result = batch.results[0];
   if (result.error || !result.response) {
     throw new Error(
-      `Persona summary generation failed: ${result.error || "No response"}`
+      `Persona summary generation failed: ${result.error || "No response"}`,
     );
   }
 
@@ -368,7 +381,7 @@ async function generatePersonaSummaryBatch(
   mode: "full" | "incremental",
   existingSummary: string | null,
   userContext: UserContext,
-  analytics: PersonaAnalytics
+  analytics: PersonaAnalytics,
 ): Promise<string> {
   const chunkSize = 20;
   const chunks: EpisodicNode[][] = [];
@@ -377,10 +390,13 @@ async function generatePersonaSummaryBatch(
     chunks.push(episodes.slice(i, i + chunkSize));
   }
 
-  logger.info(`Creating ${chunks.length} batch requests for ${episodes.length} episodes`, {
-    chunkSize,
-    mode,
-  });
+  logger.info(
+    `Creating ${chunks.length} batch requests for ${episodes.length} episodes`,
+    {
+      chunkSize,
+      mode,
+    },
+  );
 
   // Create batch requests for pattern extraction from each chunk
   const batchRequests = chunks.map((chunk, index) => {
@@ -438,7 +454,7 @@ async function generatePersonaSummaryBatch(
     existingSummary,
     mode,
     userContext,
-    analytics
+    analytics,
   );
 
   return finalSummary;
@@ -486,7 +502,7 @@ function buildAdaptivePersonaPrompt(
   mode: "full" | "incremental",
   existingSummary: string | null,
   userContext: UserContext,
-  analytics: PersonaAnalytics
+  analytics: PersonaAnalytics,
 ): CoreMessage {
   const systemPrompt = getSystemPrompt(mode);
   const contextSection = buildContextSection(userContext);
@@ -657,7 +673,10 @@ function getRoleGuidance(role?: string): string {
     `.trim(),
   };
 
-  return guidance[role] || "Create structure based on role patterns observed in episodes.";
+  return (
+    guidance[role] ||
+    "Create structure based on role patterns observed in episodes."
+  );
 }
 
 /**
@@ -666,7 +685,7 @@ function getRoleGuidance(role?: string): string {
 function buildPatternExtractionPrompt(
   episodes: EpisodicNode[],
   userContext: UserContext,
-  analytics: PersonaAnalytics
+  analytics: PersonaAnalytics,
 ): CoreMessage {
   const episodesText = formatEpisodesForPrompt(episodes);
   const contextSection = buildContextSection(userContext);
@@ -739,7 +758,7 @@ async function synthesizePatternsIntoPersona(
   existingSummary: string | null,
   mode: "full" | "incremental",
   userContext: UserContext,
-  analytics: PersonaAnalytics
+  analytics: PersonaAnalytics,
 ): Promise<string> {
   const allPatterns = patterns.join("\n\n---\n\n");
   const contextSection = buildContextSection(userContext);
@@ -856,7 +875,9 @@ Output the complete persona document.
 
   const result = batch.results[0];
   if (result.error || !result.response) {
-    throw new Error(`Persona synthesis failed: ${result.error || "No response"}`);
+    throw new Error(
+      `Persona synthesis failed: ${result.error || "No response"}`,
+    );
   }
 
   const summary =
@@ -1009,24 +1030,21 @@ export async function processPersonaGeneration(
       spaceId,
       startTime,
       clusteringRunner,
-      analyticsRunner
+      analyticsRunner,
     );
 
     // Update persona space with new summary
     // await spaceService.updateSpace(spaceId, { summary }, userId);
-    const ingestDocumentData = { 
-      episodeBody: summary, 
+    const ingestDocumentData = {
+      episodeBody: summary,
       referenceTime: new Date().toISOString(),
-      type: EpisodeType.DOCUMENT, 
-      source: "persona", 
-      sessionId: `persona-${workspaceId}`, 
-      metadata: { documentTitle: "Persona" } 
-    }
+      type: EpisodeType.DOCUMENT,
+      source: "persona",
+      sessionId: `persona-${workspaceId}`,
+      metadata: { documentTitle: "Persona" },
+    };
 
-    await addToQueue(
-      ingestDocumentData,
-      userId,
-    );
+    await addToQueue(ingestDocumentData, userId);
 
     // Update episode count tracking for threshold checking
     const totalEpisodesQuery = `
