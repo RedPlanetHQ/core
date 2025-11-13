@@ -130,10 +130,8 @@ function createEntity(
     type,
     attributes: {},
     nameEmbedding: [], // Empty placeholder for client-side preview
-    typeEmbedding: [], // Empty placeholder for client-side preview
     createdAt: new Date(),
     userId,
-    space,
   };
 }
 
@@ -152,9 +150,8 @@ function createEpisode(
     source: "onboarding",
     createdAt: new Date(),
     validAt: new Date(),
-    labels: ["onboarding"],
+    labelIds: [], // Labels will be assigned server-side during actual ingestion
     userId,
-    space,
   };
 }
 
@@ -172,8 +169,7 @@ function createStatement(
     validAt: new Date(),
     invalidAt: null,
     attributes: {},
-    userId,
-    space,
+    userId
   };
 }
 
@@ -557,9 +553,8 @@ export function createOnboardingEpisode(
     },
     createdAt: new Date(),
     validAt: new Date(),
-    labels: ["onboarding", "user-profile"],
+    labelIds: [], // Labels will be assigned server-side during actual ingestion
     userId,
-    space,
     sessionId: crypto.randomUUID(), // Generate unique session for onboarding
   };
 

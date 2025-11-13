@@ -2,6 +2,8 @@ import { logger } from "~/services/logger.service";
 import { runQuery } from "~/lib/neo4j.server";
 import { enqueuePersonaGeneration } from "~/lib/queue-adapter.server";
 import { prisma } from "~/db.server";
+import { getDocumentsByTitle } from "~/services/graphModels/document";
+import { LabelService } from "~/services/label.server";
 
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
@@ -56,11 +58,19 @@ export async function checkAndTriggerPersonaUpdate(
   workspaceId: string,
 ): Promise<{ triggered: boolean; reason?: string }> {
   try {
-    const personaSpace = await spaceService.getSpaceByName("Profile", userId);
+    const labelService = new LabelService();
+    const personaDocument = await getDocumentsByTitle(userId, "Persona");
 
-    if (!personaSpace) {
-      logger.debug("No persona space found for user", { userId });
-      return { triggered: false, reason: "no_persona_space" };
+    if (!personaDocument) {
+      logger.debug("No persona document found for user", { userId });
+      return { triggered: false, reason: "no_persona_document" };
+    }
+
+    const label = await labelService.getLabelByName("Persona", workspaceId);
+
+    if (!label) {
+      logger.debug("No label found for persona document", { userId });
+      return { triggered: false, reason: "no_label" };
     }
 
     // Get workspace metadata
@@ -99,7 +109,7 @@ export async function checkAndTriggerPersonaUpdate(
     logger.debug("Checking persona space update eligibility", {
       userId,
       episodeCount,
-      personaSpaceId: personaSpace.id,
+      personaDocumentId: personaDocument[0].uuid,
     });
 
     // Trigger persona generation every 50 episodes
@@ -108,17 +118,17 @@ export async function checkAndTriggerPersonaUpdate(
     if (episodeCount >= PERSONA_UPDATE_THRESHOLD) {
       logger.info("Enqueuing persona generation (threshold met)", {
         userId,
-        personaSpaceId: personaSpace.id,
+        personaDocumentId: personaDocument[0].uuid,
         episodeCount,
         threshold: PERSONA_UPDATE_THRESHOLD,
       });
 
-      const mode = personaSpace.summary ? "incremental" : "full";
+      const mode = personaDocument[0].originalContent ? "incremental" : "full";
 
       await enqueuePersonaGeneration({
         userId,
         workspaceId,
-        spaceId: personaSpace.id,
+        labelId: label.id,
         mode,
         startTime: lastPersonaGenerationAt,
       });
@@ -126,7 +136,6 @@ export async function checkAndTriggerPersonaUpdate(
       await updateLastPersonaGenerationTime(workspaceId);
       logger.info("Persona generation job enqueued", {
         userId,
-        personaSpaceId: personaSpace.id,
         mode,
       });
 

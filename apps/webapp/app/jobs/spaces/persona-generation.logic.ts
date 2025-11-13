@@ -8,12 +8,13 @@ import {
   getUserContext,
   type UserContext,
 } from "~/services/user-context.server";
-import { assignEpisodesToSpace } from "~/services/graphModels/space";
 import { EpisodeType, type EpisodicNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
-import { getEpisodesByUserId } from "~/services/graphModels/episode";
+import { addLabelToEpisodes, getEpisodesByUserId } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 import { addToQueue } from "~/lib/ingest.server";
+import { LabelService } from "~/services/label.server";
+import { getDocumentsByTitle } from "~/services/graphModels/document";
 
 const execAsync = promisify(exec);
 
@@ -21,7 +22,7 @@ const execAsync = promisify(exec);
 export interface PersonaGenerationPayload {
   userId: string;
   workspaceId: string;
-  spaceId: string;
+  labelId: string;
   mode: "full" | "incremental";
   startTime?: string;
 }
@@ -51,7 +52,7 @@ export interface TemporalMetrics {
 
 export interface PersonaGenerationResult {
   success: boolean;
-  spaceId: string;
+  labelId: string;
   mode: string;
   summaryLength: number;
   episodesProcessed: number;
@@ -94,7 +95,7 @@ export async function generatePersonaSummary(
   mode: "full" | "incremental",
   existingSummary: string | null,
   userId: string,
-  spaceId: string,
+  labelId: string,
   startTime?: string,
   clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
   analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
@@ -104,7 +105,7 @@ export async function generatePersonaSummary(
     mode,
     hasExistingSummary: !!existingSummary,
     userId,
-    spaceId,
+    labelId,
     startTime,
   });
 
@@ -186,19 +187,19 @@ export async function generatePersonaSummary(
   // Stage 5: Assign episodes to space for traceability
   if (filteredEpisodes.length > 0) {
     try {
-      await assignEpisodesToSpace(
+      await addLabelToEpisodes(
+        labelId,
         filteredEpisodes.map((e) => e.uuid),
-        spaceId,
         userId,
       );
-      logger.info("Episodes assigned to persona space", {
+      logger.info("Episodes assigned to persona label", {
         episodeCount: filteredEpisodes.length,
-        spaceId,
+        labelId,
       });
     } catch (error) {
-      logger.error("Failed to assign episodes to space", {
+      logger.error("Failed to assign episodes to label", {
         error: error instanceof Error ? error.message : "Unknown error",
-        spaceId,
+        labelId,
       });
       // Don't fail the entire generation if assignment fails
     }
@@ -977,24 +978,23 @@ export async function processPersonaGeneration(
   clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
   analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<PersonaGenerationResult> {
-  const { userId, workspaceId, spaceId, mode, startTime } = payload;
+  const { userId, workspaceId, labelId, mode, startTime } = payload;
 
   logger.info("Starting persona generation", {
     userId,
     workspaceId,
-    spaceId,
+    labelId,
     mode,
     startTime,
   });
 
-  const spaceService = new SpaceService();
+  const labelService = new LabelService();
 
   try {
-    // Get persona space
-    const personaSpace = await spaceService.getSpace(spaceId, userId);
+    const personaDocument = await getDocumentsByTitle(userId, "Persona");
 
-    if (!personaSpace) {
-      throw new Error(`Persona space not found: ${spaceId}`);
+    if (!personaDocument) {
+      throw new Error(`Persona document not found: ${userId}`);
     }
 
     // Get all episodes for persona generation
@@ -1003,11 +1003,11 @@ export async function processPersonaGeneration(
     if (episodes.length === 0) {
       logger.warn("No episodes found for persona generation", {
         userId,
-        spaceId,
+        workspaceId,
       });
       return {
         success: true,
-        spaceId,
+        labelId,
         mode,
         summaryLength: 0,
         episodesProcessed: 0,
@@ -1016,7 +1016,7 @@ export async function processPersonaGeneration(
 
     logger.info("Generating persona summary", {
       userId,
-      spaceId,
+      labelId,
       episodeCount: episodes.length,
       mode,
     });
@@ -1025,9 +1025,9 @@ export async function processPersonaGeneration(
     const summary = await generatePersonaSummary(
       episodes,
       mode,
-      personaSpace.summary || null,
+      personaDocument[0].originalContent || null,
       userId,
-      spaceId,
+      labelId,
       startTime,
       clusteringRunner,
       analyticsRunner,
@@ -1046,30 +1046,9 @@ export async function processPersonaGeneration(
 
     await addToQueue(ingestDocumentData, userId);
 
-    // Update episode count tracking for threshold checking
-    const totalEpisodesQuery = `
-      MATCH (e:Episode {userId: $userId})
-      RETURN count(e) as totalCount
-    `;
-    const countResult = await runQuery(totalEpisodesQuery, { userId });
-    const currentTotalCount = countResult[0]?.get("totalCount").toNumber() || 0;
-
-    const updateCountQuery = `
-      MATCH (space:Space {uuid: $spaceId, userId: $userId})
-      SET space.episodeCountAtLastSummary = $currentCount,
-          space.summaryGeneratedAt = datetime(),
-          space.updatedAt = datetime()
-      RETURN space
-    `;
-    await runQuery(updateCountQuery, {
-      spaceId,
-      userId,
-      currentCount: currentTotalCount,
-    });
-
     logger.info("Persona generation completed", {
       userId,
-      spaceId,
+      labelId,
       mode,
       summaryLength: summary.length,
       episodesProcessed: episodes.length,
@@ -1077,7 +1056,7 @@ export async function processPersonaGeneration(
 
     return {
       success: true,
-      spaceId,
+      labelId,
       mode,
       summaryLength: summary.length,
       episodesProcessed: episodes.length,
@@ -1086,7 +1065,7 @@ export async function processPersonaGeneration(
     logger.error("Error in persona generation:", {
       error,
       userId,
-      spaceId,
+      labelId,
       mode,
     });
     throw error;

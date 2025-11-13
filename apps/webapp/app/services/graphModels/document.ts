@@ -320,3 +320,33 @@ export async function deleteDocument(documentUuid: string): Promise<{
     throw error;
   }
 }
+
+export async function getDocumentsByTitle(userId: string, title: string): Promise<DocumentNode[]> {
+  const query = `
+    MATCH (d:Document {userId: $userId, title: $title})
+    RETURN d
+    ORDER BY d.createdAt DESC
+  `;
+
+  const params = { userId, title };
+  const result = await runQuery(query, params);
+
+  return result.map((record) => {
+    const documentNode = record.get("d");
+    return {
+      uuid: documentNode.properties.uuid,
+      title: documentNode.properties.title,
+      originalContent: documentNode.properties.originalContent,
+      metadata: JSON.parse(documentNode.properties.metadata || "{}"),
+      source: documentNode.properties.source,
+      userId: documentNode.properties.userId,
+      createdAt: new Date(documentNode.properties.createdAt),
+      validAt: new Date(documentNode.properties.validAt),
+      totalChunks: documentNode.properties.totalChunks,
+      version: documentNode.properties.version || 1,
+      contentHash: documentNode.properties.contentHash || "",
+      previousVersionUuid: documentNode.properties.previousVersionUuid || null,
+      chunkHashes: documentNode.properties.chunkHashes || [],
+    };
+  });
+}

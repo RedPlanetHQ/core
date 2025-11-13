@@ -33,13 +33,11 @@ export interface EpisodicNode {
   source: string;
   createdAt: Date;
   validAt: Date;
-  labels: string[];
+  labelIds: string[];
   userId: string;
-  space?: string;
   sessionId?: string;
   recallCount?: number;
   chunkIndex?: number; // Index of this chunk within the document
-  labelIds?: string[];
   documentId?: string;
 }
 
@@ -132,8 +130,7 @@ export interface StatementNode {
   invalidatedBy?: string; // UUID of the episode that invalidated this statement
   attributes: Record<string, any>;
   userId: string;
-  space?: string; // Legacy field
-  labelIds?: string[]; // Array of space UUIDs this statement belongs to
+  labelIds?: string[];
   recallCount?: { low: number; high: number };
   provenanceCount?: number;
 }
@@ -170,7 +167,7 @@ export type AddEpisodeParams = {
   metadata?: Record<string, any>;
   source: string;
   userId: string;
-  spaceId?: string;
+  labelId?: string;
   sessionId?: string;
   type?: EpisodeType;
   documentId?: string;

@@ -718,22 +718,22 @@ export class SearchService {
         const document = documentMap.get(documentId);
         if (document) {
           const group = documentGroups.get(documentId)!;
-          // Collect unique spaceIds from all chunks in this document
-          const documentSpaceIds = Array.from(
-            new Set(group.episodes.flatMap((ep) => ep.episode.spaceIds || [])),
+          // Collect unique labelIds from all chunks in this document
+          const documentLabelIds = Array.from(
+            new Set(group.episodes.flatMap((ep) => ep.episode.labelIds || [])),
           );
           result.push({
             uuid: document.uuid, // Use document UUID
             content: document.originalContent, // Use full document content
             createdAt: document.createdAt,
-            spaceIds: documentSpaceIds,
+            labelIds: documentLabelIds,
             isCompact: true, // Mark as compact/aggregated
             relevanceScore: group.highestScore, // Use highest score from document chunks
             originalIndex: group.firstIndex, // Use position of first chunk from this document
           });
           processedDocuments.add(documentId);
           logger.debug(
-            `Replaced document ${documentId.slice(0, 8)} chunk episodes with parent document, score: ${group.highestScore.toFixed(3)}, spaces: ${documentSpaceIds.join(",")}`,
+            `Replaced document ${documentId.slice(0, 8)} chunk episodes with parent document, score: ${group.highestScore.toFixed(3)}, labels: ${documentLabelIds.join(",")}`,
           );
         } else {
           // No parent document found, keep chunk episode
@@ -741,7 +741,7 @@ export class SearchService {
             uuid: ep.episode.uuid,
             content: ep.episode.originalContent,
             createdAt: ep.episode.createdAt,
-            spaceIds: ep.episode.spaceIds || [],
+            labelIds: ep.episode.labelIds || [],
             relevanceScore: ep.rerankScore,
             originalIndex: index,
           });

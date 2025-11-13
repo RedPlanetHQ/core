@@ -282,9 +282,8 @@ export class KnowledgeGraphService {
         metadata: params.metadata || {},
         createdAt: now,
         validAt: new Date(params.referenceTime),
-        labels: [],
+        labelIds: [],
         userId: params.userId,
-        space: params.spaceId,
         sessionId: params.sessionId,
         documentId: params.documentId,
       };

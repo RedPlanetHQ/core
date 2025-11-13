@@ -71,7 +71,7 @@ export const personaGenerationTask = task({
   run: async (payload: PersonaGenerationPayload) => {
     logger.info(`[Trigger.dev] Starting persona generation task`, {
       userId: payload.userId,
-      spaceId: payload.spaceId,
+      labelId: payload.labelId,
       mode: payload.mode,
     });
 

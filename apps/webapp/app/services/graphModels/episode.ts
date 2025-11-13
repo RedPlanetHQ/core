@@ -21,8 +21,7 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.createdAt = $createdAt,
       e.validAt = $validAt,
       e.userId = $userId,
-      e.labels = $labels,
-      e.space = $space,
+      e.labelIds = $labelIds,
       e.sessionId = $sessionId,
       e.documentId = $documentId
     ON MATCH SET
@@ -32,8 +31,7 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.metadata = $metadata,
       e.source = $source,
       e.validAt = $validAt,
-      e.labels = $labels,
-      e.space = $space,
+      e.labelIds = $labelIds,
       e.sessionId = $sessionId,
       e.documentId = $documentId
     RETURN e.uuid as uuid
@@ -46,11 +44,10 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
     source: episode.source,
     metadata: JSON.stringify(episode.metadata || {}),
     userId: episode.userId || null,
-    labels: episode.labels || [],
+    labelIds: episode.labelIds || [],
     createdAt: episode.createdAt.toISOString(),
     validAt: episode.validAt.toISOString(),
     contentEmbedding: episode.contentEmbedding || [],
-    space: episode.space || null,
     sessionId: episode.sessionId || null,
     documentId: episode.documentId || null,
   };
@@ -403,11 +400,30 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     createdAt: new Date(raw.createdAt),
     validAt: new Date(raw.validAt),
     userId: raw.userId,
-    labels: raw.labels || [],
-    space: raw.space || undefined,
+    labelIds: raw.labelIds || [],
     sessionId: raw.sessionId || undefined,
     recallCount: raw.recallCount || undefined,
     chunkIndex: raw.chunkIndex || undefined,
-    labelIds: raw.labelIds || [],
+    documentId: raw.documentId || undefined,
   };
 }
+
+export async function addLabelToEpisodes(labelId: string, episodeUuids: string[], userId: string): Promise<number> {
+  const query = `
+    MATCH (e:Episode {userId: $userId})
+    WHERE e.uuid IN $episodeUuids AND NOT $labelId IN COALESCE(e.labelIds, [])
+    SET e.labelIds = COALESCE(e.labelIds, []) + $labelId
+    RETURN count(e) as updatedEpisodes
+  `;
+
+  const result = await runQuery(query, {
+    userId,
+    episodeUuids,
+    labelId,
+  });
+  const updatedEpisodes =
+    result[0]?.get("updatedEpisodes") || 0;
+
+  return updatedEpisodes;
+}
+  

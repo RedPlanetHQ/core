@@ -166,7 +166,7 @@ export async function enqueueBertTopicAnalysis(payload: {
 export async function enqueuePersonaGeneration(payload: {
   userId: string;
   workspaceId: string;
-  spaceId: string;
+  labelId: string;
   mode: "full" | "incremental";
   startTime?: string;
 }): Promise<{ id?: string; token?: string }> {
