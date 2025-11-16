@@ -2,6 +2,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
   redirect,
+  type MetaFunction,
 } from "@remix-run/node";
 import { Form, useLoaderData } from "@remix-run/react";
 import { getUser, requireWorkpace } from "~/services/session.server";
@@ -25,6 +26,25 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { getIconForAuthorise } from "~/components/icon-utils";
+
+export const meta: MetaFunction = ({ matches }) => {
+  const parentMeta = matches
+    .flatMap((match) => match.meta ?? [])
+    .filter((meta) => {
+      if ("title" in meta) return false;
+      if ("name" in meta && meta.name === "viewport") return false;
+      return true;
+    });
+
+  return [
+    ...parentMeta,
+    { title: `Authorize Access - C.O.R.E.` },
+    {
+      name: "viewport",
+      content: "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no",
+    },
+  ];
+};
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Check if user is authenticated
@@ -229,48 +249,52 @@ export default function OAuthAuthorize() {
   };
 
   return (
-    <div className="bg-background-2 flex min-h-screen items-center justify-center">
-      <Card className="bg-background-3 shadow-1 w-full max-w-md rounded-lg p-5">
-        <CardContent>
-          <div className="flex items-center justify-center gap-4">
-            {getIconForAuthorise(client.name, 40, client.logoUrl)}
-            <ArrowRightLeft size={16} />
-            <Logo size={40} />
+    <div className="bg-background-2 flex min-h-screen items-start sm:items-center justify-center p-3 sm:p-4 md:p-6 overflow-x-hidden">
+      <Card className="bg-background-3 shadow-1 w-full max-w-md rounded-lg p-4 sm:p-6 md:p-8 my-auto sm:my-0">
+        <CardContent className="p-0">
+          <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+            {getIconForAuthorise(client.name, 32, client.logoUrl)}
+            <ArrowRightLeft size={14} className="shrink-0 sm:w-4 sm:h-4" />
+            <Logo size={32} />
           </div>
-          <div className="mt-4 space-y-4">
-            <div className="flex items-center justify-center space-x-3 text-center">
+          <div className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
+            <div className="flex items-center justify-center text-center px-2">
               <div>
-                <p className="text-lg font-normal">
+                <p className="text-base sm:text-lg md:text-xl font-normal leading-tight">
                   {client.name} is requesting access
                 </p>
-                <p className="text-muted-foreground text-sm">
+                <p className="text-muted-foreground mt-2 text-sm sm:text-base leading-relaxed">
                   Authenticating with your {user.name} account
                 </p>
               </div>
             </div>
 
-            <p className="text-muted-foreground mb-2 text-sm">Permissions</p>
-            <ul className="text-muted-foreground text-sm">
-              {params.scope?.split(",").map((scope, index, arr) => {
-                const trimmedScope = scope.trim();
-                const isFirst = index === 0;
-                const isLast = index === arr.length - 1;
-                return (
-                  <li
-                    key={index}
-                    className={`flex items-center gap-2 border-x border-t border-gray-300 p-2 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-br-md rounded-bl-md" : ""} `}
-                  >
-                    <div>{getScopeIcon(trimmedScope)}</div>
-                    <div>{getScopeDescription(trimmedScope)}</div>
-                  </li>
-                );
-              })}
-            </ul>
+            <div>
+              <p className="text-muted-foreground mb-2 sm:mb-3 text-sm sm:text-base font-medium">
+                Permissions
+              </p>
+              <ul className="text-muted-foreground text-sm sm:text-base">
+                {params.scope?.split(",").map((scope, index, arr) => {
+                  const trimmedScope = scope.trim();
+                  const isFirst = index === 0;
+                  const isLast = index === arr.length - 1;
+                  return (
+                    <li
+                      key={index}
+                      className={`flex items-start gap-2 sm:gap-3 border-x border-t border-gray-300 p-3 sm:p-4 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-br-md rounded-bl-md" : ""} `}
+                    >
+                      <div className="shrink-0 mt-0.5">{getScopeIcon(trimmedScope)}</div>
+                      <div className="flex-1 leading-relaxed">{getScopeDescription(trimmedScope)}</div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
 
             {isRedirecting ? (
-              <div className="flex flex-col items-center justify-center py-8">
-                <LoaderCircle className="text-primary mb-2 h-4 w-4 animate-spin" />
-                <span className="text-muted-foreground text-sm">
+              <div className="flex flex-col items-center justify-center py-6 sm:py-8 md:py-12 px-4">
+                <LoaderCircle className="text-primary mb-3 h-6 w-6 sm:h-8 sm:w-8 animate-spin" />
+                <span className="text-muted-foreground text-center text-sm sm:text-base leading-relaxed px-2">
                   Redirecting to the page... (Close this page if it doesn't
                   redirect in 5 seconds)
                 </span>
@@ -278,7 +302,7 @@ export default function OAuthAuthorize() {
             ) : (
               <Form
                 method="post"
-                className="space-y-3"
+                className="space-y-3 sm:space-y-4"
                 onSubmit={(e) => {
                   // Only show loading if allow is clicked
                   const form = e.target as HTMLFormElement;
@@ -326,13 +350,14 @@ export default function OAuthAuthorize() {
                   />
                 )}
 
-                <div className="flex justify-end space-x-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-3 pt-2">
                   <Button
                     type="submit"
                     name="action"
                     value="deny"
                     size="lg"
                     variant="secondary"
+                    className="w-full sm:w-auto min-h-[44px] text-base sm:text-sm"
                   >
                     Deny
                   </Button>
@@ -341,7 +366,7 @@ export default function OAuthAuthorize() {
                     name="action"
                     value="allow"
                     size="lg"
-                    className="shadow-none"
+                    className="w-full shadow-none sm:w-auto min-h-[44px] text-base sm:text-sm"
                   >
                     Allow Access
                   </Button>
