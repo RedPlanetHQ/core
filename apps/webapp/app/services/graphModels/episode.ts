@@ -148,7 +148,7 @@ export async function searchEpisodesByEmbedding(params: {
   const limit = params.limit || 100;
   const query = `
   MATCH (episode:Episode{userId: $userId})
-  WHERE episode.contentEmbedding IS NOT NULL
+  WHERE episode.contentEmbedding IS NOT NULL and size(episode.contentEmbedding) > 0
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode, score
@@ -277,7 +277,7 @@ export async function getRelatedEpisodesEntities(params: {
   const limit = params.limit || 100;
   const query = `
   MATCH (episode:Episode{userId: $userId})
-  WHERE episode.contentEmbedding IS NOT NULL
+  WHERE episode.contentEmbedding IS NOT NULL and size(episode.contentEmbedding) > 0
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)-[:HAS_SUBJECT|HAS_OBJECT]->(ent:Entity)

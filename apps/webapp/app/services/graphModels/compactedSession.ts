@@ -140,7 +140,7 @@ export async function searchCompactedSessionsByEmbedding(
 ): Promise<Array<{ compact: CompactedSessionNode; score: number }>> {
   const query = `
     MATCH (cs:CompactedSession {userId: $userId})
-    WHERE cs.summaryEmbedding IS NOT NULL
+    WHERE cs.summaryEmbedding IS NOT NULL and size(cs.summaryEmbedding) > 0
     WITH cs,
          gds.similarity.cosine(cs.summaryEmbedding, $embedding) AS score
     WHERE score >= $minScore

@@ -55,6 +55,8 @@ export const EPISODIC_NODE_PROPERTIES = `{
   uuid: e.uuid,
   content: e.content,
   originalContent: e.originalContent,
+  source: e.source,
+  metadata: e.metadata,
   createdAt: e.createdAt,
   userId: e.userId,
   sessionId: e.sessionId,

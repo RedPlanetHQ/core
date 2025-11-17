@@ -45,7 +45,8 @@ export async function findSimilarEpisodes(
     const similarQuery = `
       MATCH (e:Episode {userId: $userId})
       WHERE e.embedding IS NOT NULL
-        AND NOT e.uuid IN $newEpisodeIds
+        AND NOT e.uuid IN $newEpisodeIds 
+        AND size(e.embedding) > 0
       WITH e, gds.similarity.cosine(e.embedding, $searchEmbedding) AS similarity
       WHERE similarity > 0.7
       RETURN e, similarity

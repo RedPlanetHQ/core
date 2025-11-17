@@ -180,6 +180,7 @@ export async function performVectorSearch(
     MATCH (s:Statement{userId: $userId})
     WHERE s.factEmbedding IS NOT NULL
       AND s.validAt <= $validAt
+      AND size(s.factEmbedding) > 0
       ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
       ${options.startTime ? "AND s.validAt >= $startTime" : ""}
     WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
@@ -403,7 +404,7 @@ async function bfsTraversal(
     // Optimized: userId in MATCH for index usage + named rel variable for relationship index
     const cypher = `
       MATCH (e:Entity{userId: $userId})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
-      WHERE e.uuid IN $entityIds
+      WHERE e.uuid IN $entityIds and s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
         ${timeframeCondition}
       WITH DISTINCT s  // Deduplicate first
       WITH s, gds.similarity.cosine(s.factEmbedding, $queryEmbedding) AS relevance
@@ -693,13 +694,15 @@ export async function performEpisodeGraphSearch(
       // Step 2: Find episodes containing these statements and filter by labelIds
       // Optimized: Named rel for HAS_PROVENANCE index
       MATCH (s)<-[provRel:HAS_PROVENANCE]-(ep:Episode)
-      WHERE true ${episodeLabelCondition}
+      WHERE true and s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0 ${episodeLabelCondition}
 
       // Step 3: Collect all statements from these episodes (for metrics only)
       // Optimized: userId filter + named rel for relationship index
       MATCH (ep)-[provRel2:HAS_PROVENANCE]->(epStatement:Statement{userId: $userId})
       WHERE epStatement.validAt <= $validAt
         AND (epStatement.invalidAt IS NULL OR epStatement.invalidAt > $validAt)
+        AND epStatement.factEmbedding IS NOT NULL
+        AND size(epStatement.factEmbedding) > 0
 
       // Step 4: Calculate episode-level metrics
       WITH ep,
