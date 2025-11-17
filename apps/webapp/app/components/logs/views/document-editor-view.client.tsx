@@ -52,7 +52,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
     }
 
     // Fetch all episodes for this session
-    fetch(`/api/v1/episodes/session/${log.data.sessionId}`)
+    fetch(`/api/v1/episodes/session/${log.sessionId}`)
       .then((res) => {
         if (!res.ok) {
           throw new Error("Failed to fetch session episodes");

@@ -113,14 +113,14 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <div className="mt-4 flex h-full w-full flex-col">
+          {/* <div className="mt-4 flex h-full w-full flex-col">
             <div className="group flex h-8 w-full items-center justify-between gap-1 pr-2">
               <h2 className="text-muted-foreground px-4 text-sm">Favourites</h2>
               <Button variant="link" className="hidden group-hover:flex">
                 <RiFolderAddLine size="16 " />
               </Button>
             </div>
-          </div>
+          </div> */}
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">

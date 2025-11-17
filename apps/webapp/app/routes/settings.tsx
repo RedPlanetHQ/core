@@ -59,7 +59,7 @@ export default function Settings() {
         <Sidebar collapsible="none" className="hidden w-[180px] md:flex">
           <SidebarHeader className="flex justify-start pb-0">
             <Button
-              variant="link"
+              variant="ghost"
               className="flex w-fit gap-2"
               onClick={gotoHome}
             >

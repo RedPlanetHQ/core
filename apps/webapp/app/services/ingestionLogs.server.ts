@@ -204,20 +204,9 @@ export const getLogByEpisode = async (episodeUuid: string) => {
   // 2. log.output.episodes array (multiple episodes - DOCUMENT type)
   const logs = await prisma.ingestionQueue.findMany({
     where: {
-      OR: [
-        {
-          output: {
-            path: ["episodeUuid"],
-            equals: episodeUuid,
-          },
-        },
-        {
-          output: {
-            path: ["episodes"],
-            array_contains: episodeUuid,
-          },
-        },
-      ],
+      graphIds: {
+        has: episodeUuid,
+      },
     },
     orderBy: {
       createdAt: "desc",

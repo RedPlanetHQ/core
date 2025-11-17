@@ -44,7 +44,7 @@ export function EditLabel({ onCancel, label, onSuccess }: EditLabelProps) {
           className="h-3 w-3 flex-shrink-0 rounded-full"
           style={{ backgroundColor: label.color }}
         />
-        <div className="flex-1">
+        <div className="flex flex-1 gap-1">
           <Input
             value={labelName}
             className="w-full"
@@ -57,16 +57,14 @@ export function EditLabel({ onCancel, label, onSuccess }: EditLabelProps) {
               }
             }}
           />
-        </div>
-      </div>
 
-      <div>
-        <Input
-          value={labelDescription}
-          className="w-full"
-          onChange={(e) => setLabelDescription(e.target.value)}
-          placeholder="Description (optional)"
-        />
+          <Input
+            value={labelDescription}
+            className="w-full"
+            onChange={(e) => setLabelDescription(e.target.value)}
+            placeholder="Description (optional)"
+          />
+        </div>
       </div>
 
       <div className="flex justify-end gap-4">
