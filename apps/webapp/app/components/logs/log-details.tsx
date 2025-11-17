@@ -1,12 +1,5 @@
-import { useState, useEffect, type ReactNode } from "react";
-import { useFetcher } from "@remix-run/react";
-import {
-  AlertCircle,
-  File,
-  Loader2,
-  LoaderCircle,
-  MessageSquare,
-} from "lucide-react";
+import { type ReactNode } from "react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Badge, BadgeColor } from "../ui/badge";
 import { type LogItem } from "~/hooks/use-logs";
 import { getIconForAuthorise } from "../icon-utils";
@@ -16,9 +9,12 @@ import { ConversationView } from "./views/conversation-view";
 import { SessionConversationView } from "./views/session-conversation-view";
 import { DocumentEditorView } from "./views/document-editor-view.client";
 import { ClientOnly } from "remix-utils/client-only";
+import { Input } from "../ui";
+import { type Label, LabelDropdown } from "./label-dropdown";
 
 interface LogDetailsProps {
   log: LogItem;
+  labels: Label[];
 }
 
 interface PropertyItemProps {
@@ -31,7 +27,6 @@ interface PropertyItemProps {
 }
 
 function PropertyItem({
-  label,
   value,
   icon,
   variant = "secondary",
@@ -45,12 +40,15 @@ function PropertyItem({
       {variant === "status" ? (
         <Badge
           className={cn(
-            "text-foreground h-7 items-center gap-2 rounded !bg-transparent px-4.5 !text-base",
+            "text-foreground h-7 items-center gap-2 rounded !bg-transparent px-2 !text-base",
             className,
           )}
         >
           {statusColor && (
-            <BadgeColor className={cn(statusColor, "h-2.5 w-2.5")} />
+            <BadgeColor
+              className={cn("h-2.5 w-2.5")}
+              style={{ backgroundColor: statusColor }}
+            />
           )}
           {value}
         </Badge>
@@ -67,19 +65,6 @@ function PropertyItem({
   );
 }
 
-interface EpisodeFact {
-  uuid: string;
-  fact: string;
-  createdAt: string;
-  validAt: string;
-  attributes: any;
-}
-
-interface EpisodeFactsResponse {
-  facts: EpisodeFact[];
-  invalidFacts: EpisodeFact[];
-}
-
 function getStatusValue(status: string) {
   if (status === "PENDING") {
     return formatString("IN QUEUE");
@@ -88,12 +73,18 @@ function getStatusValue(status: string) {
   return formatString(status);
 }
 
-export function LogDetails({ log }: LogDetailsProps) {
+export function LogDetails({ log, labels }: LogDetailsProps) {
   return (
     <div className="flex h-full w-full flex-col items-center overflow-auto">
       <div className="max-w-4xl min-w-3xl">
-        <div className="mt-5 mb-5 px-4">
-          <div className="bg-grayAlpha-100 flex gap-2 rounded-xl px-2 py-2">
+        <div>
+          <Input
+            value={log.title ?? "Untitled"}
+            className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
+          />
+        </div>
+        <div className="mt-5 mb-3 px-4">
+          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
             <PropertyItem
               label="Source"
               value={formatString(log.source?.toLowerCase())}
@@ -112,6 +103,8 @@ export function LogDetails({ log }: LogDetailsProps) {
                 statusColor={log.status && getStatusColor(log.status)}
               />
             )}
+
+            <LabelDropdown value={log.labels} labels={labels} logId={log.id} />
           </div>
         </div>
 
@@ -130,7 +123,11 @@ export function LogDetails({ log }: LogDetailsProps) {
         )}
 
         <ClientOnly
-          fallback={<LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+          fallback={
+            <div className="flex w-full justify-center">
+              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+            </div>
+          }
         >
           {() => (
             <>

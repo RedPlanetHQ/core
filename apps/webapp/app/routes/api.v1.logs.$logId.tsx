@@ -5,6 +5,7 @@ import {
   deleteIngestionQueue,
   getIngestionQueue,
   getIngestionQueueForFrontend,
+  updateIngestionQueue,
 } from "~/services/ingestionLogs.server";
 import {
   createHybridActionApiRoute,
@@ -15,6 +16,11 @@ import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
 // Schema for space ID parameter
 const LogParamsSchema = z.object({
   logId: z.string(),
+});
+
+export const LogUpdateBody = z.object({
+  labels: z.array(z.string()).optional(),
+  title: z.string().optional(),
 });
 
 const loader = createHybridLoaderApiRoute(
@@ -38,13 +44,67 @@ const { action } = createHybridActionApiRoute(
   {
     params: LogParamsSchema,
     allowJWT: true,
-    method: "DELETE",
     authorization: {
-      action: "delete",
+      action: "update",
     },
     corsStrategy: "all",
   },
-  async ({ params, authentication }) => {
+  async ({ params, authentication, request }) => {
+    // Handle PATCH requests for updating labels
+    if (request.method === "PATCH") {
+      try {
+        const ingestionQueue = await getIngestionQueue(params.logId);
+
+        if (!ingestionQueue) {
+          return json(
+            {
+              error: "Episode not found or unauthorized",
+              code: "not_found",
+            },
+            { status: 404 },
+          );
+        }
+
+        const body = await request.json();
+        const validationResult = LogUpdateBody.safeParse(body);
+
+        if (!validationResult.success) {
+          return json(
+            {
+              error: "Invalid request body",
+              code: "validation_error",
+              details: validationResult.error.errors,
+            },
+            { status: 400 },
+          );
+        }
+
+        const { labels, title } = validationResult.data;
+
+        // Update the ingestion queue with new labels
+        const updatedQueue = await updateIngestionQueue(params.logId, {
+          labels,
+          title,
+        });
+
+        return json({
+          success: true,
+          message: "Labels updated successfully",
+          labels: updatedQueue.labels,
+        });
+      } catch (error) {
+        console.error("Error updating labels:", error);
+        return json(
+          {
+            error: "Failed to update labels",
+            code: "internal_error",
+          },
+          { status: 500 },
+        );
+      }
+    }
+
+    // Handle DELETE requests
     try {
       const ingestionQueue = await getIngestionQueue(params.logId);
 

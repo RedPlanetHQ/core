@@ -9,14 +9,25 @@ import {
 } from "~/components/ui/popover";
 import { Badge } from "~/components/ui/badge";
 
+interface Label {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  workspaceId: string;
+}
+
 interface LogsFiltersProps {
   availableSources: Array<{ name: string; slug: string }>;
   selectedSource?: string;
   selectedStatus?: string;
   selectedType?: string;
+  selectedLabel?: string;
+  labels: Label[];
   onSourceChange: (source?: string) => void;
   onStatusChange: (status?: string) => void;
   onTypeChange: (type?: string) => void;
+  onLabelChange: (label?: string) => void;
 }
 
 const statusOptions = [
@@ -30,16 +41,19 @@ const typeOptions = [
   { value: "DOCUMENT", label: "Document" },
 ];
 
-type FilterStep = "main" | "source" | "status" | "type";
+type FilterStep = "main" | "source" | "status" | "type" | "label";
 
 export function LogsFilters({
   availableSources = [],
   selectedSource,
   selectedStatus,
   selectedType,
+  selectedLabel,
+  labels = [],
   onSourceChange,
   onStatusChange,
   onTypeChange,
+  onLabelChange,
 }: LogsFiltersProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
   const [step, setStep] = useState<FilterStep>("main");
@@ -53,8 +67,9 @@ export function LogsFilters({
   const selectedTypeLabel = typeOptions.find(
     (s) => s.value === selectedType,
   )?.label;
+  const selectedLabelObj = labels.find((l) => l.id === selectedLabel);
 
-  const hasFilters = selectedSource || selectedStatus || selectedType;
+  const hasFilters = selectedSource || selectedStatus || selectedType || selectedLabel;
 
   return (
     <div className="mb-2 flex w-full items-center justify-start gap-2 px-3">
@@ -100,6 +115,13 @@ export function LogsFilters({
                   onClick={() => setStep("type")}
                 >
                   Type
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start"
+                  onClick={() => setStep("label")}
+                >
+                  Label
                 </Button>
               </div>
             )}
@@ -203,6 +225,42 @@ export function LogsFilters({
                 ))}
               </div>
             )}
+
+            {step === "label" && (
+              <div className="flex flex-col gap-1 p-2">
+                <Button
+                  variant="ghost"
+                  className="w-full justify-start"
+                  onClick={() => {
+                    onLabelChange(undefined);
+                    setPopoverOpen(false);
+                    setStep("main");
+                  }}
+                >
+                  All labels
+                </Button>
+                {labels.map((label) => (
+                  <Button
+                    key={label.id}
+                    variant="ghost"
+                    className="w-full justify-start gap-2"
+                    onClick={() => {
+                      onLabelChange(
+                        label.id === selectedLabel ? undefined : label.id,
+                      );
+                      setPopoverOpen(false);
+                      setStep("main");
+                    }}
+                  >
+                    <div
+                      className="h-3 w-3 rounded-full"
+                      style={{ backgroundColor: label.color }}
+                    />
+                    {label.name}
+                  </Button>
+                ))}
+              </div>
+            )}
           </PopoverContent>
         </PopoverPortal>
       </Popover>
@@ -234,6 +292,19 @@ export function LogsFilters({
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onTypeChange(undefined)}
+              />
+            </Badge>
+          )}
+          {selectedLabel && selectedLabelObj && (
+            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
+              <div
+                className="h-3 w-3 rounded-full"
+                style={{ backgroundColor: selectedLabelObj.color }}
+              />
+              {selectedLabelObj.name}
+              <X
+                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
+                onClick={() => onLabelChange(undefined)}
               />
             </Badge>
           )}

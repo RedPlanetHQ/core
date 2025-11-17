@@ -1,11 +1,11 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
 import { type Editor } from "@tiptap/react";
 import { EditorContent, EditorRoot } from "novel";
 import { type LogItem } from "~/hooks/use-logs";
 
 import { Badge } from "~/components/ui/badge";
-import { Loader2 } from "lucide-react";
+import { Loader2, Check } from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
   extensionsForConversation,
@@ -36,19 +36,18 @@ interface SessionEpisode {
 export function DocumentEditorView({ log }: DocumentEditorViewProps) {
   const [editor, setEditor] = useState<Editor>();
   const [episodes, setEpisodes] = useState<SessionEpisode[]>([]);
-  const [loading, setLoading] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
   const [invalidFactsByEpisode, setInvalidFactsByEpisode] = useState<
     Record<string, InvalidFact[]>
   >({});
   const [factsLoading, setFactsLoading] = useState(false);
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ success?: boolean; error?: boolean }>();
+  const saveTimeoutRef = useRef<NodeJS.Timeout>();
 
   const isLoading = fetcher.state === "submitting";
 
   useEffect(() => {
     if (!log.sessionId) {
-      setLoading(false);
       return;
     }
 
@@ -63,7 +62,6 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
       .then((data) => {
         const fetchedEpisodes = data.episodes || [];
         setEpisodes(fetchedEpisodes);
-        setLoading(false);
 
         // Fetch invalidated facts for all episodes
         if (fetchedEpisodes.length > 0) {
@@ -91,9 +89,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
             });
         }
       })
-      .catch((err) => {
-        setLoading(false);
-      });
+      .catch(() => {});
   }, [log.sessionId]);
 
   useEffect(() => {
@@ -109,33 +105,55 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
       // Get the latest episode's content
       const latestContent = sortedEpisodes[0]?.content || "";
       editor.commands.setContent(latestContent);
+
+      // Set up auto-save on content change with debounce
+      const handleUpdate = () => {
+        setHasChanges(true);
+
+        // Clear existing timeout
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+
+        // Debounced save - waits 3 seconds after user stops typing
+        saveTimeoutRef.current = setTimeout(() => {
+          handleSave();
+        }, 3000);
+      };
+
+      editor.on("update", handleUpdate);
+
+      return () => {
+        editor.off("update", handleUpdate);
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+      };
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [episodes, editor]);
 
   const handleSave = useCallback(() => {
-    if (!editor) return;
+    if (!editor || isLoading) return;
 
-    const content = editor.getHTML();
+    const content = editor?.storage.markdown.getMarkdown();
 
-    // Save the updated document
+    // Save using the new document API
     fetcher.submit(
+      { content },
       {
-        content,
-        logId: log.id,
-      },
-      {
-        action: "/api/v1/documents/update",
+        action: `/api/v1/logs/${log.id}/document`,
         method: "POST",
         encType: "application/json",
       },
     );
 
     setHasChanges(false);
-  }, [editor, log.id, fetcher]);
+  }, [editor, log.id, fetcher, isLoading]);
 
-  // Show success message after save
+  // Update last saved time after successful save
   useEffect(() => {
-    if (fetcher.data && fetcher.state === "idle") {
+    if (fetcher.data?.success && fetcher.state === "idle") {
       setHasChanges(false);
     }
   }, [fetcher.data, fetcher.state]);
@@ -169,12 +187,6 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
             />
           </EditorRoot>
         </div>
-
-        {hasChanges && (
-          <p className="text-muted-foreground mt-2 text-xs">
-            You have unsaved changes
-          </p>
-        )}
       </div>
 
       {/* Invalidated Facts by Episode */}

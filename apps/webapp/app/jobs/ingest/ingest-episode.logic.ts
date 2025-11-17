@@ -23,6 +23,7 @@ export const IngestBodyRequest = z.object({
   type: z
     .enum([EpisodeType.CONVERSATION, EpisodeType.DOCUMENT])
     .default(EpisodeType.CONVERSATION),
+  delay: z.boolean().optional(),
 });
 
 export interface IngestEpisodePayload {

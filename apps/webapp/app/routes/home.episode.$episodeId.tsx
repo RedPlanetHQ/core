@@ -7,22 +7,29 @@ import { LogOptions } from "~/components/logs/log-options";
 import { ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { getIngestionQueueForFrontend } from "~/services/ingestionLogs.server";
-import { requireUserId } from "~/services/session.server";
+import { LabelService } from "~/services/label.server";
+import { getUser, requireUserId } from "~/services/session.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
+  const user = await getUser(request);
   const logId = params.episodeId;
-
+  const labelService = new LabelService();
   try {
-    const log = await getIngestionQueueForFrontend(logId as string, userId);
-    return json({ log: log });
+    const log = await getIngestionQueueForFrontend(
+      logId as string,
+      user?.id as string,
+    );
+    const labels = await labelService.getWorkspaceLabels(
+      user?.Workspace?.id as string,
+    );
+    return json({ log: log, labels });
   } catch (e) {
-    return json({ log: null });
+    return json({ log: null, labels: [] });
   }
 }
 
 export default function InboxNotSelected() {
-  const { log } = useLoaderData<typeof loader>();
+  const { log, labels } = useLoaderData<typeof loader>();
 
   if (!log) {
     return (
@@ -38,7 +45,7 @@ export default function InboxNotSelected() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-[calc(100vh_-_20px)] w-full flex-col overflow-hidden">
+      <div className="flex h-[calc(100vh_-_16px)] w-full flex-col overflow-hidden">
         <PageHeader
           title="Episode"
           actionsNode={<LogOptions id={log.id} status={log.status} />}
@@ -52,7 +59,7 @@ export default function InboxNotSelected() {
             collapsible
             collapsedSize={50}
           >
-            <LogDetails log={log as any} />
+            <LogDetails log={log as any} labels={labels} />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>

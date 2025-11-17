@@ -134,6 +134,8 @@
   --team-color-1: #89c794;
   --team-color-2: #d2a1bb;
   --team-color-3: #90c5d6;
+
+  --avatar-1: oklch(60% 0.13 240);
 }
 
 .dark {
@@ -195,6 +197,8 @@
   --sidebar-accent-foreground: hsl(240 4.8% 95.9%);
   --sidebar-border: hsl(240 3.7% 15.9%);
   --sidebar-ring: hsl(217.2 91.2% 59.8%);
+
+  --avatar-1: oklch(60% 0.13 240);
 }
 
 @theme inline {
@@ -284,9 +288,9 @@
   --color-yellow-900: #6b4118;
   --color-yellow-950: #3e220a;
 
-  --text-xs: 12px;
-  --text-sm: 13px;
-  --text-base: 14px;
+  --text-xs: 11px;
+  --text-sm: 12px;
+  --text-base: 13px;
   --text-md: 15px;
   --text-lg: 17px;
   --text-xl: 22px;
@@ -372,6 +376,12 @@
     pointer-events: none;
 
   }
+}
+
+.popover, .dialog-content, .dropdown {
+  box-shadow: 
+  0px 0px 2px 0px rgba(0, 0, 0, 0.2),
+  0px 6px 20px 0px rgba(0, 0, 0, 0.15);
 }
 
 .title-bar-sigma {
@@ -490,6 +500,14 @@
 
     :first-child {
       margin-top: 0;
+    }
+    
+    strong {
+      font-weight: 500;
+    }
+
+    li  p {
+      margin-top: 0.5rem !important;
     }
 
     pre {

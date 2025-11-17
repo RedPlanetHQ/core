@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { FileText, Plus, Loader2, Clock } from "lucide-react";
+import { FileText, Plus, Loader2, File, MessageSquare } from "lucide-react";
 import {
   CommandDialog,
   CommandGroup,
@@ -109,7 +109,17 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                 className="flex flex-col items-start gap-1 py-2"
               >
                 <div className="flex w-full items-start gap-2">
-                  <Clock className="mt-0.5 mr-2 h-4 w-4 flex-shrink-0" />
+                  {episode.type === "DOCUMENT" ? (
+                    <File
+                      className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
+                      size={14}
+                    />
+                  ) : (
+                    <MessageSquare
+                      className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
+                      size={14}
+                    />
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="line-clamp-2 max-w-[400px] text-sm">
                       {episode.content}

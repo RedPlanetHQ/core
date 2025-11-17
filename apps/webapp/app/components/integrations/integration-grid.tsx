@@ -24,7 +24,7 @@ export function IntegrationGrid({
   if (integrations.length === 0) {
     return (
       <div className="mt-20 flex flex-col items-center justify-center">
-        <LayoutGrid className="text-muted-foreground mb-2 h-10 w-10" />
+        <LayoutGrid className="text-muted-foreground mb-2 h-6 w-6" />
         <h3 className="text-lg">No integrations found</h3>
       </div>
     );

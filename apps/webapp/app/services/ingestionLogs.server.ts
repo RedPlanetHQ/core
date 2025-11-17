@@ -68,6 +68,8 @@ export const getIngestionQueueForFrontend = async (
       error: true,
       type: true,
       output: true,
+      labels: true,
+      title: true,
       data: true,
       workspaceId: true,
       activity: {
@@ -106,7 +108,9 @@ export const getIngestionQueueForFrontend = async (
         processedAt: true,
         status: true,
         error: true,
+        labels: true,
         type: true,
+        title: true,
         output: true,
         data: true,
         workspaceId: true,
@@ -138,9 +142,39 @@ export const getIngestionQueueForFrontend = async (
   const integrationDef =
     log.activity?.integrationAccount?.integrationDefinition;
   const logData = log.data as any;
+  const sessionId = logData?.sessionId;
+
+  // If there's a sessionId, fetch title and labels from the latest log in the session
+  let title = log.title;
+  let labels = log.labels;
+  let status = log.status;
+
+  if (sessionId) {
+    const latestLog = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId,
+      },
+      select: {
+        title: true,
+        labels: true,
+        status: true,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (latestLog) {
+      title = latestLog.title;
+      labels = latestLog.labels;
+      status = latestLog.status;
+    }
+  }
 
   const formattedLog: any = {
     id: log.id,
+    title,
+    labels,
     source: integrationDef?.name || logData?.source || "Unknown",
     ingestText:
       log.activity?.text ||
@@ -150,7 +184,7 @@ export const getIngestionQueueForFrontend = async (
     time: log.createdAt,
     processedAt: log.processedAt,
     episodeUUID: (log.output as any)?.episodeUuid,
-    status: log.status,
+    status,
     error: log.error,
     sourceURL: log.activity?.sourceURL,
     integrationSlug: integrationDef?.slug,
@@ -158,8 +192,8 @@ export const getIngestionQueueForFrontend = async (
   };
 
   // Add sessionId and isSessionGroup flag
-  formattedLog.sessionId = logData?.sessionId;
-  formattedLog.isSessionGroup = !!logData?.sessionId;
+  formattedLog.sessionId = sessionId;
+  formattedLog.isSessionGroup = !!sessionId;
 
   return formattedLog;
 };
@@ -199,5 +233,59 @@ export const deleteIngestionQueue = async (id: string) => {
     where: {
       id,
     },
+  });
+};
+
+export const updateIngestionQueue = async (
+  id: string,
+  data: { labels?: string[]; title?: string },
+) => {
+  // First, get the log to check for sessionId
+  const log = await prisma.ingestionQueue.findUnique({
+    where: { id },
+    select: {
+      id: true,
+      data: true,
+    },
+  });
+
+  if (!log) {
+    throw new Error(`Ingestion queue ${id} not found`);
+  }
+
+  const logData = log.data as any;
+  const sessionId = logData?.sessionId;
+
+  // If there's a sessionId, find the latest log for that session
+  if (sessionId) {
+    const latestLog = await prisma.ingestionQueue.findFirst({
+      where: {
+        data: {
+          path: ["sessionId"],
+          equals: sessionId,
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (latestLog) {
+      // Update the latest log in the session
+      return await prisma.ingestionQueue.update({
+        where: {
+          id: latestLog.id,
+        },
+        data,
+      });
+    }
+  }
+
+  // If no sessionId or no latest log found, update the original log
+  return await prisma.ingestionQueue.update({
+    where: {
+      id,
+    },
+    data,
   });
 };

@@ -54,7 +54,14 @@ export async function processDocumentIngestion(
       },
     });
 
-    const documentBody = payload.body;
+    const ingestionQueue = await prisma.ingestionQueue.findUnique({
+      where: { id: payload.queueId },
+    });
+
+    const documentBody = {
+      ...payload.body,
+      episodeBody: (ingestionQueue?.data as any).episodeBody,
+    };
 
     // Step 1: Initialize services and prepare document version
     const versioningService = new DocumentVersioningService();
@@ -192,7 +199,7 @@ export async function processDocumentIngestion(
             chunkIndex: chunk.chunkIndex,
             documentUuid: document.uuid,
           },
-          source: documentBody.source,
+          source: ingestionQueue?.source,
           labelIds: documentBody.labelIds,
           sessionId: documentBody.sessionId,
           type: EpisodeTypeEnum.DOCUMENT,

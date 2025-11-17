@@ -59,6 +59,7 @@ export async function enqueueIngestDocument(payload: {
   userId: string;
   workspaceId: string;
   queueId: string;
+  delay: boolean;
 }): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
@@ -70,6 +71,9 @@ export async function enqueueIngestDocument(payload: {
       queue: "document-ingestion-queue",
       concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
+      ...(payload.delay
+        ? { idempotencyKey: payload.queueId, idempotencyKeyTTL: "5m" }
+        : {}),
     });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {
@@ -79,6 +83,8 @@ export async function enqueueIngestDocument(payload: {
       jobId: payload.queueId,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
+      // If delay is true, schedule job to run after 5 minutes (300000 ms)
+      ...(payload.delay ? { delay: 5 * 60 * 1000 } : {}),
     });
 
     return { id: job.id };

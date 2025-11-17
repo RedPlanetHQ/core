@@ -3,17 +3,17 @@ import { formatString } from "~/lib/utils";
 export const getStatusColor = (status: string) => {
   switch (status) {
     case "PROCESSING":
-      return "bg-blue-800";
+      return "#3F8EF7";
     case "PENDING":
-      return "bg-warning";
+      return "#F5BD46";
     case "COMPLETED":
-      return "bg-success";
+      return "#55A271";
     case "FAILED":
-      return "bg-destructive";
+      return "#D45453";
     case "CANCELLED":
-      return "bg-gray-800";
+      return "#000000";
     default:
-      return "bg-gray-800";
+      return "#000000";
   }
 };
 

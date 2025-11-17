@@ -43,6 +43,21 @@ export const addToQueue = async (
     throw new Error("no credits");
   }
 
+  let labels: string[] = [];
+
+  if (body.sessionId) {
+    const lastEpisode = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: body.sessionId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    labels = lastEpisode?.labels ?? [];
+  }
+
   // Upsert: update existing or create new ingestion queue entry
   const queuePersist = await prisma.ingestionQueue.upsert({
     where: {
@@ -62,6 +77,8 @@ export const addToQueue = async (
       priority: 1,
       workspaceId: user.Workspace.id,
       activityId,
+      sessionId: body.sessionId,
+      labels,
     },
   });
 
@@ -72,6 +89,7 @@ export const addToQueue = async (
       userId,
       workspaceId: user.Workspace.id,
       queueId: queuePersist.id,
+      delay: body.delay ?? false,
     });
 
     // Track document ingestion

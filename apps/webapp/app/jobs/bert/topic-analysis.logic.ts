@@ -3,11 +3,11 @@ import { promisify } from "util";
 import { identifySpacesForTopics } from "~/jobs/spaces/space-identification.logic";
 import { logger } from "~/services/logger.service";
 import { getEpisode } from "~/services/graphModels/episode";
-import { makeModelCall, getModelForTask, isProprietaryModel } from "~/lib/model.server";
+import { makeModelCall, getModelForTask } from "~/lib/model.server";
 import { createBatch, getBatch } from "~/lib/batch.server";
-import { addToQueue, IngestBodyRequest } from "~/lib/ingest.server";
+import { addToQueue, type IngestBodyRequest } from "~/lib/ingest.server";
 import { EpisodeType, type EpisodicNode } from "@core/types";
-import { z } from "zod";
+import { type z } from "zod";
 
 const execAsync = promisify(exec);
 
@@ -144,7 +144,9 @@ async function generateSequentialSummaries(
     intent: string;
     topics: string[];
   }>,
-  topicsData: { [topicId: string]: { keywords: string[]; episodeIds: string[] } },
+  topicsData: {
+    [topicId: string]: { keywords: string[]; episodeIds: string[] };
+  },
   documentSummaries: DocumentSummary[],
 ): Promise<void> {
   for (const proposal of proposals) {
@@ -177,12 +179,9 @@ async function generateSequentialSummaries(
       );
 
       if (validEpisodes.length === 0) {
-        logger.warn(
-          "[BERT Topic Analysis] No valid episodes found for theme",
-          {
-            theme: proposal.name,
-          },
-        );
+        logger.warn("[BERT Topic Analysis] No valid episodes found for theme", {
+          theme: proposal.name,
+        });
         continue;
       }
 
@@ -216,13 +215,10 @@ async function generateSequentialSummaries(
         summaryLength: summary.length,
       });
     } catch (summaryError) {
-      logger.error(
-        "[BERT Topic Analysis] Failed to create document summary",
-        {
-          proposal,
-          error: summaryError,
-        },
-      );
+      logger.error("[BERT Topic Analysis] Failed to create document summary", {
+        proposal,
+        error: summaryError,
+      });
       // Continue with other proposals
     }
   }
@@ -241,7 +237,9 @@ async function createDocumentSummariesBatch(
     intent: string;
     topics: string[];
   }>,
-  topicsData: { [topicId: string]: { keywords: string[]; episodeIds: string[] } },
+  topicsData: {
+    [topicId: string]: { keywords: string[]; episodeIds: string[] };
+  },
 ): Promise<DocumentSummary[]> {
   logger.info("[Document Summary] Starting batch processing", {
     proposalCount: proposals.length,
@@ -403,9 +401,10 @@ Return ONLY the summary document content, no additional commentary.`;
     );
 
     if (result?.response && !result.error) {
-      const summary = typeof result.response === "string"
-        ? result.response
-        : JSON.stringify(result.response);
+      const summary =
+        typeof result.response === "string"
+          ? result.response
+          : JSON.stringify(result.response);
 
       documentSummaries.push({
         title: metadata.proposal.name,
@@ -514,7 +513,8 @@ export async function processTopicAnalysis(
       // Step 3: Generate document summaries for each identified theme
       // Check if we can use batch processing (OpenAI models only)
       const modelForTask = getModelForTask("high");
-      const canUseBatch = modelForTask.includes("gpt") || modelForTask.includes("o1");
+      const canUseBatch =
+        modelForTask.includes("gpt") || modelForTask.includes("o1");
 
       if (canUseBatch) {
         logger.info(
@@ -570,12 +570,9 @@ export async function processTopicAnalysis(
 
       // Step 4: Ingest document summaries as episodic documents
       if (documentSummaries.length > 0) {
-        logger.info(
-          "[BERT Topic Analysis] Ingesting document summaries",
-          {
-            documentCount: documentSummaries.length,
-          },
-        );
+        logger.info("[BERT Topic Analysis] Ingesting document summaries", {
+          documentCount: documentSummaries.length,
+        });
 
         for (const docSummary of documentSummaries) {
           try {
@@ -598,23 +595,17 @@ export async function processTopicAnalysis(
               episodeCount: docSummary.episodeCount,
             });
           } catch (ingestError) {
-            logger.error(
-              "[BERT Topic Analysis] Failed to ingest document",
-              {
-                title: docSummary.title,
-                error: ingestError,
-              },
-            );
+            logger.error("[BERT Topic Analysis] Failed to ingest document", {
+              title: docSummary.title,
+              error: ingestError,
+            });
             // Continue with other documents
           }
         }
 
-        logger.info(
-          "[BERT Topic Analysis] All documents ingested",
-          {
-            documentsIngested: documentSummaries.length,
-          },
-        );
+        logger.info("[BERT Topic Analysis] All documents ingested", {
+          documentsIngested: documentSummaries.length,
+        });
       }
     } catch (themeIdentificationError) {
       logger.error(
@@ -629,7 +620,6 @@ export async function processTopicAnalysis(
     // Return topics and document summaries
     result.documentSummaries = documentSummaries;
 
-    console.log(JSON.stringify(documentSummaries));
     return result;
   } catch (error) {
     console.error(`[BERT Topic Analysis] Error:`, error);

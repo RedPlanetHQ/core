@@ -38,17 +38,16 @@ export const loader = createHybridLoaderApiRoute(
       const ingestionQueueEntries = await prisma.ingestionQueue.findMany({
         where: {
           workspaceId: user.Workspace.id,
-          data: {
-            path: ["sessionId"],
-            equals: sessionId,
-          },
-          status: "COMPLETED",
+          sessionId,
         },
         select: {
           id: true,
           createdAt: true,
           output: true,
           data: true,
+          status: true,
+          title: true,
+          labels: true,
           activity: {
             select: {
               text: true,
@@ -62,50 +61,21 @@ export const loader = createHybridLoaderApiRoute(
 
       // Extract episode UUIDs and format episodes
       const episodes = ingestionQueueEntries
-        .flatMap((entry) => {
+        .map((entry) => {
           const logData = entry.data as any;
-          const output = entry.output as any;
-
-          // Handle CONVERSATION type - single episode
-          if (logData.type === "CONVERSATION") {
-            const episodeUUID = output?.episodeUuid;
-            if (!episodeUUID) return [];
-
-            return [
-              {
-                uuid: episodeUUID,
-                id: entry.id,
-                content:
-                  entry.activity?.text ||
-                  logData?.episodeBody ||
-                  logData?.text ||
-                  "No content",
-                createdAt: entry.createdAt.toISOString(),
-                ingestionQueueId: entry.id,
-              },
-            ];
-          }
-
-          // Handle DOCUMENT type - multiple episodes
-          if (logData.type === "DOCUMENT") {
-            const episodeUUIDs = output?.episodes || [];
-            if (!Array.isArray(episodeUUIDs) || episodeUUIDs.length === 0)
-              return [];
-
-            return episodeUUIDs.map((episodeUUID: { episodeUuid: string }) => ({
-              uuid: episodeUUID.episodeUuid,
-              id: entry.id,
-              content:
-                entry.activity?.text ||
-                logData?.episodeBody ||
-                logData?.text ||
-                "No content",
-              createdAt: entry.createdAt.toISOString(),
-              ingestionQueueId: entry.id,
-            }));
-          }
-
-          return [];
+          return {
+            id: entry.id,
+            content:
+              entry.activity?.text ||
+              logData?.episodeBody ||
+              logData?.text ||
+              "No content",
+            createdAt: entry.createdAt.toISOString(),
+            ingestionQueueId: entry.id,
+            status: entry.status,
+            title: entry.title,
+            labels: entry.labels,
+          };
         })
         .filter((ep) => ep !== null);
 

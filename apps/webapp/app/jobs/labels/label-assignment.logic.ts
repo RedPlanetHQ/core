@@ -45,6 +45,26 @@ export async function processLabelAssignment(
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
 
+    let existingLabelIds: string[] = [];
+
+    if (ingestionQueue.sessionId) {
+      const latestLog = await prisma.ingestionQueue.findMany({
+        where: {
+          sessionId: ingestionQueue.sessionId,
+        },
+        select: {
+          labels: true,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
+      existingLabelIds = Array.from(
+        new Set(latestLog.flatMap((log) => log.labels)),
+      );
+    }
+
     // Get episode body from the data field
     const data = ingestionQueue.data as any;
     const episodeBody = data?.episodeBody || "";
@@ -67,39 +87,81 @@ export async function processLabelAssignment(
       return { success: true, assignedLabels: [] };
     }
 
-    // Call LLM to identify appropriate labels
+    // Get existing labels for this episode
+    const existingLabels =
+      existingLabelIds.length > 0
+        ? await prisma.label.findMany({
+            where: {
+              id: { in: existingLabelIds },
+              workspaceId: payload.workspaceId,
+            },
+          })
+        : [];
+
+    logger.info(`Found ${existingLabels.length} existing labels for episode`, {
+      queueId: payload.queueId,
+      existingLabels: existingLabels.map((l) => l.name),
+    });
+
+    // Call LLM to identify appropriate labels, passing existing labels
     const labelProposals = await identifyLabelsForEpisode(
       episodeBody,
       workspaceLabels.map((l) => ({
+        id: l.id,
         name: l.name,
         description: l.description,
       })),
+      existingLabels.map((l) => l.name),
     );
 
-    // Filter high-confidence labels (>= 0.7)
-    const highConfidenceLabels = labelProposals
-      .filter((p) => p.confidence >= 0.7)
-      .map((p) => p.labelName);
+    // Create a map of label names to IDs for quick lookup
+    const labelNameToIdMap = new Map(
+      workspaceLabels.map((l) => [l.name.toLowerCase(), l.id]),
+    );
+
+    // Filter high-confidence labels (>= 0.8) and map names to IDs
+    const newLabelIds = labelProposals
+      .filter((p) => p.confidence >= 0.8)
+      .map((p) => {
+        const labelId = labelNameToIdMap.get(p.labelName.toLowerCase());
+        if (!labelId) {
+          logger.warn(
+            `Label name from LLM not found in workspace labels: ${p.labelName}`,
+          );
+          return null;
+        }
+        return labelId;
+      })
+      .filter((id): id is string => id !== null);
+
+    // Deduplicate: combine existing + new labels
+    const allLabelIds = Array.from(
+      new Set([...existingLabelIds, ...newLabelIds]),
+    );
+    const newlyAddedCount = allLabelIds.length - existingLabelIds.length;
 
     logger.info(
-      `Identified ${highConfidenceLabels.length} high-confidence labels`,
+      `Label assignment complete: ${newlyAddedCount} new labels added`,
       {
         queueId: payload.queueId,
-        labels: highConfidenceLabels,
+        existingCount: existingLabelIds.length,
+        newCount: newLabelIds.length,
+        totalCount: allLabelIds.length,
+        newlyAdded: newlyAddedCount,
       },
     );
 
-    // Update the ingestion queue with assigned label names
+    // Update the ingestion queue with deduplicated label IDs
     await prisma.ingestionQueue.update({
       where: { id: payload.queueId },
       data: {
-        labels: highConfidenceLabels,
+        labels: allLabelIds,
       },
     });
 
     return {
       success: true,
-      assignedLabels: highConfidenceLabels,
+      assignedLabels: allLabelIds,
     };
   } catch (error: any) {
     logger.error(`Error processing label assignment:`, {
@@ -118,13 +180,23 @@ export async function processLabelAssignment(
  */
 async function identifyLabelsForEpisode(
   episodeBody: string,
-  availableLabels: Array<{ name: string; description: string | null }>,
+  availableLabels: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+  }>,
+  existingLabelNames: string[] = [],
 ): Promise<LabelProposal[]> {
-  const prompt = buildLabelAssignmentPrompt(episodeBody, availableLabels);
+  const prompt = buildLabelAssignmentPrompt(
+    episodeBody,
+    availableLabels,
+    existingLabelNames,
+  );
 
   logger.info("Identifying labels for episode", {
     episodeLength: episodeBody.length,
     availableLabelCount: availableLabels.length,
+    existingLabelCount: existingLabelNames.length,
   });
 
   // Call LLM with structured output
@@ -156,7 +228,12 @@ async function identifyLabelsForEpisode(
  */
 function buildLabelAssignmentPrompt(
   episodeBody: string,
-  availableLabels: Array<{ name: string; description: string | null }>,
+  availableLabels: Array<{
+    id: string;
+    name: string;
+    description: string | null;
+  }>,
+  existingLabelNames: string[] = [],
 ): string {
   const labelsSection = `## Available Labels
 
@@ -166,6 +243,16 @@ ${availableLabels
   .map((l) => `- **${l.name}**${l.description ? `: ${l.description}` : ""}`)
   .join("\n")}`;
 
+  const existingLabelsSection =
+    existingLabelNames.length > 0
+      ? `## Existing Labels
+
+This episode already has the following labels assigned:
+${existingLabelNames.map((name) => `- **${name}**`).join("\n")}
+
+**Note**: You should consider these existing labels when making new assignments. Only suggest additional labels that add meaningful categorization beyond what's already assigned.`
+      : "";
+
   const contentSection = `## Episode Content
 
 ${episodeBody.substring(0, 2000)}${episodeBody.length > 2000 ? "..." : ""}`;
@@ -174,39 +261,49 @@ ${episodeBody.substring(0, 2000)}${episodeBody.length > 2000 ? "..." : ""}`;
 
 ${labelsSection}
 
+${existingLabelsSection}
+
 ${contentSection}
 
 ## Task
 
-Analyze the episode content above and identify which labels are most appropriate. Consider:
+Analyze the episode content and identify ONLY the most essential labels that are clearly, directly, and substantially relevant.
 
-1. **Content relevance**: Does the episode clearly relate to the label's theme?
-2. **Confidence**: How certain are you about this assignment?
-3. **Multiple labels**: An episode can have multiple labels if it spans multiple themes
-4. **Precision over recall**: Only assign labels you're confident about
+**Critical Requirements - All Must Be Met**:
+1. **Direct Relevance**: The episode content must explicitly and substantially discuss or demonstrate the label's theme. Tangential or passing mentions do NOT qualify.
+2. **High Confidence**: You must be highly confident (>= 0.8) that this label accurately represents a core aspect of the content.
+3. **Non-Redundant**: Do NOT suggest labels that overlap with existing labels or each other. Each label must add distinct categorization value.
+4. **Minimal Set**: Prefer fewer, more accurate labels over comprehensive coverage. Most episodes should have 0-2 labels, rarely 3+.
+
+**Strict Filtering Rules**:
+- If existing labels already cover the content adequately, return empty array []
+- If content only briefly mentions a topic, do NOT assign that label
+- If uncertain whether a label applies, do NOT assign it
+- If labels would overlap in meaning, choose only the most specific one
+- Generic or vague matches do NOT qualify
 
 ## Output Format
 
-Return your analysis as a JSON array of label proposals:
+Return ONLY a JSON array (empty if no labels meet the strict criteria):
 
 \`\`\`json
 [
   {
-    "labelName": "Exact label name from the available labels",
+    "labelName": "Exact label name from available labels",
     "confidence": 0.85,
-    "reason": "Brief explanation of why this label applies"
+    "reason": "Specific evidence from content proving this label applies"
   }
 ]
 \`\`\`
 
-**Important Guidelines**:
-- **confidence**: 0.0-1.0 scale (only labels with >= 0.7 will be assigned)
-- **labelName**: Must EXACTLY match one of the available label names (case-sensitive)
-- **reason**: Short explanation (1-2 sentences) of why this label fits
-- Return an empty array [] if no labels are relevant
-- Maximum 3-4 labels per episode to avoid over-labeling
+**Validation Rules**:
+- **labelName**: Must EXACTLY match an available label name (case-sensitive)
+- **confidence**: Must be >= 0.8 to be considered (0.7-0.79 is too low)
+- **reason**: Must cite specific content evidence, not generic statements
+- **Empty array []**: Return if NO labels meet all strict requirements
+- **Maximum 2 labels**: Exceed only if content clearly spans 3+ distinct themes
 
-Return ONLY the JSON array, no additional text.`;
+Return ONLY the JSON array with no explanatory text.`;
 }
 
 /**

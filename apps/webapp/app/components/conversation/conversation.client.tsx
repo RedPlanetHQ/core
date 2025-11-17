@@ -50,7 +50,7 @@ export const ConversationNew = ({
         <div className="flex h-full w-full flex-col items-center justify-start overflow-y-auto p-4">
           <div className="flex w-full flex-col items-center">
             <div className="w-full max-w-[90ch] pt-[5rem]">
-              <h1 className="mx-1 mb-4 text-center text-[32px] font-medium">
+              <h1 className="mx-1 mb-4 text-center text-3xl font-medium">
                 What would you like me to remember?
               </h1>
 
