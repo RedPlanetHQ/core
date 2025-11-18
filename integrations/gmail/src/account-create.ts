@@ -2,11 +2,10 @@ import axios from 'axios';
 
 export async function integrationCreate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any,
-  integrationDefinition: any,
+  data: any
 ) {
   const { oauthResponse } = data;
-  
+
   // For Gmail OAuth2, we need to store the tokens and user info
   const integrationConfiguration = {
     access_token: oauthResponse.access_token,
@@ -25,10 +24,12 @@ export async function integrationCreate(
     settings: {},
     accountId: integrationConfiguration.userEmail || integrationConfiguration.userId,
     config: integrationConfiguration,
-    integrationDefinitionId: integrationDefinition.id,
   };
 
-  const integrationAccount = (await axios.post(`/api/v1/integration_account`, payload)).data;
-
-  return integrationAccount;
-} 
+  return [
+    {
+      type: 'account',
+      data: payload,
+    },
+  ];
+}
