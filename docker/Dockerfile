@@ -31,8 +31,7 @@ WORKDIR /core
 # Corepack is used to install pnpm
 RUN corepack enable
 ENV NODE_ENV production
-RUN --mount=type=cache,target=/root/.local/share/pnpm/store,sharing=locked \
-    pnpm install --prod --no-frozen-lockfile
+RUN pnpm install --ignore-scripts --no-frozen-lockfile
 COPY --from=pruner --chown=node:node /core/packages/database/prisma/schema.prisma /core/packages/database/prisma/schema.prisma
 # RUN pnpm add @prisma/client@5.1.1 -w
 ENV NPM_CONFIG_IGNORE_WORKSPACE_ROOT_CHECK true
@@ -62,6 +61,9 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     python3 \
     python3-pip \
+    python3-venv \
+    gcc \
+    g++ \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /core
 RUN corepack enable

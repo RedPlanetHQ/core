@@ -119,14 +119,15 @@ model IngestionQueue {
   status   IngestionStatus
   priority Int             @default(0)
 
-  source String?
-  title  String?
+  source    String?
+  title     String?
+  sessionId String?
 
   type String?
 
   // Graph and organization
   graphIds  String[] @default([]) // Array of Neo4j graph node IDs
-  labelIds  String[] @default([]) // Array of label IDs this episode belongs to
+  labels    String[] @default([]) // Array of label IDs this episode belongs to
   favourite Boolean  @default(false) // Whether this episode is marked as favourite
 
   workspaceId String
@@ -479,6 +480,8 @@ model Label {
   id          String  @id @default(cuid())
   name        String
   description String?
+
+  color String
 
   // Relations
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
