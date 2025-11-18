@@ -72,7 +72,8 @@ const { action } = createHybridActionApiRoute(
       // Check if we should update existing or create new
       const shouldUpdate =
         latestDocumentLog &&
-        latestDocumentLog.status === "PENDING" &&
+        (latestDocumentLog.status === "PENDING" ||
+          latestDocumentLog.status === "FAILED") &&
         latestDocumentLog.createdAt > fourMinutesAgo;
 
       if (shouldUpdate && latestDocumentLog) {

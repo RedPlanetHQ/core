@@ -55,7 +55,7 @@ export const addToQueue = async (
       },
     });
 
-    if(lastEpisode?.labels && lastEpisode?.labels.length > 0){
+    if (lastEpisode?.labels && lastEpisode?.labels.length > 0) {
       labels = lastEpisode?.labels;
     }
   }

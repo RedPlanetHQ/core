@@ -39,7 +39,7 @@ interface BadgeColorProps extends React.HTMLAttributes<HTMLDivElement> {
 function BadgeColor({ className, ...otherProps }: BadgeColorProps) {
   return (
     <span
-      className={cn("rounded-full", `h-1.5 w-1.5`, className)}
+      className={cn("rounded-full", `h-2 w-2`, className)}
       {...otherProps}
     ></span>
   );

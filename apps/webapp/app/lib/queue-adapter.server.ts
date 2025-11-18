@@ -71,9 +71,7 @@ export async function enqueueIngestDocument(payload: {
       queue: "document-ingestion-queue",
       concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
-      ...(payload.delay
-        ? { idempotencyKey: payload.queueId, idempotencyKeyTTL: "5m" }
-        : {}),
+      ...(payload.delay ? { delay: "5m" } : {}),
     });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {

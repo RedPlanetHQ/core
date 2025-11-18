@@ -8,6 +8,7 @@ import { File, MessageSquare } from "lucide-react";
 import { format, isThisYear } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TooltipPortal } from "@radix-ui/react-tooltip";
+import { type Label, LabelDropdown } from "./label-dropdown";
 
 interface LogTextCollapseProps {
   text?: string;
@@ -16,9 +17,10 @@ interface LogTextCollapseProps {
   log: LogItem;
   id: string;
   reset?: () => void;
+  labels: Label[];
 }
 
-export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
+export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
   const { logId } = useParams();
   const navigate = useNavigate();
 
@@ -142,7 +144,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                 {showStatus(log) && (
                   <Badge
                     className={cn(
-                      "!bg-grayAlpha-100 text-muted-foreground rounded text-xs",
+                      "!bg-grayAlpha-100 text-muted-foreground gap-1 rounded text-xs",
                     )}
                   >
                     <BadgeColor
@@ -151,6 +153,13 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                     {getStatusValue(log.status)}
                   </Badge>
                 )}
+                <LabelDropdown
+                  value={log.labels}
+                  labels={labels}
+                  logId={log.id}
+                  short
+                />
+
                 <div className="text-muted-foreground text-xs">
                   {formatDate(log.time)}
                 </div>

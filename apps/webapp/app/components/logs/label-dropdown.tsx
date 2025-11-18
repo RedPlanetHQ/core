@@ -32,17 +32,20 @@ interface LabelDropdownProps {
   value: string[]; // Array of selected label IDs
   labels: Label[];
   onChange?: (labelIds: string[]) => void;
+  short?: boolean;
 }
 
 export function LabelDropdown({
   logId,
-  value,
+  value: defaultValue,
   labels,
   onChange,
+  short = false,
 }: LabelDropdownProps) {
   const [open, setOpen] = React.useState(false);
   const [labelSearch, setLabelSearch] = React.useState("");
   const fetcher = useFetcher();
+  const [value, setValue] = React.useState(defaultValue);
 
   const handleLabelToggle = (labelId: string) => {
     const newValue = value.includes(labelId)
@@ -59,6 +62,7 @@ export function LabelDropdown({
       },
     );
 
+    setValue(newValue);
     // Call onChange callback if provided
     onChange?.(newValue);
   };
@@ -70,7 +74,7 @@ export function LabelDropdown({
       return (
         <span className="text-muted-foreground flex items-center gap-1">
           <Tag size={16} />
-          Add label...
+          {!short && "Add label..."}
         </span>
       );
     }
@@ -98,52 +102,54 @@ export function LabelDropdown({
   );
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="ghost"
-          role="combobox"
-          aria-expanded={open}
-          className="flex items-center justify-between font-normal"
-        >
-          {labelTitle()}
-        </Button>
-      </PopoverTrigger>
-      <PopoverPortal>
-        <PopoverContent className="w-72 p-0" align="end">
-          <Command shouldFilter={false}>
-            <CommandInput
-              placeholder="Search label..."
-              onValueChange={(searchValue: string) =>
-                setLabelSearch(searchValue)
-              }
-              autoFocus
-            />
-            <CommandList>
-              <CommandEmpty>No labels found.</CommandEmpty>
-              <CommandGroup>
-                {filteredLabels.map((label) => {
-                  const isSelected = value.includes(label.id);
-                  return (
-                    <CommandItem
-                      key={label.id}
-                      onSelect={() => handleLabelToggle(label.id)}
-                      className="flex items-center gap-2"
-                    >
-                      <Checkbox checked={isSelected} />
-                      <div
-                        className="h-3 w-3 rounded-full"
-                        style={{ backgroundColor: label.color }}
-                      />
-                      <span className="flex-1">{label.name}</span>
-                    </CommandItem>
-                  );
-                })}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </PopoverPortal>
-    </Popover>
+    <div onClick={(e) => e.stopPropagation()}>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button
+            variant="ghost"
+            role="combobox"
+            aria-expanded={open}
+            className="flex items-center justify-between font-normal"
+          >
+            {labelTitle()}
+          </Button>
+        </PopoverTrigger>
+        <PopoverPortal>
+          <PopoverContent className="w-72 p-0" align="end">
+            <Command shouldFilter={false}>
+              <CommandInput
+                placeholder="Search label..."
+                onValueChange={(searchValue: string) =>
+                  setLabelSearch(searchValue)
+                }
+                autoFocus
+              />
+              <CommandList>
+                <CommandEmpty>No labels found.</CommandEmpty>
+                <CommandGroup>
+                  {filteredLabels.map((label) => {
+                    const isSelected = value.includes(label.id);
+                    return (
+                      <CommandItem
+                        key={label.id}
+                        onSelect={() => handleLabelToggle(label.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <Checkbox checked={isSelected} />
+                        <div
+                          className="h-3 w-3 rounded-full"
+                          style={{ backgroundColor: label.color }}
+                        />
+                        <span className="flex-1">{label.name}</span>
+                      </CommandItem>
+                    );
+                  })}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </PopoverPortal>
+      </Popover>
+    </div>
   );
 }

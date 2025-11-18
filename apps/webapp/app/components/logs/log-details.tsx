@@ -1,4 +1,5 @@
-import { type ReactNode } from "react";
+import { type ReactNode, useState, useEffect, useRef } from "react";
+import { useFetcher } from "@remix-run/react";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Badge, BadgeColor } from "../ui/badge";
 import { type LogItem } from "~/hooks/use-logs";
@@ -74,12 +75,54 @@ function getStatusValue(status: string) {
 }
 
 export function LogDetails({ log, labels }: LogDetailsProps) {
+  const [title, setTitle] = useState(log.title ?? "Untitled");
+  const fetcher = useFetcher();
+  const debounceTimerRef = useRef<NodeJS.Timeout>();
+
+  // Update local state when log.title changes
+  useEffect(() => {
+    setTitle(log.title ?? "Untitled");
+  }, [log.title]);
+
+  // Debounced API call to update title
+  useEffect(() => {
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Don't make API call if title hasn't changed or is just initial load
+    if (title === (log.title ?? "Untitled")) {
+      return;
+    }
+
+    // Set new timer for debounced API call
+    debounceTimerRef.current = setTimeout(() => {
+      fetcher.submit(
+        { title },
+        {
+          method: "PATCH",
+          action: `/api/v1/logs/${log.id}`,
+          encType: "application/json",
+        }
+      );
+    }, 500); // 500ms debounce
+
+    // Cleanup timer on unmount
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [title, log.id, log.title]);
+
   return (
     <div className="flex h-full w-full flex-col items-center overflow-auto">
       <div className="max-w-4xl min-w-3xl">
         <div>
           <Input
-            value={log.title ?? "Untitled"}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
           />
         </div>

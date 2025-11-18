@@ -5,7 +5,7 @@ export const getStatusColor = (status: string) => {
     case "PROCESSING":
       return "#3F8EF7";
     case "PENDING":
-      return "#F5BD46";
+      return "#D0A95D";
     case "COMPLETED":
       return "#55A271";
     case "FAILED":

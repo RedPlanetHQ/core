@@ -162,9 +162,10 @@ export class KnowledgeGraphService {
     chunkIndices?: number[],
   ): Promise<StatementNode[]> {
     // Build query with optional chunk filter
-    const chunkFilter = chunkIndices && chunkIndices.length > 0
-      ? `AND episode.chunkIndex IN $chunkIndices`
-      : '';
+    const chunkFilter =
+      chunkIndices && chunkIndices.length > 0
+        ? `AND episode.chunkIndex IN $chunkIndices`
+        : "";
 
     const query = `
       MATCH (doc:Document {uuid: $documentUuid, userId: $userId})-[r:CONTAINS_CHUNK]->(episode:Episode)

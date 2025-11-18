@@ -191,7 +191,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
 
       {/* Invalidated Facts by Episode */}
       {factsLoading ? (
-        <div className="bg-grayAlpha-100 text-muted-foreground flex items-center gap-2 text-xs">
+        <div className="text-muted-foreground flex items-center gap-2 text-xs">
           <Loader2 className="h-3 w-3 animate-spin" />
           Loading invalidated facts...
         </div>

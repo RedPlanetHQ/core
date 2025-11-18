@@ -99,7 +99,10 @@ export default function LogsAll() {
                           No logs found
                         </h3>
                         <p className="text-muted-foreground">
-                          {selectedSource || selectedStatus || selectedType || selectedLabel
+                          {selectedSource ||
+                          selectedStatus ||
+                          selectedType ||
+                          selectedLabel
                             ? "Try adjusting your filters to see more results."
                             : "No ingestion logs are available yet."}
                         </p>
@@ -113,6 +116,7 @@ export default function LogsAll() {
                     loadMore={loadMore}
                     isLoading={isLoading}
                     height={600}
+                    labels={labels}
                   />
                 )}
               </div>
