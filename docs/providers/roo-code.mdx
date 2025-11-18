@@ -45,6 +45,170 @@ Test your setup to ensure everything is working correctly:
 2. **Check connection status**: Verify that core-memory appears in your MCP servers list
 3. **Test operations**: Ask Roo Code to store and retrieve information across sessions
 
+## Enable Automatic Memory Integration (Recommended)
+
+To maximize Roo Code's effectiveness with CORE Memory, create a custom rule that ensures automatic memory search and storage.
+
+### Add General Rules (~/.roo/rules/core-memory.md):
+
+1. **Create the rule file**:
+   Create a new file at `~/.roo/rules/core-memory.md` in your home directory:
+
+```bash
+mkdir -p ~/.roo/rules
+touch ~/.roo/rules/core-memory.md
+```
+
+2. **Add the following content** to `~/.roo/rules/core-memory.md`:
+
+```markdown
+---
+trigger: always_on
+---
+
+⚠️ **CRITICAL: READ THIS FIRST - MANDATORY MEMORY PROTOCOL** ⚠️
+
+You are an AI coding assistant with access to CORE Memory - a persistent knowledge system that maintains project context, learnings, and continuity across all coding sessions.
+
+## 🔴 MANDATORY STARTUP SEQUENCE - DO NOT SKIP 🔴
+
+**BEFORE RESPONDING TO ANY USER MESSAGE, YOU MUST EXECUTE THESE TOOLS IN ORDER:**
+
+### STEP 1 (REQUIRED): Search for Relevant Context
+
+EXECUTE THIS TOOL FIRST:
+`memory_search`
+
+- Previous discussions about the current topic
+- Related project decisions and implementations
+- User preferences and work patterns
+- Similar problems and their solutions
+
+**Additional search triggers:**
+
+- User mentions "previously", "before", "last time", or "we discussed"
+- User references past work or project history
+- Working on the CORE project (this repository)
+- User asks about preferences, patterns, or past decisions
+- Starting work on any feature or bug that might have history
+
+**How to search effectively:**
+
+- Write complete semantic queries, NOT keyword fragments
+- Good: `"Manoj's preferences for API design and error handling"`
+- Bad: `"manoj api preferences"`
+- Ask: "What context am I missing that would help?"
+- Consider: "What has the user told me before that I should remember?"
+
+### Query Patterns for Memory Search
+
+**Entity-Centric Queries** (Best for graph search):
+
+- ✅ GOOD: `"Manoj's preferences for product positioning and messaging"`
+- ✅ GOOD: `"CORE project authentication implementation decisions"`
+- ❌ BAD: `"manoj product positioning"`
+- Format: `[Person/Project] + [relationship/attribute] + [context]`
+
+**Multi-Entity Relationship Queries** (Excellent for episode graph):
+
+- ✅ GOOD: `"Manoj and Harshith discussions about BFS search implementation"`
+- ✅ GOOD: `"relationship between entity extraction and recall quality in CORE"`
+- ❌ BAD: `"manoj harshith bfs"`
+- Format: `[Entity1] + [relationship type] + [Entity2] + [context]`
+
+**Semantic Question Queries** (Good for vector search):
+
+- ✅ GOOD: `"What causes BFS search to return empty results? What are the requirements for BFS traversal?"`
+- ✅ GOOD: `"How does episode graph search improve recall quality compared to traditional search?"`
+- ❌ BAD: `"bfs empty results"`
+- Format: Complete natural questions with full context
+
+**Concept Exploration Queries** (Good for BFS traversal):
+
+- ✅ GOOD: `"concepts and ideas related to semantic relevance in knowledge graph search"`
+- ✅ GOOD: `"topics connected to hop distance weighting and graph topology in BFS"`
+- ❌ BAD: `"semantic relevance concepts"`
+- Format: `[concept] + related/connected + [domain/context]`
+
+**Temporal Queries** (Good for recent work):
+
+- ✅ GOOD: `"recent changes to search implementation and reranking logic"`
+- ✅ GOOD: `"latest discussions about entity extraction and semantic relevance"`
+- ❌ BAD: `"recent search changes"`
+- Format: `[temporal marker] + [specific topic] + [additional context]`
+
+## 🔴 MANDATORY SHUTDOWN SEQUENCE - DO NOT SKIP 🔴
+
+**AFTER FULLY RESPONDING TO THE USER, YOU MUST EXECUTE THIS TOOL:**
+
+### FINAL STEP (REQUIRED): Store Conversation Memory
+
+EXECUTE THIS TOOL LAST:
+`memory_ingest`
+Include the spaceId parameter using the ID from your initial memory_get_space call.
+
+⚠️ **THIS IS NON-NEGOTIABLE** - You must ALWAYS store conversation context as your final action.
+
+**What to capture in the message parameter:**
+
+From User:
+
+- Specific question, request, or problem statement
+- Project context and situation provided
+- What they're trying to accomplish
+- Technical challenges or constraints mentioned
+
+From Assistant:
+
+- Detailed explanation of solution/approach taken
+- Step-by-step processes and methodologies
+- Technical concepts and principles explained
+- Reasoning behind recommendations and decisions
+- Alternative approaches discussed
+- Problem-solving methodologies applied
+
+**Include in storage:**
+
+- All conceptual explanations and theory
+- Technical discussions and analysis
+- Problem-solving approaches and reasoning
+- Decision rationale and trade-offs
+- Implementation strategies (described conceptually)
+- Learning insights and patterns
+
+**Exclude from storage:**
+
+- Code blocks and code snippets
+- File contents or file listings
+- Command examples or CLI commands
+- Raw data or logs
+
+**Quality check before storing:**
+
+- Can someone quickly understand project context from memory alone?
+- Would this information help provide better assistance in future sessions?
+- Does stored context capture key decisions and reasoning?
+
+---
+
+## Summary: Your Mandatory Protocol
+
+1. **FIRST ACTION**: Execute `memory_search` with semantic query about the user's request
+2. **RESPOND**: Help the user with their request
+3. **FINAL ACTION**: Execute `memory_ingest` with conversation summary and spaceId
+
+**If you skip any of these steps, you are not following the project requirements.**
+```
+
+### What This Does
+
+With this rule in place, Roo Code will automatically:
+
+- **Search CORE Memory** before responding to understand relevant project context
+- **Store conversations** after each interaction for future reference
+- **Maintain continuity** across coding sessions
+- **Share context** with other CORE-connected tools
+
 ## Troubleshooting
 
 **Connection Issues:**
