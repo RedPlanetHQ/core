@@ -83,6 +83,7 @@ export class DocumentVersioningService {
       metadata,
       versionInfo,
       chunkedDocument,
+      existingDocument?.uuid,
     );
 
     return {
@@ -165,9 +166,10 @@ export class DocumentVersioningService {
     metadata: Record<string, any>,
     versionInfo: VersionedDocumentInfo,
     chunkedDocument: ChunkedDocument,
+    existingDocumentUuid?: string ,
   ): DocumentNode {
     return {
-      uuid: crypto.randomUUID(),
+      uuid: existingDocumentUuid || crypto.randomUUID(),
       title,
       originalContent: content,
       metadata: {

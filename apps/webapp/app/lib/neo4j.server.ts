@@ -123,7 +123,7 @@ export const getClusteredGraphData = async (userId: string) => {
        // Get all episodes and optionally connect to valid entities
        MATCH (e:Episode {userId: $userId})
        WITH e, validEntityUuids,
-            CASE WHEN size(e.spaceIds) > 0 THEN e.spaceIds[0] ELSE null END as clusterId
+            CASE WHEN size(e.labelIds) > 0 THEN e.labelIds[0] ELSE null END as clusterId
 
        OPTIONAL MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
        WHERE entity.uuid IN validEntityUuids
@@ -262,9 +262,6 @@ const initializeSchema = async () => {
       "CREATE INDEX statement_cluster_id IF NOT EXISTS FOR (n:Statement) ON (n.clusterId)",
     );
     await runQuery(
-      "CREATE INDEX statement_space_id IF NOT EXISTS FOR (n:Statement) ON (n.spaceId)",
-    );
-    await runQuery(
       "CREATE INDEX entity_name IF NOT EXISTS FOR (n:Entity) ON (n.name)",
     );
     await runQuery(
@@ -286,16 +283,6 @@ const initializeSchema = async () => {
       "CREATE INDEX cluster_aspect_type IF NOT EXISTS FOR (n:Cluster) ON (n.aspectType)",
     );
 
-    // Space-optimized indexes for better query performance
-    await runQuery(
-      "CREATE INDEX space_user_uuid IF NOT EXISTS FOR (n:Space) ON (n.userId, n.uuid)",
-    );
-    await runQuery(
-      "CREATE INDEX space_user_active IF NOT EXISTS FOR (n:Space) ON (n.userId, n.isActive)",
-    );
-    await runQuery(
-      "CREATE INDEX statement_user_spaces IF NOT EXISTS FOR (n:Statement) ON (n.userId, n.spaceIds)",
-    );
     await runQuery(
       "CREATE INDEX statement_user_invalid IF NOT EXISTS FOR (n:Statement) ON (n.userId, n.invalidAt)",
     );

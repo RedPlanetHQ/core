@@ -1,4 +1,4 @@
-import { ArrowLeft, Code, Webhook, CreditCard, User } from "lucide-react";
+import { ArrowLeft, Code, Webhook, CreditCard, User, Tag } from "lucide-react";
 
 import {
   Sidebar,
@@ -59,7 +59,7 @@ export default function Settings() {
         <Sidebar collapsible="none" className="hidden w-[180px] md:flex">
           <SidebarHeader className="flex justify-start pb-0">
             <Button
-              variant="link"
+              variant="ghost"
               className="flex w-fit gap-2"
               onClick={gotoHome}
             >
@@ -88,6 +88,25 @@ export default function Settings() {
                       </Button>
                     </SidebarMenuItem>
                   ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </SidebarGroup>
+
+            <SidebarGroup>
+              <SidebarGroupContent>
+                <SidebarMenu className="gap-0.5">
+                  <h2 className="mb-1"> Episodes </h2>
+                  <SidebarMenuItem key="labels">
+                    <Button
+                      variant="secondary"
+                      isActive={location.pathname.includes("labels")}
+                      onClick={() => navigate(`/settings/labels`)}
+                      className={cn("flex w-fit min-w-0 justify-start gap-1")}
+                    >
+                      <Tag size={16} />
+                      <span>Labels</span>
+                    </Button>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>

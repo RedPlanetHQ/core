@@ -71,7 +71,7 @@ export default function AccountSettings() {
         <>
           {/* Account Information */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold">Account Information</h2>
+            <h2 className="text-md mb-4">Account Information</h2>
             <Card className="p-6">
               <div className="space-y-4">
                 <div>
@@ -108,17 +108,13 @@ export default function AccountSettings() {
 
           {/* Danger Zone */}
           <div className="mb-8">
-            <h2 className="mb-4 text-lg font-semibold text-red-600 dark:text-red-400">
-              Danger Zone
-            </h2>
+            <h2 className="text-md mb-4">Workspace access</h2>
             <Card className="p-6">
               <div className="flex items-start gap-3">
-                <AlertTriangle className="mt-1 h-5 w-5 text-red-600 dark:text-red-400" />
+                <AlertTriangle className="mt-1 h-5 w-5" />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-red-900 dark:text-red-100">
-                    Delete Account
-                  </h3>
-                  <p className="mb-4 text-sm text-red-700 dark:text-red-300">
+                  <h3>Delete Account</h3>
+                  <p className="mb-4 text-sm">
                     Permanently delete your account and all associated data.
                     This action cannot be undone.
                   </p>

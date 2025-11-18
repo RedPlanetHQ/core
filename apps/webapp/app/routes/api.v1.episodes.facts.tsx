@@ -1,10 +1,7 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import {
-  getEpisodeStatements,
-  getStatementsInvalidatedByEpisode,
-} from "~/services/graphModels/episode";
+import { getStatementsInvalidatedByEpisode } from "~/services/graphModels/episode";
 
 // Schema for query parameters
 const FactsQuerySchema = z.object({
@@ -35,27 +32,13 @@ export const loader = createHybridLoaderApiRoute(
 
       // Fetch facts and invalid facts for all episodes in parallel
       const resultsPromises = episodeIds.map(async (episodeId) => {
-        const [facts, invalidFacts] = await Promise.all([
-          getEpisodeStatements({
-            episodeUuid: episodeId,
-            userId,
-          }),
-          getStatementsInvalidatedByEpisode({
-            episodeUuid: episodeId,
-            userId,
-          }),
-        ]);
+        const invalidFacts = await getStatementsInvalidatedByEpisode({
+          episodeUuid: episodeId,
+          userId,
+        });
 
         return {
           episodeId,
-          facts: facts.map((fact) => ({
-            uuid: fact.uuid,
-            fact: fact.fact,
-            createdAt: fact.createdAt.toISOString(),
-            validAt: fact.validAt.toISOString(),
-            invalidAt: fact.invalidAt ? fact.invalidAt.toISOString() : null,
-            attributes: fact.attributes,
-          })),
           invalidFacts: invalidFacts.map((fact) => ({
             uuid: fact.uuid,
             fact: fact.fact,

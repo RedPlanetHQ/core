@@ -27,16 +27,14 @@ export async function saveTriple(triple: Triple): Promise<string> {
           n.invalidAt = $invalidAt,
           n.invalidatedBy = $invalidatedBy,
           n.attributes = $attributes,
-          n.userId = $userId,
-          n.space = $space
+          n.userId = $userId
         ON MATCH SET
           n.fact = $fact,
           n.factEmbedding = $factEmbedding,
           n.validAt = $validAt,
           n.invalidAt = $invalidAt,
           n.invalidatedBy = $invalidatedBy,
-          n.attributes = $attributes,
-          n.space = $space
+          n.attributes = $attributes
         RETURN n.uuid as uuid
       `;
 
@@ -52,7 +50,6 @@ export async function saveTriple(triple: Triple): Promise<string> {
     invalidatedBy: triple.statement.invalidatedBy || null,
     attributes: JSON.stringify(triple.statement.attributes || {}),
     userId: triple.provenance.userId,
-    space: triple.statement.space || null,
   };
 
   const statementResult = await runQuery(statementQuery, statementParams);
@@ -193,7 +190,7 @@ export async function findSimilarStatements({
   const limit = 100;
   const query = `
       MATCH (s:Statement{userId: $userId})
-      WHERE s.factEmbedding IS NOT NULL
+      WHERE s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
       WITH s, gds.similarity.cosine(s.factEmbedding, $factEmbedding) AS score
       WHERE score >= $threshold
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
@@ -322,7 +319,7 @@ export async function searchStatementsByEmbedding(params: {
   const limit = params.limit || 100;
   const query = `
   MATCH (s:Statement{userId: $userId})
-  WHERE s.factEmbedding IS NOT NULL
+  WHERE s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
   WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score

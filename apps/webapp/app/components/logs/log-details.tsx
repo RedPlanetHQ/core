@@ -1,12 +1,6 @@
-import { useState, useEffect, type ReactNode } from "react";
+import { type ReactNode, useState, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
-import {
-  AlertCircle,
-  File,
-  Loader2,
-  LoaderCircle,
-  MessageSquare,
-} from "lucide-react";
+import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Badge, BadgeColor } from "../ui/badge";
 import { type LogItem } from "~/hooks/use-logs";
 import { getIconForAuthorise } from "../icon-utils";
@@ -16,10 +10,12 @@ import { ConversationView } from "./views/conversation-view";
 import { SessionConversationView } from "./views/session-conversation-view";
 import { DocumentEditorView } from "./views/document-editor-view.client";
 import { ClientOnly } from "remix-utils/client-only";
-import { SpaceDropdown } from "../spaces/space-dropdown";
+import { Input } from "../ui";
+import { type Label, LabelDropdown } from "./label-dropdown";
 
 interface LogDetailsProps {
   log: LogItem;
+  labels: Label[];
 }
 
 interface PropertyItemProps {
@@ -32,7 +28,6 @@ interface PropertyItemProps {
 }
 
 function PropertyItem({
-  label,
   value,
   icon,
   variant = "secondary",
@@ -46,12 +41,15 @@ function PropertyItem({
       {variant === "status" ? (
         <Badge
           className={cn(
-            "text-foreground h-7 items-center gap-2 rounded !bg-transparent px-4.5 !text-base",
+            "text-foreground h-7 items-center gap-2 rounded !bg-transparent px-2 !text-base",
             className,
           )}
         >
           {statusColor && (
-            <BadgeColor className={cn(statusColor, "h-2.5 w-2.5")} />
+            <BadgeColor
+              className={cn("h-2.5 w-2.5")}
+              style={{ backgroundColor: statusColor }}
+            />
           )}
           {value}
         </Badge>
@@ -68,19 +66,6 @@ function PropertyItem({
   );
 }
 
-interface EpisodeFact {
-  uuid: string;
-  fact: string;
-  createdAt: string;
-  validAt: string;
-  attributes: any;
-}
-
-interface EpisodeFactsResponse {
-  facts: EpisodeFact[];
-  invalidFacts: EpisodeFact[];
-}
-
 function getStatusValue(status: string) {
   if (status === "PENDING") {
     return formatString("IN QUEUE");
@@ -89,12 +74,60 @@ function getStatusValue(status: string) {
   return formatString(status);
 }
 
-export function LogDetails({ log }: LogDetailsProps) {
+export function LogDetails({ log, labels }: LogDetailsProps) {
+  const [title, setTitle] = useState(log.title ?? "Untitled");
+  const fetcher = useFetcher();
+  const debounceTimerRef = useRef<NodeJS.Timeout>();
+
+  // Update local state when log.title changes
+  useEffect(() => {
+    setTitle(log.title ?? "Untitled");
+  }, [log.title]);
+
+  // Debounced API call to update title
+  useEffect(() => {
+    // Clear existing timer
+    if (debounceTimerRef.current) {
+      clearTimeout(debounceTimerRef.current);
+    }
+
+    // Don't make API call if title hasn't changed or is just initial load
+    if (title === (log.title ?? "Untitled")) {
+      return;
+    }
+
+    // Set new timer for debounced API call
+    debounceTimerRef.current = setTimeout(() => {
+      fetcher.submit(
+        { title },
+        {
+          method: "PATCH",
+          action: `/api/v1/logs/${log.id}`,
+          encType: "application/json",
+        }
+      );
+    }, 500); // 500ms debounce
+
+    // Cleanup timer on unmount
+    return () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+    };
+  }, [title, log.id, log.title]);
+
   return (
     <div className="flex h-full w-full flex-col items-center overflow-auto">
-      <div className="max-w-4xl">
-        <div className="mt-5 mb-5 px-4">
-          <div className="bg-grayAlpha-100 flex gap-2 rounded px-2 py-2">
+      <div className="max-w-4xl min-w-3xl">
+        <div>
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
+          />
+        </div>
+        <div className="mt-5 mb-3 px-4">
+          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
             <PropertyItem
               label="Source"
               value={formatString(log.source?.toLowerCase())}
@@ -114,18 +147,12 @@ export function LogDetails({ log }: LogDetailsProps) {
               />
             )}
 
-            {!log.isSessionGroup && log.data.type === "CONVERSATION" && (
-              <SpaceDropdown
-                className="px-0"
-                episodeIds={[log.data.episodeUUID]}
-                selectedSpaceIds={log.spaceIds || []}
-              />
-            )}
+            <LabelDropdown value={log.labels} labels={labels} logId={log.id} />
           </div>
         </div>
 
         {/* Error Details */}
-        {log.error && (
+        {log.status !== "COMPLETED" && log.error && (
           <div className="mb-6 px-4">
             <div className="bg-destructive/10 rounded-md p-3">
               <div className="flex items-start gap-2 text-red-600">
@@ -139,7 +166,11 @@ export function LogDetails({ log }: LogDetailsProps) {
         )}
 
         <ClientOnly
-          fallback={<LoaderCircle className="mr-2 h-4 w-4 animate-spin" />}
+          fallback={
+            <div className="flex w-full justify-center">
+              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+            </div>
+          }
         >
           {() => (
             <>

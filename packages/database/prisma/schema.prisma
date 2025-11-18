@@ -119,10 +119,16 @@ model IngestionQueue {
   status   IngestionStatus
   priority Int             @default(0)
 
-  source String?
-  title  String?
+  source    String?
+  title     String?
+  sessionId String?
 
   type String?
+
+  // Graph and organization
+  graphIds  String[] @default([]) // Array of Neo4j graph node IDs
+  labels    String[] @default([]) // Array of label IDs this episode belongs to
+  favourite Boolean  @default(false) // Whether this episode is marked as favourite
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -470,52 +476,19 @@ model RecallLog {
   metadata Json? @default("{}")
 }
 
-model Space {
-  id           String   @id @default(cuid())
-  name         String
-  description  String?
-  autoMode     Boolean  @default(false)
-  summary      String?
-  themes       String[]
-  contextCount Int? // Count of context items in this space (episodes, statements, etc.)
+model Label {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
 
-  status String?
-
-  icon String?
-
-  lastPatternTrigger        DateTime?
-  summaryGeneratedAt        DateTime?
-  contextCountAtLastTrigger Int? // Context count when pattern was last triggered
+  color String
 
   // Relations
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String
 
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
-  SpacePattern SpacePattern[]
-}
-
-model SpacePattern {
-  id        String    @id @default(cuid())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deleted   DateTime?
-
-  name          String
-  source        String
-  type          String
-  summary       String
-  editedSummary String?
-  evidence      String[]
-  confidence    Float
-  userConfirmed String   @default("pending")
-
-  // Relations
-  space   Space  @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  spaceId String
-
-  @@index([spaceId, source])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model User {
@@ -532,6 +505,9 @@ model User {
   avatarUrl   String?
 
   memoryFilter String? // Adding memory filter instructions
+
+  // Folder structure for organizing favorites (episodes/sessions)
+  folders Json? @default("{\"folders\": []}")
 
   admin Boolean @default(false)
 
@@ -716,7 +692,7 @@ model Workspace {
   OAuthAccessToken        OAuthAccessToken[]
   OAuthRefreshToken       OAuthRefreshToken[]
   RecallLog               RecallLog[]
-  Space                   Space[]
+  Label                   Label[]
   MCPSession              MCPSession[]
   Subscription            Subscription?
 }

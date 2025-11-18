@@ -65,6 +65,7 @@ export class KnowledgeGraphService {
     userId: string;
     invalidatedBy: string;
     semanticSimilarityThreshold?: number;
+    changedChunkIndices?: number[]; // Optional: only invalidate statements from specific chunks
   }): Promise<{
     invalidatedStatements: string[];
     preservedStatements: string[];
@@ -78,6 +79,7 @@ export class KnowledgeGraphService {
     const previousStatements = await this.getStatementsFromDocument(
       params.previousDocumentUuid,
       params.userId,
+      params.changedChunkIndices, // Pass chunk filter
     );
 
     if (previousStatements.length === 0) {
@@ -152,13 +154,22 @@ export class KnowledgeGraphService {
 
   /**
    * Get all statements that were created from episodes linked to a specific document
+   * Optionally filter by chunk indices for targeted invalidation
    */
   private async getStatementsFromDocument(
     documentUuid: string,
     userId: string,
+    chunkIndices?: number[],
   ): Promise<StatementNode[]> {
+    // Build query with optional chunk filter
+    const chunkFilter =
+      chunkIndices && chunkIndices.length > 0
+        ? `AND episode.chunkIndex IN $chunkIndices`
+        : "";
+
     const query = `
-      MATCH (doc:Document {uuid: $documentUuid, userId: $userId})-[:CONTAINS_CHUNK]->(episode:Episode)
+      MATCH (doc:Document {uuid: $documentUuid, userId: $userId})-[r:CONTAINS_CHUNK]->(episode:Episode)
+      WHERE r.chunkIndex IS NOT NULL ${chunkFilter}
       MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement
     `;
@@ -166,6 +177,7 @@ export class KnowledgeGraphService {
     const result = await runQuery(query, {
       documentUuid,
       userId,
+      chunkIndices: chunkIndices || [],
     });
 
     return result.map((record) => {
@@ -282,10 +294,10 @@ export class KnowledgeGraphService {
         metadata: params.metadata || {},
         createdAt: now,
         validAt: new Date(params.referenceTime),
-        labels: [],
+        labelIds: [],
         userId: params.userId,
-        space: params.spaceId,
         sessionId: params.sessionId,
+        documentId: params.documentId,
       };
 
       // Step 3: Entity Extraction - Extract entities from the episode content

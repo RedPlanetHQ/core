@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { useLoaderData } from "@remix-run/react";
 import { useLogs } from "~/hooks/use-logs";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
@@ -6,11 +8,29 @@ import { Card, CardContent } from "~/components/ui/card";
 import { Database, LoaderCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { OnboardingModal } from "~/components/onboarding";
+import { LabelService } from "~/services/label.server";
+import { getUser } from "~/services/session.server";
+
+export async function loader({ request }: LoaderFunctionArgs) {
+  const user = await getUser(request);
+  const labelService = new LabelService();
+
+  try {
+    const labels = await labelService.getWorkspaceLabels(
+      user?.Workspace?.id as string,
+    );
+    return json({ labels });
+  } catch (e) {
+    return json({ labels: [] });
+  }
+}
 
 export default function LogsAll() {
+  const { labels } = useLoaderData<typeof loader>();
   const [selectedSource, setSelectedSource] = useState<string | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
   const [selectedType, setSelectedType] = useState<string | undefined>();
+  const [selectedLabel, setSelectedLabel] = useState<string | undefined>();
   const [onboarding, setOnboarding] = useState(false);
 
   const {
@@ -25,6 +45,7 @@ export default function LogsAll() {
     source: selectedSource,
     status: selectedStatus,
     type: selectedType,
+    label: selectedLabel,
   });
 
   useEffect(() => {
@@ -59,9 +80,12 @@ export default function LogsAll() {
                 selectedSource={selectedSource}
                 selectedStatus={selectedStatus}
                 selectedType={selectedType}
+                selectedLabel={selectedLabel}
+                labels={labels}
                 onSourceChange={setSelectedSource}
                 onStatusChange={setSelectedStatus}
                 onTypeChange={setSelectedType}
+                onLabelChange={setSelectedLabel}
               />
 
               {/* Logs List */}
@@ -75,7 +99,10 @@ export default function LogsAll() {
                           No logs found
                         </h3>
                         <p className="text-muted-foreground">
-                          {selectedSource || selectedStatus || selectedType
+                          {selectedSource ||
+                          selectedStatus ||
+                          selectedType ||
+                          selectedLabel
                             ? "Try adjusting your filters to see more results."
                             : "No ingestion logs are available yet."}
                         </p>
@@ -89,6 +116,7 @@ export default function LogsAll() {
                     loadMore={loadMore}
                     isLoading={isLoading}
                     height={600}
+                    labels={labels}
                   />
                 )}
               </div>

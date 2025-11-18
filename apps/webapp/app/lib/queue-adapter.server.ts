@@ -15,8 +15,8 @@ import type { z } from "zod";
 import type { IngestBodyRequest } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
-import type { SpaceAssignmentPayload } from "~/jobs/spaces/space-assignment.logic";
-import type { SpaceSummaryPayload } from "~/jobs/spaces/space-summary.logic";
+import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
+import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
 
 type QueueProvider = "trigger" | "bullmq";
 
@@ -59,6 +59,7 @@ export async function enqueueIngestDocument(payload: {
   userId: string;
   workspaceId: string;
   queueId: string;
+  delay: boolean;
 }): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
@@ -70,6 +71,7 @@ export async function enqueueIngestDocument(payload: {
       queue: "document-ingestion-queue",
       concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
+      ...(payload.delay ? { delay: "5m" } : {}),
     });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {
@@ -79,6 +81,8 @@ export async function enqueueIngestDocument(payload: {
       jobId: payload.queueId,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
+      // If delay is true, schedule job to run after 5 minutes (300000 ms)
+      ...(payload.delay ? { delay: 5 * 60 * 1000 } : {}),
     });
 
     return { id: job.id };
@@ -140,58 +144,6 @@ export async function enqueueSessionCompaction(
 }
 
 /**
- * Enqueue space assignment job
- */
-export async function enqueueSpaceAssignment(
-  payload: SpaceAssignmentPayload,
-): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { triggerSpaceAssignment } = await import(
-      "~/trigger/spaces/space-assignment"
-    );
-    const handler = await triggerSpaceAssignment(payload);
-    return { id: handler.id };
-  } else {
-    // BullMQ
-    const { spaceAssignmentQueue } = await import("~/bullmq/queues");
-    const job = await spaceAssignmentQueue.add("space-assignment", payload, {
-      jobId: `space-assignment-${payload.userId}-${payload.mode}-${Date.now()}`,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 2000 },
-    });
-    return { id: job.id };
-  }
-}
-
-/**
- * Enqueue space summary job
- */
-export async function enqueueSpaceSummary(
-  payload: SpaceSummaryPayload,
-): Promise<{ id?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { triggerSpaceSummary } = await import(
-      "~/trigger/spaces/space-summary"
-    );
-    const handler = await triggerSpaceSummary(payload);
-    return { id: handler.id };
-  } else {
-    // BullMQ
-    const { spaceSummaryQueue } = await import("~/bullmq/queues");
-    const job = await spaceSummaryQueue.add("space-summary", payload, {
-      jobId: `space-summary-${payload.spaceId}-${Date.now()}`,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 2000 },
-    });
-    return { id: job.id };
-  }
-}
-
-/**
  * Enqueue BERT topic analysis job
  * Always uses BullMQ regardless of QUEUE_PROVIDER setting
  */
@@ -217,6 +169,93 @@ export async function enqueueBertTopicAnalysis(payload: {
       jobId: `bert-${payload.userId}-${Date.now()}`,
       attempts: 2, // Only 2 attempts for expensive operations
       backoff: { type: "exponential", delay: 5000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue persona generation job
+ */
+export async function enqueuePersonaGeneration(payload: {
+  userId: string;
+  workspaceId: string;
+  labelId: string;
+  mode: "full" | "incremental";
+  startTime?: string;
+}): Promise<{ id?: string; token?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { personaGenerationTask } = await import(
+      "~/trigger/spaces/persona-generation"
+    );
+    const handler = await personaGenerationTask.trigger(payload);
+    return { id: handler.id, token: handler.publicAccessToken };
+  } else {
+    // BullMQ
+    const { personaGenerationQueue } = await import("~/bullmq/queues");
+    const job = await personaGenerationQueue.add(
+      "persona-generation",
+      payload,
+      {
+        jobId: `persona-${payload.userId}-${Date.now()}`,
+        attempts: 2, // Only 2 attempts for expensive operations
+        backoff: { type: "exponential", delay: 5000 },
+      },
+    );
+    return { id: job.id };
+  }
+}
+
+/* Enqueue label assignment job
+ */
+export async function enqueueLabelAssignment(
+  payload: LabelAssignmentPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { labelAssignmentTask } = await import(
+      "~/trigger/labels/label-assignment"
+    );
+    const handler = await labelAssignmentTask.trigger(payload, {
+      tags: [payload.userId, "label-assignment"],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { labelAssignmentQueue } = await import("~/bullmq/queues");
+    const job = await labelAssignmentQueue.add("label-assignment", payload, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue title generation job
+ */
+export async function enqueueTitleGeneration(
+  payload: TitleGenerationPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { titleGenerationTask } = await import(
+      "~/trigger/titles/title-generation"
+    );
+    const handler = await titleGenerationTask.trigger(payload, {
+      tags: [payload.userId, "title-generation"],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { titleGenerationQueue } = await import("~/bullmq/queues");
+    const job = await titleGenerationQueue.add("title-generation", payload, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
     });
     return { id: job.id };
   }

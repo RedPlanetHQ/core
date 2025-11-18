@@ -3,6 +3,8 @@ import {
   type SpaceNode,
   type SpaceDeletionResult,
   type SpaceAssignmentResult,
+  EPISODIC_NODE_PROPERTIES,
+  EpisodicNode,
 } from "@core/types";
 import { logger } from "~/services/logger.service";
 
@@ -14,12 +16,16 @@ export async function createSpace(
   name: string,
   description: string | undefined,
   userId: string,
+  summaryStructure?: string | undefined,
+  type?: string | undefined,
 ): Promise<SpaceNode> {
   const query = `
     CREATE (s:Space {
       uuid: $spaceId,
       name: $name,
       description: $description,
+      type: $type,
+      summaryStructure: $summaryStructure,
       userId: $userId,
       createdAt: datetime(),
       updatedAt: datetime(),
@@ -28,7 +34,14 @@ export async function createSpace(
     RETURN s
   `;
 
-  const result = await runQuery(query, { spaceId, name, description, userId });
+  const result = await runQuery(query, {
+    spaceId,
+    name,
+    description,
+    type: type || 'classification',
+    summaryStructure: summaryStructure || null,
+    userId
+  });
   if (result.length === 0) {
     throw new Error("Failed to create space");
   }
@@ -125,7 +138,7 @@ export async function getSpace(
  */
 export async function updateSpace(
   spaceId: string,
-  updates: { name?: string; description?: string },
+  updates: { name?: string; description?: string; summaryStructure?: string; type?: string },
   userId: string,
 ): Promise<SpaceNode> {
   const setClause = [];
@@ -139,6 +152,16 @@ export async function updateSpace(
   if (updates.description !== undefined) {
     setClause.push("s.description = $description");
     params.description = updates.description;
+  }
+
+  if (updates.summaryStructure !== undefined) {
+    setClause.push("s.summaryStructure = $summaryStructure");
+    params.summaryStructure = updates.summaryStructure;
+  }
+
+  if (updates.type !== undefined) {
+    setClause.push("s.type = $type");
+    params.type = updates.type;
   }
 
   if (setClause.length === 0) {
@@ -351,28 +374,17 @@ export async function removeEpisodesFromSpace(
 /**
  * Get all episodes in a space
  */
-export async function getSpaceEpisodes(spaceId: string, userId: string) {
+export async function getSpaceEpisodes(spaceId: string, userId: string): Promise<EpisodicNode[]> {
+
   const query = `
     MATCH (space:Space {uuid: $spaceId, userId: $userId})-[:HAS_EPISODE]->(e:Episode {userId: $userId})
-    RETURN e
-    ORDER BY e.createdAt DESC
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY episode.createdAt DESC
   `;
 
   const result = await runQuery(query, { spaceId, userId });
 
-  return result.map((record) => {
-    const episode = record.get("e").properties;
-    return {
-      uuid: episode.uuid,
-      content: episode.content,
-      originalContent: episode.originalContent,
-      source: episode.source,
-      createdAt: new Date(episode.createdAt),
-      validAt: new Date(episode.validAt),
-      metadata: JSON.parse(episode.metadata || "{}"),
-      sessionId: episode.sessionId,
-    };
-  });
+  return result.map((record) => record.get("episode") as EpisodicNode);
 }
 
 /**
@@ -390,7 +402,8 @@ export async function getSpaceEpisodeCount(
   `;
 
   const result = await runQuery(query, { spaceId, userId });
-  return Number(result[0]?.get("episodeCount") || 0);
+  const count = result[0]?.get("episodeCount");
+  return count?.toNumber ? count.toNumber() : Number(count || 0);
 }
 
 /**

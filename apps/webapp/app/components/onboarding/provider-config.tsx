@@ -20,7 +20,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
               target="_blank"
               rel="noopener noreferrer"
             >
-              <Button variant="default" className="rounded">
+              <Button variant="secondary" className="rounded">
                 Add Extension
               </Button>
             </a>
@@ -219,7 +219,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
             target="_blank"
             rel="noopener noreferrer"
           >
-            <Button variant="default" size="lg">
+            <Button variant="secondary" size="lg">
               Add To Cursor
             </Button>
           </a>
@@ -256,7 +256,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                   Cancel
                 </Button>
                 <Button
-                  variant="default"
+                  variant="secondary"
                   size="sm"
                   className="pointer-events-none"
                 >
@@ -305,7 +305,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               target="_blank"
               rel="noopener noreferrer"
             >
-              <Button variant="default">Add Extension</Button>
+              <Button variant="secondary">Add Extension</Button>
             </a>
           </div>
         ),

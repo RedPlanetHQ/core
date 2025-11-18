@@ -4,7 +4,9 @@ import { useFetcher } from "@remix-run/react";
 export interface LogItem {
   id: string;
   source: string;
+  title?: string;
   ingestText: string;
+  labels: string[];
   time: string;
   processedAt?: string;
   status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
@@ -15,8 +17,6 @@ export interface LogItem {
   activityId?: string;
   episodeUUID?: string;
   data?: any;
-  spaceIds?: string[];
-  episodeDetails?: any;
   sessionId?: string;
   isSessionGroup?: boolean;
   sessionEpisodeCount?: number;
@@ -25,11 +25,11 @@ export interface LogItem {
 
 export interface LogsResponse {
   logs: LogItem[];
-  totalCount: number;
   page: number;
   limit: number;
   hasMore: boolean;
-  availableSources: Array<{ name: string; slug: string }>;
+  nextCursor?: string | null;
+  availableSources?: Array<{ name: string; slug: string }>;
 }
 
 export interface UseLogsOptions {
@@ -37,12 +37,13 @@ export interface UseLogsOptions {
   source?: string;
   status?: string;
   type?: string;
+  label?: string;
 }
 
-export function useLogs({ endpoint, source, status, type }: UseLogsOptions) {
+export function useLogs({ endpoint, source, status, type, label }: UseLogsOptions) {
   const fetcher = useFetcher<LogsResponse>();
   const [logs, setLogs] = useState<LogItem[]>([]);
-  const [page, setPage] = useState(1);
+  const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [availableSources, setAvailableSources] = useState<
     Array<{ name: string; slug: string }>
@@ -50,70 +51,75 @@ export function useLogs({ endpoint, source, status, type }: UseLogsOptions) {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const buildUrl = useCallback(
-    (pageNum: number) => {
+    (cursorValue: string | null) => {
       const params = new URLSearchParams();
-      params.set("page", pageNum.toString());
       params.set("limit", "50");
+      if (cursorValue) params.set("cursor", cursorValue);
       if (source) params.set("source", source);
       if (status) params.set("status", status);
       if (type) params.set("type", type);
+      if (label) params.set("label", label);
       return `${endpoint}?${params.toString()}`;
     },
-    [endpoint, source, status, type],
+    [endpoint, source, status, type, label],
   );
 
   const loadMore = useCallback(() => {
-    if (fetcher.state === "idle" && hasMore) {
-      fetcher.load(buildUrl(page + 1));
+    // Only load more if we have a cursor (from previous page)
+    if (fetcher.state === "idle" && hasMore && cursor) {
+      fetcher.load(buildUrl(cursor));
     }
-  }, [hasMore, page, buildUrl]);
+  }, [hasMore, cursor, buildUrl]);
 
   const reset = useCallback(() => {
     setLogs([]);
-    setPage(1);
+    setCursor(null);
     setHasMore(true);
     setIsInitialLoad(true);
-    fetcher.load(buildUrl(1));
+    fetcher.load(buildUrl(null));
   }, [buildUrl]);
 
   // Effect to handle fetcher data
   useEffect(() => {
     if (fetcher.data) {
-      const {
-        logs: newLogs,
-        hasMore: newHasMore,
-        page: currentPage,
-        availableSources: sources,
-      } = fetcher.data;
+      const { logs: newLogs, hasMore: newHasMore, nextCursor, availableSources: apiSources } = fetcher.data;
 
-      if (currentPage === 1) {
+      // Check if we're resetting (no cursor and no existing logs)
+      const isReset = cursor === null && logs.length === 0;
+
+      if (isReset) {
         // First page or reset
         setLogs(newLogs);
         setIsInitialLoad(false);
-      } else {
-        // Append to existing logs
+      } else if (nextCursor !== cursor) {
+        // Only append if we got a new cursor (new page)
         setLogs((prev) => [...prev, ...newLogs]);
       }
 
       setHasMore(newHasMore);
-      setPage(currentPage);
-      setAvailableSources(sources);
+      setCursor(nextCursor || null);
+
+      // Use available sources from API response
+      if (apiSources) {
+        setAvailableSources(apiSources);
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data]);
 
   // Effect to reset when filters change
   useEffect(() => {
     setLogs([]);
-    setPage(1);
+    setCursor(null);
     setHasMore(true);
     setIsInitialLoad(true);
-    fetcher.load(buildUrl(1));
-  }, [source, status, type, buildUrl]); // Inline reset logic to avoid dependency issues
+    fetcher.load(buildUrl(null));
+  }, [source, status, type, label, buildUrl]); // Inline reset logic to avoid dependency issues
 
   // Initial load
   useEffect(() => {
     if (isInitialLoad) {
-      fetcher.load(buildUrl(1));
+      fetcher.load(buildUrl(null));
     }
   }, [isInitialLoad, buildUrl]);
 

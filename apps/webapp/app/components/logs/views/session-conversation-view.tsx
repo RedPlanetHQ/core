@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { type LogItem } from "~/hooks/use-logs";
 import { StyledMarkdown } from "~/components/common/styled-markdown";
-import { SpaceDropdown } from "~/components/spaces/space-dropdown";
 import { Loader2 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
 
@@ -14,7 +13,7 @@ interface SessionEpisode {
   content: string;
   originalContent: string;
   createdAt: string;
-  spaceIds?: string[];
+  labelIds?: string[];
 }
 
 interface InvalidFact {
@@ -43,7 +42,7 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
     }
 
     // Fetch all episodes for this session
-    fetch(`/api/v1/episodes/session/${log.data.sessionId}`)
+    fetch(`/api/v1/episodes/session/${log.sessionId}`)
       .then((res) => {
         if (!res.ok) {
           throw new Error("Failed to fetch session episodes");
@@ -129,12 +128,6 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
                     {new Date(episode.createdAt).toLocaleString()}
                   </span>
                 </div>
-              </div>
-              <div className="flex-shrink-0">
-                <SpaceDropdown
-                  episodeIds={[episode.uuid]}
-                  selectedSpaceIds={episode.spaceIds || []}
-                />
               </div>
             </div>
 

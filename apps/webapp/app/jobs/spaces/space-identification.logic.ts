@@ -5,7 +5,6 @@
  */
 
 import { makeModelCall } from "~/lib/model.server";
-import { getAllSpacesForUser } from "~/services/graphModels/space";
 import { getEpisode } from "~/services/graphModels/episode";
 import { logger } from "~/services/logger.service";
 import type { SpaceNode } from "@core/types";
@@ -38,7 +37,7 @@ export async function identifySpacesForTopics(
   const { userId, topics } = params;
 
   // Get existing spaces for the user
-  const existingSpaces = await getAllSpacesForUser(userId);
+  const existingSpaces = [];
 
   // Prepare topic data with top 10 keywords and top 5 episodes
   const topicsForAnalysis = await Promise.all(

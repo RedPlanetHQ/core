@@ -20,12 +20,13 @@ import {
   applyEpisodeReranking,
   applyMultiFactorReranking,
 } from "./search/rerank";
-import { getEmbedding, makeModelCall } from "~/lib/model.server";
+import { getEmbedding } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
 import { env } from "~/env.server";
 import { getCompactedSessionBySessionId } from "./graphModels/compactedSession";
+import { getDocument } from "./graphModels/document";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -55,7 +56,7 @@ export class SearchService {
           uuid: string;
           content: string;
           createdAt: Date;
-          spaceIds: string[];
+          labelIds: string[];
           isCompact?: boolean;
           relevanceScore?: number;
         }[];
@@ -81,7 +82,7 @@ export class SearchService {
       predicateTypes: options.predicateTypes || [],
       scoreThreshold: options.scoreThreshold || 0.7,
       minResults: options.minResults || 10,
-      spaceIds: options.spaceIds || [],
+      labelIds: options.labelIds || [],
       adaptiveFiltering: options.adaptiveFiltering || false,
       structured: options.structured || false,
       useLLMValidation: options.useLLMValidation || true,
@@ -512,7 +513,7 @@ export class SearchService {
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       rerankScore?: number;
     }>,
@@ -555,8 +556,8 @@ export class SearchService {
           if (episode.rerankScore !== undefined) {
             sections.push(`**Relevance**: ${episode.rerankScore}`);
           }
-          if (episode.spaceIds.length > 0) {
-            sections.push(`**Spaces**: ${episode.spaceIds.join(", ")}`);
+          if (episode.labelIds.length > 0) {
+            sections.push(`**Labels**: ${episode.labelIds.join(", ")}`);
           }
           sections.push(""); // Empty line before content
           sections.push(episode.content);
@@ -598,8 +599,9 @@ export class SearchService {
   }
 
   /**
-   * Replace session episodes with compacts, preserving rerank ranking order
-   * Takes highest rerank score when multiple episodes from same session
+   * Replace session episodes with compacts and document chunk episodes with parent documents,
+   * preserving rerank ranking order. Takes highest rerank score when multiple episodes from
+   * same session/document.
    */
   private async replaceWithCompacts(
     episodesWithScores: (EpisodeWithProvenance & { rerankScore: number })[],
@@ -609,7 +611,7 @@ export class SearchService {
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       relevanceScore?: number;
     }>
@@ -624,9 +626,22 @@ export class SearchService {
       }
     >();
 
+    // Group by documentId and track highest score per document
+    const documentGroups = new Map<
+      string,
+      {
+        episodes: typeof episodesWithScores;
+        highestScore: number;
+        firstIndex: number;
+      }
+    >();
+
     episodesWithScores.forEach((ep, index) => {
       const sessionId = ep.episode.sessionId;
-      if (sessionId && !ep.episode.metadata?.documentUuid) {
+      const documentId = ep.episode.documentId;
+
+      // Group session episodes (excluding document chunks)
+      if (sessionId && !documentId) {
         if (!sessionGroups.has(sessionId)) {
           sessionGroups.set(sessionId, {
             episodes: [],
@@ -638,8 +653,23 @@ export class SearchService {
         group.episodes.push(ep);
         group.highestScore = Math.max(group.highestScore, ep.rerankScore || 0);
       }
+
+      // Group document chunk episodes
+      if (documentId) {
+        if (!documentGroups.has(documentId)) {
+          documentGroups.set(documentId, {
+            episodes: [],
+            highestScore: ep.rerankScore || 0,
+            firstIndex: index,
+          });
+        }
+        const group = documentGroups.get(documentId)!;
+        group.episodes.push(ep);
+        group.highestScore = Math.max(group.highestScore, ep.rerankScore || 0);
+      }
     });
 
+    // Fetch session compacts
     const compactMap = new Map<string, any>();
     await Promise.all(
       Array.from(sessionGroups.keys()).map(async (sessionId) => {
@@ -650,24 +680,75 @@ export class SearchService {
       }),
     );
 
+    // Fetch parent documents
+    const documentMap = new Map<string, any>();
+    await Promise.all(
+      Array.from(documentGroups.keys()).map(async (documentId) => {
+        const document = await getDocument(documentId);
+        if (document) {
+          documentMap.set(documentId, document);
+        }
+      }),
+    );
+
     // Build result preserving order, using session's highest-scored position
     const result: Array<{
       uuid: string;
       content: string;
       createdAt: Date;
-      spaceIds: string[];
+      labelIds: string[];
       isCompact?: boolean;
       relevanceScore?: number;
       originalIndex: number;
     }> = [];
 
     const processedSessions = new Set<string>();
+    const processedDocuments = new Set<string>();
 
     episodesWithScores.forEach((ep, index) => {
       const sessionId = ep.episode.sessionId;
+      const documentId = ep.episode.documentId;
 
+      // Document chunk episode
+      if (documentId) {
+        if (processedDocuments.has(documentId)) {
+          return; // Skip, already added parent document
+        }
+
+        const document = documentMap.get(documentId);
+        if (document) {
+          const group = documentGroups.get(documentId)!;
+          // Collect unique labelIds from all chunks in this document
+          const documentLabelIds = Array.from(
+            new Set(group.episodes.flatMap((ep) => ep.episode.labelIds || [])),
+          );
+          result.push({
+            uuid: document.uuid, // Use document UUID
+            content: document.originalContent, // Use full document content
+            createdAt: document.createdAt,
+            labelIds: documentLabelIds,
+            isCompact: true, // Mark as compact/aggregated
+            relevanceScore: group.highestScore, // Use highest score from document chunks
+            originalIndex: group.firstIndex, // Use position of first chunk from this document
+          });
+          processedDocuments.add(documentId);
+          logger.debug(
+            `Replaced document ${documentId.slice(0, 8)} chunk episodes with parent document, score: ${group.highestScore.toFixed(3)}, labels: ${documentLabelIds.join(",")}`,
+          );
+        } else {
+          // No parent document found, keep chunk episode
+          result.push({
+            uuid: ep.episode.uuid,
+            content: ep.episode.originalContent,
+            createdAt: ep.episode.createdAt,
+            labelIds: ep.episode.labelIds || [],
+            relevanceScore: ep.rerankScore,
+            originalIndex: index,
+          });
+        }
+      }
       // Session episode
-      if (sessionId && !ep.episode.metadata?.documentUuid) {
+      else if (sessionId) {
         if (processedSessions.has(sessionId)) {
           return; // Skip, already added compact
         }
@@ -675,22 +756,22 @@ export class SearchService {
         const compact = compactMap.get(sessionId);
         if (compact) {
           const group = sessionGroups.get(sessionId)!;
-          // Collect unique spaceIds from all episodes in this session
-          const sessionSpaceIds = Array.from(
-            new Set(group.episodes.flatMap((ep) => ep.episode.spaceIds || [])),
+          // Collect unique labelIds from all episodes in this session
+          const sessionLabelIds = Array.from(
+            new Set(group.episodes.flatMap((ep) => ep.episode.labelIds || [])),
           );
           result.push({
             uuid: compact.id, // Use compact ID as uuid
             content: compact.summary,
             createdAt: compact.startTime,
-            spaceIds: sessionSpaceIds,
+            labelIds: sessionLabelIds,
             isCompact: true,
             relevanceScore: group.highestScore, // Use highest score from session episodes
             originalIndex: group.firstIndex, // Use position of first episode from this session
           });
           processedSessions.add(sessionId);
           logger.debug(
-            `Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}, spaces: ${sessionSpaceIds.join(",")}`,
+            `Replaced session ${sessionId.slice(0, 8)} episodes with compact, score: ${group.highestScore.toFixed(3)}, labels: ${sessionLabelIds.join(",")}`,
           );
         } else {
           // No compact, keep episode
@@ -698,18 +779,18 @@ export class SearchService {
             uuid: ep.episode.uuid,
             content: ep.episode.originalContent,
             createdAt: ep.episode.createdAt,
-            spaceIds: ep.episode.spaceIds || [],
+            labelIds: ep.episode.labelIds || [],
             relevanceScore: ep.rerankScore,
             originalIndex: index,
           });
         }
       } else {
-        // Non-session episode, keep as-is
+        // Standalone episode (no session, no document), keep as-is
         result.push({
           uuid: ep.episode.uuid,
           content: ep.episode.originalContent,
           createdAt: ep.episode.createdAt,
-          spaceIds: ep.episode.spaceIds || [],
+          labelIds: ep.episode.labelIds || [],
           relevanceScore: ep.rerankScore,
           originalIndex: index,
         });

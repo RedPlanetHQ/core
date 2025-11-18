@@ -116,10 +116,10 @@ export const bertTopicQueue = new Queue("bert-topic-queue", {
 });
 
 /**
- * Space assignment queue
- * Handles assigning episodes to spaces based on semantic matching
+ * Label assignment queue
+ * Uses LLM to assign appropriate labels to ingested episodes
  */
-export const spaceAssignmentQueue = new Queue("space-assignment-queue", {
+export const labelAssignmentQueue = new Queue("label-assignment-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 3,
@@ -138,10 +138,10 @@ export const spaceAssignmentQueue = new Queue("space-assignment-queue", {
 });
 
 /**
- * Space summary queue
- * Handles generating summaries for spaces
+ * Title generation queue
+ * Uses LLM to generate titles for ingested episodes
  */
-export const spaceSummaryQueue = new Queue("space-summary-queue", {
+export const titleGenerationQueue = new Queue("title-generation-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 3,
@@ -155,6 +155,28 @@ export const spaceSummaryQueue = new Queue("space-summary-queue", {
     },
     removeOnFail: {
       age: 86400,
+    },
+  },
+});
+
+/**
+ * Persona generation queue
+ * Handles CPU-intensive persona generation with HDBSCAN clustering
+ */
+export const personaGenerationQueue = new Queue("persona-generation-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 2, // Only 2 attempts for expensive operations
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      age: 7200, // Keep completed jobs for 2 hours
+      count: 100,
+    },
+    removeOnFail: {
+      age: 172800, // Keep failed jobs for 48 hours (for debugging)
     },
   },
 });

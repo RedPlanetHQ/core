@@ -1,7 +1,6 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import z from "zod";
 import { prisma } from "~/db.server";
-import { getSpacesForEpisodes } from "~/services/graphModels/space";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 // Schema for space ID parameter
@@ -39,16 +38,16 @@ export const loader = createHybridLoaderApiRoute(
       const ingestionQueueEntries = await prisma.ingestionQueue.findMany({
         where: {
           workspaceId: user.Workspace.id,
-          data: {
-            path: ["sessionId"],
-            equals: sessionId,
-          },
+          sessionId,
         },
         select: {
           id: true,
           createdAt: true,
           output: true,
           data: true,
+          status: true,
+          title: true,
+          labels: true,
           activity: {
             select: {
               text: true,
@@ -64,12 +63,8 @@ export const loader = createHybridLoaderApiRoute(
       const episodes = ingestionQueueEntries
         .map((entry) => {
           const logData = entry.data as any;
-          const episodeUUID = (entry.output as any)?.episodeUuid;
-
-          if (!episodeUUID) return null;
-
           return {
-            uuid: episodeUUID,
+            id: entry.id,
             content:
               entry.activity?.text ||
               logData?.episodeBody ||
@@ -77,21 +72,14 @@ export const loader = createHybridLoaderApiRoute(
               "No content",
             createdAt: entry.createdAt.toISOString(),
             ingestionQueueId: entry.id,
+            status: entry.status,
+            title: entry.title,
+            labels: entry.labels,
           };
         })
         .filter((ep) => ep !== null);
 
-      // Get space IDs for all episodes
-      const episodeIds = episodes.map((e) => e.uuid);
-      const spacesMap = await getSpacesForEpisodes(episodeIds, userId);
-
-      // Add space IDs to each episode
-      const episodesWithSpaces = episodes.map((episode) => ({
-        ...episode,
-        spaceIds: spacesMap[episode.uuid] || [],
-      }));
-
-      return json({ episodes: episodesWithSpaces });
+      return json({ episodes });
     } catch (error: any) {
       console.error("Error fetching session episodes:", error);
       return json({ error: error.message }, { status: 500 });

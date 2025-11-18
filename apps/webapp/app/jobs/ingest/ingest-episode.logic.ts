@@ -6,22 +6,25 @@ import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
-import { assignEpisodesToSpace } from "~/services/graphModels/space";
+
 import {
   shouldTriggerTopicAnalysis,
   updateLastTopicAnalysisTime,
 } from "~/services/bertTopicAnalysis.server";
+import { checkAndTriggerPersonaUpdate } from "../spaces/persona-trigger.logic";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
   referenceTime: z.string(),
   metadata: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   source: z.string(),
-  spaceIds: z.array(z.string()).optional(),
+  labelIds: z.array(z.string()).optional(),
   sessionId: z.string().optional(),
   type: z
     .enum([EpisodeType.CONVERSATION, EpisodeType.DOCUMENT])
     .default(EpisodeType.CONVERSATION),
+  title: z.string().optional(),
+  delay: z.boolean().optional(),
 });
 
 export interface IngestEpisodePayload {
@@ -48,11 +51,15 @@ export interface IngestEpisodeResult {
 export async function processEpisodeIngestion(
   payload: IngestEpisodePayload,
   // Callback functions for enqueueing follow-up jobs
-  enqueueSpaceAssignment?: (params: {
+  enqueueLabelAssignment?: (params: {
+    queueId: string;
     userId: string;
     workspaceId: string;
-    mode: "episode";
-    episodeIds: string[];
+  }) => Promise<any>,
+  enqueueTitleGeneration?: (params: {
+    queueId: string;
+    userId: string;
+    workspaceId: string;
   }) => Promise<any>,
   enqueueSessionCompaction?: (params: {
     userId: string;
@@ -161,6 +168,7 @@ export async function processEpisodeIngestion(
       where: { id: payload.queueId },
       data: {
         output: finalOutput,
+        graphIds: episodeUuids,
         status: currentStatus,
       },
     });
@@ -174,62 +182,63 @@ export async function processEpisodeIngestion(
       );
     }
 
-    // Handle space assignment after successful ingestion
+    // Handle label assignment and title generation after successful ingestion
     try {
-      // If spaceIds were explicitly provided, immediately assign the episode to those spaces
-      if (
-        episodeBody.spaceIds &&
-        episodeBody.spaceIds.length > 0 &&
-        episodeDetails.episodeUuid
-      ) {
-        logger.info(`Assigning episode to explicitly provided spaces`, {
-          userId: payload.userId,
-          episodeId: episodeDetails.episodeUuid,
-          spaceIds: episodeBody.spaceIds,
-        });
-
-        // Assign episode to each space
-        for (const spaceId of episodeBody.spaceIds) {
-          await assignEpisodesToSpace(
-            [episodeDetails.episodeUuid],
-            spaceId,
-            payload.userId,
+      if (currentStatus === IngestionStatus.COMPLETED) {
+        // Only assign labels if not explicitly provided
+        if (!episodeBody.labelIds || episodeBody.labelIds.length === 0) {
+          if (enqueueLabelAssignment) {
+            logger.info(
+              `Triggering LLM label assignment after successful ingestion`,
+              {
+                userId: payload.userId,
+                workspaceId: payload.workspaceId,
+                queueId: payload.queueId,
+              },
+            );
+            await enqueueLabelAssignment({
+              queueId: payload.queueId,
+              userId: payload.userId,
+              workspaceId: payload.workspaceId,
+            });
+          }
+        } else {
+          logger.info(
+            `Skipping LLM label assignment - labels explicitly provided: ${episodeBody.labelIds.join(", ")}`,
+            {
+              userId: payload.userId,
+              queueId: payload.queueId,
+            },
           );
         }
 
-        logger.info(
-          `Skipping LLM space assignment - episode explicitly assigned to ${episodeBody.spaceIds.length} space(s)`,
-        );
-      } else {
-        // Only trigger automatic LLM space assignment if no explicit spaceIds were provided
-        logger.info(
-          `Triggering LLM space assignment after successful ingestion`,
-          {
+        // Trigger title generation for all completed episodes
+        if (enqueueTitleGeneration) {
+          logger.info(
+            `Triggering title generation after successful ingestion`,
+            {
+              userId: payload.userId,
+              workspaceId: payload.workspaceId,
+              queueId: payload.queueId,
+            },
+          );
+          await enqueueTitleGeneration({
+            queueId: payload.queueId,
             userId: payload.userId,
             workspaceId: payload.workspaceId,
-            episodeId: episodeDetails?.episodeUuid,
-          },
-        );
-        if (
-          episodeDetails.episodeUuid &&
-          currentStatus === IngestionStatus.COMPLETED &&
-          enqueueSpaceAssignment
-        ) {
-          await enqueueSpaceAssignment({
-            userId: payload.userId,
-            workspaceId: payload.workspaceId,
-            mode: "episode",
-            episodeIds: episodeUuids,
           });
         }
       }
-    } catch (assignmentError) {
-      // Don't fail the ingestion if assignment fails
-      logger.warn(`Failed to trigger space assignment after ingestion:`, {
-        error: assignmentError,
-        userId: payload.userId,
-        episodeId: episodeDetails?.episodeUuid,
-      });
+    } catch (postIngestionError) {
+      // Don't fail the ingestion if label/title jobs fail
+      logger.warn(
+        `Failed to trigger label assignment or title generation after ingestion:`,
+        {
+          error: postIngestionError,
+          userId: payload.userId,
+          queueId: payload.queueId,
+        },
+      );
     }
 
     // Auto-trigger session compaction if episode has sessionId
@@ -237,6 +246,7 @@ export async function processEpisodeIngestion(
       if (
         episodeBody.sessionId &&
         currentStatus === IngestionStatus.COMPLETED &&
+        episodeBody.type !== EpisodeType.DOCUMENT &&
         enqueueSessionCompaction
       ) {
         logger.info(`Checking if session compaction should be triggered`, {
@@ -294,6 +304,19 @@ export async function processEpisodeIngestion(
       // Don't fail the ingestion if topic analysis fails
       logger.warn(`Failed to trigger topic analysis after ingestion:`, {
         error: topicAnalysisError,
+        userId: payload.userId,
+      });
+    }
+
+    // Check and trigger persona update if threshold met (50+ new episodes)
+    try {
+      if (currentStatus === IngestionStatus.COMPLETED) {
+        await checkAndTriggerPersonaUpdate(payload.userId, payload.workspaceId);
+      }
+    } catch (personaTriggerError) {
+      // Don't fail the ingestion if persona trigger fails
+      logger.warn(`Failed to check persona trigger after ingestion:`, {
+        error: personaTriggerError,
         userId: payload.userId,
       });
     }

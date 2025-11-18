@@ -11,6 +11,7 @@ import { type LogItem } from "~/hooks/use-logs";
 import { ScrollManagedList } from "../virtualized-list";
 import { LogTextCollapse } from "./log-text-collapse";
 import { LoaderCircle } from "lucide-react";
+import { type Label } from "./label-dropdown";
 
 interface VirtualLogsListProps {
   logs: LogItem[];
@@ -19,12 +20,14 @@ interface VirtualLogsListProps {
   isLoading: boolean;
   height?: number;
   reset?: () => void;
+  labels: Label[];
 }
 
 function LogItemRenderer(
   props: ListRowProps,
   logs: LogItem[],
   cache: CellMeasurerCache,
+  labels: Label[],
 ) {
   const { index, key, style, parent } = props;
   const log = logs[index];
@@ -61,6 +64,7 @@ function LogItemRenderer(
             logData={log.data}
             log={log}
             id={log.id}
+            labels={labels}
           />
         </div>
       </div>
@@ -73,6 +77,7 @@ export function VirtualLogsList({
   hasMore,
   loadMore,
   isLoading,
+  labels,
 }: VirtualLogsListProps) {
   // Create a CellMeasurerCache instance using useRef to prevent recreation
   const cacheRef = useRef<CellMeasurerCache | null>(null);
@@ -101,7 +106,7 @@ export function VirtualLogsList({
   };
 
   const rowRenderer = (props: ListRowProps) => {
-    return LogItemRenderer(props, logs, cache);
+    return LogItemRenderer(props, logs, cache, labels);
   };
 
   const rowHeight = ({ index }: Index) => {

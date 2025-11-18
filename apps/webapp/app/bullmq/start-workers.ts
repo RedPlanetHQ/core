@@ -16,8 +16,8 @@ import {
   sessionCompactionWorker,
   closeAllWorkers,
   bertTopicWorker,
-  spaceAssignmentWorker,
-  spaceSummaryWorker,
+  labelAssignmentWorker,
+  titleGenerationWorker,
 } from "./workers";
 import {
   ingestQueue,
@@ -25,8 +25,8 @@ import {
   conversationTitleQueue,
   sessionCompactionQueue,
   bertTopicQueue,
-  spaceAssignmentQueue,
-  spaceSummaryQueue,
+  labelAssignmentQueue,
+  titleGenerationQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -58,15 +58,17 @@ export async function initWorkers(): Promise<void> {
     "session-compaction",
   );
 
-  setupWorkerLogging(
-    spaceAssignmentWorker,
-    spaceAssignmentQueue,
-    "space-assignment",
-  );
-
   setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
-
-  setupWorkerLogging(spaceSummaryWorker, spaceSummaryQueue, "space-summary");
+  setupWorkerLogging(
+    labelAssignmentWorker,
+    labelAssignmentQueue,
+    "label-assignment",
+  );
+  setupWorkerLogging(
+    titleGenerationWorker,
+    titleGenerationQueue,
+    "title-generation",
+  );
 
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
@@ -87,22 +89,20 @@ export async function initWorkers(): Promise<void> {
         queue: sessionCompactionQueue,
         name: "session-compaction",
       },
-
-      {
-        worker: spaceAssignmentWorker,
-        queue: spaceAssignmentQueue,
-        name: "space-assignment",
-      },
-
-      {
-        worker: spaceSummaryWorker,
-        queue: spaceAssignmentQueue,
-        name: "space-summary",
-      },
       {
         worker: bertTopicWorker,
         queue: bertTopicQueue,
         name: "bert-topic",
+      },
+      {
+        worker: labelAssignmentWorker,
+        queue: labelAssignmentQueue,
+        name: "label-assignment",
+      },
+      {
+        worker: titleGenerationWorker,
+        queue: titleGenerationQueue,
+        name: "title-generation",
       },
     ],
     60000, // Log metrics every 60 seconds
@@ -111,16 +111,24 @@ export async function initWorkers(): Promise<void> {
   // Log worker startup
   logger.log("\n🚀 Starting BullMQ workers...");
   logger.log("─".repeat(80));
-  logger.log(`✓ Ingest worker: ${ingestWorker.name} (concurrency: 5)`);
+  logger.log(`✓ Ingest worker: ${ingestWorker.name} (concurrency: 1)`);
   logger.log(
     `✓ Document ingest worker: ${documentIngestWorker.name} (concurrency: 3)`,
   );
   logger.log(
     `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
   );
-
   logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
+  );
+  logger.log(
+    `✓ BERT topic worker: ${bertTopicWorker.name} (concurrency: 2)`,
+  );
+  logger.log(
+    `✓ Label assignment worker: ${labelAssignmentWorker.name} (concurrency: 5)`,
+  );
+  logger.log(
+    `✓ Title generation worker: ${titleGenerationWorker.name} (concurrency: 10)`,
   );
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");

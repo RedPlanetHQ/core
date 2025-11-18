@@ -21,9 +21,9 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.createdAt = $createdAt,
       e.validAt = $validAt,
       e.userId = $userId,
-      e.labels = $labels,
-      e.space = $space,
-      e.sessionId = $sessionId
+      e.labelIds = $labelIds,
+      e.sessionId = $sessionId,
+      e.documentId = $documentId
     ON MATCH SET
       e.content = $content,
       e.contentEmbedding = $contentEmbedding,
@@ -31,9 +31,9 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.metadata = $metadata,
       e.source = $source,
       e.validAt = $validAt,
-      e.labels = $labels,
-      e.space = $space,
-      e.sessionId = $sessionId
+      e.labelIds = $labelIds,
+      e.sessionId = $sessionId,
+      e.documentId = $documentId
     RETURN e.uuid as uuid
   `;
 
@@ -44,12 +44,12 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
     source: episode.source,
     metadata: JSON.stringify(episode.metadata || {}),
     userId: episode.userId || null,
-    labels: episode.labels || [],
+    labelIds: episode.labelIds || [],
     createdAt: episode.createdAt.toISOString(),
     validAt: episode.validAt.toISOString(),
     contentEmbedding: episode.contentEmbedding || [],
-    space: episode.space || null,
     sessionId: episode.sessionId || null,
+    documentId: episode.documentId || null,
   };
 
   const result = await runQuery(query, params);
@@ -148,7 +148,7 @@ export async function searchEpisodesByEmbedding(params: {
   const limit = params.limit || 100;
   const query = `
   MATCH (episode:Episode{userId: $userId})
-  WHERE episode.contentEmbedding IS NOT NULL
+  WHERE episode.contentEmbedding IS NOT NULL and size(episode.contentEmbedding) > 0
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode, score
@@ -277,7 +277,7 @@ export async function getRelatedEpisodesEntities(params: {
   const limit = params.limit || 100;
   const query = `
   MATCH (episode:Episode{userId: $userId})
-  WHERE episode.contentEmbedding IS NOT NULL
+  WHERE episode.contentEmbedding IS NOT NULL and size(episode.contentEmbedding) > 0
   WITH episode, gds.similarity.cosine(episode.contentEmbedding, $embedding) AS score
   WHERE score >= $minSimilarity
   OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(stmt:Statement)-[:HAS_SUBJECT|HAS_OBJECT]->(ent:Entity)
@@ -355,6 +355,39 @@ export async function getStatementsInvalidatedByEpisode(params: {
   });
 }
 
+export async function getEpisodesByUserId(params: {
+  userId: string;
+  startTime?: string;
+  endTime?: string;
+}): Promise<EpisodicNode[]> {
+  let whereClause = "";
+  const conditions: string[] = [];
+
+  if (params.startTime) {
+    conditions.push("e.createdAt >= datetime($startTime)");
+  }
+  if (params.endTime) {
+    conditions.push("e.createdAt <= datetime($endTime)");
+  }
+
+  if (conditions.length > 0) {
+    whereClause = `WHERE ${conditions.join(" AND ")}`;
+  }
+
+  const query = `
+  MATCH (e:Episode {userId: $userId})
+  ${whereClause}
+  RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+  `;
+
+  const result = await runQuery(query, {
+    userId: params.userId,
+    startTime: params.startTime,
+    endTime: params.endTime,
+  });
+
+  return result.map((record) => record.get("episode") as EpisodicNode);
+}
 
 export function parseEpisodicNode(raw: any): EpisodicNode {
   return {
@@ -367,11 +400,30 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     createdAt: new Date(raw.createdAt),
     validAt: new Date(raw.validAt),
     userId: raw.userId,
-    labels: raw.labels || [],
-    space: raw.space || undefined,
+    labelIds: raw.labelIds || [],
     sessionId: raw.sessionId || undefined,
     recallCount: raw.recallCount || undefined,
     chunkIndex: raw.chunkIndex || undefined,
-    spaceIds: raw.spaceIds || [],
+    documentId: raw.documentId || undefined,
   };
 }
+
+export async function addLabelToEpisodes(labelId: string, episodeUuids: string[], userId: string): Promise<number> {
+  const query = `
+    MATCH (e:Episode {userId: $userId})
+    WHERE e.uuid IN $episodeUuids AND NOT $labelId IN COALESCE(e.labelIds, [])
+    SET e.labelIds = COALESCE(e.labelIds, []) + $labelId
+    RETURN count(e) as updatedEpisodes
+  `;
+
+  const result = await runQuery(query, {
+    userId,
+    episodeUuids,
+    labelId,
+  });
+  const updatedEpisodes =
+    result[0]?.get("updatedEpisodes") || 0;
+
+  return updatedEpisodes;
+}
+  

@@ -3,8 +3,11 @@ import { promisify } from "util";
 import { identifySpacesForTopics } from "~/jobs/spaces/space-identification.logic";
 import { logger } from "~/services/logger.service";
 import { getEpisode } from "~/services/graphModels/episode";
-import { makeModelCall } from "~/lib/model.server";
-import type { EpisodicNode } from "@core/types";
+import { makeModelCall, getModelForTask } from "~/lib/model.server";
+import { createBatch, getBatch } from "~/lib/batch.server";
+import { addToQueue, type IngestBodyRequest } from "~/lib/ingest.server";
+import { EpisodeType, type EpisodicNode } from "@core/types";
+import { type z } from "zod";
 
 const execAsync = promisify(exec);
 
@@ -129,6 +132,308 @@ Return ONLY the summary document content, no additional commentary.`;
 }
 
 /**
+ * Generate document summaries sequentially (for non-OpenAI models)
+ *
+ * @param proposals - Array of theme proposals with topics and metadata
+ * @param topicsData - Topics data containing episode IDs
+ * @param documentSummaries - Array to push generated summaries into
+ */
+async function generateSequentialSummaries(
+  proposals: Array<{
+    name: string;
+    intent: string;
+    topics: string[];
+  }>,
+  topicsData: {
+    [topicId: string]: { keywords: string[]; episodeIds: string[] };
+  },
+  documentSummaries: DocumentSummary[],
+): Promise<void> {
+  for (const proposal of proposals) {
+    try {
+      // Collect all episode IDs from the topics in this proposal
+      const episodeIds: string[] = [];
+      for (const topicId of proposal.topics) {
+        const topic = topicsData[topicId];
+        if (topic) {
+          episodeIds.push(...topic.episodeIds);
+        }
+      }
+
+      if (episodeIds.length === 0) {
+        logger.warn("[BERT Topic Analysis] No episodes found for theme", {
+          theme: proposal.name,
+        });
+        continue;
+      }
+
+      // Fetch top 10 episodes for summary generation
+      const episodesToFetch = episodeIds.slice(0, 10);
+      const episodes = await Promise.all(
+        episodesToFetch.map((id) => getEpisode(id)),
+      );
+
+      // Filter out null episodes
+      const validEpisodes = episodes.filter(
+        (ep): ep is EpisodicNode => ep !== null,
+      );
+
+      if (validEpisodes.length === 0) {
+        logger.warn("[BERT Topic Analysis] No valid episodes found for theme", {
+          theme: proposal.name,
+        });
+        continue;
+      }
+
+      logger.info(
+        "[BERT Topic Analysis] Generating document summary about topic theme",
+        {
+          title: proposal.name,
+          episodeCount: validEpisodes.length,
+          totalEpisodes: episodeIds.length,
+          topics: proposal.topics,
+        },
+      );
+
+      // Generate document summary from episodes
+      const summary = await createDocumentSummaryFromEpisodes(
+        validEpisodes,
+        proposal.intent,
+        proposal.name,
+      );
+
+      documentSummaries.push({
+        title: proposal.name,
+        theme: proposal.intent,
+        summary,
+        topics: proposal.topics,
+        episodeCount: episodeIds.length,
+      });
+
+      logger.info("[BERT Topic Analysis] Document summary created", {
+        title: proposal.name,
+        summaryLength: summary.length,
+      });
+    } catch (summaryError) {
+      logger.error("[BERT Topic Analysis] Failed to create document summary", {
+        proposal,
+        error: summaryError,
+      });
+      // Continue with other proposals
+    }
+  }
+}
+
+/**
+ * Create document summaries using batch processing (for OpenAI models)
+ *
+ * @param proposals - Array of theme proposals with topics and metadata
+ * @param topicsData - Topics data containing episode IDs
+ * @returns Array of document summaries
+ */
+async function createDocumentSummariesBatch(
+  proposals: Array<{
+    name: string;
+    intent: string;
+    topics: string[];
+  }>,
+  topicsData: {
+    [topicId: string]: { keywords: string[]; episodeIds: string[] };
+  },
+): Promise<DocumentSummary[]> {
+  logger.info("[Document Summary] Starting batch processing", {
+    proposalCount: proposals.length,
+  });
+
+  // Step 1: Prepare all episode data for batch processing
+  const batchRequests = [];
+  const proposalMetadata: Array<{
+    proposal: { name: string; intent: string; topics: string[] };
+    episodeIds: string[];
+    validEpisodes: EpisodicNode[];
+  }> = [];
+
+  for (const proposal of proposals) {
+    try {
+      // Collect all episode IDs from the topics in this proposal
+      const episodeIds: string[] = [];
+      for (const topicId of proposal.topics) {
+        const topic = topicsData[topicId];
+        if (topic) {
+          episodeIds.push(...topic.episodeIds);
+        }
+      }
+
+      if (episodeIds.length === 0) {
+        logger.warn("[Document Summary] No episodes found for theme", {
+          theme: proposal.name,
+        });
+        continue;
+      }
+
+      // Fetch top 10 episodes for summary generation
+      const episodesToFetch = episodeIds.slice(0, 10);
+      const episodes = await Promise.all(
+        episodesToFetch.map((id) => getEpisode(id)),
+      );
+
+      // Filter out null episodes
+      const validEpisodes = episodes.filter(
+        (ep): ep is EpisodicNode => ep !== null,
+      );
+
+      if (validEpisodes.length === 0) {
+        logger.warn("[Document Summary] No valid episodes found for theme", {
+          theme: proposal.name,
+        });
+        continue;
+      }
+
+      // Store metadata for later processing
+      proposalMetadata.push({
+        proposal,
+        episodeIds,
+        validEpisodes,
+      });
+
+      // Build the prompt for this proposal
+      const episodeTexts = validEpisodes
+        .map((ep, idx) => `### Episode ${idx + 1}\n${ep.content}`)
+        .join("\n\n");
+
+      const prompt = `You are creating a comprehensive summary document about topics the user frequently discusses.
+
+## Document Theme
+**Title**: ${proposal.name}
+**Theme**: ${proposal.intent}
+
+## Episodes to Summarize
+The following episodes represent conversations where the user discussed this topic:
+
+${episodeTexts}
+
+## Task
+Create a cohesive, well-structured summary document that:
+1. Synthesizes what the user talks about regarding this theme
+2. Captures the key insights, patterns, and recurring concepts
+3. Organizes information in a logical, readable format
+4. Highlights the user's perspectives, experiences, or knowledge on this topic
+5. Uses clear headings and structure for easy reference
+
+This document will help the user understand what they frequently discuss about "${proposal.name}" and serve as a reference for this topic area.
+
+Return ONLY the summary document content, no additional commentary.`;
+
+      batchRequests.push({
+        customId: `summary-${proposal.name}`,
+        messages: [{ role: "user" as const, content: prompt }],
+        options: { temperature: 0.7 },
+      });
+    } catch (error) {
+      logger.error("[Document Summary] Failed to prepare batch request", {
+        proposal,
+        error,
+      });
+    }
+  }
+
+  if (batchRequests.length === 0) {
+    logger.warn("[Document Summary] No valid batch requests to process");
+    return [];
+  }
+
+  logger.info("[Document Summary] Submitting batch with requests", {
+    requestCount: batchRequests.length,
+  });
+
+  // Step 2: Create batch job
+  const { batchId } = await createBatch({
+    requests: batchRequests,
+    modelComplexity: "high",
+  });
+
+  logger.info("[Document Summary] Batch job created", { batchId });
+
+  // Step 3: Poll for batch completion (with timeout)
+  const maxWaitTime = 10 * 60 * 1000; // 10 minutes
+  const pollInterval = 5000; // 5 seconds
+  const startTime = Date.now();
+
+  let batchJob;
+  while (Date.now() - startTime < maxWaitTime) {
+    batchJob = await getBatch({ batchId });
+
+    logger.info("[Document Summary] Batch status check", {
+      batchId,
+      status: batchJob.status,
+      completed: batchJob.completedRequests,
+      total: batchJob.totalRequests,
+    });
+
+    if (batchJob.status === "completed") {
+      break;
+    }
+
+    if (batchJob.status === "failed" || batchJob.status === "cancelled") {
+      throw new Error(`Batch job ${batchId} ${batchJob.status}`);
+    }
+
+    // Wait before next poll
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  if (!batchJob || batchJob.status !== "completed") {
+    throw new Error(`Batch job ${batchId} timed out or failed to complete`);
+  }
+
+  // Step 4: Process results
+  const documentSummaries: DocumentSummary[] = [];
+
+  if (!batchJob.results) {
+    logger.error("[Document Summary] Batch completed but no results found");
+    return [];
+  }
+
+  for (let i = 0; i < proposalMetadata.length; i++) {
+    const metadata = proposalMetadata[i];
+    const result = batchJob.results.find(
+      (r) => r.customId === `summary-${metadata.proposal.name}`,
+    );
+
+    if (result?.response && !result.error) {
+      const summary =
+        typeof result.response === "string"
+          ? result.response
+          : JSON.stringify(result.response);
+
+      documentSummaries.push({
+        title: metadata.proposal.name,
+        theme: metadata.proposal.intent,
+        summary,
+        topics: metadata.proposal.topics,
+        episodeCount: metadata.episodeIds.length,
+      });
+
+      logger.info("[Document Summary] Document summary created from batch", {
+        title: metadata.proposal.name,
+        summaryLength: summary.length,
+      });
+    } else {
+      logger.error("[Document Summary] Failed to get summary from batch", {
+        proposal: metadata.proposal.name,
+        error: result?.error,
+      });
+    }
+  }
+
+  logger.info("[Document Summary] Batch processing completed", {
+    documentsGenerated: documentSummaries.length,
+  });
+
+  return documentSummaries;
+}
+
+/**
  * Process BERT topic analysis on user's episodes and generate document summaries
  *
  * Workflow:
@@ -206,84 +511,54 @@ export async function processTopicAnalysis(
       );
 
       // Step 3: Generate document summaries for each identified theme
-      for (const proposal of themeProposals) {
+      // Check if we can use batch processing (OpenAI models only)
+      const modelForTask = getModelForTask("high");
+      const canUseBatch =
+        modelForTask.includes("gpt") || modelForTask.includes("o1");
+
+      if (canUseBatch) {
+        logger.info(
+          "[BERT Topic Analysis] Using batch processing for document summaries",
+          { model: modelForTask },
+        );
+
         try {
-          // Collect all episode IDs from the topics in this proposal
-          const episodeIds: string[] = [];
-          for (const topicId of proposal.topics) {
-            const topic = result.topics[topicId];
-            if (topic) {
-              episodeIds.push(...topic.episodeIds);
-            }
-          }
-
-          if (episodeIds.length === 0) {
-            logger.warn("[BERT Topic Analysis] No episodes found for theme", {
-              theme: proposal.name,
-            });
-            continue;
-          }
-
-          // Fetch top 5-10 episodes for summary generation
-          const episodesToFetch = episodeIds.slice(0, 10);
-          const episodes = await Promise.all(
-            episodesToFetch.map((id) => getEpisode(id)),
+          // Use batch processing for all summaries at once
+          const batchSummaries = await createDocumentSummariesBatch(
+            themeProposals,
+            result.topics,
           );
-
-          // Filter out null episodes
-          const validEpisodes = episodes.filter(
-            (ep): ep is EpisodicNode => ep !== null,
-          );
-
-          if (validEpisodes.length === 0) {
-            logger.warn(
-              "[BERT Topic Analysis] No valid episodes found for theme",
-              {
-                theme: proposal.name,
-              },
-            );
-            continue;
-          }
+          documentSummaries.push(...batchSummaries);
 
           logger.info(
-            "[BERT Topic Analysis] Generating document summary about topic theme",
+            "[BERT Topic Analysis] Batch document summary generation completed",
             {
-              title: proposal.name,
-              episodeCount: validEpisodes.length,
-              totalEpisodes: episodeIds.length,
-              topics: proposal.topics,
+              documentsGenerated: documentSummaries.length,
             },
           );
-
-          // Generate document summary from episodes
-          const summary = await createDocumentSummaryFromEpisodes(
-            validEpisodes,
-            proposal.intent,
-            proposal.name,
-          );
-
-          documentSummaries.push({
-            title: proposal.name,
-            theme: proposal.intent,
-            summary,
-            topics: proposal.topics,
-            episodeCount: episodeIds.length,
-          });
-
-          logger.info("[BERT Topic Analysis] Document summary created", {
-            title: proposal.name,
-            summaryLength: summary.length,
-          });
-        } catch (summaryError) {
+        } catch (batchError) {
           logger.error(
-            "[BERT Topic Analysis] Failed to create document summary",
-            {
-              proposal,
-              error: summaryError,
-            },
+            "[BERT Topic Analysis] Batch processing failed, falling back to sequential",
+            { error: batchError },
           );
-          // Continue with other proposals
+          // Fall back to sequential processing below
+          await generateSequentialSummaries(
+            themeProposals,
+            result.topics,
+            documentSummaries,
+          );
         }
+      } else {
+        logger.info(
+          "[BERT Topic Analysis] Using sequential processing for document summaries",
+          { model: modelForTask },
+        );
+        // Use sequential processing for non-OpenAI models
+        await generateSequentialSummaries(
+          themeProposals,
+          result.topics,
+          documentSummaries,
+        );
       }
 
       logger.info(
@@ -292,6 +567,46 @@ export async function processTopicAnalysis(
           documentsGenerated: documentSummaries.length,
         },
       );
+
+      // Step 4: Ingest document summaries as episodic documents
+      if (documentSummaries.length > 0) {
+        logger.info("[BERT Topic Analysis] Ingesting document summaries", {
+          documentCount: documentSummaries.length,
+        });
+
+        for (const docSummary of documentSummaries) {
+          try {
+            const ingestDocumentData: z.infer<typeof IngestBodyRequest> = {
+              episodeBody: docSummary.summary,
+              referenceTime: new Date().toISOString(),
+              type: EpisodeType.DOCUMENT,
+              source: "topic-analysis",
+              metadata: {
+                documentTitle: docSummary.title,
+                theme: docSummary.theme,
+                episodeCount: docSummary.episodeCount,
+              },
+            };
+
+            await addToQueue(ingestDocumentData, userId);
+
+            logger.info("[BERT Topic Analysis] Document ingested", {
+              title: docSummary.title,
+              episodeCount: docSummary.episodeCount,
+            });
+          } catch (ingestError) {
+            logger.error("[BERT Topic Analysis] Failed to ingest document", {
+              title: docSummary.title,
+              error: ingestError,
+            });
+            // Continue with other documents
+          }
+        }
+
+        logger.info("[BERT Topic Analysis] All documents ingested", {
+          documentsIngested: documentSummaries.length,
+        });
+      }
     } catch (themeIdentificationError) {
       logger.error(
         "[BERT Topic Analysis] Topic theme identification failed, returning topics only",
@@ -305,7 +620,6 @@ export async function processTopicAnalysis(
     // Return topics and document summaries
     result.documentSummaries = documentSummaries;
 
-    console.log(JSON.stringify(documentSummaries));
     return result;
   } catch (error) {
     console.error(`[BERT Topic Analysis] Error:`, error);

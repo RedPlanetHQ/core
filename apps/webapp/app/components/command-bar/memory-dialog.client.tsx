@@ -5,23 +5,22 @@ import {
   getPlaceholder,
 } from "../conversation/editor-extensions";
 import { Button } from "../ui/button";
-import { SpaceDropdown } from "../spaces/space-dropdown";
 import React from "react";
 import { useFetcher } from "@remix-run/react";
 
 interface AddMemoryDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultSpaceId?: string;
+  defaultLabelId?: string;
 }
 
 export function AddMemoryDialog({
   open,
   onOpenChange,
-  defaultSpaceId,
+  defaultLabelId,
 }: AddMemoryDialogProps) {
-  const [spaceIds, setSpaceIds] = React.useState<string[]>(
-    defaultSpaceId ? [defaultSpaceId] : [],
+  const [labelIds, setLabelIds] = React.useState<string[]>(
+    defaultLabelId ? [defaultLabelId] : [],
   );
   const fetcher = useFetcher();
   const editor = useEditor({
@@ -45,7 +44,7 @@ export function AddMemoryDialog({
     const payload = {
       episodeBody: content,
       referenceTime: new Date().toISOString(),
-      spaceIds: spaceIds,
+      labelIds,
       type: "DOCUMENT",
       sessionId: crypto.randomUUID(),
       source: "core",
@@ -59,7 +58,7 @@ export function AddMemoryDialog({
 
     // Clear editor and close dialog
     editor?.commands.clearContent();
-    setSpaceIds([]);
+    setLabelIds([]);
     onOpenChange(false);
   };
 
@@ -69,16 +68,7 @@ export function AddMemoryDialog({
         <div className="overflow-y-auto rounded-md">
           <EditorContent editor={editor} />
         </div>
-        <div className="flex justify-between gap-2 px-4 pb-4">
-          <div>
-            <SpaceDropdown
-              episodeIds={[]}
-              selectedSpaceIds={spaceIds}
-              onSpaceChange={(spaceIds) => {
-                setSpaceIds(spaceIds);
-              }}
-            />
-          </div>
+        <div className="flex justify-end gap-2 px-4 pb-4">
           <div className="flex gap-2">
             <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel

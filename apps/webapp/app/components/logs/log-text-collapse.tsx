@@ -8,6 +8,7 @@ import { File, MessageSquare } from "lucide-react";
 import { format, isThisYear } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TooltipPortal } from "@radix-ui/react-tooltip";
+import { type Label, LabelDropdown } from "./label-dropdown";
 
 interface LogTextCollapseProps {
   text?: string;
@@ -16,9 +17,10 @@ interface LogTextCollapseProps {
   log: LogItem;
   id: string;
   reset?: () => void;
+  labels: Label[];
 }
 
-export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
+export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
   const { logId } = useParams();
   const navigate = useNavigate();
 
@@ -77,7 +79,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
     <div className="flex w-full items-center">
       <div
         className={cn(
-          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2 text-sm",
+          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2",
           logId === log.id && "bg-grayAlpha-200",
         )}
         onClick={() => {
@@ -93,7 +95,7 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                     <div>
                       {getIconForAuthorise(
                         log.source.toLowerCase(),
-                        14,
+                        16,
                         undefined,
                       )}
                     </div>
@@ -104,20 +106,23 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                     </TooltipContent>
                   </TooltipPortal>
                 </Tooltip>
-                <div className={cn("truncate text-left text-base")}>
-                  {text.replace(/<[^>]+>/g, "")}
+                <div className={cn("truncate text-left")}>
+                  {log.title ?? text.replace(/<[^>]+>/g, "")}
                 </div>
               </div>
 
-              <div className="flex grow gap-1">
+              <div className="flex grow gap-1"></div>
+
+              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-xs">
                 {log.isSessionGroup &&
-                  log.sessionEpisodeCount &&
+                  !!log.sessionEpisodeCount &&
                   log.sessionEpisodeCount > 1 && (
                     <Badge
                       variant="secondary"
                       className={cn("shrink-0 rounded")}
                     >
-                      {log.sessionEpisodeCount} episodes
+                      {log.sessionEpisodeCount}{" "}
+                      {log.type === "DOCUMENT" ? "versions" : "episodes"}
                     </Badge>
                   )}
                 <Tooltip>
@@ -136,19 +141,25 @@ export function LogTextCollapse({ text, log }: LogTextCollapseProps) {
                     </TooltipContent>
                   </TooltipPortal>
                 </Tooltip>
-              </div>
-
-              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-xs">
                 {showStatus(log) && (
                   <Badge
                     className={cn(
-                      "!bg-grayAlpha-100 text-muted-foreground rounded text-xs",
+                      "!bg-grayAlpha-100 text-muted-foreground gap-1 rounded text-xs",
                     )}
                   >
-                    <BadgeColor className={cn(getStatusColor(log.status))} />
+                    <BadgeColor
+                      style={{ backgroundColor: getStatusColor(log.status) }}
+                    />
                     {getStatusValue(log.status)}
                   </Badge>
                 )}
+                <LabelDropdown
+                  value={log.labels}
+                  labels={labels}
+                  logId={log.id}
+                  short
+                />
+
                 <div className="text-muted-foreground text-xs">
                   {formatDate(log.time)}
                 </div>
