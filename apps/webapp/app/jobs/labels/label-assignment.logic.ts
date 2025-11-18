@@ -8,6 +8,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { LabelService } from "~/services/label.server";
+import { updateEpisodeLabels } from "~/services/graphModels/episode";
 
 export interface LabelAssignmentPayload {
   queueId: string;
@@ -45,7 +46,7 @@ export async function processLabelAssignment(
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
 
-    if(ingestionQueue.title === 'Persona'){
+    if (ingestionQueue.title === "Persona") {
       logger.info(`Title is Persona for queue ${payload.queueId}`);
       return { success: true, assignedLabels: [] };
     }
@@ -162,6 +163,21 @@ export async function processLabelAssignment(
         labels: allLabelIds,
       },
     });
+
+    // Update Neo4j Episodes with the same labelIds
+    const graphIds = (ingestionQueue.graphIds as string[]) || [];
+    if (graphIds.length > 0) {
+      const updatedCount = await updateEpisodeLabels(
+        graphIds,
+        allLabelIds,
+        payload.userId
+      );
+      logger.info(`Updated ${updatedCount} Neo4j episodes with labels`, {
+        queueId: payload.queueId,
+        episodeCount: graphIds.length,
+        updatedCount,
+      });
+    }
 
     return {
       success: true,

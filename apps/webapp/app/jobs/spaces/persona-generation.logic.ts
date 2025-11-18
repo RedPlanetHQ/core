@@ -9,11 +9,14 @@ import {
   type UserContext,
 } from "~/services/user-context.server";
 import { EpisodeType, type EpisodicNode } from "@core/types";
-import { runQuery } from "~/lib/neo4j.server";
-import { addLabelToEpisodes, getEpisodesByUserId } from "~/services/graphModels/episode";
+import {
+  addLabelToEpisodes,
+  getEpisodesByUserId,
+} from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
-import { addToQueue } from "~/lib/ingest.server";
+
 import { getDocumentsByTitle } from "~/services/graphModels/document";
+import { addToQueue } from "~/trigger/utils/queue";
 
 const execAsync = promisify(exec);
 
@@ -1061,7 +1064,9 @@ OUTPUT FORMAT: Structured markdown with sections appropriate for the user's role
 Standard sections include: STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
 
 IMPORTANT: Skip sections with insufficient data (<5 relevant mentions).
-${mode === "incremental" ? `
+${
+  mode === "incremental"
+    ? `
 
 INCREMENTAL UPDATE PROTOCOL:
 For each section in the existing persona, determine:
@@ -1070,7 +1075,9 @@ For each section in the existing persona, determine:
 - NEW: Entirely new pattern not in existing persona (mark with [NEW])
 
 Only update sections with strong evidence. Prefer stability over churn.
-Output the COMPLETE updated persona document with all sections (preserved + updated + new).` : ""}
+Output the COMPLETE updated persona document with all sections (preserved + updated + new).`
+    : ""
+}
   `.trim();
 }
 

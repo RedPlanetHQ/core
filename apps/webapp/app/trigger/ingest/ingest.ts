@@ -5,11 +5,10 @@ import {
   type IngestEpisodePayload,
 } from "~/jobs/ingest/ingest-episode.logic";
 import { triggerSessionCompaction } from "../session/session-compaction";
-import {
-  enqueueBertTopicAnalysis,
-  enqueueLabelAssignment,
-  enqueueTitleGeneration,
-} from "~/lib/queue-adapter.server";
+import { labelAssignmentTask } from "../labels/label-assignment";
+import { titleGenerationTask } from "../titles/title-generation";
+import { bertTopicAnalysisTask } from "../bert/bert";
+import { personaGenerationTask } from "../spaces/persona-generation";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
@@ -30,11 +29,11 @@ export const ingestTask = task({
       payload,
       // Callback for label assignment
       async (params) => {
-        await enqueueLabelAssignment(params);
+        await labelAssignmentTask.trigger(params);
       },
       // Callback for title generation
       async (params) => {
-        await enqueueTitleGeneration(params);
+        await titleGenerationTask.trigger(params);
       },
       // Callback for session compaction
       async (params) => {
@@ -42,7 +41,10 @@ export const ingestTask = task({
       },
       // Callback for BERT topic analysis
       async (params) => {
-        await enqueueBertTopicAnalysis(params);
+        await bertTopicAnalysisTask.trigger(params);
+      },
+      async (params) => {
+        await personaGenerationTask.trigger(params);
       },
     );
   },

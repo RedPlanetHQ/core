@@ -72,6 +72,13 @@ export async function processEpisodeIngestion(
     minTopicSize?: number;
     nrTopics?: number;
   }) => Promise<any>,
+  enqueuePersonaGeneration?: (params: {
+    userId: string;
+    workspaceId: string;
+    labelId: string;
+    mode: "full" | "incremental";
+    startTime?: string;
+  }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
   try {
     logger.log(`Processing job for user ${payload.userId}`);
@@ -310,8 +317,15 @@ export async function processEpisodeIngestion(
 
     // Check and trigger persona update if threshold met (50+ new episodes)
     try {
-      if (currentStatus === IngestionStatus.COMPLETED) {
-        await checkAndTriggerPersonaUpdate(payload.userId, payload.workspaceId);
+      if (
+        currentStatus === IngestionStatus.COMPLETED &&
+        enqueuePersonaGeneration
+      ) {
+        await checkAndTriggerPersonaUpdate(
+          payload.userId,
+          payload.workspaceId,
+          enqueuePersonaGeneration,
+        );
       }
     } catch (personaTriggerError) {
       // Don't fail the ingestion if persona trigger fails

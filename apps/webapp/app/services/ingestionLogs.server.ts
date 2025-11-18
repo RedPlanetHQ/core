@@ -1,4 +1,5 @@
 import { prisma } from "~/db.server";
+import { updateEpisodeLabels } from "./graphModels/episode";
 
 export async function getIngestionLogs(
   userId: string,
@@ -228,6 +229,7 @@ export const deleteIngestionQueue = async (id: string) => {
 export const updateIngestionQueue = async (
   id: string,
   data: { labels?: string[]; title?: string },
+  userId: string,
 ) => {
   // First, get the log to check for sessionId
   const log = await prisma.ingestionQueue.findUnique({
@@ -235,6 +237,7 @@ export const updateIngestionQueue = async (
     select: {
       id: true,
       data: true,
+      graphIds: true,
     },
   });
 
@@ -247,17 +250,22 @@ export const updateIngestionQueue = async (
 
   // If there's a sessionId, find the latest log for that session
   if (sessionId) {
-    const latestLog = await prisma.ingestionQueue.findFirst({
+    const allSessionLogs = await prisma.ingestionQueue.findMany({
       where: {
-        data: {
-          path: ["sessionId"],
-          equals: sessionId,
-        },
+        sessionId,
       },
       orderBy: {
         createdAt: "desc",
       },
     });
+
+    const episodes = allSessionLogs.flatMap((log) => log.graphIds);
+
+    if (data.labels && episodes.length > 0) {
+      await updateEpisodeLabels(episodes, data.labels as string[], userId);
+    }
+
+    const latestLog = allSessionLogs[0];
 
     if (latestLog) {
       // Update the latest log in the session
@@ -268,6 +276,11 @@ export const updateIngestionQueue = async (
         data,
       });
     }
+  }
+
+  const graphIds = (log.graphIds as string[]) || [];
+  if (data.labels && graphIds.length > 0) {
+    await updateEpisodeLabels(graphIds, data.labels as string[], userId);
   }
 
   // If no sessionId or no latest log found, update the original log

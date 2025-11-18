@@ -5,9 +5,11 @@ import { logger } from "~/services/logger.service";
 import { getEpisode } from "~/services/graphModels/episode";
 import { makeModelCall, getModelForTask } from "~/lib/model.server";
 import { createBatch, getBatch } from "~/lib/batch.server";
-import { addToQueue, type IngestBodyRequest } from "~/lib/ingest.server";
+
 import { EpisodeType, type EpisodicNode } from "@core/types";
 import { type z } from "zod";
+import { addToQueue } from "~/trigger/utils/queue";
+import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 
 const execAsync = promisify(exec);
 

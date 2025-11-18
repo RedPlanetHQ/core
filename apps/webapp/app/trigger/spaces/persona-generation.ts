@@ -13,7 +13,7 @@ export type { PersonaGenerationPayload };
  */
 async function runClusteringWithTriggerPython(
   userId: string,
-  startTime?: string
+  startTime?: string,
 ): Promise<string> {
   const args = [userId, "--json"];
 
@@ -22,11 +22,14 @@ async function runClusteringWithTriggerPython(
     args.push("--start-time", startTime);
   }
 
-  logger.info("[Trigger.dev] Running HDBSCAN clustering with python.runScript", {
-    userId,
-    startTime,
-    args: args.join(" "),
-  });
+  logger.info(
+    "[Trigger.dev] Running HDBSCAN clustering with python.runScript",
+    {
+      userId,
+      startTime,
+      args: args.join(" "),
+    },
+  );
 
   const result = await python.runScript("./python/main.py", args);
   return result.stdout;
@@ -37,7 +40,7 @@ async function runClusteringWithTriggerPython(
  */
 async function runAnalyticsWithTriggerPython(
   userId: string,
-  startTime?: string
+  startTime?: string,
 ): Promise<string> {
   const args = [userId, "--json"];
 

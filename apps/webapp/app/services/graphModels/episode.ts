@@ -426,4 +426,26 @@ export async function addLabelToEpisodes(labelId: string, episodeUuids: string[]
 
   return updatedEpisodes;
 }
-  
+
+export async function updateEpisodeLabels(
+  episodeUuids: string[],
+  labelIds: string[],
+  userId: string
+): Promise<number> {
+  if (episodeUuids.length === 0) return 0;
+
+  const query = `
+    MATCH (e:Episode {userId: $userId})
+    WHERE e.uuid IN $episodeUuids
+    SET e.labelIds = $labelIds
+    RETURN count(e) as updatedEpisodes
+  `;
+
+  const result = await runQuery(query, {
+    userId,
+    episodeUuids,
+    labelIds,
+  });
+
+  return result[0]?.get("updatedEpisodes") || 0;
+}

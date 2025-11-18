@@ -82,10 +82,14 @@ const { action } = createHybridActionApiRoute(
         const { labels, title } = validationResult.data;
 
         // Update the ingestion queue with new labels
-        const updatedQueue = await updateIngestionQueue(params.logId, {
-          labels,
-          title,
-        });
+        const updatedQueue = await updateIngestionQueue(
+          params.logId,
+          {
+            labels,
+            title,
+          },
+          authentication.userId,
+        );
 
         return json({
           success: true,

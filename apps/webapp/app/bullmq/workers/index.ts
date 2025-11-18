@@ -41,8 +41,13 @@ import {
   enqueueTitleGeneration,
   enqueueSessionCompaction,
   enqueueBertTopicAnalysis,
+  enqueuePersonaGeneration,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
+import {
+  type PersonaGenerationPayload,
+  processPersonaGeneration,
+} from "~/jobs/spaces/persona-generation.logic";
 
 /**
  * Episode ingestion worker
@@ -64,6 +69,7 @@ export const ingestWorker = new Worker(
       enqueueTitleGeneration,
       enqueueSessionCompaction,
       enqueueBertTopicAnalysis,
+      enqueuePersonaGeneration,
     );
   },
   {
