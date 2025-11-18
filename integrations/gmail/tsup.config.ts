@@ -9,8 +9,8 @@ export default defineConfig({
   clean: true,
   minify: true,
   outDir: 'bin',
-  external: ['react', 'react-dom'],
+  external: [],
   banner: {
-    js: '#!/usr/bin/env node'
-  }
-}); 
+    js: '#!/usr/bin/env node',
+  },
+});

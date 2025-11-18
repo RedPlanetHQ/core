@@ -38,6 +38,17 @@ class GitHubCLI extends IntegrationCLI {
       description:
         'Plan, track, and manage your agile and software development projects in GitHub. Customize your workflow, collaborate, and release great software.',
       icon: 'github',
+      schedule: {
+        frequency: '*/5 * * * *',
+      },
+      mcp: {
+        type: 'http',
+        url: 'https://api.githubcopilot.com/mcp/',
+        headers: {
+          Authorization: 'Bearer ${config:access_token}',
+          'Content-Type': 'application/json',
+        },
+      },
       auth: {
         OAuth2: {
           token_url: 'https://github.com/login/oauth/access_token',

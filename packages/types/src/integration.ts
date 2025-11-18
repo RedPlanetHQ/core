@@ -25,10 +25,33 @@ export enum IntegrationEventType {
    * For returning integration metadata/config
    */
   SPEC = "spec",
+  /**
+   * For to start mcp
+   */
+  MCP = "mcp",
+}
+
+interface IntegrationDefinition {
+  name: string;
+  version: string;
+  description: string;
+  config: Record<string, string>;
+  spec: any;
 }
 
 export interface IntegrationEventPayload {
   event: IntegrationEventType;
+
+  // For setup command
+  integrationDefinition?: IntegrationDefinition;
+  // Has event body based on the event
+  eventBody: any;
+
+  // For everything other than setup
+  config?: Config;
+
+  // For sync command
+  state?: Record<string, string>;
   [x: string]: any;
 }
 
@@ -48,7 +71,7 @@ export class Spec {
 
 export interface Config {
   access_token: string;
-  [key: string]: any;
+  [key: string]: string;
 }
 
 export interface Identifier {
