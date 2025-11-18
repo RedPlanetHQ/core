@@ -75,7 +75,7 @@ export async function processDocumentIngestion(
     } = await versioningService.prepareDocumentVersion(
       documentBody.sessionId!,
       payload.userId,
-      documentBody.metadata?.documentTitle?.toString() || "Untitled Document",
+      documentBody.title || "Untitled Document",
       documentBody.episodeBody,
       documentBody.source,
       documentBody.metadata || {},
@@ -122,11 +122,19 @@ export async function processDocumentIngestion(
     // Step 3: Save the new document version
     await saveDocument(document);
 
-    // Step 3.1: Invalidate statements from previous document version if it exists
+    // Step 3.1: Invalidate statements from previous document version if using differential processing
     let invalidationResults = null;
-    if (versionInfo.existingDocument && versionInfo.hasContentChanged) {
+    if (
+      versionInfo.existingDocument &&
+      versionInfo.hasContentChanged &&
+      differentialDecision.shouldUseDifferential &&
+      differentialDecision.strategy === "chunk_level_diff"
+    ) {
+      // For chunk-level differential: only invalidate statements from changed chunks
+      const changedIndices = versionInfo.chunkLevelChanges.changedChunkIndices;
+
       logger.log(
-        `Invalidating statements from previous document version: ${versionInfo.existingDocument.uuid}`,
+        `Invalidating statements from changed chunks only: ${changedIndices.length} chunks`,
       );
 
       invalidationResults =
@@ -136,15 +144,23 @@ export async function processDocumentIngestion(
             newDocumentContent: documentBody.episodeBody,
             userId: payload.userId,
             invalidatedBy: document.uuid,
-            semanticSimilarityThreshold: 0.75, // Configurable threshold
+            semanticSimilarityThreshold: 0.75,
+            changedChunkIndices: changedIndices,
           },
         );
 
-      logger.log(`Statement invalidation completed:`, {
+      logger.log(`Chunk-level statement invalidation completed:`, {
+        changedChunks: changedIndices.length,
         totalAnalyzed: invalidationResults.totalStatementsAnalyzed,
         invalidated: invalidationResults.invalidatedStatements.length,
         preserved: invalidationResults.preservedStatements.length,
       });
+    } else if (differentialDecision.strategy === "full_reingest") {
+      // For full reingest: skip document-level invalidation
+      // Let episode-level contradiction detection handle everything
+      logger.log(
+        `Full reingest strategy: skipping document-level invalidation, relying on episode-level contradiction detection`,
+      );
     }
 
     logger.log(`Document chunked into ${chunkedDocument.chunks.length} chunks`);

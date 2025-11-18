@@ -45,6 +45,10 @@ export async function processLabelAssignment(
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
 
+    if(ingestionQueue.title === 'Persona'){
+      logger.info(`Title is Persona for queue ${payload.queueId}`);
+      return { success: true, assignedLabels: [] };
+    }
     let existingLabelIds: string[] = [];
 
     if (ingestionQueue.sessionId) {

@@ -2,7 +2,7 @@ import { logger } from "~/services/logger.service";
 import { runQuery } from "~/lib/neo4j.server";
 import { enqueuePersonaGeneration } from "~/lib/queue-adapter.server";
 import { prisma } from "~/db.server";
-import { getDocumentsByTitle } from "~/services/graphModels/document";
+import { getDocumentsByTitle, createPersonaDocument } from "~/services/graphModels/document";
 import { LabelService } from "~/services/label.server";
 
 interface WorkspaceMetadata {
@@ -59,18 +59,36 @@ export async function checkAndTriggerPersonaUpdate(
 ): Promise<{ triggered: boolean; reason?: string }> {
   try {
     const labelService = new LabelService();
-    const personaDocument = await getDocumentsByTitle(userId, "Persona");
+    let personaDocument = await getDocumentsByTitle(userId, "Persona");
 
-    if (!personaDocument) {
-      logger.debug("No persona document found for user", { userId });
-      return { triggered: false, reason: "no_persona_document" };
+    // Auto-create persona document if missing (for existing users)
+    if (!personaDocument || personaDocument.length === 0) {
+      logger.info("Creating missing persona document for existing user", { userId });
+      try {
+        await createPersonaDocument(userId, workspaceId);
+        personaDocument = await getDocumentsByTitle(userId, "Persona");
+      } catch (error) {
+        logger.error("Failed to create persona document", { userId, error });
+        return { triggered: false, reason: "failed_to_create_document" };
+      }
     }
 
-    const label = await labelService.getLabelByName("Persona", workspaceId);
+    let label = await labelService.getLabelByName("Persona", workspaceId);
 
+    // Auto-create Persona label if missing (for existing users)
     if (!label) {
-      logger.debug("No label found for persona document", { userId });
-      return { triggered: false, reason: "no_label" };
+      logger.info("Creating missing Persona label for existing user", { userId, workspaceId });
+      try {
+        label = await labelService.createLabel({
+          name: "Persona",
+          workspaceId,
+          color: "#009CF3",
+          description: "Personal persona generated from your episodes",
+        });
+      } catch (error) {
+        logger.error("Failed to create Persona label", { userId, workspaceId, error });
+        return { triggered: false, reason: "failed_to_create_label" };
+      }
     }
 
     // Get workspace metadata
@@ -112,10 +130,10 @@ export async function checkAndTriggerPersonaUpdate(
       personaDocumentId: personaDocument[0].uuid,
     });
 
-    // Trigger persona generation every 50 episodes
-    const PERSONA_UPDATE_THRESHOLD = 50;
+    // Trigger persona generation every 20 episodes
+    const PERSONA_UPDATE_THRESHOLD = 20;
 
-    if (episodeCount >= PERSONA_UPDATE_THRESHOLD) {
+    if (episodeCount >= PERSONA_UPDATE_THRESHOLD || !lastPersonaGenerationAt) {
       logger.info("Enqueuing persona generation (threshold met)", {
         userId,
         personaDocumentId: personaDocument[0].uuid,
@@ -123,7 +141,7 @@ export async function checkAndTriggerPersonaUpdate(
         threshold: PERSONA_UPDATE_THRESHOLD,
       });
 
-      const mode = personaDocument[0].originalContent ? "incremental" : "full";
+      const mode = lastPersonaGenerationAt ? (personaDocument[0].originalContent ? "incremental" : "full") : "full";
 
       await enqueuePersonaGeneration({
         userId,

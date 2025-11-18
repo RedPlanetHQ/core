@@ -6,8 +6,11 @@ import { SearchService } from "~/services/search.server";
 import { IntegrationLoader } from "./integration-loader";
 import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
+import { getUserDocuments, getDocument, getUserPersonaContent } from "~/services/graphModels/document";
+import { LabelService } from "~/services/label.server";
 
 const searchService = new SearchService();
+const labelService = new LabelService();
 
 // Memory tool schemas (from existing memory endpoint)
 const SearchParamsSchema = {
@@ -66,13 +69,13 @@ const SearchParamsSchema = {
         "- 'between Jan and Mar' → set startTime='2025-01-01T00:00:00Z', endTime='2025-03-31T23:59:59Z'. " +
         "IMPORTANT: Use with startTime to define time windows. Always use ISO format with timezone (Z for UTC).",
     },
-    spaceIds: {
+    labelIds: {
       type: "array",
       items: {
         type: "string",
       },
       description:
-        "Optional: Array of space UUIDs to search within. Leave empty to search all spaces.",
+        "Optional: Array of label UUIDs to filter search results. Leave empty to search all labels.",
     },
     sortBy: {
       type: "string",
@@ -97,13 +100,13 @@ const IngestSchema = {
       description:
         "IMPORTANT: Session ID (UUID) is required to track the conversation session. If you don't have a sessionId in your context, you MUST call the initialize_conversation_session tool first to obtain one before calling memory_ingest.",
     },
-    spaceIds: {
+    labelIds: {
       type: "array",
       items: {
         type: "string",
       },
       description:
-        "Optional: Array of space UUIDs (from memory_get_spaces). Add this to organize the memory by project. Example: If discussing 'core' project, include the 'core' space ID. Leave empty to store in general memory.",
+        "Optional: Array of label UUIDs (from get_labels). Add this to organize the memory by topic or project. Example: If discussing 'core' project, include the 'core' label ID. Leave empty to store without specific labels.",
     },
   },
   required: ["message", "sessionId"],
@@ -113,7 +116,7 @@ export const memoryTools = [
   {
     name: "memory_ingest",
     description:
-      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one, call initialize_conversation_session tool FIRST to obtain it at the start of the conversation, then use that SAME sessionId for all memory_ingest calls. Optionally add spaceIds array to organize by project. Returns: Success confirmation with storage ID.",
+      "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one, call initialize_conversation_session tool FIRST to obtain it at the start of the conversation, then use that SAME sessionId for all memory_ingest calls. Optionally add labelIds array to organize by topic. Returns: Success confirmation with storage ID.",
     inputSchema: IngestSchema,
   },
   {
@@ -123,18 +126,27 @@ export const memoryTools = [
     inputSchema: SearchParamsSchema,
   },
   {
-    name: "memory_get_spaces",
+    name: "get_documents",
     description:
-      "List all available memory spaces (project contexts). USE THIS TOOL: To see what spaces exist before searching or storing memories. Each space organizes memories by topic (e.g., 'Profile' for user info, 'GitHub' for GitHub work, project names for project-specific context). Returns: Array of spaces with id, name, and description.",
+      "List all user documents. USE THIS TOOL: To discover available documents and get their IDs. Each document represents stored content with a unique UUID. Returns: Array of documents with uuid, title, createdAt, and totalChunks.",
     inputSchema: {
       type: "object",
       properties: {
-        all: {
-          type: "boolean",
+        limit: {
+          type: "number",
           description:
-            "Set to true to get all spaces including system spaces. Leave empty for user spaces only.",
+            "Optional: Maximum number of documents to return. Defaults to 50.",
         },
       },
+    },
+  },
+  {
+    name: "get_labels",
+    description:
+      "List all workspace labels. USE THIS TOOL: To discover available labels and get their IDs for filtering memories. Labels organize episodes and conversations by topic or project. Returns: Array of labels with id, name, description, and color.",
+    inputSchema: {
+      type: "object",
+      properties: {},
     },
   },
   {
@@ -153,23 +165,19 @@ export const memoryTools = [
     },
   },
   {
-    name: "memory_get_space",
+    name: "get_document",
     description:
-      "Get detailed information about a specific space including its full summary. USE THIS TOOL: When working on a project to get comprehensive context about that project. The summary contains consolidated knowledge about the space topic. HOW TO USE: Provide either spaceName (like 'core', 'GitHub', 'Profile') OR spaceId (UUID). Returns: Space details with full summary, description, and metadata.",
+      "Get detailed information about a specific document including its content. USE THIS TOOL: When you need to retrieve document content by its ID. HOW TO USE: Provide the documentId (UUID from get_documents). Returns: Document details with uuid, title, originalContent, metadata, source, createdAt, validAt, and totalChunks.",
     inputSchema: {
       type: "object",
       properties: {
-        spaceId: {
+        documentId: {
           type: "string",
           description:
-            "UUID of the space (use this if you have the ID from memory_get_spaces)",
-        },
-        spaceName: {
-          type: "string",
-          description:
-            "Name of the space (easier option). Examples: 'core', 'Profile', 'GitHub', 'Health'",
+            "UUID of the document (required). Get this from get_documents tool.",
         },
       },
+      required: ["documentId"],
     },
   },
   {
@@ -273,12 +281,14 @@ export async function callMemoryTool(
         return await handleMemoryIngest({ ...args, userId, source });
       case "memory_search":
         return await handleMemorySearch({ ...args, userId, source });
-      case "memory_get_spaces":
-        return await handleMemoryGetSpaces(userId);
+      case "get_documents":
+        return await handleGetDocuments({ ...args, userId });
+      case "get_labels":
+        return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
         return await handleUserProfile(userId);
-      case "memory_get_space":
-        return await handleGetSpace({ ...args, userId });
+      case "get_document":
+        return await handleGetDocument({ ...args, userId });
       case "initialize_conversation_session":
         return await handleGetSessionId();
       case "get_integrations":
@@ -309,13 +319,13 @@ export async function callMemoryTool(
 // Handler for user_context
 async function handleUserProfile(userId: string) {
   try {
-    const space = {};
+    const personaContent = await getUserPersonaContent(userId);
 
     return {
       content: [
         {
           type: "text",
-          text: space?.summary || "No profile information available",
+          text: personaContent || "No profile information available",
         },
       ],
       isError: false,
@@ -441,34 +451,38 @@ async function handleMemorySearch(args: any) {
   }
 }
 
-// Handler for memory_get_spaces
-async function handleMemoryGetSpaces(userId: string) {
+// Handler for get_documents
+async function handleGetDocuments(args: any) {
   try {
-    const spaces = await spaceService.getUserSpaces(userId);
+    const { userId, limit = 50 } = args;
 
-    // Return id, name, and description for listing
-    const simplifiedSpaces = spaces.map((space) => ({
-      id: space.id,
-      name: space.name,
+    const documents = await getUserDocuments(userId, limit);
+
+    // Return simplified document info for listing
+    const simplifiedDocuments = documents.map((doc) => ({
+      uuid: doc.uuid,
+      title: doc.title,
+      createdAt: doc.createdAt.toISOString(),
+      totalChunks: doc.totalChunks,
     }));
 
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(simplifiedSpaces),
+          text: JSON.stringify(simplifiedDocuments),
         },
       ],
       isError: false,
     };
   } catch (error) {
-    logger.error(`MCP get spaces error: ${error}`);
+    logger.error(`MCP get documents error: ${error}`);
 
     return {
       content: [
         {
           type: "text",
-          text: `Error getting spaces: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Error getting documents: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,
@@ -476,50 +490,106 @@ async function handleMemoryGetSpaces(userId: string) {
   }
 }
 
-// Handler for memory_get_space
-async function handleGetSpace(args: any) {
+// Handler for get_document
+async function handleGetDocument(args: any) {
   try {
-    const { spaceId, spaceName, userId } = args;
+    const { documentId, userId } = args;
 
-    if (!spaceId && !spaceName) {
-      throw new Error("Either spaceId or spaceName is required");
+    if (!documentId) {
+      throw new Error("documentId is required");
     }
 
-    let space;
-    if (spaceName) {
-      space = await spaceService.getSpaceByName(spaceName, userId);
-    } else {
-      space = await spaceService.getSpace(spaceId, userId);
+    const document = await getDocument(documentId);
+
+    if (!document) {
+      throw new Error(`Document not found: ${documentId}`);
     }
 
-    if (!space) {
-      throw new Error(`Space not found: ${spaceName || spaceId}`);
+    // Verify the document belongs to the user
+    if (document.userId !== userId) {
+      throw new Error(`Access denied: Document ${documentId} does not belong to user`);
     }
 
-    // Return id, name, description, and summary for detailed view
-    const spaceDetails = {
-      id: space.id,
-      name: space.name,
-      summary: space.summary,
+    // Return full document details
+    const documentDetails = {
+      uuid: document.uuid,
+      title: document.title,
+      originalContent: document.originalContent,
+      metadata: document.metadata,
+      source: document.source,
+      createdAt: document.createdAt.toISOString(),
+      validAt: document.validAt.toISOString(),
+      totalChunks: document.totalChunks,
+      version: document.version,
     };
 
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(spaceDetails),
+          text: JSON.stringify(documentDetails),
         },
       ],
       isError: false,
     };
   } catch (error) {
-    logger.error(`MCP get space error: ${error}`);
+    logger.error(`MCP get document error: ${error}`);
 
     return {
       content: [
         {
           type: "text",
-          text: `Error getting space: ${error instanceof Error ? error.message : String(error)}`,
+          text: `Error getting document: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
+
+// Handler for get_labels
+async function handleGetLabels(args: any) {
+  try {
+    const { userId } = args;
+
+    // Get workspace for user
+    const workspace = await prisma.workspace.findFirst({
+      where: {
+        userId: userId,
+      },
+    });
+
+    if (!workspace) {
+      throw new Error("Workspace not found for user");
+    }
+
+    const labels = await labelService.getWorkspaceLabels(workspace.id);
+
+    // Return simplified label info for listing
+    const simplifiedLabels = labels.map((label) => ({
+      id: label.id,
+      name: label.name,
+      description: label.description,
+      color: label.color,
+    }));
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(simplifiedLabels),
+        },
+      ],
+      isError: false,
+    };
+  } catch (error) {
+    logger.error(`MCP get labels error: ${error}`);
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error getting labels: ${error instanceof Error ? error.message : String(error)}`,
         },
       ],
       isError: true,

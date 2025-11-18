@@ -13,7 +13,6 @@ import { runQuery } from "~/lib/neo4j.server";
 import { addLabelToEpisodes, getEpisodesByUserId } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 import { addToQueue } from "~/lib/ingest.server";
-import { LabelService } from "~/services/label.server";
 import { getDocumentsByTitle } from "~/services/graphModels/document";
 
 const execAsync = promisify(exec);
@@ -166,23 +165,40 @@ export async function generatePersonaSummary(
     }
   }
 
-  // Stage 4: Generate persona using Batch API
-  const summary =
-    filteredEpisodes.length <= 50 || mode === "incremental"
-      ? await generatePersonaSummarySingle(
-          filteredEpisodes,
-          mode,
-          existingSummary,
-          userContext,
-          analytics,
-        )
-      : await generatePersonaSummaryBatch(
-          filteredEpisodes,
-          mode,
-          existingSummary,
-          userContext,
-          analytics,
-        );
+  // Stage 4: Generate persona using appropriate strategy
+  let summary: string;
+
+  // Bootstrap mode for very small datasets (avoid over-extraction)
+  if (episodes.length < 10 && mode === "full") {
+    summary = await generateBootstrapPersona(
+      filteredEpisodes,
+      userContext,
+      analytics,
+    );
+    logger.info("Using bootstrap mode for small dataset", {
+      episodeCount: episodes.length,
+    });
+  }
+  // Standard generation
+  else if (filteredEpisodes.length <= 50 || mode === "incremental") {
+    summary = await generatePersonaSummarySingle(
+      filteredEpisodes,
+      mode,
+      existingSummary,
+      userContext,
+      analytics,
+    );
+  }
+  // Batch processing for large datasets
+  else {
+    summary = await generatePersonaSummaryBatch(
+      filteredEpisodes,
+      mode,
+      existingSummary,
+      userContext,
+      analytics,
+    );
+  }
 
   // Stage 5: Assign episodes to space for traceability
   if (filteredEpisodes.length > 0) {
@@ -309,6 +325,111 @@ async function extractPersonaAnalytics(
   const analytics = JSON.parse(stdout) as PersonaAnalytics;
 
   return analytics;
+}
+
+/**
+ * Generate bootstrap persona for very small datasets (<10 episodes)
+ * Uses conservative extraction to avoid hallucination
+ */
+async function generateBootstrapPersona(
+  episodes: EpisodicNode[],
+  userContext: UserContext,
+  analytics: PersonaAnalytics,
+): Promise<string> {
+  const episodesText = formatEpisodesForPrompt(episodes);
+  const contextSection = buildContextSection(userContext);
+
+  const content = `
+You are creating an INITIAL persona profile from a very small dataset (${episodes.length} episodes).
+
+CRITICAL: This is BOOTSTRAP MODE. Do NOT hallucinate patterns or frequencies that don't exist.
+
+${contextSection}
+
+BOOTSTRAP EXTRACTION RULES:
+
+1. ONLY extract what is EXPLICITLY stated
+   - DO NOT infer preferences from single mentions
+   - DO NOT claim frequency counts beyond actual data
+   - DO NOT create patterns from <3 mentions
+
+2. Keep it minimal and factual
+   - Focus on explicitly stated information (role, goal, tools)
+   - Skip sections without sufficient data
+   - Mark everything as [Confidence: BOOTSTRAP - limited data]
+
+3. Acceptable sections for bootstrap:
+   - CONTEXT: Role, goal, tools (if explicitly stated)
+   - INITIAL_OBSERVATIONS: Only patterns with 3+ clear mentions
+
+4. DO NOT include:
+   - LEXICON (insufficient frequency data)
+   - STYLE_GUIDE (need more writing samples)
+   - Fabricated preferences or rules
+   - Invented frequency counts
+
+EPISODES (${episodes.length} total):
+${episodesText}
+
+OUTPUT FORMAT:
+
+# PERSONA
+
+## CONTEXT
+[Role, goal, tools - ONLY if explicitly stated]
+
+## INITIAL_OBSERVATIONS
+[Only patterns with 3+ mentions - skip if none exist]
+
+Keep it clean and minimal - no need to explain bootstrap mode or episode counts to the user.
+  `.trim();
+
+  const batchRequest = {
+    customId: `persona-bootstrap-${Date.now()}`,
+    messages: [
+      {
+        role: "user",
+        content,
+      } as CoreMessage,
+    ],
+    systemPrompt: "",
+  };
+
+  const { batchId } = await createBatch({
+    requests: [batchRequest],
+    outputSchema: PersonaSummarySchema,
+    maxRetries: 3,
+    timeoutMs: 300000,
+  });
+
+  logger.info(`Bootstrap persona batch created: ${batchId}`, {
+    episodeCount: episodes.length,
+  });
+
+  const batch = await pollBatchCompletion(batchId, 300000);
+
+  if (!batch.results || batch.results.length === 0) {
+    throw new Error("No results returned from bootstrap persona batch");
+  }
+
+  const result = batch.results[0];
+  if (result.error || !result.response) {
+    throw new Error(
+      `Bootstrap persona generation failed: ${result.error || "No response"}`,
+    );
+  }
+
+  const summary =
+    typeof result.response === "string"
+      ? result.response
+      : result.response.summary || JSON.stringify(result.response);
+
+  logger.info("Bootstrap persona generated", {
+    summaryLength: summary.length,
+    episodeCount: episodes.length,
+  });
+
+  return summary;
 }
 
 /**
@@ -542,13 +663,18 @@ ${analyticsSection}
 NEW EPISODES: ${episodes.length} episodes
 ${episodesText}
 
-INSTRUCTIONS:
-1. Identify changes from new episodes
-2. Update relevant sections (LEXICON, RECEIPTS, EXAMPLES, etc.)
-3. Preserve stability (don't update unless clear shift detected)
-4. Mark updated sections with [UPDATED]
+INCREMENTAL UPDATE PROTOCOL:
+For each section in the existing persona:
+1. Analyze new episodes for patterns
+2. Determine action:
+   - PRESERVE: >80% consistency with existing pattern (mark [PRESERVED])
+   - UPDATE: 10+ new mentions contradict existing (mark [UPDATED])
+   - NEW: Entirely new pattern not in existing persona (mark [NEW])
+3. Include confidence scoring for updated/new sections
+4. Track temporal evolution if time span > 180 days
+5. Prefer stability - only update with strong evidence
 
-Output the complete updated persona document.
+Output the COMPLETE updated persona document with ALL sections (preserved + updated + new).
     `.trim();
   }
 
@@ -781,16 +907,19 @@ ${existingSummary}
 PATTERNS FROM CHUNKS (qualitative context for analytics):
 ${allPatterns}
 
-TASK: Update the existing persona by:
+TASK: Update the existing persona using the INCREMENTAL UPDATE PROTOCOL:
+
+For each section in the existing persona:
 1. Use analytics above as quantitative foundation
-2. Merge pattern context from chunks with existing persona
-3. Resolve conflicts (prefer higher frequency patterns from analytics)
-4. Maintain the standard persona format (STYLE_GUIDE, LEXICON_USE, VOICE_TONE, etc.)
-5. Mark significantly updated sections with [UPDATED]
+2. Merge pattern context from chunks
+3. Determine: PRESERVE (>80% consistency) | UPDATE (10+ contradictions) | NEW (new pattern)
+4. Mark sections: [PRESERVED] [UPDATED] [NEW]
+5. Include confidence scoring for updated/new sections
+6. Track temporal evolution if time span > 180 days
 
 ${roleGuidance}
 
-Output the complete updated persona document following the standard template.
+Output the COMPLETE updated persona document with ALL sections (preserved + updated + new).
     `.trim()
     : `
 ${systemPrompt}
@@ -806,44 +935,18 @@ TASK: Create a complete persona document by:
 1. Use analytics above as quantitative foundation (lexicon frequencies, style metrics, etc.)
 2. Integrate qualitative pattern context from chunks
 3. Combine quantitative + qualitative into cohesive persona sections
-4. Organize into standard persona format
+4. Include confidence scoring for each section: [Confidence: HIGH|MEDIUM|LOW (N data points)]
+5. Track temporal evolution if time span > 180 days (for WORLDVIEW, GOALS, PREFERENCES)
+6. Organize into standard persona format
 
 ${roleGuidance}
 
-Use this format:
+Standard sections: STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
 
-# STYLE_GUIDE
-[Use structural metrics from analytics + qualitative observations from chunks]
-
-# LEXICON_USE
-[Use TF-IDF terms from analytics + usage context from chunks]
-
-# VOICE_TONE
-[Communication style parameters from pattern observations]
-
-# WORLDVIEW
-[Core beliefs and principles from chunks]
-
-# RECEIPTS
-[Achievements and metrics]
-
-# DO_DONT
-DO:
-- [preferred approaches]
-DON'T:
-- [anti-patterns]
-
-# FORMATS
-[Preferred output structures]
-
-# MESSAGING
-[Tagline, positioning if available]
-
-# GOALS
-[Stated goals]
-
-# EXAMPLES
-[Concrete examples]
+For each section:
+- Include content with prescriptive patterns
+- End with confidence scoring: [Confidence: HIGH|MEDIUM|LOW (N data points)]
+- Skip sections with <5 data points
 
 Output the complete persona document.
     `.trim();
@@ -942,11 +1045,32 @@ EXTRACTION PRINCIPLES:
    - Agent conversations show interaction patterns
    - Multi-source consistency indicates strong pattern
 
+7. CONFIDENCE SCORING
+   - For each section, include confidence level at the end: [Confidence: HIGH|MEDIUM|LOW (N data points)]
+   - HIGH: 20+ supporting data points, consistent pattern across sources
+   - MEDIUM: 10-19 data points, mostly consistent
+   - LOW: 5-9 data points, emerging pattern
+   - Skip sections with <5 data points
+
+8. TEMPORAL EVOLUTION (if time span > 180 days)
+   - Track pattern changes over time for WORLDVIEW, GOALS, PREFERENCES
+   - Format: "Previously: X (early data)" → "Currently: Y (recent data)"
+   - Only note evolution if clear shift detected (10+ mentions each period)
+
 OUTPUT FORMAT: Structured markdown with sections appropriate for the user's role/context.
 Standard sections include: STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
 
-IMPORTANT: Skip sections with insufficient data (<3 relevant mentions).
-${mode === "incremental" ? "\nFor incremental updates: Focus on NEW patterns, preserve existing unless contradicted." : ""}
+IMPORTANT: Skip sections with insufficient data (<5 relevant mentions).
+${mode === "incremental" ? `
+
+INCREMENTAL UPDATE PROTOCOL:
+For each section in the existing persona, determine:
+- PRESERVE: Pattern remains >80% consistent with new data (mark with [PRESERVED])
+- UPDATE: Clear shift detected - 10+ new mentions contradict existing pattern (mark with [UPDATED])
+- NEW: Entirely new pattern not in existing persona (mark with [NEW])
+
+Only update sections with strong evidence. Prefer stability over churn.
+Output the COMPLETE updated persona document with all sections (preserved + updated + new).` : ""}
   `.trim();
 }
 
@@ -987,8 +1111,6 @@ export async function processPersonaGeneration(
     mode,
     startTime,
   });
-
-  const labelService = new LabelService();
 
   try {
     const personaDocument = await getDocumentsByTitle(userId, "Persona");
@@ -1040,6 +1162,8 @@ export async function processPersonaGeneration(
       referenceTime: new Date().toISOString(),
       type: EpisodeType.DOCUMENT,
       source: "persona",
+      title: "Persona",
+      labelIds: [labelId],
       sessionId: `persona-${workspaceId}`,
       metadata: { documentTitle: "Persona" },
     };

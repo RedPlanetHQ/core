@@ -38,6 +38,14 @@ export async function processTitleGeneration(
     if (!ingestionQueue) {
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
+    
+    if(ingestionQueue.title){
+      logger.info(`Title already exists for queue ${payload.queueId}`);
+      return {
+        success: true,
+        title: ingestionQueue.title,
+      };
+    }
 
     // Get episode body from the data field
     const data = ingestionQueue.data as any;

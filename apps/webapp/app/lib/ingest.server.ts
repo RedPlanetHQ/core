@@ -43,7 +43,7 @@ export const addToQueue = async (
     throw new Error("no credits");
   }
 
-  let labels: string[] = [];
+  let labels: string[] = body.labelIds ?? [];
 
   if (body.sessionId) {
     const lastEpisode = await prisma.ingestionQueue.findFirst({
@@ -55,7 +55,9 @@ export const addToQueue = async (
       },
     });
 
-    labels = lastEpisode?.labels ?? [];
+    if(lastEpisode?.labels && lastEpisode?.labels.length > 0){
+      labels = lastEpisode?.labels;
+    }
   }
 
   // Upsert: update existing or create new ingestion queue entry
@@ -79,6 +81,7 @@ export const addToQueue = async (
       activityId,
       sessionId: body.sessionId,
       labels,
+      title: body.title,
     },
   });
 

@@ -252,6 +252,8 @@ export async function getDocumentVersions(
 /**
  * Delete a document and all its related episodes, statements, and entities efficiently
  * Uses optimized Cypher patterns for bulk deletion
+ *
+ * @throws Error if attempting to delete a persona document
  */
 export async function deleteDocument(documentUuid: string): Promise<{
   documentsDeleted: number;
@@ -259,6 +261,23 @@ export async function deleteDocument(documentUuid: string): Promise<{
   statementsDeleted: number;
   entitiesDeleted: number;
 }> {
+  // First, check if this is a persona document
+  const documentCheck = await getDocument(documentUuid);
+
+  if (!documentCheck) {
+    return {
+      documentsDeleted: 0,
+      episodesDeleted: 0,
+      statementsDeleted: 0,
+      entitiesDeleted: 0,
+    };
+  }
+
+  // Prevent deletion of persona documents
+  if (documentCheck.title === "Persona" || documentCheck.metadata?.isPersona === true) {
+    throw new Error("Cannot delete persona document. Persona documents are system-managed and cannot be deleted.");
+  }
+
   const query = `
     MATCH (d:Document {uuid: $documentUuid})
 
@@ -349,4 +368,66 @@ export async function getDocumentsByTitle(userId: string, title: string): Promis
       chunkHashes: documentNode.properties.chunkHashes || [],
     };
   });
+}
+
+/**
+ * Get user's persona content for AI chat context
+ * Returns null if persona doesn't exist or has no content yet
+ */
+export async function getUserPersonaContent(userId: string): Promise<string | null> {
+  try {
+    const personaDocs = await getDocumentsByTitle(userId, "Persona");
+
+    if (!personaDocs || personaDocs.length === 0) {
+      return null;
+    }
+
+    const personaContent = personaDocs[0]?.originalContent;
+
+    // Return null if it's just the initial placeholder content
+    if (!personaContent || personaContent.trim() === "# Persona") {
+      return null;
+    }
+
+    return personaContent;
+  } catch (error) {
+    console.error("Error fetching persona content:", error);
+    return null;
+  }
+}
+
+/**
+ * Create initial persona document for a user
+ * Called during user signup/onboarding
+ */
+export async function createPersonaDocument(
+  userId: string,
+  workspaceId: string,
+): Promise<DocumentNode> {
+  const uuid = crypto.randomUUID();
+  const now = new Date();
+  const initialContent = "# Persona";
+
+  const personaDocument: DocumentNode = {
+    uuid,
+    title: "Persona",
+    originalContent: initialContent,
+    metadata: {
+      workspaceId,
+      isPersona: true,
+    },
+    source: "persona",
+    userId,
+    createdAt: now,
+    validAt: now,
+    totalChunks: 0,
+    sessionId: `persona-${workspaceId}`,
+    version: 1,
+    contentHash: generateContentHash(initialContent),
+    chunkHashes: [],
+  };
+
+  await saveDocument(personaDocument);
+
+  return personaDocument;
 }

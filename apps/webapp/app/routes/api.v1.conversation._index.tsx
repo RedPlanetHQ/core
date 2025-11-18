@@ -23,6 +23,7 @@ import {
   hasQuestion,
   REACT_SYSTEM_PROMPT,
 } from "~/lib/prompt.server";
+import { getUserPersonaContent } from "~/services/graphModels/document";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { env } from "~/env.server";
 
@@ -103,12 +104,27 @@ const { loader, action } = createHybridActionApiRoute(
       messages: finalMessages,
     });
 
+    // Fetch user's persona to condition AI behavior
+    const personaContent = await getUserPersonaContent(authentication.userId);
+
+    // Build system prompt with persona context if available
+    let systemPrompt = REACT_SYSTEM_PROMPT;
+    if (personaContent) {
+      systemPrompt = `${REACT_SYSTEM_PROMPT}
+
+<user_persona>
+You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
+
+${personaContent}
+</user_persona>`;
+    }
+
     const result = streamText({
       model: getModel() as LanguageModel,
       messages: [
         {
           role: "system",
-          content: REACT_SYSTEM_PROMPT,
+          content: systemPrompt,
         },
         ...convertToModelMessages(validatedMessages),
       ],
