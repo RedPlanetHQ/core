@@ -12,6 +12,7 @@ import {
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
+import { LabelService } from "~/services/label.server";
 
 // Schema for space ID parameter
 const LogParamsSchema = z.object({
@@ -80,6 +81,21 @@ const { action } = createHybridActionApiRoute(
         }
 
         const { labels, title } = validationResult.data;
+
+        if (
+          ingestionQueue.title === "Persona" ||
+          title === "Persona" ||
+          body.labels
+        ) {
+          return json(
+            {
+              error:
+                "Cannot edit the persona title or labels, also cannot name any document as Persona",
+              code: "validation_error",
+            },
+            { status: 400 },
+          );
+        }
 
         // Update the ingestion queue with new labels
         const updatedQueue = await updateIngestionQueue(

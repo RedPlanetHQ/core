@@ -40,6 +40,8 @@ export const ICON_MAPPING = {
   obsidian: Obsidian,
   figma: Figma,
   core: StaticLogo,
+  persona: StaticLogo,
+  "topic-analysis": StaticLogo,
   zed: Zed,
   kilo: Kilo,
 

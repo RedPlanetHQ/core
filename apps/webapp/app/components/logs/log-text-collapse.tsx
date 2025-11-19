@@ -29,7 +29,7 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
 
   if (!text) {
     return (
-      <div className="text-muted-foreground mb-2 text-xs italic">
+      <div className="text-muted-foreground mb-2 text-sm italic">
         No log details.
       </div>
     );
@@ -92,6 +92,42 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
               <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start gap-2">
                 <Tooltip>
                   <TooltipTrigger asChild>
+                    <Badge
+                      className={cn(
+                        "text-foreground shrink-0 rounded !bg-transparent px-0 text-sm",
+                      )}
+                    >
+                      {getIngestType(log).icon}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipPortal>
+                    <TooltipContent>
+                      <p>{getIngestType(log).label}</p>
+                    </TooltipContent>
+                  </TooltipPortal>
+                </Tooltip>
+
+                <div className={cn("truncate text-left")}>
+                  {log.title ?? text.replace(/<[^>]+>/g, "")}
+                </div>
+              </div>
+
+              <div className="flex grow gap-1"></div>
+
+              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-sm">
+                {log.isSessionGroup &&
+                  !!log.sessionEpisodeCount &&
+                  log.sessionEpisodeCount > 1 && (
+                    <Badge
+                      variant="secondary"
+                      className={cn("shrink-0 rounded")}
+                    >
+                      {log.sessionEpisodeCount}{" "}
+                      {log.type === "DOCUMENT" ? "versions" : "episodes"}
+                    </Badge>
+                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <div>
                       {getIconForAuthorise(
                         log.source.toLowerCase(),
@@ -106,45 +142,10 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                     </TooltipContent>
                   </TooltipPortal>
                 </Tooltip>
-                <div className={cn("truncate text-left")}>
-                  {log.title ?? text.replace(/<[^>]+>/g, "")}
-                </div>
-              </div>
-
-              <div className="flex grow gap-1"></div>
-
-              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-xs">
-                {log.isSessionGroup &&
-                  !!log.sessionEpisodeCount &&
-                  log.sessionEpisodeCount > 1 && (
-                    <Badge
-                      variant="secondary"
-                      className={cn("shrink-0 rounded")}
-                    >
-                      {log.sessionEpisodeCount}{" "}
-                      {log.type === "DOCUMENT" ? "versions" : "episodes"}
-                    </Badge>
-                  )}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge
-                      className={cn(
-                        "text-foreground shrink-0 rounded !bg-transparent text-xs",
-                      )}
-                    >
-                      {getIngestType(log).icon}
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipPortal>
-                    <TooltipContent>
-                      <p>{getIngestType(log).label}</p>
-                    </TooltipContent>
-                  </TooltipPortal>
-                </Tooltip>
                 {showStatus(log) && (
                   <Badge
                     className={cn(
-                      "!bg-grayAlpha-100 text-muted-foreground gap-1 rounded text-xs",
+                      "!bg-grayAlpha-100 text-muted-foreground gap-1 rounded text-sm",
                     )}
                   >
                     <BadgeColor
@@ -160,7 +161,7 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                   short
                 />
 
-                <div className="text-muted-foreground text-xs">
+                <div className="text-muted-foreground text-sm">
                   {formatDate(log.time)}
                 </div>
               </div>

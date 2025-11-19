@@ -54,6 +54,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const mcpClient = await createMCPClient({
       transport: new StreamableHTTPClientTransport(url, {
+        sessionId: body.id,
         requestInit: {
           headers: {
             Cookie: request.headers.get("Cookie") || "",
@@ -89,7 +90,7 @@ const { loader, action } = createHybridActionApiRoute(
       };
     });
 
-    const tools = { ...(await mcpClient.tools()) };
+    const tools = await mcpClient.tools();
 
     const finalMessages = [
       ...messages,
@@ -129,6 +130,7 @@ ${personaContent}
         ...convertToModelMessages(validatedMessages),
       ],
       tools,
+
       stopWhen: [stepCountIs(10), hasAnswer, hasQuestion],
     });
 

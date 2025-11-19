@@ -60,9 +60,7 @@ export const loader = createHybridLoaderApiRoute(
     });
 
     // Get unique sources from ingestion logs data field using raw SQL
-    const uniqueDataSources = await prisma.$queryRaw<
-      Array<{ source: string }>
-    >`
+    const uniqueDataSources = await prisma.$queryRaw<Array<{ source: string }>>`
       SELECT DISTINCT (data->>'source')::text as source
       FROM "IngestionQueue"
       WHERE "workspaceId" = ${user.Workspace.id}
@@ -167,6 +165,10 @@ export const loader = createHybridLoaderApiRoute(
         createdAt: "desc",
       },
       take: fetchLimit,
+    });
+
+    const totalCount = await prisma.ingestionQueue.count({
+      where: whereClause,
     });
 
     // Deduplicate by sessionId - keep only the first (latest) log per session
@@ -293,6 +295,7 @@ export const loader = createHybridLoaderApiRoute(
       hasMore,
       nextCursor, // Client uses this for next page instead of page number
       availableSources,
+      totalCount,
     });
   },
 );

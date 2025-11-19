@@ -41,7 +41,8 @@ export const meta: MetaFunction = ({ matches }) => {
     { title: `Authorize Access - C.O.R.E.` },
     {
       name: "viewport",
-      content: "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no",
+      content:
+        "width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no",
     },
   ];
 };
@@ -249,28 +250,28 @@ export default function OAuthAuthorize() {
   };
 
   return (
-    <div className="bg-background-2 flex min-h-screen items-start sm:items-center justify-center p-3 sm:p-4 md:p-6 overflow-x-hidden">
-      <Card className="bg-background-3 shadow-1 w-full max-w-md rounded-lg p-4 sm:p-6 md:p-8 my-auto sm:my-0">
+    <div className="bg-background-2 flex min-h-screen items-start justify-center overflow-x-hidden p-3 sm:items-center sm:p-4 md:p-6">
+      <Card className="bg-background-3 shadow-1 my-auto w-full max-w-md rounded-lg p-4 sm:my-0 sm:p-6 md:p-8">
         <CardContent className="p-0">
-          <div className="flex items-center justify-center gap-2 sm:gap-3 md:gap-4 mb-4 sm:mb-6">
+          <div className="mb-4 flex items-center justify-center gap-2 sm:mb-6 sm:gap-3 md:gap-4">
             {getIconForAuthorise(client.name, 32, client.logoUrl)}
-            <ArrowRightLeft size={14} className="shrink-0 sm:w-4 sm:h-4" />
+            <ArrowRightLeft size={14} className="shrink-0 sm:h-4 sm:w-4" />
             <Logo size={32} />
           </div>
-          <div className="mt-4 sm:mt-6 space-y-4 sm:space-y-6">
-            <div className="flex items-center justify-center text-center px-2">
+          <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
+            <div className="flex items-center justify-center px-2 text-center">
               <div>
-                <p className="text-base sm:text-lg md:text-xl font-normal leading-tight">
+                <p className="text-base leading-tight font-normal sm:text-lg md:text-xl">
                   {client.name} is requesting access
                 </p>
-                <p className="text-muted-foreground mt-2 text-sm sm:text-base leading-relaxed">
+                <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
                   Authenticating with your {user.name} account
                 </p>
               </div>
             </div>
 
             <div>
-              <p className="text-muted-foreground mb-2 sm:mb-3 text-sm sm:text-base font-medium">
+              <p className="text-muted-foreground mb-2 text-sm font-medium sm:mb-3 sm:text-base">
                 Permissions
               </p>
               <ul className="text-muted-foreground text-sm sm:text-base">
@@ -281,10 +282,14 @@ export default function OAuthAuthorize() {
                   return (
                     <li
                       key={index}
-                      className={`flex items-start gap-2 sm:gap-3 border-x border-t border-gray-300 p-3 sm:p-4 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-br-md rounded-bl-md" : ""} `}
+                      className={`flex items-start gap-2 border-x border-t border-gray-300 p-2 sm:gap-3 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-br-md rounded-bl-md" : ""} `}
                     >
-                      <div className="shrink-0 mt-0.5">{getScopeIcon(trimmedScope)}</div>
-                      <div className="flex-1 leading-relaxed">{getScopeDescription(trimmedScope)}</div>
+                      <div className="mt-0.5 shrink-0">
+                        {getScopeIcon(trimmedScope)}
+                      </div>
+                      <div className="flex-1 leading-relaxed">
+                        {getScopeDescription(trimmedScope)}
+                      </div>
                     </li>
                   );
                 })}
@@ -292,9 +297,9 @@ export default function OAuthAuthorize() {
             </div>
 
             {isRedirecting ? (
-              <div className="flex flex-col items-center justify-center py-6 sm:py-8 md:py-12 px-4">
-                <LoaderCircle className="text-primary mb-3 h-6 w-6 sm:h-8 sm:w-8 animate-spin" />
-                <span className="text-muted-foreground text-center text-sm sm:text-base leading-relaxed px-2">
+              <div className="flex flex-col items-center justify-center px-4 py-6 sm:py-8 md:py-12">
+                <LoaderCircle className="text-primary mb-3 h-6 w-6 animate-spin sm:h-8 sm:w-8" />
+                <span className="text-muted-foreground px-2 text-center text-sm leading-relaxed sm:text-base">
                   Redirecting to the page... (Close this page if it doesn't
                   redirect in 5 seconds)
                 </span>
@@ -350,14 +355,14 @@ export default function OAuthAuthorize() {
                   />
                 )}
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:justify-end sm:gap-3 pt-2">
+                <div className="flex flex-col gap-3 pt-2 sm:flex-row sm:justify-end sm:gap-3">
                   <Button
                     type="submit"
                     name="action"
                     value="deny"
                     size="lg"
                     variant="secondary"
-                    className="w-full sm:w-auto min-h-[44px] text-base sm:text-sm"
+                    className="w-full"
                   >
                     Deny
                   </Button>
@@ -366,7 +371,7 @@ export default function OAuthAuthorize() {
                     name="action"
                     value="allow"
                     size="lg"
-                    className="w-full shadow-none sm:w-auto min-h-[44px] text-base sm:text-sm"
+                    className="w-full shadow-none"
                   >
                     Allow Access
                   </Button>
