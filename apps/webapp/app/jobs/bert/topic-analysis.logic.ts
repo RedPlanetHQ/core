@@ -584,6 +584,7 @@ export async function processTopicAnalysis(
               episodeBody: docSummary.summary,
               referenceTime: new Date().toISOString(),
               type: EpisodeType.DOCUMENT,
+              sessionId: crypto.randomUUID(),
               source: "topic-analysis",
               metadata: {
                 documentTitle: docSummary.title,
