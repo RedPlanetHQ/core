@@ -61,7 +61,8 @@ async function createMcpServer(
       name === "initialize_conversation_session" ||
       name === "get_integrations" ||
       name === "get_integration_actions" ||
-      name === "execute_integration_action"
+      name === "execute_integration_action" ||
+      name === "get_labels"
     ) {
       // Get workspace for integration tools
       const workspace = await getWorkspaceByUser(userId);

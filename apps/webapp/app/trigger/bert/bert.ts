@@ -30,6 +30,8 @@ async function runBertWithTriggerPython(
  */
 export const bertTopicAnalysisTask = task({
   id: "bert-topic-analysis",
+  machine: "large-2x",
+  maxDuration: 36000,
   run: async (payload: TopicAnalysisPayload) => {
     return await processTopicAnalysis(
       payload,

@@ -71,6 +71,8 @@ export const personaGenerationTask = task({
     name: "persona-generation-queue",
     concurrencyLimit: 3,
   },
+  machine: "large-2x",
+  maxDuration: 36000,
   run: async (payload: PersonaGenerationPayload) => {
     logger.info(`[Trigger.dev] Starting persona generation task`, {
       userId: payload.userId,

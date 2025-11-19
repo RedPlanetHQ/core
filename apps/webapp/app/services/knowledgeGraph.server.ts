@@ -891,26 +891,42 @@ export class KnowledgeGraphService {
       });
 
       // Step 7: Reconstruct triples with resolved entities
-      const resolvedTriples = triples.map((triple) => {
-        const newTriple = { ...triple };
+      const resolvedTriples = triples
+        .map((triple) => {
+          // Validate original entities have UUIDs
+          if (
+            !triple.subject?.uuid ||
+            !triple.predicate?.uuid ||
+            !triple.object?.uuid
+          ) {
+            logger.error(`Triple has entities missing UUIDs, skipping`, {
+              statementFact: triple.statement.fact,
+              hasSubjectUuid: !!triple.subject?.uuid,
+              hasPredicateUuid: !!triple.predicate?.uuid,
+              hasObjectUuid: !!triple.object?.uuid,
+            });
+            return null;
+          }
 
-        // Replace subject if resolved
-        if (entityResolutionMap.has(triple.subject.uuid)) {
-          newTriple.subject = entityResolutionMap.get(triple.subject.uuid)!;
-        }
+          const newTriple = { ...triple };
 
-        // Replace predicate if resolved
-        if (entityResolutionMap.has(triple.predicate.uuid)) {
-          newTriple.predicate = entityResolutionMap.get(triple.predicate.uuid)!;
-        }
+          // Replace subject if resolved, otherwise keep original
+          const resolvedSubject = entityResolutionMap.get(triple.subject.uuid);
+          newTriple.subject = resolvedSubject || triple.subject;
 
-        // Replace object if resolved
-        if (entityResolutionMap.has(triple.object.uuid)) {
-          newTriple.object = entityResolutionMap.get(triple.object.uuid)!;
-        }
+          // Replace predicate if resolved, otherwise keep original
+          const resolvedPredicate = entityResolutionMap.get(
+            triple.predicate.uuid,
+          );
+          newTriple.predicate = resolvedPredicate || triple.predicate;
 
-        return newTriple;
-      });
+          // Replace object if resolved, otherwise keep original
+          const resolvedObject = entityResolutionMap.get(triple.object.uuid);
+          newTriple.object = resolvedObject || triple.object;
+
+          return newTriple;
+        })
+        .filter(Boolean) as Triple[];
 
       return resolvedTriples;
     } catch (error) {

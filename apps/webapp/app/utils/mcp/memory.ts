@@ -6,7 +6,11 @@ import { SearchService } from "~/services/search.server";
 import { IntegrationLoader } from "./integration-loader";
 import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
-import { getUserDocuments, getDocument, getUserPersonaContent } from "~/services/graphModels/document";
+import {
+  getUserDocuments,
+  getDocument,
+  getUserPersonaContent,
+} from "~/services/graphModels/document";
 import { LabelService } from "~/services/label.server";
 
 const searchService = new SearchService();
@@ -126,7 +130,7 @@ export const memoryTools = [
     inputSchema: SearchParamsSchema,
   },
   {
-    name: "get_documents",
+    name: "memory_get_documents",
     description:
       "List all user documents. USE THIS TOOL: To discover available documents and get their IDs. Each document represents stored content with a unique UUID. Returns: Array of documents with uuid, title, createdAt, and totalChunks.",
     inputSchema: {
@@ -165,7 +169,7 @@ export const memoryTools = [
     },
   },
   {
-    name: "get_document",
+    name: "memory_get_document",
     description:
       "Get detailed information about a specific document including its content. USE THIS TOOL: When you need to retrieve document content by its ID. HOW TO USE: Provide the documentId (UUID from get_documents). Returns: Document details with uuid, title, originalContent, metadata, source, createdAt, validAt, and totalChunks.",
     inputSchema: {
@@ -281,13 +285,13 @@ export async function callMemoryTool(
         return await handleMemoryIngest({ ...args, userId, source });
       case "memory_search":
         return await handleMemorySearch({ ...args, userId, source });
-      case "get_documents":
+      case "memory_get_documents":
         return await handleGetDocuments({ ...args, userId });
       case "get_labels":
         return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
         return await handleUserProfile(userId);
-      case "get_document":
+      case "memory_get_document":
         return await handleGetDocument({ ...args, userId });
       case "initialize_conversation_session":
         return await handleGetSessionId();
@@ -507,7 +511,9 @@ async function handleGetDocument(args: any) {
 
     // Verify the document belongs to the user
     if (document.userId !== userId) {
-      throw new Error(`Access denied: Document ${documentId} does not belong to user`);
+      throw new Error(
+        `Access denied: Document ${documentId} does not belong to user`,
+      );
     }
 
     // Return full document details

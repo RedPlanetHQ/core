@@ -43,6 +43,17 @@ export default defineConfig({
         schema: "prisma/schema.prisma",
       }),
       pythonExtension({
+        requirements: [
+          "click>=8.1.0",
+          "python-dotenv>=1.0.0",
+          "neo4j>=5.14.0",
+          "numpy>=1.24.0",
+          "scipy>=1.11.0",
+          "pandas>=2.0.0",
+          "scikit-learn>=1.3.0",
+          "umap-learn>=0.5.4",
+          "hdbscan>=0.8.33",
+        ],
         scripts: ["./python/*.py"],
       }),
     ],

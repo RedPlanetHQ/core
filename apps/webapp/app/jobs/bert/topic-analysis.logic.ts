@@ -475,7 +475,9 @@ export async function processTopicAnalysis(
     console.log(`[BERT Topic Analysis] Completed in ${duration}ms`);
 
     // Parse the JSON output
-    const result: TopicAnalysisResult = JSON.parse(stdout);
+    const output = JSON.parse(stdout);
+
+    const result: TopicAnalysisResult = { topics: output };
 
     // Log summary
     const topicCount = Object.keys(result.topics).length;
@@ -587,6 +589,7 @@ export async function processTopicAnalysis(
                 documentTitle: docSummary.title,
                 theme: docSummary.theme,
                 episodeCount: docSummary.episodeCount,
+                auto: true,
               },
             };
 
