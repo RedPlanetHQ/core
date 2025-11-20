@@ -127,14 +127,6 @@ export async function callbackHandler(params: CallbackParams) {
       },
     );
 
-    console.log({
-      oauthResponse: tokensResponse.token,
-      oauthParams: {
-        ...params,
-        redirect_uri: CALLBACK_URL,
-      },
-    });
-
     const setupResult = await runIntegrationTrigger(
       integrationDefinition,
       {

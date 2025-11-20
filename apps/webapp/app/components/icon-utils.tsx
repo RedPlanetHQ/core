@@ -19,6 +19,7 @@ import { Figma } from "./icons/figma";
 import StaticLogo from "./logo/logo";
 import { Zed } from "./icons/zed";
 import { Kilo } from "./icons/kilo";
+import { Gmail } from "./icons/gmail";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -26,7 +27,7 @@ export const ICON_MAPPING = {
   discord: RiDiscordFill,
   github: RiGithubFill,
 
-  gmail: RiMailFill,
+  gmail: Gmail,
   linear: LinearIcon,
   cursor: Cursor,
   claude: Claude,

@@ -1,5 +1,5 @@
 import { integrationCreate } from './account-create';
-import { createActivityEvent } from './create-activity';
+import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -13,11 +13,8 @@ export async function run(eventPayload: IntegrationEventPayload) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
 
-    case IntegrationEventType.IDENTIFY:
-      return eventPayload.eventBody.event.userEmail;
-
-    case IntegrationEventType.PROCESS:
-      return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
+    case IntegrationEventType.SYNC:
+      return await handleSchedule(eventPayload.config, eventPayload.state);
 
     case IntegrationEventType.MCP:
       const integrationDefinition = eventPayload.integrationDefinition;
@@ -30,8 +27,8 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return mcp(
         integrationDefinition.config.client_id,
         integrationDefinition.config.client_secret,
-        config?.callback,
-        config?.token
+        config?.redirect_uri,
+        config
       );
 
     default:
@@ -56,12 +53,9 @@ class GmailCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Gmail. Monitor emails, send messages, and manage your email workflow',
       icon: 'gmail',
-      // mcp: {
-      //   env: { SLACK_MCP_XOXP_TOKEN: '${config:access_token}' },
-      //   url: 'https://integrations.heysol.ai/slack/mcp/slack-mcp-server',
-      //   args: [],
-      //   type: 'stdio',
-      // },
+      mcp: {
+        type: 'cli',
+      },
       auth: {
         OAuth2: {
           token_url: 'https://oauth2.googleapis.com/token',

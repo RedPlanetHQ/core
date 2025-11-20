@@ -6,63 +6,7 @@ import * as path from "path";
 
 import { prisma } from "./prisma";
 
-export const configureStdioMCPEnvironment = (
-  spec: any,
-  account: any,
-): { env: Record<string, string>; args: any[] } => {
-  if (!spec.mcp) {
-    return { env: {}, args: [] };
-  }
-
-  const mcpSpec = spec.mcp;
-  const configuredMCP = { ...mcpSpec };
-
-  // Replace config placeholders in environment variables
-  if (configuredMCP.env) {
-    for (const [key, value] of Object.entries(configuredMCP.env)) {
-      if (typeof value === "string" && value.includes("${config:")) {
-        // Extract the config key from the placeholder
-        const configKey = value.match(/\$\{config:(.*?)\}/)?.[1];
-        if (
-          configKey &&
-          account.integrationConfiguration &&
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (account.integrationConfiguration as any)[configKey]
-        ) {
-          configuredMCP.env[key] = value.replace(
-            `\${config:${configKey}}`,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (account.integrationConfiguration as any)[configKey],
-          );
-        }
-      }
-
-      if (typeof value === "string" && value.includes("${integrationConfig:")) {
-        // Extract the config key from the placeholder
-        const configKey = value.match(/\$\{integrationConfig:(.*?)\}/)?.[1];
-        if (
-          configKey &&
-          account.integrationDefinition.config &&
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (account.integrationDefinition.config as any)[configKey]
-        ) {
-          configuredMCP.env[key] = value.replace(
-            `\${integrationConfig:${configKey}}`,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (account.integrationDefinition.config as any)[configKey],
-          );
-        }
-      }
-    }
-  }
-
-  return {
-    env: configuredMCP.env || {},
-    args: Array.isArray(configuredMCP.args) ? configuredMCP.args : [],
-  };
-};
-
-export const fetchAndSaveStdioIntegrations = async () => {
+export const fetchAndSaveIntegrations = async () => {
   try {
     logger.info("Starting stdio integrations fetch and save process");
 
@@ -80,120 +24,111 @@ export const fetchAndSaveStdioIntegrations = async () => {
 
     for (const integration of integrationDefinitions) {
       try {
-        const spec = integration.spec as any;
+        logger.info(`Processing stdio integration: ${integration.slug}`);
 
-        // Check if this integration has MCP config and is stdio type
-        if (spec?.mcp?.type === "stdio" && spec?.mcp?.url) {
-          logger.info(`Processing stdio integration: ${integration.slug}`);
+        const integrationDir = path.join(
+          process.cwd(),
+          "integrations",
+          integration.slug,
+        );
+        const targetFile = path.join(integrationDir, "main");
 
-          const integrationDir = path.join(
-            process.cwd(),
-            "integrations",
-            integration.slug,
+        // Create directory if it doesn't exist
+        if (!fs.existsSync(integrationDir)) {
+          fs.mkdirSync(integrationDir, { recursive: true });
+          logger.info(`Created directory: ${integrationDir}`);
+        }
+
+        // Skip if file already exists
+        if (fs.existsSync(targetFile)) {
+          logger.info(
+            `Integration ${integration.slug} already exists, skipping`,
           );
-          const targetFile = path.join(integrationDir, "main");
+          continue;
+        }
 
-          // Create directory if it doesn't exist
-          if (!fs.existsSync(integrationDir)) {
-            fs.mkdirSync(integrationDir, { recursive: true });
-            logger.info(`Created directory: ${integrationDir}`);
-          }
+        const urlOrPath = integration.url as string;
 
-          // Skip if file already exists
-          if (fs.existsSync(targetFile)) {
-            logger.info(
-              `Integration ${integration.slug} already exists, skipping`,
+        // If urlOrPath looks like a URL, use fetch, otherwise treat as local path
+        let isUrl = false;
+        try {
+          // Try to parse as URL
+          const parsed = new URL(urlOrPath);
+          isUrl = ["http:", "https:"].includes(parsed.protocol);
+        } catch {
+          isUrl = false;
+        }
+
+        if (isUrl) {
+          // Fetch the URL content
+          logger.info(`Fetching content from URL: ${urlOrPath}`);
+          const response = await fetch(urlOrPath);
+
+          if (!response.ok) {
+            logger.error(
+              `Failed to fetch ${urlOrPath}: ${response.status} ${response.statusText}`,
             );
             continue;
           }
 
-          const urlOrPath = spec.mcp.url;
+          // Check if the response is binary (executable) or text
+          const contentType = response.headers.get("content-type");
+          const isBinary =
+            contentType &&
+            (contentType.includes("application/octet-stream") ||
+              contentType.includes("application/executable") ||
+              contentType.includes("application/x-executable") ||
+              contentType.includes("binary") ||
+              !contentType.includes("text/"));
 
-          // If urlOrPath looks like a URL, use fetch, otherwise treat as local path
-          let isUrl = false;
-          try {
-            // Try to parse as URL
-            const parsed = new URL(urlOrPath);
-            isUrl = ["http:", "https:"].includes(parsed.protocol);
-          } catch {
-            isUrl = false;
-          }
+          let content: string | Buffer;
 
-          if (isUrl) {
-            // Fetch the URL content
-            logger.info(`Fetching content from URL: ${urlOrPath}`);
-            const response = await fetch(urlOrPath);
-
-            if (!response.ok) {
-              logger.error(
-                `Failed to fetch ${urlOrPath}: ${response.status} ${response.statusText}`,
-              );
-              continue;
-            }
-
-            // Check if the response is binary (executable) or text
-            const contentType = response.headers.get("content-type");
-            const isBinary =
-              contentType &&
-              (contentType.includes("application/octet-stream") ||
-                contentType.includes("application/executable") ||
-                contentType.includes("application/x-executable") ||
-                contentType.includes("binary") ||
-                !contentType.includes("text/"));
-
-            let content: string | Buffer;
-
-            if (isBinary) {
-              // Handle binary files
-              const arrayBuffer = await response.arrayBuffer();
-              content = Buffer.from(arrayBuffer);
-            } else {
-              // Handle text files
-              content = await response.text();
-            }
-
-            // Save the content to the target file
-            if (typeof content === "string") {
-              fs.writeFileSync(targetFile, content);
-            } else {
-              fs.writeFileSync(targetFile, content);
-            }
-
-            // Make the file executable if it's a script
-            if (process.platform !== "win32") {
-              fs.chmodSync(targetFile, "755");
-            }
-
-            logger.info(
-              `Successfully saved stdio integration: ${integration.slug} to ${targetFile}`,
-            );
+          if (isBinary) {
+            // Handle binary files
+            const arrayBuffer = await response.arrayBuffer();
+            content = Buffer.from(arrayBuffer);
           } else {
-            // Treat as local file path
-            const sourcePath = path.isAbsolute(urlOrPath)
-              ? urlOrPath
-              : path.join(process.cwd(), urlOrPath);
-
-            logger.info(`Copying content from local path: ${sourcePath}`);
-
-            if (!fs.existsSync(sourcePath)) {
-              logger.error(`Source file does not exist: ${sourcePath}`);
-              continue;
-            }
-
-            fs.copyFileSync(sourcePath, targetFile);
-
-            // Make the file executable if it's a script
-            if (process.platform !== "win32") {
-              fs.chmodSync(targetFile, "755");
-            }
-
-            logger.info(
-              `Successfully copied stdio integration: ${integration.slug} to ${targetFile}`,
-            );
+            // Handle text files
+            content = await response.text();
           }
+
+          // Save the content to the target file
+          if (typeof content === "string") {
+            fs.writeFileSync(targetFile, content);
+          } else {
+            fs.writeFileSync(targetFile, content);
+          }
+
+          // Make the file executable if it's a script
+          if (process.platform !== "win32") {
+            fs.chmodSync(targetFile, "755");
+          }
+
+          logger.info(
+            `Successfully saved stdio integration: ${integration.slug} to ${targetFile}`,
+          );
         } else {
-          logger.debug(
-            `Skipping integration ${integration.slug}: not a stdio type or missing URL`,
+          // Treat as local file path
+          const sourcePath = path.isAbsolute(urlOrPath)
+            ? urlOrPath
+            : path.join(process.cwd(), urlOrPath);
+
+          logger.info(`Copying content from local path: ${sourcePath}`);
+
+          if (!fs.existsSync(sourcePath)) {
+            logger.error(`Source file does not exist: ${sourcePath}`);
+            continue;
+          }
+
+          fs.copyFileSync(sourcePath, targetFile);
+
+          // Make the file executable if it's a script
+          if (process.platform !== "win32") {
+            fs.chmodSync(targetFile, "755");
+          }
+
+          logger.info(
+            `Successfully copied stdio integration: ${integration.slug} to ${targetFile}`,
           );
         }
       } catch (error) {

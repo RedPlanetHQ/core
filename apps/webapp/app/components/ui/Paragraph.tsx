@@ -18,27 +18,27 @@ const paragraphVariants = {
     spacing: "mb-2",
   },
   "extra-small": {
-    text: "font-sans text-xs font-normal text-text-dimmed",
+    text: "font-sans text-sm font-normal text-text-dimmed",
     spacing: "mb-1.5",
   },
   "extra-small/bright": {
-    text: "font-sans text-xs font-normal text-text-bright",
+    text: "font-sans text-sm font-normal text-text-bright",
     spacing: "mb-1.5",
   },
   "extra-small/mono": {
-    text: "font-mono text-xs font-normal text-text-dimmed",
+    text: "font-mono text-sm font-normal text-text-dimmed",
     spacing: "mb-1.5",
   },
   "extra-small/bright/mono": {
-    text: "font-mono text-xs text-text-bright",
+    text: "font-mono text-sm text-text-bright",
     spacing: "mb-1.5",
   },
   "extra-small/caps": {
-    text: "font-sans text-xs uppercase tracking-wider font-normal text-text-dimmed",
+    text: "font-sans text-sm uppercase tracking-wider font-normal text-text-dimmed",
     spacing: "mb-1.5",
   },
   "extra-small/bright/caps": {
-    text: "font-sans text-xs uppercase tracking-wider font-normal text-text-bright",
+    text: "font-sans text-sm uppercase tracking-wider font-normal text-text-bright",
     spacing: "mb-1.5",
   },
   "extra-extra-small": {
@@ -85,7 +85,7 @@ export function Paragraph({
       className={cn(
         paragraphVariants[variant].text,
         spacing === true && paragraphVariants[variant].spacing,
-        className
+        className,
       )}
       {...props}
     >

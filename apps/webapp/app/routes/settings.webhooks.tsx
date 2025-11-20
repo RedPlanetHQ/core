@@ -208,7 +208,7 @@ export default function WebhooksSettings() {
                     }))
                   }
                 />
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-sm">
                   Used to verify webhook authenticity via HMAC signature
                 </p>
               </div>

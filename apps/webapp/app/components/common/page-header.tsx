@@ -139,24 +139,25 @@ export function PageHeader({
           )}
         </div>
 
-        {/* Actions */}
-        {actions && actions.length > 0 && (
-          <div className="flex items-center gap-2">
-            {actions.map((action, index) => (
-              <Button
-                key={index}
-                onClick={action.onClick}
-                variant={action.variant || "secondary"}
-                className="gap-2"
-              >
-                {action.icon}
-                {action.label}
-              </Button>
-            ))}
-          </div>
-        )}
-
-        {actionsNode && actionsNode}
+        <div className="flex gap-1">
+          {/* Actions */}
+          {actions && actions.length > 0 && (
+            <div className="flex items-center gap-2">
+              {actions.map((action, index) => (
+                <Button
+                  key={index}
+                  onClick={action.onClick}
+                  variant={action.variant || "secondary"}
+                  className="gap-2"
+                >
+                  {action.icon}
+                  {action.label}
+                </Button>
+              ))}
+            </div>
+          )}
+          {actionsNode && actionsNode}
+        </div>
       </div>
 
       {isLoading && (

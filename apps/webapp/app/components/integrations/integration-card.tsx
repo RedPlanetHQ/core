@@ -39,14 +39,14 @@ export function IntegrationCard({
 
             {isConnected && (
               <div className="flex w-full items-center justify-end">
-                <Badge className="h-6 rounded bg-green-100 p-2 text-xs text-green-800">
+                <Badge className="h-6 rounded bg-green-100 p-2 text-sm text-green-800">
                   Connected
                 </Badge>
               </div>
             )}
           </div>
           <CardTitle className="text-base">{integration.name}</CardTitle>
-          <CardDescription className="line-clamp-2 text-xs">
+          <CardDescription className="line-clamp-2 text-sm">
             {integration.description || `Connect to ${integration.name}`}
           </CardDescription>
         </CardHeader>

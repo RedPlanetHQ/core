@@ -61,11 +61,16 @@ export class Spec {
   description: string;
   icon: string;
   category?: string;
-  mcp?: {
-    command: string;
-    args: string[];
-    env: Record<string, string>;
-  };
+  mcp?:
+    | {
+        type: "http";
+        url: string;
+        headers?: Record<string, string>;
+        needsAuth?: boolean;
+      }
+    | {
+        type: "cli";
+      };
   auth?: Record<string, OAuth2Params | APIKeyParams>;
 }
 

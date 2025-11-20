@@ -108,7 +108,7 @@ export function GraphPopovers({
               <h4 className="leading-none font-medium">Node Details</h4>
               {primaryNodeLabel && (
                 <span
-                  className="rounded-md px-2 py-1 text-xs font-medium text-white"
+                  className="rounded-md px-2 py-1 text-sm font-medium text-white"
                   style={{ backgroundColor: labelColor }}
                 >
                   {primaryNodeLabel}

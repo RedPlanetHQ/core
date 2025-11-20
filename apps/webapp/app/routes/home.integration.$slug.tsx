@@ -1,10 +1,10 @@
-import React, { useMemo, useState } from "react";
+import { useMemo } from "react";
 import {
   json,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
 } from "@remix-run/node";
-import { useLoaderData, useParams } from "@remix-run/react";
+import { useLoaderData } from "@remix-run/react";
 import { requireUserId, requireWorkpace } from "~/services/session.server";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
@@ -21,15 +21,9 @@ import {
 } from "~/services/ingestionRule.server";
 import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
-import { Check, Copy, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
-import {
-  IngestionRule,
-  type IntegrationAccount,
-  IntegrationDefinitionV2,
-} from "@prisma/client";
-import { Input } from "~/components/ui/input";
-import { Button } from "~/components/ui";
+import { type IntegrationAccount } from "@prisma/client";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);

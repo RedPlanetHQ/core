@@ -191,7 +191,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
 
       {/* Invalidated Facts by Episode */}
       {factsLoading ? (
-        <div className="text-muted-foreground flex items-center gap-2 text-xs">
+        <div className="text-muted-foreground flex items-center gap-2 text-sm">
           <Loader2 className="h-3 w-3 animate-spin" />
           Loading invalidated facts...
         </div>
@@ -206,7 +206,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
                 key={episode.uuid}
                 className="border-grayAlpha-200 border-t pt-3"
               >
-                <div className="mb-2 text-xs font-medium">
+                <div className="mb-2 text-sm font-medium">
                   Episode {index + 1} - Invalidated Facts ({facts.length})
                 </div>
                 <div className="flex flex-col gap-2">
@@ -215,7 +215,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
                       key={fact.uuid}
                       className="rounded-md border border-red-200 bg-red-50 p-2"
                     >
-                      <p className="mb-1 text-xs">{fact.fact}</p>
+                      <p className="mb-1 text-sm">{fact.fact}</p>
                       <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
                         {fact.invalidAt && (
                           <span>

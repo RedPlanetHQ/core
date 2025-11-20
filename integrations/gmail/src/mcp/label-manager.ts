@@ -158,7 +158,7 @@ export async function listLabels(gmail: any) {
       },
     };
   } catch (error: any) {
-    throw new Error(`Failed to list labels: ${error.message}`);
+    throw new Error(`Failed to list labels: ${error}`);
   }
 }
 

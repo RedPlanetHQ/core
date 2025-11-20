@@ -124,7 +124,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                     <p className="line-clamp-2 max-w-[400px] text-sm">
                       {episode.content}
                     </p>
-                    <p className="text-muted-foreground mt-1 text-xs">
+                    <p className="text-muted-foreground mt-1 text-sm">
                       {new Date(episode.createdAt).toLocaleDateString("en-US", {
                         month: "short",
                         day: "numeric",

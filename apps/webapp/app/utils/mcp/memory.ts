@@ -240,7 +240,7 @@ export const memoryTools = [
           description:
             "Action name from get_integration_actions. Examples: 'get_pr', 'get_issues', 'create_issue'",
         },
-        arguments: {
+        actionParameters: {
           type: "object",
           description:
             "Parameters for the action. Check the action's inputSchema from get_integration_actions to see what's required.",
@@ -723,7 +723,12 @@ async function handleGetIntegrationActions(args: any) {
 // Handler for execute_integration_action
 async function handleExecuteIntegrationAction(args: any) {
   try {
-    const { integrationSlug, action, arguments: actionArgs, sessionId } = args;
+    const {
+      integrationSlug,
+      action,
+      actionParameters: actionArgs,
+      sessionId,
+    } = args;
 
     if (!integrationSlug) {
       throw new Error("integrationSlug is required");

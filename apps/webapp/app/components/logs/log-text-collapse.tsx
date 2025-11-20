@@ -142,6 +142,41 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                     </TooltipContent>
                   </TooltipPortal>
                 </Tooltip>
+                <div className={cn("truncate text-left")}>
+                  {log.title ?? text.replace(/<[^>]+>/g, "")}
+                </div>
+              </div>
+
+              <div className="flex grow gap-1"></div>
+
+              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-sm">
+                {log.isSessionGroup &&
+                  !!log.sessionEpisodeCount &&
+                  log.sessionEpisodeCount > 1 && (
+                    <Badge
+                      variant="secondary"
+                      className={cn("shrink-0 rounded")}
+                    >
+                      {log.sessionEpisodeCount}{" "}
+                      {log.type === "DOCUMENT" ? "versions" : "episodes"}
+                    </Badge>
+                  )}
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge
+                      className={cn(
+                        "text-foreground shrink-0 rounded !bg-transparent text-sm",
+                      )}
+                    >
+                      {getIngestType(log).icon}
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipPortal>
+                    <TooltipContent>
+                      <p>{getIngestType(log).label}</p>
+                    </TooltipContent>
+                  </TooltipPortal>
+                </Tooltip>
                 {showStatus(log) && (
                   <Badge
                     className={cn(

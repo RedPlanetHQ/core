@@ -97,7 +97,7 @@ export function McpSessionsFilters({
                     }}
                   >
                     <span>{source.name}</span>
-                    <Badge variant="outline" className="text-xs">
+                    <Badge variant="outline" className="text-sm">
                       {source.count}
                     </Badge>
                   </Button>

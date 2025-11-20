@@ -264,7 +264,7 @@ export default function BillingSettings() {
                   className="mb-2"
                   color="#c15e50"
                 />
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-sm">
                   {usageSummary.credits.percentageUsed}% used this period
                 </p>
               </Card>
@@ -313,7 +313,7 @@ export default function BillingSettings() {
                   </span>
                   <span className="text-muted-foreground"> days left</span>
                 </div>
-                <p className="text-muted-foreground text-xs">
+                <p className="text-muted-foreground text-sm">
                   Resets on{" "}
                   {new Date(usageSummary.billingCycle.end).toLocaleDateString()}
                 </p>

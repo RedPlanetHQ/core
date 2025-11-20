@@ -1,6 +1,5 @@
 import { prisma } from "~/db.server";
 import { TransportManager } from "./transport-manager";
-import { configureStdioMCPEnvironment } from "~/trigger/utils/mcp";
 import { getDefaultEnvironment } from "@core/mcp-proxy";
 
 export interface IntegrationAccountWithDefinition {
@@ -55,6 +54,7 @@ export class IntegrationLoader {
             name: true,
             slug: true,
             spec: true,
+            config: true,
           },
         },
       },
@@ -80,7 +80,7 @@ export class IntegrationLoader {
     // Filter for accounts with MCP configuration
     return accounts.filter((account) => {
       const spec = account.integrationDefinition.spec;
-      return spec && spec.mcp && spec.mcp.type && spec.mcp.url;
+      return spec && spec.mcp && spec.mcp.type;
     });
   }
 
@@ -134,11 +134,10 @@ export class IntegrationLoader {
 
           loaded++;
         } else {
-          const { env, args } = configureStdioMCPEnvironment(spec, account);
           const slug = account.integrationDefinition.slug;
 
           // Extract headers from the incoming request and convert to environment variables
-          const extractedEnv = { ...getDefaultEnvironment(), ...env };
+          const extractedEnv = { ...getDefaultEnvironment() };
 
           // Use the saved local file instead of command
           const executablePath = `./integrations/${slug}/main`;
@@ -147,12 +146,22 @@ export class IntegrationLoader {
             sessionId,
             account.id,
             account.integrationDefinition.slug,
-            executablePath,
-            args,
+            "node",
+            [
+              executablePath,
+              "mcp",
+              "--config",
+              JSON.stringify(account.integrationConfiguration),
+              "--integration-definition",
+              JSON.stringify(account.integrationDefinition),
+            ],
             extractedEnv,
           );
+
+          loaded++;
         }
       } catch (error) {
+        console.log(error);
         failed.push({
           slug: account.integrationDefinition.slug,
           error: error instanceof Error ? error.message : "Unknown error",

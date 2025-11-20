@@ -56,7 +56,7 @@ export function IngestionRuleSection({
             onChange={(e) => setIngestionRuleText(e.target.value)}
             className="min-h-[100px]"
           />
-          <p className="text-muted-foreground text-xs">
+          <p className="text-muted-foreground text-sm">
             Describe what data should be ingested from this integration
           </p>
         </div>
