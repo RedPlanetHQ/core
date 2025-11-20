@@ -53,7 +53,7 @@ export function McpSourcesStats({
                     <div className="flex items-center gap-1">
                       {getIconForAuthorise(source.name.toLowerCase(), 16)}
                       <span className="mr-1 text-sm">{source.name}</span>
-                      <Badge variant="secondary" className="text-xs">
+                      <Badge variant="secondary" className="text-sm">
                         {source.count}
                       </Badge>
                     </div>
@@ -64,7 +64,7 @@ export function McpSourcesStats({
                           style={{ width: `${percentage}%` }}
                         />
                       </div>
-                      <span className="text-muted-foreground w-10 text-right text-xs">
+                      <span className="text-muted-foreground w-10 text-right text-sm">
                         {percentage.toFixed(0)}%
                       </span>
                     </div>
@@ -89,7 +89,7 @@ export function McpSourcesStats({
                 <Badge
                   key={source}
                   variant="secondary"
-                  className="rounded text-xs"
+                  className="rounded text-sm"
                 >
                   {getIconForAuthorise(source.toLowerCase(), 12)}
 

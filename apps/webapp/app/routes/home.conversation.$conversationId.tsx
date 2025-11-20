@@ -1,7 +1,7 @@
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 
 import { useParams, useNavigate } from "@remix-run/react";
-import { requireUser, requireWorkpace } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 import { getConversationAndHistory } from "~/services/conversation.server";
 import {
   ConversationItem,
@@ -16,6 +16,7 @@ import { type UIMessage, useChat } from "@ai-sdk/react";
 import { DefaultChatTransport } from "ai";
 import { UserTypeEnum } from "@core/types";
 import React from "react";
+import { HistoryDropdown } from "~/components/conversation/history-dropdown";
 
 // Example loader accessing params
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -45,7 +46,9 @@ export default function SingleConversation() {
       (history) =>
         ({
           role: history.userType === UserTypeEnum.Agent ? "assistant" : "user",
-          parts: [{ text: history.message, type: "text" }],
+          parts: history.parts
+            ? history.parts
+            : [{ text: history.message, type: "text" }],
         }) as UIMessage,
     ), // load initial messages
     transport: new DefaultChatTransport({
@@ -57,7 +60,7 @@ export default function SingleConversation() {
   });
 
   React.useEffect(() => {
-    if (messages.length === 1) {
+    if (conversation.ConversationHistory.length === 1) {
       regenerate();
     }
   }, []);
@@ -82,6 +85,7 @@ export default function SingleConversation() {
             variant: "secondary",
           },
         ]}
+        actionsNode={<HistoryDropdown currentConversationId={conversationId} />}
       />
 
       <div className="relative flex h-[calc(100vh_-_56px)] w-full flex-col items-center justify-center overflow-auto">

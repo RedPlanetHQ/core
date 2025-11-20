@@ -53,7 +53,7 @@ export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
       },
       cell: ({ row }) => {
         return (
-          <div className="flex items-center gap-1 text-xs">
+          <div className="flex items-center gap-1 text-sm">
             {row.original.obfuscatedToken}
           </div>
         );

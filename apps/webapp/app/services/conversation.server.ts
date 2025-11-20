@@ -10,6 +10,14 @@ export const CreateConversationSchema = z.object({
   title: z.string().optional(),
   conversationId: z.string().optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
+  parts: z
+    .array(
+      z.object({
+        text: z.string(),
+        type: z.string(),
+      }),
+    )
+    .optional(),
 });
 
 export type CreateConversationDto = z.infer<typeof CreateConversationSchema>;
@@ -125,7 +133,7 @@ export const getConversationAndHistory = async (
 };
 
 export const createConversationHistory = async (
-  userMessage: string,
+  parts: any,
   conversationId: string,
   userType: UserTypeEnum,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -134,7 +142,8 @@ export const createConversationHistory = async (
   return await prisma.conversationHistory.create({
     data: {
       conversationId,
-      message: userMessage,
+      parts,
+      message: "",
       thoughts,
       userType,
     },

@@ -28,6 +28,7 @@ export abstract class IntegrationCLI {
     this.setupAccountCommands();
     this.setupDataCommands();
     this.setupSyncCommand();
+    this.setupMCPCommand();
   }
 
   private setupAccountCommands(): void {
@@ -155,6 +156,34 @@ export abstract class IntegrationCLI {
           for (const message of messages) {
             console.log(JSON.stringify(message));
           }
+        } catch (error) {
+          console.error('Error during sync:', error);
+          process.exit(1);
+        }
+      });
+  }
+
+  private setupMCPCommand(): void {
+    this.program
+      .command('mcp')
+      .description('To start the mcp')
+      .requiredOption('--config <config>', 'Integration configuration JSON')
+      .requiredOption(
+        '--integration-definition <definition>',
+        'Integration definition JSON',
+      )
+      .action(async (options) => {
+        try {
+          const config = JSON.parse(options.config);
+          const integrationDefinition = JSON.parse(
+            options.integrationDefinition,
+          );
+          await this.handleEvent({
+            event: IntegrationEventType.MCP,
+            eventBody: {},
+            config,
+            integrationDefinition,
+          });
         } catch (error) {
           console.error('Error during sync:', error);
           process.exit(1);

@@ -121,10 +121,10 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
             <div className="flex items-center justify-between gap-3">
               <div className="flex-1">
                 <div className="mb-1 flex items-center gap-2">
-                  <span className="text-muted-foreground text-xs font-medium">
+                  <span className="text-muted-foreground text-sm font-medium">
                     Episode {index + 1}
                   </span>
-                  <span className="text-muted-foreground truncate font-mono text-xs">
+                  <span className="text-muted-foreground truncate font-mono text-sm">
                     {new Date(episode.createdAt).toLocaleString()}
                   </span>
                 </div>
@@ -139,13 +139,13 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
 
             {/* Invalidated Facts for this episode */}
             {factsLoading ? (
-              <div className="border-grayAlpha-200 text-muted-foreground flex items-center gap-2 border-t pt-3 text-xs">
+              <div className="border-grayAlpha-200 text-muted-foreground flex items-center gap-2 border-t pt-3 text-sm">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Loading facts...
               </div>
             ) : invalidFactsByEpisode[episode.uuid]?.length > 0 ? (
               <div className="border-grayAlpha-200 border-t pt-3">
-                <div className="text-muted-foreground mb-2 text-xs font-medium">
+                <div className="text-muted-foreground mb-2 text-sm font-medium">
                   Invalidated Facts (
                   {invalidFactsByEpisode[episode.uuid].length})
                 </div>
@@ -155,7 +155,7 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
                       key={fact.uuid}
                       className="rounded-md border border-red-200 bg-red-50 p-2"
                     >
-                      <p className="mb-1 text-xs">{fact.fact}</p>
+                      <p className="mb-1 text-sm">{fact.fact}</p>
                       <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
                         {fact.invalidAt && (
                           <span>

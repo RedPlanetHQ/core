@@ -11,13 +11,14 @@ import {
   requireWorkpace,
 } from "~/services/session.server";
 
-import { ConversationNew } from "~/components/conversation";
+import { ConversationList, ConversationNew } from "~/components/conversation";
 import {
   createConversation,
   CreateConversationSchema,
 } from "~/services/conversation.server";
 
 import { PageHeader } from "~/components/common/page-header";
+import { HistoryDropdown } from "~/components/conversation/history-dropdown";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Only return userId, not the heavy nodeLinks
@@ -44,6 +45,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const conversation = await createConversation(workspace?.id, userId, {
     message: submission.value.message,
     title: submission.value.title ?? "Untitled",
+    parts: [{ text: submission.value.message, type: "text" }],
   });
 
   // If conversationId exists in submission, return the conversation data (don't redirect)
@@ -67,7 +69,7 @@ export default function Chat() {
 
   return (
     <>
-      <PageHeader title="Conversation" />
+      <PageHeader title="Conversation" actionsNode={<HistoryDropdown />} />
       {typeof window !== "undefined" && <ConversationNew user={user} />}
     </>
   );

@@ -41,10 +41,10 @@ export function NavUser({ user }: { user: ExtendedUser }) {
                   <span className="truncate font-medium">
                     {user.displayName}
                   </span>
-                  <span className="text-muted-foreground truncate text-xs">
+                  <span className="text-muted-foreground truncate text-sm">
                     {user.email}
                   </span>
-                  <span className="text-muted-foreground truncate text-xs">
+                  <span className="text-muted-foreground truncate text-sm">
                     Credits: {user.availableCredits}
                   </span>
                 </div>

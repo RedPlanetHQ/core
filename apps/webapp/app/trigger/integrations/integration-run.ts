@@ -89,7 +89,7 @@ const executeCLICommand = async (
   return new Promise((resolve, reject) => {
     // Create temporary directory for the integration file
     const tempDir = mkdtempSync(join(tmpdir(), "integration-"));
-    const integrationPath = join(tempDir, "integration.js");
+    const integrationPath = join(tempDir, "main");
 
     try {
       // Write integration file to temporary location

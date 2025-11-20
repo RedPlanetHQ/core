@@ -204,41 +204,6 @@ export const getIntegrationConfigForIntegrationDefinition = (
   });
 };
 
-export const updateExecutionStep = async (
-  step: HistoryStep,
-  conversationHistoryId: string,
-) => {
-  const {
-    thought,
-    userMessage,
-    skillInput,
-    skillOutput,
-    skillId,
-    skillStatus,
-    ...metadata
-  } = step;
-
-  await prisma.conversationExecutionStep.create({
-    data: {
-      thought: thought ?? "",
-      message: userMessage ?? "",
-      actionInput:
-        typeof skillInput === "object"
-          ? JSON.stringify(skillInput)
-          : skillInput,
-      actionOutput:
-        typeof skillOutput === "object"
-          ? JSON.stringify(skillOutput)
-          : skillOutput,
-      actionId: skillId,
-      actionStatus: skillStatus,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      metadata: metadata as any,
-      conversationHistoryId,
-    },
-  });
-};
-
 export const updateConversationHistoryMessage = async (
   userMessage: string,
   conversationHistoryId: string,
@@ -255,18 +220,6 @@ export const updateConversationHistoryMessage = async (
       userType: UserType.Agent,
     },
   });
-};
-
-export const getExecutionStepsForConversation = async (
-  conversationHistoryId: string,
-) => {
-  const lastExecutionSteps = await prisma.conversationExecutionStep.findMany({
-    where: {
-      conversationHistoryId,
-    },
-  });
-
-  return lastExecutionSteps;
 };
 
 export const getActivityDetails = async (activityId: string) => {

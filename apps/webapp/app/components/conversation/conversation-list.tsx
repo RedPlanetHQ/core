@@ -100,7 +100,7 @@ export const ConversationList = ({
           <div
             key={key}
             style={style}
-            className="-mt-1 ml-1 hidden items-center justify-start p-0 text-sm group-hover:flex"
+            className="-mt-1 ml-1 flex items-center justify-start p-0 text-sm"
           >
             <Button
               variant="link"
@@ -135,7 +135,7 @@ export const ConversationList = ({
 
       return (
         <div key={key} style={style}>
-          <div className="px-1 pr-2">
+          <div className="flex w-full pr-2">
             <Button
               variant={
                 currentConversationId === conversation.id
@@ -143,11 +143,12 @@ export const ConversationList = ({
                   : "ghost"
               }
               className={cn(
-                "border-border h-auto w-fit max-w-[200px] justify-start rounded p-2 py-1 text-left",
+                "border-border h-auto justify-start rounded p-2 py-1 text-left",
               )}
               onClick={() => {
                 navigate(`/home/conversation/${conversation.id}`);
               }}
+              full
               tabIndex={0}
               aria-current={
                 currentConversationId === conversation.id ? "page" : undefined
@@ -181,9 +182,9 @@ export const ConversationList = ({
   );
 
   return (
-    <div className="flex h-full flex-col pt-1 pl-1">
+    <div className="flex h-full min-h-[200px] w-full flex-col pt-1 pl-1">
       {!isLoading && conversations.length > 0 && (
-        <div className="group grow overflow-hidden">
+        <div className="group w-full grow overflow-hidden">
           <AutoSizer>
             {({ height, width }) => (
               <List

@@ -46,7 +46,11 @@ async function fetchUserInfo(accessToken: string) {
 /**
  * Processes GitHub notifications into activity messages
  */
-async function processNotifications(accessToken: string, lastSyncTime: string, username: string): Promise<any[]> {
+async function processNotifications(
+  accessToken: string,
+  lastSyncTime: string,
+  username: string,
+): Promise<any[]> {
   const activities = [];
   const allowedReasons = [
     'assign',
@@ -279,7 +283,10 @@ async function processUserEvents(
   return activities;
 }
 
-export async function handleSchedule(config: any, state: any) {
+export async function handleSchedule(
+  config: Record<string, string>,
+  state: Record<string, string>,
+) {
   try {
     const integrationConfiguration = config;
 

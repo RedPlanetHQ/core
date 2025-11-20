@@ -67,33 +67,14 @@ model Conversation {
   RecallLog           RecallLog[]
 }
 
-model ConversationExecutionStep {
-  id        String    @id @default(uuid())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  deleted   DateTime?
-
-  thought String
-  message String
-
-  actionId     String?
-  actionOutput String?
-  actionInput  String?
-  actionStatus String?
-
-  metadata Json? @default("{}")
-
-  conversationHistory   ConversationHistory @relation(fields: [conversationHistoryId], references: [id], onDelete: Cascade)
-  conversationHistoryId String
-}
-
 model ConversationHistory {
   id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  message  String
+  message  String //Deprecated
+  parts    Json?
   userType UserType
 
   activity   Activity? @relation(fields: [activityId], references: [id], onDelete: Cascade)
@@ -105,9 +86,8 @@ model ConversationHistory {
   user     User?   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId   String?
 
-  conversation              Conversation                @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-  conversationId            String
-  ConversationExecutionStep ConversationExecutionStep[]
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversationId String
 }
 
 model IngestionQueue {

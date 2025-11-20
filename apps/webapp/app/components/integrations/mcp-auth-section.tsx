@@ -80,7 +80,7 @@ export function MCPAuthSection({
   }, [disconnectMcpFetcher.state, disconnectMcpFetcher.data]);
 
   // Show nothing if not connected at all
-  if (!isConnected) return null;
+  if (!isConnected || !hasMCPAuth) return null;
 
   // Show MCP box if:
   // - hasMCPAuth is true (always show MCP section)

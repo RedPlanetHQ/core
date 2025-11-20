@@ -79,10 +79,10 @@ function McpSessionItemRenderer(
                   </div>
                 </div>
 
-                <div className="text-muted-foreground flex shrink-0 items-center justify-end text-xs">
+                <div className="text-muted-foreground flex shrink-0 items-center justify-end text-sm">
                   <div className="flex items-center">
                     {!deleted && (
-                      <Badge className="bg-success/20 text-success mr-2 rounded text-xs">
+                      <Badge className="bg-success/20 text-success mr-2 rounded text-sm">
                         Active
                       </Badge>
                     )}
@@ -96,7 +96,7 @@ function McpSessionItemRenderer(
                           <Badge
                             key={integration}
                             variant="secondary"
-                            className="rounded text-xs"
+                            className="rounded text-sm"
                           >
                             {getIconForAuthorise(integration, 12)}
                             {integration}

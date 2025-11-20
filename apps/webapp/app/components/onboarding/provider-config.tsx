@@ -169,7 +169,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
         component: (
           <StepCodeBlock>
             <div className="space-y-2">
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`model = "gpt-5-codex"
 model_reasoning_effort = "medium"
 trust_level = "trusted"
@@ -233,16 +233,16 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               <div>Install MCP Server?</div>
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Name:</span>
+                  <span className="text-sm text-gray-400">Name:</span>
                   <span>core</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">Type:</span>
+                  <span className="text-sm text-gray-400">Type:</span>
                   <span>streamableHttp</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400">URL:</span>
-                  <span className="text-xs">
+                  <span className="text-sm text-gray-400">URL:</span>
+                  <span className="text-sm">
                     https://core.heysol.ai/api/v1/mcp?source=cursor
                   </span>
                 </div>
@@ -277,7 +277,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               </div>
               <div className="flex-1">
                 <div className="font-medium">core-memory</div>
-                <div className="flex items-center gap-1 text-xs text-yellow-600">
+                <div className="flex items-center gap-1 text-sm text-yellow-600">
                   <div className="h-2 w-2 rounded-full bg-yellow-500" />
                   Needs login
                 </div>
@@ -351,7 +351,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your MCP config file:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "core-memory": {
     "type": "streamable-http",
@@ -381,7 +381,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Enter the below in mcp.json file:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "servers": {
     "core-memory": {
@@ -413,7 +413,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Enter the below in mcp_config.json file:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -480,7 +480,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 Enter below code in configuration file and click on Add server
                 button:
               </div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "core-memory": {
     "command": "npx",
@@ -507,7 +507,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your VS Code Insiders MCP config:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`"mcp": {
   "servers": {
     "core-memory": {
@@ -571,7 +571,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Go to ~/.augment/settings.json</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -611,7 +611,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Roo Code MCP configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -643,7 +643,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Opencode configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`"mcp": {
   "core-memory": {
     "type": "remote",
@@ -674,7 +674,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to ~/.qwen/settings.json:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -706,7 +706,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to ~/.copilot/mcp-config.json:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core": {
@@ -741,7 +741,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 Add to Repository Settings → Copilot → Coding agent → MCP
                 configuration:
               </div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core": {
@@ -773,7 +773,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add in Settings → AI → Manage MCP servers:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "core": {
     "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
@@ -800,7 +800,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
         title: "Edit mcp config",
         component: (
           <p className="text-muted-foreground text-sm">
-            <pre className="text-xs">acli rovodev mcp</pre>
+            <pre className="text-sm">acli rovodev mcp</pre>
           </p>
         ),
       },
@@ -810,7 +810,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Rovo Dev MCP configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -855,7 +855,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Cline MCP configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -895,7 +895,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add in Kiro → MCP Servers:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -926,7 +926,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Trae MCP configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core": {
@@ -958,7 +958,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 Add in Perplexity → Settings → Connectors → Add Connector →
                 Advanced:
               </div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "core-memory": {
     "command": "npx",
@@ -1017,7 +1017,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add the following configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "mcpServers": {
     "core-memory": {
@@ -1045,7 +1045,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
           <StepCodeBlock>
             <div className="space-y-2">
               <div>Add to your Crush configuration:</div>
-              <pre className="text-xs">
+              <pre className="text-sm">
                 {`{
   "$schema": "https://charm.land/crush.json",
   "mcp": {

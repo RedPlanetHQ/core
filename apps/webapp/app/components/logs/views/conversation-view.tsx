@@ -66,14 +66,14 @@ export function ConversationView({ log }: ConversationViewProps) {
             {invalidFacts.map((fact) => (
               <div key={fact.uuid} className="bg-grayAlpha-100 rounded-md p-3">
                 <p className="mb-1 text-sm">{fact.fact}</p>
-                <div className="text-muted-foreground flex items-center gap-2 text-xs">
+                <div className="text-muted-foreground flex items-center gap-2 text-sm">
                   {fact.invalidAt && (
                     <span>
                       Invalid: {new Date(fact.invalidAt).toLocaleString()}
                     </span>
                   )}
                   {Object.keys(fact.attributes).length > 0 && (
-                    <Badge variant="secondary" className="text-xs">
+                    <Badge variant="secondary" className="text-sm">
                       {Object.keys(fact.attributes).length} attributes
                     </Badge>
                   )}

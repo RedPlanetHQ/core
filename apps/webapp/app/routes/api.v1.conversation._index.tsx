@@ -3,12 +3,13 @@ import {
   streamText,
   validateUIMessages,
   type LanguageModel,
-  experimental_createMCPClient as createMCPClient,
   generateId,
   stepCountIs,
+  tool,
+  jsonSchema,
+  type Tool,
 } from "ai";
 import { z } from "zod";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import {
@@ -25,7 +26,10 @@ import {
 } from "~/lib/prompt.server";
 import { getUserPersonaContent } from "~/services/graphModels/document";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
-import { env } from "~/env.server";
+import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
+import { IntegrationLoader } from "~/utils/mcp/integration-loader";
+import { getWorkspaceByUser } from "~/models/workspace.server";
+import { logger } from "~/services/logger.service";
 
 const ChatRequestSchema = z.object({
   message: z.object({
@@ -45,23 +49,23 @@ const { loader, action } = createHybridActionApiRoute(
     },
     corsStrategy: "all",
   },
-  async ({ body, authentication, request }) => {
+  async ({ body, authentication }) => {
     const message = body.message.parts[0].text;
+    const messageParts = body.message.parts;
     const id = body.message.id;
-    const apiEndpoint = `${env.APP_ORIGIN}/api/v1/mcp?source=core`;
+    const workspace = await getWorkspaceByUser(authentication.userId);
 
-    const url = new URL(apiEndpoint);
+    const integrationsConnection =
+      await IntegrationLoader.loadIntegrationTransports(
+        body.id,
+        authentication.userId,
+        workspace?.id as string,
+        undefined,
+      );
 
-    const mcpClient = await createMCPClient({
-      transport: new StreamableHTTPClientTransport(url, {
-        sessionId: body.id,
-        requestInit: {
-          headers: {
-            Cookie: request.headers.get("Cookie") || "",
-          },
-        },
-      }),
-    });
+    logger.log(
+      `Loaded ${integrationsConnection.loaded} integration transports`,
+    );
 
     const conversation = await getConversationAndHistory(
       body.id,
@@ -79,18 +83,39 @@ const { loader, action } = createHybridActionApiRoute(
     }
 
     if (conversationHistory.length > 1) {
-      await createConversationHistory(message, body.id, UserTypeEnum.User);
+      await createConversationHistory(messageParts, body.id, UserTypeEnum.User);
     }
 
     const messages = conversationHistory.map((history: any) => {
       return {
-        parts: [{ text: history.message, type: "text" }],
-        role: "user",
+        parts: history.parts,
+        role: history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
         id: history.id,
       };
     });
 
-    const tools = await mcpClient.tools();
+    const tools: Record<string, Tool> = {};
+
+    memoryTools.forEach((mt) => {
+      tools[mt.name] = tool({
+        name: mt.name,
+        inputSchema: jsonSchema(mt.inputSchema as any),
+        description: mt.description,
+        execute: async (params) => {
+          return await callMemoryTool(
+            mt.name,
+            {
+              sessionId: body.id,
+              ...params,
+              userId: authentication.userId,
+              workspaceId: workspace?.id,
+            },
+            authentication.userId,
+            "core",
+          );
+        },
+      });
+    });
 
     const finalMessages = [
       ...messages,
@@ -127,7 +152,9 @@ ${personaContent}
           role: "system",
           content: systemPrompt,
         },
-        ...convertToModelMessages(validatedMessages),
+        ...convertToModelMessages(validatedMessages, {
+          tools,
+        }),
       ],
       tools,
 
@@ -140,15 +167,12 @@ ${personaContent}
       originalMessages: validatedMessages,
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();
-        let message = "";
-        lastMessage?.parts.forEach((part) => {
-          if (part.type === "text") {
-            message += part.text;
-          }
-        });
-        await mcpClient.close();
 
-        await createConversationHistory(message, body.id, UserTypeEnum.Agent);
+        await createConversationHistory(
+          lastMessage?.parts,
+          body.id,
+          UserTypeEnum.Agent,
+        );
       },
       // async consumeSseStream({ stream }) {
       //   // Create a resumable stream from the SSE stream

@@ -1,22 +1,35 @@
 import { integrationCreate } from './account-create';
-import { createActivityEvent } from './create-activity';
+import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
 } from '@redplanethq/sdk';
+import { mcp } from './mcp';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
-      return await integrationCreate(eventPayload.eventBody, eventPayload.integrationDefinition);
+      return await integrationCreate(eventPayload.eventBody);
 
-    case IntegrationEventType.IDENTIFY:
-      return eventPayload.eventBody.event.userEmail;
+    case IntegrationEventType.SYNC:
+      return await handleSchedule(eventPayload.config, eventPayload.state);
 
-    case IntegrationEventType.PROCESS:
-      return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
+    case IntegrationEventType.MCP:
+      const integrationDefinition = eventPayload.integrationDefinition;
+
+      if (!integrationDefinition) {
+        return 'No integration definition found';
+      }
+
+      const config = eventPayload.config as any;
+      return mcp(
+        integrationDefinition.config.clientId,
+        integrationDefinition.config.clientSecret,
+        config?.redirect_uri,
+        config
+      );
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };
@@ -37,37 +50,35 @@ class GmailCLI extends IntegrationCLI {
     return {
       name: 'Gmail extension',
       key: 'gmail',
-      description: 'Connect your workspace to Gmail. Monitor emails, send messages, and manage your email workflow',
+      description:
+        'Connect your workspace to Gmail. Monitor emails, send messages, and manage your email workflow',
       icon: 'gmail',
       mcp: {
-        command: 'npx',
-        args: ['-y', '@modelcontextprotocol/server-gmail'],
-        env: {
-          GOOGLE_CLIENT_ID: '${config:client_id}',
-          GOOGLE_CLIENT_SECRET: '${config:client_secret}',
-          GOOGLE_REFRESH_TOKEN: '${config:refresh_token}',
-          GOOGLE_ACCESS_TOKEN: '${config:access_token}',
-        },
+        type: 'cli',
+      },
+      schedule: {
+        frequency: '*/15 * * * *',
       },
       auth: {
         OAuth2: {
           token_url: 'https://oauth2.googleapis.com/token',
           authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
           scopes: [
-            'https://www.googleapis.com/auth/gmail.readonly',
-            'https://www.googleapis.com/auth/gmail.send',
-            'https://www.googleapis.com/auth/gmail.modify',
-            'https://www.googleapis.com/auth/gmail.compose',
+            'https://mail.google.com',
             'https://www.googleapis.com/auth/gmail.labels',
-            'https://www.googleapis.com/auth/gmail.metadata',
-            'https://www.googleapis.com/auth/gmail.settings.basic',
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
           ],
           scope_identifier: 'scope',
           scope_separator: ' ',
-          access_type: 'offline',
-          prompt: 'consent',
+          token_params: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
+          authorization_params: {
+            access_type: 'offline',
+            prompt: 'consent',
+          },
         },
       },
     };
@@ -81,4 +92,4 @@ function main() {
   gmailCLI.parse();
 }
 
-main(); 
+main();

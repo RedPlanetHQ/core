@@ -1,5 +1,5 @@
 import { logger } from "~/services/logger.service";
-import { fetchAndSaveStdioIntegrations } from "~/trigger/utils/mcp";
+import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
 import { initNeo4jSchemaOnce, verifyConnectivity } from "~/lib/neo4j.server";
 import { env } from "~/env.server";
 import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
@@ -112,7 +112,7 @@ export async function initializeStartupServices() {
     await initNeo4jSchemaOnce();
     logger.info("Neo4j schema initialization completed");
 
-    await fetchAndSaveStdioIntegrations();
+    await fetchAndSaveIntegrations();
     logger.info("Stdio integrations initialization completed");
 
     // Track system configuration once at startup

@@ -40,11 +40,19 @@ class LinearCLI extends IntegrationCLI {
       description:
         'Plan, track, and manage your agile and software development projects in Linear. Customize your workflow, collaborate, and release great software.',
       icon: 'linear',
+      schedule: {
+        frequency: '*/5 * * * *',
+      },
       auth: {
         api_key: {
-          header_name: 'Authorization',
-          format: '',
+          type: 'string',
+          label: 'Linear API Key',
         },
+      },
+      mcp: {
+        type: 'http',
+        url: 'https://mcp.linear.app/mcp',
+        needsAuth: true,
       },
     };
   }

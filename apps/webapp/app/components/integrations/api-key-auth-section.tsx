@@ -63,8 +63,8 @@ export function ApiKeyAuthSection({
           Connect with API Key
         </Button>
       ) : (
-        <div className="space-y-3">
-          <div className="space-y-2">
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-col gap-1">
             <label htmlFor="apiKey" className="text-sm font-medium">
               {specData?.auth?.api_key?.label || "API Key"}
             </label>
@@ -75,7 +75,7 @@ export function ApiKeyAuthSection({
               onChange={(e) => setApiKey(e.target.value)}
             />
             {specData?.auth?.api_key?.description && (
-              <p className="text-muted-foreground text-xs">
+              <p className="text-muted-foreground text-sm">
                 {specData.auth.api_key.description}
               </p>
             )}
