@@ -44,6 +44,7 @@ export const addToQueue = async (
   }
 
   let labels: string[] = body.labelIds ?? [];
+  let title = body.title;
 
   if (body.sessionId) {
     const lastEpisode = await prisma.ingestionQueue.findFirst({
@@ -57,6 +58,10 @@ export const addToQueue = async (
 
     if (lastEpisode?.labels && lastEpisode?.labels.length > 0) {
       labels = lastEpisode?.labels;
+    }
+
+    if (body.type === "DOCUMENT" && lastEpisode?.title) {
+      title = lastEpisode?.title;
     }
   }
 
@@ -81,7 +86,7 @@ export const addToQueue = async (
       activityId,
       sessionId: body.sessionId,
       labels,
-      title: body.title,
+      title,
     },
   });
 
