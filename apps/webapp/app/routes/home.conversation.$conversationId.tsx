@@ -60,7 +60,7 @@ export default function SingleConversation() {
   });
 
   React.useEffect(() => {
-    if (messages.length === 1) {
+    if (conversation.ConversationHistory.length === 1) {
       regenerate();
     }
   }, []);

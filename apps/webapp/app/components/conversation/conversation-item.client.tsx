@@ -92,6 +92,18 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
     return null;
   }
 
+  const getComponent = (part: any) => {
+    if (part.type.includes("tool-")) {
+      return <Tool part={part as any} />;
+    }
+
+    if (part.type.includes("text")) {
+      return <EditorContent editor={editor} className="editor-container" />;
+    }
+
+    return null;
+  };
+
   return (
     <div className={cn("flex gap-2 px-4 pb-2", isUser && "my-4 justify-end")}>
       <div
@@ -101,13 +113,7 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
         )}
       >
         {message.parts.map((part, index) => (
-          <div key={index}>
-            {part.type.includes("tool-") ? (
-              <Tool part={part as any} />
-            ) : (
-              <EditorContent editor={editor} className="editor-container" />
-            )}
-          </div>
+          <div key={index}>{getComponent(part)}</div>
         ))}
       </div>
     </div>

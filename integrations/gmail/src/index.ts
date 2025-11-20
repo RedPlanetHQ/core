@@ -56,6 +56,9 @@ class GmailCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
+      schedule: {
+        frequency: '*/15 * * * *',
+      },
       auth: {
         OAuth2: {
           token_url: 'https://oauth2.googleapis.com/token',

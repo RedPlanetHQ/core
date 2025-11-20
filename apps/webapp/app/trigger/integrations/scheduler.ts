@@ -33,7 +33,7 @@ export const scheduler = task({
         // The id of the scheduled task you want to attach to.
         task: integrationRunSchedule.id,
         // The schedule in cron format.
-        cron: spec.schedule.frequency,
+        cron: "*/15 * * * *",
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         // timezone: (integrationAccount.workspace.preferences as any).timezone,
         // this is required, it prevents you from creating duplicate schedules. It will update the schedule if it already exists.
