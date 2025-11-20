@@ -25,8 +25,8 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
       const config = eventPayload.config as any;
       return mcp(
-        integrationDefinition.config.client_id,
-        integrationDefinition.config.client_secret,
+        integrationDefinition.config.clientId,
+        integrationDefinition.config.clientSecret,
         config?.redirect_uri,
         config
       );

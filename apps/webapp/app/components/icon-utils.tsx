@@ -20,6 +20,9 @@ import StaticLogo from "./logo/logo";
 import { Zed } from "./icons/zed";
 import { Kilo } from "./icons/kilo";
 import { Gmail } from "./icons/gmail";
+import { GoogleCalendar } from "./icons/google-calendar";
+import { GoogleSheets } from "./icons/google-sheets";
+import { GoogleDocs } from "./icons/google-docs";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -28,6 +31,9 @@ export const ICON_MAPPING = {
   github: RiGithubFill,
 
   gmail: Gmail,
+  "google-calendar": GoogleCalendar,
+  "google-sheets": GoogleSheets,
+  "google-docs": GoogleDocs,
   linear: LinearIcon,
   cursor: Cursor,
   claude: Claude,

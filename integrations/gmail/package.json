@@ -1,6 +1,6 @@
 {
   "name": "@sol/gmail",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Gmail integration for Sol",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

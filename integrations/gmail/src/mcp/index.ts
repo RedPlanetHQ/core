@@ -23,6 +23,7 @@ import {
   deleteFilter,
   filterTemplates,
 } from './filter-manager';
+import { generatedTools, handleGeneratedTool } from './generated-tools';
 
 // Type definitions for Gmail API responses
 interface GmailMessagePart {
@@ -97,6 +98,7 @@ async function loadCredentials(
   config: Record<string, string>
 ) {
   try {
+    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
     const credentials = {
       /**
        * This field is only present if the access_type parameter was set to offline in the authentication request. For details, see Refresh tokens.
@@ -127,8 +129,8 @@ async function loadCredentials(
       scope: config.scope,
     };
 
-    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
     oauth2Client.setCredentials(credentials);
+    oauth2Client.refreshAccessToken();
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
@@ -376,6 +378,7 @@ export async function mcp(
   // Tool handlers
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
+      // Custom email tools
       {
         name: 'send_email',
         description: 'Sends a new email',
@@ -471,6 +474,8 @@ export async function mcp(
         description: 'Downloads an email attachment to a specified location',
         inputSchema: zodToJsonSchema(DownloadAttachmentSchema),
       },
+      // Auto-generated tools from Discovery Document
+      ...generatedTools,
     ],
   }));
 
@@ -1280,7 +1285,8 @@ export async function mcp(
         }
 
         default:
-          throw new Error(`Unknown tool: ${name}`);
+          // Try to handle with auto-generated tools
+          return await handleGeneratedTool(name, args, gmail);
       }
     } catch (error: any) {
       return {

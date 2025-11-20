@@ -39,7 +39,7 @@ export function IntegrationCard({
 
             {isConnected && (
               <div className="flex w-full items-center justify-end">
-                <Badge className="h-6 rounded bg-green-100 p-2 text-sm text-green-800">
+                <Badge className="h-6 rounded !bg-green-100 p-2 text-sm text-green-800">
                   Connected
                 </Badge>
               </div>
