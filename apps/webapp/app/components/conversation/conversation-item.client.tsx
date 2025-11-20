@@ -4,7 +4,7 @@ import { useEffect, memo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
 import { skillExtension } from "../editor/skill-extension";
-import { ToolUIPart, type UIMessage } from "ai";
+import { type ToolUIPart, type UIMessage } from "ai";
 import {
   Collapsible,
   CollapsibleContent,

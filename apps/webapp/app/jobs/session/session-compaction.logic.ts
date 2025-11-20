@@ -8,7 +8,7 @@ import {
   getSessionEpisodes,
   saveCompactedSession,
 } from "~/services/graphModels/compactedSession";
-import { CompactedSessionNode, EpisodicNode } from "@core/types";
+import { type CompactedSessionNode, type EpisodicNode } from "@core/types";
 
 export interface SessionCompactionPayload {
   userId: string;

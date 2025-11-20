@@ -1,4 +1,4 @@
-import { COMPACTED_SESSION_NODE_PROPERTIES, CompactedSessionNode, EPISODIC_NODE_PROPERTIES, EpisodicNode } from "@core/types";
+import { COMPACTED_SESSION_NODE_PROPERTIES, type CompactedSessionNode, EPISODIC_NODE_PROPERTIES, type EpisodicNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
 
 /**

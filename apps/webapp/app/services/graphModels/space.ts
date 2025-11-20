@@ -4,7 +4,7 @@ import {
   type SpaceDeletionResult,
   type SpaceAssignmentResult,
   EPISODIC_NODE_PROPERTIES,
-  EpisodicNode,
+  type EpisodicNode,
 } from "@core/types";
 import { logger } from "~/services/logger.service";
 
