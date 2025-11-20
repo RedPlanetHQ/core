@@ -8,7 +8,7 @@ on:
 
 jobs:
   build-webapp:
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux, x64, aws, spot]
 
     steps:
       - uses: actions/checkout@v4
