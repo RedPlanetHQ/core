@@ -89,7 +89,7 @@ const { loader, action } = createHybridActionApiRoute(
     const messages = conversationHistory.map((history: any) => {
       return {
         parts: history.parts,
-        role: "user",
+        role: history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
         id: history.id,
       };
     });
