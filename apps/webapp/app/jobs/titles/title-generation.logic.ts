@@ -123,7 +123,8 @@ async function generateTitleFromContent(
     {
       temperature: 0.5,
     },
-    "low", // Use low complexity for simple title generation
+    "low",
+    "title-generation",
   );
 
   // Clean up the response
@@ -182,7 +183,8 @@ async function generateTitleForConversationWithSession(
     {
       temperature: 0.5,
     },
-    "low", // Use medium complexity for session-aware title generation
+    "low",
+    "title-generation-session",
   );
 
   return responseText.trim().replace(/^["']|["']$/g, "");

@@ -82,6 +82,7 @@ export async function processEpisodeIngestion(
   enqueueGraphResolution?: (params: {
     episodeUuid: string;
     userId: string;
+    queueId?: string;
   }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
   try {
@@ -141,6 +142,7 @@ export async function processEpisodeIngestion(
         await enqueueGraphResolution({
           episodeUuid: episodeDetails.episodeUuid,
           userId: payload.userId,
+          queueId: payload.queueId,
         });
       } catch (resolutionError) {
         // Don't fail the ingestion if resolution job fails to enqueue

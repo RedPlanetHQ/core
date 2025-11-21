@@ -1,5 +1,5 @@
 import { type CoreMessage, embed, generateText, streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
+import { openai, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
 import { logger } from "~/services/logger.service";
 
 import { createOllama } from "ollama-ai-provider-v2";
@@ -25,6 +25,7 @@ export function getModelForTask(complexity: ModelComplexity = "high"): string {
   // If already using a cheap model, keep it
   const downgrades: Record<string, string> = {
     // OpenAI downgrades
+    "gpt-5.1-2025-11-13": "gpt-5-mini-2025-08-07",
     "gpt-5-2025-08-07": "gpt-5-mini-2025-08-07",
     "gpt-4.1-2025-04-14": "gpt-4.1-mini-2025-04-14",
 
@@ -81,7 +82,7 @@ export const getModel = (takeModel?: string) => {
       if (!openaiKey) {
         throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
       }
-      modelInstance = openai(model);
+      modelInstance = openai.responses(model);
     }
 
     return modelInstance;
@@ -92,6 +93,7 @@ export interface TokenUsage {
   promptTokens?: number;
   completionTokens?: number;
   totalTokens?: number;
+  cachedInputTokens?: number;
 }
 
 export async function makeModelCall(
@@ -100,12 +102,34 @@ export async function makeModelCall(
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
   options?: any,
   complexity: ModelComplexity = "high",
+  cacheKey?: string,
 ) {
   let model = getModelForTask(complexity);
   logger.info(`complexity: ${complexity}, model: ${model}`);
 
   const modelInstance = getModel(model);
   const generateTextOptions: any = {};
+
+  // Add OpenAI provider options for prompt caching and disable web search
+  if (model.includes("gpt")) {
+    const openaiOptions: OpenAIResponsesProviderOptions = {
+      promptCacheKey: cacheKey || `ingestion-${complexity}`,
+    };
+
+    // 24h retention and reasoning options only available for non-mini gpt-5 models
+    if (model.startsWith("gpt-5")) {
+      if (model.includes("mini")) {
+        openaiOptions.reasoningEffort = "low";
+      } else {
+        openaiOptions.promptCacheRetention = "24h";
+        openaiOptions.reasoningEffort = "none";
+      }
+    }
+
+    generateTextOptions.providerOptions = {
+      openai: openaiOptions,
+    };
+  }
 
   if (!modelInstance) {
     throw new Error(`Unsupported model type: ${model}`);
@@ -148,12 +172,13 @@ export async function makeModelCall(
         promptTokens: usage.inputTokens,
         completionTokens: usage.outputTokens,
         totalTokens: usage.totalTokens,
+        cachedInputTokens: usage.cachedInputTokens,
       }
     : undefined;
 
   if (tokenUsage) {
     logger.log(
-      `[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens})`,
+      `[${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens}, cached: ${tokenUsage.cachedInputTokens})`,
     );
   }
 

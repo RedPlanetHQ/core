@@ -32,10 +32,12 @@ import {
 import { getEpisode, getEpisodeStatements, getSessionEpisodes, getTriplesForEpisode, linkEpisodeToExistingStatement } from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
 import { runQuery } from "~/lib/neo4j.server";
+import { prisma } from "~/trigger/utils/prisma";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
   userId: string;
+  queueId?: string;
 }
 
 export interface GraphResolutionResult {
@@ -43,6 +45,9 @@ export interface GraphResolutionResult {
   resolvedCount?: number;
   invalidatedCount?: number;
   error?: string;
+  tokenUsage?: {
+    low: { input: number; output: number; total: number; cached: number };
+  };
 }
 
 /**
@@ -82,8 +87,8 @@ export async function processGraphResolution(
 
     // Token metrics for tracking
     const tokenMetrics = {
-      high: { input: 0, output: 0, total: 0 },
-      low: { input: 0, output: 0, total: 0 },
+      high: { input: 0, output: 0, total: 0, cached: 0 },
+      low: { input: 0, output: 0, total: 0, cached: 0 },
     };
 
     // Step 1: Entity Resolution - find which entities should be merged
@@ -142,10 +147,42 @@ export async function processGraphResolution(
       logger.info(`Deleted ${orphanedCount} orphaned entities`);
     }
 
+    // Step 7: Update ingestion queue with resolution token usage
+    if (payload.queueId) {
+      try {
+        const queue = await prisma.ingestionQueue.findUnique({
+          where: { id: payload.queueId },
+          select: { output: true },
+        });
+
+        if (queue?.output) {
+          const currentOutput = queue.output as any;
+          const updatedOutput = {
+            ...currentOutput,
+            resolutionTokenUsage: {
+              low: tokenMetrics.low,
+            },
+          };
+
+          await prisma.ingestionQueue.update({
+            where: { id: payload.queueId },
+            data: { output: updatedOutput },
+          });
+
+          logger.info(`Updated ingestion queue ${payload.queueId} with resolution token usage`);
+        }
+      } catch (error) {
+        logger.warn(`Failed to update ingestion queue with resolution token usage:`, { error });
+      }
+    }
+
     return {
       success: true,
       resolvedCount: resolvedStatements.length,
       invalidatedCount: invalidatedStatements.length,
+      tokenUsage: {
+        low: tokenMetrics.low,
+      },
     };
   } catch (error: any) {
     logger.error(`Error processing graph resolution:`, {
@@ -167,8 +204,8 @@ async function resolveExtractedNodesWithMerges(
   episode: EpisodicNode,
   previousEpisodes: EpisodicNode[],
   tokenMetrics: {
-    high: { input: number; output: number; total: number };
-    low: { input: number; output: number; total: number };
+    high: { input: number; output: number; total: number; cached: number };
+    low: { input: number; output: number; total: number; cached: number };
   },
 ): Promise<{
   resolvedTriples: Triple[];
@@ -280,10 +317,12 @@ async function resolveExtractedNodesWithMerges(
           tokenMetrics.low.input += usage.promptTokens as number;
           tokenMetrics.low.output += usage.completionTokens as number;
           tokenMetrics.low.total += usage.totalTokens as number;
+          tokenMetrics.low.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "low",
+      "entity-deduplication",
     );
 
     // Step 5: Process LLM response
@@ -363,8 +402,8 @@ async function resolveStatementsWithDuplicates(
   episode: EpisodicNode,
   previousEpisodes: EpisodicNode[],
   tokenMetrics: {
-    high: { input: number; output: number; total: number };
-    low: { input: number; output: number; total: number };
+    high: { input: number; output: number; total: number; cached: number };
+    low: { input: number; output: number; total: number; cached: number };
   },
 ): Promise<{
   resolvedStatements: Triple[];
@@ -557,10 +596,12 @@ async function resolveStatementsWithDuplicates(
           tokenMetrics.low.input += usage.promptTokens as number;
           tokenMetrics.low.output += usage.completionTokens as number;
           tokenMetrics.low.total += usage.totalTokens as number;
+          tokenMetrics.low.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "low",
+      "statement-resolution",
     );
 
     try {

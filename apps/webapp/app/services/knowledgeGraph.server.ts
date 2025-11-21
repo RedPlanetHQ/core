@@ -236,8 +236,8 @@ export class KnowledgeGraphService {
 
     // Track token usage by complexity
     const tokenMetrics = {
-      high: { input: 0, output: 0, total: 0 },
-      low: { input: 0, output: 0, total: 0 },
+      high: { input: 0, output: 0, total: 0, cached: 0 },
+      low: { input: 0, output: 0, total: 0, cached: 0 },
     };
 
     try {
@@ -364,8 +364,8 @@ export class KnowledgeGraphService {
     episode: EpisodicNode,
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
   ): Promise<EntityNode[]> {
     // Use the prompt library to get the appropriate prompts
@@ -393,10 +393,12 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "entity-extraction",
     );
 
     // Convert to EntityNode objects
@@ -447,8 +449,8 @@ export class KnowledgeGraphService {
     },
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
   ): Promise<Triple[]> {
     // Use the prompt library to get the appropriate prompts
@@ -488,13 +490,14 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "statement-extraction",
     );
 
-    console.log("responseText", responseText);
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
     if (outputMatch && outputMatch[1]) {
       responseText = outputMatch[1].trim();
@@ -630,8 +633,8 @@ export class KnowledgeGraphService {
     userId: string,
     prisma: PrismaClient,
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
     episodeTimestamp?: Date,
     sessionContext?: string,
@@ -675,13 +678,15 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.low.input += usage.promptTokens as number;
-          tokenMetrics.low.output += usage.completionTokens as number;
-          tokenMetrics.low.total += usage.totalTokens as number;
+          tokenMetrics.high.input += usage.promptTokens as number;
+          tokenMetrics.high.output += usage.completionTokens as number;
+          tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "normalization",
     );
     let normalizedEpisodeBody = "";
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
