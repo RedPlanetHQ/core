@@ -122,12 +122,22 @@ export const memoryTools = [
     description:
       "Store conversation in memory for future reference. USE THIS TOOL: At the END of every conversation after fully answering the user. WHAT TO STORE: 1) User's question or request, 2) Your solution or explanation, 3) Important decisions made, 4) Key insights discovered. HOW TO USE: Put the entire conversation summary in the 'message' field. IMPORTANT: You MUST provide a sessionId - if you don't have one, call initialize_conversation_session tool FIRST to obtain it at the start of the conversation, then use that SAME sessionId for all memory_ingest calls. Optionally add labelIds array to organize by topic. Returns: Success confirmation with storage ID.",
     inputSchema: IngestSchema,
+    annotations: {
+      readOnly: false,
+      idempotent: false,
+      destructive: false,
+    },
   },
   {
     name: "memory_search",
     description:
       "Search stored memories for past conversations, user preferences, project context, and decisions. USE THIS TOOL: 1) At start of every conversation to find related context, 2) When user mentions past work or projects, 3) Before answering questions that might have previous context. HOW TO USE: Write a simple query describing what to find (e.g., 'user code preferences', 'authentication bugs', 'API setup steps'). Returns: Markdown-formatted context optimized for LLM consumption, including session compacts, episodes, and key facts with temporal metadata.",
     inputSchema: SearchParamsSchema,
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
+    },
   },
   {
     name: "memory_get_documents",
@@ -143,6 +153,11 @@ export const memoryTools = [
         },
       },
     },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
+    },
   },
   {
     name: "get_labels",
@@ -151,6 +166,11 @@ export const memoryTools = [
     inputSchema: {
       type: "object",
       properties: {},
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
     },
   },
   {
@@ -166,6 +186,11 @@ export const memoryTools = [
             "Set to true to get full profile. Leave empty for default profile view.",
         },
       },
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
     },
   },
   {
@@ -183,6 +208,11 @@ export const memoryTools = [
       },
       required: ["documentId"],
     },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
+    },
   },
   {
     name: "initialize_conversation_session",
@@ -197,6 +227,11 @@ export const memoryTools = [
         },
       },
     },
+    annotations: {
+      readOnly: false,
+      idempotent: false,
+      destructive: false,
+    },
   },
   {
     name: "get_integrations",
@@ -205,6 +240,11 @@ export const memoryTools = [
     inputSchema: {
       type: "object",
       properties: {},
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
     },
   },
   {
@@ -221,6 +261,11 @@ export const memoryTools = [
         },
       },
       required: ["integrationSlug"],
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
     },
   },
   {
@@ -247,6 +292,11 @@ export const memoryTools = [
         },
       },
       required: ["integrationSlug", "action"],
+    },
+    annotations: {
+      readOnly: false,
+      idempotent: false,
+      destructive: false,
     },
   },
   // {
