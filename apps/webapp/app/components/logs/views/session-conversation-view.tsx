@@ -132,7 +132,7 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
             </div>
 
             <div className="border-grayAlpha-200 border-t pt-3">
-              <div className="text-sm">
+              <div className="text-base">
                 <StyledMarkdown>{episode.content}</StyledMarkdown>
               </div>
             </div>

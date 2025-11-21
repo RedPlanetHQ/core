@@ -141,10 +141,10 @@ export async function getUserDocuments(
     MATCH (d:Document {userId: $userId})
     RETURN d
     ORDER BY d.createdAt DESC
-    LIMIT $limit
+    LIMIT ${limit}
   `;
 
-  const params = { userId, limit };
+  const params = { userId };
   const result = await runQuery(query, params);
 
   return result.map((record) => {
@@ -223,10 +223,10 @@ export async function getDocumentVersions(
     MATCH (d:Document {sessionId: $sessionId, userId: $userId})
     RETURN d
     ORDER BY d.version DESC
-    LIMIT $limit
+    LIMIT ${limit}
   `;
 
-  const params = { sessionId, userId, limit };
+  const params = { sessionId, userId };
   const result = await runQuery(query, params);
 
   return result.map((record) => {
@@ -274,8 +274,13 @@ export async function deleteDocument(documentUuid: string): Promise<{
   }
 
   // Prevent deletion of persona documents
-  if (documentCheck.title === "Persona" || documentCheck.metadata?.isPersona === true) {
-    throw new Error("Cannot delete persona document. Persona documents are system-managed and cannot be deleted.");
+  if (
+    documentCheck.title === "Persona" ||
+    documentCheck.metadata?.isPersona === true
+  ) {
+    throw new Error(
+      "Cannot delete persona document. Persona documents are system-managed and cannot be deleted.",
+    );
   }
 
   const query = `
@@ -340,7 +345,10 @@ export async function deleteDocument(documentUuid: string): Promise<{
   }
 }
 
-export async function getDocumentsByTitle(userId: string, title: string): Promise<DocumentNode[]> {
+export async function getDocumentsByTitle(
+  userId: string,
+  title: string,
+): Promise<DocumentNode[]> {
   const query = `
     MATCH (d:Document {userId: $userId, title: $title})
     RETURN d
@@ -374,7 +382,9 @@ export async function getDocumentsByTitle(userId: string, title: string): Promis
  * Get user's persona content for AI chat context
  * Returns null if persona doesn't exist or has no content yet
  */
-export async function getUserPersonaContent(userId: string): Promise<string | null> {
+export async function getUserPersonaContent(
+  userId: string,
+): Promise<string | null> {
   try {
     const personaDocs = await getDocumentsByTitle(userId, "Persona");
 

@@ -1,4 +1,9 @@
-import { COMPACTED_SESSION_NODE_PROPERTIES, type CompactedSessionNode, EPISODIC_NODE_PROPERTIES, type EpisodicNode } from "@core/types";
+import {
+  COMPACTED_SESSION_NODE_PROPERTIES,
+  type CompactedSessionNode,
+  EPISODIC_NODE_PROPERTIES,
+  type EpisodicNode,
+} from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
 
 /**
@@ -127,57 +132,6 @@ export async function linkEpisodesToCompact(
   `;
 
   await runQuery(query, { compactUuid, episodeUuids, userId });
-}
-
-/**
- * Search compacted sessions by embedding similarity
- */
-export async function searchCompactedSessionsByEmbedding(
-  embedding: number[],
-  userId: string,
-  limit: number = 10,
-  minScore: number = 0.7,
-): Promise<Array<{ compact: CompactedSessionNode; score: number }>> {
-  const query = `
-    MATCH (cs:CompactedSession {userId: $userId})
-    WHERE cs.summaryEmbedding IS NOT NULL and size(cs.summaryEmbedding) > 0
-    WITH cs,
-         gds.similarity.cosine(cs.summaryEmbedding, $embedding) AS score
-    WHERE score >= $minScore
-    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact, score
-    ORDER BY score DESC
-    LIMIT $limit
-  `;
-
-  const result = await runQuery(query, {
-    embedding,
-    userId,
-    limit,
-    minScore,
-  });
-
-  return result.map((r) => ({
-    compact: parseCompactedSessionNode(r.get("compact")),
-    score: r.get("score"),
-  }));
-}
-
-/**
- * Get compacted sessions for a user
- */
-export async function getUserCompactedSessions(
-  userId: string,
-  limit: number = 50,
-): Promise<CompactedSessionNode[]> {
-  const query = `
-    MATCH (cs:CompactedSession {userId: $userId})
-    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact
-    ORDER BY compact.endTime DESC
-    LIMIT $limit
-  `;
-
-  const result = await runQuery(query, { userId, limit });
-  return result.map((r) => parseCompactedSessionNode(r.get("compact")));
 }
 
 /**

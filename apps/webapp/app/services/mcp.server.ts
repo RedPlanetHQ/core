@@ -15,6 +15,7 @@ import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 import { ensureBillingInitialized } from "./billing.server";
+import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
 
 const QueryParams = z.object({
   source: z.string().optional(),
@@ -142,6 +143,7 @@ async function createTransport(
   // Load integration transports
   try {
     if (!noIntegrations) {
+      await fetchAndSaveIntegrations();
       const result = await IntegrationLoader.loadIntegrationTransports(
         sessionId,
         userId,

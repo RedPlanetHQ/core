@@ -408,7 +408,11 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
   };
 }
 
-export async function addLabelToEpisodes(labelId: string, episodeUuids: string[], userId: string): Promise<number> {
+export async function addLabelToEpisodes(
+  labelId: string,
+  episodeUuids: string[],
+  userId: string,
+): Promise<number> {
   const query = `
     MATCH (e:Episode {userId: $userId})
     WHERE e.uuid IN $episodeUuids AND NOT $labelId IN COALESCE(e.labelIds, [])
@@ -421,8 +425,7 @@ export async function addLabelToEpisodes(labelId: string, episodeUuids: string[]
     episodeUuids,
     labelId,
   });
-  const updatedEpisodes =
-    result[0]?.get("updatedEpisodes") || 0;
+  const updatedEpisodes = result[0]?.get("updatedEpisodes") || 0;
 
   return updatedEpisodes;
 }
@@ -430,7 +433,7 @@ export async function addLabelToEpisodes(labelId: string, episodeUuids: string[]
 export async function updateEpisodeLabels(
   episodeUuids: string[],
   labelIds: string[],
-  userId: string
+  userId: string,
 ): Promise<number> {
   if (episodeUuids.length === 0) return 0;
 

@@ -43,7 +43,7 @@ const Tool = ({ part }: { part: ToolUIPart<any> }) => {
           variant="link"
           full
           size="xl"
-          className="flex justify-between px-2 py-2"
+          className="flex justify-between gap-4 px-2 py-2"
         >
           <div className="flex items-center gap-2">
             <StaticLogo size={18} className="rounded-sm" />
