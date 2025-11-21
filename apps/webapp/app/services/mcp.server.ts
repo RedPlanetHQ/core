@@ -5,6 +5,10 @@ import {
   isInitializeRequest,
   ListToolsRequestSchema,
   CallToolRequestSchema,
+  ListPromptsRequestSchema,
+  GetPromptRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { z } from "zod";
 import { MCPSessionManager } from "~/utils/mcp/session-manager";
@@ -33,12 +37,17 @@ async function createMcpServer(
 ) {
   const server = new Server(
     {
-      name: "core-unified-mcp-server",
+      name: "core",
       version: "1.0.0",
+      description: "CORE Memory - Intelligent knowledge graph that remembers conversations, documents, and context across all your tools",
+      homepage: "https://getcore.me",
+      icon: "https://getcore.me/logo.png",
     },
     {
       capabilities: {
         tools: {},
+        prompts: {},
+        resources: {},
       },
     },
   );
@@ -76,6 +85,185 @@ async function createMcpServer(
     }
 
     throw new Error(`Unknown tool: ${name}`);
+  });
+
+  // Prompts handler
+  server.setRequestHandler(ListPromptsRequestSchema, async () => {
+    return {
+      prompts: [
+        {
+          name: "search-context",
+          description: "Search your memory for relevant context about a topic",
+          arguments: [
+            {
+              name: "query",
+              description: "What are you looking for? (e.g., 'authentication bugs', 'API design decisions')",
+              required: true,
+            },
+          ],
+        },
+        {
+          name: "remember-conversation",
+          description: "Store this conversation in memory for future reference",
+          arguments: [
+            {
+              name: "summary",
+              description: "Brief summary of what was discussed and decided",
+              required: true,
+            },
+          ],
+        },
+      ],
+    };
+  });
+
+  server.setRequestHandler(GetPromptRequestSchema, async (request) => {
+    const { name, arguments: args } = request.params;
+
+    if (name === "search-context") {
+      const query = args?.query as string;
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Search my memory for: ${query}`,
+            },
+          },
+        ],
+      };
+    }
+
+    if (name === "remember-conversation") {
+      const summary = args?.summary as string;
+      return {
+        messages: [
+          {
+            role: "user",
+            content: {
+              type: "text",
+              text: `Remember this: ${summary}`,
+            },
+          },
+        ],
+      };
+    }
+
+    throw new Error(`Unknown prompt: ${name}`);
+  });
+
+  // Resources handler
+  server.setRequestHandler(ListResourcesRequestSchema, async () => {
+    return {
+      resources: [
+        {
+          uri: "memory://user/profile",
+          name: "User Profile",
+          description: "Your preferences, background, and work style",
+          mimeType: "text/plain",
+        },
+        {
+          uri: "memory://documents/all",
+          name: "All Documents",
+          description: "List of all documents in your memory",
+          mimeType: "application/json",
+        },
+        {
+          uri: "memory://config/schema",
+          name: "Configuration Schema",
+          description: "JSON schema for configuring the CORE memory server",
+          mimeType: "application/json",
+        },
+      ],
+    };
+  });
+
+  server.setRequestHandler(ReadResourceRequestSchema, async (request) => {
+    const { uri } = request.params;
+
+    if (uri === "memory://user/profile") {
+      const workspace = await getWorkspaceByUser(userId);
+      const profile = await callMemoryTool(
+        "memory_about_user",
+        { sessionId, workspaceId: workspace?.id },
+        userId,
+        source,
+      );
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "text/plain",
+            text: profile.content[0].text,
+          },
+        ],
+      };
+    }
+
+    if (uri === "memory://documents/all") {
+      const workspace = await getWorkspaceByUser(userId);
+      const docs = await callMemoryTool(
+        "memory_get_documents",
+        { sessionId, workspaceId: workspace?.id, limit: 50 },
+        userId,
+        source,
+      );
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: docs.content[0].text,
+          },
+        ],
+      };
+    }
+
+    if (uri === "memory://config/schema") {
+      const configSchema = {
+        $schema: "http://json-schema.org/draft-07/schema#",
+        type: "object",
+        title: "CORE Memory Server Configuration",
+        description: "Configuration options for the CORE memory MCP server",
+        properties: {
+          source: {
+            type: "string",
+            description: "Source identifier for tracking where requests originate (e.g., 'claude-desktop', 'vscode')",
+            default: "api",
+          },
+          integrations: {
+            type: "array",
+            description: "List of integration slugs to load (e.g., ['github', 'linear', 'slack']). Leave empty to load all available integrations.",
+            items: {
+              type: "string",
+            },
+            default: [],
+          },
+          no_integrations: {
+            type: "boolean",
+            description: "If true, disables loading of all integrations",
+            default: false,
+          },
+          spaceId: {
+            type: "string",
+            description: "UUID of a space to associate memories with. Enables space-scoped memory organization.",
+            format: "uuid",
+          },
+        },
+      };
+      return {
+        contents: [
+          {
+            uri,
+            mimeType: "application/json",
+            text: JSON.stringify(configSchema, null, 2),
+          },
+        ],
+      };
+    }
+
+    throw new Error(`Unknown resource: ${uri}`);
   });
 
   return server;

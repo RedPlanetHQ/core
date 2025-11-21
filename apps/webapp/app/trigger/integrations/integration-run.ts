@@ -143,9 +143,11 @@ const executeCLICommand = async (
 
       childProcess.stdout.on("data", (data) => {
         stdout += data.toString();
+        console.log(stdout);
       });
 
       childProcess.stderr.on("data", (data) => {
+        console.log(stderr);
         stderr += data.toString();
       });
 
@@ -368,6 +370,7 @@ async function handleMessageResponse(
 
 export const integrationRun = task({
   id: "integration-run",
+  machine: "medium-2x",
   run: async ({
     eventBody,
     integrationAccount,

@@ -1,4 +1,4 @@
-ARG NODE_IMAGE=node:20.11.1-bullseye-slim@sha256:5a5a92b3a8d392691c983719dbdc65d9f30085d6dcd65376e7a32e6fe9bf4cbe
+ARG NODE_IMAGE=node:24.11-bullseye-slim
 
 FROM ${NODE_IMAGE} AS pruner
 
