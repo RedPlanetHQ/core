@@ -578,3 +578,34 @@ export async function linkEpisodeToExistingStatement(
     ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId
   `, { episodeUuid, statementUuid, userId });
 }
+
+/**
+ * Move all provenance relationships from source statement to target statement
+ * Used when consolidating duplicate statements - moves ALL episode links, not just one
+ */
+export async function moveAllProvenanceToStatement(
+  sourceStatementUuid: string,
+  targetStatementUuid: string,
+  userId: string,
+): Promise<number> {
+  const result = await runQuery(`
+    MATCH (source:Statement {uuid: $sourceStatementUuid, userId: $userId})
+    MATCH (target:Statement {uuid: $targetStatementUuid, userId: $userId})
+
+    // Find all episodes linked to source
+    OPTIONAL MATCH (episode:Episode)-[r:HAS_PROVENANCE]->(source)
+    WITH source, target, collect(episode) AS episodes, collect(r) AS rels
+
+    // Delete old relationships
+    FOREACH (r IN rels | DELETE r)
+
+    // Create new relationships to target (MERGE to avoid duplicates)
+    FOREACH (ep IN episodes | MERGE (ep)-[newR:HAS_PROVENANCE]->(target)
+      ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = datetime(), newR.userId = $userId)
+
+    RETURN size(episodes) AS movedCount
+  `, { sourceStatementUuid, targetStatementUuid, userId });
+
+  const count = result[0]?.get("movedCount");
+  return count ? Number(count) : 0;
+}

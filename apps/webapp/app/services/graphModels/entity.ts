@@ -228,12 +228,18 @@ export function parseEntityNode(raw: any): EntityNode {
 /**
  * Merge source entity into target entity
  * Updates all relationships pointing to source → point to target, then deletes source
+ * This is idempotent - if source doesn't exist (already merged), it's a no-op
  */
 export async function mergeEntities(sourceUuid: string, targetUuid: string, userId: string): Promise<void> {
   // Single query to update all relationships and delete source entity
+  // Uses OPTIONAL MATCH for source to be idempotent on retry
   await runQuery(`
-    MATCH (source:Entity {uuid: $sourceUuid, userId: $userId})
+    OPTIONAL MATCH (source:Entity {uuid: $sourceUuid, userId: $userId})
     MATCH (target:Entity {uuid: $targetUuid, userId: $userId})
+
+    // Only proceed if source exists (skip if already merged)
+    WITH source, target
+    WHERE source IS NOT NULL
 
     // Update HAS_SUBJECT relationships
     WITH source, target

@@ -29,7 +29,7 @@ import {
   getTripleForStatementsBatch,
   invalidateStatements,
 } from "~/services/graphModels/statement";
-import { getEpisode, getEpisodeStatements, getSessionEpisodes, getTriplesForEpisode, linkEpisodeToExistingStatement } from "~/services/graphModels/episode";
+import { getEpisode, getEpisodeStatements, getSessionEpisodes, getTriplesForEpisode, moveAllProvenanceToStatement } from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { prisma } from "~/trigger/utils/prisma";
@@ -120,17 +120,22 @@ export async function processGraphResolution(
 
     logger.info(`Merged ${entityMerges.length} duplicate entities`);
 
-    // Step 4: Handle duplicate statements - link episode to existing, then batch delete new ones
+    // Step 4: Handle duplicate statements - move ALL provenance to existing, then delete duplicates
     if (duplicateStatements.length > 0) {
-      // Link episode to all existing statements
-      await Promise.all(
-        duplicateStatements.map((dup) =>
-          linkEpisodeToExistingStatement(payload.episodeUuid, dup.existingStatementUuid, payload.userId)
-        )
-      );
-      // Batch delete all new duplicate statements at once
+      // Move all provenance relationships from duplicate to existing statement
+      // This handles the case where other episodes (B, C) linked to the duplicate
+      // while this episode's (A) resolution was pending/failed
+      // Run sequentially to avoid Neo4j deadlocks
+      let totalMoved = 0;
+      for (const dup of duplicateStatements) {
+        const moved = await moveAllProvenanceToStatement(dup.newStatementUuid, dup.existingStatementUuid, payload.userId);
+        totalMoved += moved;
+      }
+
+      // Batch delete all duplicate statements at once
+      // This is safe even if some were already deleted in a previous attempt
       await deleteStatements(duplicateStatements.map((dup) => dup.newStatementUuid));
-      logger.info(`Processed ${duplicateStatements.length} duplicate statements`);
+      logger.info(`Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`);
     }
 
     // Step 5: Invalidate contradicted statements
