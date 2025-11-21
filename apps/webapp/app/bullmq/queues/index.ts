@@ -180,3 +180,25 @@ export const personaGenerationQueue = new Queue("persona-generation-queue", {
     },
   },
 });
+
+/**
+ * Graph resolution queue
+ * Handles async entity and statement resolution after episode ingestion
+ */
+export const graphResolutionQueue = new Queue("graph-resolution-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});

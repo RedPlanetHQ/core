@@ -6,6 +6,7 @@ import {
   EPISODIC_NODE_PROPERTIES,
   ENTITY_NODE_PROPERTIES,
   STATEMENT_NODE_PROPERTIES,
+  Triple,
 } from "@core/types";
 import { parseEntityNode } from "./entity";
 
@@ -57,16 +58,16 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
 }
 
 // Get an episode by UUID
-export async function getEpisode(uuid: string): Promise<EpisodicNode | null> {
+export async function getEpisode(uuid: string, withEmbedding: boolean = false): Promise<EpisodicNode | null> {
   const query = `
     MATCH (e:Episode {uuid: $uuid})
-    RETURN e
+    RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
   `;
 
   const result = await runQuery(query, { uuid });
   if (result.length === 0) return null;
 
-  const episode = result[0].get("e").properties;
+  const episode = result[0].get("episode");
   return parseEpisodicNode(episode);
 }
 
@@ -448,4 +449,132 @@ export async function updateEpisodeLabels(
   });
 
   return result[0]?.get("updatedEpisodes") || 0;
+}
+
+
+export async function getSessionEpisodes(sessionId: string, userId: string, limit?: number): Promise<EpisodicNode[]> {
+  const query = `
+    MATCH (e:Episode {userId: $userId})
+    WHERE e.sessionId = $sessionId
+    ORDER BY e.createdAt ${limit ? "DESC" : "ASC"}
+    ${limit ? `LIMIT ${limit}` : ""}
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+  `;
+
+  const result = await runQuery(query, {
+    sessionId,
+    userId,
+  });
+
+  return result.map((record) => parseEpisodicNode(record.get("episode")));
+}
+
+export async function getTriplesForEpisode(episodeUuid: string, userId: string): Promise<Triple[]> {
+  const query = `
+    MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(statement:Statement)
+    MATCH (statement)-[:HAS_SUBJECT]->(subject:Entity)
+    MATCH (statement)-[:HAS_PREDICATE]->(predicate:Entity)
+    MATCH (statement)-[:HAS_OBJECT]->(object:Entity)
+    RETURN
+      statement {
+        .uuid, .fact, .factEmbedding, .createdAt, .validAt, .invalidAt, .invalidatedBy, .attributes, .userId
+      } as statement,
+      subject {
+        .uuid, .name, .type, .attributes, .nameEmbedding, .createdAt, .userId
+      } as subject,
+      predicate {
+        .uuid, .name, .type, .attributes, .nameEmbedding, .createdAt, .userId
+      } as predicate,
+      object {
+        .uuid, .name, .type, .attributes, .nameEmbedding, .createdAt, .userId
+      } as object,
+      episode {
+        .uuid, .content, .originalContent, .source, .metadata, .createdAt, .validAt, .labelIds, .userId, .sessionId, .documentId
+      } as episode
+  `;
+
+  const result = await runQuery(query, { episodeUuid, userId });
+
+  if (!result || result.length === 0) {
+    return [];
+  }
+
+  return result.map((record) => {
+    const statementProps = record.get("statement");
+    const subjectProps = record.get("subject");
+    const predicateProps = record.get("predicate");
+    const objectProps = record.get("object");
+    const episodeProps = record.get("episode");
+
+    return {
+      statement: {
+        uuid: statementProps.uuid,
+        fact: statementProps.fact,
+        factEmbedding: statementProps.factEmbedding || [],
+        createdAt: new Date(statementProps.createdAt),
+        validAt: new Date(statementProps.validAt),
+        invalidAt: statementProps.invalidAt ? new Date(statementProps.invalidAt) : null,
+        invalidatedBy: statementProps.invalidatedBy,
+        attributes: statementProps.attributes ? JSON.parse(statementProps.attributes) : {},
+        userId: statementProps.userId,
+      },
+      subject: {
+        uuid: subjectProps.uuid,
+        name: subjectProps.name,
+        type: subjectProps.type,
+        attributes: subjectProps.attributes ? JSON.parse(subjectProps.attributes) : {},
+        nameEmbedding: subjectProps.nameEmbedding || [],
+        createdAt: new Date(subjectProps.createdAt),
+        userId: subjectProps.userId,
+      },
+      predicate: {
+        uuid: predicateProps.uuid,
+        name: predicateProps.name,
+        type: predicateProps.type,
+        attributes: predicateProps.attributes ? JSON.parse(predicateProps.attributes) : {},
+        nameEmbedding: predicateProps.nameEmbedding || [],
+        createdAt: new Date(predicateProps.createdAt),
+        userId: predicateProps.userId,
+      },
+      object: {
+        uuid: objectProps.uuid,
+        name: objectProps.name,
+        type: objectProps.type,
+        attributes: objectProps.attributes ? JSON.parse(objectProps.attributes) : {},
+        nameEmbedding: objectProps.nameEmbedding || [],
+        createdAt: new Date(objectProps.createdAt),
+        userId: objectProps.userId,
+      },
+      provenance: {
+        uuid: episodeProps.uuid,
+        content: episodeProps.content,
+        originalContent: episodeProps.originalContent,
+        contentEmbedding: [],
+        source: episodeProps.source,
+        metadata: episodeProps.metadata || {},
+        createdAt: new Date(episodeProps.createdAt),
+        validAt: new Date(episodeProps.validAt),
+        labelIds: episodeProps.labelIds || [],
+        userId: episodeProps.userId,
+        sessionId: episodeProps.sessionId,
+        documentId: episodeProps.documentId,
+      },
+    };
+  });
+}
+
+/**
+ * Link an episode to an existing statement (for duplicate handling)
+ */
+export async function linkEpisodeToExistingStatement(
+  episodeUuid: string,
+  statementUuid: string,
+  userId: string,
+): Promise<void> {
+  await runQuery(`
+    MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
+    MATCH (statement:Statement {uuid: $statementUuid, userId: $userId})
+    MERGE (episode)-[r:HAS_PROVENANCE]->(statement)
+    ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId
+  `, { episodeUuid, statementUuid, userId });
 }

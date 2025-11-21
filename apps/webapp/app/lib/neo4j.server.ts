@@ -308,6 +308,16 @@ const initializeSchema = async () => {
     await runQuery(
       "CREATE INDEX episode_session_id IF NOT EXISTS FOR (n:Episode) ON (n.sessionId)",
     );
+
+    // Composite index for entity name + userId (for exact match lookups)
+    await runQuery(
+      "CREATE INDEX entity_name_user IF NOT EXISTS FOR (n:Entity) ON (n.name, n.userId)",
+    );
+
+    // Composite index for session + userId (for previous episodes lookup)
+    await runQuery(
+      "CREATE INDEX episode_session_user IF NOT EXISTS FOR (n:Episode) ON (n.sessionId, n.userId)",
+    );
     // Create vector indexes for semantic search (if using Neo4j 5.0+)
     await runQuery(`
       CREATE VECTOR INDEX entity_embedding IF NOT EXISTS FOR (n:Entity) ON n.nameEmbedding

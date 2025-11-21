@@ -190,7 +190,7 @@ export async function findSimilarStatements({
   const limit = 100;
   const query = `
       MATCH (s:Statement{userId: $userId})
-      WHERE s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
+      WHERE s.factEmbedding IS NOT NULL AND size(s.factEmbedding) > 0 AND NOT s.uuid IN $excludeIds
       WITH s, gds.similarity.cosine(s.factEmbedding, $factEmbedding) AS score
       WHERE score >= $threshold
       RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
@@ -355,4 +355,176 @@ export function parseStatementNode(node: Record<string, any>): StatementNode {
     attributes: node.attributes ? JSON.parse(node.attributes) : {},
     userId: node.userId,
   };
+}
+
+/**
+ * Batch version of getTripleForStatement - fetch multiple triples in a single query
+ */
+export async function getTripleForStatementsBatch({
+  statementIds,
+}: {
+  statementIds: string[];
+}): Promise<Map<string, Triple>> {
+  if (statementIds.length === 0) {
+    return new Map();
+  }
+
+  const query = `
+    UNWIND $statementIds AS statementId
+    MATCH (statement:Statement {uuid: statementId})
+    MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
+    MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
+    MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
+    OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
+    RETURN statementId,
+      ${STATEMENT_NODE_PROPERTIES.replace(/s\./g, "statement.")} as statement,
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "subject.")} as subject,
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "predicate.")} as predicate,
+      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "object.")} as object,
+      ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
+  `;
+
+  const result = await runQuery(query, { statementIds });
+
+  const triplesMap = new Map<string, Triple>();
+
+  if (!result || result.length === 0) {
+    return triplesMap;
+  }
+
+  for (const record of result) {
+    const statementId = record.get("statementId");
+    const statementProps = record.get("statement");
+    const subjectProps = record.get("subject");
+    const predicateProps = record.get("predicate");
+    const objectProps = record.get("object");
+    const episodeProps = record.get("episode");
+
+    const statement: StatementNode = parseStatementNode(statementProps);
+    const subject: EntityNode = parseEntityNode(subjectProps);
+    const predicate: EntityNode = parseEntityNode(predicateProps);
+    const object: EntityNode = parseEntityNode(objectProps);
+    const provenance: EpisodicNode = parseEpisodicNode(episodeProps);
+
+    triplesMap.set(statementId, {
+      statement,
+      subject,
+      predicate,
+      object,
+      provenance,
+    });
+  }
+
+  return triplesMap;
+}
+
+/**
+ * Batch version of findContradictoryStatements - find contradictory statements for multiple subject-predicate pairs
+ */
+export async function findContradictoryStatementsBatch({
+  pairs,
+  userId,
+  excludeStatementIds = [],
+}: {
+  pairs: Array<{ subjectId: string; predicateId: string }>;
+  userId: string;
+  excludeStatementIds?: string[];
+}): Promise<Map<string, Omit<StatementNode, "factEmbedding">[]>> {
+  if (pairs.length === 0) {
+    return new Map();
+  }
+
+  const query = `
+    UNWIND $pairs AS pair
+    MATCH (subject:Entity {uuid: pair.subjectId}), (predicate:Entity {uuid: pair.predicateId})
+    MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_PREDICATE]->(predicate)
+    WHERE s.userId = $userId
+      AND s.invalidAt IS NULL
+      AND NOT s.uuid IN $excludeStatementIds
+    RETURN pair.subjectId + '_' + pair.predicateId AS pairKey,
+           collect(${STATEMENT_NODE_PROPERTIES}) as statements
+  `;
+
+  const result = await runQuery(query, { pairs, userId, excludeStatementIds });
+
+  const resultsMap = new Map<string, Omit<StatementNode, "factEmbedding">[]>();
+
+  if (!result || result.length === 0) {
+    return resultsMap;
+  }
+
+  for (const record of result) {
+    const pairKey = record.get("pairKey");
+    const statements = record.get("statements");
+
+    resultsMap.set(
+      pairKey,
+      statements.map((s: any) => parseStatementNode(s))
+    );
+  }
+
+  return resultsMap;
+}
+
+/**
+ * Batch version of findStatementsWithSameSubjectObject
+ */
+export async function findStatementsWithSameSubjectObjectBatch({
+  pairs,
+  userId,
+  excludeStatementIds = [],
+}: {
+  pairs: Array<{ subjectId: string; objectId: string; excludePredicateId?: string }>;
+  userId: string;
+  excludeStatementIds?: string[];
+}): Promise<Map<string, Omit<StatementNode, "factEmbedding">[]>> {
+  if (pairs.length === 0) {
+    return new Map();
+  }
+
+  const query = `
+    UNWIND $pairs AS pair
+    MATCH (subject:Entity {uuid: pair.subjectId}), (object:Entity {uuid: pair.objectId})
+    MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_OBJECT]->(object)
+    MATCH (s)-[:HAS_PREDICATE]->(predicate:Entity)
+    WHERE s.userId = $userId
+      AND s.invalidAt IS NULL
+      AND NOT s.uuid IN $excludeStatementIds
+      AND (pair.excludePredicateId IS NULL OR predicate.uuid <> pair.excludePredicateId)
+    RETURN pair.subjectId + '_' + pair.objectId AS pairKey,
+           collect(${STATEMENT_NODE_PROPERTIES}) as statements
+  `;
+
+  const result = await runQuery(query, { pairs, userId, excludeStatementIds });
+
+  const resultsMap = new Map<string, Omit<StatementNode, "factEmbedding">[]>();
+
+  if (!result || result.length === 0) {
+    return resultsMap;
+  }
+
+  for (const record of result) {
+    const pairKey = record.get("pairKey");
+    const statements = record.get("statements");
+
+    resultsMap.set(
+      pairKey,
+      statements.map((s: any) => parseStatementNode(s))
+    );
+  }
+
+  return resultsMap;
+}
+
+/**
+ * Delete statements by their UUIDs
+ */
+export async function deleteStatements(statementUuids: string[]): Promise<void> {
+  if (statementUuids.length === 0) return;
+
+  await runQuery(`
+    UNWIND $statementUuids AS uuid
+    MATCH (s:Statement {uuid: uuid})
+    DETACH DELETE s
+  `, { statementUuids });
 }

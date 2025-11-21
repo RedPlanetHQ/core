@@ -48,6 +48,11 @@ import {
   type PersonaGenerationPayload,
   processPersonaGeneration,
 } from "~/jobs/spaces/persona-generation.logic";
+import {
+  type GraphResolutionPayload,
+  processGraphResolution,
+} from "~/jobs/ingest/graph-resolution.logic";
+import { enqueueGraphResolution } from "~/lib/queue-adapter.server";
 
 /**
  * Episode ingestion worker
@@ -70,6 +75,7 @@ export const ingestWorker = new Worker(
       enqueueSessionCompaction,
       enqueueBertTopicAnalysis,
       enqueuePersonaGeneration,
+      enqueueGraphResolution,
     );
   },
   {
@@ -196,6 +202,22 @@ export const personaGenerationWorker = new Worker(
 );
 
 /**
+ * Graph resolution worker
+ * Handles async entity and statement resolution after episode ingestion
+ */
+export const graphResolutionWorker = new Worker(
+  "graph-resolution-queue",
+  async (job) => {
+    const payload = job.data as GraphResolutionPayload;
+    return await processGraphResolution(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 3, // Process up to 3 resolutions in parallel
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -207,6 +229,8 @@ export async function closeAllWorkers(): Promise<void> {
     bertTopicWorker.close(),
     labelAssignmentWorker.close(),
     titleGenerationWorker.close(),
+    personaGenerationWorker.close(),
+    graphResolutionWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

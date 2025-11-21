@@ -17,6 +17,7 @@ import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
 import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
+import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logic";
 
 type QueueProvider = "trigger" | "bullmq";
 
@@ -254,6 +255,34 @@ export async function enqueueTitleGeneration(
     // BullMQ
     const { titleGenerationQueue } = await import("~/bullmq/queues");
     const job = await titleGenerationQueue.add("title-generation", payload, {
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue graph resolution job
+ */
+export async function enqueueGraphResolution(
+  payload: GraphResolutionPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { graphResolutionTask } = await import(
+      "~/trigger/ingest/graph-resolution"
+    );
+    const handler = await graphResolutionTask.trigger(payload, {
+      tags: [payload.userId, "graph-resolution"],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { graphResolutionQueue } = await import("~/bullmq/queues");
+    const job = await graphResolutionQueue.add("graph-resolution", payload, {
+      jobId: `resolution-${payload.episodeUuid}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
     });
