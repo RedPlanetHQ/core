@@ -128,13 +128,13 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                   )}
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <Badge
-                      className={cn(
-                        "text-foreground shrink-0 rounded !bg-transparent text-sm",
+                    <div>
+                      {getIconForAuthorise(
+                        log.source.toLowerCase(),
+                        16,
+                        undefined,
                       )}
-                    >
-                      {getIngestType(log).icon}
-                    </Badge>
+                    </div>
                   </TooltipTrigger>
                   <TooltipPortal>
                     <TooltipContent>

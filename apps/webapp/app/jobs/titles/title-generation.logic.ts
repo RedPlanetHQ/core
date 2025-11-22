@@ -38,8 +38,8 @@ export async function processTitleGeneration(
     if (!ingestionQueue) {
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
-    
-    if(ingestionQueue.title){
+
+    if (ingestionQueue.title) {
       logger.info(`Title already exists for queue ${payload.queueId}`);
       return {
         success: true,
