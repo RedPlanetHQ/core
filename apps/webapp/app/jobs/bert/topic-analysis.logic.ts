@@ -114,7 +114,7 @@ Return ONLY the summary document content, no additional commentary.`;
 
   let summaryText = "";
   await makeModelCall(
-    false, // not streaming
+    false,
     [{ role: "user", content: prompt }],
     (text) => {
       summaryText = text;
@@ -122,7 +122,8 @@ Return ONLY the summary document content, no additional commentary.`;
     {
       temperature: 0.7,
     },
-    "high", // Use high complexity model for better summaries
+    "high",
+    "topic-summary",
   );
 
   logger.info("[Document Summary] Summary generated", {

@@ -79,6 +79,11 @@ export async function processEpisodeIngestion(
     mode: "full" | "incremental";
     startTime?: string;
   }) => Promise<any>,
+  enqueueGraphResolution?: (params: {
+    episodeUuid: string;
+    userId: string;
+    queueId?: string;
+  }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
   try {
     logger.log(`Processing job for user ${payload.userId}`);
@@ -125,6 +130,29 @@ export async function processEpisodeIngestion(
       },
       prisma,
     );
+
+    // Trigger async graph resolution if we skipped it during ingestion
+    if (episodeDetails.episodeUuid && enqueueGraphResolution) {
+      try {
+        logger.info(`Triggering async graph resolution for episode ${episodeDetails.episodeUuid}`, {
+          userId: payload.userId,
+          triplesCount: episodeDetails.statementsCreated,
+        });
+
+        await enqueueGraphResolution({
+          episodeUuid: episodeDetails.episodeUuid,
+          userId: payload.userId,
+          queueId: payload.queueId,
+        });
+      } catch (resolutionError) {
+        // Don't fail the ingestion if resolution job fails to enqueue
+        logger.warn(`Failed to trigger graph resolution after ingestion:`, {
+          error: resolutionError,
+          userId: payload.userId,
+          episodeUuid: episodeDetails.episodeUuid,
+        });
+      }
+    }
 
     // Link episode to document if it's a document chunk
     if (

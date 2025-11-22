@@ -79,7 +79,7 @@ export async function identifySpacesForTopics(
   // Call LLM with structured output
   let responseText = "";
   await makeModelCall(
-    false, // not streaming
+    false,
     [{ role: "user", content: prompt }],
     (text) => {
       responseText = text;
@@ -87,7 +87,8 @@ export async function identifySpacesForTopics(
     {
       temperature: 0.7,
     },
-    "high", // Use high complexity for space identification
+    "high",
+    "space-identification",
   );
 
   // Parse the response

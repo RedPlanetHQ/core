@@ -100,7 +100,7 @@ export async function findExactPredicateMatches(params: {
 }): Promise<EntityNode[]> {
   const query = `
     MATCH (ent:Entity)
-    WHERE ent.type = 'Predicate' 
+    WHERE ent.type = 'Predicate'
       AND toLower(ent.name) = toLower($predicateName)
       AND ent.userId = $userId
     RETURN ${ENTITY_NODE_PROPERTIES} as entity
@@ -110,6 +110,24 @@ export async function findExactPredicateMatches(params: {
   return result.map((record) => {
     return parseEntityNode(record.get("entity"));
   });
+}
+
+// Find exact match for any entity by name (case-insensitive)
+export async function findExactEntityMatch(params: {
+  entityName: string;
+  userId: string;
+}): Promise<EntityNode | null> {
+  const query = `
+    MATCH (ent:Entity)
+    WHERE toLower(ent.name) = toLower($entityName)
+      AND ent.userId = $userId
+    RETURN ${ENTITY_NODE_PROPERTIES} as entity
+    LIMIT 1
+  `;
+
+  const result = await runQuery(query, params);
+  if (result.length === 0) return null;
+  return parseEntityNode(result[0].get("entity"));
 }
 
 /**
@@ -204,4 +222,65 @@ export function parseEntityNode(raw: any): EntityNode {
     createdAt: new Date(raw.createdAt),
     userId: raw.userId,
   };
+}
+
+
+/**
+ * Merge source entity into target entity
+ * Updates all relationships pointing to source → point to target, then deletes source
+ * This is idempotent - if source doesn't exist (already merged), it's a no-op
+ */
+export async function mergeEntities(sourceUuid: string, targetUuid: string, userId: string): Promise<void> {
+  // Single query to update all relationships and delete source entity
+  // Uses OPTIONAL MATCH for source to be idempotent on retry
+  await runQuery(`
+    OPTIONAL MATCH (source:Entity {uuid: $sourceUuid, userId: $userId})
+    MATCH (target:Entity {uuid: $targetUuid, userId: $userId})
+
+    // Only proceed if source exists (skip if already merged)
+    WITH source, target
+    WHERE source IS NOT NULL
+
+    // Update HAS_SUBJECT relationships
+    WITH source, target
+    OPTIONAL MATCH (s1:Statement{userId: $userId})-[r1:HAS_SUBJECT]->(source)
+    WITH source, target, collect(s1) AS subjectStatements, collect(r1) AS subjectRels
+    FOREACH (r IN subjectRels | DELETE r)
+    FOREACH (s IN subjectStatements | MERGE (s)-[:HAS_SUBJECT]->(target))
+
+    // Update HAS_PREDICATE relationships
+    WITH source, target
+    OPTIONAL MATCH (s2:Statement{userId: $userId})-[r2:HAS_PREDICATE]->(source)
+    WITH source, target, collect(s2) AS predicateStatements, collect(r2) AS predicateRels
+    FOREACH (r IN predicateRels | DELETE r)
+    FOREACH (s IN predicateStatements | MERGE (s)-[:HAS_PREDICATE]->(target))
+
+    // Update HAS_OBJECT relationships
+    WITH source, target
+    OPTIONAL MATCH (s3:Statement{userId: $userId})-[r3:HAS_OBJECT]->(source)
+    WITH source, target, collect(s3) AS objectStatements, collect(r3) AS objectRels
+    FOREACH (r IN objectRels | DELETE r)
+    FOREACH (s IN objectStatements | MERGE (s)-[:HAS_OBJECT]->(target))
+
+    // Delete source entity
+    WITH source
+    DETACH DELETE source
+  `, { sourceUuid, targetUuid, userId });
+}
+
+/**
+ * Delete orphaned entities (entities with no relationships)
+ */
+export async function deleteOrphanedEntities(userId: string): Promise<number> {
+  const result = await runQuery(`
+    MATCH (e:Entity {userId: $userId})
+    WHERE NOT (e)<-[:HAS_SUBJECT]-()
+      AND NOT (e)<-[:HAS_PREDICATE]-()
+      AND NOT (e)<-[:HAS_OBJECT]-()
+    WITH e, e.uuid AS uuid
+    DETACH DELETE e
+    RETURN count(uuid) AS deletedCount
+  `, { userId });
+
+  return result[0]?.get("deletedCount") || 0;
 }

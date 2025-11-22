@@ -222,15 +222,16 @@ async function identifyLabelsForEpisode(
   // Call LLM with structured output
   let responseText = "";
   await makeModelCall(
-    false, // not streaming
+    false,
     [{ role: "user", content: prompt }],
     (text) => {
       responseText = text;
     },
     {
-      temperature: 0.3, // Lower temperature for more consistent labeling
+      temperature: 0.3,
     },
-    "high", // Use medium complexity for label assignment
+    "high",
+    "label-assignment",
   );
 
   // Parse the response

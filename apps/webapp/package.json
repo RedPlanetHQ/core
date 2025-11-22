@@ -17,7 +17,7 @@
     "@ai-sdk/amazon-bedrock": "3.0.47",
     "@ai-sdk/anthropic": "^2.0.37",
     "@ai-sdk/google": "^2.0.23",
-    "@ai-sdk/openai": "^2.0.53",
+    "@ai-sdk/openai": "^2.0.71",
     "@ai-sdk/react": "2.0.78",
     "@anthropic-ai/sdk": "^0.67.0",
     "@aws-sdk/client-s3": "3.879.0",

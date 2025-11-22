@@ -818,7 +818,8 @@ If NO episodes are relevant to the query, return:
           responseText = text;
         },
         { temperature: 0.2, maxTokens: 500 },
-        'low', 
+        'low',
+        'search-rerank',
       );
 
       // Parse LLM response

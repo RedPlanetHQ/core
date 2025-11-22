@@ -662,7 +662,13 @@ You MUST wrap your response in <output> tags. Do not include any text outside th
     "statementId": "new_statement_uuid",
     "isDuplicate": false,
     "duplicateId": null,
-    "contradictions": []
+    "contradictions": ["contradicted_statement_uuid"]
+  },
+  {
+    "statementId": "new_statement_uuid",
+    "isDuplicate": false,
+    "duplicateId": null,
+    "contradictions": ["contradicted_statement_uuid"]
   },
   {
     "statementId": "another_statement_uuid",
@@ -705,7 +711,18 @@ CRITICAL FORMATTING RULES:
   </NEW_STATEMENTS>
   
   <SIMILAR_STATEMENTS>
-  ${JSON.stringify(context.similarStatements, null, 2)}
+  ${context.similarStatements
+    .map(
+      (stmt: any) => `
+  StatementId: ${stmt.statementId}
+  Fact: ${stmt.fact}
+  Subject: ${stmt.subject}
+  Predicate: ${stmt.predicate}
+  Object: ${stmt.object}
+  ---------------------------
+  `,
+    )
+    .join("")}
   </SIMILAR_STATEMENTS>
   
   <EPISODE_CONTENT>

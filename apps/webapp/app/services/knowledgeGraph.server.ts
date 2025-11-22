@@ -236,8 +236,8 @@ export class KnowledgeGraphService {
 
     // Track token usage by complexity
     const tokenMetrics = {
-      high: { input: 0, output: 0, total: 0 },
-      low: { input: 0, output: 0, total: 0 },
+      high: { input: 0, output: 0, total: 0, cached: 0 },
+      low: { input: 0, output: 0, total: 0, cached: 0 },
     };
 
     try {
@@ -254,11 +254,11 @@ export class KnowledgeGraphService {
       const sessionContext =
         params.sessionId && previousEpisodes.length > 0
           ? previousEpisodes
-              .map(
-                (ep, i) =>
-                  `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
-              )
-              .join("\n\n")
+            .map(
+              (ep, i) =>
+                `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
+            )
+            .join("\n\n")
           : undefined;
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
@@ -333,97 +333,21 @@ export class KnowledgeGraphService {
       logger.log(
         `Extracted statements in ${extractedStatementsTime - expandedTime} ms`,
       );
-
-      // Step 5: Entity Resolution - Resolve extracted nodes to existing nodes or create new ones
-      const resolvedTriples = await this.resolveExtractedNodes(
-        extractedStatements,
-        episode,
-        previousEpisodes,
-        tokenMetrics,
-      );
-
-      const resolvedTriplesTime = Date.now();
-      logger.log(
-        `Resolved Entities in ${resolvedTriplesTime - extractedStatementsTime} ms`,
-      );
-
-      // Step 6: Statement Resolution - Resolve statements and detect contradictions
-      const { resolvedStatements, invalidatedStatements } =
-        await this.resolveStatements(
-          resolvedTriples,
-          episode,
-          previousEpisodes,
-          tokenMetrics,
-        );
-
-      const resolvedStatementsTime = Date.now();
-      logger.log(
-        `Resolved statements in ${resolvedStatementsTime - resolvedTriplesTime} ms`,
-      );
-
-      // Step 7: ADd attributes to entity nodes
-      // const updatedTriples = await this.addAttributesToEntities(
-      //   resolvedStatements,
-      //   episode,
-      // );
-
-      const updatedTriples = resolvedStatements;
-
-      const updatedTriplesTime = Date.now();
-      logger.log(
-        `Updated triples in ${updatedTriplesTime - resolvedStatementsTime} ms`,
-      );
-
-      for (const triple of updatedTriples) {
-        const { subject, predicate, object, statement, provenance } = triple;
-        const safeTriple = {
-          subject: {
-            ...subject,
-            nameEmbedding: undefined,
-            typeEmbedding: undefined,
-          },
-          predicate: {
-            ...predicate,
-            nameEmbedding: undefined,
-            typeEmbedding: undefined,
-          },
-          object: {
-            ...object,
-            nameEmbedding: undefined,
-            typeEmbedding: undefined,
-          },
-          statement: { ...statement, factEmbedding: undefined },
-          provenance: { ...provenance, contentEmbedding: undefined },
-        };
-      }
-
-      // Process triples sequentially to avoid race conditions
-      for (const triple of updatedTriples) {
+      // Save triples without resolution
+      for (const triple of extractedStatements) {
         await saveTriple(triple);
       }
 
       const saveTriplesTime = Date.now();
-      logger.log(`Saved triples in ${saveTriplesTime - updatedTriplesTime} ms`);
-
-      // Invalidate invalidated statements
-      await invalidateStatements({
-        statementIds: invalidatedStatements,
-        invalidatedBy: episode.uuid,
-      });
+      logger.log(`Saved unresolved triples in ${saveTriplesTime - extractedStatementsTime} ms`);
 
       const endTime = Date.now();
       const processingTimeMs = endTime - startTime;
-      logger.log(`Processing time: ${processingTimeMs} ms`);
-
-      // Count only truly new statements (exclude duplicates)
-      const newStatementsCount = updatedTriples.filter(
-        (triple) => triple.statement.createdAt >= episode.createdAt,
-      ).length;
+      logger.log(`Processing time (without resolution): ${processingTimeMs} ms`);
 
       return {
         episodeUuid: episode.uuid,
-        // nodesCreated: hydratedNodes.length,
-        statementsCreated: newStatementsCount,
+        statementsCreated: extractedStatements.length,
         processingTimeMs,
         tokenUsage: tokenMetrics,
       };
@@ -440,8 +364,8 @@ export class KnowledgeGraphService {
     episode: EpisodicNode,
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
   ): Promise<EntityNode[]> {
     // Use the prompt library to get the appropriate prompts
@@ -469,10 +393,12 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "entity-extraction",
     );
 
     // Convert to EntityNode objects
@@ -523,8 +449,8 @@ export class KnowledgeGraphService {
     },
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
   ): Promise<Triple[]> {
     // Use the prompt library to get the appropriate prompts
@@ -564,10 +490,12 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "statement-extraction",
     );
 
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
@@ -697,507 +625,6 @@ export class KnowledgeGraphService {
   }
 
   /**
-   * Resolve extracted nodes to existing nodes or create new ones
-   */
-  private async resolveExtractedNodes(
-    triples: Triple[],
-    episode: EpisodicNode,
-    previousEpisodes: EpisodicNode[],
-    tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
-    },
-  ): Promise<Triple[]> {
-    // Step 1: Extract unique entities from triples
-    const uniqueEntitiesMap = new Map<string, EntityNode>();
-    const entityIdToPositions = new Map<
-      string,
-      Array<{
-        tripleIndex: number;
-        position: "subject" | "predicate" | "object";
-      }>
-    >();
-
-    // First pass: collect all unique entities and their positions in triples
-    triples.forEach((triple, tripleIndex) => {
-      // Process subject
-      if (!uniqueEntitiesMap.has(triple.subject.uuid)) {
-        uniqueEntitiesMap.set(triple.subject.uuid, triple.subject);
-      }
-      if (!entityIdToPositions.has(triple.subject.uuid)) {
-        entityIdToPositions.set(triple.subject.uuid, []);
-      }
-      entityIdToPositions.get(triple.subject.uuid)!.push({
-        tripleIndex,
-        position: "subject",
-      });
-
-      // Process predicate
-      if (!uniqueEntitiesMap.has(triple.predicate.uuid)) {
-        uniqueEntitiesMap.set(triple.predicate.uuid, triple.predicate);
-      }
-      if (!entityIdToPositions.has(triple.predicate.uuid)) {
-        entityIdToPositions.set(triple.predicate.uuid, []);
-      }
-      entityIdToPositions.get(triple.predicate.uuid)!.push({
-        tripleIndex,
-        position: "predicate",
-      });
-
-      // Process object
-      if (!uniqueEntitiesMap.has(triple.object.uuid)) {
-        uniqueEntitiesMap.set(triple.object.uuid, triple.object);
-      }
-      if (!entityIdToPositions.has(triple.object.uuid)) {
-        entityIdToPositions.set(triple.object.uuid, []);
-      }
-      entityIdToPositions.get(triple.object.uuid)!.push({
-        tripleIndex,
-        position: "object",
-      });
-    });
-
-    // Convert to arrays for processing
-    const uniqueEntities = Array.from(uniqueEntitiesMap.values());
-
-    // Separate predicates from other entities
-    const predicates = uniqueEntities.filter(
-      (entity) => entity.type === "Predicate",
-    );
-    const nonPredicates = uniqueEntities.filter(
-      (entity) => entity.type !== "Predicate",
-    );
-
-    // Step 2a: Find similar entities for non-predicate entities
-    const similarEntitiesResults = await Promise.all(
-      nonPredicates.map(async (entity) => {
-        const similarEntities = await findSimilarEntities({
-          queryEmbedding: entity.nameEmbedding as number[],
-          limit: 5,
-          threshold: 0.7,
-          userId: episode.userId,
-        });
-        return {
-          entity,
-          similarEntities,
-        };
-      }),
-    );
-
-    // Step 2b: Find exact matches for predicates
-    const exactPredicateResults = await Promise.all(
-      predicates.map(async (predicate) => {
-        const exactMatches = await findExactPredicateMatches({
-          predicateName: predicate.name,
-          userId: episode.userId,
-        });
-
-        // Filter out the current predicate from matches
-        const filteredMatches = exactMatches.filter(
-          (match) => match.uuid !== predicate.uuid,
-        );
-
-        return {
-          entity: predicate,
-          similarEntities: filteredMatches, // Use the same structure as similarEntitiesResults
-        };
-      }),
-    );
-
-    // Combine the results
-    const allEntityResults = [
-      ...similarEntitiesResults,
-      ...exactPredicateResults,
-    ];
-
-    // Step 3: Prepare context for LLM deduplication
-    const dedupeContext = {
-      extracted_nodes: allEntityResults.map((result, index) => ({
-        id: index,
-        name: result.entity.name,
-        entity_type: result.entity.type,
-        duplication_candidates: result.similarEntities.map((candidate, j) => ({
-          idx: j,
-          name: candidate.name,
-          entity_type: candidate.type,
-        })),
-      })),
-      episode_content: episode ? episode.content : "",
-      previous_episodes: previousEpisodes
-        ? previousEpisodes.map((ep) => ep.content)
-        : [],
-    };
-
-    // Step 4: Call LLM to resolve duplicates
-    const messages = dedupeNodes(dedupeContext);
-    let responseText = "";
-
-    // Entity deduplication is LOW complexity (pattern matching, similarity comparison)
-    await makeModelCall(
-      false,
-      messages as CoreMessage[],
-      (text, _model, usage) => {
-        responseText = text;
-        if (usage) {
-          tokenMetrics.low.input += usage.promptTokens as number;
-          tokenMetrics.low.output += usage.completionTokens as number;
-          tokenMetrics.low.total += usage.totalTokens as number;
-        }
-      },
-      undefined,
-      "low",
-    );
-
-    // Step 5: Process LLM response
-    const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
-    if (!outputMatch || !outputMatch[1]) {
-      return triples; // Return original if parsing fails
-    }
-
-    try {
-      responseText = outputMatch[1].trim();
-      const parsedResponse = JSON.parse(responseText);
-      const nodeResolutions = parsedResponse.entity_resolutions || [];
-
-      // Step 6: Create mapping from original entity UUID to resolved entity
-      const entityResolutionMap = new Map<string, EntityNode>();
-
-      nodeResolutions.forEach((resolution: any, index: number) => {
-        const originalEntity = allEntityResults[resolution.id ?? index];
-        if (!originalEntity) return;
-
-        const duplicateIdx = resolution.duplicate_idx ?? -1;
-
-        // Get the corresponding result from allEntityResults
-        const resultEntry = allEntityResults.find(
-          (result) => result.entity.uuid === originalEntity.entity.uuid,
-        );
-
-        if (!resultEntry) return;
-
-        // If a duplicate was found, use that entity, otherwise keep original
-        const resolvedEntity =
-          duplicateIdx >= 0 && duplicateIdx < resultEntry.similarEntities.length
-            ? resultEntry.similarEntities[duplicateIdx]
-            : originalEntity.entity;
-
-        // Update name if provided
-        if (resolution.name) {
-          resolvedEntity.name = resolution.name;
-        }
-
-        // Map original UUID to resolved entity
-        entityResolutionMap.set(originalEntity.entity.uuid, resolvedEntity);
-      });
-
-      // Step 7: Reconstruct triples with resolved entities
-      const resolvedTriples = triples
-        .map((triple) => {
-          // Validate original entities have UUIDs
-          if (
-            !triple.subject?.uuid ||
-            !triple.predicate?.uuid ||
-            !triple.object?.uuid
-          ) {
-            logger.error(`Triple has entities missing UUIDs, skipping`, {
-              statementFact: triple.statement.fact,
-              hasSubjectUuid: !!triple.subject?.uuid,
-              hasPredicateUuid: !!triple.predicate?.uuid,
-              hasObjectUuid: !!triple.object?.uuid,
-            });
-            return null;
-          }
-
-          const newTriple = { ...triple };
-
-          // Replace subject if resolved, otherwise keep original
-          const resolvedSubject = entityResolutionMap.get(triple.subject.uuid);
-          newTriple.subject = resolvedSubject || triple.subject;
-
-          // Replace predicate if resolved, otherwise keep original
-          const resolvedPredicate = entityResolutionMap.get(
-            triple.predicate.uuid,
-          );
-          newTriple.predicate = resolvedPredicate || triple.predicate;
-
-          // Replace object if resolved, otherwise keep original
-          const resolvedObject = entityResolutionMap.get(triple.object.uuid);
-          newTriple.object = resolvedObject || triple.object;
-
-          return newTriple;
-        })
-        .filter(Boolean) as Triple[];
-
-      return resolvedTriples;
-    } catch (error) {
-      console.error("Error processing entity resolutions:", error);
-      return triples; // Return original triples on error
-    }
-  }
-
-  /**
-   * Resolve statements by checking for existing statements and handling contradictions
-   * This replaces the previous resolveExtractedEdges method with a reified approach
-   */
-  private async resolveStatements(
-    triples: Triple[],
-    episode: EpisodicNode,
-    previousEpisodes: EpisodicNode[],
-    tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
-    },
-  ): Promise<{
-    resolvedStatements: Triple[];
-    invalidatedStatements: string[];
-  }> {
-    const resolvedStatements: Triple[] = [];
-    const invalidatedStatements: string[] = [];
-
-    if (triples.length === 0) {
-      return { resolvedStatements, invalidatedStatements };
-    }
-
-    // Step 1: Collect all potential matches for all triples at once
-    const allPotentialMatches: Map<
-      string,
-      Omit<StatementNode, "factEmbedding">[]
-    > = new Map();
-    const allExistingTripleData: Map<string, Triple> = new Map();
-
-    // For preparing the LLM context
-    const newStatements: any[] = [];
-    const similarStatements: any[] = [];
-
-    for (const triple of triples) {
-      // Track IDs of statements we've already checked to avoid duplicates
-      const checkedStatementIds: string[] = [];
-      let potentialMatches: Omit<StatementNode, "factEmbedding">[] = [];
-
-      // Phase 1a: Find statements with exact subject-predicate match
-      // Example: "John lives_in New York" vs "John lives_in San Francisco"
-      const exactMatches = await findContradictoryStatements({
-        subjectId: triple.subject.uuid,
-        predicateId: triple.predicate.uuid,
-        userId: triple.provenance.userId,
-      });
-
-      if (exactMatches && exactMatches.length > 0) {
-        potentialMatches.push(...exactMatches);
-        checkedStatementIds.push(...exactMatches.map((s) => s.uuid));
-      }
-
-      // Phase 1b: Find statements with same subject-object but different predicates
-      // Example: "John is_married_to Sarah" vs "John is_divorced_from Sarah"
-      const subjectObjectMatches = await findStatementsWithSameSubjectObject({
-        subjectId: triple.subject.uuid,
-        objectId: triple.object.uuid,
-        excludePredicateId: triple.predicate.uuid,
-        userId: triple.provenance.userId,
-      });
-
-      if (subjectObjectMatches && subjectObjectMatches.length > 0) {
-        // Filter out statements we've already checked
-        const newSubjectObjectMatches = subjectObjectMatches.filter(
-          (match) => !checkedStatementIds.includes(match.uuid),
-        );
-        if (newSubjectObjectMatches.length > 0) {
-          potentialMatches.push(...newSubjectObjectMatches);
-          checkedStatementIds.push(
-            ...newSubjectObjectMatches.map((s) => s.uuid),
-          );
-        }
-      }
-
-      // Phase 2: Find semantically similar statements
-      const semanticMatches = await findSimilarStatements({
-        factEmbedding: triple.statement.factEmbedding,
-        threshold: 0.85,
-        excludeIds: checkedStatementIds,
-        userId: triple.provenance.userId,
-      });
-
-      if (semanticMatches && semanticMatches.length > 0) {
-        potentialMatches.push(...semanticMatches);
-      }
-
-      // Phase 3: Check related memories for contradictory statements
-      const previousEpisodesStatements: Omit<StatementNode, "factEmbedding">[] =
-        [];
-
-      await Promise.all(
-        previousEpisodes.map(async (episode) => {
-          const statements = await getEpisodeStatements({
-            episodeUuid: episode.uuid,
-            userId: episode.userId,
-          });
-          previousEpisodesStatements.push(...statements);
-        }),
-      );
-
-      if (previousEpisodesStatements && previousEpisodesStatements.length > 0) {
-        // Filter out facts we've already checked
-        const newRelatedFacts = previousEpisodesStatements
-          .flat()
-          .filter((fact) => !checkedStatementIds.includes(fact.uuid));
-
-        if (newRelatedFacts.length > 0) {
-          potentialMatches.push(...newRelatedFacts);
-        }
-      }
-
-      if (potentialMatches.length > 0) {
-        logger.info(
-          `Found ${potentialMatches.length} potential matches for: ${triple.statement.fact}`,
-        );
-
-        allPotentialMatches.set(triple.statement.uuid, potentialMatches);
-
-        // Get full triple information for each potential match
-        for (const match of potentialMatches) {
-          if (!allExistingTripleData.has(match.uuid)) {
-            const existingTripleData = await getTripleForStatement({
-              statementId: match.uuid,
-            });
-
-            if (existingTripleData) {
-              allExistingTripleData.set(match.uuid, existingTripleData);
-
-              // Add to similarStatements for LLM context
-              similarStatements.push({
-                statementId: match.uuid,
-                fact: existingTripleData.statement.fact,
-                subject: existingTripleData.subject.name,
-                predicate: existingTripleData.predicate.name,
-                object: existingTripleData.object.name,
-              });
-            }
-          }
-        }
-      }
-
-      // Add to newStatements for LLM context
-      newStatements.push({
-        statement: {
-          uuid: triple.statement.uuid,
-          fact: triple.statement.fact,
-        },
-        subject: triple.subject.name,
-        predicate: triple.predicate.name,
-        object: triple.object.name,
-      });
-    }
-
-    // Step 2: If we have potential matches, use the LLM to analyze them in batch
-    if (similarStatements.length > 0) {
-      // Prepare context for the LLM
-      const promptContext = {
-        newStatements,
-        similarStatements,
-        episodeContent: episode.content,
-        referenceTime: episode.validAt.toISOString(),
-      };
-
-      // Get the statement resolution prompt
-      const messages = resolveStatementPrompt(promptContext);
-
-      let responseText = "";
-
-      // Statement resolution is LOW complexity (rule-based duplicate/contradiction detection)
-      await makeModelCall(
-        false,
-        messages,
-        (text, _model, usage) => {
-          responseText = text;
-          if (usage) {
-            tokenMetrics.low.input += usage.promptTokens as number;
-            tokenMetrics.low.output += usage.completionTokens as number;
-            tokenMetrics.low.total += usage.totalTokens as number;
-          }
-        },
-        undefined,
-        "low",
-      );
-
-      try {
-        // Extract the JSON response from the output tags
-        const jsonMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
-        const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
-
-        // Process the analysis results
-        for (const result of analysisResult) {
-          const tripleIndex = triples.findIndex(
-            (t) => t.statement.uuid === result.statementId,
-          );
-          if (tripleIndex === -1) continue;
-
-          const triple = triples[tripleIndex];
-
-          // Handle duplicates
-          if (result.isDuplicate && result.duplicateId) {
-            const duplicateTriple = allExistingTripleData.get(
-              result.duplicateId,
-            );
-            if (duplicateTriple) {
-              logger.info(`Statement is a duplicate: ${triple.statement.fact}`);
-              // Reuse existing subject, predicate, object, and statement
-              // Only update provenance to link new episode
-              resolvedStatements.push({
-                ...duplicateTriple,
-                provenance: triple.provenance,
-              });
-              continue;
-            }
-          }
-
-          // Handle contradictions
-          if (result.contradictions && result.contradictions.length > 0) {
-            for (const contradictionId of result.contradictions) {
-              const contradictedTriple =
-                allExistingTripleData.get(contradictionId);
-              if (contradictedTriple) {
-                invalidatedStatements.push(contradictedTriple.statement.uuid);
-              }
-            }
-          }
-
-          // Add the new statement if it's not a duplicate
-          if (!result.isDuplicate) {
-            logger.info(`Adding new statement: ${triple.statement.fact}`);
-            resolvedStatements.push(triple);
-          }
-        }
-      } catch (e) {
-        logger.error("Error processing batch analysis:", { error: e });
-
-        // Fallback: add all statements as new if we couldn't process the analysis
-        for (const triple of triples) {
-          if (
-            !resolvedStatements.some(
-              (s) => s.statement.uuid === triple.statement.uuid,
-            )
-          ) {
-            logger.info(
-              `Fallback: Adding statement as new: ${triple.statement.fact}`,
-            );
-            resolvedStatements.push(triple);
-          }
-        }
-      }
-    } else {
-      // No potential matches found for any statements, add them all as new
-      for (const triple of triples) {
-        logger.info(
-          `No matches found, adding as new: ${triple.statement.fact}`,
-        );
-        resolvedStatements.push(triple);
-      }
-    }
-
-    return { resolvedStatements, invalidatedStatements };
-  }
-
-  /**
    * Normalize an episode by extracting entities and creating nodes and statements
    */
   private async normalizeEpisodeBody(
@@ -1206,8 +633,8 @@ export class KnowledgeGraphService {
     userId: string,
     prisma: PrismaClient,
     tokenMetrics: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
+      high: { input: number; output: number; total: number, cached: number };
+      low: { input: number; output: number; total: number, cached: number };
     },
     episodeTimestamp?: Date,
     sessionContext?: string,
@@ -1251,13 +678,15 @@ export class KnowledgeGraphService {
       (text, _model, usage) => {
         responseText = text;
         if (usage) {
-          tokenMetrics.low.input += usage.promptTokens as number;
-          tokenMetrics.low.output += usage.completionTokens as number;
-          tokenMetrics.low.total += usage.totalTokens as number;
+          tokenMetrics.high.input += usage.promptTokens as number;
+          tokenMetrics.high.output += usage.completionTokens as number;
+          tokenMetrics.high.total += usage.totalTokens as number;
+          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
         }
       },
       undefined,
       "high",
+      "normalization",
     );
     let normalizedEpisodeBody = "";
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);

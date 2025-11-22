@@ -287,6 +287,7 @@ async function generateCompaction(
       },
       undefined,
       "high",
+      "session-compaction",
     );
 
     return parseCompactionResponse(responseText);

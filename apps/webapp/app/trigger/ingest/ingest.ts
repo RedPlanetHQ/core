@@ -9,6 +9,7 @@ import { labelAssignmentTask } from "../labels/label-assignment";
 import { titleGenerationTask } from "../titles/title-generation";
 import { bertTopicAnalysisTask } from "../bert/bert";
 import { personaGenerationTask } from "../spaces/persona-generation";
+import { graphResolutionTask } from "./graph-resolution";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
@@ -43,8 +44,13 @@ export const ingestTask = task({
       async (params) => {
         await bertTopicAnalysisTask.trigger(params);
       },
+      // Callback for persona generation
       async (params) => {
         await personaGenerationTask.trigger(params);
+      },
+      // Callback for async graph resolution
+      async (params) => {
+        await graphResolutionTask.trigger(params);
       },
     );
   },

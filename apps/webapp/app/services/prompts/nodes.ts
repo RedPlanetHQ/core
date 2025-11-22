@@ -266,9 +266,9 @@ Each entity in ENTITIES is represented as a JSON object with the following struc
 ## Example Patterns:
 
 **DUPLICATE CASES:**
-- "John Smith" vs "John Smith" → Check context for same person
-- "Microsoft" vs "Microsoft Corporation" → Same organization (duplicate_idx = 0)
-- "iPhone" vs "Apple iPhone" → Same product (duplicate_idx = 0)
+- "John Smith" vs "John Smith" → Check context for same person (duplicate_idx = 0)
+- "Microsoft" vs "Microsoft Corporation" → Same organization (duplicate_idx = 2)
+- "iPhone" vs "Apple iPhone" → Same product (duplicate_idx = 1)
 - "Tier 1" vs "Tier 1" → Same classification level (duplicate_idx = 0)
 
 **NOT DUPLICATE CASES:**
