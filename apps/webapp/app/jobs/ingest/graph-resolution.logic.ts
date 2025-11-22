@@ -29,7 +29,13 @@ import {
   getTripleForStatementsBatch,
   invalidateStatements,
 } from "~/services/graphModels/statement";
-import { getEpisode, getEpisodeStatements, getSessionEpisodes, getTriplesForEpisode, moveAllProvenanceToStatement } from "~/services/graphModels/episode";
+import {
+  getEpisode,
+  getEpisodeStatements,
+  getSessionEpisodes,
+  getTriplesForEpisode,
+  moveAllProvenanceToStatement,
+} from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
 import { runQuery } from "~/lib/neo4j.server";
 import { prisma } from "~/trigger/utils/prisma";
@@ -57,7 +63,9 @@ export async function processGraphResolution(
   payload: GraphResolutionPayload,
 ): Promise<GraphResolutionResult> {
   try {
-    logger.info(`Processing graph resolution for episode ${payload.episodeUuid}`);
+    logger.info(
+      `Processing graph resolution for episode ${payload.episodeUuid}`,
+    );
 
     // Get episode data for context
     const episode = await getEpisode(payload.episodeUuid);
@@ -68,18 +76,25 @@ export async function processGraphResolution(
     // Step 0: Deduplicate entities with same name before resolution
     const deduplicatedCount = await deduplicateEntitiesByName(payload.userId);
     if (deduplicatedCount > 0) {
-      logger.info(`Pre-resolution: deduplicated ${deduplicatedCount} entities for user ${payload.userId}`);
+      logger.info(
+        `Pre-resolution: deduplicated ${deduplicatedCount} entities for user ${payload.userId}`,
+      );
     }
 
     // Fetch triples for this episode from the graph
-    const triples = await getTriplesForEpisode(payload.episodeUuid, payload.userId);
+    const triples = await getTriplesForEpisode(
+      payload.episodeUuid,
+      payload.userId,
+    );
 
     if (triples.length === 0) {
       logger.info(`No triples found for episode ${payload.episodeUuid}`);
       return { success: true, resolvedCount: 0, invalidatedCount: 0 };
     }
 
-    logger.info(`Found ${triples.length} triples for episode ${payload.episodeUuid}`);
+    logger.info(
+      `Found ${triples.length} triples for episode ${payload.episodeUuid}`,
+    );
 
     // Get previous episodes for context
     let previousEpisodes: EpisodicNode[] = [];
@@ -87,7 +102,7 @@ export async function processGraphResolution(
       previousEpisodes = await getSessionEpisodes(
         episode.sessionId,
         payload.userId,
-        5
+        5,
       );
     }
 
@@ -98,22 +113,26 @@ export async function processGraphResolution(
     };
 
     // Step 1: Entity Resolution - find which entities should be merged
-    const { resolvedTriples, entityMerges } = await resolveExtractedNodesWithMerges(
-      triples,
-      episode,
-      previousEpisodes,
-      tokenMetrics,
-    );
+    const { resolvedTriples, entityMerges } =
+      await resolveExtractedNodesWithMerges(
+        triples,
+        episode,
+        previousEpisodes,
+        tokenMetrics,
+      );
 
-    logger.info(`Entity resolution completed: ${resolvedTriples.length} triples, ${entityMerges.length} merges`);
+    logger.info(
+      `Entity resolution completed: ${resolvedTriples.length} triples, ${entityMerges.length} merges`,
+    );
 
     // Step 2: Statement Resolution - find duplicates and contradictions
-    const { resolvedStatements, invalidatedStatements, duplicateStatements } = await resolveStatementsWithDuplicates(
-      resolvedTriples,
-      episode,
-      previousEpisodes,
-      tokenMetrics,
-    );
+    const { resolvedStatements, invalidatedStatements, duplicateStatements } =
+      await resolveStatementsWithDuplicates(
+        resolvedTriples,
+        episode,
+        previousEpisodes,
+        tokenMetrics,
+      );
 
     logger.info(
       `Statement resolution completed: ${resolvedStatements.length} resolved, ${invalidatedStatements.length} invalidated, ${duplicateStatements.length} duplicates`,
@@ -134,14 +153,22 @@ export async function processGraphResolution(
       // Run sequentially to avoid Neo4j deadlocks
       let totalMoved = 0;
       for (const dup of duplicateStatements) {
-        const moved = await moveAllProvenanceToStatement(dup.newStatementUuid, dup.existingStatementUuid, payload.userId);
+        const moved = await moveAllProvenanceToStatement(
+          dup.newStatementUuid,
+          dup.existingStatementUuid,
+          payload.userId,
+        );
         totalMoved += moved;
       }
 
       // Batch delete all duplicate statements at once
       // This is safe even if some were already deleted in a previous attempt
-      await deleteStatements(duplicateStatements.map((dup) => dup.newStatementUuid));
-      logger.info(`Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`);
+      await deleteStatements(
+        duplicateStatements.map((dup) => dup.newStatementUuid),
+      );
+      logger.info(
+        `Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`,
+      );
     }
 
     // Step 5: Invalidate contradicted statements
@@ -180,10 +207,15 @@ export async function processGraphResolution(
             data: { output: updatedOutput },
           });
 
-          logger.info(`Updated ingestion queue ${payload.queueId} with resolution token usage`);
+          logger.info(
+            `Updated ingestion queue ${payload.queueId} with resolution token usage`,
+          );
         }
       } catch (error) {
-        logger.warn(`Failed to update ingestion queue with resolution token usage:`, { error });
+        logger.warn(
+          `Failed to update ingestion queue with resolution token usage:`,
+          { error },
+        );
       }
     }
 
@@ -257,7 +289,9 @@ async function resolveExtractedNodesWithMerges(
       return {
         entity,
         // Filter out all entities from current episode
-        similarEntities: similarEntities.filter((s) => !currentEntityIds.includes(s.uuid)),
+        similarEntities: similarEntities.filter(
+          (s) => !currentEntityIds.includes(s.uuid),
+        ),
       };
     }),
   );
@@ -304,7 +338,7 @@ async function resolveExtractedNodesWithMerges(
           tokenMetrics.low.input += usage.promptTokens as number;
           tokenMetrics.low.output += usage.completionTokens as number;
           tokenMetrics.low.total += usage.totalTokens as number;
-          tokenMetrics.low.cached += usage.cachedInputTokens as number || 0;
+          tokenMetrics.low.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
       undefined,
@@ -325,7 +359,10 @@ async function resolveExtractedNodesWithMerges(
 
           const duplicateIdx = resolution.duplicate_idx ?? -1;
 
-          if (duplicateIdx >= 0 && duplicateIdx < originalEntity.similarEntities.length) {
+          if (
+            duplicateIdx >= 0 &&
+            duplicateIdx < originalEntity.similarEntities.length
+          ) {
             // This entity should be merged into an existing one
             const targetEntity = originalEntity.similarEntities[duplicateIdx];
             if (targetEntity && targetEntity.uuid) {
@@ -338,11 +375,17 @@ async function resolveExtractedNodesWithMerges(
               });
             } else {
               // Target entity is invalid, keep original
-              entityResolutionMap.set(originalEntity.entity.uuid, originalEntity.entity);
+              entityResolutionMap.set(
+                originalEntity.entity.uuid,
+                originalEntity.entity,
+              );
             }
           } else {
             // Keep original
-            entityResolutionMap.set(originalEntity.entity.uuid, originalEntity.entity);
+            entityResolutionMap.set(
+              originalEntity.entity.uuid,
+              originalEntity.entity,
+            );
           }
         });
       } catch (error) {
@@ -395,11 +438,17 @@ async function resolveStatementsWithDuplicates(
 ): Promise<{
   resolvedStatements: Triple[];
   invalidatedStatements: string[];
-  duplicateStatements: Array<{ newStatementUuid: string; existingStatementUuid: string }>;
+  duplicateStatements: Array<{
+    newStatementUuid: string;
+    existingStatementUuid: string;
+  }>;
 }> {
   const resolvedStatements: Triple[] = [];
   const invalidatedStatements: string[] = [];
-  const duplicateStatements: Array<{ newStatementUuid: string; existingStatementUuid: string }> = [];
+  const duplicateStatements: Array<{
+    newStatementUuid: string;
+    existingStatementUuid: string;
+  }> = [];
 
   if (triples.length === 0) {
     return { resolvedStatements, invalidatedStatements, duplicateStatements };
@@ -427,7 +476,11 @@ async function resolveStatementsWithDuplicates(
   }));
 
   // Execute batch queries in parallel
-  const [contradictoryResults, subjectObjectResults, previousEpisodesStatements] = await Promise.all([
+  const [
+    contradictoryResults,
+    subjectObjectResults,
+    previousEpisodesStatements,
+  ] = await Promise.all([
     findContradictoryStatementsBatch({
       pairs: contradictoryPairs,
       userId: episode.userId,
@@ -450,7 +503,10 @@ async function resolveStatementsWithDuplicates(
   ]);
 
   // Step 1: Collect structural matches (from batch queries) for each triple
-  const structuralMatches: Map<string, { matches: Omit<StatementNode, "factEmbedding">[]; checkedIds: string[] }> = new Map();
+  const structuralMatches: Map<
+    string,
+    { matches: Omit<StatementNode, "factEmbedding">[]; checkedIds: string[] }
+  > = new Map();
 
   for (const triple of triples) {
     const checkedStatementIds: string[] = [];
@@ -464,7 +520,8 @@ async function resolveStatementsWithDuplicates(
     }
 
     const subjectObjectKey = `${triple.subject.uuid}_${triple.object.uuid}`;
-    const subjectObjectMatches = subjectObjectResults.get(subjectObjectKey) || [];
+    const subjectObjectMatches =
+      subjectObjectResults.get(subjectObjectKey) || [];
     const newSubjectObjectMatches = subjectObjectMatches.filter(
       (match) => !checkedStatementIds.includes(match.uuid),
     );
@@ -473,7 +530,10 @@ async function resolveStatementsWithDuplicates(
       checkedStatementIds.push(...newSubjectObjectMatches.map((s) => s.uuid));
     }
 
-    structuralMatches.set(triple.statement.uuid, { matches: potentialMatches, checkedIds: checkedStatementIds });
+    structuralMatches.set(triple.statement.uuid, {
+      matches: potentialMatches,
+      checkedIds: checkedStatementIds,
+    });
   }
 
   // Step 2: Run all semantic similarity searches in parallel
@@ -481,19 +541,24 @@ async function resolveStatementsWithDuplicates(
     triples.map((triple) => {
       const structural = structuralMatches.get(triple.statement.uuid);
       // Exclude current episode's statements AND already checked structural matches
-      const excludeIds = [...currentStatementIds, ...(structural?.checkedIds || [])];
+      const excludeIds = [
+        ...currentStatementIds,
+        ...(structural?.checkedIds || []),
+      ];
       return findSimilarStatements({
         factEmbedding: triple.statement.factEmbedding,
         threshold: 0.7,
         excludeIds,
         userId: triple.provenance.userId,
       });
-    })
+    }),
   );
 
-
   // Step 3: Combine all matches
-  const allPotentialMatches: Map<string, Omit<StatementNode, "factEmbedding">[]> = new Map();
+  const allPotentialMatches: Map<
+    string,
+    Omit<StatementNode, "factEmbedding">[]
+  > = new Map();
   const allStatementIdsToFetch = new Set<string>();
 
   triples.forEach((triple, index) => {
@@ -508,7 +573,9 @@ async function resolveStatementsWithDuplicates(
     }
 
     const newRelatedFacts = previousEpisodesStatements.filter(
-      (fact) => !checkedStatementIds.includes(fact.uuid) && !currentStatementIds.includes(fact.uuid),
+      (fact) =>
+        !checkedStatementIds.includes(fact.uuid) &&
+        !currentStatementIds.includes(fact.uuid),
     );
     if (newRelatedFacts.length > 0) {
       potentialMatches.push(...newRelatedFacts);
@@ -527,7 +594,7 @@ async function resolveStatementsWithDuplicates(
     return {
       resolvedStatements: triples,
       invalidatedStatements: [],
-      duplicateStatements: []
+      duplicateStatements: [],
     };
   }
 
@@ -548,10 +615,14 @@ async function resolveStatementsWithDuplicates(
       object: triple.object.name,
     });
 
-    const potentialMatches = allPotentialMatches.get(triple.statement.uuid) || [];
+    const potentialMatches =
+      allPotentialMatches.get(triple.statement.uuid) || [];
     for (const match of potentialMatches) {
       const existingTripleData = allExistingTripleData.get(match.uuid);
-      if (existingTripleData && !similarStatements.find((s) => s.statementId === match.uuid)) {
+      if (
+        existingTripleData &&
+        !similarStatements.find((s) => s.statementId === match.uuid)
+      ) {
         similarStatements.push({
           statementId: match.uuid,
           fact: existingTripleData.statement.fact,
@@ -583,7 +654,7 @@ async function resolveStatementsWithDuplicates(
           tokenMetrics.low.input += usage.promptTokens as number;
           tokenMetrics.low.output += usage.completionTokens as number;
           tokenMetrics.low.total += usage.totalTokens as number;
-          tokenMetrics.low.cached += usage.cachedInputTokens as number || 0;
+          tokenMetrics.low.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
       undefined,
@@ -596,7 +667,9 @@ async function resolveStatementsWithDuplicates(
       const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
 
       for (const result of analysisResult) {
-        const triple = triples.find((t) => t.statement.uuid === result.statementId);
+        const triple = triples.find(
+          (t) => t.statement.uuid === result.statementId,
+        );
         if (!triple) continue;
 
         if (result.isDuplicate && result.duplicateId) {
@@ -605,7 +678,9 @@ async function resolveStatementsWithDuplicates(
             newStatementUuid: triple.statement.uuid,
             existingStatementUuid: result.duplicateId,
           });
-          logger.info(`Statement is duplicate, will delete and link to existing: ${triple.statement.fact}`);
+          logger.info(
+            `Statement is duplicate, will delete and link to existing: ${triple.statement.fact}`,
+          );
         } else {
           // Keep the new statement
           resolvedStatements.push(triple);

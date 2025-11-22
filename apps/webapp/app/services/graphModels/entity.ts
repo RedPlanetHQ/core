@@ -53,6 +53,10 @@ export async function findSimilarEntities(params: {
   threshold: number;
   userId: string;
 }): Promise<EntityNode[]> {
+  if (params.queryEmbedding.length === 0) {
+    return [];
+  }
+
   const limit = params.limit || 5;
   const query = `
   MATCH (entity:Entity{userId: $userId})
@@ -62,30 +66,6 @@ export async function findSimilarEntities(params: {
   RETURN entity, score
   ORDER BY score DESC
   LIMIT ${limit}
-  `;
-
-  const result = await runQuery(query, { ...params });
-  return result.map((record) => {
-    return parseEntityNode(record.get("entity"));
-  });
-}
-
-export async function findSimilarEntitiesWithSameType(params: {
-  queryEmbedding: number[];
-  entityType: string;
-  limit: number;
-  threshold: number;
-  userId: string;
-}): Promise<EntityNode[]> {
-  const limit = params.limit || 5;
-  const query = `
-    MATCH (entity:Entity{userId: $userId})
-    WHERE entity.nameEmbedding IS NOT NULL and size(entity.nameEmbedding) > 0
-    WITH entity, gds.similarity.cosine(entity.nameEmbedding, $queryEmbedding) AS score
-    WHERE score >= $threshold
-    RETURN entity, score
-    ORDER BY score DESC
-    LIMIT ${limit}
   `;
 
   const result = await runQuery(query, { ...params });
@@ -224,12 +204,13 @@ export function parseEntityNode(raw: any): EntityNode {
   };
 }
 
-
 /**
  * Deduplicate entities with the same name (case-insensitive) for a user
  * Merges all duplicate entities into the first one found
  */
-export async function deduplicateEntitiesByName(userId: string): Promise<number> {
+export async function deduplicateEntitiesByName(
+  userId: string,
+): Promise<number> {
   const query = `
     MATCH (e:Entity {userId: $userId})
     WITH toLower(e.name) AS normalizedName, collect(e) AS entities, count(e) AS cnt
@@ -273,7 +254,10 @@ export async function deduplicateEntitiesByName(userId: string): Promise<number>
   `;
 
   const result = await runQuery(query, { userId });
-  const mergedCount = result[0]?.get("mergedCount")?.toNumber?.() || result[0]?.get("mergedCount") || 0;
+  const mergedCount =
+    result[0]?.get("mergedCount")?.toNumber?.() ||
+    result[0]?.get("mergedCount") ||
+    0;
 
   if (mergedCount > 0) {
     logger.info(`Deduplicated ${mergedCount} entities for user ${userId}`);
@@ -282,16 +266,20 @@ export async function deduplicateEntitiesByName(userId: string): Promise<number>
   return mergedCount;
 }
 
-
 /**
  * Merge source entity into target entity
  * Updates all relationships pointing to source → point to target, then deletes source
  * This is idempotent - if source doesn't exist (already merged), it's a no-op
  */
-export async function mergeEntities(sourceUuid: string, targetUuid: string, userId: string): Promise<void> {
+export async function mergeEntities(
+  sourceUuid: string,
+  targetUuid: string,
+  userId: string,
+): Promise<void> {
   // Single query to update all relationships and delete source entity
   // Uses OPTIONAL MATCH for source to be idempotent on retry
-  await runQuery(`
+  await runQuery(
+    `
     OPTIONAL MATCH (source:Entity {uuid: $sourceUuid, userId: $userId})
     MATCH (target:Entity {uuid: $targetUuid, userId: $userId})
 
@@ -323,14 +311,17 @@ export async function mergeEntities(sourceUuid: string, targetUuid: string, user
     // Delete source entity
     WITH source
     DETACH DELETE source
-  `, { sourceUuid, targetUuid, userId });
+  `,
+    { sourceUuid, targetUuid, userId },
+  );
 }
 
 /**
  * Delete orphaned entities (entities with no relationships)
  */
 export async function deleteOrphanedEntities(userId: string): Promise<number> {
-  const result = await runQuery(`
+  const result = await runQuery(
+    `
     MATCH (e:Entity {userId: $userId})
     WHERE NOT (e)<-[:HAS_SUBJECT]-()
       AND NOT (e)<-[:HAS_PREDICATE]-()
@@ -338,7 +329,9 @@ export async function deleteOrphanedEntities(userId: string): Promise<number> {
     WITH e, e.uuid AS uuid
     DETACH DELETE e
     RETURN count(uuid) AS deletedCount
-  `, { userId });
+  `,
+    { userId },
+  );
 
   return result[0]?.get("deletedCount") || 0;
 }

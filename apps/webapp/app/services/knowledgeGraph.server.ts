@@ -12,26 +12,13 @@ import {
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";
-import { dedupeNodes, extractEntities } from "./prompts/nodes";
+import { extractEntities } from "./prompts/nodes";
+import { extractStatements, extractStatementsOSS } from "./prompts/statements";
 import {
-  extractStatements,
-  extractStatementsOSS,
-  resolveStatementPrompt,
-} from "./prompts/statements";
-import {
-  getEpisodeStatements,
   getRecentEpisodes,
   searchEpisodesByEmbedding,
 } from "./graphModels/episode";
 import {
-  findExactPredicateMatches,
-  findSimilarEntities,
-} from "./graphModels/entity";
-import {
-  findContradictoryStatements,
-  findSimilarStatements,
-  findStatementsWithSameSubjectObject,
-  getTripleForStatement,
   invalidateStatements,
   parseStatementNode,
   saveTriple,
@@ -254,11 +241,11 @@ export class KnowledgeGraphService {
       const sessionContext =
         params.sessionId && previousEpisodes.length > 0
           ? previousEpisodes
-            .map(
-              (ep, i) =>
-                `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
-            )
-            .join("\n\n")
+              .map(
+                (ep, i) =>
+                  `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
+              )
+              .join("\n\n")
           : undefined;
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
@@ -339,11 +326,15 @@ export class KnowledgeGraphService {
       }
 
       const saveTriplesTime = Date.now();
-      logger.log(`Saved unresolved triples in ${saveTriplesTime - extractedStatementsTime} ms`);
+      logger.log(
+        `Saved unresolved triples in ${saveTriplesTime - extractedStatementsTime} ms`,
+      );
 
       const endTime = Date.now();
       const processingTimeMs = endTime - startTime;
-      logger.log(`Processing time (without resolution): ${processingTimeMs} ms`);
+      logger.log(
+        `Processing time (without resolution): ${processingTimeMs} ms`,
+      );
 
       return {
         episodeUuid: episode.uuid,
@@ -364,8 +355,8 @@ export class KnowledgeGraphService {
     episode: EpisodicNode,
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number, cached: number };
-      low: { input: number; output: number; total: number, cached: number };
+      high: { input: number; output: number; total: number; cached: number };
+      low: { input: number; output: number; total: number; cached: number };
     },
   ): Promise<EntityNode[]> {
     // Use the prompt library to get the appropriate prompts
@@ -393,7 +384,7 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
-          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
+          tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
       undefined,
@@ -449,8 +440,8 @@ export class KnowledgeGraphService {
     },
     previousEpisodes: EpisodicNode[],
     tokenMetrics: {
-      high: { input: number; output: number; total: number, cached: number };
-      low: { input: number; output: number; total: number, cached: number };
+      high: { input: number; output: number; total: number; cached: number };
+      low: { input: number; output: number; total: number; cached: number };
     },
   ): Promise<Triple[]> {
     // Use the prompt library to get the appropriate prompts
@@ -490,7 +481,7 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
-          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
+          tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
       undefined,
@@ -633,8 +624,8 @@ export class KnowledgeGraphService {
     userId: string,
     prisma: PrismaClient,
     tokenMetrics: {
-      high: { input: number; output: number; total: number, cached: number };
-      low: { input: number; output: number; total: number, cached: number };
+      high: { input: number; output: number; total: number; cached: number };
+      low: { input: number; output: number; total: number; cached: number };
     },
     episodeTimestamp?: Date,
     sessionContext?: string,
@@ -681,7 +672,7 @@ export class KnowledgeGraphService {
           tokenMetrics.high.input += usage.promptTokens as number;
           tokenMetrics.high.output += usage.completionTokens as number;
           tokenMetrics.high.total += usage.totalTokens as number;
-          tokenMetrics.high.cached += usage.cachedInputTokens as number || 0;
+          tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
         }
       },
       undefined,
