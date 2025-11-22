@@ -1,0 +1,221 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: core-app
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+      app.kubernetes.io/component: app
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: app
+    spec:
+      containers:
+      - name: core-app
+        image: redplanethq/core:0.1.24
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: NODE_ENV
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DATABASE_URL
+        - name: DIRECT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DIRECT_URL
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: SESSION_SECRET
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: ENCRYPTION_KEY
+        - name: MAGIC_LINK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: MAGIC_LINK_SECRET
+        - name: CORE_LOGIN_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: CORE_LOGIN_ORIGIN
+        - name: CORE_APP_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: CORE_APP_ORIGIN
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_PORT
+        - name: REDIS_TLS_DISABLED
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_TLS_DISABLED
+        - name: NEO4J_URI
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: NEO4J_URI
+        - name: NEO4J_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: NEO4J_USERNAME
+        - name: NEO4J_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: NEO4J_PASSWORD
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: OPENAI_API_KEY
+          optional: true
+        - name: AUTH_GOOGLE_CLIENT_ID
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: AUTH_GOOGLE_CLIENT_ID
+          optional: true
+        - name: AUTH_GOOGLE_CLIENT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: AUTH_GOOGLE_CLIENT_SECRET
+          optional: true
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: ANTHROPIC_API_KEY
+          optional: true
+        - name: ENABLE_EMAIL_LOGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: ENABLE_EMAIL_LOGIN
+        - name: EMBEDDING_MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: EMBEDDING_MODEL
+        - name: MODEL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: MODEL
+        - name: TRIGGER_PROJECT_ID
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: TRIGGER_PROJECT_ID
+        - name: TRIGGER_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: TRIGGER_SECRET_KEY
+        - name: TRIGGER_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: API_ORIGIN
+        - name: EMAIL_TRANSPORT
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: EMAIL_TRANSPORT
+          optional: true
+        - name: REPLY_TO_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: REPLY_TO_EMAIL
+          optional: true
+        - name: FROM_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: FROM_EMAIL
+          optional: true
+        - name: RESEND_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: RESEND_API_KEY
+          optional: true
+        - name: COHERE_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: COHERE_API_KEY
+          optional: true
+        - name: OLLAMA_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: OLLAMA_URL
+          optional: true
+        - name: TRIGGER_TASKS_IMAGE
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: TRIGGER_TASKS_IMAGE
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command: ['sh', '-c', 'until pg_isready -h postgres -p 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-redis
+        image: redis:7
+        command: ['sh', '-c', 'until redis-cli -h redis -p 6379 ping; do echo waiting for redis; sleep 2; done;']
+      - name: wait-for-neo4j
+        image: neo4j:5
+        command: ['sh', '-c', 'until cypher-shell -a bolt://neo4j:7687 -u neo4j -p 27192e6432564f4788d55c15131bd5ac "RETURN 1"; do echo waiting for neo4j; sleep 2; done;']
