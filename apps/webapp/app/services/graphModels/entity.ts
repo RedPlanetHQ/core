@@ -1,5 +1,6 @@
 import { ENTITY_NODE_PROPERTIES, type EntityNode } from "@core/types";
 import { runQuery } from "~/lib/neo4j.server";
+import { logger } from "~/services/logger.service";
 
 export async function saveEntity(entity: EntityNode): Promise<string> {
   const query = `
@@ -122,7 +123,6 @@ export async function findExactEntityMatch(params: {
     WHERE toLower(ent.name) = toLower($entityName)
       AND ent.userId = $userId
     RETURN ${ENTITY_NODE_PROPERTIES} as entity
-    LIMIT 1
   `;
 
   const result = await runQuery(query, params);
@@ -222,6 +222,64 @@ export function parseEntityNode(raw: any): EntityNode {
     createdAt: new Date(raw.createdAt),
     userId: raw.userId,
   };
+}
+
+
+/**
+ * Deduplicate entities with the same name (case-insensitive) for a user
+ * Merges all duplicate entities into the first one found
+ */
+export async function deduplicateEntitiesByName(userId: string): Promise<number> {
+  const query = `
+    MATCH (e:Entity {userId: $userId})
+    WITH toLower(e.name) AS normalizedName, collect(e) AS entities, count(e) AS cnt
+    WHERE cnt > 1
+
+    // Keep the first one as target, merge others into it
+    WITH normalizedName, entities[0] AS target, entities[1..] AS duplicates
+
+    UNWIND duplicates AS source
+
+    // Move HAS_SUBJECT relationships
+    OPTIONAL MATCH (s1:Statement {userId: $userId})-[r1:HAS_SUBJECT]->(source)
+    FOREACH (_ IN CASE WHEN s1 IS NOT NULL THEN [1] ELSE [] END |
+      MERGE (s1)-[:HAS_SUBJECT]->(target)
+    )
+    DELETE r1
+
+    WITH normalizedName, target, source
+
+    // Move HAS_PREDICATE relationships
+    OPTIONAL MATCH (s2:Statement {userId: $userId})-[r2:HAS_PREDICATE]->(source)
+    FOREACH (_ IN CASE WHEN s2 IS NOT NULL THEN [1] ELSE [] END |
+      MERGE (s2)-[:HAS_PREDICATE]->(target)
+    )
+    DELETE r2
+
+    WITH normalizedName, target, source
+
+    // Move HAS_OBJECT relationships
+    OPTIONAL MATCH (s3:Statement {userId: $userId})-[r3:HAS_OBJECT]->(source)
+    FOREACH (_ IN CASE WHEN s3 IS NOT NULL THEN [1] ELSE [] END |
+      MERGE (s3)-[:HAS_OBJECT]->(target)
+    )
+    DELETE r3
+
+    // Delete the duplicate entity
+    WITH source
+    DETACH DELETE source
+
+    RETURN count(source) AS mergedCount
+  `;
+
+  const result = await runQuery(query, { userId });
+  const mergedCount = result[0]?.get("mergedCount")?.toNumber?.() || result[0]?.get("mergedCount") || 0;
+
+  if (mergedCount > 0) {
+    logger.info(`Deduplicated ${mergedCount} entities for user ${userId}`);
+  }
+
+  return mergedCount;
 }
 
 

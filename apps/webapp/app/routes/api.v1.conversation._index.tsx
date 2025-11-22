@@ -135,8 +135,26 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Build system prompt with persona context if available
     let systemPrompt = REACT_SYSTEM_PROMPT;
+
+    // Add current date and time context
+    const now = new Date();
+    const dateTimeContext = `
+<current_datetime>
+Current date and time: ${now.toLocaleString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    })}
+</current_datetime>`;
+
+    systemPrompt = `${systemPrompt}${dateTimeContext}`;
+
     if (personaContent) {
-      systemPrompt = `${REACT_SYSTEM_PROMPT}
+      systemPrompt = `${systemPrompt}
 
 <user_persona>
 You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.

@@ -16,8 +16,8 @@ import { logger } from "~/services/logger.service";
 import { dedupeNodes } from "~/services/prompts/nodes";
 import { resolveStatementPrompt } from "~/services/prompts/statements";
 import {
+  deduplicateEntitiesByName,
   deleteOrphanedEntities,
-  findExactEntityMatch,
   findSimilarEntities,
   mergeEntities,
 } from "~/services/graphModels/entity";
@@ -63,6 +63,12 @@ export async function processGraphResolution(
     const episode = await getEpisode(payload.episodeUuid);
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
+    }
+
+    // Step 0: Deduplicate entities with same name before resolution
+    const deduplicatedCount = await deduplicateEntitiesByName(payload.userId);
+    if (deduplicatedCount > 0) {
+      logger.info(`Pre-resolution: deduplicated ${deduplicatedCount} entities for user ${payload.userId}`);
     }
 
     // Fetch triples for this episode from the graph
@@ -238,25 +244,10 @@ async function resolveExtractedNodesWithMerges(
   // Get all entity UUIDs from this episode to exclude from searches
   const currentEntityIds = uniqueEntities.map((e) => e.uuid);
 
-  // Step 2: For each entity, first check exact match, then fall back to similar entities
+  // Step 2: For each entity, find similar entities for LLM evaluation
+  // Note: Exact name matches are already deduplicated before this function is called
   const allEntityResults = await Promise.all(
     uniqueEntities.map(async (entity) => {
-      // First, check for exact match (case-insensitive)
-      const exactMatch = await findExactEntityMatch({
-        entityName: entity.name,
-        userId: episode.userId,
-      });
-
-      // If exact match found and it's not from current episode, use it directly
-      if (exactMatch && !currentEntityIds.includes(exactMatch.uuid)) {
-        return {
-          entity,
-          similarEntities: [exactMatch],
-          hasExactMatch: true,
-        };
-      }
-
-      // No exact match found, fall back to similarity search
       const similarEntities = await findSimilarEntities({
         queryEmbedding: entity.nameEmbedding as number[],
         limit: 5,
@@ -267,26 +258,17 @@ async function resolveExtractedNodesWithMerges(
         entity,
         // Filter out all entities from current episode
         similarEntities: similarEntities.filter((s) => !currentEntityIds.includes(s.uuid)),
-        hasExactMatch: false,
       };
     }),
   );
 
-  // Step 3: Process exact matches directly without LLM
+  // Step 3: Separate entities that need LLM resolution from those that don't
   const entityResolutionMap = new Map<string, EntityNode>();
   const entitiesNeedingLLM: typeof allEntityResults = [];
 
   for (const result of allEntityResults) {
-    if (result.hasExactMatch && result.similarEntities.length === 1) {
-      // Exact match found - merge directly without LLM
-      const targetEntity = result.similarEntities[0];
-      entityResolutionMap.set(result.entity.uuid, targetEntity);
-      entityMerges.push({
-        sourceUuid: result.entity.uuid,
-        targetUuid: targetEntity.uuid,
-      });
-    } else if (result.similarEntities.length > 0) {
-      // Has similar entities but no exact match - needs LLM resolution
+    if (result.similarEntities.length > 0) {
+      // Has similar entities - needs LLM resolution
       entitiesNeedingLLM.push(result);
     } else {
       // No matches - keep original
