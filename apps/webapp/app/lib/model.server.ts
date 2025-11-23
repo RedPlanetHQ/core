@@ -211,26 +211,51 @@ export function isProprietaryModel(
 
 export async function getEmbedding(text: string) {
   const ollamaUrl = process.env.OLLAMA_URL;
-
-  // Default to using Ollama
   const model = process.env.EMBEDDING_MODEL;
+  const maxRetries = 3;
+  let lastEmbedding: number[] = [];
 
-  if (model === "text-embedding-3-small") {
-    // Use OpenAI embedding model when explicitly requested
-    const { embedding } = await embed({
-      model: openai.embedding("text-embedding-3-small"),
-      value: text,
-    });
-    return embedding;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      if (model === "text-embedding-3-small") {
+        // Use OpenAI embedding model when explicitly requested
+        const { embedding } = await embed({
+          model: openai.embedding("text-embedding-3-small"),
+          value: text,
+        });
+        lastEmbedding = embedding;
+      } else {
+        const ollama = createOllama({
+          baseURL: ollamaUrl,
+        });
+        const { embedding } = await embed({
+          model: ollama.embedding(model as string),
+          value: text,
+        });
+        lastEmbedding = embedding;
+      }
+
+      // If embedding is not empty, return it immediately
+      if (lastEmbedding.length > 0) {
+        return lastEmbedding;
+      }
+
+      // If empty, log and retry (unless it's the last attempt)
+      if (attempt < maxRetries) {
+        logger.warn(
+          `Attempt ${attempt}/${maxRetries}: Got empty embedding, retrying...`,
+        );
+      }
+    } catch (error) {
+      logger.error(
+        `Embedding attempt ${attempt}/${maxRetries} failed: ${error}`,
+      );
+    }
   }
 
-  const ollama = createOllama({
-    baseURL: ollamaUrl,
-  });
-  const { embedding } = await embed({
-    model: ollama.embedding(model as string),
-    value: text,
-  });
-
-  return embedding;
+  // Return last embedding even if empty after all retries
+  logger.warn(
+    `All ${maxRetries} attempts returned empty embedding, returning last response`,
+  );
+  return lastEmbedding;
 }
