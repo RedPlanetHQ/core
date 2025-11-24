@@ -32,7 +32,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
       searchFetcher.submit(
         {
           query: searchQuery,
-          addId: true,
           adaptiveFiltering: false,
         },
         {
@@ -73,7 +72,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
           value={searchQuery}
           onValueChange={setSearchQuery}
         />
-        <CommandList>
+        <CommandList className="h-72">
           <CommandEmpty className="text-muted-foreground p-4 text-center text-sm">
             {searchQuery.trim().length > 0 && !isSearching
               ? "Start typing to search."
@@ -89,62 +88,65 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               <span>Add Memory</span>
             </CommandItem>
           </CommandGroup>
-        </CommandList>
-        <CommandGroup heading="Episodes" className="max-w-[50w] p-2">
-          {isSearching && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-            </div>
-          )}
+          <CommandGroup heading="Episodes" className="max-w-[700px] p-2">
+            {isSearching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+              </div>
+            )}
 
-          {!isSearching &&
-            searchResults.length > 0 &&
-            searchResults.map((episode: any, index: number) => (
-              <CommandItem
-                key={index}
-                value={`${index}`}
-                onSelect={() => {
-                  episode.uuid && handleEpisodeClick(episode.uuid);
-                }}
-                className="flex flex-col items-start gap-1 py-2"
-              >
-                <div className="flex w-full items-start gap-2">
-                  {episode.type === "DOCUMENT" ? (
-                    <File
-                      className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
-                      size={14}
-                    />
-                  ) : (
-                    <MessageSquare
-                      className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
-                      size={14}
-                    />
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="line-clamp-2 max-w-[400px] text-sm">
-                      {episode.content}
-                    </p>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                      {new Date(episode.createdAt).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                      {episode.isCompact && " • Compact"}
-                    </p>
+            {!isSearching &&
+              searchResults.length > 0 &&
+              searchResults.map((episode: any, index: number) => (
+                <CommandItem
+                  key={index}
+                  value={`${index}`}
+                  onSelect={() => {
+                    episode.uuid && handleEpisodeClick(episode.uuid);
+                  }}
+                  className="flex flex-col items-start gap-1 py-2"
+                >
+                  <div className="flex w-full items-start gap-2">
+                    {episode.type === "DOCUMENT" ? (
+                      <File
+                        className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
+                        size={14}
+                      />
+                    ) : (
+                      <MessageSquare
+                        className="mt-0.5 mr-2 !h-4 !w-4 flex-shrink-0"
+                        size={14}
+                      />
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="line-clamp-2 max-w-[400px] text-sm">
+                        {episode.content}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-sm">
+                        {new Date(episode.createdAt).toLocaleDateString(
+                          "en-US",
+                          {
+                            month: "short",
+                            day: "numeric",
+                            year: "numeric",
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          },
+                        )}
+                        {episode.isCompact && " • Compact"}
+                      </p>
+                    </div>
                   </div>
-                </div>
-              </CommandItem>
-            ))}
+                </CommandItem>
+              ))}
 
-          {!isSearching && searchResults.length === 0 && (
-            <div className="text-muted-foreground py-4 text-center text-sm">
-              Start typing to search
-            </div>
-          )}
-        </CommandGroup>
+            {!isSearching && searchResults.length === 0 && (
+              <div className="text-muted-foreground py-4 text-center text-sm">
+                Start typing to search
+              </div>
+            )}
+          </CommandGroup>
+        </CommandList>
       </CommandDialog>
 
       {showAddMemory && (

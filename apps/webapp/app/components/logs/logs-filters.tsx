@@ -1,5 +1,14 @@
 import { useState } from "react";
-import { ListFilter, X } from "lucide-react";
+import {
+  Check,
+  LayoutGrid,
+  ListFilter,
+  ListTodo,
+  File,
+  MessageSquare,
+  Tag,
+  X,
+} from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   Popover,
@@ -7,7 +16,9 @@ import {
   PopoverPortal,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import { Badge } from "~/components/ui/badge";
+import { Badge, BadgeColor } from "~/components/ui/badge";
+import { getStatusColor } from "./utils";
+import { getIconForAuthorise } from "../icon-utils";
 
 interface Label {
   id: string;
@@ -69,7 +80,20 @@ export function LogsFilters({
   )?.label;
   const selectedLabelObj = labels.find((l) => l.id === selectedLabel);
 
-  const hasFilters = selectedSource || selectedStatus || selectedType || selectedLabel;
+  const hasFilters =
+    selectedSource || selectedStatus || selectedType || selectedLabel;
+
+  const getIngestType = (type: string) => {
+    return {
+      label: type === "Conversation" ? "Conversation" : "Document",
+      icon:
+        type === "Conversation" ? (
+          <MessageSquare size={14} />
+        ) : (
+          <File size={14} />
+        ),
+    };
+  };
 
   return (
     <div className="mb-2 flex w-full items-center justify-start gap-2 px-3">
@@ -97,30 +121,34 @@ export function LogsFilters({
               <div className="flex flex-col gap-1 p-2">
                 <Button
                   variant="ghost"
-                  className="justify-start"
+                  className="justify-start gap-2"
                   onClick={() => setStep("source")}
                 >
+                  <LayoutGrid size={14} />
                   Source
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start"
+                  className="justify-start gap-2"
                   onClick={() => setStep("status")}
                 >
+                  <Check size={14} />
                   Status
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start"
+                  className="justify-start gap-2"
                   onClick={() => setStep("type")}
                 >
+                  <MessageSquare size={14} />
                   Type
                 </Button>
                 <Button
                   variant="ghost"
-                  className="justify-start"
+                  className="justify-start gap-2"
                   onClick={() => setStep("label")}
                 >
+                  <Tag size={14} />
                   Label
                 </Button>
               </div>
@@ -143,7 +171,7 @@ export function LogsFilters({
                   <Button
                     key={source.slug}
                     variant="ghost"
-                    className="w-full justify-start"
+                    className="w-full justify-start gap-2"
                     onClick={() => {
                       onSourceChange(
                         source.slug === selectedSource
@@ -154,6 +182,11 @@ export function LogsFilters({
                       setStep("main");
                     }}
                   >
+                    {getIconForAuthorise(
+                      source.name.toLowerCase(),
+                      14,
+                      undefined,
+                    )}
                     {source.name}
                   </Button>
                 ))}
@@ -177,7 +210,7 @@ export function LogsFilters({
                   <Button
                     key={status.value}
                     variant="ghost"
-                    className="w-full justify-start"
+                    className="w-full justify-start gap-2"
                     onClick={() => {
                       onStatusChange(
                         status.value === selectedStatus
@@ -188,6 +221,14 @@ export function LogsFilters({
                       setStep("main");
                     }}
                   >
+                    <BadgeColor
+                      className="h-3 w-3"
+                      style={{
+                        backgroundColor: getStatusColor(
+                          status.label.toLocaleUpperCase(),
+                        ),
+                      }}
+                    />
                     {status.label}
                   </Button>
                 ))}
@@ -211,7 +252,7 @@ export function LogsFilters({
                   <Button
                     key={type.value}
                     variant="ghost"
-                    className="w-full justify-start"
+                    className="w-full justify-start gap-2"
                     onClick={() => {
                       onTypeChange(
                         type.value === selectedType ? undefined : type.value,
@@ -220,6 +261,7 @@ export function LogsFilters({
                       setStep("main");
                     }}
                   >
+                    {getIngestType(type.label).icon}
                     {type.label}
                   </Button>
                 ))}
@@ -269,8 +311,17 @@ export function LogsFilters({
       {hasFilters && (
         <div className="flex items-center gap-2">
           {selectedSource && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
-              {selectedSourceName}
+            <Badge
+              variant="secondary"
+              className="h-7 items-center gap-2 rounded px-2"
+            >
+              {getIconForAuthorise(
+                (selectedSourceName as string).toLowerCase(),
+                14,
+                undefined,
+              )}
+              <div className="mt-[1px]"> {selectedSourceName}</div>
+
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onSourceChange(undefined)}
@@ -278,8 +329,17 @@ export function LogsFilters({
             </Badge>
           )}
           {selectedStatus && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
-              {selectedStatusLabel}
+            <Badge variant="secondary" className="h-7 gap-2 rounded px-2">
+              <BadgeColor
+                className="h-3 w-3"
+                style={{
+                  backgroundColor: getStatusColor(
+                    selectedStatusLabel?.toLocaleUpperCase() as string,
+                  ),
+                }}
+              />
+              <div className="mt-[1px]">{selectedStatusLabel}</div>
+
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onStatusChange(undefined)}
@@ -287,8 +347,10 @@ export function LogsFilters({
             </Badge>
           )}
           {selectedType && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
-              {selectedTypeLabel}
+            <Badge variant="secondary" className="h-7 gap-2 rounded px-2">
+              {getIngestType(selectedTypeLabel as string).icon}
+              <div className="mt-[1px]"> {selectedTypeLabel}</div>
+
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onTypeChange(undefined)}
@@ -296,12 +358,15 @@ export function LogsFilters({
             </Badge>
           )}
           {selectedLabel && selectedLabelObj && (
-            <Badge variant="secondary" className="h-7 gap-1 rounded px-2">
+            <Badge
+              variant="secondary"
+              className="flex h-7 items-center gap-2 rounded px-2"
+            >
               <div
                 className="h-3 w-3 rounded-full"
                 style={{ backgroundColor: selectedLabelObj.color }}
               />
-              {selectedLabelObj.name}
+              <div className="mt-[1px]">{selectedLabelObj.name}</div>
               <X
                 className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
                 onClick={() => onLabelChange(undefined)}
