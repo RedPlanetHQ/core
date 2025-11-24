@@ -9,14 +9,12 @@ import axios, { AxiosInstance } from 'axios';
 let calComClient: AxiosInstance;
 
 async function initializeClient(config: Record<string, string>) {
-  const baseURL = config.cal_api_url || 'https://api.cal.com/v2';
+  const baseURL = config.cal_api_url || 'https://api.cal.com/v1';
 
   calComClient = axios.create({
     baseURL,
-    headers: {
-      Authorization: `Bearer ${config.apiKey}`,
-      'Content-Type': 'application/json',
-      'cal-api-version': '2024-08-13',
+    params: {
+      apiKey: config.apiKey,
     },
   });
 }
