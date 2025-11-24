@@ -1,7 +1,13 @@
 import { runQuery } from "~/lib/neo4j.server";
 import { logger } from "~/services/logger.service";
+import { prisma } from "~/db.server";
 
 export interface UserContext {
+  // Identity (from User table)
+  name?: string;
+  email?: string;
+
+  // Context fields
   role?: string;
   goal?: string;
   tools?: string[];
@@ -15,20 +21,31 @@ export interface UserContext {
  * 3. Generic (no context)
  */
 export async function getUserContext(userId: string): Promise<UserContext> {
+  // Fetch user identity from database
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true },
+  });
+
+  const identity = {
+    name: user?.name || undefined,
+    email: user?.email || undefined,
+  };
+
   // Try onboarding statements first
   const onboardingContext = await getOnboardingContext(userId);
   if (onboardingContext.role || onboardingContext.goal || onboardingContext.tools?.length) {
-    return { ...onboardingContext, source: "onboarding" };
+    return { ...identity, ...onboardingContext, source: "onboarding" };
   }
 
   // Fallback: infer from episodes
   const inferredContext = await inferContextFromEpisodes(userId);
   if (inferredContext.role || inferredContext.tools?.length) {
-    return { ...inferredContext, source: "inferred" };
+    return { ...identity, ...inferredContext, source: "inferred" };
   }
 
   // No context available
-  return { source: "none" };
+  return { ...identity, source: "none" };
 }
 
 /**

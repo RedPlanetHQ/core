@@ -349,6 +349,14 @@ export async function processEpisodeIngestion(
         currentStatus === IngestionStatus.COMPLETED &&
         enqueuePersonaGeneration
       ) {
+        logger.info(
+          `Checking if persona update should be triggered after ingestion`,
+          {
+            userId: payload.userId,
+            workspaceId: payload.workspaceId,
+          },
+        );
+        
         await checkAndTriggerPersonaUpdate(
           payload.userId,
           payload.workspaceId,

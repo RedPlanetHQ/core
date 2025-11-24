@@ -17,6 +17,7 @@ import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 
 import { getDocumentsByTitle } from "~/services/graphModels/document";
 import { addToQueue } from "~/trigger/utils/queue";
+import { prisma } from "~/trigger/utils/prisma";
 
 const execAsync = promisify(exec);
 
@@ -70,11 +71,11 @@ interface ClusteringOutput {
   >;
 }
 
-interface ClusterData {
-  topicId: string;
-  keywords: string[];
-  episodeIds: string[];
+interface WorkspaceMetadata {
+  lastPersonaGenerationAt?: string;
+  [key: string]: any;
 }
+
 
 // Zod schema for batch response validation
 const PersonaSummarySchema = z.object({
@@ -536,7 +537,7 @@ async function generatePersonaSummaryBatch(
   const { batchId } = await createBatch({
     requests: batchRequests,
     maxRetries: 3,
-    timeoutMs: 900000,
+    timeoutMs: 1200000,
   });
 
   logger.info(`Persona pattern extraction batch created: ${batchId}`, {
@@ -546,7 +547,7 @@ async function generatePersonaSummaryBatch(
   });
 
   // Poll for completion
-  const batch = await pollBatchCompletion(batchId, 900000);
+  const batch = await pollBatchCompletion(batchId, 1200000);
 
   if (!batch.results || batch.results.length === 0) {
     throw new Error("No results returned from persona pattern extraction");
@@ -670,14 +671,14 @@ INCREMENTAL UPDATE PROTOCOL:
 For each section in the existing persona:
 1. Analyze new episodes for patterns
 2. Determine action:
-   - PRESERVE: >80% consistency with existing pattern (mark [PRESERVED])
-   - UPDATE: 10+ new mentions contradict existing (mark [UPDATED])
-   - NEW: Entirely new pattern not in existing persona (mark [NEW])
-3. Include confidence scoring for updated/new sections
+   - PRESERVE: >80% consistency with existing pattern
+   - UPDATE: 10+ new mentions contradict existing
+   - NEW: Entirely new pattern not in existing persona
+3. Include confidence scoring for sections
 4. Track temporal evolution if time span > 180 days
 5. Prefer stability - only update with strong evidence
 
-Output the COMPLETE updated persona document with ALL sections (preserved + updated + new).
+Output the COMPLETE updated persona document with ALL sections. Do NOT include markers like [PRESERVED], [UPDATED], or [NEW] in the output.
     `.trim();
   }
 
@@ -691,16 +692,29 @@ Output the COMPLETE updated persona document with ALL sections (preserved + upda
  * Build user context section based on source (onboarding/inferred/none)
  */
 function buildContextSection(userContext: UserContext): string {
+  // Build identity section if available
+  const identityLines: string[] = [];
+  if (userContext.name) {
+    identityLines.push(`- Name: ${userContext.name}`);
+  }
+  if (userContext.email) {
+    identityLines.push(`- Primary Email: ${userContext.email}`);
+  }
+
+  const identitySection = identityLines.length > 0
+    ? `## User Identity (from account):\n${identityLines.join("\n")}\n\n`
+    : "";
+
   if (userContext.source === "onboarding") {
     return `
-## User Context (from onboarding):
+${identitySection}## User Context (from onboarding):
 - Role: ${userContext.role || "Not specified"}
 - Goal: ${userContext.goal || "Not specified"}
 - Tools: ${userContext.tools?.join(", ") || "Not specified"}
     `.trim();
   } else if (userContext.source === "inferred") {
     return `
-## User Context (inferred from episodes):
+${identitySection}## User Context (inferred from episodes):
 - Likely Role: ${userContext.role || "Unknown"}
 - Tools Used: ${userContext.tools?.join(", ") || "None detected"}
 
@@ -708,7 +722,7 @@ Note: No onboarding data available. Structure should be generic and data-driven.
     `.trim();
   } else {
     return `
-## User Context:
+${identitySection}## User Context:
 - No onboarding data or role inference available
 - Create a generic, data-driven persona structure based on observed patterns
     `.trim();
@@ -916,13 +930,12 @@ For each section in the existing persona:
 1. Use analytics above as quantitative foundation
 2. Merge pattern context from chunks
 3. Determine: PRESERVE (>80% consistency) | UPDATE (10+ contradictions) | NEW (new pattern)
-4. Mark sections: [PRESERVED] [UPDATED] [NEW]
-5. Include confidence scoring for updated/new sections
-6. Track temporal evolution if time span > 180 days
+4. Include confidence scoring for updated/new sections
+5. Track temporal evolution if time span > 180 days
 
 ${roleGuidance}
 
-Output the COMPLETE updated persona document with ALL sections (preserved + updated + new).
+Output the COMPLETE updated persona document with ALL sections. Do NOT include markers like [PRESERVED], [UPDATED], or [NEW] in the output.
     `.trim()
     : `
 ${systemPrompt}
@@ -938,17 +951,17 @@ TASK: Create a complete persona document by:
 1. Use analytics above as quantitative foundation (lexicon frequencies, style metrics, etc.)
 2. Integrate qualitative pattern context from chunks
 3. Combine quantitative + qualitative into cohesive persona sections
-4. Include confidence scoring for each section: [Confidence: HIGH|MEDIUM|LOW (N data points)]
+4. Include confidence scoring for each section: [Confidence: HIGH|MEDIUM|LOW]
 5. Track temporal evolution if time span > 180 days (for WORLDVIEW, GOALS, PREFERENCES)
 6. Organize into standard persona format
 
 ${roleGuidance}
 
-Standard sections: STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
+Standard sections: IDENTITY, STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
 
 For each section:
 - Include content with prescriptive patterns
-- End with confidence scoring: [Confidence: HIGH|MEDIUM|LOW (N data points)]
+- End with confidence scoring: [Confidence: HIGH|MEDIUM|LOW]
 - Skip sections with <5 data points
 
 Output the complete persona document.
@@ -969,12 +982,12 @@ Output the complete persona document.
     requests: [batchRequest],
     outputSchema: PersonaSummarySchema,
     maxRetries: 3,
-    timeoutMs: 600000,
+    timeoutMs: 1200000,
   });
 
   logger.info(`Persona synthesis batch created: ${batchId}`);
 
-  const batch = await pollBatchCompletion(batchId, 600000);
+  const batch = await pollBatchCompletion(batchId, 1200000);
 
   if (!batch.results || batch.results.length === 0) {
     throw new Error("Persona synthesis batch failed");
@@ -1049,10 +1062,7 @@ EXTRACTION PRINCIPLES:
    - Multi-source consistency indicates strong pattern
 
 7. CONFIDENCE SCORING
-   - For each section, include confidence level at the end: [Confidence: HIGH|MEDIUM|LOW (N data points)]
-   - HIGH: 20+ supporting data points, consistent pattern across sources
-   - MEDIUM: 10-19 data points, mostly consistent
-   - LOW: 5-9 data points, emerging pattern
+   - For each section, include confidence level: [Confidence: HIGH|MEDIUM|LOW]
    - Skip sections with <5 data points
 
 8. TEMPORAL EVOLUTION (if time span > 180 days)
@@ -1061,7 +1071,13 @@ EXTRACTION PRINCIPLES:
    - Only note evolution if clear shift detected (10+ mentions each period)
 
 OUTPUT FORMAT: Structured markdown with sections appropriate for the user's role/context.
-Standard sections include: STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
+Standard sections include: IDENTITY, STYLE_GUIDE, LEXICON_USE, VOICE_TONE, WORLDVIEW, RECEIPTS, DO_DONT, FORMATS, MESSAGING, GOALS, EXAMPLES
+
+IDENTITY SECTION (extract from episodes):
+- Name variations: nicknames, how they refer to themselves
+- Email addresses: any additional emails mentioned (beyond primary)
+- Social profiles: GitHub, Twitter/X, LinkedIn, Discord, Slack handles
+- Other identifiers: any platform usernames or contact info mentioned
 
 IMPORTANT: Skip sections with insufficient data (<5 relevant mentions).
 ${
@@ -1070,12 +1086,12 @@ ${
 
 INCREMENTAL UPDATE PROTOCOL:
 For each section in the existing persona, determine:
-- PRESERVE: Pattern remains >80% consistent with new data (mark with [PRESERVED])
-- UPDATE: Clear shift detected - 10+ new mentions contradict existing pattern (mark with [UPDATED])
-- NEW: Entirely new pattern not in existing persona (mark with [NEW])
+- PRESERVE: Pattern remains >80% consistent with new data
+- UPDATE: Clear shift detected - 10+ new mentions contradict existing pattern
+- NEW: Entirely new pattern not in existing persona
 
 Only update sections with strong evidence. Prefer stability over churn.
-Output the COMPLETE updated persona document with all sections (preserved + updated + new).`
+Output the COMPLETE updated persona document with all sections. Do NOT include markers like [PRESERVED], [UPDATED], or [NEW] in the output.`
     : ""
 }
   `.trim();
@@ -1096,6 +1112,43 @@ ${episode.content}
       `.trim();
     })
     .join("\n\n");
+}
+
+async function updateLastPersonaGenerationTime(
+  workspaceId: string,
+): Promise<void> {
+  try {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+
+    if (!workspace) {
+      logger.warn(`Workspace not found: ${workspaceId}`);
+      return;
+    }
+
+    const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        metadata: {
+          ...metadata,
+          lastPersonaGenerationAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    logger.info(
+      `[Persona Generation] Updated last generation timestamp for workspace: ${workspaceId}`,
+    );
+  } catch (error) {
+    logger.error(
+      `[Persona Generation] Error updating last generation timestamp:`,
+      { error },
+    );
+  }
 }
 
 /**
@@ -1170,12 +1223,18 @@ export async function processPersonaGeneration(
       type: EpisodeType.DOCUMENT,
       source: "persona",
       title: "Persona",
-      labelIds: [labelId],
+      labelIds: [labelId],  
       sessionId: `persona-${workspaceId}`,
       metadata: { documentTitle: "Persona" },
     };
 
     await addToQueue(ingestDocumentData, userId);
+
+    await updateLastPersonaGenerationTime(workspaceId);
+    logger.info("Persona generation job enqueued", {
+      userId,
+      mode,
+    });
 
     logger.info("Persona generation completed", {
       userId,

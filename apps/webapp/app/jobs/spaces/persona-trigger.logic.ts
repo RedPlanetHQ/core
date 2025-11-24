@@ -7,47 +7,9 @@ import {
 } from "~/services/graphModels/document";
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
-
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
   [key: string]: any;
-}
-
-async function updateLastPersonaGenerationTime(
-  workspaceId: string,
-): Promise<void> {
-  try {
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      select: { metadata: true },
-    });
-
-    if (!workspace) {
-      logger.warn(`Workspace not found: ${workspaceId}`);
-      return;
-    }
-
-    const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
-
-    await prisma.workspace.update({
-      where: { id: workspaceId },
-      data: {
-        metadata: {
-          ...metadata,
-          lastPersonaGenerationAt: new Date().toISOString(),
-        },
-      },
-    });
-
-    logger.info(
-      `[Persona Generation] Updated last generation timestamp for workspace: ${workspaceId}`,
-    );
-  } catch (error) {
-    logger.error(
-      `[Persona Generation] Error updating last generation timestamp:`,
-      { error },
-    );
-  }
 }
 
 /**
@@ -174,11 +136,6 @@ export async function checkAndTriggerPersonaUpdate(
         startTime: lastPersonaGenerationAt,
       });
 
-      await updateLastPersonaGenerationTime(workspaceId);
-      logger.info("Persona generation job enqueued", {
-        userId,
-        mode,
-      });
 
       return {
         triggered: true,
