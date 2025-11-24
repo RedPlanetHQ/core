@@ -171,102 +171,103 @@ export async function searchEpisodesByEmbedding(params: {
   });
 }
 
-// Delete episode and its related nodes safely
+// Delete episode and its related nodes safely using single optimized Cypher
 export async function deleteEpisodeWithRelatedNodes(params: {
   episodeUuid: string;
   userId: string;
 }): Promise<{
-  episodeDeleted: boolean;
+  deleted: boolean;
+  episodesDeleted: number;
   statementsDeleted: number;
   entitiesDeleted: number;
-  factsDeleted: number;
 }> {
-  // Step 1: Check if episode exists
+  // Check if episode exists
   const episodeCheck = await runQuery(
-    `MATCH (e:Episode {uuid: $episodeUuid, userId: $userId}) RETURN ${EPISODIC_NODE_PROPERTIES} as episode`,
+    `MATCH (e:Episode {uuid: $episodeUuid, userId: $userId}) RETURN e.uuid as uuid`,
     { episodeUuid: params.episodeUuid, userId: params.userId },
   );
 
   if (!episodeCheck || episodeCheck.length === 0) {
     return {
-      // Return true if no episode exist
-      episodeDeleted: true,
+      deleted: true,
+      episodesDeleted: 0,
       statementsDeleted: 0,
       entitiesDeleted: 0,
-      factsDeleted: 0,
     };
   }
 
-  // Step 2: Find statements that are ONLY connected to this episode
-  const statementsToDelete = await runQuery(
-    `
-    MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(stmt:Statement)
-    WHERE NOT EXISTS {
-      MATCH (otherEpisode:Episode)-[:HAS_PROVENANCE]->(stmt)
-      WHERE otherEpisode.uuid <> $episodeUuid AND otherEpisode.userId = $userId
-    }
-    RETURN stmt.uuid as statementUuid
-  `,
-    { episodeUuid: params.episodeUuid, userId: params.userId },
-  );
-
-  const statementUuids = statementsToDelete.map((r) => r.get("statementUuid"));
-
-  // Step 3: Find entities that are ONLY connected to statements we're deleting
-  const entitiesToDelete = await runQuery(
-    `
-    MATCH (stmt:Statement)-[r:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]->(entity:Entity)
-    WHERE stmt.uuid IN $statementUuids AND stmt.userId = $userId
-    AND NOT EXISTS {
-      MATCH (otherStmt:Statement)-[:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]->(entity)
-      WHERE otherStmt.userId = $userId AND NOT otherStmt.uuid IN $statementUuids
-    }
-    RETURN DISTINCT entity.uuid as entityUuid
-  `,
-    { statementUuids, userId: params.userId },
-  );
-
-  const entityUuids = entitiesToDelete.map((r) => r.get("entityUuid"));
-
-  // Step 4: Delete statements
-  if (statementUuids.length > 0) {
-    await runQuery(
-      `
-      MATCH (stmt:Statement {userId: $userId})
-      WHERE stmt.uuid IN $statementUuids
-      DETACH DELETE stmt
-    `,
-      { statementUuids, userId: params.userId },
-    );
-  }
-
-  // Step 5: Delete orphaned entities
-  if (entityUuids.length > 0) {
-    await runQuery(
-      `
-      MATCH (entity:Entity {userId: $userId})
-      WHERE entity.uuid IN $entityUuids
-      DETACH DELETE entity
-    `,
-      { entityUuids, userId: params.userId },
-    );
-  }
-
-  // Step 6: Delete the episode
-  await runQuery(
-    `
+  const query = `
     MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
-    DETACH DELETE episode
-  `,
-    { episodeUuid: params.episodeUuid, userId: params.userId },
-  );
 
-  return {
-    episodeDeleted: true,
-    statementsDeleted: statementUuids.length,
-    entitiesDeleted: entityUuids.length,
-    factsDeleted: statementUuids.length,
-  };
+    // Get all related data first
+    OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
+    OPTIONAL MATCH (s)-[:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]->(entity:Entity)
+
+    // Collect all related nodes
+    WITH episode, collect(DISTINCT s) as statements, collect(DISTINCT entity) as entities
+
+    // Find statements only connected to this episode
+    UNWIND CASE WHEN size(statements) = 0 THEN [null] ELSE statements END as stmt
+    OPTIONAL MATCH (otherEpisode:Episode)-[:HAS_PROVENANCE]->(stmt)
+    WHERE stmt IS NOT NULL AND otherEpisode.uuid <> $episodeUuid AND otherEpisode.userId = $userId
+
+    WITH episode, statements, entities,
+         collect(CASE WHEN stmt IS NOT NULL AND otherEpisode IS NULL THEN stmt ELSE null END) as orphanedStatements
+
+    // Filter to valid orphaned statements
+    WITH episode, statements, entities, [s IN orphanedStatements WHERE s IS NOT NULL] as stmtsToDelete
+
+    // Find orphaned entities (only connected to statements we're deleting)
+    UNWIND CASE WHEN size(entities) = 0 THEN [null] ELSE entities END as entity
+    OPTIONAL MATCH (entity)<-[:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]-(otherStmt:Statement)
+    WHERE entity IS NOT NULL AND NOT otherStmt IN stmtsToDelete
+
+    WITH episode, stmtsToDelete,
+         collect(CASE WHEN entity IS NOT NULL AND otherStmt IS NULL THEN entity ELSE null END) as orphanedEntities
+
+    // Delete orphaned statements
+    FOREACH (stmt IN stmtsToDelete | DETACH DELETE stmt)
+
+    // Delete orphaned entities only
+    WITH episode, stmtsToDelete, [entity IN orphanedEntities WHERE entity IS NOT NULL] as entitiesToDelete
+    FOREACH (entity IN entitiesToDelete | DETACH DELETE entity)
+
+    // Delete episode
+    DETACH DELETE episode
+
+    RETURN
+      true as deleted,
+      1 as episodesDeleted,
+      size(stmtsToDelete) as statementsDeleted,
+      size(entitiesToDelete) as entitiesDeleted
+  `;
+
+  try {
+    const result = await runQuery(query, {
+      episodeUuid: params.episodeUuid,
+      userId: params.userId
+    });
+
+    if (result.length === 0) {
+      return {
+        deleted: false,
+        episodesDeleted: 0,
+        statementsDeleted: 0,
+        entitiesDeleted: 0,
+      };
+    }
+
+    const record = result[0];
+    return {
+      deleted: record.get("deleted") || false,
+      episodesDeleted: record.get("episodesDeleted") || 0,
+      statementsDeleted: record.get("statementsDeleted") || 0,
+      entitiesDeleted: record.get("entitiesDeleted") || 0,
+    };
+  } catch (error) {
+    console.error("Error deleting episode with related nodes:", error);
+    throw error;
+  }
 }
 
 export async function getRelatedEpisodesEntities(params: {

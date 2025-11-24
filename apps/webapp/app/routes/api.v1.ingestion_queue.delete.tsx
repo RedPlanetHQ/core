@@ -7,6 +7,7 @@ import {
   getIngestionQueue,
 } from "~/services/ingestionLogs.server";
 import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
+import { deleteDocumentWithRelatedNodes } from "~/services/graphModels/document";
 
 export const DeleteEpisodeBodyRequest = z.object({
   id: z.string(),
@@ -48,7 +49,19 @@ const { action, loader } = createHybridActionApiRoute(
         await cancelJob(latestTask.id);
       }
 
-      let result;
+      let result: {
+        deleted: boolean;
+        documentsDeleted?: number;
+        episodesDeleted: number;
+        statementsDeleted: number;
+        entitiesDeleted: number;
+      } = {
+        deleted: false,
+        documentsDeleted: 0,
+        episodesDeleted: 0,
+        statementsDeleted: 0,
+        entitiesDeleted: 0,
+      };
 
       if (output?.episodeUuid) {
         result = await deleteEpisodeWithRelatedNodes({
@@ -56,10 +69,25 @@ const { action, loader } = createHybridActionApiRoute(
           userId: authentication.userId,
         });
 
-        if (!result.episodeDeleted) {
+        if (!result.deleted) {
           return json(
             {
               error: "Episode not found or unauthorized",
+              code: "not_found",
+            },
+            { status: 404 },
+          );
+        }
+      } else if (output?.documentUuid) {
+        result = await deleteDocumentWithRelatedNodes(
+          output?.documentUuid,
+          authentication.userId,
+        );
+
+        if (!result.deleted) {
+          return json(
+            {
+              error: "Document not found or unauthorized",
               code: "not_found",
             },
             { status: 404 },
@@ -73,10 +101,10 @@ const { action, loader } = createHybridActionApiRoute(
         success: true,
         message: "Episode deleted successfully",
         deleted: {
-          episode: result?.episodeDeleted,
-          statements: result?.statementsDeleted,
-          entities: result?.entitiesDeleted,
-          facts: result?.factsDeleted,
+          documentsDeleted: result.documentsDeleted,
+          episodesDeleted: result.episodesDeleted,
+          statementsDeleted: result.statementsDeleted,
+          entitiesDeleted: result.entitiesDeleted,
         },
       });
     } catch (error) {

@@ -255,7 +255,8 @@ export async function getDocumentVersions(
  *
  * @throws Error if attempting to delete a persona document
  */
-export async function deleteDocument(documentUuid: string): Promise<{
+export async function deleteDocumentWithRelatedNodes(documentUuid: string, userId: string): Promise<{
+  deleted: boolean;
   documentsDeleted: number;
   episodesDeleted: number;
   statementsDeleted: number;
@@ -266,6 +267,7 @@ export async function deleteDocument(documentUuid: string): Promise<{
 
   if (!documentCheck) {
     return {
+      deleted: true,
       documentsDeleted: 0,
       episodesDeleted: 0,
       statementsDeleted: 0,
@@ -284,26 +286,28 @@ export async function deleteDocument(documentUuid: string): Promise<{
   }
 
   const query = `
-    MATCH (d:Document {uuid: $documentUuid})
+    MATCH (d:Document {uuid: $documentUuid, userId: $userId})
 
     // Get all related data first
     OPTIONAL MATCH (d)-[:CONTAINS_CHUNK]->(e:Episode)
-    OPTIONAL MATCH (e)-[:CONTAINS]->(s:Statement)
-    OPTIONAL MATCH (s)-[:REFERENCES]->(entity:Entity)
+    OPTIONAL MATCH (e)-[:HAS_PROVENANCE]->(s:Statement)
+    OPTIONAL MATCH (s)-[:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]->(entity:Entity)
 
-    // Count entities that will become orphaned
+    // Collect all related nodes
     WITH d, collect(DISTINCT e) as episodes, collect(DISTINCT s) as statements, collect(DISTINCT entity) as entities
-    UNWIND entities as entity
-    OPTIONAL MATCH (entity)<-[:REFERENCES]-(otherStmt:Statement)
-    WHERE NOT otherStmt IN statements
+
+    // Find orphaned entities (only connected to statements we're deleting)
+    UNWIND CASE WHEN size(entities) = 0 THEN [null] ELSE entities END as entity
+    OPTIONAL MATCH (entity)<-[:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]-(otherStmt:Statement)
+    WHERE entity IS NOT NULL AND NOT otherStmt IN statements
 
     WITH d, episodes, statements,
-         collect(CASE WHEN otherStmt IS NULL THEN entity ELSE null END) as orphanedEntities
+         collect(CASE WHEN entity IS NOT NULL AND otherStmt IS NULL THEN entity ELSE null END) as orphanedEntities
 
-    // Delete statements (breaks references to entities)
+    // Delete statements
     FOREACH (stmt IN statements | DETACH DELETE stmt)
 
-    // Delete orphaned entities only (filter nulls first)
+    // Delete orphaned entities only
     WITH d, episodes, statements, [entity IN orphanedEntities WHERE entity IS NOT NULL] as validOrphanedEntities
     FOREACH (entity IN validOrphanedEntities | DETACH DELETE entity)
 
@@ -314,6 +318,7 @@ export async function deleteDocument(documentUuid: string): Promise<{
     DETACH DELETE d
 
     RETURN
+      true as deleted,
       1 as documentsDeleted,
       size(episodes) as episodesDeleted,
       size(statements) as statementsDeleted,
@@ -321,10 +326,11 @@ export async function deleteDocument(documentUuid: string): Promise<{
   `;
 
   try {
-    const result = await runQuery(query, { documentUuid });
+    const result = await runQuery(query, { documentUuid, userId });
 
     if (result.length === 0) {
       return {
+        deleted: false,
         documentsDeleted: 0,
         episodesDeleted: 0,
         statementsDeleted: 0,
@@ -334,6 +340,7 @@ export async function deleteDocument(documentUuid: string): Promise<{
 
     const record = result[0];
     return {
+      deleted: record.get("deleted") || false,
       documentsDeleted: record.get("documentsDeleted") || 0,
       episodesDeleted: record.get("episodesDeleted") || 0,
       statementsDeleted: record.get("statementsDeleted") || 0,
