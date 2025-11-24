@@ -1,4 +1,4 @@
-import { task } from "@trigger.dev/sdk/v3";
+import { queue, task } from "@trigger.dev/sdk/v3";
 import { python } from "@trigger.dev/python";
 import { logger } from "~/services/logger.service";
 import {
@@ -59,6 +59,11 @@ async function runAnalyticsWithTriggerPython(
   return result.stdout;
 }
 
+const personaQueue = queue({
+  name: "persona-generation-queue",
+  concurrencyLimit: 1,
+});
+
 /**
  * Trigger.dev task for persona generation
  *
@@ -67,10 +72,7 @@ async function runAnalyticsWithTriggerPython(
  */
 export const personaGenerationTask = task({
   id: "persona-generation",
-  queue: {
-    name: "persona-generation-queue",
-    concurrencyLimit: 3,
-  },
+  queue: personaQueue,
   machine: "large-2x",
   maxDuration: 36000,
   run: async (payload: PersonaGenerationPayload) => {

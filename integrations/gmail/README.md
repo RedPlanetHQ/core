@@ -1,4 +1,4 @@
-# Gmail Integration for Sol
+# Gmail Integration for Core
 
 This integration allows you to connect your Gmail account to Sol, enabling you to monitor emails, send messages, and manage your email workflow.
 
@@ -19,6 +19,7 @@ This integration allows you to connect your Gmail account to Sol, enabling you t
 ## Installation
 
 1. Install dependencies:
+
    ```bash
    npm install
    ```
@@ -47,21 +48,27 @@ The integration uses OAuth2 for authentication with the following scopes:
 The integration handles the following events:
 
 ### Email Received
+
 Triggered when a new email is received. Creates an activity with:
+
 - Sender information
 - Subject line
 - Email content
 - Permalink to the email in Gmail
 
 ### Email Sent
+
 Triggered when an email is sent. Creates an activity with:
+
 - Recipient information
 - Subject line
 - Email content
 - Permalink to the sent email
 
 ### Email Starred
+
 Triggered when an email is starred. Creates an activity with:
+
 - Sender information
 - Subject line
 - Email content
@@ -70,16 +77,19 @@ Triggered when an email is starred. Creates an activity with:
 ## Development
 
 ### Build
+
 ```bash
 npm run build
 ```
 
 ### Lint
+
 ```bash
 npm run lint
 ```
 
 ### Format
+
 ```bash
 npm run prettier
 ```
@@ -108,6 +118,7 @@ src/
 ## Error Handling
 
 The integration includes proper error handling for:
+
 - Authentication failures
 - API rate limits
 - Network errors
@@ -130,4 +141,4 @@ The integration includes proper error handling for:
 
 ## License
 
-This project is licensed under the same license as the parent Sol project. 
+This project is licensed under the same license as the parent Sol project.
