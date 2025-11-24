@@ -97,7 +97,7 @@ export default function API() {
   };
 
   return (
-    <div className="mx-auto flex w-3xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
       <Dialog open={open} onOpenChange={setOpen}>
         <SettingSection
           title="API Keys"

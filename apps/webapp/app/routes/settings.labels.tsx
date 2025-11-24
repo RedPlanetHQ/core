@@ -125,7 +125,7 @@ export default function Labels() {
   >(undefined);
 
   return (
-    <div className="mx-auto flex w-3xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
       <SettingSection
         title="Labels"
         description="Use labels and label groups to help organize and filter episodes in your workspace."

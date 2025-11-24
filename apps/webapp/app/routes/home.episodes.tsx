@@ -5,11 +5,12 @@ import { useLogs } from "~/hooks/use-logs";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
 import { Card, CardContent } from "~/components/ui/card";
-import { Database, LoaderCircle } from "lucide-react";
+import { Database, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { OnboardingModal } from "~/components/onboarding";
 import { LabelService } from "~/services/label.server";
 import { getUser } from "~/services/session.server";
+import { AddMemoryDialog } from "~/components/command-bar/memory-dialog.client";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -32,6 +33,7 @@ export default function LogsAll() {
   const [selectedType, setSelectedType] = useState<string | undefined>();
   const [selectedLabel, setSelectedLabel] = useState<string | undefined>();
   const [onboarding, setOnboarding] = useState(false);
+  const [showAddMemory, setShowAddMemory] = useState(false);
 
   const {
     logs,
@@ -64,9 +66,19 @@ export default function LogsAll() {
   return (
     <>
       <div className="flex h-full flex-col">
-        <PageHeader title="Episodes" />
+        <PageHeader
+          title="Episodes"
+          actions={[
+            {
+              label: "Add episode",
+              icon: <Plus size={14} />,
+              onClick: () => setShowAddMemory(true),
+              variant: "secondary",
+            },
+          ]}
+        />
 
-        <div className="flex h-[calc(100vh_-_56px)] w-full flex-col items-center space-y-6 pt-3">
+        <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
           {isInitialLoad ? (
             <>
               <LoaderCircle className="text-primary h-4 w-4 animate-spin" />
@@ -134,6 +146,10 @@ export default function LogsAll() {
           setOnboarding(false);
         }}
       />
+
+      {showAddMemory && (
+        <AddMemoryDialog open={showAddMemory} onOpenChange={setShowAddMemory} />
+      )}
     </>
   );
 }

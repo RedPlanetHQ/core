@@ -9,6 +9,7 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarProvider,
+  SidebarTrigger,
 } from "~/components/ui/sidebar";
 import { Button } from "~/components/ui";
 import { cn } from "~/lib/utils";
@@ -55,8 +56,17 @@ export default function Settings() {
 
   return (
     <div className="bg-background h-full w-full overflow-hidden p-0">
-      <SidebarProvider className="items-start">
-        <Sidebar collapsible="none" className="hidden w-[180px] md:flex">
+      <SidebarProvider
+        style={
+          {
+            "--sidebar-width": "calc(var(--spacing) * 54)",
+            "--header-height": "calc(var(--spacing) * 12)",
+            background: "var(--background)",
+          } as React.CSSProperties
+        }
+        className="items-start"
+      >
+        <Sidebar className="border-none">
           <SidebarHeader className="flex justify-start pb-0">
             <Button
               variant="ghost"
@@ -112,8 +122,11 @@ export default function Settings() {
             </SidebarGroup>
           </SidebarContent>
         </Sidebar>
-        <main className="flex h-[100vh] flex-1 flex-col overflow-hidden p-2 pl-0">
+        <main className="flex h-[100vh] flex-1 flex-col overflow-hidden p-2 lg:pl-0">
           <div className="bg-background-2 flex h-full flex-1 flex-col overflow-y-auto rounded-md">
+            <div className="flex p-4 pb-0 lg:hidden">
+              <SidebarTrigger className="mr-1" />
+            </div>
             <Outlet />
           </div>
         </main>

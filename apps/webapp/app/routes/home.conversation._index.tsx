@@ -11,7 +11,7 @@ import {
   requireWorkpace,
 } from "~/services/session.server";
 
-import { ConversationList, ConversationNew } from "~/components/conversation";
+import { ConversationNew } from "~/components/conversation";
 import {
   createConversation,
   CreateConversationSchema,

@@ -13,7 +13,7 @@ import { graphResolutionTask } from "./graph-resolution";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
-  concurrencyLimit: 1,
+  concurrencyLimit: 50,
 });
 
 // Export for backwards compatibility

@@ -18,6 +18,7 @@ import {
   AlertDialogTitle,
 } from "~/components/ui/alert-dialog";
 import { SettingSection } from "~/components/setting-section";
+import { SidebarTrigger } from "~/components/ui/sidebar";
 
 interface SuccessDataResponse {
   success: boolean;
@@ -63,7 +64,7 @@ export default function AccountSettings() {
   const canDelete = confirmText === user.email;
 
   return (
-    <div className="mx-auto flex w-3xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
       <SettingSection
         title="Account Settings"
         description="Manage your account information and preferences"

@@ -44,9 +44,13 @@ export const ConversationNew = ({
       action="/home/conversation"
       method="post"
       onSubmit={(e) => submitForm(e)}
-      className="h-[calc(100vh_-_56px)] pt-2"
+      className="h-[calc(100vh)] pt-2 md:h-[calc(100vh_-_56px)]"
     >
-      <div className={cn("flex h-[calc(100vh_-_56px)] flex-col")}>
+      <div
+        className={cn(
+          "flex h-[calc(100vh)] flex-col md:h-[calc(100vh_-_56px)]",
+        )}
+      >
         <div className="flex h-full w-full flex-col items-center justify-start overflow-y-auto p-4">
           <div className="flex w-full flex-col items-center">
             <div className="w-full max-w-[90ch] pt-[5rem]">

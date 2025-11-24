@@ -48,7 +48,7 @@ const DialogContent = React.forwardRef<
       >
         <div
           className={cn(
-            "dialog-content bg-background-2 shadow-1 border-border z-50 flex max-h-full min-w-[500px] flex-col gap-4 overflow-hidden sm:rounded-lg",
+            "dialog-content bg-background-2 shadow-1 border-border z-50 flex max-h-full min-w-[300px] flex-col gap-4 overflow-hidden rounded sm:rounded-lg md:min-w-[500px]",
             className,
           )}
         >

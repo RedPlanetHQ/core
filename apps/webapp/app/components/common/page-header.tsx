@@ -94,23 +94,28 @@ export function PageHeader({
         `}
       </style>
       <div className="flex w-full items-center justify-between gap-1 px-4 pr-2 lg:gap-2">
-        <div className="-ml-1 flex items-center gap-1">
-          {showTrigger && <SidebarTrigger className="mr-1" />}
+        <div className="-ml-1 flex min-w-[0px] shrink items-center gap-1">
+          {showTrigger && <SidebarTrigger className="mr-1 shrink-0" />}
 
           {/* Breadcrumbs */}
           {breadcrumbs && breadcrumbs.length > 0 ? (
-            <nav className="mt-0.5 flex items-center space-x-1">
+            <nav className="mt-0.5 flex min-w-[0px] shrink items-center space-x-1">
               {breadcrumbs.map((breadcrumb, index) => (
-                <div key={index} className="flex items-center">
+                <div key={index} className="flex items-center truncate">
                   {index > 0 && (
                     <span className="text-muted-foreground mx-1">/</span>
                   )}
                   {breadcrumb.href ? (
-                    <a onClick={() => navigate(breadcrumb.href as string)}>
+                    <a
+                      className="truncate"
+                      onClick={() => navigate(breadcrumb.href as string)}
+                    >
                       {breadcrumb.label}
                     </a>
                   ) : (
-                    <span className="text-gray-900">{breadcrumb.label}</span>
+                    <span className="text-muted-foreground truncate">
+                      {breadcrumb.label}
+                    </span>
                   )}
                 </div>
               ))}
