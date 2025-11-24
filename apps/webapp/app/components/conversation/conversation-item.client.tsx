@@ -36,7 +36,7 @@ const Tool = ({ part }: { part: ToolUIPart<any> }) => {
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className="bg-grayAlpha-100 my-1 rounded px-2"
+      className="my-1 rounded border-1 border-gray-300 px-2"
     >
       <CollapsibleTrigger asChild>
         <Button
@@ -55,13 +55,13 @@ const Tool = ({ part }: { part: ToolUIPart<any> }) => {
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="flex flex-col gap-2">
-          <div className="bg-grayAlpha-100 rounded p-2">
+          <div className="bg-grayAlpha-50 rounded p-2">
             <p className="text-muted-foreground text-sm"> Request </p>
             <p className="mt-2 font-mono text-[#BF4594]">
               {JSON.stringify(part.input, null, 2)}
             </p>
           </div>
-          <div className="bg-grayAlpha-100 mb-2 rounded p-2">
+          <div className="bg-grayAlpha-50 mb-2 rounded p-2">
             <p className="text-muted-foreground text-sm"> Response </p>
             <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
           </div>
@@ -105,10 +105,15 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
   };
 
   return (
-    <div className={cn("flex gap-2 px-4 pb-2", isUser && "my-4 justify-end")}>
+    <div
+      className={cn(
+        "flex w-full gap-2 px-4 pb-2",
+        isUser && "my-4 justify-end",
+      )}
+    >
       <div
         className={cn(
-          "flex flex-col",
+          "flex w-full flex-col",
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >

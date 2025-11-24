@@ -36,7 +36,6 @@ export async function enqueueIngestEpisode(payload: {
     const { ingestTask } = await import("~/trigger/ingest/ingest");
     const handler = await ingestTask.trigger(payload, {
       queue: "ingestion-queue",
-      concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
     });
     return { id: handler.id, token: handler.publicAccessToken };
@@ -136,10 +135,14 @@ export async function enqueueSessionCompaction(
   } else {
     // BullMQ
     const { sessionCompactionQueue } = await import("~/bullmq/queues");
-    const job = await sessionCompactionQueue.add("session-compaction", payload, {
-      attempts: 3,
-      backoff: { type: "exponential", delay: 2000 },
-    });
+    const job = await sessionCompactionQueue.add(
+      "session-compaction",
+      payload,
+      {
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+      },
+    );
     return { id: job.id };
   }
 }
@@ -275,7 +278,9 @@ export async function enqueueGraphResolution(
       "~/trigger/ingest/graph-resolution"
     );
     const handler = await graphResolutionTask.trigger(payload, {
-      tags: [payload.userId, "graph-resolution"],
+      concurrencyKey: payload.userId,
+      queue: "graph-resolution-queue",
+      tags: [payload.userId, payload.queueId as string],
     });
     return { id: handler.id };
   } else {

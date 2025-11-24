@@ -90,7 +90,7 @@ export default function ConfirmBasicDetails() {
 
   return (
     <LoginPageLayout>
-      <Card className="min-w-[500px] rounded-lg p-3 pt-1">
+      <Card className="min-w-[0] rounded-lg p-3 pt-1 md:min-w-[500px]">
         <CardHeader className="flex flex-col items-start px-0">
           <CardTitle className="px-0">Onboarding</CardTitle>
           <CardDescription>

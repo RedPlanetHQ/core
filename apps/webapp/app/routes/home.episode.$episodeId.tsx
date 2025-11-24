@@ -35,7 +35,7 @@ export default function InboxNotSelected() {
     return (
       <div className="flex h-full w-full flex-col">
         <PageHeader title="Episode" />
-        <div className="flex h-[calc(100vh_-_56px)] flex-col items-center justify-center gap-2 p-4">
+        <div className="flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4 md:h-[calc(100vh_-_56px)]">
           <Inbox size={30} />
           No episode data found
         </div>
@@ -45,7 +45,7 @@ export default function InboxNotSelected() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-[calc(100vh_-_16px)] w-full flex-col overflow-hidden">
+      <div className="flex h-[calc(100vh)] w-full flex-col overflow-hidden md:h-[calc(100vh_-_16px)]">
         <PageHeader
           title="Episode"
           actionsNode={<LogOptions id={log.id} status={log.status} />}

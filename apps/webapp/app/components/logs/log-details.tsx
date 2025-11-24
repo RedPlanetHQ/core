@@ -104,7 +104,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
           method: "PATCH",
           action: `/api/v1/logs/${log.id}`,
           encType: "application/json",
-        }
+        },
       );
     }, 500); // 500ms debounce
 
@@ -118,7 +118,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
 
   return (
     <div className="flex h-full w-full flex-col items-center overflow-auto">
-      <div className="max-w-4xl min-w-3xl">
+      <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
         <div>
           <Input
             value={title}

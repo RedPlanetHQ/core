@@ -328,6 +328,12 @@
     @apply border-border outline-ring/50;
     --header-height: 40px;
   }
+
+  html {
+    height: 100%;
+  }
+
+
   body {
     @apply bg-background-2 text-foreground text-base;
   }

@@ -1,13 +1,19 @@
-import { task } from "@trigger.dev/sdk";
+import { queue, task } from "@trigger.dev/sdk";
 import {
   processGraphResolution,
   type GraphResolutionPayload,
 } from "~/jobs/ingest/graph-resolution.logic";
 
+const graphResolutionQueue = queue({
+  name: "graph-resolution-queue",
+  concurrencyLimit: 1,
+});
+
 // Register the Trigger.dev task for graph resolution
 export const graphResolutionTask = task({
   id: "graph-resolution",
-  machine: "small-2x",
+  machine: "medium-2x",
+  queue: graphResolutionQueue,
   retry: {
     maxAttempts: 3,
     maxTimeoutInMs: 10000,

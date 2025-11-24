@@ -88,8 +88,8 @@ export default function SingleConversation() {
         actionsNode={<HistoryDropdown currentConversationId={conversationId} />}
       />
 
-      <div className="relative flex h-[calc(100vh_-_56px)] w-full flex-col items-center justify-center overflow-auto">
-        <div className="flex h-[calc(100vh_-_80px)] w-full flex-col justify-end overflow-hidden">
+      <div className="relative flex h-[calc(100vh)] w-full flex-col items-center justify-center overflow-auto md:h-[calc(100vh_-_56px)]">
+        <div className="flex h-full w-full flex-col justify-end overflow-hidden py-4 pb-12 lg:pb-4">
           <ScrollAreaWithAutoScroll>
             {messages.map((message: UIMessage, index: number) => {
               return <ConversationItem key={index} message={message} />;

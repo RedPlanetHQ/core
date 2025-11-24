@@ -64,7 +64,6 @@ const data = {
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const user = useUser();
-  const { conversationId } = useParams();
 
   const [commandBar, setCommandBar] = React.useState(false);
   const [memoryAdd, setMemoryAdd] = React.useState(false);
@@ -77,11 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <>
-      <Sidebar
-        variant="inset"
-        {...props}
-        className="bg-background h-[100vh] py-2"
-      >
+      <Sidebar variant="inset" {...props} className="bg-background py-2">
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">

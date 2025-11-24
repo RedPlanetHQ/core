@@ -42,6 +42,7 @@ import {
   enqueueSessionCompaction,
   enqueueBertTopicAnalysis,
   enqueuePersonaGeneration,
+  enqueueGraphResolution,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import {
@@ -52,7 +53,6 @@ import {
   type GraphResolutionPayload,
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
-import { enqueueGraphResolution } from "~/lib/queue-adapter.server";
 
 /**
  * Episode ingestion worker
@@ -80,7 +80,7 @@ export const ingestWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 1, // Global limit: process up to 1 jobs in parallel
+    concurrency: 3, // Global limit: process up to 1 jobs in parallel
   },
 );
 
@@ -213,7 +213,7 @@ export const graphResolutionWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 3, // Process up to 3 resolutions in parallel
+    concurrency: 1, // Process up to 3 resolutions in parallel
   },
 );
 

@@ -24,7 +24,7 @@ export default function McpSettings() {
   });
 
   return (
-    <div className="mx-auto flex h-full w-3xl flex-col gap-4 px-4 pt-6">
+    <div className="mx-auto flex h-full w-auto flex-col gap-4 px-4 pt-6 md:w-3xl">
       <SettingSection
         title="MCP Sessions"
         description="View and manage Model Context Protocol sessions for integrations."

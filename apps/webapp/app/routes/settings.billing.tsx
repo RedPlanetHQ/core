@@ -231,7 +231,7 @@ export default function BillingSettings() {
   }
 
   return (
-    <div className="mx-auto flex w-3xl flex-col gap-4 px-4 py-6">
+    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
       <SettingSection
         title="Billing"
         description=" Manage your subscription, usage, and billing history"

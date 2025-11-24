@@ -17,7 +17,7 @@ export function FloatingIngestionStatus() {
   ).length;
 
   return (
-    <div className="fixed right-4 bottom-4 z-50 max-w-sm">
+    <div className="fixed right-4 bottom-4 z-50 hidden max-w-sm md:block">
       <Card className="shadow">
         <CardContent className="flex items-center gap-2 p-2">
           <LoaderCircle className="text-primary h-4 w-4 animate-spin" />

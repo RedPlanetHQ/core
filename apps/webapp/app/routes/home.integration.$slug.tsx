@@ -179,7 +179,7 @@ export function IntegrationDetail({
           },
         ]}
       />
-      <div className="flex h-[calc(100vh_-_56px)] flex-col items-center overflow-hidden p-4 px-5">
+      <div className="flex h-[calc(100vh)] flex-col items-center overflow-hidden p-4 px-5 md:h-[calc(100vh_-_56px)]">
         <div className="w-5xl">
           <Section
             title={integration.name}

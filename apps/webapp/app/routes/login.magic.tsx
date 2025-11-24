@@ -144,7 +144,7 @@ export default function LoginMagicLinkPage() {
       <Form method="post">
         <div className="flex flex-col items-center justify-center">
           {data.magicLinkSent ? (
-            <Card className="min-w-[400px] rounded-md bg-transparent p-3">
+            <Card className="min-w-[0] rounded-md bg-transparent p-3 md:min-w-[500px]">
               <CardHeader className="flex flex-col items-start">
                 <CardTitle className="mb-0 text-xl">
                   Check your magic link
