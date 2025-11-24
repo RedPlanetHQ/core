@@ -58,6 +58,7 @@ export class SearchService {
           createdAt: Date;
           labelIds: string[];
           isCompact?: boolean;
+          isDocument?: boolean;
           relevanceScore?: number;
         }[];
         invalidatedFacts: {
@@ -515,6 +516,7 @@ export class SearchService {
       createdAt: Date;
       labelIds: string[];
       isCompact?: boolean;
+      isDocument?: boolean;
       rerankScore?: number;
     }>,
     facts: Array<{
@@ -613,6 +615,7 @@ export class SearchService {
       createdAt: Date;
       labelIds: string[];
       isCompact?: boolean;
+      isDocument?: boolean;
       relevanceScore?: number;
     }>
   > {
@@ -698,6 +701,7 @@ export class SearchService {
       createdAt: Date;
       labelIds: string[];
       isCompact?: boolean;
+      isDocument?: boolean;
       relevanceScore?: number;
       originalIndex: number;
     }> = [];
@@ -705,14 +709,16 @@ export class SearchService {
     const processedSessions = new Set<string>();
     const processedDocuments = new Set<string>();
 
-    episodesWithScores.forEach((ep, index) => {
+    let index = 0;
+    for (const ep of episodesWithScores) {
       const sessionId = ep.episode.sessionId;
       const documentId = ep.episode.documentId;
 
       // Document chunk episode
       if (documentId) {
         if (processedDocuments.has(documentId)) {
-          return; // Skip, already added parent document
+          index++;
+          continue; // Skip, already added parent document
         }
 
         const document = documentMap.get(documentId);
@@ -727,7 +733,7 @@ export class SearchService {
             content: document.originalContent, // Use full document content
             createdAt: document.createdAt,
             labelIds: documentLabelIds,
-            isCompact: true, // Mark as compact/aggregated
+            isDocument: true, // Mark as compact/aggregated
             relevanceScore: group.highestScore, // Use highest score from document chunks
             originalIndex: group.firstIndex, // Use position of first chunk from this document
           });
@@ -748,12 +754,14 @@ export class SearchService {
         }
       }
       // Session episode
-      else if (sessionId) {
+      else if (sessionId && !documentId) {
         if (processedSessions.has(sessionId)) {
-          return; // Skip, already added compact
+          index++;
+          continue; // Skip, already added compact
         }
 
         const compact = compactMap.get(sessionId);
+
         if (compact) {
           const group = sessionGroups.get(sessionId)!;
           // Collect unique labelIds from all episodes in this session
@@ -795,7 +803,9 @@ export class SearchService {
           originalIndex: index,
         });
       }
-    });
+
+      index++;
+    }
 
     // Sort by originalIndex to preserve reranking order
     result.sort((a, b) => a.originalIndex - b.originalIndex);

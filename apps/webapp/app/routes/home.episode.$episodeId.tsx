@@ -17,7 +17,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   try {
     const log = await getIngestionQueueForFrontend(
       logId as string,
-      user?.id as string,
+      user?.Workspace?.id as string,
     );
     const labels = await labelService.getWorkspaceLabels(
       user?.Workspace?.id as string,

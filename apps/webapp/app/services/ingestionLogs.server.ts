@@ -56,7 +56,7 @@ export const getIngestionQueue = async (id: string) => {
 
 export const getIngestionQueueForFrontend = async (
   id: string,
-  userId: string,
+  workspaceId: string,
 ) => {
   // Fetch the specific log by logId
   let log = await prisma.ingestionQueue.findUnique({
@@ -94,7 +94,7 @@ export const getIngestionQueueForFrontend = async (
 
   // If not found by ID, try to find by episode UUID
   if (!log) {
-    const logByEpisode = await getLogByEpisode(id);
+    const logByEpisode = await getLogByEpisode(id, workspaceId);
 
     if (!logByEpisode) {
       throw new Response("Log not found", { status: 404 });
@@ -199,15 +199,29 @@ export const getIngestionQueueForFrontend = async (
   return formattedLog;
 };
 
-export const getLogByEpisode = async (episodeUuid: string) => {
+export const getLogByEpisode = async (
+  episodeUuid: string,
+  workspaceId: string,
+) => {
   // Find logs where the episode UUID matches either:
   // 1. log.output.episodeUuid (single episode - CONVERSATION type)
   // 2. log.output.episodes array (multiple episodes - DOCUMENT type)
   const logs = await prisma.ingestionQueue.findMany({
     where: {
-      graphIds: {
-        has: episodeUuid,
-      },
+      workspaceId,
+      OR: [
+        {
+          graphIds: {
+            has: episodeUuid,
+          },
+        },
+        {
+          output: {
+            path: ["documentUuid"],
+            equals: episodeUuid,
+          },
+        },
+      ],
     },
     orderBy: {
       createdAt: "desc",

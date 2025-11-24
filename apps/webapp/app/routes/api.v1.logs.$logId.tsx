@@ -13,6 +13,7 @@ import {
 } from "~/services/routeBuilders/apiBuilder.server";
 import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
 import { LabelService } from "~/services/label.server";
+import { getWorkspaceByUser } from "~/models/workspace.server";
 
 // Schema for space ID parameter
 const LogParamsSchema = z.object({
@@ -32,9 +33,11 @@ const loader = createHybridLoaderApiRoute(
     allowJWT: true,
   },
   async ({ params, authentication }) => {
+    const workspace = await getWorkspaceByUser(authentication.userId);
+
     const formattedLog = await getIngestionQueueForFrontend(
       params.logId,
-      authentication.userId,
+      workspace?.id as string,
     );
 
     return json({ log: formattedLog });
