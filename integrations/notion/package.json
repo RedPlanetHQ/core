@@ -30,7 +30,12 @@
     "prettier": "^3.4.2",
     "rimraf": "^3.0.2",
     "tslib": "^2.8.1",
-    "typescript": "^4.7.2",
+    "typescript": "^4.7.2"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "commander": "^12.0.0",
+    "@redplanethq/sdk": "0.1.6",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "zod": "^3.22.4",
     "zod-to-json-schema": "^3.22.1"
@@ -49,10 +54,5 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
-  },
-  "dependencies": {
-    "axios": "^1.7.9",
-    "commander": "^12.0.0",
-    "@redplanethq/sdk": "0.1.6"
   }
 }

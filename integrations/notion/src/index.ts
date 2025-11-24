@@ -1,4 +1,5 @@
 import { integrationCreate } from './account-create';
+import { mcp } from './mcp';
 
 import {
   IntegrationCLI,
@@ -11,6 +12,16 @@ export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
+
+    case IntegrationEventType.MCP:
+      const integrationDefinition = eventPayload.integrationDefinition;
+
+      if (!integrationDefinition) {
+        return 'No integration definition found';
+      }
+
+      const config = eventPayload.config as any;
+      return mcp(config);
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };
@@ -35,12 +46,7 @@ class NotionCLI extends IntegrationCLI {
         'Connect your workspace to Notion. Create, read, and manage pages, databases, and blocks with powerful automation',
       icon: 'notion',
       mcp: {
-        type: 'http',
-        url: 'https://mcp.notion.com/mcp',
-        headers: {
-          Authorization: 'Bearer ${config:access_token}',
-          'Content-Type': 'application/json',
-        },
+        type: 'cli',
       },
       auth: {
         OAuth2: {
@@ -48,6 +54,10 @@ class NotionCLI extends IntegrationCLI {
           authorization_url: 'https://api.notion.com/v1/oauth/authorize',
           scopes: [],
           scope_separator: ' ',
+          authorization_params: {
+            owner: 'user',
+          },
+          token_request_auth_method: 'basic',
         },
       },
     };
