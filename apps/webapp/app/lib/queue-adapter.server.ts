@@ -194,7 +194,9 @@ export async function enqueuePersonaGeneration(payload: {
     const { personaGenerationTask } = await import(
       "~/trigger/spaces/persona-generation"
     );
-    const handler = await personaGenerationTask.trigger(payload);
+    const handler = await personaGenerationTask.trigger(payload, {
+      concurrencyKey: payload.userId,
+    });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {
     // BullMQ

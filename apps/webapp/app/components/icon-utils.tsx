@@ -1,9 +1,4 @@
-import {
-  RiDiscordFill,
-  RiGithubFill,
-  RiMailFill,
-  RiSlackFill,
-} from "@remixicon/react";
+import { RiDiscordFill, RiGithubFill, RiMailFill } from "@remixicon/react";
 import { LayoutGrid } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
@@ -23,6 +18,9 @@ import { Gmail } from "./icons/gmail";
 import { GoogleCalendar } from "./icons/google-calendar";
 import { GoogleSheets } from "./icons/google-sheets";
 import { GoogleDocs } from "./icons/google-docs";
+import { CalCom } from "./icons/cal_com";
+import { Notion } from "./icons/notion";
+import { Zoho } from "./icons/zoho";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -51,6 +49,9 @@ export const ICON_MAPPING = {
   "topic-analysis": StaticLogo,
   zed: Zed,
   kilo: Kilo,
+  cal_com: CalCom,
+  notion: Notion,
+  zoho: Zoho,
 
   // Default icon
   integration: LayoutGrid,
