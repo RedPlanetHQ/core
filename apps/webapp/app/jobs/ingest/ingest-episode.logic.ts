@@ -11,7 +11,6 @@ import {
   shouldTriggerTopicAnalysis,
   updateLastTopicAnalysisTime,
 } from "~/services/bertTopicAnalysis.server";
-import { checkAndTriggerPersonaUpdate } from "../spaces/persona-trigger.logic";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
@@ -75,9 +74,6 @@ export async function processEpisodeIngestion(
   enqueuePersonaGeneration?: (params: {
     userId: string;
     workspaceId: string;
-    labelId: string;
-    mode: "full" | "incremental";
-    startTime?: string;
   }) => Promise<any>,
   enqueueGraphResolution?: (params: {
     episodeUuid: string;
@@ -343,29 +339,30 @@ export async function processEpisodeIngestion(
       });
     }
 
-    // Check and trigger persona update if threshold met (50+ new episodes)
+    // Trigger persona generation after successful episode creation
+    // Threshold check happens inside the persona generation task
     try {
       if (
         currentStatus === IngestionStatus.COMPLETED &&
         enqueuePersonaGeneration
       ) {
         logger.info(
-          `Checking if persona update should be triggered after ingestion`,
+          `Triggering persona generation check after ingestion`,
           {
             userId: payload.userId,
             workspaceId: payload.workspaceId,
           },
         );
-        
-        await checkAndTriggerPersonaUpdate(
-          payload.userId,
-          payload.workspaceId,
-          enqueuePersonaGeneration,
-        );
+
+        // Trigger persona generation task - threshold check happens within the task
+        await enqueuePersonaGeneration({
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+        });
       }
     } catch (personaTriggerError) {
       // Don't fail the ingestion if persona trigger fails
-      logger.warn(`Failed to check persona trigger after ingestion:`, {
+      logger.warn(`Failed to trigger persona generation after ingestion:`, {
         error: personaTriggerError,
         userId: payload.userId,
       });

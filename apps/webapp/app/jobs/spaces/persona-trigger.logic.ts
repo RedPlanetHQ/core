@@ -13,22 +13,23 @@ interface WorkspaceMetadata {
 }
 
 /**
- * Check if persona space needs update and trigger generation if threshold met
+ * Check if persona space needs update based on threshold
  *
- * Called after episode ingestion to check if we've accumulated enough new episodes
- * to warrant a persona refresh (threshold: 50 episodes)
+ * Called from processPersonaGeneration to check if we've accumulated enough new episodes
+ * to warrant a persona refresh (threshold: 20 episodes)
+ *
+ * Returns labelId and mode if generation should proceed, null otherwise
  */
-export async function checkAndTriggerPersonaUpdate(
+export async function checkPersonaUpdateThreshold(
   userId: string,
   workspaceId: string,
-  enqueuePersonaGeneration: (params: {
-    userId: string;
-    workspaceId: string;
-    labelId: string;
-    mode: "full" | "incremental";
-    startTime?: string;
-  }) => Promise<{ id?: string; token?: string }>,
-): Promise<{ triggered: boolean; reason?: string }> {
+): Promise<{
+  shouldGenerate: boolean;
+  labelId?: string;
+  mode?: "full" | "incremental";
+  startTime?: string;
+  reason?: string
+}> {
   try {
     const labelService = new LabelService();
     let personaDocument = await getDocumentsByTitle(userId, "Persona");
@@ -43,7 +44,7 @@ export async function checkAndTriggerPersonaUpdate(
         personaDocument = await getDocumentsByTitle(userId, "Persona");
       } catch (error) {
         logger.error("Failed to create persona document", { userId, error });
-        return { triggered: false, reason: "failed_to_create_document" };
+        return { shouldGenerate: false, reason: "failed_to_create_document" };
       }
     }
 
@@ -68,7 +69,7 @@ export async function checkAndTriggerPersonaUpdate(
           workspaceId,
           error,
         });
-        return { triggered: false, reason: "failed_to_create_label" };
+        return { shouldGenerate: false, reason: "failed_to_create_label" };
       }
     }
 
@@ -80,7 +81,7 @@ export async function checkAndTriggerPersonaUpdate(
 
     if (!workspace) {
       logger.warn(`Workspace not found: ${workspaceId}`);
-      return { triggered: false, reason: "workspace_not_found" };
+      return { shouldGenerate: false, reason: "workspace_not_found" };
     }
 
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
@@ -115,7 +116,7 @@ export async function checkAndTriggerPersonaUpdate(
     const PERSONA_UPDATE_THRESHOLD = 20;
 
     if (episodeCount >= PERSONA_UPDATE_THRESHOLD || !lastPersonaGenerationAt) {
-      logger.info("Enqueuing persona generation (threshold met)", {
+      logger.info("Threshold met for persona generation", {
         userId,
         personaDocumentId: personaDocument[0].uuid,
         episodeCount,
@@ -128,30 +129,24 @@ export async function checkAndTriggerPersonaUpdate(
           : "full"
         : "full";
 
-      await enqueuePersonaGeneration({
-        userId,
-        workspaceId,
+      return {
+        shouldGenerate: true,
         labelId: label.id,
         mode,
         startTime: lastPersonaGenerationAt,
-      });
-
-
-      return {
-        triggered: true,
         reason: `${episodeCount} new episodes (threshold: ${PERSONA_UPDATE_THRESHOLD})`,
       };
     }
 
     return {
-      triggered: false,
+      shouldGenerate: false,
       reason: `only ${episodeCount} new episodes (threshold: ${PERSONA_UPDATE_THRESHOLD})`,
     };
   } catch (error) {
-    logger.warn("Failed to check/trigger persona update:", {
+    logger.warn("Failed to check persona update threshold:", {
       error,
       userId,
     });
-    return { triggered: false, reason: "error" };
+    return { shouldGenerate: false, reason: "error" };
   }
 }

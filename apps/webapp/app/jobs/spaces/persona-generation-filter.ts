@@ -179,14 +179,14 @@ OUTPUT ONLY valid JSON (no markdown, no extra text):
   const { batchId } = await createBatch({
     requests: batchRequests,
     maxRetries: 2,
-    timeoutMs: 300000, // 5 min
+    timeoutMs: 1200000, // 20 min
   });
 
   logger.info(`Cluster filtering batch created: ${batchId}`, {
     clusterCount: validPrompts.length,
   });
 
-  const batch = await pollBatchCompletion(batchId, 300000);
+  const batch = await pollBatchCompletion(batchId, 1200000);
 
   if (!batch.results || batch.results.length === 0) {
     logger.warn("Cluster filtering batch failed, using all clusters as fallback");

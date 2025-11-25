@@ -18,6 +18,7 @@ import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 import { getDocumentsByTitle } from "~/services/graphModels/document";
 import { addToQueue } from "~/trigger/utils/queue";
 import { prisma } from "~/trigger/utils/prisma";
+import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
 
 const execAsync = promisify(exec);
 
@@ -25,9 +26,6 @@ const execAsync = promisify(exec);
 export interface PersonaGenerationPayload {
   userId: string;
   workspaceId: string;
-  labelId: string;
-  mode: "full" | "incremental";
-  startTime?: string;
 }
 
 export interface PersonaAnalytics {
@@ -1162,14 +1160,55 @@ export async function processPersonaGeneration(
   clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
   analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<PersonaGenerationResult> {
-  const { userId, workspaceId, labelId, mode, startTime } = payload;
+  const { userId, workspaceId } = payload;
 
-  logger.info("Starting persona generation", {
+  logger.info("Checking persona generation threshold", {
+    userId,
+    workspaceId,
+  });
+
+  // Check threshold first - early return if not met
+  const thresholdCheck = await checkPersonaUpdateThreshold(userId, workspaceId);
+
+  if (!thresholdCheck.shouldGenerate) {
+    logger.info("Persona generation skipped - threshold not met", {
+      userId,
+      workspaceId,
+      reason: thresholdCheck.reason,
+    });
+    return {
+      success: false,
+      labelId: thresholdCheck.labelId || "",
+      mode: thresholdCheck.mode || "full",
+      summaryLength: 0,
+      episodesProcessed: 0,
+    };
+  } if(!thresholdCheck.labelId || !thresholdCheck.mode){
+    logger.info("Persona generation skipped - missing threshold check values", {
+      userId,
+      workspaceId,
+      reason: thresholdCheck.reason,
+    });
+    return {
+      success: false,
+      labelId: thresholdCheck.labelId || "",
+      mode: thresholdCheck.mode || "full",
+      summaryLength: 0,
+      episodesProcessed: 0,
+    };
+  }
+
+  // Use values from threshold check
+  const { labelId, mode, startTime } = thresholdCheck;
+
+
+  logger.info("Starting persona generation (threshold met)", {
     userId,
     workspaceId,
     labelId,
     mode,
     startTime,
+    reason: thresholdCheck.reason,
   });
 
   try {

@@ -46,11 +46,21 @@ export const ingestTask = task({
       },
       // Callback for persona generation
       async (params) => {
-        await personaGenerationTask.trigger(params);
+        await personaGenerationTask.trigger(params, {
+          queue: "persona-generation-queue",
+          concurrencyKey: payload.userId,
+          tags: [payload.userId, payload.queueId],
+        });
       },
       // Callback for async graph resolution
       async (params) => {
-        await graphResolutionTask.trigger(params);
+        await graphResolutionTask.trigger(params,
+          {
+            queue: "graph-resolution-queue",
+            concurrencyKey: payload.userId,
+            tags: [payload.userId, payload.queueId],
+          },
+        );
       },
     );
   },
