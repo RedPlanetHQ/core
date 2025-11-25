@@ -148,7 +148,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <DropdownMenuItem
                 className="flex gap-2 rounded"
                 onClick={() =>
-                  (window.location.href = "mailto:support@heysol.ai")
+                  (window.location.href = "mailto:harshith@poozle.dev")
                 }
               >
                 <Mail size={16} />
