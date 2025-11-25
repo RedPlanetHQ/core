@@ -10,7 +10,6 @@ import { DocumentDifferentialService } from "~/services/documentDiffer.server";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { type IngestBodyRequest } from "./ingest-episode.logic";
-import { title } from "process";
 
 export interface IngestDocumentPayload {
   body: z.infer<typeof IngestBodyRequest>;

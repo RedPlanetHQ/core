@@ -232,6 +232,20 @@ export const getLogByEpisode = async (
   return logs[0] || null;
 };
 
+export const getPersonaForUser = async (workspaceId: string) => {
+  const log = await prisma.ingestionQueue.findFirst({
+    where: {
+      title: "Persona",
+      workspaceId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return log?.id;
+};
+
 export const deleteIngestionQueue = async (id: string) => {
   return await prisma.ingestionQueue.delete({
     where: {

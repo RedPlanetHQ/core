@@ -37,7 +37,6 @@ import {
   moveAllProvenanceToStatement,
 } from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
-import { runQuery } from "~/lib/neo4j.server";
 import { prisma } from "~/trigger/utils/prisma";
 
 export interface GraphResolutionPayload {

@@ -20,6 +20,8 @@ import {
   Phone,
   FileText,
   Search,
+  File,
+  Contact,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -43,6 +45,11 @@ const data = {
       title: "Episodes",
       url: "/home/episodes",
       icon: FileText,
+    },
+    {
+      title: "Persona",
+      url: "/home/persona",
+      icon: Contact,
     },
     {
       title: "Chat",
@@ -141,7 +148,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
               <DropdownMenuItem
                 className="flex gap-2 rounded"
                 onClick={() =>
-                  (window.location.href = "mailto:support@heysol.ai")
+                  (window.location.href = "mailto:harshith@poozle.dev")
                 }
               >
                 <Mail size={16} />
