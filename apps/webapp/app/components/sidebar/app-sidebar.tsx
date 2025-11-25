@@ -20,6 +20,8 @@ import {
   Phone,
   FileText,
   Search,
+  File,
+  Contact,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -43,6 +45,11 @@ const data = {
       title: "Episodes",
       url: "/home/episodes",
       icon: FileText,
+    },
+    {
+      title: "Persona",
+      url: "/home/persona",
+      icon: Contact,
     },
     {
       title: "Chat",

@@ -1,6 +1,6 @@
 import { runQuery } from "~/lib/neo4j.server";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/db.server";
+import { prisma } from "~/trigger/utils/prisma";
 
 export interface UserContext {
   // Identity (from User table)
@@ -34,7 +34,11 @@ export async function getUserContext(userId: string): Promise<UserContext> {
 
   // Try onboarding statements first
   const onboardingContext = await getOnboardingContext(userId);
-  if (onboardingContext.role || onboardingContext.goal || onboardingContext.tools?.length) {
+  if (
+    onboardingContext.role ||
+    onboardingContext.goal ||
+    onboardingContext.tools?.length
+  ) {
     return { ...identity, ...onboardingContext, source: "onboarding" };
   }
 
@@ -185,7 +189,9 @@ async function inferContextFromEpisodes(userId: string): Promise<{
 
     let maxScore = 0;
     for (const [roleName, patterns] of Object.entries(rolePatterns)) {
-      const score = patterns.filter((pattern) => allContent.includes(pattern)).length;
+      const score = patterns.filter((pattern) =>
+        allContent.includes(pattern),
+      ).length;
       if (score > maxScore && score >= 3) {
         // Require at least 3 matching patterns
         maxScore = score;

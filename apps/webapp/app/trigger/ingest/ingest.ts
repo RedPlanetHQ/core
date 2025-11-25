@@ -13,7 +13,7 @@ import { graphResolutionTask } from "./graph-resolution";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
-  concurrencyLimit: 50,
+  concurrencyLimit: 1,
 });
 
 // Export for backwards compatibility
@@ -42,7 +42,12 @@ export const ingestTask = task({
       },
       // Callback for BERT topic analysis
       async (params) => {
-        await bertTopicAnalysisTask.trigger(params);
+        await bertTopicAnalysisTask.trigger(params, {
+          queue: "bert-topic-queue",
+          concurrencyKey: payload.userId,
+          idempotencyKey: payload.userId,
+          idempotencyKeyTTL: "10m",
+        });
       },
       // Callback for persona generation
       async (params) => {
@@ -50,17 +55,17 @@ export const ingestTask = task({
           queue: "persona-generation-queue",
           concurrencyKey: payload.userId,
           tags: [payload.userId, payload.queueId],
+          idempotencyKey: payload.userId,
+          idempotencyKeyTTL: "10m",
         });
       },
       // Callback for async graph resolution
       async (params) => {
-        await graphResolutionTask.trigger(params,
-          {
-            queue: "graph-resolution-queue",
-            concurrencyKey: payload.userId,
-            tags: [payload.userId, payload.queueId],
-          },
-        );
+        await graphResolutionTask.trigger(params, {
+          queue: "graph-resolution-queue",
+          concurrencyKey: payload.userId,
+          tags: [payload.userId, payload.queueId],
+        });
       },
     );
   },

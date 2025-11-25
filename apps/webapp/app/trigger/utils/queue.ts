@@ -90,12 +90,18 @@ export const addToQueue = async (
 
     // Track document ingestion
   } else {
-    handler = await ingestTask.trigger({
-      body,
-      userId,
-      workspaceId: user.Workspace.id,
-      queueId: queuePersist.id,
-    });
+    handler = await ingestTask.trigger(
+      {
+        body,
+        userId,
+        workspaceId: user.Workspace.id,
+        queueId: queuePersist.id,
+      },
+      {
+        concurrencyKey: userId,
+        tags: [userId, queuePersist.id],
+      },
+    );
 
     // Track episode ingestion
   }

@@ -36,6 +36,7 @@ export async function enqueueIngestEpisode(payload: {
     const { ingestTask } = await import("~/trigger/ingest/ingest");
     const handler = await ingestTask.trigger(payload, {
       queue: "ingestion-queue",
+      concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
     });
     return { id: handler.id, token: handler.publicAccessToken };

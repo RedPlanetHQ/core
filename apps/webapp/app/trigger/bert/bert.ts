@@ -1,4 +1,4 @@
-import { task } from "@trigger.dev/sdk/v3";
+import { queue, task } from "@trigger.dev/sdk/v3";
 import { python } from "@trigger.dev/python";
 import {
   processTopicAnalysis,
@@ -23,6 +23,11 @@ async function runBertWithTriggerPython(
   return result.stdout;
 }
 
+const bertQueue = queue({
+  name: "bert-topic-queue",
+  concurrencyLimit: 1,
+});
+
 /**
  * Trigger.dev task for BERT topic analysis
  *
@@ -31,6 +36,7 @@ async function runBertWithTriggerPython(
 export const bertTopicAnalysisTask = task({
   id: "bert-topic-analysis",
   machine: "large-2x",
+  queue: bertQueue,
   maxDuration: 36000,
   run: async (payload: TopicAnalysisPayload) => {
     return await processTopicAnalysis(
