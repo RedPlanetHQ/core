@@ -13,7 +13,7 @@ import { parseEpisodicNode, saveEpisode } from "./episode";
 import crypto from "crypto";
 
 export async function saveTriple(triple: Triple): Promise<string> {
-  // First, save the Episode
+  // First, update the Episode
   await saveEpisode(triple.provenance);
 
   // Then, save the Statement

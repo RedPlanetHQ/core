@@ -23,6 +23,7 @@ export interface DocumentNode {
 /**
  * Interface for episodic node in the reified knowledge graph
  * Episodes are containers for statements and represent source information
+ * Unified architecture: Both conversations and documents use Episodes with sessionId grouping
  */
 export interface EpisodicNode {
   uuid: string;
@@ -35,10 +36,21 @@ export interface EpisodicNode {
   validAt: Date;
   labelIds: string[];
   userId: string;
-  sessionId?: string;
+
+  // Grouping and chunking
+  sessionId: string;  // Required - groups chunks together (replaces documentId)
+  queueId?: string;   // Ingestion queue ID - useful for grouping chunks of same message/document ingestion
+  type?: EpisodeType; // CONVERSATION or DOCUMENT
+  chunkIndex?: number; // Index of this chunk within the session (0-based)
+  totalChunks?: number; // Total chunks in this session
+
+  version?: number; // Version counter (1, 2, 3, ...)
+  contentHash?: string; // SHA-256 of entire session content
+  previousVersionSessionId?: string; // Links to previous version's sessionId
+  // Version tracking (stored on first chunk, chunkIndex=0)
+  chunkHashes?: string[]; // Array of hashes for each chunk (for differential detection)
+
   recallCount?: number;
-  chunkIndex?: number; // Index of this chunk within the document
-  documentId?: string;
 }
 
 /**
@@ -60,10 +72,17 @@ export const EPISODIC_NODE_PROPERTIES = `{
   createdAt: e.createdAt,
   userId: e.userId,
   sessionId: e.sessionId,
+  queueId: e.queueId,
   labelIds: e.labelIds,
   validAt: e.validAt,
   recallCount: e.recallCount,
+  type: e.type,
   chunkIndex: e.chunkIndex,
+  totalChunks: e.totalChunks,
+  version: e.version,
+  contentHash: e.contentHash,
+  previousVersionSessionId: e.previousVersionSessionId,
+  chunkHashes: e.chunkHashes,
   documentId: e.documentId
 }`;
 
@@ -169,17 +188,34 @@ export type AddEpisodeParams = {
   metadata?: Record<string, any>;
   source: string;
   userId: string;
-  labelId?: string;
-  sessionId?: string;
+  labelIds?: string[];
+  sessionId: string;
+  queueId?: string;
   type?: EpisodeType;
-  documentId?: string;
+
+  // Chunking metadata
+  chunkIndex?: number;
+  totalChunks?: number;
+
+  // Version tracking (only set on first chunk)
+  version?: number;
+  contentHash?: string;
+  previousVersionSessionId?: string;
+  chunkHashes?: string[];
+
 };
 
 export type AddEpisodeResult = {
-  episodeUuid: string;
-  nodesCreated: number;
+  episodeUuid: string | null;
+  type: EpisodeType;
   statementsCreated: number;
   processingTimeMs: number;
+  tokenUsage?: {
+    high: { input: number; output: number; total: number };
+    low: { input: number; output: number; total: number };
+  };
+  totalChunks?: number;
+  currentChunk?: number;
 };
 
 export interface ExtractedTripleData {

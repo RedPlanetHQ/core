@@ -11,6 +11,7 @@ import {
   type EntityNode,
   type EpisodicNode,
   type StatementNode,
+  AddEpisodeResult,
 } from "@core/types";
 import { logger } from "~/services/logger.service";
 import { dedupeNodes } from "~/services/prompts/nodes";
@@ -38,11 +39,17 @@ import {
 } from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
+import { IngestionStatus } from "@core/database";
+import { deductCredits } from "~/trigger/utils/utils";
+import { getDocumentStatements } from "~/services/graphModels/document";
+
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
   userId: string;
+  workspaceId: string;
   queueId?: string;
+  episodeDetails?: AddEpisodeResult;
 }
 
 export interface GraphResolutionResult {
@@ -185,37 +192,70 @@ export async function processGraphResolution(
     }
 
     // Step 7: Update ingestion queue with resolution token usage
-    if (payload.queueId) {
-      try {
-        const queue = await prisma.ingestionQueue.findUnique({
-          where: { id: payload.queueId },
-          select: { output: true },
-        });
+    try {
+      const queue = await prisma.ingestionQueue.findUnique({
+        where: { id: payload.queueId },
+        select: { output: true },
+      });
 
-        if (queue?.output) {
-          const currentOutput = queue.output as any;
-          const updatedOutput = {
-            ...currentOutput,
-            resolutionTokenUsage: {
-              low: tokenMetrics.low,
-            },
-          };
+      let finalOutput: any = payload.episodeDetails
+      let currentStatus: IngestionStatus = IngestionStatus.COMPLETED;
+      const currentOutput = queue?.output as any;
+      let episodeUuids: string[] = finalOutput?.episodeUuid
+        ? [finalOutput.episodeUuid]
+        : [];
 
-          await prisma.ingestionQueue.update({
-            where: { id: payload.queueId },
-            data: { output: updatedOutput },
-          });
+      const episodeStatements = finalOutput?.episodeUuid ? await getEpisodeStatements({ episodeUuid: finalOutput.episodeUuid, userId: payload.userId }) : [];
+      const statementsCount = episodeStatements.length;
 
-          logger.info(
-            `Updated ingestion queue ${payload.queueId} with resolution token usage`,
-          );
-        }
-      } catch (error) {
-        logger.warn(
-          `Failed to update ingestion queue with resolution token usage:`,
-          { error },
+      if (currentOutput && currentOutput.episodes.length > 0) {
+        currentOutput.episodes.push(payload.episodeDetails);
+        episodeUuids = currentOutput.episodes.map(
+          (episode: any) => episode.episodeUuid,
         );
+        finalOutput = {
+          ...currentOutput,
+          statementsCreated: currentOutput.statementsCreated + statementsCount,
+          resolutionTokenUsage: {
+            low: tokenMetrics.low + currentOutput.resolutionTokenUsage.low,
+          },
+        };
+
+      } else {
+        finalOutput = {
+          episodes: [payload.episodeDetails],
+          statementsCreated: statementsCount,
+          resolutionTokenUsage: {
+            low: tokenMetrics.low,
+          },
+        };
       }
+
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          output: finalOutput,
+          graphIds: episodeUuids,
+        },
+      });
+
+
+      // Deduct credits for episode creation
+      await deductCredits(
+        payload.workspaceId,
+        "addEpisode",
+        statementsCount,
+      );
+
+
+      logger.info(
+        `Updated ingestion queue ${payload.queueId} with resolution metrics`,
+      );
+    } catch (error) {
+      logger.warn(
+        `Failed to update ingestion queue with resolution metrics:`,
+        { error },
+      );
     }
 
     return {

@@ -7,8 +7,8 @@ import {
   type StatementNode,
   type Triple,
   EpisodeTypeEnum,
-  type EpisodeType,
-  STATEMENT_NODE_PROPERTIES,
+  EpisodeType,
+  AddEpisodeResult,
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";
@@ -37,169 +37,11 @@ import { type PrismaClient } from "@prisma/client";
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
 
+
 export class KnowledgeGraphService {
   async getEmbedding(text: string) {
     return getEmbedding(text);
   }
-
-  /**
-   * Invalidate statements from a previous document version that are no longer supported
-   * by the new document content using semantic similarity analysis
-   */
-  async invalidateStatementsFromPreviousDocumentVersion(params: {
-    previousDocumentUuid: string;
-    newDocumentContent: string;
-    userId: string;
-    invalidatedBy: string;
-    semanticSimilarityThreshold?: number;
-    changedChunkIndices?: number[]; // Optional: only invalidate statements from specific chunks
-  }): Promise<{
-    invalidatedStatements: string[];
-    preservedStatements: string[];
-    totalStatementsAnalyzed: number;
-  }> {
-    const threshold = params.semanticSimilarityThreshold || 0.75; // Lower threshold for document-level analysis
-    const invalidatedStatements: string[] = [];
-    const preservedStatements: string[] = [];
-
-    // Step 1: Get all statements from the previous document version
-    const previousStatements = await this.getStatementsFromDocument(
-      params.previousDocumentUuid,
-      params.userId,
-      params.changedChunkIndices, // Pass chunk filter
-    );
-
-    if (previousStatements.length === 0) {
-      return {
-        invalidatedStatements: [],
-        preservedStatements: [],
-        totalStatementsAnalyzed: 0,
-      };
-    }
-
-    logger.log(
-      `Analyzing ${previousStatements.length} statements from previous document version`,
-    );
-
-    // Step 2: Generate embedding for new document content
-    const newDocumentEmbedding = await this.getEmbedding(
-      params.newDocumentContent,
-    );
-
-    // Step 3: For each statement, check if it's still semantically supported by new content
-    for (const statement of previousStatements) {
-      try {
-        // Generate embedding for the statement fact
-        const statementEmbedding = await this.getEmbedding(statement.fact);
-
-        // Calculate semantic similarity between statement and new document
-        const semanticSimilarity = this.calculateCosineSimilarity(
-          statementEmbedding,
-          newDocumentEmbedding,
-        );
-
-        if (semanticSimilarity < threshold) {
-          invalidatedStatements.push(statement.uuid);
-          logger.log(
-            `Invalidating statement: "${statement.fact}" (similarity: ${semanticSimilarity.toFixed(3)})`,
-          );
-        } else {
-          preservedStatements.push(statement.uuid);
-          logger.log(
-            `Preserving statement: "${statement.fact}" (similarity: ${semanticSimilarity.toFixed(3)})`,
-          );
-        }
-      } catch (error) {
-        logger.error(`Error analyzing statement ${statement.uuid}:`, { error });
-        // On error, be conservative and invalidate
-        invalidatedStatements.push(statement.uuid);
-      }
-    }
-
-    // Step 4: Bulk invalidate the selected statements
-    if (invalidatedStatements.length > 0) {
-      await invalidateStatements({
-        statementIds: invalidatedStatements,
-        invalidatedBy: params.invalidatedBy,
-      });
-
-      logger.log(`Document-level invalidation completed`, {
-        previousDocumentUuid: params.previousDocumentUuid,
-        totalAnalyzed: previousStatements.length,
-        invalidated: invalidatedStatements.length,
-        preserved: preservedStatements.length,
-        threshold,
-      });
-    }
-
-    return {
-      invalidatedStatements,
-      preservedStatements,
-      totalStatementsAnalyzed: previousStatements.length,
-    };
-  }
-
-  /**
-   * Get all statements that were created from episodes linked to a specific document
-   * Optionally filter by chunk indices for targeted invalidation
-   */
-  private async getStatementsFromDocument(
-    documentUuid: string,
-    userId: string,
-    chunkIndices?: number[],
-  ): Promise<StatementNode[]> {
-    // Build query with optional chunk filter
-    const chunkFilter =
-      chunkIndices && chunkIndices.length > 0
-        ? `AND episode.chunkIndex IN $chunkIndices`
-        : "";
-
-    const query = `
-      MATCH (doc:Document {uuid: $documentUuid, userId: $userId})-[r:CONTAINS_CHUNK]->(episode:Episode)
-      WHERE r.chunkIndex IS NOT NULL ${chunkFilter}
-      MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
-    `;
-
-    const result = await runQuery(query, {
-      documentUuid,
-      userId,
-      chunkIndices: chunkIndices || [],
-    });
-
-    return result.map((record) => {
-      return parseStatementNode(record.get("statement"));
-    });
-  }
-
-  /**
-   * Calculate cosine similarity between two embedding vectors
-   */
-  private calculateCosineSimilarity(vecA: number[], vecB: number[]): number {
-    if (vecA.length !== vecB.length) {
-      throw new Error("Vector dimensions must match");
-    }
-
-    let dotProduct = 0;
-    let normA = 0;
-    let normB = 0;
-
-    for (let i = 0; i < vecA.length; i++) {
-      dotProduct += vecA[i] * vecB[i];
-      normA += vecA[i] * vecA[i];
-      normB += vecB[i] * vecB[i];
-    }
-
-    normA = Math.sqrt(normA);
-    normB = Math.sqrt(normB);
-
-    if (normA === 0 || normB === 0) {
-      return 0;
-    }
-
-    return dotProduct / (normA * normB);
-  }
-
   /**
    * Process an episode and update the knowledge graph.
    *
@@ -209,15 +51,7 @@ export class KnowledgeGraphService {
   async addEpisode(
     params: AddEpisodeParams,
     prisma: PrismaClient,
-  ): Promise<{
-    episodeUuid: string | null;
-    statementsCreated: number;
-    processingTimeMs: number;
-    tokenUsage?: {
-      high: { input: number; output: number; total: number };
-      low: { input: number; output: number; total: number };
-    };
-  }> {
+  ): Promise<AddEpisodeResult> {
     const startTime = Date.now();
     const now = new Date();
 
@@ -228,7 +62,38 @@ export class KnowledgeGraphService {
     };
 
     try {
-      // Step 1: Context Retrieval - Get previous episodes for context
+      // Step 1: Create and save episode FIRST with original content
+      // This ensures parallel chunks can see this episode when they retrieve context
+      const episode: EpisodicNode = {
+        uuid: crypto.randomUUID(),
+        content: params.episodeBody, // Use original content initially
+        originalContent: params.episodeBody,
+        contentEmbedding: [], // Will update after normalization
+        source: params.source,
+        metadata: params.metadata || {},
+        createdAt: now,
+        validAt: new Date(params.referenceTime),
+        labelIds: params.labelIds || [],
+        userId: params.userId,
+        sessionId: params.sessionId,
+        queueId: params.queueId,
+        type: params.type,
+        chunkIndex: params.chunkIndex,
+        totalChunks: params.totalChunks,
+        version: params.version,
+        contentHash: params.contentHash,
+        previousVersionSessionId: params.previousVersionSessionId,
+        chunkHashes: params.chunkHashes,
+      };
+
+      // Save episode immediately to Neo4j
+      const { saveEpisode } = await import("./graphModels/episode");
+      await saveEpisode(episode);
+
+      const episodeSavedTime = Date.now();
+      logger.log(`Saved episode to Neo4j in ${episodeSavedTime - startTime} ms`);
+
+      // Step 2: Context Retrieval - Get previous episodes for context (now includes earlier chunks)
       const previousEpisodes = await getRecentEpisodes({
         referenceTime: params.referenceTime,
         limit: DEFAULT_EPISODE_WINDOW,
@@ -265,27 +130,19 @@ export class KnowledgeGraphService {
       if (normalizedEpisodeBody === "NOTHING_TO_REMEMBER") {
         logger.log("Nothing to remember");
         return {
+          type: params.type || EpisodeType.CONVERSATION,
           episodeUuid: null,
           statementsCreated: 0,
           processingTimeMs: 0,
         };
       }
 
-      // Step 2: Episode Creation - Create or retrieve the episode
-      const episode: EpisodicNode = {
-        uuid: crypto.randomUUID(),
-        content: normalizedEpisodeBody,
-        originalContent: params.episodeBody,
-        contentEmbedding: await this.getEmbedding(normalizedEpisodeBody),
-        source: params.source,
-        metadata: params.metadata || {},
-        createdAt: now,
-        validAt: new Date(params.referenceTime),
-        labelIds: [],
-        userId: params.userId,
-        sessionId: params.sessionId,
-        documentId: params.documentId,
-      };
+      // Step 3: Update episode with normalized content and embedding
+      episode.content = normalizedEpisodeBody;
+      episode.contentEmbedding = await this.getEmbedding(normalizedEpisodeBody);
+
+      const episodeUpdatedTime = Date.now();
+      logger.log(`Updated episode with normalized content in ${episodeUpdatedTime - normalizedTime} ms`);
 
       // Step 3: Entity Extraction - Extract entities from the episode content
       const extractedNodes = await this.extractEntities(
@@ -337,10 +194,13 @@ export class KnowledgeGraphService {
       );
 
       return {
+        type: params.type || EpisodeType.CONVERSATION,
         episodeUuid: episode.uuid,
         statementsCreated: extractedStatements.length,
         processingTimeMs,
         tokenUsage: tokenMetrics,
+        totalChunks: params.totalChunks,
+        currentChunk: params.chunkIndex ? params.chunkIndex + 1 : 1,
       };
     } catch (error) {
       console.error("Error in addEpisode:", error);
@@ -762,7 +622,7 @@ export class KnowledgeGraphService {
         formattedMemories += "## Related Episodes\n";
         relatedEpisodes.forEach((episode, index) => {
           formattedMemories += `### Episode ${index + 1} (${new Date(episode.validAt).toISOString()})\n`;
-          formattedMemories += `${episode.content}\n\n`;
+          formattedMemories += `${episode.content || episode.originalContent}\n\n`;
         });
       }
 
