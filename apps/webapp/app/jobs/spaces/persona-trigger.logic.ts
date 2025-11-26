@@ -28,14 +28,15 @@ export async function checkPersonaUpdateThreshold(
   labelId?: string;
   mode?: "full" | "incremental";
   startTime?: string;
-  reason?: string
+  reason?: string;
 }> {
   try {
     const labelService = new LabelService();
     let personaDocument = await getDocumentsByTitle(userId, "Persona");
+    const noDocumentExist = !personaDocument || personaDocument.length === 0;
 
     // Auto-create persona document if missing (for existing users)
-    if (!personaDocument || personaDocument.length === 0) {
+    if (noDocumentExist) {
       logger.info("Creating missing persona document for existing user", {
         userId,
       });
@@ -115,7 +116,11 @@ export async function checkPersonaUpdateThreshold(
     // Trigger persona generation every 20 episodes
     const PERSONA_UPDATE_THRESHOLD = 20;
 
-    if (episodeCount >= PERSONA_UPDATE_THRESHOLD || !lastPersonaGenerationAt) {
+    if (
+      episodeCount >= PERSONA_UPDATE_THRESHOLD ||
+      !lastPersonaGenerationAt ||
+      noDocumentExist
+    ) {
       logger.info("Threshold met for persona generation", {
         userId,
         personaDocumentId: personaDocument[0].uuid,
