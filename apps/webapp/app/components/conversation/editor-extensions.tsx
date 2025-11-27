@@ -93,7 +93,7 @@ export const starterKit = StarterKit.configure({
   },
   listItem: {
     HTMLAttributes: {
-      class: cx("mt-1.5"),
+      class: cx("mt-1"),
     },
   },
   blockquote: {

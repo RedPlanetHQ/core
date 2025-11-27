@@ -46,7 +46,7 @@ async function runBertWithExec(
   minTopicSize: number,
   nrTopics?: number,
 ): Promise<string> {
-  let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
+  let command = `python3 /Users/harshithmullapudi/Documents/core/apps/webapp/python/main.py ${userId} --json`;
 
   console.log(`[BERT Topic Analysis] Executing: ${command}`);
 

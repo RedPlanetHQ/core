@@ -10,9 +10,7 @@ import {
   processEpisodeIngestion,
   type IngestEpisodePayload,
 } from "~/jobs/ingest/ingest-episode.logic";
-import {
-  processEpisodePreprocessing,
-} from "~/jobs/ingest/preprocess-episode.logic";
+import { processEpisodePreprocessing } from "~/jobs/ingest/preprocess-episode.logic";
 import {
   processConversationTitleCreation,
   type CreateConversationTitlePayload,
@@ -52,6 +50,7 @@ import {
   type GraphResolutionPayload,
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
+import { addToQueue } from "~/lib/ingest.server";
 
 /**
  * Episode preprocessing worker
@@ -103,7 +102,6 @@ export const ingestWorker = new Worker(
     concurrency: 3, // Global limit: process up to 3 jobs in parallel
   },
 );
-
 
 /**
  * Conversation title creation worker
@@ -191,7 +189,7 @@ export const personaGenerationWorker = new Worker(
   "persona-generation-queue",
   async (job) => {
     const payload = job.data as PersonaGenerationPayload;
-    return await processPersonaGeneration(payload);
+    return await processPersonaGeneration(payload, addToQueue);
   },
   {
     connection: getRedisConnection(),

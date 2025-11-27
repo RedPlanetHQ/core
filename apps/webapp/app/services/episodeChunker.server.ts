@@ -1,6 +1,6 @@
 import { encode } from "gpt-tokenizer";
 import crypto from "crypto";
-import { EpisodeType } from "@core/types";
+import { type EpisodeType } from "@core/types";
 
 export interface EpisodeChunk {
   content: string;
@@ -60,14 +60,13 @@ export class EpisodeChunker {
    * Determine if content needs chunking based on token count
    * Uses unified threshold for all content types
    */
-  
+
   needsChunking(content: string, _type?: string): boolean {
     const tokens = encode(content).length;
     return tokens >= EpisodeChunker.DEFAULT_CONFIG.maxChunkSize;
   }
 
-
-  /** 
+  /**
    * Create a single chunk when content is below threshold
    */
   private createSingleChunk(
@@ -112,7 +111,13 @@ export class EpisodeChunker {
     metadata?: Record<string, any>,
   ): Promise<ChunkedEpisode> {
     if (!this.needsChunking(originalContent, type)) {
-      return this.createSingleChunk(originalContent, type, sessionId, title, metadata);
+      return this.createSingleChunk(
+        originalContent,
+        type,
+        sessionId,
+        title,
+        metadata,
+      );
     }
 
     const contentHash = this.generateContentHash(originalContent);

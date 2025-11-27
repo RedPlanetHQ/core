@@ -1,9 +1,7 @@
 import { task, queue } from "@trigger.dev/sdk";
-import {
-  processEpisodePreprocessing,
-} from "~/jobs/ingest/preprocess-episode.logic";
+import { processEpisodePreprocessing } from "~/jobs/ingest/preprocess-episode.logic";
 import { ingestTask } from "./ingest";
-import { IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
+import { type IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
 
 const preprocessingQueue = queue({
   name: "preprocessing-queue",

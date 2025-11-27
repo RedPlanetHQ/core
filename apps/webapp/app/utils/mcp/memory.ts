@@ -8,6 +8,7 @@ import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
+import { getDocument, getUserDocuments } from "~/services/ingestionLogs.server";
 
 const searchService = new SearchService();
 const labelService = new LabelService();
@@ -169,47 +170,47 @@ export const memoryTools = [
       destructive: false,
     },
   },
-  // {
-  //   name: "memory_get_documents",
-  //   description:
-  //     "List all user documents. USE THIS TOOL: To discover available documents and get their IDs. Each document represents stored content with a unique UUID. Returns: Array of documents with uuid, title, createdAt, and totalChunks.",
-  //   inputSchema: {
-  //     type: "object",
-  //     properties: {
-  //       limit: {
-  //         type: "number",
-  //         description:
-  //           "Optional: Maximum number of documents to return. Defaults to 50.",
-  //       },
-  //     },
-  //   },
-  //   annotations: {
-  //     readOnly: true,
-  //     idempotent: true,
-  //     destructive: false,
-  //   },
-  // },
-  // {
-  //   name: "memory_get_document",
-  //   description:
-  //     "Get detailed information about a specific document including its content. USE THIS TOOL: When you need to retrieve document content by its ID. HOW TO USE: Provide the documentId (UUID from get_documents). Returns: Document details with uuid, title, originalContent, metadata, source, createdAt, validAt, and totalChunks.",
-  //   inputSchema: {
-  //     type: "object",
-  //     properties: {
-  //       documentId: {
-  //         type: "string",
-  //         description:
-  //           "UUID of the document (required). Get this from get_documents tool.",
-  //       },
-  //     },
-  //     required: ["documentId"],
-  //   },
-  //   annotations: {
-  //     readOnly: true,
-  //     idempotent: true,
-  //     destructive: false,
-  //   },
-  // },
+  {
+    name: "memory_get_documents",
+    description:
+      "List all user documents. USE THIS TOOL: To discover available documents and get their IDs. Each document represents stored content with a unique Id. Returns: Array of documents with id, title, createdAt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        limit: {
+          type: "number",
+          description:
+            "Optional: Maximum number of documents to return. Defaults to 50.",
+        },
+      },
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
+    },
+  },
+  {
+    name: "memory_get_document",
+    description:
+      "Get detailed information about a specific document including its content. USE THIS TOOL: When you need to retrieve document content by its ID. HOW TO USE: Provide the documentId (ID from get_documents). Returns: Document details with id, title, content, metadata, source, createdAt.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        documentId: {
+          type: "string",
+          description:
+            "Id of the document (required). Get this from get_documents tool.",
+        },
+      },
+      required: ["documentId"],
+    },
+    annotations: {
+      readOnly: true,
+      idempotent: true,
+      destructive: false,
+    },
+  },
   {
     name: "initialize_conversation_session",
     description:
@@ -334,11 +335,11 @@ export async function callMemoryTool(
       case "get_labels":
         return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
-        return await handleUserProfile(userId);
-      // case "memory_get_documents":
-      //   return await handleGetDocuments({ ...args, userId });
-      // case "memory_get_document":
-      //   return await handleGetDocument({ ...args, userId });
+        return await handleUserProfile(args.workspaceId);
+      case "memory_get_documents":
+        return await handleGetDocuments({ ...args, userId });
+      case "memory_get_document":
+        return await handleGetDocument({ ...args, userId });
       case "initialize_conversation_session":
         return await handleGetSessionId();
       case "get_integrations":
@@ -367,13 +368,12 @@ export async function callMemoryTool(
 }
 
 // Handler for user_context
-async function handleUserProfile(userId: string) {
+async function handleUserProfile(workspaceId: string) {
   try {
-    const workspace = await getWorkspaceByUser(userId);
     const latestPersona = await prisma.ingestionQueue.findFirst({
       where: {
-        sessionId: `persona-${workspace?.id}`,
-        workspaceId: workspace?.id,
+        sessionId: `persona-${workspaceId}`,
+        workspaceId,
         status: "COMPLETED",
       },
       orderBy: {
@@ -415,15 +415,9 @@ async function handleUserProfile(userId: string) {
 // Handler for memory_ingest
 async function handleMemoryIngest(args: any) {
   try {
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        userId: args.userId,
-      },
-    });
-
     // Check if workspace has sufficient credits before processing
     const hasSufficientCredits = await hasCredits(
-      workspace?.id as string,
+      args.workspaceId as string,
       "addEpisode",
     );
 
@@ -519,121 +513,98 @@ async function handleMemorySearch(args: any) {
   }
 }
 
-// // Handler for get_documents
-// async function handleGetDocuments(args: any) {
-//   try {
-//     const { userId, limit = 50 } = args;
+// Handler for get_documents
+async function handleGetDocuments(args: any) {
+  try {
+    const { workspaceId, limit = 50 } = args;
 
-//     const documents = await getUserDocuments(userId, limit);
+    const documents = await getUserDocuments(workspaceId, limit);
 
-//     // Return simplified document info for listing
-//     const simplifiedDocuments = documents.map((doc) => ({
-//       uuid: doc.uuid,
-//       title: doc.title,
-//       createdAt: doc.createdAt.toISOString(),
-//       totalChunks: doc.totalChunks,
-//     }));
+    // Return simplified document info for listing
+    const simplifiedDocuments = documents.map((doc) => ({
+      id: doc.id,
+      title: doc.title,
+      createdAt: doc.createdAt.toISOString(),
+    }));
 
-//     return {
-//       content: [
-//         {
-//           type: "text",
-//           text: JSON.stringify(simplifiedDocuments),
-//         },
-//       ],
-//       isError: false,
-//     };
-//   } catch (error) {
-//     logger.error(`MCP get documents error: ${error}`);
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(simplifiedDocuments),
+        },
+      ],
+      isError: false,
+    };
+  } catch (error) {
+    logger.error(`MCP get documents error: ${error}`);
 
-//     return {
-//       content: [
-//         {
-//           type: "text",
-//           text: `Error getting documents: ${error instanceof Error ? error.message : String(error)}`,
-//         },
-//       ],
-//       isError: true,
-//     };
-//   }
-// }
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error getting documents: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
 
-// // Handler for get_document
-// async function handleGetDocument(args: any) {
-//   try {
-//     const { documentId, userId } = args;
+// Handler for get_document
+async function handleGetDocument(args: any) {
+  try {
+    const { documentId, workspaceId } = args;
 
-//     if (!documentId) {
-//       throw new Error("documentId is required");
-//     }
+    if (!documentId) {
+      throw new Error("documentId is required");
+    }
 
-//     const document = await getDocument(documentId);
+    const document = await getDocument(documentId, workspaceId);
 
-//     if (!document) {
-//       throw new Error(`Document not found: ${documentId}`);
-//     }
+    if (!document) {
+      throw new Error(`Document not found: ${documentId}`);
+    }
 
-//     // Verify the document belongs to the user
-//     if (document.userId !== userId) {
-//       throw new Error(
-//         `Access denied: Document ${documentId} does not belong to user`,
-//       );
-//     }
+    // Return full document details
+    const documentDetails = {
+      id: document.id,
+      title: document.title,
+      content: (document.data as any).episodeBody,
+      source: document.source,
+      createdAt: document.createdAt.toISOString(),
+    };
 
-//     // Return full document details
-//     const documentDetails = {
-//       uuid: document.uuid,
-//       title: document.title,
-//       originalContent: document.originalContent,
-//       metadata: document.metadata,
-//       source: document.source,
-//       createdAt: document.createdAt.toISOString(),
-//       validAt: document.validAt.toISOString(),
-//       totalChunks: document.totalChunks,
-//       version: document.version,
-//     };
+    return {
+      content: [
+        {
+          type: "text",
+          text: JSON.stringify(documentDetails),
+        },
+      ],
+      isError: false,
+    };
+  } catch (error) {
+    logger.error(`MCP get document error: ${error}`);
 
-//     return {
-//       content: [
-//         {
-//           type: "text",
-//           text: JSON.stringify(documentDetails),
-//         },
-//       ],
-//       isError: false,
-//     };
-//   } catch (error) {
-//     logger.error(`MCP get document error: ${error}`);
-
-//     return {
-//       content: [
-//         {
-//           type: "text",
-//           text: `Error getting document: ${error instanceof Error ? error.message : String(error)}`,
-//         },
-//       ],
-//       isError: true,
-//     };
-//   }
-// }
+    return {
+      content: [
+        {
+          type: "text",
+          text: `Error getting document: ${error instanceof Error ? error.message : String(error)}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+}
 
 // Handler for get_labels
 async function handleGetLabels(args: any) {
   try {
-    const { userId } = args;
+    const { workspaceId } = args;
 
-    // Get workspace for user
-    const workspace = await prisma.workspace.findFirst({
-      where: {
-        userId: userId,
-      },
-    });
-
-    if (!workspace) {
-      throw new Error("Workspace not found for user");
-    }
-
-    const labels = await labelService.getWorkspaceLabels(workspace.id);
+    const labels = await labelService.getWorkspaceLabels(workspaceId);
 
     // Return simplified label info for listing
     const simplifiedLabels = labels.map((label) => ({

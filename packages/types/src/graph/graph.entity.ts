@@ -38,8 +38,8 @@ export interface EpisodicNode {
   userId: string;
 
   // Grouping and chunking
-  sessionId: string;  // Required - groups chunks together (replaces documentId)
-  queueId?: string;   // Ingestion queue ID - useful for grouping chunks of same message/document ingestion
+  sessionId: string; // Required - groups chunks together (replaces documentId)
+  queueId?: string; // Ingestion queue ID - useful for grouping chunks of same message/document ingestion
   type?: EpisodeType; // CONVERSATION or DOCUMENT
   chunkIndex?: number; // Index of this chunk within the session (0-based)
   totalChunks?: number; // Total chunks in this session
@@ -82,8 +82,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   version: e.version,
   contentHash: e.contentHash,
   previousVersionSessionId: e.previousVersionSessionId,
-  chunkHashes: e.chunkHashes,
-  documentId: e.documentId
+  chunkHashes: e.chunkHashes
 }`;
 
 export const STATEMENT_NODE_PROPERTIES = `{
@@ -202,7 +201,6 @@ export type AddEpisodeParams = {
   contentHash?: string;
   previousVersionSessionId?: string;
   chunkHashes?: string[];
-
 };
 
 export type AddEpisodeResult = {

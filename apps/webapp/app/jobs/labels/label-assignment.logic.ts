@@ -81,9 +81,9 @@ export async function processLabelAssignment(
 
     // Get workspace labels
     const labelService = new LabelService();
-    const workspaceLabels = await labelService.getWorkspaceLabels(
-      payload.workspaceId,
-    );
+    const workspaceLabels = (
+      await labelService.getWorkspaceLabels(payload.workspaceId)
+    ).filter((label) => label.name !== "Persona");
 
     if (workspaceLabels.length === 0) {
       logger.info(
@@ -170,7 +170,7 @@ export async function processLabelAssignment(
       const updatedCount = await updateEpisodeLabels(
         graphIds,
         allLabelIds,
-        payload.userId
+        payload.userId,
       );
       logger.info(`Updated ${updatedCount} Neo4j episodes with labels`, {
         queueId: payload.queueId,

@@ -1,10 +1,11 @@
 import { IngestionStatus } from "@prisma/client";
 import { type z } from "zod";
-import { type IngestBodyRequest, ingestTask } from "../ingest/ingest";
+import { type IngestBodyRequest } from "../ingest/ingest";
 import { prisma } from "./prisma";
-import { EpisodeType } from "@core/types";
 import { hasCredits } from "./utils";
+import { preprocessTask } from "../ingest/preprocess-episode";
 
+// Used in the trigger
 export const addToQueue = async (
   body: z.infer<typeof IngestBodyRequest>,
   userId: string,
@@ -79,7 +80,7 @@ export const addToQueue = async (
   });
 
   // Use unified episode ingestion flow for all types
-  const handler = await ingestTask.trigger(
+  const handler = await preprocessTask.trigger(
     {
       body,
       userId,
