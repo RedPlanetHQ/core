@@ -37,14 +37,11 @@ export interface ChunkingConfig {
 export class EpisodeChunker {
   // Unified chunking configuration for all content types
   static DEFAULT_CONFIG: ChunkingConfig = {
-    targetChunkSize: 1500,
-    minChunkSize: 1000,
+    targetChunkSize: 1250,
+    minChunkSize: 750,
     maxChunkSize: 1800,
     minParagraphSize: 100,
   };
-
-  // Unified chunking threshold - chunk if content exceeds 1000 tokens
-  static CHUNKING_THRESHOLD = 1000;
 
   private TARGET_CHUNK_SIZE: number;
   private MIN_CHUNK_SIZE: number;

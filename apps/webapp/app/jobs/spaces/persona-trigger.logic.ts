@@ -1,10 +1,6 @@
 import { logger } from "~/services/logger.service";
 import { runQuery } from "~/lib/neo4j.server";
 
-import {
-  getDocumentsByTitle,
-  createPersonaDocument,
-} from "~/services/graphModels/document";
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
 interface WorkspaceMetadata {
@@ -32,22 +28,23 @@ export async function checkPersonaUpdateThreshold(
 }> {
   try {
     const labelService = new LabelService();
-    let personaDocument = await getDocumentsByTitle(userId, "Persona");
-    const noDocumentExist = !personaDocument || personaDocument.length === 0;
 
-    // Auto-create persona document if missing (for existing users)
-    if (noDocumentExist) {
-      logger.info("Creating missing persona document for existing user", {
-        userId,
-      });
-      try {
-        await createPersonaDocument(userId, workspaceId);
-        personaDocument = await getDocumentsByTitle(userId, "Persona");
-      } catch (error) {
-        logger.error("Failed to create persona document", { userId, error });
-        return { shouldGenerate: false, reason: "failed_to_create_document" };
-      }
-    }
+    // Check if persona ingestion exists in queue
+    const personaSessionId = `persona-${workspaceId}`;
+    const latestPersona = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: personaSessionId,
+        workspaceId: workspaceId,
+        status: "COMPLETED",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        output: true,
+      },
+    });
 
     let label = await labelService.getLabelByName("Persona", workspaceId);
 
@@ -110,7 +107,7 @@ export async function checkPersonaUpdateThreshold(
     logger.debug("Checking persona space update eligibility", {
       userId,
       episodeCount,
-      personaDocumentId: personaDocument[0].uuid,
+      hasExistingPersona: !!latestPersona,
     });
 
     // Trigger persona generation every 20 episodes
@@ -119,19 +116,17 @@ export async function checkPersonaUpdateThreshold(
     if (
       episodeCount >= PERSONA_UPDATE_THRESHOLD ||
       !lastPersonaGenerationAt ||
-      noDocumentExist
+      !latestPersona
     ) {
       logger.info("Threshold met for persona generation", {
         userId,
-        personaDocumentId: personaDocument[0].uuid,
         episodeCount,
         threshold: PERSONA_UPDATE_THRESHOLD,
+        hasExistingPersona: !!latestPersona,
       });
 
-      const mode = lastPersonaGenerationAt
-        ? personaDocument[0].originalContent
-          ? "incremental"
-          : "full"
+      const mode = lastPersonaGenerationAt && latestPersona
+        ? "incremental"
         : "full";
 
       return {

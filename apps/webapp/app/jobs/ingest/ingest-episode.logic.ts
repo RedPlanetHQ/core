@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
-import { linkEpisodeToDocument } from "~/services/graphModels/document";
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";

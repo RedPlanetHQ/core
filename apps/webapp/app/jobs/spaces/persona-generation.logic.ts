@@ -15,7 +15,6 @@ import {
 } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 
-import { getDocumentsByTitle } from "~/services/graphModels/document";
 import { addToQueue } from "~/trigger/utils/queue";
 import { prisma } from "~/trigger/utils/prisma";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
@@ -1212,11 +1211,26 @@ export async function processPersonaGeneration(
   });
 
   try {
-    const personaDocument = await getDocumentsByTitle(userId, "Persona");
+    // Get latest persona from ingestion queue
+    const personaSessionId = `persona-${workspaceId}`;
+    const latestPersona = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: personaSessionId,
+        workspaceId: workspaceId,
+        status: "COMPLETED",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        data: true,
+      },
+    });
 
-    if (!personaDocument) {
-      throw new Error(`Persona document not found: ${userId}`);
-    }
+    const existingSummary = latestPersona?.data
+      ? (latestPersona.data as any).episodeBody
+      : null;
 
     // Get all episodes for persona generation
     const episodes = await getEpisodesByUserId({ userId, startTime });
@@ -1240,13 +1254,14 @@ export async function processPersonaGeneration(
       labelId,
       episodeCount: episodes.length,
       mode,
+      hasExistingSummary: !!existingSummary,
     });
 
     // Generate persona summary (calls Python analytics + clustering + LLM logic)
     const summary = await generatePersonaSummary(
       episodes,
       mode,
-      personaDocument[0].originalContent || null,
+      existingSummary,
       userId,
       labelId,
       startTime,

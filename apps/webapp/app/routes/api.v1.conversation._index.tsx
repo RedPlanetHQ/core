@@ -24,12 +24,12 @@ import {
   hasQuestion,
   REACT_SYSTEM_PROMPT,
 } from "~/lib/prompt.server";
-import { getUserPersonaContent } from "~/services/graphModels/document";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 import { logger } from "~/services/logger.service";
+import { prisma } from "~/db.server";
 
 const ChatRequestSchema = z.object({
   message: z.object({
@@ -131,7 +131,23 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     // Fetch user's persona to condition AI behavior
-    const personaContent = await getUserPersonaContent(authentication.userId);
+    const latestPersona = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: `persona-${workspace?.id}`,
+        workspaceId: workspace?.id,
+        status: "COMPLETED",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        data: true,
+      },
+    });
+    const personaContent = latestPersona?.data
+      ? (latestPersona.data as any).episodeBody
+      : null;
 
     // Build system prompt with persona context if available
     let systemPrompt = REACT_SYSTEM_PROMPT;

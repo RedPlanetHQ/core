@@ -41,7 +41,6 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
-import { getDocumentStatements } from "~/services/graphModels/document";
 
 
 export interface GraphResolutionPayload {
