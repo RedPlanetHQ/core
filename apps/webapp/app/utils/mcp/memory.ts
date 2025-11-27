@@ -7,7 +7,6 @@ import { IntegrationLoader } from "./integration-loader";
 import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
 import { getDocument, getUserDocuments } from "~/services/ingestionLogs.server";
 
 const searchService = new SearchService();

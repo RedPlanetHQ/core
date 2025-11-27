@@ -8,6 +8,8 @@ import { History } from "@tiptap/extension-history";
 import { Paragraph } from "@tiptap/extension-paragraph";
 import { Text } from "@tiptap/extension-text";
 import { Button } from "../ui";
+import { ExampleUseCases } from "./example-usecases";
+import { type Editor } from "@tiptap/react";
 
 export const ConversationNew = ({
   user,
@@ -17,8 +19,16 @@ export const ConversationNew = ({
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
   const editorRef = useRef<any>(null);
+  const [editor, setEditor] = useState<Editor>();
 
   const submit = useSubmit();
+
+  // Handle selecting a prompt from examples
+  const handleSelectPrompt = useCallback((prompt: string) => {
+    editor?.commands.setContent(`<p>${prompt}</p>`);
+
+    setTitle(prompt);
+  }, []);
 
   // Send message to API
   const submitForm = useCallback(
@@ -58,7 +68,7 @@ export const ConversationNew = ({
                 What would you like me to remember?
               </h1>
 
-              <div className="bg-background-3 rounded-lg border-1 border-gray-300 py-2">
+              <div className="bg-background-3 mb-4 rounded-lg border-1 border-gray-300 py-2">
                 <EditorRoot>
                   <EditorContent
                     ref={editorRef}
@@ -78,6 +88,11 @@ export const ConversationNew = ({
                       }),
                       History,
                     ]}
+                    onCreate={async ({ editor }) => {
+                      setEditor(editor);
+                      await new Promise((resolve) => setTimeout(resolve, 100));
+                      editor.commands.focus("end");
+                    }}
                     editorProps={{
                       attributes: {
                         class: `prose prose-lg dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full`,
@@ -127,6 +142,8 @@ export const ConversationNew = ({
                   </Button>
                 </div>
               </div>
+
+              <ExampleUseCases onSelectPrompt={handleSelectPrompt} />
             </div>
           </div>
         </div>

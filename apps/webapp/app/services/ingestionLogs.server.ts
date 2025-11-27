@@ -215,12 +215,6 @@ export const getLogByEpisode = async (
             has: episodeUuid,
           },
         },
-        {
-          output: {
-            path: ["documentUuid"],
-            equals: episodeUuid,
-          },
-        },
       ],
     },
     orderBy: {
