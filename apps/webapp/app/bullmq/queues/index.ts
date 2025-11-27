@@ -8,10 +8,10 @@ import { Queue } from "bullmq";
 import { getRedisConnection } from "../connection";
 
 /**
- * Episode ingestion queue
- * Handles individual episode ingestion (including document chunks)
+ * Episode preprocessing queue
+ * Handles chunking, versioning, and differential analysis before ingestion
  */
-export const ingestQueue = new Queue("ingest-queue", {
+export const preprocessQueue = new Queue("preprocess-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 3,
@@ -30,10 +30,10 @@ export const ingestQueue = new Queue("ingest-queue", {
 });
 
 /**
- * Document ingestion queue
- * Handles document-level ingestion with differential processing
+ * Episode ingestion queue
+ * Handles individual episode ingestion (receives pre-chunked episodes from preprocessing)
  */
-export const documentIngestQueue = new Queue("document-ingest-queue", {
+export const ingestQueue = new Queue("ingest-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
     attempts: 3,
@@ -42,11 +42,11 @@ export const documentIngestQueue = new Queue("document-ingest-queue", {
       delay: 2000,
     },
     removeOnComplete: {
-      age: 3600,
-      count: 1000,
+      age: 3600, // Keep completed jobs for 1 hour
+      count: 1000, // Keep last 1000 completed jobs
     },
     removeOnFail: {
-      age: 86400,
+      age: 86400, // Keep failed jobs for 24 hours
     },
   },
 });

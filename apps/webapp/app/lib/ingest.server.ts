@@ -1,16 +1,14 @@
-// lib/ingest.queue.ts
+// lib/ingest.server.ts
 import { IngestionStatus } from "@core/database";
 import { EpisodeType } from "@core/types";
 import { type z } from "zod";
 import { prisma } from "~/db.server";
 import { hasCredits } from "~/services/billing.server";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
-import {
-  enqueueIngestDocument,
-  enqueueIngestEpisode,
-} from "~/lib/queue-adapter.server";
+import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 
+// Used in the server
 export const addToQueue = async (
   rawBody: z.infer<typeof IngestBodyRequest>,
   userId: string,
@@ -90,27 +88,18 @@ export const addToQueue = async (
     },
   });
 
-  let handler;
-  if (body.type === EpisodeType.DOCUMENT) {
-    handler = await enqueueIngestDocument({
-      body,
-      userId,
-      workspaceId: user.Workspace.id,
-      queueId: queuePersist.id,
-      delay: body.delay ?? false,
-    });
+  // Use preprocessing flow for all types (preprocessing handles chunking, versioning, then enqueues ingestion)
+  const handler = await enqueuePreprocessEpisode({
+    body,
+    userId,
+    workspaceId: user.Workspace.id,
+    queueId: queuePersist.id,
+  });
 
-    // Track document ingestion
+  // Track feature usage
+  if (body.type === EpisodeType.DOCUMENT) {
     trackFeatureUsage("document_ingested", userId).catch(console.error);
   } else {
-    handler = await enqueueIngestEpisode({
-      body,
-      userId,
-      workspaceId: user.Workspace.id,
-      queueId: queuePersist.id,
-    });
-
-    // Track episode ingestion
     trackFeatureUsage("episode_ingested", userId).catch(console.error);
   }
 

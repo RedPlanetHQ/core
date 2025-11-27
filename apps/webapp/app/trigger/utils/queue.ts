@@ -1,11 +1,11 @@
 import { IngestionStatus } from "@prisma/client";
 import { type z } from "zod";
-import { type IngestBodyRequest, ingestTask } from "../ingest/ingest";
+import { type IngestBodyRequest } from "../ingest/ingest";
 import { prisma } from "./prisma";
-import { EpisodeType } from "@core/types";
-import { ingestDocumentTask } from "../ingest/ingest-document";
 import { hasCredits } from "./utils";
+import { preprocessTask } from "../ingest/preprocess-episode";
 
+// Used in the trigger
 export const addToQueue = async (
   body: z.infer<typeof IngestBodyRequest>,
   userId: string,
@@ -79,32 +79,19 @@ export const addToQueue = async (
     },
   });
 
-  let handler;
-  if (body.type === EpisodeType.DOCUMENT) {
-    handler = await ingestDocumentTask.trigger({
+  // Use unified episode ingestion flow for all types
+  const handler = await preprocessTask.trigger(
+    {
       body,
       userId,
       workspaceId: user.Workspace.id,
       queueId: queuePersist.id,
-    });
-
-    // Track document ingestion
-  } else {
-    handler = await ingestTask.trigger(
-      {
-        body,
-        userId,
-        workspaceId: user.Workspace.id,
-        queueId: queuePersist.id,
-      },
-      {
-        concurrencyKey: userId,
-        tags: [userId, queuePersist.id],
-      },
-    );
-
-    // Track episode ingestion
-  }
+    },
+    {
+      concurrencyKey: userId,
+      tags: [userId, queuePersist.id],
+    },
+  );
 
   return { id: handler?.id };
 };

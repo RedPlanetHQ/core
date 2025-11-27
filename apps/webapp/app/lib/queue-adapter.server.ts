@@ -12,7 +12,7 @@
 
 import { env } from "~/env.server";
 import type { z } from "zod";
-import type { IngestBodyRequest } from "~/jobs/ingest/ingest-episode.logic";
+import type { IngestBodyRequest, IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
@@ -22,14 +22,35 @@ import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logi
 type QueueProvider = "trigger" | "bullmq";
 
 /**
+ * Enqueue episode preprocessing job
+ */
+export async function enqueuePreprocessEpisode(payload: IngestEpisodePayload): Promise<{ id?: string; token?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { preprocessTask } = await import("~/trigger/ingest/preprocess-episode");
+    const handler = await preprocessTask.trigger(payload, {
+      queue: "preprocessing-queue",
+      concurrencyKey: payload.userId,
+      tags: [payload.userId, payload.queueId],
+    });
+    return { id: handler.id, token: handler.publicAccessToken };
+  } else {
+    // BullMQ
+    const { preprocessQueue } = await import("~/bullmq/queues");
+    const job = await preprocessQueue.add("preprocess-episode", payload, {
+      jobId: payload.queueId,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
  * Enqueue episode ingestion job
  */
-export async function enqueueIngestEpisode(payload: {
-  body: z.infer<typeof IngestBodyRequest>;
-  userId: string;
-  workspaceId: string;
-  queueId: string;
-}): Promise<{ id?: string; token?: string }> {
+export async function enqueueIngestEpisode(payload: IngestEpisodePayload): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
@@ -52,43 +73,6 @@ export async function enqueueIngestEpisode(payload: {
   }
 }
 
-/**
- * Enqueue document ingestion job
- */
-export async function enqueueIngestDocument(payload: {
-  body: z.infer<typeof IngestBodyRequest>;
-  userId: string;
-  workspaceId: string;
-  queueId: string;
-  delay: boolean;
-}): Promise<{ id?: string; token?: string }> {
-  const provider = env.QUEUE_PROVIDER as QueueProvider;
-
-  if (provider === "trigger") {
-    const { ingestDocumentTask } = await import(
-      "~/trigger/ingest/ingest-document"
-    );
-    const handler = await ingestDocumentTask.trigger(payload, {
-      queue: "document-ingestion-queue",
-      concurrencyKey: payload.userId,
-      tags: [payload.userId, payload.queueId],
-      ...(payload.delay ? { delay: "5m" } : {}),
-    });
-    return { id: handler.id, token: handler.publicAccessToken };
-  } else {
-    // BullMQ
-    const { documentIngestQueue } = await import("~/bullmq/queues");
-    const job = await documentIngestQueue.add("ingest-document", payload, {
-      jobId: payload.queueId,
-      attempts: 3,
-      backoff: { type: "exponential", delay: 2000 },
-      // If delay is true, schedule job to run after 5 minutes (300000 ms)
-      ...(payload.delay ? { delay: 5 * 60 * 1000 } : {}),
-    });
-
-    return { id: job.id };
-  }
-}
 
 /**
  * Enqueue conversation title creation job

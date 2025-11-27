@@ -1,7 +1,8 @@
 import { encode } from "gpt-tokenizer";
 import crypto from "crypto";
+import { type EpisodeType } from "@core/types";
 
-export interface DocumentChunk {
+export interface EpisodeChunk {
   content: string;
   chunkIndex: number;
   title?: string;
@@ -11,52 +12,120 @@ export interface DocumentChunk {
   contentHash: string; // Hash for change detection
 }
 
-export interface ChunkedDocument {
-  documentId: string;
+export interface ChunkedEpisode {
+  sessionId: string;
+  type: EpisodeType;
   title: string;
   originalContent: string;
-  chunks: DocumentChunk[];
+  chunks: EpisodeChunk[];
   totalChunks: number;
-  contentHash: string; // Hash of the entire document
+  contentHash: string; // Hash of the entire Episode
   chunkHashes: string[]; // Array of chunk hashes for change detection
+}
+
+export interface ChunkingConfig {
+  targetChunkSize: number;
+  minChunkSize: number;
+  maxChunkSize: number;
+  minParagraphSize: number;
 }
 
 /**
  * Document chunking service that splits large documents into semantic chunks
- * Targets 1-3k tokens per chunk for better entity extraction with natural paragraph boundaries
+ * Uses unified chunking strategy for both documents and conversations
  */
-export class DocumentChunker {
-  private TARGET_CHUNK_SIZE = 1000; // Much smaller for better entity extraction
-  private MIN_CHUNK_SIZE = 500;
-  private MAX_CHUNK_SIZE = 1500;
-  private MIN_PARAGRAPH_SIZE = 100; // Minimum tokens for a paragraph to be considered
+export class EpisodeChunker {
+  // Unified chunking configuration for all content types
+  static DEFAULT_CONFIG: ChunkingConfig = {
+    targetChunkSize: 1250,
+    minChunkSize: 750,
+    maxChunkSize: 1800,
+    minParagraphSize: 100,
+  };
 
-  constructor(
-    targetChunkSize: number = 1000,
-    minChunkSize: number = 500,
-    maxChunkSize: number = 1500,
-    minParagraphSize: number = 100,
-  ) {
-    this.TARGET_CHUNK_SIZE = targetChunkSize;
-    this.MIN_CHUNK_SIZE = minChunkSize;
-    this.MAX_CHUNK_SIZE = maxChunkSize;
-    this.MIN_PARAGRAPH_SIZE = minParagraphSize;
+  private TARGET_CHUNK_SIZE: number;
+  private MIN_CHUNK_SIZE: number;
+  private MAX_CHUNK_SIZE: number;
+  private MIN_PARAGRAPH_SIZE: number;
+
+  constructor(config?: ChunkingConfig) {
+    const c = config || EpisodeChunker.DEFAULT_CONFIG;
+    this.TARGET_CHUNK_SIZE = c.targetChunkSize;
+    this.MIN_CHUNK_SIZE = c.minChunkSize;
+    this.MAX_CHUNK_SIZE = c.maxChunkSize;
+    this.MIN_PARAGRAPH_SIZE = c.minParagraphSize;
+  }
+
+  /**
+   * Determine if content needs chunking based on token count
+   * Uses unified threshold for all content types
+   */
+
+  needsChunking(content: string, _type?: string): boolean {
+    const tokens = encode(content).length;
+    return tokens >= EpisodeChunker.DEFAULT_CONFIG.maxChunkSize;
+  }
+
+  /**
+   * Create a single chunk when content is below threshold
+   */
+  private createSingleChunk(
+    content: string,
+    type: EpisodeType,
+    sessionId: string,
+    title: string,
+    metadata?: Record<string, any>,
+  ): ChunkedEpisode {
+    const contentHash = this.generateContentHash(content);
+
+    const chunk: EpisodeChunk = {
+      content,
+      chunkIndex: 0,
+      title,
+      context: metadata?.context,
+      startPosition: 0,
+      endPosition: content.length,
+      contentHash,
+    };
+
+    return {
+      sessionId,
+      type,
+      title,
+      originalContent: content,
+      chunks: [chunk],
+      totalChunks: 1,
+      contentHash,
+      chunkHashes: [contentHash],
+    };
   }
 
   /**
    * Chunk a document into semantic sections with natural boundaries
    */
-  async chunkDocument(
+  async chunkEpisode(
     originalContent: string,
-    title: string,
-  ): Promise<ChunkedDocument> {
-    const documentId = crypto.randomUUID();
+    type: EpisodeType,
+    sessionId: string,
+    title: string = "Untitled",
+    metadata?: Record<string, any>,
+  ): Promise<ChunkedEpisode> {
+    if (!this.needsChunking(originalContent, type)) {
+      return this.createSingleChunk(
+        originalContent,
+        type,
+        sessionId,
+        title,
+        metadata,
+      );
+    }
+
     const contentHash = this.generateContentHash(originalContent);
 
     // First, split by major section headers (markdown style)
     const majorSections = this.splitByMajorSections(originalContent);
 
-    const chunks: DocumentChunk[] = [];
+    const chunks: EpisodeChunk[] = [];
     let currentChunk = "";
     let currentChunkStart = 0;
     let chunkIndex = 0;
@@ -137,7 +206,8 @@ export class DocumentChunker {
     const chunkHashes = chunks.map((chunk) => chunk.contentHash);
 
     return {
-      documentId,
+      sessionId,
+      type,
       title,
       originalContent,
       chunks,
@@ -485,7 +555,7 @@ export class DocumentChunker {
     startPosition: number,
     endPosition: number,
     title?: string,
-  ): DocumentChunk {
+  ): EpisodeChunk {
     // Generate a concise context/title if not provided
     const context = title || this.generateChunkContext(content);
     const contentHash = this.generateContentHash(content.trim());

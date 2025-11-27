@@ -319,3 +319,29 @@ export const updateIngestionQueue = async (
     data,
   });
 };
+
+export const getUserDocuments = async (workspaceId: string, limit: number) => {
+  const documents = await prisma.ingestionQueue.findMany({
+    where: {
+      type: "DOCUMENT",
+      workspaceId,
+      status: "COMPLETED",
+    },
+    orderBy: {
+      createdAt: "desc", // or updatedAt: 'desc' depending on your needs
+    },
+    distinct: ["sessionId"],
+    take: limit,
+  });
+
+  return documents;
+};
+
+export const getDocument = async (id: string, workspaceId: string) => {
+  return await prisma.ingestionQueue.findUnique({
+    where: {
+      id,
+      workspaceId,
+    },
+  });
+};

@@ -11,7 +11,7 @@
 import { logger } from "~/services/logger.service";
 import {
   ingestWorker,
-  documentIngestWorker,
+  preprocessWorker,
   conversationTitleWorker,
   sessionCompactionWorker,
   closeAllWorkers,
@@ -21,12 +21,12 @@ import {
 } from "./workers";
 import {
   ingestQueue,
-  documentIngestQueue,
   conversationTitleQueue,
   sessionCompactionQueue,
   bertTopicQueue,
   labelAssignmentQueue,
   titleGenerationQueue,
+  preprocessQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -41,11 +41,7 @@ let metricsInterval: NodeJS.Timeout | null = null;
 export async function initWorkers(): Promise<void> {
   // Setup comprehensive logging for all workers
   setupWorkerLogging(ingestWorker, ingestQueue, "ingest-episode");
-  setupWorkerLogging(
-    documentIngestWorker,
-    documentIngestQueue,
-    "ingest-document",
-  );
+  setupWorkerLogging(preprocessWorker, preprocessQueue, "preprocess-episode");
   setupWorkerLogging(
     conversationTitleWorker,
     conversationTitleQueue,
@@ -75,9 +71,9 @@ export async function initWorkers(): Promise<void> {
     [
       { worker: ingestWorker, queue: ingestQueue, name: "ingest-episode" },
       {
-        worker: documentIngestWorker,
-        queue: documentIngestQueue,
-        name: "ingest-document",
+        worker: preprocessWorker,
+        queue: preprocessQueue,
+        name: "preprocess-episode",
       },
       {
         worker: conversationTitleWorker,
@@ -113,7 +109,7 @@ export async function initWorkers(): Promise<void> {
   logger.log("─".repeat(80));
   logger.log(`✓ Ingest worker: ${ingestWorker.name} (concurrency: 1)`);
   logger.log(
-    `✓ Document ingest worker: ${documentIngestWorker.name} (concurrency: 3)`,
+    `✓ Document ingest worker: ${preprocessWorker.name} (concurrency: 3)`,
   );
   logger.log(
     `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
@@ -121,9 +117,7 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
   );
-  logger.log(
-    `✓ BERT topic worker: ${bertTopicWorker.name} (concurrency: 2)`,
-  );
+  logger.log(`✓ BERT topic worker: ${bertTopicWorker.name} (concurrency: 2)`);
   logger.log(
     `✓ Label assignment worker: ${labelAssignmentWorker.name} (concurrency: 5)`,
   );

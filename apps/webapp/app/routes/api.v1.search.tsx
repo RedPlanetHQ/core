@@ -35,7 +35,7 @@ const { action, loader } = createHybridActionApiRoute(
   async ({ body, authentication }) => {
     const results = await searchService.search(
       body.query,
-      "cmc0x85jv0000nu1wiu1yla73",
+      authentication.userId,
       {
         startTime: body.startTime ? new Date(body.startTime) : undefined,
         endTime: body.endTime ? new Date(body.endTime) : undefined,

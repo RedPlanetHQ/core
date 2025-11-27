@@ -16,14 +16,22 @@ interface JobInfo {
 async function getAllQueues() {
   const {
     ingestQueue,
-    documentIngestQueue,
+    preprocessQueue,
+    bertTopicQueue,
+    labelAssignmentQueue,
+    titleGenerationQueue,
+    personaGenerationQueue,
     conversationTitleQueue,
     sessionCompactionQueue,
   } = await import("../queues");
 
   return [
     ingestQueue,
-    documentIngestQueue,
+    preprocessQueue,
+    bertTopicQueue,
+    labelAssignmentQueue,
+    titleGenerationQueue,
+    personaGenerationQueue,
     conversationTitleQueue,
     sessionCompactionQueue,
   ];

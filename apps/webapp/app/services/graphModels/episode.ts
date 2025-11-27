@@ -24,7 +24,15 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.userId = $userId,
       e.labelIds = $labelIds,
       e.sessionId = $sessionId,
-      e.documentId = $documentId
+      e.queueId = $queueId,
+      e.type = $type,
+      e.chunkIndex = $chunkIndex,
+      e.totalChunks = $totalChunks,
+      e.version = $version,
+      e.contentHash = $contentHash,
+      e.previousVersionSessionId = $previousVersionSessionId,
+      e.chunkHashes = $chunkHashes,
+      e.queueId = $queueId
     ON MATCH SET
       e.content = $content,
       e.contentEmbedding = $contentEmbedding,
@@ -34,7 +42,15 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
       e.validAt = $validAt,
       e.labelIds = $labelIds,
       e.sessionId = $sessionId,
-      e.documentId = $documentId
+      e.queueId = $queueId,
+      e.type = $type,
+      e.chunkIndex = $chunkIndex,
+      e.totalChunks = $totalChunks,
+      e.version = $version,
+      e.contentHash = $contentHash,
+      e.previousVersionSessionId = $previousVersionSessionId,
+      e.chunkHashes = $chunkHashes,
+      e.queueId = $queueId
     RETURN e.uuid as uuid
   `;
 
@@ -49,8 +65,15 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
     createdAt: episode.createdAt.toISOString(),
     validAt: episode.validAt.toISOString(),
     contentEmbedding: episode.contentEmbedding || [],
-    sessionId: episode.sessionId || null,
-    documentId: episode.documentId || null,
+    sessionId: episode.sessionId,
+    queueId: episode.queueId || null,
+    type: episode.type || null,
+    chunkIndex: episode.chunkIndex !== undefined ? episode.chunkIndex : null,
+    totalChunks: episode.totalChunks || null,
+    version: episode.version || null,
+    contentHash: episode.contentHash || null,
+    previousVersionSessionId: episode.previousVersionSessionId || null,
+    chunkHashes: episode.chunkHashes || [],
   };
 
   const result = await runQuery(query, params);
@@ -58,7 +81,10 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
 }
 
 // Get an episode by UUID
-export async function getEpisode(uuid: string, withEmbedding: boolean = false): Promise<EpisodicNode | null> {
+export async function getEpisode(
+  uuid: string,
+  withEmbedding: boolean = false,
+): Promise<EpisodicNode | null> {
   const query = `
     MATCH (e:Episode {uuid: $uuid})
     RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
@@ -92,10 +118,8 @@ export async function getRecentEpisodes(params: {
   const query = `
     MATCH (e:Episode{userId: $userId})
     ${filters}
-    MATCH (e)-[:HAS_PROVENANCE]->(s:Statement)
-    WHERE s.invalidAt IS NULL
-    RETURN DISTINCT ${EPISODIC_NODE_PROPERTIES} as episode
-    ORDER BY episode.validAt DESC
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY e.validAt DESC
     LIMIT ${params.limit}
   `;
 
@@ -245,7 +269,7 @@ export async function deleteEpisodeWithRelatedNodes(params: {
   try {
     const result = await runQuery(query, {
       episodeUuid: params.episodeUuid,
-      userId: params.userId
+      userId: params.userId,
     });
 
     if (result.length === 0) {
@@ -406,7 +430,7 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     sessionId: raw.sessionId || undefined,
     recallCount: raw.recallCount || undefined,
     chunkIndex: raw.chunkIndex || undefined,
-    documentId: raw.documentId || undefined,
+    queueId: raw.queueId || undefined,
   };
 }
 
@@ -455,8 +479,11 @@ export async function updateEpisodeLabels(
   return result[0]?.get("updatedEpisodes") || 0;
 }
 
-
-export async function getSessionEpisodes(sessionId: string, userId: string, limit?: number): Promise<EpisodicNode[]> {
+export async function getSessionEpisodes(
+  sessionId: string,
+  userId: string,
+  limit?: number,
+): Promise<EpisodicNode[]> {
   const query = `
     MATCH (e:Episode {userId: $userId})
     WHERE e.sessionId = $sessionId
@@ -473,7 +500,10 @@ export async function getSessionEpisodes(sessionId: string, userId: string, limi
   return result.map((record) => parseEpisodicNode(record.get("episode")));
 }
 
-export async function getTriplesForEpisode(episodeUuid: string, userId: string): Promise<Triple[]> {
+export async function getTriplesForEpisode(
+  episodeUuid: string,
+  userId: string,
+): Promise<Triple[]> {
   const query = `
     MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(statement:Statement)
     MATCH (statement)-[:HAS_SUBJECT]->(subject:Entity)
@@ -493,7 +523,7 @@ export async function getTriplesForEpisode(episodeUuid: string, userId: string):
         .uuid, .name, .type, .attributes, .nameEmbedding, .createdAt, .userId
       } as object,
       episode {
-        .uuid, .content, .originalContent, .source, .metadata, .createdAt, .validAt, .labelIds, .userId, .sessionId, .documentId
+        .uuid, .content, .originalContent, .source, .metadata, .createdAt, .validAt, .labelIds, .userId, .sessionId
       } as episode
   `;
 
@@ -517,16 +547,22 @@ export async function getTriplesForEpisode(episodeUuid: string, userId: string):
         factEmbedding: statementProps.factEmbedding || [],
         createdAt: new Date(statementProps.createdAt),
         validAt: new Date(statementProps.validAt),
-        invalidAt: statementProps.invalidAt ? new Date(statementProps.invalidAt) : null,
+        invalidAt: statementProps.invalidAt
+          ? new Date(statementProps.invalidAt)
+          : null,
         invalidatedBy: statementProps.invalidatedBy,
-        attributes: statementProps.attributes ? JSON.parse(statementProps.attributes) : {},
+        attributes: statementProps.attributes
+          ? JSON.parse(statementProps.attributes)
+          : {},
         userId: statementProps.userId,
       },
       subject: {
         uuid: subjectProps.uuid,
         name: subjectProps.name,
         type: subjectProps.type,
-        attributes: subjectProps.attributes ? JSON.parse(subjectProps.attributes) : {},
+        attributes: subjectProps.attributes
+          ? JSON.parse(subjectProps.attributes)
+          : {},
         nameEmbedding: subjectProps.nameEmbedding || [],
         createdAt: new Date(subjectProps.createdAt),
         userId: subjectProps.userId,
@@ -535,7 +571,9 @@ export async function getTriplesForEpisode(episodeUuid: string, userId: string):
         uuid: predicateProps.uuid,
         name: predicateProps.name,
         type: predicateProps.type,
-        attributes: predicateProps.attributes ? JSON.parse(predicateProps.attributes) : {},
+        attributes: predicateProps.attributes
+          ? JSON.parse(predicateProps.attributes)
+          : {},
         nameEmbedding: predicateProps.nameEmbedding || [],
         createdAt: new Date(predicateProps.createdAt),
         userId: predicateProps.userId,
@@ -544,7 +582,9 @@ export async function getTriplesForEpisode(episodeUuid: string, userId: string):
         uuid: objectProps.uuid,
         name: objectProps.name,
         type: objectProps.type,
-        attributes: objectProps.attributes ? JSON.parse(objectProps.attributes) : {},
+        attributes: objectProps.attributes
+          ? JSON.parse(objectProps.attributes)
+          : {},
         nameEmbedding: objectProps.nameEmbedding || [],
         createdAt: new Date(objectProps.createdAt),
         userId: objectProps.userId,
@@ -561,7 +601,6 @@ export async function getTriplesForEpisode(episodeUuid: string, userId: string):
         labelIds: episodeProps.labelIds || [],
         userId: episodeProps.userId,
         sessionId: episodeProps.sessionId,
-        documentId: episodeProps.documentId,
       },
     };
   });
@@ -575,12 +614,15 @@ export async function linkEpisodeToExistingStatement(
   statementUuid: string,
   userId: string,
 ): Promise<void> {
-  await runQuery(`
+  await runQuery(
+    `
     MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
     MATCH (statement:Statement {uuid: $statementUuid, userId: $userId})
     MERGE (episode)-[r:HAS_PROVENANCE]->(statement)
     ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId
-  `, { episodeUuid, statementUuid, userId });
+  `,
+    { episodeUuid, statementUuid, userId },
+  );
 }
 
 /**
@@ -592,7 +634,8 @@ export async function moveAllProvenanceToStatement(
   targetStatementUuid: string,
   userId: string,
 ): Promise<number> {
-  const result = await runQuery(`
+  const result = await runQuery(
+    `
     MATCH (source:Statement {uuid: $sourceStatementUuid, userId: $userId})
     MATCH (target:Statement {uuid: $targetStatementUuid, userId: $userId})
 
@@ -608,8 +651,92 @@ export async function moveAllProvenanceToStatement(
       ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = datetime(), newR.userId = $userId)
 
     RETURN size(episodes) AS movedCount
-  `, { sourceStatementUuid, targetStatementUuid, userId });
+  `,
+    { sourceStatementUuid, targetStatementUuid, userId },
+  );
 
   const count = result[0]?.get("movedCount");
   return count ? Number(count) : 0;
+}
+
+/**
+ * Get all sessions for a user (replaces getUserDocuments)
+ * Returns first episode of each session for session-level metadata
+ * @param userId - User ID
+ * @param type - Optional filter by episode type (CONVERSATION or DOCUMENT)
+ * @param limit - Optional limit on number of sessions
+ */
+export async function getUserSessions(
+  userId: string,
+  type?: string,
+  limit: number = 50,
+): Promise<EpisodicNode[]> {
+  const typeFilter = type ? `AND e.type = $type` : "";
+
+  const query = `
+    MATCH (e:Episode {userId: $userId})
+    WHERE e.chunkIndex = 0 ${typeFilter}
+    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
+    ORDER BY e.createdAt DESC
+    LIMIT ${limit}
+  `;
+
+  const result = await runQuery(query, { userId, type });
+
+  return result.map((record) => parseEpisodicNode(record.get("episode")));
+}
+
+/**
+ * Invalidate all statements from a previous document version
+ * Marks statements as invalid but keeps episodes for version history
+ * Optionally filter by specific chunk indices for differential invalidation
+ */
+export async function invalidateStatementsFromPreviousVersion(params: {
+  sessionId: string;
+  userId: string;
+  previousVersion: number;
+  invalidatedBy: string;
+  invalidatedAt?: Date;
+  changedChunkIndices?: number[]; // Optional: only invalidate statements from specific chunks
+}): Promise<{
+  invalidatedCount: number;
+  statementUuids: string[];
+}> {
+  const invalidatedAt = params.invalidatedAt || new Date();
+
+  // Build chunk filter if provided
+  const chunkFilter =
+    params.changedChunkIndices && params.changedChunkIndices.length > 0
+      ? `AND e.chunkIndex IN $changedChunkIndices`
+      : "";
+
+  const query = `
+    MATCH (e:Episode {sessionId: $sessionId, userId: $userId, version: $previousVersion})-[:HAS_PROVENANCE]->(s:Statement)
+    WHERE s.invalidAt IS NULL ${chunkFilter}
+    SET s.invalidAt = $invalidatedAt,
+        s.invalidatedBy = $invalidatedBy
+    RETURN collect(s.uuid) as statementUuids, count(s) as invalidatedCount
+  `;
+
+  const result = await runQuery(query, {
+    sessionId: params.sessionId,
+    userId: params.userId,
+    previousVersion: params.previousVersion,
+    invalidatedBy: params.invalidatedBy,
+    invalidatedAt: invalidatedAt.toISOString(),
+    changedChunkIndices: params.changedChunkIndices || [],
+  });
+
+  if (result.length === 0) {
+    return {
+      invalidatedCount: 0,
+      statementUuids: [],
+    };
+  }
+
+  const record = result[0];
+  return {
+    invalidatedCount: record.get("invalidatedCount") || 0,
+    statementUuids: record.get("statementUuids") || [],
+  };
 }

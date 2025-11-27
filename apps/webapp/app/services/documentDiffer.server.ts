@@ -1,6 +1,6 @@
 import { encode } from "gpt-tokenizer";
-import { DocumentChunker, type ChunkedDocument } from "./documentChunker.server";
-import type { DocumentNode } from "@core/types";
+import { EpisodeChunker, type ChunkedEpisode } from "./episodeChunker.server";
+import type { DocumentNode, EpisodicNode } from "@core/types";
 
 export interface DifferentialDecision {
   shouldUseDifferential: boolean;
@@ -38,8 +38,8 @@ export class DocumentDifferentialService {
    */
   async analyzeDifferentialNeed(
     newContent: string,
-    existingDocument: DocumentNode | null,
-    newChunkedDocument: ChunkedDocument,
+    existingDocument: EpisodicNode | null,
+    newChunkedDocument: ChunkedEpisode,
   ): Promise<DifferentialDecision> {
     // If no existing document, it's a new document
     if (!existingDocument) {
@@ -55,20 +55,8 @@ export class DocumentDifferentialService {
 
     const documentSizeTokens = encode(newContent).length;
     
-    // Quick content hash comparison
-    if (existingDocument.contentHash === newChunkedDocument.contentHash) {
-      return {
-        shouldUseDifferential: false,
-        strategy: "skip_processing", // No changes detected
-        reason: "Document content unchanged",
-        changedChunkIndices: [],
-        changePercentage: 0,
-        documentSizeTokens,
-      };
-    }
-
     // Compare chunk hashes to identify changes
-    const chunkComparison = DocumentChunker.compareChunkHashes(
+    const chunkComparison = EpisodeChunker.compareChunkHashes(
       existingDocument.chunkHashes || [],
       newChunkedDocument.chunkHashes,
     );
@@ -79,7 +67,6 @@ export class DocumentDifferentialService {
     const decision = this.applyThresholdDecision(
       documentSizeTokens,
       changePercentage,
-      changedIndices,
     );
 
     return {
@@ -96,7 +83,6 @@ export class DocumentDifferentialService {
   private applyThresholdDecision(
     documentSizeTokens: number,
     changePercentage: number,
-    changedIndices: number[],
   ): Pick<DifferentialDecision, "shouldUseDifferential" | "strategy" | "reason"> {
     // Small documents: always full re-ingest (cheap)
     if (documentSizeTokens < this.SMALL_DOC_THRESHOLD) {
@@ -145,7 +131,7 @@ export class DocumentDifferentialService {
    */
   getChunkComparisons(
     existingDocument: DocumentNode,
-    newChunkedDocument: ChunkedDocument,
+    newChunkedDocument: ChunkedEpisode,
   ): ChunkComparison[] {
     const oldHashes = existingDocument.chunkHashes || [];
     const newHashes = newChunkedDocument.chunkHashes;

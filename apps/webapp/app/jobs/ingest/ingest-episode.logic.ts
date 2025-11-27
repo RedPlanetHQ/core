@@ -1,10 +1,9 @@
 import { z } from "zod";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
-import { linkEpisodeToDocument } from "~/services/graphModels/document";
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
-import { EpisodeType } from "@core/types";
+import { AddEpisodeResult, EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
 
 import {
@@ -24,6 +23,12 @@ export const IngestBodyRequest = z.object({
     .default(EpisodeType.CONVERSATION),
   title: z.string().optional(),
   delay: z.boolean().optional(),
+  chunkIndex: z.number().optional(),
+  totalChunks: z.number().optional(),
+  version: z.number().optional(),
+  contentHash: z.string().optional(),
+  previousVersionSessionId: z.string().optional(),
+  chunkHashes: z.array(z.string()).optional(),
 });
 
 export interface IngestEpisodePayload {
@@ -78,6 +83,8 @@ export async function processEpisodeIngestion(
   enqueueGraphResolution?: (params: {
     episodeUuid: string;
     userId: string;
+    episodeDetails: AddEpisodeResult;
+    workspaceId: string;
     queueId?: string;
   }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
@@ -108,7 +115,7 @@ export async function processEpisodeIngestion(
       };
     }
 
-    const ingestionQueue = await prisma.ingestionQueue.update({
+    await prisma.ingestionQueue.update({
       where: { id: payload.queueId },
       data: {
         status: IngestionStatus.PROCESSING,
@@ -116,16 +123,22 @@ export async function processEpisodeIngestion(
     });
 
     const knowledgeGraphService = new KnowledgeGraphService();
-
     const episodeBody = payload.body as any;
 
-    const episodeDetails = await knowledgeGraphService.addEpisode(
-      {
-        ...episodeBody,
-        userId: payload.userId,
-      },
-      prisma,
-    );
+    let episodeDetails;
+    try {
+      episodeDetails = await knowledgeGraphService.addEpisode(
+        {
+          ...episodeBody,
+          userId: payload.userId,
+          queueId: payload.queueId,
+        },
+        prisma,
+      );
+    }
+    catch (error) {
+      throw new Error(`Failed to add episode: ${error}`);
+    }
 
     // Trigger async graph resolution if we skipped it during ingestion
     if (episodeDetails.episodeUuid && enqueueGraphResolution) {
@@ -138,7 +151,9 @@ export async function processEpisodeIngestion(
         await enqueueGraphResolution({
           episodeUuid: episodeDetails.episodeUuid,
           userId: payload.userId,
+          workspaceId: payload.workspaceId,
           queueId: payload.queueId,
+          episodeDetails,
         });
       } catch (resolutionError) {
         // Don't fail the ingestion if resolution job fails to enqueue
@@ -150,68 +165,15 @@ export async function processEpisodeIngestion(
       }
     }
 
-    // Link episode to document if it's a document chunk
-    if (
-      episodeBody.type === EpisodeType.DOCUMENT &&
-      episodeBody.metadata.documentUuid &&
-      episodeDetails.episodeUuid
-    ) {
-      try {
-        await linkEpisodeToDocument(
-          episodeDetails.episodeUuid,
-          episodeBody.metadata.documentUuid,
-          episodeBody.metadata.chunkIndex || 0,
-        );
-        logger.log(
-          `Linked episode ${episodeDetails.episodeUuid} to document ${episodeBody.metadata.documentUuid} at chunk ${episodeBody.metadata.chunkIndex || 0}`,
-        );
-      } catch (error) {
-        logger.error(`Failed to link episode to document:`, {
-          error,
-          episodeUuid: episodeDetails.episodeUuid,
-          documentUuid: episodeBody.metadata.documentUuid,
-        });
-      }
-    }
-
-    let finalOutput = episodeDetails;
-    let episodeUuids: string[] = episodeDetails.episodeUuid
-      ? [episodeDetails.episodeUuid]
-      : [];
-    let currentStatus: IngestionStatus = IngestionStatus.COMPLETED;
-    if (episodeBody.type === EpisodeType.DOCUMENT) {
-      const currentOutput = ingestionQueue.output as any;
-      currentOutput.episodes.push(episodeDetails);
-      episodeUuids = currentOutput.episodes.map(
-        (episode: any) => episode.episodeUuid,
-      );
-
-      finalOutput = {
-        ...currentOutput,
-      };
-
-      if (currentOutput.episodes.length !== currentOutput.totalChunks) {
-        currentStatus = IngestionStatus.PROCESSING;
-      }
-    }
+    // Simple output - preprocessing already handled chunking logic
+    const currentStatus: IngestionStatus = episodeDetails.episodeUuid ? IngestionStatus.COMPLETED : IngestionStatus.FAILED;
 
     await prisma.ingestionQueue.update({
       where: { id: payload.queueId },
       data: {
-        output: finalOutput,
-        graphIds: episodeUuids,
         status: currentStatus,
       },
     });
-
-    // Deduct credits for episode creation
-    if (currentStatus === IngestionStatus.COMPLETED) {
-      await deductCredits(
-        payload.workspaceId,
-        "addEpisode",
-        finalOutput.statementsCreated,
-      );
-    }
 
     // Handle label assignment and title generation after successful ingestion
     try {

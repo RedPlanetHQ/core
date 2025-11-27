@@ -15,10 +15,9 @@ import {
 } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 
-import { getDocumentsByTitle } from "~/services/graphModels/document";
-import { addToQueue } from "~/trigger/utils/queue";
 import { prisma } from "~/trigger/utils/prisma";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
+import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 
 const execAsync = promisify(exec);
 
@@ -73,7 +72,6 @@ interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
   [key: string]: any;
 }
-
 
 // Zod schema for batch response validation
 const PersonaSummarySchema = z.object({
@@ -233,7 +231,7 @@ async function runClusteringWithExec(
   userId: string,
   startTime?: string,
 ): Promise<string> {
-  let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
+  let command = `python3 /Users/harshithmullapudi/Documents/core/apps/webapp/python/main.py ${userId} --json`;
 
   // Add time filter if provided
   if (startTime) {
@@ -264,7 +262,7 @@ async function runAnalyticsWithExec(
   userId: string,
   startTime?: string,
 ): Promise<string> {
-  let command = `python3 /core/apps/webapp/python/persona_analytics.py ${userId} --json`;
+  let command = `python3 /Users/harshithmullapudi/Documents/core/apps/webapp/python/persona_analytics.py ${userId} --json`;
 
   // Add time filter if provided
   if (startTime) {
@@ -699,9 +697,10 @@ function buildContextSection(userContext: UserContext): string {
     identityLines.push(`- Primary Email: ${userContext.email}`);
   }
 
-  const identitySection = identityLines.length > 0
-    ? `## User Identity (from account):\n${identityLines.join("\n")}\n\n`
-    : "";
+  const identitySection =
+    identityLines.length > 0
+      ? `## User Identity (from account):\n${identityLines.join("\n")}\n\n`
+      : "";
 
   if (userContext.source === "onboarding") {
     return `
@@ -1157,6 +1156,12 @@ async function updateLastPersonaGenerationTime(
  */
 export async function processPersonaGeneration(
   payload: PersonaGenerationPayload,
+  addToQueue: (
+    body: z.infer<typeof IngestBodyRequest>,
+    userId: string,
+    activityId?: string,
+    ingestionQueueId?: string,
+  ) => Promise<{ id?: string }>,
   clusteringRunner?: (userId: string, startTime?: string) => Promise<string>,
   analyticsRunner?: (userId: string, startTime?: string) => Promise<string>,
 ): Promise<PersonaGenerationResult> {
@@ -1183,7 +1188,8 @@ export async function processPersonaGeneration(
       summaryLength: 0,
       episodesProcessed: 0,
     };
-  } if(!thresholdCheck.labelId || !thresholdCheck.mode){
+  }
+  if (!thresholdCheck.labelId || !thresholdCheck.mode) {
     logger.info("Persona generation skipped - missing threshold check values", {
       userId,
       workspaceId,
@@ -1201,7 +1207,6 @@ export async function processPersonaGeneration(
   // Use values from threshold check
   const { labelId, mode, startTime } = thresholdCheck;
 
-
   logger.info("Starting persona generation (threshold met)", {
     userId,
     workspaceId,
@@ -1212,11 +1217,26 @@ export async function processPersonaGeneration(
   });
 
   try {
-    const personaDocument = await getDocumentsByTitle(userId, "Persona");
+    // Get latest persona from ingestion queue
+    const personaSessionId = `persona-${workspaceId}`;
+    const latestPersona = await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: personaSessionId,
+        workspaceId: workspaceId,
+        status: "COMPLETED",
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      select: {
+        id: true,
+        data: true,
+      },
+    });
 
-    if (!personaDocument) {
-      throw new Error(`Persona document not found: ${userId}`);
-    }
+    const existingSummary = latestPersona?.data
+      ? (latestPersona.data as any).episodeBody
+      : null;
 
     // Get all episodes for persona generation
     const episodes = await getEpisodesByUserId({ userId, startTime });
@@ -1240,13 +1260,14 @@ export async function processPersonaGeneration(
       labelId,
       episodeCount: episodes.length,
       mode,
+      hasExistingSummary: !!existingSummary,
     });
 
     // Generate persona summary (calls Python analytics + clustering + LLM logic)
     const summary = await generatePersonaSummary(
       episodes,
       mode,
-      personaDocument[0].originalContent || null,
+      existingSummary,
       userId,
       labelId,
       startTime,
@@ -1262,7 +1283,7 @@ export async function processPersonaGeneration(
       type: EpisodeType.DOCUMENT,
       source: "persona",
       title: "Persona",
-      labelIds: [labelId],  
+      labelIds: [labelId],
       sessionId: `persona-${workspaceId}`,
       metadata: { documentTitle: "Persona" },
     };

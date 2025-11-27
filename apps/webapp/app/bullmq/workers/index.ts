@@ -10,10 +10,7 @@ import {
   processEpisodeIngestion,
   type IngestEpisodePayload,
 } from "~/jobs/ingest/ingest-episode.logic";
-import {
-  processDocumentIngestion,
-  type IngestDocumentPayload,
-} from "~/jobs/ingest/ingest-document.logic";
+import { processEpisodePreprocessing } from "~/jobs/ingest/preprocess-episode.logic";
 import {
   processConversationTitleCreation,
   type CreateConversationTitlePayload,
@@ -53,12 +50,34 @@ import {
   type GraphResolutionPayload,
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
+import { addToQueue } from "~/lib/ingest.server";
+
+/**
+ * Episode preprocessing worker
+ * Handles chunking, versioning, and differential analysis before ingestion
+ */
+export const preprocessWorker = new Worker(
+  "preprocess-queue",
+  async (job) => {
+    const payload = job.data as IngestEpisodePayload;
+
+    return await processEpisodePreprocessing(
+      payload,
+      // Callback to enqueue individual chunk ingestion jobs
+      enqueueIngestEpisode,
+    );
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5, // Process up to 5 preprocessing jobs in parallel
+  },
+);
 
 /**
  * Episode ingestion worker
- * Processes individual episode ingestion jobs with global concurrency
+ * Processes individual episode ingestion jobs (receives pre-chunked episodes from preprocessing)
  *
- * Note: BullMQ uses global concurrency limit (5 jobs max).
+ * Note: BullMQ uses global concurrency limit (3 jobs max).
  * Trigger.dev uses per-user concurrency via concurrencyKey.
  * For most open-source deployments, global concurrency is sufficient.
  */
@@ -80,30 +99,7 @@ export const ingestWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 3, // Global limit: process up to 1 jobs in parallel
-  },
-);
-
-/**
- * Document ingestion worker
- * Handles document-level ingestion with differential processing
- *
- * Note: Per-user concurrency is achieved by using userId as part of the jobId
- * when adding jobs to the queue
- */
-export const documentIngestWorker = new Worker(
-  "document-ingest-queue",
-  async (job) => {
-    const payload = job.data as IngestDocumentPayload;
-    return await processDocumentIngestion(
-      payload,
-      // Callback to enqueue episode ingestion for each chunk
-      enqueueIngestEpisode,
-    );
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 3, // Process up to 3 documents in parallel
+    concurrency: 3, // Global limit: process up to 3 jobs in parallel
   },
 );
 
@@ -193,7 +189,7 @@ export const personaGenerationWorker = new Worker(
   "persona-generation-queue",
   async (job) => {
     const payload = job.data as PersonaGenerationPayload;
-    return await processPersonaGeneration(payload);
+    return await processPersonaGeneration(payload, addToQueue);
   },
   {
     connection: getRedisConnection(),
@@ -222,8 +218,8 @@ export const graphResolutionWorker = new Worker(
  */
 export async function closeAllWorkers(): Promise<void> {
   await Promise.all([
+    preprocessWorker.close(),
     ingestWorker.close(),
-    documentIngestWorker.close(),
     conversationTitleWorker.close(),
     sessionCompactionWorker.close(),
     bertTopicWorker.close(),

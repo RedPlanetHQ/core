@@ -5,6 +5,7 @@ import {
   processPersonaGeneration,
   type PersonaGenerationPayload,
 } from "~/jobs/spaces/persona-generation.logic";
+import { addToQueue } from "../utils/queue";
 
 export type { PersonaGenerationPayload };
 
@@ -84,6 +85,7 @@ export const personaGenerationTask = task({
     // Use common business logic with Trigger.dev Python runners
     return await processPersonaGeneration(
       payload,
+      addToQueue,
       runClusteringWithTriggerPython,
       runAnalyticsWithTriggerPython,
     );

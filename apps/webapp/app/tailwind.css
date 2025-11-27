@@ -513,7 +513,7 @@
     }
 
     li  p {
-      margin-top: 0.5rem !important;
+      margin-top: 0 !important;
     }
 
     pre {
