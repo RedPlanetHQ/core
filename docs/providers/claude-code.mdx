@@ -13,7 +13,7 @@ description: "Connect your Claude Code CLI to CORE's memory system"
 Run this command in your terminal to connect CORE with Claude Code:
 
 ```bash
-claude mcp add --transport http core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+claude mcp add --transport http --scope user core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
 ```
 
 What this does: This command registers CORE's MCP server with Claude Code, establishing the connection endpoint for memory operations.
