@@ -106,7 +106,7 @@ No context loss, no re-explaining projects, no forgotten decisions.
 1. Run this command in your terminal to connect CORE with Claude Code:
 
 ```sh
-claude mcp add --transport http core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+claude mcp add --transport http --scope user core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
 ```
 
 2. Type `/mcp` and open core-memory MCP for authentication

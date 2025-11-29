@@ -60,7 +60,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
             <div className="space-y-2">
               <div>Run in terminal:</div>
               <code className="text-sm">
-                claude mcp add --transport http core-memory
+                claude mcp add --transport http --scope user core-memory
                 https://core.heysol.ai/api/v1/mcp?source=Claude-Code
               </code>
             </div>
