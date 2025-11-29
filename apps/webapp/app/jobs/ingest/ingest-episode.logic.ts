@@ -3,7 +3,7 @@ import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
-import { AddEpisodeResult, EpisodeType } from "@core/types";
+import { type AddEpisodeResult, EpisodeType } from "@core/types";
 import { deductCredits, hasCredits } from "~/trigger/utils/utils";
 
 import {
@@ -135,18 +135,20 @@ export async function processEpisodeIngestion(
         },
         prisma,
       );
-    }
-    catch (error) {
+    } catch (error) {
       throw new Error(`Failed to add episode: ${error}`);
     }
 
     // Trigger async graph resolution if we skipped it during ingestion
     if (episodeDetails.episodeUuid && enqueueGraphResolution) {
       try {
-        logger.info(`Triggering async graph resolution for episode ${episodeDetails.episodeUuid}`, {
-          userId: payload.userId,
-          triplesCount: episodeDetails.statementsCreated,
-        });
+        logger.info(
+          `Triggering async graph resolution for episode ${episodeDetails.episodeUuid}`,
+          {
+            userId: payload.userId,
+            triplesCount: episodeDetails.statementsCreated,
+          },
+        );
 
         await enqueueGraphResolution({
           episodeUuid: episodeDetails.episodeUuid,
@@ -166,7 +168,9 @@ export async function processEpisodeIngestion(
     }
 
     // Simple output - preprocessing already handled chunking logic
-    const currentStatus: IngestionStatus = episodeDetails.episodeUuid ? IngestionStatus.COMPLETED : IngestionStatus.FAILED;
+    const currentStatus: IngestionStatus = episodeDetails.episodeUuid
+      ? IngestionStatus.COMPLETED
+      : IngestionStatus.FAILED;
 
     await prisma.ingestionQueue.update({
       where: { id: payload.queueId },
@@ -308,13 +312,10 @@ export async function processEpisodeIngestion(
         currentStatus === IngestionStatus.COMPLETED &&
         enqueuePersonaGeneration
       ) {
-        logger.info(
-          `Triggering persona generation check after ingestion`,
-          {
-            userId: payload.userId,
-            workspaceId: payload.workspaceId,
-          },
-        );
+        logger.info(`Triggering persona generation check after ingestion`, {
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+        });
 
         // Trigger persona generation task - threshold check happens within the task
         await enqueuePersonaGeneration({

@@ -39,7 +39,8 @@ async function createMcpServer(
     {
       name: "core",
       version: "1.0.0",
-      description: "CORE Memory - Intelligent knowledge graph that remembers conversations, documents, and context across all your tools",
+      description:
+        "CORE Memory - Intelligent knowledge graph that remembers conversations, documents, and context across all your tools",
       homepage: "https://getcore.me",
       icon: "https://getcore.me/logo.png",
     },
@@ -97,7 +98,8 @@ async function createMcpServer(
           arguments: [
             {
               name: "query",
-              description: "What are you looking for? (e.g., 'authentication bugs', 'API design decisions')",
+              description:
+                "What are you looking for? (e.g., 'authentication bugs', 'API design decisions')",
               required: true,
             },
           ],
@@ -229,12 +231,14 @@ async function createMcpServer(
         properties: {
           source: {
             type: "string",
-            description: "Source identifier for tracking where requests originate (e.g., 'claude-desktop', 'vscode')",
+            description:
+              "Source identifier for tracking where requests originate (e.g., 'claude-desktop', 'vscode')",
             default: "api",
           },
           integrations: {
             type: "array",
-            description: "List of integration slugs to load (e.g., ['github', 'linear', 'slack']). Leave empty to load all available integrations.",
+            description:
+              "List of integration slugs to load (e.g., ['github', 'linear', 'slack']). Leave empty to load all available integrations.",
             items: {
               type: "string",
             },
@@ -247,7 +251,8 @@ async function createMcpServer(
           },
           spaceId: {
             type: "string",
-            description: "UUID of a space to associate memories with. Enables space-scoped memory organization.",
+            description:
+              "UUID of a space to associate memories with. Enables space-scoped memory organization.",
             format: "uuid",
           },
         },
@@ -388,6 +393,7 @@ export const handleMCPRequest = async (
     ) {
       // Use existing session
       const sessionData = TransportManager.getSessionInfo(sessionId);
+
       if (!sessionData.exists) {
         // Session exists in DB but not in memory (server restarted)
         // For initialize requests, we can try to recreate the transport

@@ -12,7 +12,10 @@ import { logger } from "~/services/logger.service";
 import { EpisodeType } from "@core/types";
 import { EpisodeVersioningService } from "~/services/episodeVersioning.server";
 import { DocumentDifferentialService } from "~/services/documentDiffer.server";
-import { IngestBodyRequest, type IngestEpisodePayload } from "./ingest-episode.logic";
+import {
+  IngestBodyRequest,
+  type IngestEpisodePayload,
+} from "./ingest-episode.logic";
 import { EpisodeChunker } from "~/services/episodeChunker.server";
 import { invalidateStatementsFromPreviousVersion } from "~/services/graphModels/episode";
 
@@ -64,14 +67,18 @@ export async function processEpisodePreprocessing(
 
     if (!needsChunking) {
       // Content below threshold - prepare as single episode
-      logger.info(`Content below chunking threshold - preparing single episode`, {
-        type,
-        sessionId,
-      });
+      logger.info(
+        `Content below chunking threshold - preparing single episode`,
+        {
+          type,
+          sessionId,
+        },
+      );
 
       preprocessedChunks = [
         {
           ...payload.body,
+          sessionId,
           chunkIndex: 0,
           totalChunks: 1,
         },
@@ -114,7 +121,8 @@ export async function processEpisodePreprocessing(
           isNewSession: versionInfo.isNewSession,
           version: versionInfo.newVersion,
           hasContentChanged: versionInfo.hasContentChanged,
-          changePercentage: versionInfo.chunkLevelChanges.changePercentage.toFixed(1),
+          changePercentage:
+            versionInfo.chunkLevelChanges.changePercentage.toFixed(1),
         });
 
         let chunksToProcess = chunked.chunks;
@@ -125,28 +133,31 @@ export async function processEpisodePreprocessing(
           const decision = await differentialService.analyzeDifferentialNeed(
             chunked.originalContent,
             versionInfo.existingFirstEpisode,
-            chunked
+            chunked,
           );
 
           preprocessingStrategy = decision.strategy;
 
           if (decision.strategy === "chunk_level_diff") {
             // Invalidate statements from changed chunks only
-            const changedIndices = versionInfo.chunkLevelChanges.changedChunkIndices;
+            const changedIndices =
+              versionInfo.chunkLevelChanges.changedChunkIndices;
 
             logger.info(
               `Invalidating statements from changed chunks only: ${changedIndices.length} chunks`,
             );
 
-            const previousVersion = (versionInfo.existingFirstEpisode?.version || 1);
+            const previousVersion =
+              versionInfo.existingFirstEpisode?.version || 1;
 
-            const invalidationResult = await invalidateStatementsFromPreviousVersion({
-              sessionId: sessionId, // Same sessionId (documentId) across versions
-              userId: payload.userId,
-              previousVersion: previousVersion,
-              changedChunkIndices: changedIndices,
-              invalidatedBy: sessionId,
-            });
+            const invalidationResult =
+              await invalidateStatementsFromPreviousVersion({
+                sessionId: sessionId, // Same sessionId (documentId) across versions
+                userId: payload.userId,
+                previousVersion: previousVersion,
+                changedChunkIndices: changedIndices,
+                invalidatedBy: sessionId,
+              });
 
             logger.info(`Chunk-level statement invalidation completed`, {
               previousVersion,
@@ -158,11 +169,14 @@ export async function processEpisodePreprocessing(
               decision.changedChunkIndices.includes(c.chunkIndex),
             );
 
-            logger.info(`Differential processing: processing changed chunks only`, {
-              totalChunks: chunked.totalChunks,
-              chunksToProcess: chunksToProcess.length,
-              changedIndices: decision.changedChunkIndices,
-            });
+            logger.info(
+              `Differential processing: processing changed chunks only`,
+              {
+                totalChunks: chunked.totalChunks,
+                chunksToProcess: chunksToProcess.length,
+                changedIndices: decision.changedChunkIndices,
+              },
+            );
           } else if (decision.strategy === "skip_processing") {
             logger.info(`No changes detected, skipping processing`);
             chunksToProcess = [];
@@ -171,13 +185,15 @@ export async function processEpisodePreprocessing(
               `Full reingest strategy: invalidating all statements from previous version`,
             );
 
-            const previousVersion = (versionInfo.existingFirstEpisode?.version || 1);
-            const invalidationResult = await invalidateStatementsFromPreviousVersion({
-              sessionId: sessionId,
-              userId: payload.userId,
-              previousVersion: previousVersion,
-              invalidatedBy: sessionId,
-            });
+            const previousVersion =
+              versionInfo.existingFirstEpisode?.version || 1;
+            const invalidationResult =
+              await invalidateStatementsFromPreviousVersion({
+                sessionId: sessionId,
+                userId: payload.userId,
+                previousVersion: previousVersion,
+                invalidatedBy: sessionId,
+              });
 
             logger.info(`Full version invalidation completed`, {
               previousVersion,
@@ -203,11 +219,13 @@ export async function processEpisodePreprocessing(
             version: versionInfo.newVersion,
             totalChunks: chunked.totalChunks,
             contentHash: chunked.contentHash,
-            previousVersionSessionId: versionInfo.previousVersionSessionId || undefined,
+            previousVersionSessionId:
+              versionInfo.previousVersionSessionId || undefined,
             // chunkHashes only on first chunk
-            ...(isFirstChunk && versionInfo && {
-              chunkHashes: chunked.chunkHashes,
-            }),
+            ...(isFirstChunk &&
+              versionInfo && {
+                chunkHashes: chunked.chunkHashes,
+              }),
           });
         }
       } else {
@@ -259,7 +277,10 @@ export async function processEpisodePreprocessing(
       preprocessingStrategy,
     };
   } catch (err: any) {
-    logger.error(`Error preprocessing episode for user ${payload.userId}:`, err);
+    logger.error(
+      `Error preprocessing episode for user ${payload.userId}:`,
+      err,
+    );
     return {
       success: false,
       error: err.message,

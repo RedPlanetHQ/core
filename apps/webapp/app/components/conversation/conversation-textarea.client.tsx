@@ -5,11 +5,11 @@ import { Paragraph } from "@tiptap/extension-paragraph";
 import { Text } from "@tiptap/extension-text";
 import { type Editor } from "@tiptap/react";
 import { EditorContent, Placeholder, EditorRoot } from "novel";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { LoaderCircle } from "lucide-react";
-import { Form, useSubmit, useActionData } from "@remix-run/react";
+import { useSubmit } from "@remix-run/react";
 
 interface ConversationTextareaProps {
   defaultValue?: string;
