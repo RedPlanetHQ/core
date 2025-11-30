@@ -15,7 +15,9 @@ const loader = createHybridLoaderApiRoute(
     const labelService = new LabelService();
     const workspace = await getWorkspaceByUser(authentication.userId);
 
-    const labels = labelService.getWorkspaceLabels(workspace?.id as string);
+    const labels = await labelService.getWorkspaceLabels(
+      workspace?.id as string,
+    );
 
     return json(labels);
   },
