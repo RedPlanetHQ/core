@@ -8,6 +8,7 @@ import {
   MessageSquare,
   Tag,
   X,
+  FileText,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -307,6 +308,17 @@ export function LogsFilters({
         </PopoverPortal>
       </Popover>
 
+      <Button
+        variant="secondary"
+        className="gap-1"
+        isActive={selectedType === "DOCUMENT"}
+        onClick={() => {
+          onTypeChange(selectedType ? undefined : "DOCUMENT");
+        }}
+      >
+        <FileText size={16} /> Document
+      </Button>
+
       {/* Active Filters */}
       {hasFilters && (
         <div className="flex items-center gap-2">
@@ -346,7 +358,7 @@ export function LogsFilters({
               />
             </Badge>
           )}
-          {selectedType && (
+          {selectedType && selectedType !== "DOCUMENT" && (
             <Badge variant="secondary" className="h-7 gap-2 rounded px-2">
               {getIngestType(selectedTypeLabel as string).icon}
               <div className="mt-[1px]"> {selectedTypeLabel}</div>

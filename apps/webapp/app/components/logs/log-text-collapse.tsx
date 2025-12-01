@@ -145,11 +145,12 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                 {showStatus(log) && (
                   <Badge
                     className={cn(
-                      "!bg-grayAlpha-100 text-muted-foreground gap-1 rounded text-sm",
+                      "!bg-grayAlpha-100 text-muted-foreground gap-1.5 rounded text-sm",
                     )}
                   >
                     <BadgeColor
                       style={{ backgroundColor: getStatusColor(log.status) }}
+                      className="mb-[1px]"
                     />
                     {getStatusValue(log.status)}
                   </Badge>

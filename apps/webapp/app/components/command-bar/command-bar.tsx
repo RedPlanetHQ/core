@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { FileText, Plus, Loader2, File, MessageSquare } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Plus, Loader2, File, MessageSquare } from "lucide-react";
 import {
   CommandDialog,
   CommandGroup,
@@ -8,7 +8,7 @@ import {
   CommandList,
   CommandEmpty,
 } from "../ui/command";
-import { AddMemoryDialog } from "./memory-dialog.client";
+
 import { useFetcher, useNavigate } from "@remix-run/react";
 
 interface CommandBarProps {
@@ -17,7 +17,6 @@ interface CommandBarProps {
 }
 
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
-  const [showAddMemory, setShowAddMemory] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const searchFetcher = useFetcher<any>();
   const navigate = useNavigate();
@@ -46,7 +45,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   }, [searchQuery]);
 
   const handleAddMemory = () => {
-    setShowAddMemory(true);
+    navigate(`/home/episode`);
     onOpenChange(false);
   };
 
@@ -148,10 +147,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
           </CommandGroup>
         </CommandList>
       </CommandDialog>
-
-      {showAddMemory && (
-        <AddMemoryDialog open={showAddMemory} onOpenChange={setShowAddMemory} />
-      )}
     </>
   );
 }

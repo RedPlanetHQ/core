@@ -33,9 +33,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
-import { AddMemoryDialog } from "../command-bar/memory-dialog.client";
+
 import { type Label } from "@prisma/client";
 import { DocumentList } from "./document-list";
+import { useNavigate } from "@remix-run/react";
 
 const data = {
   navMain: [
@@ -64,9 +65,9 @@ const data = {
 
 export function AppSidebar({ labels }: { labels: Label[] }) {
   const user = useUser();
+  const navigate = useNavigate();
 
   const [commandBar, setCommandBar] = React.useState(false);
-  const [memoryAdd, setMemoryAdd] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
   useHotkeys("meta+k", (e) => {
@@ -98,7 +99,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
                   variant="secondary"
                   size="sm"
                   className="rounded"
-                  onClick={() => setMemoryAdd(true)}
+                  onClick={() => navigate(`/home/episode`)}
                 >
                   <Plus size={16} />
                 </Button>
@@ -155,10 +156,6 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
           <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
-
-      {memoryAdd && (
-        <AddMemoryDialog open={memoryAdd} onOpenChange={setMemoryAdd} />
-      )}
 
       <CommandBar open={commandBar} onOpenChange={setCommandBar} />
     </>

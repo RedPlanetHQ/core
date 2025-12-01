@@ -4,15 +4,30 @@ import {
   getPlaceholder,
 } from "../conversation/editor-extensions";
 import { Button, Input } from "../ui";
-import { useState } from "react";
 
-export const Editor = () => {
+import React, { useState } from "react";
+import { useFetcher, useNavigate } from "@remix-run/react";
+import { LabelDropdown } from "../logs/label-dropdown";
+import { type Label } from "@prisma/client";
+
+interface EditorProps {
+  defaultLabelId?: string;
+  labels: Label[];
+}
+
+export const Editor = ({ defaultLabelId, labels }: EditorProps) => {
   const [title, setTitle] = useState("Untitled");
+  const [labelIds, setLabelIds] = React.useState<string[]>(
+    defaultLabelId ? [defaultLabelId] : [],
+  );
+
+  const fetcher = useFetcher<{ id: string }>();
+  const navigate = useNavigate();
 
   const editor = useEditor({
     extensions: [
       ...extensionsForConversation,
-      getPlaceholder("Write your memory here..."),
+      getPlaceholder("Start writing here..."),
     ],
     editorProps: {
       attributes: {
@@ -21,6 +36,43 @@ export const Editor = () => {
       },
     },
   });
+
+  const handleAdd = async () => {
+    const content = editor?.storage.markdown.getMarkdown();
+
+    if (!content?.trim()) return;
+
+    const payload: Record<string, string | string[]> = {
+      episodeBody: content,
+      referenceTime: new Date().toISOString(),
+      labelIds,
+      type: "DOCUMENT",
+      sessionId: crypto.randomUUID(),
+      source: "core",
+    };
+
+    if (title && title !== "Untitled") {
+      payload["title"] = title.trim();
+    }
+
+    fetcher.submit(payload, {
+      method: "POST",
+      action: "/api/v1/add",
+      encType: "application/json",
+    });
+
+    // Clear editor and close dialog
+    editor?.commands.clearContent();
+    setLabelIds([]);
+  };
+
+  React.useEffect(() => {
+    if (fetcher.state === "idle") {
+      if (fetcher.data !== undefined) {
+        navigate(`/home/episode/${fetcher?.data?.id}`);
+      }
+    }
+  }, [fetcher.state, fetcher.data]);
 
   return (
     <div className="flex h-full w-full flex-col items-center">
@@ -33,10 +85,20 @@ export const Editor = () => {
           />
         </div>
 
+        <div className="my-4 px-4">
+          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
+            <LabelDropdown value={labelIds} labels={labels} />
+          </div>
+        </div>
+
         <EditorContent editor={editor} />
         <div className="flex justify-end gap-2 px-4 pb-4">
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={() => {}}>
+            <Button
+              variant="secondary"
+              onClick={handleAdd}
+              isLoading={fetcher.state !== "idle"}
+            >
               Save document
             </Button>
           </div>

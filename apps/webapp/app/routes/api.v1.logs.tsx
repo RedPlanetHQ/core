@@ -114,9 +114,15 @@ export const loader = createHybridLoaderApiRoute(
     }
 
     if (label) {
-      whereClause.labels = {
-        has: label,
-      };
+      if (label === "no_label") {
+        whereClause.labels = {
+          isEmpty: true,
+        };
+      } else {
+        whereClause.labels = {
+          has: label,
+        };
+      }
     }
 
     // Add cursor condition for pagination
