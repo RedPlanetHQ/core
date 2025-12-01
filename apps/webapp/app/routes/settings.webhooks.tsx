@@ -23,9 +23,8 @@ import {
 } from "~/components/ui/dialog";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { Badge } from "~/components/ui/badge";
 import { FormButtons } from "~/components/ui/FormButtons";
-import { Plus, Trash2, Globe, Check, X, Webhook } from "lucide-react";
+import { Plus, Trash2, Globe, Webhook } from "lucide-react";
 import { prisma } from "~/db.server";
 import { SettingSection } from "~/components/setting-section";
 

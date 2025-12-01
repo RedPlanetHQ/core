@@ -5,6 +5,7 @@ import { getUser } from "~/services/session.server";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
 import { Editor } from "~/components/editor/editor.client";
+import { useLoaderData, useParams } from "@remix-run/react";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -21,10 +22,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export default function NewEpisode() {
+  const { labels } = useLoaderData<typeof loader>();
+  const { labelId } = useParams();
+
   return (
     <>
       <div className="flex h-full flex-col">
-        <PageHeader title="New episode" />
+        <PageHeader title="New document" />
 
         <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
           <ClientOnly
@@ -35,7 +39,7 @@ export default function NewEpisode() {
             }
           >
             {() => {
-              return <Editor />;
+              return <Editor defaultLabelId={labelId} labels={labels as any} />;
             }}
           </ClientOnly>
         </div>

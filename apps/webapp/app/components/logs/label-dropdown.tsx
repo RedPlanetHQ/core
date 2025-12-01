@@ -15,7 +15,6 @@ import {
   CommandItem,
 } from "../ui/command";
 import { Button } from "../ui";
-import { cn } from "~/lib/utils";
 import { Checkbox } from "../ui/checkbox";
 import { Tag } from "lucide-react";
 
@@ -28,7 +27,7 @@ export interface Label {
 }
 
 interface LabelDropdownProps {
-  logId: string;
+  logId?: string;
   value: string[]; // Array of selected label IDs
   labels: Label[];
   onChange?: (labelIds: string[]) => void;
@@ -52,15 +51,17 @@ export function LabelDropdown({
       ? value.filter((id) => id !== labelId)
       : [...value, labelId];
 
-    // Update via API
-    fetcher.submit(
-      { labels: newValue },
-      {
-        method: "PATCH",
-        action: `/api/v1/logs/${logId}`,
-        encType: "application/json",
-      },
-    );
+    if (logId) {
+      // Update via API
+      fetcher.submit(
+        { labels: newValue },
+        {
+          method: "PATCH",
+          action: `/api/v1/logs/${logId}`,
+          encType: "application/json",
+        },
+      );
+    }
 
     setValue(newValue);
     // Call onChange callback if provided
@@ -85,7 +86,7 @@ export function LabelDropdown({
           {selectedLabels.slice(0, 3).map((label) => (
             <div
               key={label.id}
-              className="border-background h-3 w-3 rounded-full border"
+              className="border-background mb-[1px] h-3 w-3 rounded-[0.3rem] border"
               style={{ backgroundColor: label.color }}
             />
           ))}
@@ -137,7 +138,7 @@ export function LabelDropdown({
                       >
                         <Checkbox checked={isSelected} />
                         <div
-                          className="h-3 w-3 rounded-full"
+                          className="h-3 w-3 rounded-[0.3rem]"
                           style={{ backgroundColor: label.color }}
                         />
                         <span className="flex-1">{label.name}</span>

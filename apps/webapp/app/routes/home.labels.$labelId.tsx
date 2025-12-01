@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData, useNavigate, useParams } from "@remix-run/react";
 import { useLogs } from "~/hooks/use-logs";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
@@ -29,9 +29,11 @@ export default function LogsAll() {
   const { labels } = useLoaderData<typeof loader>();
   const [selectedSource, setSelectedSource] = useState<string | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
-  const [selectedType, setSelectedType] = useState<string | undefined>();
   const [selectedLabel, setSelectedLabel] = useState<string | undefined>();
+  const [selectedType, setSelectedType] = useState<string | undefined>();
   const [onboarding, setOnboarding] = useState(false);
+  const { labelId } = useParams();
+  const currentLabel = labels.find((label) => label.id === labelId);
   const navigate = useNavigate();
 
   const {
@@ -46,7 +48,7 @@ export default function LogsAll() {
     source: selectedSource,
     status: selectedStatus,
     type: selectedType,
-    label: selectedLabel,
+    label: currentLabel?.id ?? "no_label",
   });
 
   useEffect(() => {
@@ -66,12 +68,12 @@ export default function LogsAll() {
     <>
       <div className="flex h-full flex-col">
         <PageHeader
-          title="Episodes"
+          title={currentLabel?.name ?? "No label"}
           actions={[
             {
               label: "Add document",
               icon: <Plus size={14} />,
-              onClick: () => navigate(`/home/episode`),
+              onClick: () => navigate(`/home/episode?labelId=${labelId}`),
               variant: "secondary",
             },
           ]}
