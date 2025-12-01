@@ -51,6 +51,11 @@ import {
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
 import { addToQueue } from "~/lib/ingest.server";
+import {
+  type ImportConversationsPayload,
+  processConversationImport,
+} from "~/trigger/imports/import-conversations.logic";
+import { deleteFromLocalStorage } from "~/lib/storage.server";
 
 /**
  * Episode preprocessing worker
@@ -214,6 +219,55 @@ export const graphResolutionWorker = new Worker(
 );
 
 /**
+ * Conversation import worker
+ * Handles importing conversations from external providers (Claude, OpenAI)
+ * Uses BERT clustering to generate themed documents
+ */
+export const importConversationsWorker = new Worker(
+  "import-conversations-queue",
+  async (job) => {
+    const payload = job.data as ImportConversationsPayload;
+
+    try {
+      const result = await processConversationImport(payload);
+
+      // Cleanup temp file after processing (for local storage only)
+      if (payload.storageSource.type === 'local') {
+        try {
+          await deleteFromLocalStorage(payload.storageSource.filePath);
+          logger.info('[Import Worker] Temp file cleaned up', {
+            filePath: payload.storageSource.filePath
+          });
+        } catch (cleanupError) {
+          logger.warn('[Import Worker] Failed to cleanup temp file', {
+            filePath: payload.storageSource.filePath,
+            error: cleanupError
+          });
+        }
+      }
+
+      return result;
+    } catch (error) {
+      // Cleanup temp file even on error
+      if (payload.storageSource.type === 'local') {
+        try {
+          await deleteFromLocalStorage(payload.storageSource.filePath);
+        } catch (cleanupError) {
+          logger.warn('[Import Worker] Failed to cleanup temp file after error', {
+            error: cleanupError
+          });
+        }
+      }
+      throw error;
+    }
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 1, // Process one import at a time (CPU and memory intensive)
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -227,6 +281,7 @@ export async function closeAllWorkers(): Promise<void> {
     titleGenerationWorker.close(),
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
+    importConversationsWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

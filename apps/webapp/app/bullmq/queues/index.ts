@@ -202,3 +202,26 @@ export const graphResolutionQueue = new Queue("graph-resolution-queue", {
     },
   },
 });
+
+/**
+ * Conversation import queue
+ * Handles importing conversations from external providers (Claude, OpenAI)
+ * Uses BERT clustering to generate themed documents
+ */
+export const importConversationsQueue = new Queue("import-conversations-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 2, // Expensive operation, only retry once
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      age: 7200, // Keep completed jobs for 2 hours
+      count: 50,
+    },
+    removeOnFail: {
+      age: 172800, // Keep failed jobs for 48 hours (for debugging)
+    },
+  },
+});

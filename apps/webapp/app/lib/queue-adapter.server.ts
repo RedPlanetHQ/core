@@ -282,3 +282,42 @@ export async function enqueueGraphResolution(
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
+
+/**
+ * Enqueue conversation import job
+ *
+ * Auto-detects storage strategy:
+ * - Trigger.dev + S3 configured: Upload to S3, trigger Trigger.dev
+ * - Otherwise: Save to temp directory, queue BullMQ
+ */
+export async function enqueueImportConversations(payload: {
+  userId: string;
+  workspaceId: string;
+  provider: "claude" | "openai";
+  dryRun?: boolean;
+  storageSource: { type: 'local'; filePath: string } | { type: 's3'; key: string };
+}): Promise<{ id?: string; token?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const { isS3Configured } = await import("~/lib/storage.server");
+
+  // Use Trigger.dev only if both QUEUE_PROVIDER=trigger AND S3 is configured
+  const shouldUseTrigger = provider === "trigger" && isS3Configured();
+
+  if (shouldUseTrigger) {
+    const { importConversationsTask } = await import("~/trigger/imports/import-conversations");
+    const handler = await importConversationsTask.trigger(payload, {
+      concurrencyKey: payload.userId,
+      tags: [payload.userId, "import-conversations"],
+    });
+    return { id: handler.id, token: handler.publicAccessToken };
+  } else {
+    // BullMQ
+    const { importConversationsQueue } = await import("~/bullmq/queues");
+    const job = await importConversationsQueue.add("import-conversations", payload, {
+      jobId: `import-${payload.userId}-${Date.now()}`,
+      attempts: 2, // Expensive operation, only retry once
+      backoff: { type: "exponential", delay: 5000 },
+    });
+    return { id: job.id };
+  }
+}
