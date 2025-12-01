@@ -8,7 +8,7 @@ import {
   type Triple,
   EpisodeTypeEnum,
   EpisodeType,
-  AddEpisodeResult,
+  type AddEpisodeResult,
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";

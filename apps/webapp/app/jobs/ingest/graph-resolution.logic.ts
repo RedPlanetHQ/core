@@ -11,7 +11,7 @@ import {
   type EntityNode,
   type EpisodicNode,
   type StatementNode,
-  AddEpisodeResult,
+  type AddEpisodeResult,
 } from "@core/types";
 import { logger } from "~/services/logger.service";
 import { dedupeNodes } from "~/services/prompts/nodes";

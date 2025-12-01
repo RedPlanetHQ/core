@@ -6,7 +6,7 @@ import {
   EPISODIC_NODE_PROPERTIES,
   ENTITY_NODE_PROPERTIES,
   STATEMENT_NODE_PROPERTIES,
-  Triple,
+  type Triple,
 } from "@core/types";
 import { parseEntityNode } from "./entity";
 
