@@ -1,7 +1,7 @@
 import { type StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-import { Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
-import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
+import { type StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import { type Client as McpClient } from "@modelcontextprotocol/sdk/client/index.js";
+import { type StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
 export interface IntegrationTransport {
   client: McpClient;
@@ -54,135 +54,6 @@ export class TransportManager {
     transport.onclose = () => {
       this.cleanupSession(sessionId);
     };
-  }
-
-  /**
-   * Add an integration transport to a session
-   */
-  static async addIntegrationTransport(
-    sessionId: string,
-    integrationAccountId: string,
-    slug: string,
-    url: string,
-    accessToken?: string,
-  ): Promise<IntegrationTransport> {
-    const session = this.getOrCreateSession(sessionId);
-
-    // Create HTTP transport for the integration
-    const transport = new StreamableHTTPClientTransport(new URL(url), {
-      requestInit: {
-        headers: accessToken
-          ? {
-              Authorization: `Bearer ${accessToken}`,
-            }
-          : {},
-      },
-    });
-
-    // Create MCP client
-    const client = new McpClient({
-      name: `core-client-${slug}`,
-      version: "1.0.0",
-    });
-
-    // Connect client to transport
-    await client.connect(transport);
-
-    const integrationTransport: IntegrationTransport = {
-      client,
-      transport,
-      integrationAccountId,
-      slug,
-      url,
-    };
-
-    session.integrationTransports.set(
-      integrationAccountId,
-      integrationTransport,
-    );
-    return integrationTransport;
-  }
-
-  static async addStdioIntegrationTransport(
-    sessionId: string,
-    integrationAccountId: string,
-    slug: string,
-    command: string,
-    args: string[],
-    env?: any,
-  ): Promise<IntegrationTransport> {
-    const session = this.getOrCreateSession(sessionId);
-
-    const transport = new StdioClientTransport({
-      command,
-      args: args || [],
-      env,
-    });
-
-    // Create MCP client
-    const client = new McpClient({
-      name: `core-client-${slug}`,
-      version: "1.0.0",
-    });
-
-    // Connect client to transport
-    await client.connect(transport);
-
-    const integrationTransport: IntegrationTransport = {
-      client,
-      transport,
-      integrationAccountId,
-      slug,
-      url: command,
-    };
-
-    session.integrationTransports.set(
-      integrationAccountId,
-      integrationTransport,
-    );
-
-    return integrationTransport;
-  }
-
-  /**
-   * Get integration transport by account ID
-   */
-  static getIntegrationTransport(
-    sessionId: string,
-    integrationAccountId: string,
-  ): IntegrationTransport | undefined {
-    const session = this.transports.get(sessionId);
-    return session?.integrationTransports.get(integrationAccountId);
-  }
-
-  /**
-   * Get all integration transports for a session
-   */
-  static getSessionIntegrationTransports(
-    sessionId: string,
-  ): IntegrationTransport[] {
-    const session = this.transports.get(sessionId);
-    return session ? Array.from(session.integrationTransports.values()) : [];
-  }
-
-  /**
-   * Remove an integration transport
-   */
-  static async removeIntegrationTransport(
-    sessionId: string,
-    integrationAccountId: string,
-  ): Promise<void> {
-    const session = this.transports.get(sessionId);
-    if (!session) return;
-
-    const integrationTransport =
-      session.integrationTransports.get(integrationAccountId);
-    if (integrationTransport) {
-      // Close the transport
-      await integrationTransport.transport.close();
-      // Remove from map
-      session.integrationTransports.delete(integrationAccountId);
-    }
   }
 
   /**

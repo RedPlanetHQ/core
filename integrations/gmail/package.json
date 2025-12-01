@@ -1,6 +1,6 @@
 {
   "name": "@core/gmail",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "description": "Gmail integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
@@ -13,7 +13,7 @@
     "gmail": "./bin/index.js"
   },
   "scripts": {
-    "build": "rimraf bin && bun build src/index.ts --outfile dist/index.js --target node",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
@@ -68,7 +68,7 @@
     "commander": "^12.0.0",
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
-    "@redplanethq/sdk": "0.1.6",
+    "@redplanethq/sdk": "0.1.9",
     "turndown": "^7.2.0"
   }
 }

@@ -131,9 +131,20 @@
   --custom-color-12: #b0617c;
 
   /* Team Colors */
-  --team-color-1: #89c794;
-  --team-color-2: #d2a1bb;
-  --team-color-3: #90c5d6;
+  --team-color-1: #E194AD;
+  --team-color-2: #E59593;
+  --team-color-3: #E4997C;
+  --team-color-4: #DDA068;
+  --team-color-5: #D0A95D;
+  --team-color-6: #BFB25F;
+  --team-color-7: #AABA6C;
+  --team-color-8: #93C180;
+  --team-color-9: #7DC599;
+  --team-color-10: #6BC6B3;
+  --team-color-11: #62C4CC;
+  --team-color-12: #67BFE1;
+  --team-color-13: #77B8F0;
+  --team-color-14: #77B8F0;
 
   --avatar-1: oklch(60% 0.13 240);
 }
@@ -186,9 +197,22 @@
   --status-icon-6: #5d9151;
 
   /* Team Colors */
-  --team-color-1: #54935b;
-  --team-color-2: #a165a1;
-  --team-color-3: #4187c0;
+  /* Team Colors */
+  --team-color-1: #E194AD;
+  --team-color-2: #E59593;
+  --team-color-3: #E4997C;
+  --team-color-4: #DDA068;
+  --team-color-5: #D0A95D;
+  --team-color-6: #BFB25F;
+  --team-color-7: #AABA6C;
+  --team-color-8: #93C180;
+  --team-color-9: #7DC599;
+  --team-color-10: #6BC6B3;
+  --team-color-11: #62C4CC;
+  --team-color-12: #67BFE1;
+  --team-color-13: #77B8F0;
+  --team-color-14: #77B8F0;
+
   --sidebar: hsl(240 5.9% 10%);
   --sidebar-foreground: hsl(240 4.8% 95.9%);
   --sidebar-primary: hsl(224.3 76.3% 48%);

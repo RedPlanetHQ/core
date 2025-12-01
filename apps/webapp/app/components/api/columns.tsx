@@ -40,7 +40,7 @@ export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
       },
       cell: ({ row }) => {
         return (
-          <div className="py-2capitalize flex items-center gap-1 py-2">
+          <div className="flex items-center gap-1 py-2 capitalize">
             {row.original.name}
           </div>
         );
@@ -53,7 +53,7 @@ export const useTokensColumns = (): Array<ColumnDef<PersonalAccessToken>> => {
       },
       cell: ({ row }) => {
         return (
-          <div className="flex items-center gap-1 text-sm">
+          <div className="text-muted-foreground flex items-center gap-1 text-sm">
             {row.original.obfuscatedToken}
           </div>
         );

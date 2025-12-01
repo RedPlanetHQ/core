@@ -8,7 +8,7 @@ import { ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { getIngestionQueueForFrontend } from "~/services/ingestionLogs.server";
 import { LabelService } from "~/services/label.server";
-import { getUser, requireUserId } from "~/services/session.server";
+import { getUser } from "~/services/session.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await getUser(request);

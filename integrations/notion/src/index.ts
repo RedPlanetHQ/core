@@ -1,5 +1,5 @@
 import { integrationCreate } from './account-create';
-import { mcp } from './mcp';
+import { callTool, getTools } from './mcp';
 
 import {
   IntegrationCLI,
@@ -13,15 +13,26 @@ export async function run(eventPayload: IntegrationEventPayload) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
 
-    case IntegrationEventType.MCP:
+    case IntegrationEventType.GET_TOOLS: {
+      const tools = await getTools();
+
+      return tools;
+    }
+
+    case IntegrationEventType.CALL_TOOL: {
       const integrationDefinition = eventPayload.integrationDefinition;
 
       if (!integrationDefinition) {
-        return 'No integration definition found';
+        return null;
       }
 
       const config = eventPayload.config as any;
-      return mcp(config);
+      const { name, arguments: args } = eventPayload.eventBody;
+
+      const result = await callTool(name, args, config);
+
+      return result;
+    }
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };

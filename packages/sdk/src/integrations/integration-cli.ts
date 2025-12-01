@@ -28,7 +28,8 @@ export abstract class IntegrationCLI {
     this.setupAccountCommands();
     this.setupDataCommands();
     this.setupSyncCommand();
-    this.setupMCPCommand();
+    this.setupGetToolsCommand();
+    this.setupCallToolCommand();
   }
 
   private setupAccountCommands(): void {
@@ -163,10 +164,10 @@ export abstract class IntegrationCLI {
       });
   }
 
-  private setupMCPCommand(): void {
+  private setupGetToolsCommand(): void {
     this.program
-      .command('mcp')
-      .description('To start the mcp')
+      .command('get-tools')
+      .description('Get available MCP tools for this integration')
       .requiredOption('--config <config>', 'Integration configuration JSON')
       .requiredOption(
         '--integration-definition <definition>',
@@ -178,14 +179,53 @@ export abstract class IntegrationCLI {
           const integrationDefinition = JSON.parse(
             options.integrationDefinition,
           );
-          await this.handleEvent({
-            event: IntegrationEventType.MCP,
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.GET_TOOLS,
             eventBody: {},
             config,
             integrationDefinition,
           });
+
+          console.log(JSON.stringify(messages));
         } catch (error) {
-          console.error('Error during sync:', error);
+          console.error('Error getting tools:', error);
+          process.exit(1);
+        }
+      });
+  }
+
+  private setupCallToolCommand(): void {
+    this.program
+      .command('call-tool')
+      .description('Call a specific MCP tool')
+      .requiredOption('--config <config>', 'Integration configuration JSON')
+      .requiredOption(
+        '--integration-definition <definition>',
+        'Integration definition JSON',
+      )
+      .requiredOption('--tool-name <name>', 'Name of the tool to call')
+      .requiredOption('--tool-arguments <arguments>', 'Tool arguments as JSON')
+      .action(async (options) => {
+        try {
+          const config = JSON.parse(options.config);
+          const integrationDefinition = JSON.parse(
+            options.integrationDefinition,
+          );
+          const toolArguments = JSON.parse(options.toolArguments);
+
+          const messages: Message[] = await this.handleEvent({
+            event: IntegrationEventType.CALL_TOOL,
+            eventBody: {
+              name: options.toolName,
+              arguments: toolArguments,
+            },
+            config,
+            integrationDefinition,
+          });
+
+          console.log(JSON.stringify(messages));
+        } catch (error) {
+          console.error('Error calling tool:', error);
           process.exit(1);
         }
       });

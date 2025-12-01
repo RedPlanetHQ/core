@@ -1,6 +1,5 @@
 import { prisma } from "~/db.server";
-import { TransportManager } from "./transport-manager";
-import { getDefaultEnvironment } from "@core/mcp-proxy";
+import { execSync } from "child_process";
 
 export interface IntegrationAccountWithDefinition {
   id: string;
@@ -85,175 +84,45 @@ export class IntegrationLoader {
   }
 
   /**
-   * Load integration transports for a session
+   * Get tools from a specific integration
    */
-  static async loadIntegrationTransports(
-    sessionId: string,
+  static async getIntegrationTools(
     userId: string,
     workspaceId: string,
-    integrationSlugs?: string[],
-  ): Promise<{
-    loaded: number;
-    failed: Array<{ slug: string; error: string }>;
-  }> {
+    integrationSlug: string,
+  ) {
     const accounts = await this.getMcpEnabledIntegrationAccounts(
       userId,
       workspaceId,
-      integrationSlugs,
+      [integrationSlug],
     );
 
-    let loaded = 0;
-    const failed: Array<{ slug: string; error: string }> = [];
-
-    for (const account of accounts) {
-      try {
-        const spec = account.integrationDefinition.spec;
-        const mcpConfig = spec.mcp;
-
-        if (mcpConfig.type === "http") {
-          // Get access token from integration configuration
-          let accessToken: string | undefined;
-
-          const integrationConfig = account.integrationConfiguration as any;
-          if (
-            integrationConfig &&
-            integrationConfig.mcp &&
-            integrationConfig.mcp.tokens
-          ) {
-            accessToken = integrationConfig.mcp.tokens.access_token;
-          }
-
-          // Create HTTP transport for this integration
-          await TransportManager.addIntegrationTransport(
-            sessionId,
-            account.id,
-            account.integrationDefinition.slug,
-            mcpConfig.url,
-            accessToken,
-          );
-
-          loaded++;
-        } else {
-          const slug = account.integrationDefinition.slug;
-
-          // Extract headers from the incoming request and convert to environment variables
-          const extractedEnv = { ...getDefaultEnvironment() };
-
-          // Use the saved local file instead of command
-          const executablePath = `./integrations/${slug}/main`;
-
-          await TransportManager.addStdioIntegrationTransport(
-            sessionId,
-            account.id,
-            account.integrationDefinition.slug,
-            "node",
-            [
-              executablePath,
-              "mcp",
-              "--config",
-              JSON.stringify(account.integrationConfiguration),
-              "--integration-definition",
-              JSON.stringify(account.integrationDefinition),
-            ],
-            extractedEnv,
-          );
-
-          loaded++;
-        }
-      } catch (error) {
-        console.log(error);
-        failed.push({
-          slug: account.integrationDefinition.slug,
-          error: error instanceof Error ? error.message : "Unknown error",
-        });
-      }
-    }
-
-    return { loaded, failed };
-  }
-
-  /**
-   * Get tools from all connected integration accounts
-   */
-  static async getAllIntegrationTools(sessionId: string) {
-    const integrationTransports =
-      TransportManager.getSessionIntegrationTransports(sessionId);
-    const allTools: any[] = [];
-
-    for (const integrationTransport of integrationTransports) {
-      try {
-        const result = await integrationTransport.client.listTools();
-
-        if (result.tools && Array.isArray(result.tools)) {
-          // Prefix tool names with integration slug to avoid conflicts
-          const prefixedTools = result.tools.map((tool: any) => ({
-            ...tool,
-            name: `${integrationTransport.slug}_${tool.name}`,
-            description: `[${integrationTransport.slug}] ${tool.description || tool.name}`,
-            _integration: {
-              slug: integrationTransport.slug,
-              accountId: integrationTransport.integrationAccountId,
-              originalName: tool.name,
-            },
-          }));
-
-          allTools.push(...prefixedTools);
-        }
-      } catch (error) {
-        console.error(
-          `Failed to get tools from integration ${integrationTransport.slug}:`,
-          error,
-        );
-      }
-    }
-
-    return allTools;
-  }
-
-  /**
-   * Get tools from a specific integration
-   */
-  static async getIntegrationTools(sessionId: string, integrationSlug: string) {
-    const integrationTransports =
-      TransportManager.getSessionIntegrationTransports(sessionId);
-
-    if (integrationTransports.length === 0) {
+    if (accounts.length === 0) {
       throw new Error(
-        `No integration transports loaded for session ${sessionId}. Make sure integrations are connected and session is initialized properly.`,
+        `Integration '${integrationSlug}' not found or not connected.`,
       );
     }
 
-    const integrationTransport = integrationTransports.find(
-      (t) => t.slug === integrationSlug,
-    );
+    const account = accounts[0];
+    const executablePath = `./integrations/${integrationSlug}/main`;
 
-    if (!integrationTransport) {
-      const availableSlugs = integrationTransports
-        .map((t) => t.slug)
-        .join(", ");
-      throw new Error(
-        `Integration '${integrationSlug}' not found or not connected. Available integrations: ${availableSlugs}`,
-      );
-    }
+    // Call the get-tools command
+    const command = `node ${executablePath} get-tools --config '${JSON.stringify(account.integrationConfiguration)}' --integration-definition '${JSON.stringify(account.integrationDefinition)}'`;
 
-    const result = await integrationTransport.client.listTools();
+    const output = execSync(command, {
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+    });
 
-    if (result.tools && Array.isArray(result.tools)) {
-      return result.tools.map((tool: any) => ({
-        name: tool.name,
-        description: tool.description || tool.name,
-        inputSchema: tool.inputSchema,
-      }));
-    }
-
-    return [];
+    return output;
   }
 
   /**
    * Call a tool on a specific integration
    */
   static async callIntegrationTool(
-    sessionId: string,
+    userId: string,
+    workspaceId: string,
     toolName: string,
     args: any,
   ): Promise<any> {
@@ -266,23 +135,44 @@ export class IntegrationLoader {
     const integrationSlug = parts[0];
     const originalToolName = parts.slice(1).join("_");
 
-    // Find the integration transport
-    const integrationTransports =
-      TransportManager.getSessionIntegrationTransports(sessionId);
-    const integrationTransport = integrationTransports.find(
-      (t) => t.slug === integrationSlug,
+    // Get the integration account
+    const accounts = await this.getMcpEnabledIntegrationAccounts(
+      userId,
+      workspaceId,
+      [integrationSlug],
     );
 
-    if (!integrationTransport) {
+    if (accounts.length === 0) {
       throw new Error(
         `Integration ${integrationSlug} not found or not connected`,
       );
     }
 
-    // Call the tool
-    return await integrationTransport.client.callTool({
-      name: originalToolName,
-      arguments: args,
+    const account = accounts[0];
+    const executablePath = `./integrations/${integrationSlug}/main`;
+
+    // Call the call-tool command
+    const command = `node ${executablePath} call-tool --config '${JSON.stringify(account.integrationConfiguration)}' --integration-definition '${JSON.stringify(account.integrationDefinition)}' --tool-name "${originalToolName}" --tool-arguments '${JSON.stringify(args)}'`;
+
+    console.log(command);
+    const output = execSync(command, {
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
     });
+
+    try {
+      // Parse the JSON output (expecting Message format)
+      return JSON.parse(output);
+    } catch (error) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: `Error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
+        isError: true,
+      };
+    }
   }
 }

@@ -231,7 +231,7 @@ async function runClusteringWithExec(
   userId: string,
   startTime?: string,
 ): Promise<string> {
-  let command = `python3 /Users/harshithmullapudi/Documents/core/apps/webapp/python/main.py ${userId} --json`;
+  let command = `python3 /core/apps/webapp/python/main.py ${userId} --json`;
 
   // Add time filter if provided
   if (startTime) {
@@ -262,7 +262,7 @@ async function runAnalyticsWithExec(
   userId: string,
   startTime?: string,
 ): Promise<string> {
-  let command = `python3 /Users/harshithmullapudi/Documents/core/apps/webapp/python/persona_analytics.py ${userId} --json`;
+  let command = `python3 /core/apps/webapp/python/persona_analytics.py ${userId} --json`;
 
   // Add time filter if provided
   if (startTime) {

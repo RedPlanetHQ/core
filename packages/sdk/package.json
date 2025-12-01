@@ -1,6 +1,6 @@
 {
   "name": "@redplanethq/sdk",
-  "version": "0.1.6",
+  "version": "0.1.9",
   "description": "CORE Node.JS SDK",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
