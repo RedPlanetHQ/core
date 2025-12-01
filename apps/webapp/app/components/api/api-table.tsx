@@ -26,8 +26,8 @@ export const APITable = ({
   });
 
   return (
-    <div className="mt-2">
-      <Table className="bg-background-3 rounded-md">
+    <div className="bg-background-3 mt-2 rounded p-2">
+      <Table className="bg-background-3 rounded-md p-4">
         <TableHeader>
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
@@ -61,12 +61,7 @@ export const APITable = ({
               </TableRow>
             ))
           ) : (
-            <TableRow>
-              <TableCell
-                colSpan={columns.length}
-                className="h-24 text-center"
-              ></TableCell>
-            </TableRow>
+            <></>
           )}
         </TableBody>
       </Table>

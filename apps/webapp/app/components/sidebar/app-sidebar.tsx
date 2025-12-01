@@ -18,10 +18,8 @@ import {
   BookOpen,
   Mail,
   Phone,
-  FileText,
   Search,
-  File,
-  Contact,
+  Inbox,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -29,7 +27,6 @@ import { NavUser } from "./nav-user";
 import Logo from "../logo/logo";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
-import { useParams } from "@remix-run/react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,27 +34,23 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 import { AddMemoryDialog } from "../command-bar/memory-dialog.client";
-import { RiFolderAddLine } from "@remixicon/react";
+import { type Label } from "@prisma/client";
+import { DocumentList } from "./document-list";
 
 const data = {
   navMain: [
     {
       title: "Episodes",
       url: "/home/episodes",
-      icon: FileText,
+      icon: Inbox,
     },
     {
-      title: "Persona",
-      url: "/home/persona",
-      icon: Contact,
-    },
-    {
-      title: "Chat",
+      title: "New chat",
       url: "/home/conversation",
       icon: MessageSquare,
     },
     {
-      title: "Graph",
+      title: "My mind",
       url: "/home/graph",
       icon: Network,
     },
@@ -69,7 +62,7 @@ const data = {
   ],
 };
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ labels }: { labels: Label[] }) {
   const user = useUser();
 
   const [commandBar, setCommandBar] = React.useState(false);
@@ -83,7 +76,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
 
   return (
     <>
-      <Sidebar variant="inset" {...props} className="bg-background py-2">
+      <Sidebar variant="inset" className="bg-background py-2">
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">
@@ -105,7 +98,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
                   variant="secondary"
                   size="sm"
                   className="rounded"
-                  onClick={() => setCommandBar(true)}
+                  onClick={() => setMemoryAdd(true)}
                 >
                   <Plus size={16} />
                 </Button>
@@ -115,14 +108,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          {/* <div className="mt-4 flex h-full w-full flex-col">
-            <div className="group flex h-8 w-full items-center justify-between gap-1 pr-2">
-              <h2 className="text-muted-foreground px-4 text-sm">Favourites</h2>
-              <Button variant="link" className="hidden group-hover:flex">
-                <RiFolderAddLine size="16 " />
-              </Button>
-            </div>
-          </div> */}
+          <DocumentList labels={labels} />
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">

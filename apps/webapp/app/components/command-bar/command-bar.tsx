@@ -85,7 +85,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               className="flex items-center gap-2 py-1"
             >
               <Plus className="mr-2 h-4 w-4" />
-              <span>Add Memory</span>
+              <span>Add Document</span>
             </CommandItem>
           </CommandGroup>
           <CommandGroup heading="Episodes" className="max-w-[700px] p-2">

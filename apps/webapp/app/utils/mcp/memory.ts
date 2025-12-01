@@ -715,18 +715,15 @@ async function handleGetIntegrations(args: any) {
 // Handler for get_integration_actions
 async function handleGetIntegrationActions(args: any) {
   try {
-    const { integrationSlug, sessionId } = args;
+    const { integrationSlug, userId, workspaceId } = args;
 
     if (!integrationSlug) {
       throw new Error("integrationSlug is required");
     }
 
-    if (!sessionId) {
-      throw new Error("sessionId is required");
-    }
-
     const tools = await IntegrationLoader.getIntegrationTools(
-      sessionId,
+      userId,
+      workspaceId,
       integrationSlug,
     );
 
@@ -734,7 +731,7 @@ async function handleGetIntegrationActions(args: any) {
       content: [
         {
           type: "text",
-          text: JSON.stringify(tools),
+          text: tools,
         },
       ],
       isError: false,
@@ -757,7 +754,13 @@ async function handleGetIntegrationActions(args: any) {
 // Handler for execute_integration_action
 async function handleExecuteIntegrationAction(args: any) {
   try {
-    const { integrationSlug, action, parameters: actionArgs, sessionId } = args;
+    const {
+      integrationSlug,
+      action,
+      parameters: actionArgs,
+      userId,
+      workspaceId,
+    } = args;
 
     if (!integrationSlug) {
       throw new Error("integrationSlug is required");
@@ -767,13 +770,10 @@ async function handleExecuteIntegrationAction(args: any) {
       throw new Error("action is required");
     }
 
-    if (!sessionId) {
-      throw new Error("sessionId is required");
-    }
-
     const toolName = `${integrationSlug}_${action}`;
     const result = await IntegrationLoader.callIntegrationTool(
-      sessionId,
+      userId,
+      workspaceId,
       toolName,
       actionArgs || {},
     );

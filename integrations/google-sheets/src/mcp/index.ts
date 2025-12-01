@@ -1,6 +1,3 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google, sheets_v4 } from 'googleapis';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -104,8 +101,61 @@ const WriteToCellSchema = z.object({
     .describe('How the value should be interpreted (RAW = as-is, USER_ENTERED = as if typed)'),
 });
 
-// Main function
-export async function mcp(
+export async function getTools() {
+  return [
+    // Custom high-level tools
+    {
+      name: 'list_spreadsheets',
+      description: "List all Google Sheets spreadsheets in the user's Google Drive.",
+      inputSchema: zodToJsonSchema(ListSpreadsheetsSchema),
+    },
+    {
+      name: 'list_sheets',
+      description:
+        'List all sheets in a spreadsheet with metadata (sheetId, title, index, rowCount, columnCount). Does not include cell data. Use this to discover available sheets before fetching data.',
+      inputSchema: zodToJsonSchema(ListSheetsSchema),
+    },
+    {
+      name: 'write_to_cell',
+      description: 'Writes a single value to a specific cell',
+      inputSchema: zodToJsonSchema(WriteToCellSchema),
+    },
+    {
+      name: 'create_spreadsheet',
+      description: 'Creates a new spreadsheet with optional initial sheets',
+      inputSchema: zodToJsonSchema(CreateSpreadsheetSchema),
+    },
+    {
+      name: 'read_range',
+      description: 'Reads values from a spreadsheet range',
+      inputSchema: zodToJsonSchema(ReadRangeSchema),
+    },
+    {
+      name: 'write_range',
+      description: 'Writes values to a spreadsheet range',
+      inputSchema: zodToJsonSchema(WriteRangeSchema),
+    },
+    {
+      name: 'append_range',
+      description: 'Appends values to a spreadsheet range',
+      inputSchema: zodToJsonSchema(AppendRangeSchema),
+    },
+    {
+      name: 'batch_update',
+      description: 'Performs batch updates (formatting, sorting, filtering, adding sheets, etc.)',
+      inputSchema: zodToJsonSchema(BatchUpdateSchema),
+    },
+    // Auto-generated tools from Discovery Document
+    ...generatedTools,
+  ];
+}
+
+/**
+ * Call a specific tool without starting the MCP server
+ */
+export async function callTool(
+  name: string,
+  args: Record<string, any>,
   client_id: string,
   client_secret: string,
   callback: string,
@@ -116,272 +166,206 @@ export async function mcp(
   // Initialize Sheets API
   sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
-  // Server implementation
-  const server = new Server({
-    name: 'google-sheets',
-    version: '1.0.0',
-    capabilities: {
-      tools: {},
-    },
-  });
+  try {
+    switch (name) {
+      case 'list_spreadsheets': {
+        ListSpreadsheetsSchema.parse(args);
 
-  // Tool handlers
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      // Custom high-level tools
-      {
-        name: 'list_spreadsheets',
-        description: "List all Google Sheets spreadsheets in the user's Google Drive.",
-        inputSchema: zodToJsonSchema(ListSpreadsheetsSchema),
-      },
-      {
-        name: 'list_sheets',
-        description:
-          'List all sheets in a spreadsheet with metadata (sheetId, title, index, rowCount, columnCount). Does not include cell data. Use this to discover available sheets before fetching data.',
-        inputSchema: zodToJsonSchema(ListSheetsSchema),
-      },
-      {
-        name: 'write_to_cell',
-        description: 'Writes a single value to a specific cell',
-        inputSchema: zodToJsonSchema(WriteToCellSchema),
-      },
-      {
-        name: 'create_spreadsheet',
-        description: 'Creates a new spreadsheet with optional initial sheets',
-        inputSchema: zodToJsonSchema(CreateSpreadsheetSchema),
-      },
-      {
-        name: 'read_range',
-        description: 'Reads values from a spreadsheet range',
-        inputSchema: zodToJsonSchema(ReadRangeSchema),
-      },
-      {
-        name: 'write_range',
-        description: 'Writes values to a spreadsheet range',
-        inputSchema: zodToJsonSchema(WriteRangeSchema),
-      },
-      {
-        name: 'append_range',
-        description: 'Appends values to a spreadsheet range',
-        inputSchema: zodToJsonSchema(AppendRangeSchema),
-      },
-      {
-        name: 'batch_update',
-        description: 'Performs batch updates (formatting, sorting, filtering, adding sheets, etc.)',
-        inputSchema: zodToJsonSchema(BatchUpdateSchema),
-      },
-      // Auto-generated tools from Discovery Document
-      ...generatedTools,
-    ],
-  }));
+        // Use Drive API to list all spreadsheets
+        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+        const response = await drive.files.list({
+          q: "mimeType='application/vnd.google-apps.spreadsheet'",
+          fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
+          orderBy: 'modifiedTime desc',
+        });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
-    const { name, arguments: args } = request.params;
-
-    try {
-      switch (name) {
-        case 'list_spreadsheets': {
-          ListSpreadsheetsSchema.parse(args);
-
-          // Use Drive API to list all spreadsheets
-          const drive = google.drive({ version: 'v3', auth: oauth2Client });
-          const response = await drive.files.list({
-            q: "mimeType='application/vnd.google-apps.spreadsheet'",
-            fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',
-            orderBy: 'modifiedTime desc',
-          });
-
-          const files = response.data.files || [];
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Found ${files.length} spreadsheet(s):\n\n${files
-                  .map(
-                    f =>
-                      `- ${f.name}\n  ID: ${f.id}\n  Modified: ${f.modifiedTime}\n  URL: ${f.webViewLink}`
-                  )
-                  .join('\n\n')}`,
-              },
-            ],
-          };
-        }
-
-        case 'list_sheets': {
-          const validatedArgs = ListSheetsSchema.parse(args);
-
-          const response = await sheets.spreadsheets.get({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            fields: 'sheets(properties(sheetId,title,index,gridProperties(rowCount,columnCount)))',
-          });
-
-          const sheetsList = response.data.sheets || [];
-          const sheetsInfo = sheetsList.map(sheet => ({
-            sheetId: sheet.properties?.sheetId,
-            title: sheet.properties?.title,
-            index: sheet.properties?.index,
-            rowCount: sheet.properties?.gridProperties?.rowCount,
-            columnCount: sheet.properties?.gridProperties?.columnCount,
-          }));
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Found ${sheetsInfo.length} sheet(s) in spreadsheet:\n\n${JSON.stringify(
-                  sheetsInfo,
-                  null,
-                  2
-                )}`,
-              },
-            ],
-          };
-        }
-
-        case 'write_to_cell': {
-          const validatedArgs = WriteToCellSchema.parse(args);
-          const range = `${validatedArgs.sheetName}!${validatedArgs.cell}`;
-
-          const response = await sheets.spreadsheets.values.update({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            range,
-            valueInputOption: validatedArgs.valueInputOption,
-            requestBody: {
-              values: [[validatedArgs.value]],
+        const files = response.data.files || [];
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Found ${files.length} spreadsheet(s):\n\n${files
+                .map(
+                  f =>
+                    `- ${f.name}\n  ID: ${f.id}\n  Modified: ${f.modifiedTime}\n  URL: ${f.webViewLink}`
+                )
+                .join('\n\n')}`,
             },
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Successfully wrote value to ${range}\nUpdated range: ${response.data.updatedRange}`,
-              },
-            ],
-          };
-        }
-
-        case 'create_spreadsheet': {
-          const validatedArgs = CreateSpreadsheetSchema.parse(args);
-          const resource: sheets_v4.Schema$Spreadsheet = {
-            properties: {
-              title: validatedArgs.title,
-            },
-            sheets: validatedArgs.sheetTitles?.map(title => ({
-              properties: { title },
-            })) || [{ properties: { title: 'Sheet1' } }],
-          };
-
-          const response = await sheets.spreadsheets.create({
-            requestBody: resource,
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Spreadsheet created successfully!\nID: ${response.data.spreadsheetId}\nURL: ${response.data.spreadsheetUrl}\nTitle: ${response.data.properties?.title}`,
-              },
-            ],
-          };
-        }
-
-        case 'read_range': {
-          const validatedArgs = ReadRangeSchema.parse(args);
-          const response = await sheets.spreadsheets.values.get({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            range: validatedArgs.range,
-            majorDimension: validatedArgs.majorDimension,
-          });
-
-          const values = response.data.values || [];
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Range: ${response.data.range}\nRows: ${values.length}\n\nData:\n${JSON.stringify(values, null, 2)}`,
-              },
-            ],
-          };
-        }
-
-        case 'write_range': {
-          const validatedArgs = WriteRangeSchema.parse(args);
-          const response = await sheets.spreadsheets.values.update({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            range: validatedArgs.range,
-            valueInputOption: validatedArgs.valueInputOption,
-            requestBody: {
-              values: validatedArgs.values,
-            },
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Successfully wrote ${response.data.updatedRows} rows and ${response.data.updatedColumns} columns to ${response.data.updatedRange}`,
-              },
-            ],
-          };
-        }
-
-        case 'append_range': {
-          const validatedArgs = AppendRangeSchema.parse(args);
-          const response = await sheets.spreadsheets.values.append({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            range: validatedArgs.range,
-            valueInputOption: validatedArgs.valueInputOption,
-            requestBody: {
-              values: validatedArgs.values,
-            },
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Successfully appended ${response.data.updates?.updatedRows} rows to ${response.data.updates?.updatedRange}`,
-              },
-            ],
-          };
-        }
-
-        case 'batch_update': {
-          const validatedArgs = BatchUpdateSchema.parse(args);
-          const response = await sheets.spreadsheets.batchUpdate({
-            spreadsheetId: validatedArgs.spreadsheetId,
-            requestBody: {
-              requests: validatedArgs.requests,
-            },
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Batch update completed successfully with ${response.data.replies?.length || 0} replies`,
-              },
-            ],
-          };
-        }
-
-        default:
-          // Try to handle with auto-generated tools
-          return await handleGeneratedTool(name, args, sheets);
+          ],
+        };
       }
-    } catch (error: any) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error: ${error.message}`,
-          },
-        ],
-      };
-    }
-  });
 
-  const transport = new StdioServerTransport();
-  server.connect(transport);
+      case 'list_sheets': {
+        const validatedArgs = ListSheetsSchema.parse(args);
+
+        const response = await sheets.spreadsheets.get({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          fields: 'sheets(properties(sheetId,title,index,gridProperties(rowCount,columnCount)))',
+        });
+
+        const sheetsList = response.data.sheets || [];
+        const sheetsInfo = sheetsList.map(sheet => ({
+          sheetId: sheet.properties?.sheetId,
+          title: sheet.properties?.title,
+          index: sheet.properties?.index,
+          rowCount: sheet.properties?.gridProperties?.rowCount,
+          columnCount: sheet.properties?.gridProperties?.columnCount,
+        }));
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Found ${sheetsInfo.length} sheet(s) in spreadsheet:\n\n${JSON.stringify(
+                sheetsInfo,
+                null,
+                2
+              )}`,
+            },
+          ],
+        };
+      }
+
+      case 'write_to_cell': {
+        const validatedArgs = WriteToCellSchema.parse(args);
+        const range = `${validatedArgs.sheetName}!${validatedArgs.cell}`;
+
+        const response = await sheets.spreadsheets.values.update({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          range,
+          valueInputOption: validatedArgs.valueInputOption,
+          requestBody: {
+            values: [[validatedArgs.value]],
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Successfully wrote value to ${range}\nUpdated range: ${response.data.updatedRange}`,
+            },
+          ],
+        };
+      }
+
+      case 'create_spreadsheet': {
+        const validatedArgs = CreateSpreadsheetSchema.parse(args);
+        const resource: sheets_v4.Schema$Spreadsheet = {
+          properties: {
+            title: validatedArgs.title,
+          },
+          sheets: validatedArgs.sheetTitles?.map(title => ({
+            properties: { title },
+          })) || [{ properties: { title: 'Sheet1' } }],
+        };
+
+        const response = await sheets.spreadsheets.create({
+          requestBody: resource,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Spreadsheet created successfully!\nID: ${response.data.spreadsheetId}\nURL: ${response.data.spreadsheetUrl}\nTitle: ${response.data.properties?.title}`,
+            },
+          ],
+        };
+      }
+
+      case 'read_range': {
+        const validatedArgs = ReadRangeSchema.parse(args);
+        const response = await sheets.spreadsheets.values.get({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          range: validatedArgs.range,
+          majorDimension: validatedArgs.majorDimension,
+        });
+
+        const values = response.data.values || [];
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Range: ${response.data.range}\nRows: ${values.length}\n\nData:\n${JSON.stringify(values, null, 2)}`,
+            },
+          ],
+        };
+      }
+
+      case 'write_range': {
+        const validatedArgs = WriteRangeSchema.parse(args);
+        const response = await sheets.spreadsheets.values.update({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          range: validatedArgs.range,
+          valueInputOption: validatedArgs.valueInputOption,
+          requestBody: {
+            values: validatedArgs.values,
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Successfully wrote ${response.data.updatedRows} rows and ${response.data.updatedColumns} columns to ${response.data.updatedRange}`,
+            },
+          ],
+        };
+      }
+
+      case 'append_range': {
+        const validatedArgs = AppendRangeSchema.parse(args);
+        const response = await sheets.spreadsheets.values.append({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          range: validatedArgs.range,
+          valueInputOption: validatedArgs.valueInputOption,
+          requestBody: {
+            values: validatedArgs.values,
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Successfully appended ${response.data.updates?.updatedRows} rows to ${response.data.updates?.updatedRange}`,
+            },
+          ],
+        };
+      }
+
+      case 'batch_update': {
+        const validatedArgs = BatchUpdateSchema.parse(args);
+        const response = await sheets.spreadsheets.batchUpdate({
+          spreadsheetId: validatedArgs.spreadsheetId,
+          requestBody: {
+            requests: validatedArgs.requests,
+          },
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Batch update completed successfully with ${response.data.replies?.length || 0} replies`,
+            },
+          ],
+        };
+      }
+
+      default:
+        // Try to handle with auto-generated tools
+        return await handleGeneratedTool(name, args, sheets);
+    }
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${error.message}`,
+        },
+      ],
+    };
+  }
 }

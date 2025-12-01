@@ -164,14 +164,11 @@ export const loader = createHybridLoaderApiRoute(
       orderBy: {
         createdAt: "desc",
       },
-      distinct: "sessionId",
       take: fetchLimit,
     });
 
     const totalCount = await prisma.ingestionQueue.count({
-      where: {
-        ...whereClause,
-      },
+      where: whereClause,
     });
 
     // Deduplicate by sessionId - keep only the first (latest) log per session

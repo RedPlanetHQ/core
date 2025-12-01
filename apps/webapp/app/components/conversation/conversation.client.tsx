@@ -24,11 +24,14 @@ export const ConversationNew = ({
   const submit = useSubmit();
 
   // Handle selecting a prompt from examples
-  const handleSelectPrompt = useCallback((prompt: string) => {
-    editor?.commands.setContent(`<p>${prompt}</p>`);
+  const handleSelectPrompt = useCallback(
+    (prompt: string) => {
+      editor?.commands.setContent(`<p>${prompt}</p>`);
 
-    setTitle(prompt);
-  }, []);
+      setTitle(prompt);
+    },
+    [editor],
+  );
 
   // Send message to API
   const submitForm = useCallback(

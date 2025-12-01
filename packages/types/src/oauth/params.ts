@@ -10,6 +10,7 @@ export class OAuth2Params {
   token_response_metadata?: string[];
   token_expiration_buffer?: number; // In seconds.
   scopes?: string[];
+  token_request_auth_method?: string;
 }
 
 export type AuthType = "OAuth2" | "APIKey";

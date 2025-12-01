@@ -70,7 +70,7 @@ export default function LogsAll() {
           title="Episodes"
           actions={[
             {
-              label: "Add episode",
+              label: "Add document",
               icon: <Plus size={14} />,
               onClick: () => setShowAddMemory(true),
               variant: "secondary",

@@ -25,10 +25,16 @@ export enum IntegrationEventType {
    * For returning integration metadata/config
    */
   SPEC = "spec",
+
   /**
-   * For to start mcp
+   * Get available MCP tools for this integration
    */
-  MCP = "mcp",
+  GET_TOOLS = "get-tools",
+
+  /**
+   * Call a specific MCP tool
+   */
+  CALL_TOOL = "call-tool",
 }
 
 interface IntegrationDefinition {
@@ -61,6 +67,9 @@ export class Spec {
   description: string;
   icon: string;
   category?: string;
+  schedule?: {
+    frequency?: string;
+  };
   mcp?:
     | {
         type: "http";
@@ -84,7 +93,15 @@ export interface Identifier {
   type?: string;
 }
 
-export type MessageType = "spec" | "activity" | "state" | "identifier" | "account";
+export type MessageType =
+  | "spec"
+  | "activity"
+  | "state"
+  | "identifier"
+  | "account"
+  | "tools"
+  | "tool_result"
+  | "error";
 
 export interface Message {
   type: MessageType;

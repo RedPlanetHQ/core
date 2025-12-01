@@ -1,6 +1,3 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { google, calendar_v3 } from 'googleapis';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -140,342 +137,328 @@ const GetFreeBusySchema = z.object({
   timeZone: z.string().optional().describe('Time zone for the response'),
 });
 
-// Main function
-export async function mcp(
+export async function getTools() {
+  return [
+    // Custom high-level tools
+    {
+      name: 'create_event',
+      description: 'Creates a new calendar event',
+      inputSchema: zodToJsonSchema(CreateEventSchema),
+    },
+    {
+      name: 'get_event',
+      description: 'Gets details of a specific calendar event',
+      inputSchema: zodToJsonSchema(GetEventSchema),
+    },
+    {
+      name: 'list_events',
+      description: 'Lists calendar events within a time range',
+      inputSchema: zodToJsonSchema(ListEventsSchema),
+    },
+    {
+      name: 'update_event',
+      description: 'Updates an existing calendar event',
+      inputSchema: zodToJsonSchema(UpdateEventSchema),
+    },
+    {
+      name: 'delete_event',
+      description: 'Deletes a calendar event',
+      inputSchema: zodToJsonSchema(DeleteEventSchema),
+    },
+    {
+      name: 'list_calendars',
+      description: 'Lists all calendars accessible to the user',
+      inputSchema: zodToJsonSchema(ListCalendarsSchema),
+    },
+    {
+      name: 'quick_add_event',
+      description: 'Creates an event using natural language',
+      inputSchema: zodToJsonSchema(QuickAddEventSchema),
+    },
+    {
+      name: 'get_freebusy',
+      description: 'Gets free/busy information for calendars',
+      inputSchema: zodToJsonSchema(GetFreeBusySchema),
+    },
+    // Auto-generated tools from Discovery Document
+    ...generatedTools,
+  ];
+}
+
+/**
+ * Call a specific tool without starting the MCP server
+ */
+export async function callTool(
+  name: string,
+  args: Record<string, any>,
   client_id: string,
   client_secret: string,
   callback: string,
   credentials: Record<string, string>
 ) {
   await loadCredentials(client_id, client_secret, callback, credentials);
-
   // Initialize Calendar API
   calendar = google.calendar({ version: 'v3', auth: oauth2Client });
 
-  // Server implementation
-  const server = new Server({
-    name: 'google-calendar',
-    version: '1.0.0',
-    capabilities: {
-      tools: {},
-    },
-  });
+  try {
+    switch (name) {
+      case 'create_event': {
+        const validatedArgs = CreateEventSchema.parse(args);
+        const event: calendar_v3.Schema$Event = {
+          summary: validatedArgs.summary,
+          description: validatedArgs.description,
+          location: validatedArgs.location,
+          start: {
+            dateTime: validatedArgs.startDateTime,
+            timeZone: validatedArgs.timeZone,
+          },
+          end: {
+            dateTime: validatedArgs.endDateTime,
+            timeZone: validatedArgs.timeZone,
+          },
+          attendees: validatedArgs.attendees,
+          reminders: validatedArgs.reminders,
+        };
 
-  // Tool handlers
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [
-      // Custom high-level tools
-      {
-        name: 'create_event',
-        description: 'Creates a new calendar event',
-        inputSchema: zodToJsonSchema(CreateEventSchema),
-      },
-      {
-        name: 'get_event',
-        description: 'Gets details of a specific calendar event',
-        inputSchema: zodToJsonSchema(GetEventSchema),
-      },
-      {
-        name: 'list_events',
-        description: 'Lists calendar events within a time range',
-        inputSchema: zodToJsonSchema(ListEventsSchema),
-      },
-      {
-        name: 'update_event',
-        description: 'Updates an existing calendar event',
-        inputSchema: zodToJsonSchema(UpdateEventSchema),
-      },
-      {
-        name: 'delete_event',
-        description: 'Deletes a calendar event',
-        inputSchema: zodToJsonSchema(DeleteEventSchema),
-      },
-      {
-        name: 'list_calendars',
-        description: 'Lists all calendars accessible to the user',
-        inputSchema: zodToJsonSchema(ListCalendarsSchema),
-      },
-      {
-        name: 'quick_add_event',
-        description: 'Creates an event using natural language',
-        inputSchema: zodToJsonSchema(QuickAddEventSchema),
-      },
-      {
-        name: 'get_freebusy',
-        description: 'Gets free/busy information for calendars',
-        inputSchema: zodToJsonSchema(GetFreeBusySchema),
-      },
-      // Auto-generated tools from Discovery Document
-      ...generatedTools,
-    ],
-  }));
+        const response = await calendar.events.insert({
+          calendarId: validatedArgs.calendarId,
+          requestBody: event,
+        });
 
-  server.setRequestHandler(CallToolRequestSchema, async (request: any) => {
-    const { name, arguments: args } = request.params;
-
-    try {
-      switch (name) {
-        case 'create_event': {
-          const validatedArgs = CreateEventSchema.parse(args);
-          const event: calendar_v3.Schema$Event = {
-            summary: validatedArgs.summary,
-            description: validatedArgs.description,
-            location: validatedArgs.location,
-            start: {
-              dateTime: validatedArgs.startDateTime,
-              timeZone: validatedArgs.timeZone,
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Event created successfully!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}\nLink: ${response.data.htmlLink}`,
             },
-            end: {
-              dateTime: validatedArgs.endDateTime,
-              timeZone: validatedArgs.timeZone,
+          ],
+        };
+      }
+
+      case 'get_event': {
+        const validatedArgs = GetEventSchema.parse(args);
+        const response = await calendar.events.get({
+          calendarId: validatedArgs.calendarId,
+          eventId: validatedArgs.eventId,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Event: ${response.data.summary}\nID: ${response.data.id}\nDescription: ${response.data.description || 'N/A'}\nLocation: ${response.data.location || 'N/A'}\nStart: ${response.data.start?.dateTime || response.data.start?.date}\nEnd: ${response.data.end?.dateTime || response.data.end?.date}\nStatus: ${response.data.status}\nLink: ${response.data.htmlLink}`,
             },
-            attendees: validatedArgs.attendees,
-            reminders: validatedArgs.reminders,
-          };
+          ],
+        };
+      }
 
-          const response = await calendar.events.insert({
-            calendarId: validatedArgs.calendarId,
-            requestBody: event,
-          });
+      case 'list_events': {
+        const validatedArgs = ListEventsSchema.parse(args);
+        const response = await calendar.events.list({
+          calendarId: validatedArgs.calendarId,
+          timeMin: validatedArgs.timeMin,
+          timeMax: validatedArgs.timeMax,
+          maxResults: validatedArgs.maxResults,
+          singleEvents: validatedArgs.singleEvents,
+          orderBy: validatedArgs.orderBy,
+          q: validatedArgs.q,
+        });
 
+        const events = response.data.items || [];
+        if (events.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: `Event created successfully!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}\nLink: ${response.data.htmlLink}`,
+                text: 'No events found in the specified time range.',
               },
             ],
           };
         }
 
-        case 'get_event': {
-          const validatedArgs = GetEventSchema.parse(args);
-          const response = await calendar.events.get({
-            calendarId: validatedArgs.calendarId,
-            eventId: validatedArgs.eventId,
-          });
+        const eventList = events
+          .map(
+            event =>
+              `- ${event.summary} (${event.start?.dateTime || event.start?.date})\n  ID: ${event.id}\n  Location: ${event.location || 'N/A'}`
+          )
+          .join('\n\n');
 
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Found ${events.length} events:\n\n${eventList}`,
+            },
+          ],
+        };
+      }
+
+      case 'update_event': {
+        const validatedArgs = UpdateEventSchema.parse(args);
+
+        // First get the existing event
+        const existingEvent = await calendar.events.get({
+          calendarId: validatedArgs.calendarId,
+          eventId: validatedArgs.eventId,
+        });
+
+        // Merge updates with existing event
+        const updatedEvent: calendar_v3.Schema$Event = {
+          ...existingEvent.data,
+          summary: validatedArgs.summary || existingEvent.data.summary,
+          description: validatedArgs.description || existingEvent.data.description,
+          location: validatedArgs.location || existingEvent.data.location,
+        };
+
+        if (validatedArgs.startDateTime) {
+          updatedEvent.start = {
+            dateTime: validatedArgs.startDateTime,
+            timeZone: validatedArgs.timeZone || existingEvent.data.start?.timeZone,
+          };
+        }
+
+        if (validatedArgs.endDateTime) {
+          updatedEvent.end = {
+            dateTime: validatedArgs.endDateTime,
+            timeZone: validatedArgs.timeZone || existingEvent.data.end?.timeZone,
+          };
+        }
+
+        const response = await calendar.events.update({
+          calendarId: validatedArgs.calendarId,
+          eventId: validatedArgs.eventId,
+          requestBody: updatedEvent,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Event updated successfully!\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}`,
+            },
+          ],
+        };
+      }
+
+      case 'delete_event': {
+        const validatedArgs = DeleteEventSchema.parse(args);
+        await calendar.events.delete({
+          calendarId: validatedArgs.calendarId,
+          eventId: validatedArgs.eventId,
+          sendUpdates: validatedArgs.sendUpdates,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Event ${validatedArgs.eventId} deleted successfully`,
+            },
+          ],
+        };
+      }
+
+      case 'list_calendars': {
+        const validatedArgs = ListCalendarsSchema.parse(args);
+        const response = await calendar.calendarList.list({
+          maxResults: validatedArgs.maxResults,
+          showHidden: validatedArgs.showHidden,
+        });
+
+        const calendars = response.data.items || [];
+        if (calendars.length === 0) {
           return {
             content: [
               {
                 type: 'text',
-                text: `Event: ${response.data.summary}\nID: ${response.data.id}\nDescription: ${response.data.description || 'N/A'}\nLocation: ${response.data.location || 'N/A'}\nStart: ${response.data.start?.dateTime || response.data.start?.date}\nEnd: ${response.data.end?.dateTime || response.data.end?.date}\nStatus: ${response.data.status}\nLink: ${response.data.htmlLink}`,
+                text: 'No calendars found.',
               },
             ],
           };
         }
 
-        case 'list_events': {
-          const validatedArgs = ListEventsSchema.parse(args);
-          const response = await calendar.events.list({
-            calendarId: validatedArgs.calendarId,
+        const calendarList = calendars
+          .map(
+            cal =>
+              `- ${cal.summary}\n  ID: ${cal.id}\n  Primary: ${cal.primary || false}\n  Access Role: ${cal.accessRole}`
+          )
+          .join('\n\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Found ${calendars.length} calendars:\n\n${calendarList}`,
+            },
+          ],
+        };
+      }
+
+      case 'quick_add_event': {
+        const validatedArgs = QuickAddEventSchema.parse(args);
+        const response = await calendar.events.quickAdd({
+          calendarId: validatedArgs.calendarId,
+          text: validatedArgs.text,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Event created from quick add!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime || response.data.start?.date}\nEnd: ${response.data.end?.dateTime || response.data.end?.date}\nLink: ${response.data.htmlLink}`,
+            },
+          ],
+        };
+      }
+
+      case 'get_freebusy': {
+        const validatedArgs = GetFreeBusySchema.parse(args);
+        const response = await calendar.freebusy.query({
+          requestBody: {
             timeMin: validatedArgs.timeMin,
             timeMax: validatedArgs.timeMax,
-            maxResults: validatedArgs.maxResults,
-            singleEvents: validatedArgs.singleEvents,
-            orderBy: validatedArgs.orderBy,
-            q: validatedArgs.q,
-          });
-
-          const events = response.data.items || [];
-          if (events.length === 0) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: 'No events found in the specified time range.',
-                },
-              ],
-            };
-          }
-
-          const eventList = events
-            .map(
-              event =>
-                `- ${event.summary} (${event.start?.dateTime || event.start?.date})\n  ID: ${event.id}\n  Location: ${event.location || 'N/A'}`
-            )
-            .join('\n\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Found ${events.length} events:\n\n${eventList}`,
-              },
-            ],
-          };
-        }
-
-        case 'update_event': {
-          const validatedArgs = UpdateEventSchema.parse(args);
-
-          // First get the existing event
-          const existingEvent = await calendar.events.get({
-            calendarId: validatedArgs.calendarId,
-            eventId: validatedArgs.eventId,
-          });
-
-          // Merge updates with existing event
-          const updatedEvent: calendar_v3.Schema$Event = {
-            ...existingEvent.data,
-            summary: validatedArgs.summary || existingEvent.data.summary,
-            description: validatedArgs.description || existingEvent.data.description,
-            location: validatedArgs.location || existingEvent.data.location,
-          };
-
-          if (validatedArgs.startDateTime) {
-            updatedEvent.start = {
-              dateTime: validatedArgs.startDateTime,
-              timeZone: validatedArgs.timeZone || existingEvent.data.start?.timeZone,
-            };
-          }
-
-          if (validatedArgs.endDateTime) {
-            updatedEvent.end = {
-              dateTime: validatedArgs.endDateTime,
-              timeZone: validatedArgs.timeZone || existingEvent.data.end?.timeZone,
-            };
-          }
-
-          const response = await calendar.events.update({
-            calendarId: validatedArgs.calendarId,
-            eventId: validatedArgs.eventId,
-            requestBody: updatedEvent,
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Event updated successfully!\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}`,
-              },
-            ],
-          };
-        }
-
-        case 'delete_event': {
-          const validatedArgs = DeleteEventSchema.parse(args);
-          await calendar.events.delete({
-            calendarId: validatedArgs.calendarId,
-            eventId: validatedArgs.eventId,
-            sendUpdates: validatedArgs.sendUpdates,
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Event ${validatedArgs.eventId} deleted successfully`,
-              },
-            ],
-          };
-        }
-
-        case 'list_calendars': {
-          const validatedArgs = ListCalendarsSchema.parse(args);
-          const response = await calendar.calendarList.list({
-            maxResults: validatedArgs.maxResults,
-            showHidden: validatedArgs.showHidden,
-          });
-
-          const calendars = response.data.items || [];
-          if (calendars.length === 0) {
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text: 'No calendars found.',
-                },
-              ],
-            };
-          }
-
-          const calendarList = calendars
-            .map(
-              cal =>
-                `- ${cal.summary}\n  ID: ${cal.id}\n  Primary: ${cal.primary || false}\n  Access Role: ${cal.accessRole}`
-            )
-            .join('\n\n');
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Found ${calendars.length} calendars:\n\n${calendarList}`,
-              },
-            ],
-          };
-        }
-
-        case 'quick_add_event': {
-          const validatedArgs = QuickAddEventSchema.parse(args);
-          const response = await calendar.events.quickAdd({
-            calendarId: validatedArgs.calendarId,
-            text: validatedArgs.text,
-          });
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Event created from quick add!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime || response.data.start?.date}\nEnd: ${response.data.end?.dateTime || response.data.end?.date}\nLink: ${response.data.htmlLink}`,
-              },
-            ],
-          };
-        }
-
-        case 'get_freebusy': {
-          const validatedArgs = GetFreeBusySchema.parse(args);
-          const response = await calendar.freebusy.query({
-            requestBody: {
-              timeMin: validatedArgs.timeMin,
-              timeMax: validatedArgs.timeMax,
-              timeZone: validatedArgs.timeZone,
-              items: validatedArgs.calendarIds.map(id => ({ id })),
-            },
-          });
-
-          let result = `Free/Busy information:\n\n`;
-          for (const [calendarId, calendar] of Object.entries(response.data.calendars || {})) {
-            const cal = calendar as calendar_v3.Schema$FreeBusyCalendar;
-            result += `Calendar: ${calendarId}\n`;
-            if (cal.busy && cal.busy.length > 0) {
-              result += `Busy times:\n`;
-              cal.busy.forEach(period => {
-                result += `  - ${period.start} to ${period.end}\n`;
-              });
-            } else {
-              result += `  No busy times in this period\n`;
-            }
-            result += '\n';
-          }
-
-          return {
-            content: [
-              {
-                type: 'text',
-                text: result,
-              },
-            ],
-          };
-        }
-
-        default:
-          // Try to handle with auto-generated tools
-          return await handleGeneratedTool(name, args, calendar);
-      }
-    } catch (error: any) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error: ${error.message}`,
+            timeZone: validatedArgs.timeZone,
+            items: validatedArgs.calendarIds.map(id => ({ id })),
           },
-        ],
-      };
-    }
-  });
+        });
 
-  const transport = new StdioServerTransport();
-  server.connect(transport);
+        let result = `Free/Busy information:\n\n`;
+        for (const [calendarId, calendar] of Object.entries(response.data.calendars || {})) {
+          const cal = calendar as calendar_v3.Schema$FreeBusyCalendar;
+          result += `Calendar: ${calendarId}\n`;
+          if (cal.busy && cal.busy.length > 0) {
+            result += `Busy times:\n`;
+            cal.busy.forEach(period => {
+              result += `  - ${period.start} to ${period.end}\n`;
+            });
+          } else {
+            result += `  No busy times in this period\n`;
+          }
+          result += '\n';
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result,
+            },
+          ],
+        };
+      }
+
+      default:
+        // Try to handle with auto-generated tools
+        return await handleGeneratedTool(name, args, calendar);
+    }
+  } catch (error: any) {
+    return {
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${error.message}`,
+        },
+      ],
+    };
+  }
 }

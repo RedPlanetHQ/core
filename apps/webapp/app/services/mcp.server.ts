@@ -13,7 +13,6 @@ import {
 import { z } from "zod";
 import { MCPSessionManager } from "~/utils/mcp/session-manager";
 import { TransportManager } from "~/utils/mcp/transport-manager";
-import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
@@ -337,18 +336,6 @@ async function createTransport(
   try {
     if (!noIntegrations) {
       await fetchAndSaveIntegrations();
-      const result = await IntegrationLoader.loadIntegrationTransports(
-        sessionId,
-        userId,
-        workspaceId,
-        integrations.length > 0 ? integrations : undefined,
-      );
-      logger.log(
-        `Loaded ${result.loaded} integration transports for session ${sessionId}`,
-      );
-      if (result.failed.length > 0) {
-        logger.warn(`Failed to load some integrations: ${result.failed}`);
-      }
     }
   } catch (error) {
     logger.error(`Error loading integration transports: ${error}`);
