@@ -1,5 +1,5 @@
 import { prisma } from "~/db.server";
-import { execSync } from "child_process";
+import { execFileSync } from "child_process";
 
 export interface IntegrationAccountWithDefinition {
   id: string;
@@ -107,12 +107,21 @@ export class IntegrationLoader {
     const executablePath = `./integrations/${integrationSlug}/main`;
 
     // Call the get-tools command
-    const command = `node ${executablePath} get-tools --config '${JSON.stringify(account.integrationConfiguration)}' --integration-definition '${JSON.stringify(account.integrationDefinition)}'`;
-
-    const output = execSync(command, {
-      encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-    });
+    const output = execFileSync(
+      "node",
+      [
+        executablePath,
+        "get-tools",
+        "--config",
+        JSON.stringify(account.integrationConfiguration),
+        "--integration-definition",
+        JSON.stringify(account.integrationDefinition),
+      ],
+      {
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      },
+    );
 
     return output;
   }
@@ -152,13 +161,25 @@ export class IntegrationLoader {
     const executablePath = `./integrations/${integrationSlug}/main`;
 
     // Call the call-tool command
-    const command = `node ${executablePath} call-tool --config '${JSON.stringify(account.integrationConfiguration)}' --integration-definition '${JSON.stringify(account.integrationDefinition)}' --tool-name "${originalToolName}" --tool-arguments '${JSON.stringify(args)}'`;
-
-    console.log(command);
-    const output = execSync(command, {
-      encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-    });
+    const output = execFileSync(
+      "node",
+      [
+        executablePath,
+        "call-tool",
+        "--config",
+        JSON.stringify(account.integrationConfiguration),
+        "--integration-definition",
+        JSON.stringify(account.integrationDefinition),
+        "--tool-name",
+        originalToolName,
+        "--tool-arguments",
+        JSON.stringify(args),
+      ],
+      {
+        encoding: "utf-8",
+        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      },
+    );
 
     try {
       // Parse the JSON output (expecting Message format)
