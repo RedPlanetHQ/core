@@ -505,23 +505,10 @@
 }
 
 @layer base {
-  .react-calendar-heatmap {
-    font-size: 9px;
-  }
-  .react-calendar-heatmap .react-calendar-heatmap-month-label {
-    font-size: 9px;
-    fill: hsl(var(--muted-foreground));
-  }
-  .react-calendar-heatmap .react-calendar-heatmap-weekday-label {
-    font-size: 9px;
-    fill: hsl(var(--muted-foreground));
-  }
-  .react-calendar-heatmap rect {
 
-    rx: 2;
-  }
-  .react-calendar-heatmap rect:hover {
 
+  .episode-details p {
+    @apply text-md;
   }
 
   .tiptap {

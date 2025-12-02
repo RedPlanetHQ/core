@@ -117,7 +117,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
   }, [title, log.id, log.title]);
 
   return (
-    <div className="flex h-full w-full flex-col items-center overflow-auto">
+    <div className="episode-details flex h-full w-full flex-col items-center overflow-auto">
       <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
         <div>
           <Input

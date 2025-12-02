@@ -13,9 +13,13 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return await integrationCreate(eventPayload.eventBody);
 
     case IntegrationEventType.GET_TOOLS: {
-      const tools = await getTools();
+      try {
+        const tools = await getTools();
 
-      return tools;
+        return tools;
+      } catch (e: any) {
+        return { message: `Error ${e.message}` };
+      }
     }
 
     case IntegrationEventType.CALL_TOOL: {

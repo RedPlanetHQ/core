@@ -55,18 +55,6 @@ const { loader, action } = createHybridActionApiRoute(
     const id = body.message.id;
     const workspace = await getWorkspaceByUser(authentication.userId);
 
-    const integrationsConnection =
-      await IntegrationLoader.loadIntegrationTransports(
-        body.id,
-        authentication.userId,
-        workspace?.id as string,
-        undefined,
-      );
-
-    logger.log(
-      `Loaded ${integrationsConnection.loaded} integration transports`,
-    );
-
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -89,7 +77,8 @@ const { loader, action } = createHybridActionApiRoute(
     const messages = conversationHistory.map((history: any) => {
       return {
         parts: history.parts,
-        role: history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
+        role:
+          history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
         id: history.id,
       };
     });
@@ -156,14 +145,14 @@ const { loader, action } = createHybridActionApiRoute(
     const now = new Date();
     const dateTimeContext = `
 <current_datetime>
-Current date and time: ${now.toLocaleString('en-US', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
+Current date and time: ${now.toLocaleString("en-US", {
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
     })}
 </current_datetime>`;
 

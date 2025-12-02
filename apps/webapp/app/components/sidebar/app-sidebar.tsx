@@ -41,14 +41,14 @@ import { useNavigate } from "@remix-run/react";
 const data = {
   navMain: [
     {
-      title: "Episodes",
-      url: "/home/episodes",
-      icon: Inbox,
-    },
-    {
       title: "New chat",
       url: "/home/conversation",
       icon: MessageSquare,
+    },
+    {
+      title: "Episodes",
+      url: "/home/episodes",
+      icon: Inbox,
     },
     {
       title: "My mind",

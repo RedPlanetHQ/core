@@ -7,6 +7,7 @@ import {
   IntegrationEventType,
   Spec,
 } from '@redplanethq/sdk';
+import { callTool, getTools } from './mcp';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -15,6 +16,31 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
     case IntegrationEventType.SYNC:
       return await handleSchedule(eventPayload.config, eventPayload.state);
+
+    case IntegrationEventType.GET_TOOLS: {
+      try {
+        const tools = await getTools(eventPayload.config);
+
+        return tools;
+      } catch (e: any) {
+        return { message: `Error ${e.message}` };
+      }
+    }
+
+    case IntegrationEventType.CALL_TOOL: {
+      const integrationDefinition = eventPayload.integrationDefinition;
+
+      if (!integrationDefinition) {
+        return null;
+      }
+
+      const config = eventPayload.config as any;
+      const { name, arguments: args } = eventPayload.eventBody;
+
+      const result = await callTool(name, args, config);
+
+      return result;
+    }
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };
@@ -41,14 +67,7 @@ class GitHubCLI extends IntegrationCLI {
       schedule: {
         frequency: '*/5 * * * *',
       },
-      mcp: {
-        type: 'http',
-        url: 'https://api.githubcopilot.com/mcp/',
-        headers: {
-          Authorization: 'Bearer ${config:access_token}',
-          'Content-Type': 'application/json',
-        },
-      },
+      mcp: {},
       auth: {
         OAuth2: {
           token_url: 'https://github.com/login/oauth/access_token',
