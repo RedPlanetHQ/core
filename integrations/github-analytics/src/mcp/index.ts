@@ -17,7 +17,7 @@ import {
 const RepoSchema = z.object({
   owner: z.string().describe('Repository owner (organization or user)'),
   repo: z.string().describe('Repository name'),
-  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  days: z.number().optional().describe('Number of days to analyze (default: 30)'),
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (week-over-week, default: false)'),
@@ -27,7 +27,7 @@ const CommitFrequencySchema = z.object({
   owner: z.string().describe('Repository owner (organization or user)'),
   repo: z.string().describe('Repository name'),
   branch: z.string().optional().describe('Branch name to analyze (default: main)'),
-  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  days: z.number().optional().describe('Number of days to analyze (default: 30)'),
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
@@ -36,7 +36,7 @@ const CommitFrequencySchema = z.object({
 const ChangeFailureRateSchema = z.object({
   owner: z.string().describe('Repository owner (organization or user)'),
   repo: z.string().describe('Repository name'),
-  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  days: z.number().optional().describe('Number of days to analyze (default: 30)'),
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
@@ -51,7 +51,7 @@ const ChangeFailureRateSchema = z.object({
 const HotfixRateSchema = z.object({
   owner: z.string().describe('Repository owner (organization or user)'),
   repo: z.string().describe('Repository name'),
-  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  days: z.number().optional().describe('Number of days to analyze (default: 30)'),
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
@@ -63,70 +63,76 @@ const HotfixRateSchema = z.object({
     ),
 });
 
+// Pre-convert schemas to JSON to avoid deep type instantiation issues
+const repoSchemaJson = zodToJsonSchema(RepoSchema) as any;
+const commitFrequencySchemaJson = zodToJsonSchema(CommitFrequencySchema) as any;
+const changeFailureRateSchemaJson = zodToJsonSchema(ChangeFailureRateSchema) as any;
+const hotfixRateSchemaJson = zodToJsonSchema(HotfixRateSchema) as any;
+
 /**
  * Get list of available tools without starting the MCP server
  */
-export async function getTools() {
+export async function getTools(): Promise<Array<{ name: string; description: string; inputSchema: any }>> {
   return [
     {
       name: "deployment_frequency",
       description:
         "Calculate deployment frequency - number of releases/deployments per week. DORA metric for delivery speed.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "lead_time_for_changes",
       description:
         "Calculate lead time for changes - time from first commit to production deployment (in hours/days). DORA metric for delivery speed.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "pr_merge_time",
       description:
         "Calculate PR merge time - average time from PR creation to merge (in hours). Delivery speed metric.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "pr_throughput",
       description:
         "Calculate PR throughput - number of PRs merged per week. Delivery speed metric.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "commit_frequency",
       description:
         "Calculate commit frequency - number of commits to main branch per week. Delivery speed metric.",
-      inputSchema: zodToJsonSchema(CommitFrequencySchema),
+      inputSchema: commitFrequencySchemaJson,
     },
     {
       name: "change_failure_rate",
       description:
         "Calculate change failure rate - percentage of deployments that cause production failures. DORA metric for stability & reliability.",
-      inputSchema: zodToJsonSchema(ChangeFailureRateSchema),
+      inputSchema: changeFailureRateSchemaJson,
     },
     {
       name: "hotfix_rate",
       description:
         "Calculate hotfix rate - percentage of releases that are emergency hotfixes. Stability & reliability metric.",
-      inputSchema: zodToJsonSchema(HotfixRateSchema),
+      inputSchema: hotfixRateSchemaJson,
     },
     {
       name: "revert_rate",
       description:
         "Calculate revert rate - percentage of merged PRs that get reverted. Stability & reliability metric.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "pr_size",
       description:
         "Calculate PR size - average lines changed (additions + deletions) per PR. Code quality metric.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
     {
       name: "all_metrics",
       description:
         "Calculate all GitHub analytics metrics at once - includes all DORA metrics, delivery speed, stability, and code quality metrics.",
-      inputSchema: zodToJsonSchema(RepoSchema),
+      inputSchema: repoSchemaJson,
     },
   ];
 }

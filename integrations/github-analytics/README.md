@@ -21,14 +21,14 @@ Calculate deployment frequency - number of releases/deployments per week.
 **Parameters:**
 - `owner` (required): Repository owner (organization or user)
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 **Example:**
 ```json
 {
   "owner": "redplanethq",
   "repo": "core",
-  "days": 7
+  "days": 30
 }
 ```
 
@@ -38,7 +38,7 @@ Calculate lead time for changes - time from first commit to production deploymen
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 #### `pr_merge_time`
 Calculate average time from PR creation to merge (in hours).
@@ -46,7 +46,7 @@ Calculate average time from PR creation to merge (in hours).
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 #### `pr_throughput`
 Calculate number of PRs merged per week.
@@ -54,7 +54,7 @@ Calculate number of PRs merged per week.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 #### `commit_frequency`
 Calculate number of commits to main branch per week.
@@ -63,7 +63,7 @@ Calculate number of commits to main branch per week.
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
 - `branch` (optional): Branch name to analyze (default: "main")
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 ### Stability & Reliability Metrics
 
@@ -73,7 +73,7 @@ Calculate percentage of deployments that cause production failures.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 - `incidentLabels` (optional): Array of issue labels indicating incidents (default: ["incident", "production", "outage", "bug"])
 
 #### `hotfix_rate`
@@ -82,7 +82,7 @@ Calculate percentage of releases that are emergency hotfixes.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 - `hotfixPatterns` (optional): Array of patterns to identify hotfixes (default: ["hotfix", "emergency", "patch"])
 
 #### `revert_rate`
@@ -91,7 +91,7 @@ Calculate percentage of merged PRs that get reverted.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 ### Code Quality Metrics
 
@@ -101,7 +101,7 @@ Calculate average lines changed (additions + deletions) per PR.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 ### All Metrics
 
@@ -111,7 +111,7 @@ Calculate all GitHub analytics metrics at once.
 **Parameters:**
 - `owner` (required): Repository owner
 - `repo` (required): Repository name
-- `days` (optional): Number of days to analyze (default: 7)
+- `days` (optional): Number of days to analyze (default: 30)
 
 **Returns:** Comprehensive report including all delivery speed, stability, and code quality metrics.
 

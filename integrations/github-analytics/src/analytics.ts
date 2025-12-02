@@ -20,22 +20,34 @@ interface DateRangeParams {
 /**
  * Helper: Calculate date range for metrics
  * Supports both relative (days) and absolute (startDate/endDate) ranges
+ *
+ * Edge cases:
+ * 1. startDate + endDate → Use exact range
+ * 2. Only startDate → From startDate to today
+ * 3. Only endDate → Go back 'days' from endDate
+ * 4. Neither → Go back 'days' from today (default: 30 days)
  */
 function getDateRange(params: DateRangeParams = {}): { startDate: string; endDate: string; periodDays: number } {
   let startDate: Date;
   let endDate: Date;
 
   if (params.startDate && params.endDate) {
-    // Absolute date range
+    // Case 1: Both dates provided - use exact range
     startDate = new Date(params.startDate);
     endDate = new Date(params.endDate);
   } else if (params.startDate) {
-    // Start date to today
+    // Case 2: Only startDate - from startDate to today
     startDate = new Date(params.startDate);
     endDate = new Date();
+  } else if (params.endDate) {
+    // Case 3: Only endDate - go back 'days' from endDate
+    const days = params.days || 30;
+    endDate = new Date(params.endDate);
+    startDate = new Date(params.endDate);
+    startDate.setDate(endDate.getDate() - days);
   } else {
-    // Relative range (default 7 days)
-    const days = params.days || 7;
+    // Case 4: Neither date provided - relative range (default 30 days back from today)
+    const days = params.days || 30;
     endDate = new Date();
     startDate = new Date();
     startDate.setDate(endDate.getDate() - days);
@@ -67,6 +79,53 @@ function getPreviousPeriod(currentStart: string, currentEnd: string): { startDat
   return {
     startDate: prevStart.toISOString().split('T')[0],
     endDate: prevEnd.toISOString().split('T')[0],
+  };
+}
+
+/**
+ * Helper: Add comparison data to result object
+ * Generic helper to calculate and add period-over-period comparison
+ * Reserved for future use when adding comparison logic to remaining metrics
+ */
+function _addComparisonToResult(
+  result: any,
+  currentValue: number,
+  previousValue: number,
+  startDate: string,
+  endDate: string
+): void {
+  const prevPeriod = getPreviousPeriod(startDate, endDate);
+  const change = currentValue - previousValue;
+  const changePercent = previousValue > 0 ? ((change / previousValue) * 100).toFixed(1) : 'N/A';
+
+  result.comparison = {
+    previousPeriod: {
+      value: Math.round(previousValue * 100) / 100,
+      dateRange: prevPeriod,
+    },
+    change: {
+      absolute: Math.round(change * 100) / 100,
+      percent: changePercent,
+      direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+    },
+  };
+}
+
+/**
+ * Helper: Add date range and period to result object
+ */
+function addDateRangeToResult(
+  result: any,
+  startDate: string,
+  endDate: string,
+  periodDays: number,
+  hasCustomDates: boolean
+): void {
+  result.period = hasCustomDates ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`;
+  result.dateRange = {
+    start: startDate,
+    end: endDate,
+    days: periodDays,
   };
 }
 
@@ -178,13 +237,12 @@ export async function calculateLeadTime(
     endDate?: string;
     compareWithPrevious?: boolean }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     // Get merged PRs in the time period
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -231,11 +289,16 @@ export async function calculateLeadTime(
       ? leadTimes.reduce((a, b) => a + b, 0) / leadTimes.length
       : 0;
 
-    return {
+    const result: any = {
       metric: 'lead_time_for_changes',
       value: Math.round(avgLeadTime * 100) / 100,
       unit: 'hours',
-      period: `last_${days}_days`,
+      period: params.startDate ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+        days: periodDays,
+      },
       details: {
         averageHours: Math.round(avgLeadTime * 100) / 100,
         averageDays: Math.round((avgLeadTime / 24) * 100) / 100,
@@ -244,6 +307,55 @@ export async function calculateLeadTime(
         prs: prDetails,
       },
     };
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+
+      try {
+        const prevPrsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+
+        const prevLeadTimes: number[] = [];
+        for (const pr of prevPrsResponse.items || []) {
+          const createdAt = new Date(pr.created_at);
+          const mergedAt = new Date(pr.closed_at);
+          const nextRelease = releases.find((release: any) => {
+            return new Date(release.published_at) >= mergedAt;
+          });
+          if (nextRelease) {
+            const deployedAt = new Date(nextRelease.published_at);
+            const leadTimeHours = (deployedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+            prevLeadTimes.push(leadTimeHours);
+          }
+        }
+
+        const prevAvgLeadTime = prevLeadTimes.length > 0
+          ? prevLeadTimes.reduce((a, b) => a + b, 0) / prevLeadTimes.length
+          : 0;
+        const change = avgLeadTime - prevAvgLeadTime;
+        const changePercent = prevAvgLeadTime > 0 ? ((change / prevAvgLeadTime) * 100).toFixed(1) : 'N/A';
+
+        result.comparison = {
+          previousPeriod: {
+            value: Math.round(prevAvgLeadTime * 100) / 100,
+            dateRange: prevPeriod,
+          },
+          change: {
+            absolute: Math.round(change * 100) / 100,
+            percent: changePercent,
+            direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+          },
+        };
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate lead time: ${error}`,
@@ -262,12 +374,11 @@ export async function calculatePRMergeTime(
     endDate?: string;
     compareWithPrevious?: boolean }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -296,11 +407,16 @@ export async function calculatePRMergeTime(
       ? mergeTimes.reduce((a, b) => a + b, 0) / mergeTimes.length
       : 0;
 
-    return {
+    const result: any = {
       metric: 'pr_merge_time',
       value: Math.round(avgMergeTime * 100) / 100,
       unit: 'hours',
-      period: `last_${days}_days`,
+      period: params.startDate ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+        days: periodDays,
+      },
       details: {
         averageHours: Math.round(avgMergeTime * 100) / 100,
         medianHours: mergeTimes.length > 0 ? Math.round(mergeTimes.sort()[Math.floor(mergeTimes.length / 2)] * 100) / 100 : 0,
@@ -308,6 +424,49 @@ export async function calculatePRMergeTime(
         prs: prDetails,
       },
     };
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+
+      try {
+        const prevPrsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+
+        const prevMergeTimes: number[] = [];
+        for (const pr of prevPrsResponse.items || []) {
+          const createdAt = new Date(pr.created_at);
+          const mergedAt = new Date(pr.closed_at);
+          const mergeTimeHours = (mergedAt.getTime() - createdAt.getTime()) / (1000 * 60 * 60);
+          prevMergeTimes.push(mergeTimeHours);
+        }
+
+        const prevAvgMergeTime = prevMergeTimes.length > 0
+          ? prevMergeTimes.reduce((a, b) => a + b, 0) / prevMergeTimes.length
+          : 0;
+        const change = avgMergeTime - prevAvgMergeTime;
+        const changePercent = prevAvgMergeTime > 0 ? ((change / prevAvgMergeTime) * 100).toFixed(1) : 'N/A';
+
+        result.comparison = {
+          previousPeriod: {
+            value: Math.round(prevAvgMergeTime * 100) / 100,
+            dateRange: prevPeriod,
+          },
+          change: {
+            absolute: Math.round(change * 100) / 100,
+            percent: changePercent,
+            direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+          },
+        };
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate PR merge time: ${error}`,
@@ -339,7 +498,7 @@ export async function calculatePRThroughput(
 
   try {
     // Calculate current period
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -514,9 +673,9 @@ export async function calculateChangeFailureRate(
     endDate?: string;
     compareWithPrevious?: boolean; incidentLabels?: string[] }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const incidentLabels = params.incidentLabels || ['incident', 'production', 'outage', 'bug'];
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     // Get releases
@@ -525,17 +684,14 @@ export async function calculateChangeFailureRate(
       config.access_token
     );
 
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
-
+    const cutoffDate = new Date(startDate);
     const recentReleases = releases.filter((release: any) => {
       return new Date(release.published_at) >= cutoffDate;
     });
 
     // Search for production incidents
     const labelQuery = incidentLabels.map(l => `label:${l}`).join(' ');
-    const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
-    const searchQuery = `repo:${owner}/${repo} is:issue ${labelQuery} created:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:issue ${labelQuery} created:${startDate}..${endDate}`;
 
     const incidentsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
@@ -543,11 +699,8 @@ export async function calculateChangeFailureRate(
     );
 
     // Get revert commits
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - days);
-
     const commits = await getGithubData(
-      `https://api.github.com/repos/${owner}/${repo}/commits?since=${sinceDate.toISOString()}&per_page=100`,
+      `https://api.github.com/repos/${owner}/${repo}/commits?since=${new Date(startDate).toISOString()}&until=${new Date(endDate).toISOString()}&per_page=100`,
       config.access_token
     );
 
@@ -559,11 +712,10 @@ export async function calculateChangeFailureRate(
     const totalDeployments = recentReleases.length || 1;
     const failureRate = (totalFailures / totalDeployments) * 100;
 
-    return {
+    const result: any = {
       metric: 'change_failure_rate',
       value: Math.round(failureRate * 100) / 100,
       unit: 'percentage',
-      period: `last_${days}_days`,
       details: {
         totalDeployments: totalDeployments,
         totalFailures: totalFailures,
@@ -578,6 +730,49 @@ export async function calculateChangeFailureRate(
         })),
       },
     };
+
+    // Add date range
+    addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      try {
+        // Get previous period releases
+        const prevCutoffDate = new Date(prevPeriod.startDate);
+        const prevRecentReleases = releases.filter((release: any) => {
+          const releaseDate = new Date(release.published_at);
+          return releaseDate >= prevCutoffDate && releaseDate <= new Date(prevPeriod.endDate);
+        });
+
+        // Get previous period incidents
+        const prevSearchQuery = `repo:${owner}/${repo} is:issue ${labelQuery} created:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+        const prevIncidentsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+
+        // Get previous period revert commits
+        const prevCommits = await getGithubData(
+          `https://api.github.com/repos/${owner}/${repo}/commits?since=${new Date(prevPeriod.startDate).toISOString()}&until=${new Date(prevPeriod.endDate).toISOString()}&per_page=100`,
+          config.access_token
+        );
+
+        const prevRevertCommits = prevCommits.filter((commit: any) =>
+          commit.commit.message.toLowerCase().includes('revert')
+        );
+
+        const prevTotalFailures = (prevIncidentsResponse.total_count || 0) + prevRevertCommits.length;
+        const prevTotalDeployments = prevRecentReleases.length || 1;
+        const prevFailureRate = (prevTotalFailures / prevTotalDeployments) * 100;
+
+        _addComparisonToResult(result, failureRate, prevFailureRate, startDate, endDate);
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate change failure rate: ${error}`,
@@ -596,9 +791,9 @@ export async function calculateHotfixRate(
     endDate?: string;
     compareWithPrevious?: boolean; hotfixPatterns?: string[] }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const hotfixPatterns = params.hotfixPatterns || ['hotfix', 'emergency', 'patch'];
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     const releases = await getGithubData(
@@ -606,11 +801,12 @@ export async function calculateHotfixRate(
       config.access_token
     );
 
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+    const cutoffDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
 
     const recentReleases = releases.filter((release: any) => {
-      return new Date(release.published_at) >= cutoffDate;
+      const releaseDate = new Date(release.published_at);
+      return releaseDate >= cutoffDate && releaseDate <= endDateObj;
     });
 
     const hotfixes = recentReleases.filter((release: any) => {
@@ -621,11 +817,10 @@ export async function calculateHotfixRate(
     const totalReleases = recentReleases.length || 1;
     const hotfixRate = (hotfixes.length / totalReleases) * 100;
 
-    return {
+    const result: any = {
       metric: 'hotfix_rate',
       value: Math.round(hotfixRate * 100) / 100,
       unit: 'percentage',
-      period: `last_${days}_days`,
       details: {
         totalReleases: totalReleases,
         hotfixes: hotfixes.length,
@@ -638,6 +833,37 @@ export async function calculateHotfixRate(
         })),
       },
     };
+
+    // Add date range
+    addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      try {
+        const prevCutoffDate = new Date(prevPeriod.startDate);
+        const prevEndDate = new Date(prevPeriod.endDate);
+
+        const prevRecentReleases = releases.filter((release: any) => {
+          const releaseDate = new Date(release.published_at);
+          return releaseDate >= prevCutoffDate && releaseDate <= prevEndDate;
+        });
+
+        const prevHotfixes = prevRecentReleases.filter((release: any) => {
+          const releaseText = `${release.name} ${release.tag_name}`.toLowerCase();
+          return hotfixPatterns.some(pattern => releaseText.includes(pattern));
+        });
+
+        const prevTotalReleases = prevRecentReleases.length || 1;
+        const prevHotfixRate = (prevHotfixes.length / prevTotalReleases) * 100;
+
+        _addComparisonToResult(result, hotfixRate, prevHotfixRate, startDate, endDate);
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate hotfix rate: ${error}`,
@@ -656,24 +882,20 @@ export async function calculateRevertRate(
     endDate?: string;
     compareWithPrevious?: boolean }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     // Get merged PRs
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
     );
 
     // Get revert commits
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - days);
-
     const commits = await getGithubData(
-      `https://api.github.com/repos/${owner}/${repo}/commits?since=${sinceDate.toISOString()}&per_page=100`,
+      `https://api.github.com/repos/${owner}/${repo}/commits?since=${new Date(startDate).toISOString()}&until=${new Date(endDate).toISOString()}&per_page=100`,
       config.access_token
     );
 
@@ -684,11 +906,10 @@ export async function calculateRevertRate(
     const totalPRs = prsResponse.total_count || 1;
     const revertRate = (revertCommits.length / totalPRs) * 100;
 
-    return {
+    const result: any = {
       metric: 'revert_rate',
       value: Math.round(revertRate * 100) / 100,
       unit: 'percentage',
-      period: `last_${days}_days`,
       details: {
         totalPRs: totalPRs,
         reverts: revertCommits.length,
@@ -702,6 +923,41 @@ export async function calculateRevertRate(
         })),
       },
     };
+
+    // Add date range
+    addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      try {
+        // Get previous period merged PRs
+        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+        const prevPrsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+
+        // Get previous period revert commits
+        const prevCommits = await getGithubData(
+          `https://api.github.com/repos/${owner}/${repo}/commits?since=${new Date(prevPeriod.startDate).toISOString()}&until=${new Date(prevPeriod.endDate).toISOString()}&per_page=100`,
+          config.access_token
+        );
+
+        const prevRevertCommits = prevCommits.filter((commit: any) =>
+          commit.commit.message.toLowerCase().includes('revert')
+        );
+
+        const prevTotalPRs = prevPrsResponse.total_count || 1;
+        const prevRevertRate = (prevRevertCommits.length / prevTotalPRs) * 100;
+
+        _addComparisonToResult(result, revertRate, prevRevertRate, startDate, endDate);
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate revert rate: ${error}`,
@@ -720,12 +976,11 @@ export async function calculatePRSize(
     endDate?: string;
     compareWithPrevious?: boolean }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -764,11 +1019,10 @@ export async function calculatePRSize(
       ? prSizes.reduce((a, b) => a + b, 0) / prSizes.length
       : 0;
 
-    return {
+    const result: any = {
       metric: 'pr_size',
       value: Math.round(avgSize),
       unit: 'lines_changed',
-      period: `last_${days}_days`,
       details: {
         averageSize: Math.round(avgSize),
         medianSize: prSizes.length > 0 ? Math.round(prSizes.sort()[Math.floor(prSizes.length / 2)]) : 0,
@@ -776,6 +1030,49 @@ export async function calculatePRSize(
         prs: prDetails,
       },
     };
+
+    // Add date range
+    addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      try {
+        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+        const prevPrsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+
+        const prevPrSizes: number[] = [];
+
+        // Get detailed PR info for each previous period PR
+        for (const pr of (prevPrsResponse.items || []).slice(0, 30)) {
+          try {
+            const prData = await getGithubData(
+              pr.pull_request.url,
+              config.access_token
+            );
+
+            const totalChanges = (prData.additions || 0) + (prData.deletions || 0);
+            prevPrSizes.push(totalChanges);
+          } catch (error) {
+            // Skip PRs that can't be fetched
+            continue;
+          }
+        }
+
+        const prevAvgSize = prevPrSizes.length > 0
+          ? prevPrSizes.reduce((a, b) => a + b, 0) / prevPrSizes.length
+          : 0;
+
+        _addComparisonToResult(result, avgSize, prevAvgSize, startDate, endDate);
+      } catch (error) {
+        console.error('Failed to calculate previous period comparison:', error);
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate PR size: ${error}`,
