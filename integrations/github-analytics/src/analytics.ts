@@ -11,17 +11,62 @@ interface AnalyticsConfig {
   repo?: string;
 }
 
+interface DateRangeParams {
+  days?: number;
+  startDate?: string;
+  endDate?: string;
+}
+
 /**
  * Helper: Calculate date range for metrics
+ * Supports both relative (days) and absolute (startDate/endDate) ranges
  */
-function getDateRange(days: number = 7): { startDate: string; endDate: string } {
-  const endDate = new Date();
-  const startDate = new Date();
-  startDate.setDate(endDate.getDate() - days);
+function getDateRange(params: DateRangeParams = {}): { startDate: string; endDate: string; periodDays: number } {
+  let startDate: Date;
+  let endDate: Date;
+
+  if (params.startDate && params.endDate) {
+    // Absolute date range
+    startDate = new Date(params.startDate);
+    endDate = new Date(params.endDate);
+  } else if (params.startDate) {
+    // Start date to today
+    startDate = new Date(params.startDate);
+    endDate = new Date();
+  } else {
+    // Relative range (default 7 days)
+    const days = params.days || 7;
+    endDate = new Date();
+    startDate = new Date();
+    startDate.setDate(endDate.getDate() - days);
+  }
+
+  const periodDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
 
   return {
     startDate: startDate.toISOString().split('T')[0],
     endDate: endDate.toISOString().split('T')[0],
+    periodDays,
+  };
+}
+
+/**
+ * Helper: Calculate previous period for comparison
+ */
+function getPreviousPeriod(currentStart: string, currentEnd: string): { startDate: string; endDate: string } {
+  const start = new Date(currentStart);
+  const end = new Date(currentEnd);
+  const periodDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+
+  const prevEnd = new Date(start);
+  prevEnd.setDate(prevEnd.getDate() - 1);
+
+  const prevStart = new Date(prevEnd);
+  prevStart.setDate(prevStart.getDate() - periodDays + 1);
+
+  return {
+    startDate: prevStart.toISOString().split('T')[0],
+    endDate: prevEnd.toISOString().split('T')[0],
   };
 }
 
@@ -31,10 +76,21 @@ function getDateRange(days: number = 7): { startDate: string; endDate: string } 
  */
 export async function calculateDeploymentFrequency(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: {
+    owner: string;
+    repo: string;
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean;
+  }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
+  const { startDate, endDate, periodDays } = getDateRange({
+    days: params.days,
+    startDate: params.startDate,
+    endDate: params.endDate,
+  });
 
   try {
     // Get all releases
@@ -43,21 +99,27 @@ export async function calculateDeploymentFrequency(
       config.access_token
     );
 
-    // Filter releases from the last N days
-    const cutoffDate = new Date();
-    cutoffDate.setDate(cutoffDate.getDate() - days);
+    // Filter releases for current period
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    end.setHours(23, 59, 59, 999);
 
     const recentReleases = releases.filter((release: any) => {
       const publishedAt = new Date(release.published_at);
-      return publishedAt >= cutoffDate;
+      return publishedAt >= start && publishedAt <= end;
     });
 
-    return {
+    const result: any = {
       metric: 'deployment_frequency',
       value: recentReleases.length,
-      period: `last_${days}_days`,
+      period: params.startDate ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`,
       unit: 'deployments',
-      perWeek: (recentReleases.length / days) * 7,
+      perWeek: (recentReleases.length / periodDays) * 7,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+        days: periodDays,
+      },
       details: {
         totalReleases: recentReleases.length,
         releases: recentReleases.map((r: any) => ({
@@ -68,6 +130,36 @@ export async function calculateDeploymentFrequency(
         })),
       },
     };
+
+    // Add comparison with previous period
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      const prevStart = new Date(prevPeriod.startDate);
+      const prevEnd = new Date(prevPeriod.endDate);
+      prevEnd.setHours(23, 59, 59, 999);
+
+      const prevReleases = releases.filter((release: any) => {
+        const publishedAt = new Date(release.published_at);
+        return publishedAt >= prevStart && publishedAt <= prevEnd;
+      });
+
+      const change = recentReleases.length - prevReleases.length;
+      const changePercent = prevReleases.length > 0 ? ((change / prevReleases.length) * 100).toFixed(1) : 'N/A';
+
+      result.comparison = {
+        previousPeriod: {
+          value: prevReleases.length,
+          dateRange: prevPeriod,
+        },
+        change: {
+          absolute: change,
+          percent: changePercent,
+          direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+        },
+      };
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate deployment frequency: ${error}`,
@@ -81,11 +173,14 @@ export async function calculateDeploymentFrequency(
  */
 export async function calculateLeadTime(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
-  const { startDate, endDate } = getDateRange(days);
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     // Get merged PRs in the time period
@@ -162,11 +257,14 @@ export async function calculateLeadTime(
  */
 export async function calculatePRMergeTime(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
-  const { startDate, endDate } = getDateRange(days);
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
@@ -223,13 +321,24 @@ export async function calculatePRMergeTime(
  */
 export async function calculatePRThroughput(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: {
+    owner: string;
+    repo: string;
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean;
+  }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
-  const { startDate, endDate } = getDateRange(days);
+  const { startDate, endDate, periodDays } = getDateRange({
+    days: params.days,
+    startDate: params.startDate,
+    endDate: params.endDate,
+  });
 
   try {
+    // Calculate current period
     const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
@@ -237,13 +346,17 @@ export async function calculatePRThroughput(
     );
 
     const prCount = prsResponse.total_count || 0;
-
-    return {
+    const result: any = {
       metric: 'pr_throughput',
       value: prCount,
-      period: `last_${days}_days`,
+      period: params.startDate ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`,
       unit: 'prs_merged',
-      perWeek: (prCount / days) * 7,
+      perWeek: (prCount / periodDays) * 7,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+        days: periodDays,
+      },
       details: {
         totalPRs: prCount,
         prs: (prsResponse.items || []).map((pr: any) => ({
@@ -254,6 +367,40 @@ export async function calculatePRThroughput(
         })),
       },
     };
+
+    // Add comparison with previous period if requested
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+
+      try {
+        const prevPrsResponse = await getGithubData(
+          `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
+          config.access_token
+        );
+        const prevPrCount = prevPrsResponse.total_count || 0;
+        const change = prCount - prevPrCount;
+        const changePercent = prevPrCount > 0 ? ((change / prevPrCount) * 100).toFixed(1) : 'N/A';
+
+        result.comparison = {
+          previousPeriod: {
+            value: prevPrCount,
+            dateRange: prevPeriod,
+          },
+          change: {
+            absolute: change,
+            percent: changePercent,
+            direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+          },
+        };
+      } catch (error) {
+        result.comparison = {
+          error: 'Failed to fetch previous period data',
+        };
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate PR throughput: ${error}`,
@@ -267,28 +414,41 @@ export async function calculatePRThroughput(
  */
 export async function calculateCommitFrequency(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; branch?: string; days?: number }
+  params: { owner: string; repo: string; branch?: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean }
 ): Promise<any> {
-  const days = params.days || 7;
   const { owner, repo } = params;
   const branch = params.branch || 'main';
+  const { startDate, endDate, periodDays } = getDateRange({
+    days: params.days,
+    startDate: params.startDate,
+    endDate: params.endDate,
+  });
 
   try {
-    const sinceDate = new Date();
-    sinceDate.setDate(sinceDate.getDate() - days);
+    const sinceDate = new Date(startDate);
+    const untilDate = new Date(endDate);
+    untilDate.setHours(23, 59, 59, 999);
 
     const commits = await getGithubData(
-      `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${sinceDate.toISOString()}&per_page=100`,
+      `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${sinceDate.toISOString()}&until=${untilDate.toISOString()}&per_page=100`,
       config.access_token
     );
 
-    return {
+    const result: any = {
       metric: 'commit_frequency',
       value: commits.length,
-      period: `last_${days}_days`,
+      period: params.startDate ? `${startDate}_to_${endDate}` : `last_${periodDays}_days`,
       unit: 'commits',
-      perWeek: (commits.length / days) * 7,
+      perWeek: (commits.length / periodDays) * 7,
       branch: branch,
+      dateRange: {
+        start: startDate,
+        end: endDate,
+        days: periodDays,
+      },
       details: {
         totalCommits: commits.length,
         commits: commits.map((commit: any) => ({
@@ -300,6 +460,42 @@ export async function calculateCommitFrequency(
         })),
       },
     };
+
+    // Add comparison with previous period
+    if (params.compareWithPrevious) {
+      const prevPeriod = getPreviousPeriod(startDate, endDate);
+      const prevStart = new Date(prevPeriod.startDate);
+      const prevEnd = new Date(prevPeriod.endDate);
+      prevEnd.setHours(23, 59, 59, 999);
+
+      try {
+        const prevCommits = await getGithubData(
+          `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${prevStart.toISOString()}&until=${prevEnd.toISOString()}&per_page=100`,
+          config.access_token
+        );
+
+        const change = commits.length - prevCommits.length;
+        const changePercent = prevCommits.length > 0 ? ((change / prevCommits.length) * 100).toFixed(1) : 'N/A';
+
+        result.comparison = {
+          previousPeriod: {
+            value: prevCommits.length,
+            dateRange: prevPeriod,
+          },
+          change: {
+            absolute: change,
+            percent: changePercent,
+            direction: change > 0 ? 'up' : change < 0 ? 'down' : 'flat',
+          },
+        };
+      } catch (error) {
+        result.comparison = {
+          error: 'Failed to fetch previous period data',
+        };
+      }
+    }
+
+    return result;
   } catch (error) {
     return {
       error: `Failed to calculate commit frequency: ${error}`,
@@ -313,7 +509,10 @@ export async function calculateCommitFrequency(
  */
 export async function calculateChangeFailureRate(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number; incidentLabels?: string[] }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean; incidentLabels?: string[] }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
@@ -335,7 +534,7 @@ export async function calculateChangeFailureRate(
 
     // Search for production incidents
     const labelQuery = incidentLabels.map(l => `label:${l}`).join(' ');
-    const { startDate, endDate } = getDateRange(days);
+    const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
     const searchQuery = `repo:${owner}/${repo} is:issue ${labelQuery} created:>=${startDate}`;
 
     const incidentsResponse = await getGithubData(
@@ -392,7 +591,10 @@ export async function calculateChangeFailureRate(
  */
 export async function calculateHotfixRate(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number; hotfixPatterns?: string[] }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean; hotfixPatterns?: string[] }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
@@ -449,11 +651,14 @@ export async function calculateHotfixRate(
  */
 export async function calculateRevertRate(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
-  const { startDate, endDate } = getDateRange(days);
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     // Get merged PRs
@@ -510,11 +715,14 @@ export async function calculateRevertRate(
  */
 export async function calculatePRSize(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: { owner: string; repo: string; days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean }
 ): Promise<any> {
   const days = params.days || 7;
   const { owner, repo } = params;
-  const { startDate, endDate } = getDateRange(days);
+  const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
   try {
     const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:>=${startDate}`;
