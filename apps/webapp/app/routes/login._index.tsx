@@ -20,6 +20,7 @@ import {
 } from "~/components/ui/card";
 import { Button } from "~/components/ui";
 import { Mail } from "lucide-react";
+import Logo from "~/components/logo/logo";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await getUserId(request);
@@ -58,16 +59,36 @@ export default function LoginPage() {
   return (
     <LoginPageLayout>
       <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
-        <CardHeader className="flex flex-col items-start">
-          <CardTitle className="text-xl">Welcome back</CardTitle>
-          <CardDescription className="text-md">
-            Create an account or login
-          </CardDescription>
+        <CardHeader className="flex flex-col items-center">
+          <CardTitle className="text-2xl">Welcome to Core</CardTitle>
         </CardHeader>
 
         <CardContent className="pt-2">
           <Fieldset className="w-full">
             <div className="flex flex-col gap-y-2">
+              <div className="mb-10 flex justify-center">
+                <Logo size={60} />
+              </div>
+
+              <p className="text-muted-foreground/70 mb-2 text-center">
+                By connecting a third-party account, you <br /> agree to our{" "}
+                <a
+                  href="https://getcore.me/terms"
+                  target="_blank"
+                  className="text-muted-foreground underline"
+                >
+                  Terms of Service
+                </a>{" "}
+                and
+                <a
+                  href="https://getcore.me/privacy"
+                  target="_blank"
+                  className="text-muted-foreground underline"
+                >
+                  {" "}
+                  Privacy Policy
+                </a>
+              </p>
               {data.showGoogleAuth && (
                 <Button
                   type="submit"

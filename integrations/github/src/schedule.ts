@@ -284,8 +284,8 @@ async function processUserEvents(
 }
 
 export async function handleSchedule(
-  config: Record<string, string>,
-  state: Record<string, string>,
+  config?: Record<string, string>,
+  state?: Record<string, string>,
 ) {
   try {
     const integrationConfiguration = config;

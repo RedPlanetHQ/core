@@ -46,7 +46,7 @@ export function ConversationView({ log }: ConversationViewProps) {
     <div className="flex flex-col items-center p-4 pt-0">
       {/* Content */}
       <div className="mb-4 w-full">
-        <div className="rounded-md">
+        <div className="text-md rounded-md">
           <StyledMarkdown>{log.ingestText}</StyledMarkdown>
         </div>
       </div>

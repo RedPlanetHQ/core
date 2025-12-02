@@ -2,6 +2,7 @@ import { TeamIcon } from "../ui/team-icon";
 import { type Label } from "@prisma/client";
 import { Button } from "../ui";
 import { useNavigate, useNavigation } from "@remix-run/react";
+import { Plus } from "lucide-react";
 
 interface DocumentListProps {
   labels: Label[];
@@ -16,7 +17,19 @@ export const DocumentList = ({ labels }: DocumentListProps) => {
 
   return (
     <div className="px-2">
-      <h2 className="text-muted-foreground mb-1"> Labels </h2>
+      <div className="flex w-full justify-between">
+        <h2 className="text-muted-foreground mb-1"> Labels </h2>
+        <Button
+          variant="ghost"
+          size="xs"
+          className="rounded"
+          onClick={() => {
+            navigate("/settings/labels");
+          }}
+        >
+          <Plus size={14} />
+        </Button>
+      </div>
       <div className="flex flex-col gap-0.5">
         <div>
           <Button

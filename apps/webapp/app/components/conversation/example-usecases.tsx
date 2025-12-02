@@ -242,18 +242,13 @@ export const ExampleUseCases = ({ onSelectPrompt }: ExampleUseCasesProps) => {
               {useCases
                 .filter((useCase) => useCase.category === category.category)
                 .map((useCase, index) => {
-                  const Icon = useCase.icon;
                   return (
                     <div
                       key={index}
                       className={cn(
-                        "group relative flex flex-col rounded-xl bg-white p-4 transition-all",
-                        "dark:border-gray-700 dark:bg-gray-800",
+                        "group hover:bg-background-3/80 relative flex flex-col rounded-xl bg-white p-4 transition-all",
                       )}
                     >
-                      <div className="mb-4 flex h-8 w-8 items-center justify-center rounded-lg bg-gray-100 dark:bg-gray-700">
-                        <Icon className="h-6 w-6" />
-                      </div>
                       <h3 className="mb-4 text-base">{useCase.title}</h3>
                       <div className="mt-auto flex justify-end">
                         <Button

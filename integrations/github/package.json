@@ -1,6 +1,6 @@
 {
   "name": "@core/github",
-  "version": "0.1.1",
+  "version": "0.1.7",
   "description": "github extension for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
@@ -59,6 +59,7 @@
     "commander": "^12.0.0",
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
-    "@redplanethq/sdk": "0.1.2"
+    "@redplanethq/sdk": "0.1.9",
+    "@modelcontextprotocol/sdk": "1.13.2"
   }
 }

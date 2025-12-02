@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@redplanethq/sdk':
-        specifier: 0.1.8
-        version: 0.1.8
+        specifier: 0.1.9
+        version: 0.1.9
       axios:
         specifier: ^1.7.9
         version: 1.13.2
@@ -287,8 +287,8 @@ packages:
     resolution: {integrity: sha512-QNqXyfVS2wm9hweSYD2O7F0G06uurj9kZ96TRQE5Y9hU7+tgdZwIkbAKc5Ocy1HxEY2kuDQa6cQ1WRs/O5LFKA==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@redplanethq/sdk@0.1.8':
-    resolution: {integrity: sha512-h4rQlOlNng8gaL9OGMl6dcYKQzmyMqfm4HSampfGzgq6q/h5svTeCPlezLlQMbh5XcZSiJvsrQf05SJ2MTGEzQ==}
+  '@redplanethq/sdk@0.1.9':
+    resolution: {integrity: sha512-fi+mtKTTdKPp1E6gCl9W8Ri7ZuULs0J/s5Hy5am1mg/lQ1foX+mLoBE08kr4p1LTNXJYJFsY7J4PHMe16AcN/g==}
     engines: {node: '>=18.0.0'}
 
   '@rtsao/scc@1.1.0':
@@ -1710,7 +1710,7 @@ snapshots:
 
   '@pkgr/core@0.2.9': {}
 
-  '@redplanethq/sdk@0.1.8':
+  '@redplanethq/sdk@0.1.9':
     dependencies:
       commander: 14.0.0
 

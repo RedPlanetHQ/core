@@ -30,6 +30,7 @@ import {
   getUserSession,
 } from "~/services/sessionStorage.server";
 import { env } from "~/env.server";
+import Logo from "~/components/logo/logo";
 
 export const meta: MetaFunction = ({ matches }) => {
   const parentMeta = matches
@@ -145,17 +146,23 @@ export default function LoginMagicLinkPage() {
         <div className="flex flex-col items-center justify-center">
           {data.magicLinkSent ? (
             <Card className="min-w-[0] rounded-md bg-transparent p-3 md:min-w-[500px]">
-              <CardHeader className="flex flex-col items-start">
-                <CardTitle className="mb-0 text-xl">
+              <CardHeader className="flex flex-col items-center">
+                <CardTitle className="mb-0 text-2xl">
                   Check your magic link
                 </CardTitle>
-                <CardDescription className="text-md">
-                  The magic link is printed in the container logs if you are
-                  using Docker, otherwise check your server logs.
-                </CardDescription>
               </CardHeader>
 
               <Fieldset className="flex w-full flex-col items-center gap-y-2 px-2">
+                <div className="mb-10 flex justify-center">
+                  <Logo size={60} />
+                </div>
+
+                <p className="text-md text-muted-foreground text-center">
+                  {" "}
+                  The magic link is printed in the container <br />
+                  logs if you are using Docker, otherwise <br />
+                  check your server logs.
+                </p>
                 <FormButtons
                   cancelButton={<></>}
                   confirmButton={
@@ -170,19 +177,40 @@ export default function LoginMagicLinkPage() {
                       Re-enter email
                     </Button>
                   }
+                  className="justify-center"
                 />
               </Fieldset>
             </Card>
           ) : (
             <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
-              <CardHeader className="flex flex-col items-start">
-                <CardTitle className="text-xl">Welcome back</CardTitle>
-                <CardDescription className="text-md">
-                  Create an account or login using email
-                </CardDescription>
+              <CardHeader className="flex flex-col items-center">
+                <CardTitle className="text-2xl">Welcome to Core</CardTitle>
               </CardHeader>
               <CardContent className="pt-2 pl-2">
                 <Fieldset className="flex w-full flex-col items-center gap-y-2">
+                  <div className="mb-10 flex justify-center">
+                    <Logo size={60} />
+                  </div>
+
+                  <p className="text-muted-foreground/70 mb-2 text-center">
+                    By connecting a third-party account, you <br /> agree to our{" "}
+                    <a
+                      href="https://getcore.me/terms"
+                      target="_blank"
+                      className="text-muted-foreground underline"
+                    >
+                      Terms of Service
+                    </a>{" "}
+                    and
+                    <a
+                      href="https://getcore.me/privacy"
+                      target="_blank"
+                      className="text-muted-foreground underline"
+                    >
+                      {" "}
+                      Privacy Policy
+                    </a>
+                  </p>
                   <Input
                     type="email"
                     name="email"

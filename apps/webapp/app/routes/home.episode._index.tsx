@@ -27,7 +27,7 @@ export default function NewEpisode() {
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="episode-details flex h-full flex-col">
         <PageHeader title="New document" />
 
         <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">

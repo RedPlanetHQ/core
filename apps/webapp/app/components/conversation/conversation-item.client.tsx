@@ -113,7 +113,7 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
     >
       <div
         className={cn(
-          "flex w-full flex-col",
+          "flex w-fit flex-col",
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >

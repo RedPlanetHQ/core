@@ -52,6 +52,11 @@ async function init() {
   app.use(morgan("tiny"));
 
   app.get("/api/v1/mcp", async (req, res) => {
+    // Enable CORS for all domains
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
     const authenticationResult = await module.authenticateHybridRequest(
       req as any,
       {
@@ -77,6 +82,11 @@ async function init() {
   });
 
   app.post("/api/v1/mcp", async (req, res) => {
+    // Enable CORS for all domains
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
     const authenticationResult = await module.authenticateHybridRequest(
       req as any,
       {
@@ -121,6 +131,11 @@ async function init() {
   });
 
   app.delete("/api/v1/mcp", async (req, res) => {
+    // Enable CORS for all domains
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+
     const authenticationResult = await module.authenticateHybridRequest(
       req as any,
       {
@@ -146,6 +161,10 @@ async function init() {
   });
 
   app.options("/api/v1/mcp", (_, res) => {
+    // Enable CORS for all domains
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    res.setHeader("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     res.json({});
   });
 
@@ -187,11 +206,7 @@ async function init() {
         "client_credentials",
       ],
       code_challenge_methods_supported: ["S256", "plain"],
-      token_endpoint_auth_methods_supported: [
-        "client_secret_basic",
-        "none",
-        "client_secret_post",
-      ],
+      token_endpoint_auth_methods_supported: ["client_secret_post"],
     });
   });
 

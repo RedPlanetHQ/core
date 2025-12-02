@@ -46,7 +46,7 @@ export async function action({ request }: ActionFunctionArgs) {
       response_types: ["code"],
       redirect_uris: client.redirectUris.split(","),
       scope: client.allowedScopes,
-      token_endpoint_auth_method: "client_secret_basic",
+      token_endpoint_auth_method: "client_secret_post",
     });
   } catch (error) {
     console.error("Dynamic client registration error:", error);
