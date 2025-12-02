@@ -1,20 +1,35 @@
-export async function integrationCreate(eventBody: any) {
-  const messages = [];
+import { getGithubData } from "./utils";
 
-  // Extract OAuth tokens from the event body
-  const accessToken = eventBody.access_token;
+export async function integrationCreate(data: any) {
+  const { oauthResponse } = data;
+  const integrationConfiguration = {
+    refresh_token: oauthResponse.refresh_token,
+    access_token: oauthResponse.access_token,
+  };
 
-  if (!accessToken) {
-    throw new Error('No access token provided');
+  if (!integrationConfiguration.access_token) {
+    throw new Error("No access token provided");
   }
 
-  // Return configuration message
-  messages.push({
-    type: 'config',
-    data: {
-      access_token: accessToken,
-    },
-  });
+  const user = await getGithubData(
+    "https://api.github.com/user",
+    integrationConfiguration.access_token
+  );
 
-  return messages;
+  return [
+    {
+      type: "account",
+      data: {
+        settings: {
+          login: user.login,
+          username: user.login,
+        },
+        accountId: `github-analytics-${user.id.toString()}`,
+        config: {
+          ...integrationConfiguration,
+          mcp: { tokens: { access_token: integrationConfiguration.access_token } },
+        },
+      },
+    },
+  ];
 }
