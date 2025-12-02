@@ -30,7 +30,7 @@ export const DocumentList = ({ labels }: DocumentListProps) => {
           <Plus size={14} />
         </Button>
       </div>
-      <div className="flex flex-col gap-0.5">
+      <div className="text-foreground flex flex-col gap-0.5">
         <div>
           <Button
             variant="secondary"
