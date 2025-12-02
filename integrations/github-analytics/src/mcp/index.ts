@@ -15,22 +15,31 @@ import {
 
 // Schema definitions for all analytics actions
 const RepoSchema = z.object({
-  owner: z.string().describe("Repository owner (organization or user)"),
-  repo: z.string().describe("Repository name"),
-  days: z.number().optional().describe("Number of days to analyze (default: 7)"),
+  owner: z.string().describe('Repository owner (organization or user)'),
+  repo: z.string().describe('Repository name'),
+  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
+  endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
+  compareWithPrevious: z.boolean().optional().describe('Compare with previous period (week-over-week, default: false)'),
 });
 
 const CommitFrequencySchema = z.object({
-  owner: z.string().describe("Repository owner (organization or user)"),
-  repo: z.string().describe("Repository name"),
-  branch: z.string().optional().describe("Branch name to analyze (default: main)"),
-  days: z.number().optional().describe("Number of days to analyze (default: 7)"),
+  owner: z.string().describe('Repository owner (organization or user)'),
+  repo: z.string().describe('Repository name'),
+  branch: z.string().optional().describe('Branch name to analyze (default: main)'),
+  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
+  endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
+  compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
 });
 
 const ChangeFailureRateSchema = z.object({
-  owner: z.string().describe("Repository owner (organization or user)"),
-  repo: z.string().describe("Repository name"),
-  days: z.number().optional().describe("Number of days to analyze (default: 7)"),
+  owner: z.string().describe('Repository owner (organization or user)'),
+  repo: z.string().describe('Repository name'),
+  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
+  endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
+  compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
   incidentLabels: z
     .array(z.string())
     .optional()
@@ -40,9 +49,12 @@ const ChangeFailureRateSchema = z.object({
 });
 
 const HotfixRateSchema = z.object({
-  owner: z.string().describe("Repository owner (organization or user)"),
-  repo: z.string().describe("Repository name"),
-  days: z.number().optional().describe("Number of days to analyze (default: 7)"),
+  owner: z.string().describe('Repository owner (organization or user)'),
+  repo: z.string().describe('Repository name'),
+  days: z.number().optional().describe('Number of days to analyze (default: 7)'),
+  startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
+  endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
+  compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
   hotfixPatterns: z
     .array(z.string())
     .optional()
