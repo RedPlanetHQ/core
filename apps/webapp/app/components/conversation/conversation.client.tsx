@@ -26,8 +26,9 @@ export const ConversationNew = ({
   // Handle selecting a prompt from examples
   const handleSelectPrompt = useCallback(
     (prompt: string) => {
-      editor?.commands.setContent(`<p>${prompt}</p>`);
-
+      const content = `<p>${prompt}</p>`;
+      editor?.commands.setContent(content);
+      setContent(content);
       setTitle(prompt);
     },
     [editor],
