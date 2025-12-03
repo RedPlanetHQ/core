@@ -9,6 +9,7 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "~/components/ui/accordion";
+import { SingleEpisodeOptions } from "~/components/logs/single-episode-options";
 import { cn } from "~/lib/utils";
 
 interface SessionConversationViewProps {
@@ -41,6 +42,17 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
     Record<string, InvalidFact[]>
   >({});
   const [factsLoading, setFactsLoading] = useState(false);
+
+  const refreshEpisodes = () => {
+    setLoading(true);
+    fetch(`/api/v1/episodes/session/${log.sessionId}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setEpisodes(data.episodes || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (!log.sessionId) {
@@ -118,8 +130,6 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
     );
   }
 
-  console.log(episodes);
-
   return (
     <div className="flex flex-col gap-4 p-4 pt-0">
       <div className="flex flex-col gap-4">
@@ -132,15 +142,17 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
           {episodes.map((episode, index) => (
             <AccordionItem value={episode.id} key={episode.id} className="mb-2">
               <AccordionTrigger className="bg-background-3 hover:shadow-1 flex w-full flex-col justify-between rounded p-4 text-base">
-                <div className="flex w-full justify-between">
-                  <div className="text-md font-medium">
-                    {" "}
-                    Episode {index + 1}
+                <div className="flex w-full items-center justify-between">
+                  <div className="text-md font-medium">Episode {index + 1}</div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-muted-foreground shrink-0 text-sm">
+                      {new Date(episode.createdAt).toLocaleString()}
+                    </span>
+                    <SingleEpisodeOptions
+                      episodeId={episode.id}
+                      onDelete={refreshEpisodes}
+                    />
                   </div>
-                  <span className="text-muted-foreground shrink-0 text-sm">
-                    {" "}
-                    {new Date(episode.createdAt).toLocaleString()}
-                  </span>
                 </div>
                 <div className="flex w-full">
                   <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start gap-2">

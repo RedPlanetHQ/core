@@ -45,10 +45,10 @@ export default function Dashboard() {
   return (
     <>
       <PageHeader title="Memory graph" />
-      <div className="home flex h-[calc(100vh)] flex-col overflow-y-auto p-3 text-base md:h-[calc(100vh_-_56px)]">
+      <div className="home flex h-[calc(100vh)] flex-col overflow-y-auto text-base md:h-[calc(100vh_-_56px)]">
         <div className="flex grow items-center justify-center rounded">
           {loading ? (
-            <div className="flex h-full w-full flex-col items-center justify-center">
+            <div className="flex h-full w-full flex-col items-center justify-center p-3">
               <LoaderCircle size={18} className="mr-1 animate-spin" />
               <span className="text-muted-foreground">Loading graph...</span>
             </div>

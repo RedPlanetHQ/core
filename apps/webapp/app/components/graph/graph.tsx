@@ -329,7 +329,7 @@ export const Graph = forwardRef<GraphRef, GraphProps>(
       return {
         scalingRatio: Math.round(scalingRatio * 10) / 10,
         gravity: Math.round(gravity * 10) / 10,
-        iterations: Math.round(complexity),
+        iterations: 10,
       };
     }, []);
 

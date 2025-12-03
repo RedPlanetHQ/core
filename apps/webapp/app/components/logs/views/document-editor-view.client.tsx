@@ -5,7 +5,7 @@ import { EditorContent, EditorRoot } from "novel";
 import { type LogItem } from "~/hooks/use-logs";
 
 import { Badge } from "~/components/ui/badge";
-import { Loader2, Check } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { cn } from "~/lib/utils";
 import {
   extensionsForConversation,
@@ -26,7 +26,7 @@ interface InvalidFact {
 }
 
 interface SessionEpisode {
-  uuid: string;
+  id: string;
   content: string;
   originalContent: string;
   createdAt: string;
@@ -67,7 +67,7 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
         if (fetchedEpisodes.length > 0) {
           setFactsLoading(true);
           const episodeIds = fetchedEpisodes
-            .map((ep: SessionEpisode) => ep.uuid)
+            .map((ep: SessionEpisode) => ep.id)
             .join(",");
 
           fetch(
@@ -198,12 +198,12 @@ export function DocumentEditorView({ log }: DocumentEditorViewProps) {
       ) : (
         <div className="bg-grayAlpha-100 flex flex-col gap-3">
           {episodes.map((episode: any, index: number) => {
-            const facts = invalidFactsByEpisode[episode.uuid] || [];
+            const facts = invalidFactsByEpisode[episode.id] || [];
             if (facts.length === 0) return null;
 
             return (
               <div
-                key={episode.uuid}
+                key={episode.id}
                 className="border-grayAlpha-200 border-t pt-3"
               >
                 <div className="mb-2 text-sm font-medium">

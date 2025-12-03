@@ -133,12 +133,18 @@ export const GraphClustering = forwardRef<
           hover: "#646464",
           text: themeMode === "dark" ? colors.slate[100] : colors.slate[900],
           selected: "#646464",
-          dimmed: colors.pink[300],
+          dimmed:
+            themeMode === "dark"
+              ? colors.slate[700] + "40"
+              : colors.slate[400] + "40", // 25% opacity
         },
         link: {
           stroke: colors.gray[400],
           selected: "#646464",
-          dimmed: themeMode === "dark" ? colors.slate[800] : colors.slate[200],
+          dimmed:
+            themeMode === "dark"
+              ? colors.slate[800] + "20"
+              : colors.slate[300] + "20", // 12.5% opacity
         },
         cluster: {
           labelColor:
@@ -508,22 +514,10 @@ export const GraphClustering = forwardRef<
         gravity *= 0.8;
       }
 
-      const complexity = nodeCount + edgeCount;
-      let durationSeconds: number;
-      if (complexity < 50) {
-        durationSeconds = 2.0;
-      } else if (complexity < 200) {
-        durationSeconds = 3.0;
-      } else if (complexity < 500) {
-        durationSeconds = 4.0;
-      } else {
-        durationSeconds = Math.min(20, 5 + (complexity - 500) * 0.006);
-      }
-
       return {
         scalingRatio: Math.round(scalingRatio * 10) / 10,
         gravity: Math.round(gravity * 10) / 10,
-        duration: forOnboarding ? 1 : Math.round(durationSeconds * 100) / 100, // in seconds
+        duration: 5, // in seconds
       };
     }, []);
 
@@ -654,9 +648,9 @@ export const GraphClustering = forwardRef<
           settings: {
             ...settings,
             barnesHutOptimize: true,
-            strongGravityMode: false, // Marvel doesn't use strong gravity
-            gravity: Math.max(0.1, optimalParams.gravity * 0.005), // Much weaker gravity like Marvel
-            scalingRatio: optimalParams.scalingRatio * 10, // Higher scaling for more spacing
+            strongGravityMode: true, // Enable strong gravity to pull outliers closer
+            gravity: Math.max(0.5, optimalParams.gravity * 0.02), // Stronger gravity to prevent outliers
+            scalingRatio: optimalParams.scalingRatio * 5, // Reduced scaling for tighter layout
             slowDown: 20, // Much slower to preserve cluster positions
             outboundAttractionDistribution: false, // Use standard distribution
             linLogMode: false, // Linear mode
@@ -674,14 +668,14 @@ export const GraphClustering = forwardRef<
 
       // Create Sigma instance
       const sigma = new Sigma(graph, containerRef.current, {
-        renderEdgeLabels: true,
+        renderEdgeLabels: false,
         defaultEdgeColor: "#0000001A",
         defaultNodeColor: theme.node.fill,
         defaultEdgeType: "edges-fast",
         edgeProgramClasses: {
           "edges-fast": EdgeLineProgram,
         },
-        renderLabels: true,
+        renderLabels: false,
         labelRenderedSizeThreshold: 15, // labels appear when node size >= 10px
 
         enableEdgeEvents: true,
@@ -768,14 +762,18 @@ export const GraphClustering = forwardRef<
         graph.forEachNode((nodeId) => {
           if (!connectedNodes.has(nodeId)) {
             const nodeData = graph.getNodeAttribute(nodeId, "nodeData");
-            const originalColor = getNodeColor(nodeData);
+
             const isEpisodeNode =
               nodeData?.attributes.nodeType === "Episode" ||
               (nodeData?.labels && nodeData.labels.includes("Episode"));
 
             // Reduce opacity by using dimmed color
-            graph.setNodeAttribute(nodeId, "color", theme.node.dimmed);
-            graph.setNodeAttribute(nodeId, "size", (isEpisodeNode ? size : size / 2) * 0.6);
+            graph.setNodeAttribute(nodeId, "color", "#0000001A");
+            graph.setNodeAttribute(
+              nodeId,
+              "size",
+              (isEpisodeNode ? size : size / 2) * 0.6,
+            );
             graph.setNodeAttribute(nodeId, "zIndex", 0);
           }
         });
@@ -783,7 +781,7 @@ export const GraphClustering = forwardRef<
         // Dim all edges that are NOT connected
         graph.forEachEdge((edgeId) => {
           if (!connectedEdges.has(edgeId)) {
-            graph.setEdgeAttribute(edgeId, "color", theme.link.dimmed);
+            graph.setEdgeAttribute(edgeId, "color", "#0000000D");
             graph.setEdgeAttribute(edgeId, "size", 0.5);
           }
         });
