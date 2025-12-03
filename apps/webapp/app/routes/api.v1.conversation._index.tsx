@@ -138,8 +138,35 @@ const { loader, action } = createHybridActionApiRoute(
       ? (latestPersona.data as any).episodeBody
       : null;
 
+    // Get user's connected integrations
+    const connectedIntegrations =
+      await IntegrationLoader.getMcpEnabledIntegrationAccounts(
+        authentication.userId,
+        workspace?.id ?? "",
+      );
+
+    const integrationsList = connectedIntegrations
+      .map(
+        (int, index) =>
+          `${index + 1}. **${int.integrationDefinition.name}** (${int.integrationDefinition.slug})`,
+      )
+      .join("\n");
+
     // Build system prompt with persona context if available
     let systemPrompt = REACT_SYSTEM_PROMPT;
+
+    // Add connected integrations context
+    const integrationsContext = `
+<connected_integrations>
+You have access to these ${connectedIntegrations.length} connected integrations:
+${integrationsList}
+
+Use these integrations proactively to help the user. Load tools with \`load_mcp\` when needed.
+</connected_integrations>`;
+
+    console.log(integrationsContext);
+
+    systemPrompt = `${systemPrompt}${integrationsContext}`;
 
     // Add current date and time context
     const now = new Date();
@@ -180,8 +207,7 @@ ${personaContent}
         }),
       ],
       tools,
-
-      stopWhen: [stepCountIs(10), hasAnswer, hasQuestion],
+      stopWhen: [stepCountIs(10)],
     });
 
     result.consumeStream(); // no await
@@ -190,7 +216,6 @@ ${personaContent}
       originalMessages: validatedMessages,
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();
-
         await createConversationHistory(
           lastMessage?.parts,
           body.id,
