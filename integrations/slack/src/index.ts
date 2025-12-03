@@ -1,5 +1,6 @@
 import { integrationCreate } from './account-create';
 import { createActivityEvent } from './create-activity';
+import { getTools, callTool } from './mcp';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -25,6 +26,24 @@ export async function run(eventPayload: IntegrationEventPayload) {
     case IntegrationEventType.PROCESS:
       return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
 
+    case IntegrationEventType.GET_TOOLS: {
+      const tools = await getTools();
+      return tools;
+    }
+
+    case IntegrationEventType.CALL_TOOL: {
+      const config = eventPayload.config as any;
+      const { name, arguments: args } = eventPayload.eventBody;
+
+      const result = await callTool(
+        name,
+        args,
+        config?.access_token
+      );
+
+      return result;
+    }
+
     default:
       return [{ type: 'error', data: `The event payload type is ${eventPayload.event}` }];
   }
@@ -47,11 +66,7 @@ class SlackCLI extends IntegrationCLI {
       description: 'Connect your workspace to Slack. Run your workflows from slack bookmarks',
       icon: 'slack',
       mcp: {
-        command: 'slack-mcp-server',
-        args: [],
-        env: {
-          SLACK_MCP_XOXP_TOKEN: '${config:access_token}',
-        },
+        type: 'cli',
       },
       auth: {
         OAuth2: {
@@ -74,6 +89,11 @@ class SlackCLI extends IntegrationCLI {
             'reactions:read',
             'reactions:write',
             'users.profile:read',
+            'files:read',
+            'files:write',
+            'reminders:read',
+            'reminders:write',
+            'search:read',
           ],
           scope_identifier: 'user_scope',
           scope_separator: ',',

@@ -12,7 +12,6 @@ import {
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
-import { LabelService } from "~/services/label.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 
 // Schema for space ID parameter
@@ -83,13 +82,9 @@ const { action } = createHybridActionApiRoute(
           );
         }
 
-        const { labels, title } = validationResult.data;
+        let { labels, title } = validationResult.data;
 
-        if (
-          ingestionQueue.title === "Persona" ||
-          title === "Persona" ||
-          body.labels
-        ) {
+        if (ingestionQueue.title === "Persona" || title === "Persona") {
           return json(
             {
               error:

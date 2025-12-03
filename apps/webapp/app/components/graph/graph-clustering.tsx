@@ -753,6 +753,41 @@ export const GraphClustering = forwardRef<
           onNodeClick(node);
         }
 
+        // Collect connected nodes and edges
+        const connectedNodes = new Set<string>();
+        connectedNodes.add(node);
+
+        const connectedEdges = new Set<string>();
+        graph.forEachEdge(node, (edge, _attributes, source, target) => {
+          connectedEdges.add(edge);
+          connectedNodes.add(source);
+          connectedNodes.add(target);
+        });
+
+        // Dim all nodes that are NOT connected
+        graph.forEachNode((nodeId) => {
+          if (!connectedNodes.has(nodeId)) {
+            const nodeData = graph.getNodeAttribute(nodeId, "nodeData");
+            const originalColor = getNodeColor(nodeData);
+            const isEpisodeNode =
+              nodeData?.attributes.nodeType === "Episode" ||
+              (nodeData?.labels && nodeData.labels.includes("Episode"));
+
+            // Reduce opacity by using dimmed color
+            graph.setNodeAttribute(nodeId, "color", theme.node.dimmed);
+            graph.setNodeAttribute(nodeId, "size", (isEpisodeNode ? size : size / 2) * 0.6);
+            graph.setNodeAttribute(nodeId, "zIndex", 0);
+          }
+        });
+
+        // Dim all edges that are NOT connected
+        graph.forEachEdge((edgeId) => {
+          if (!connectedEdges.has(edgeId)) {
+            graph.setEdgeAttribute(edgeId, "color", theme.link.dimmed);
+            graph.setEdgeAttribute(edgeId, "size", 0.5);
+          }
+        });
+
         // Highlight the clicked node
         graph.setNodeAttribute(node, "highlighted", true);
         graph.setNodeAttribute(node, "color", theme.node.selected);

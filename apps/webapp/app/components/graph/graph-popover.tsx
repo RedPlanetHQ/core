@@ -36,7 +36,9 @@ interface GraphPopoversProps {
 
 export function GraphPopovers({
   showNodePopup,
+  showEdgePopup,
   nodePopupContent,
+  edgePopupContent,
   onOpenChange,
   labelColorMap,
 }: GraphPopoversProps) {
@@ -92,6 +94,7 @@ export function GraphPopovers({
 
   return (
     <div className="fixed right-4 bottom-4 z-50">
+      {/* Node Popover */}
       <Popover open={showNodePopup} onOpenChange={onOpenChange}>
         <PopoverTrigger asChild>
           <div className="pointer-events-none h-4 w-4" />
@@ -138,6 +141,111 @@ export function GraphPopovers({
               )}
             </div>
           </div>
+        </PopoverContent>
+      </Popover>
+
+      {/* Edge Popover */}
+      <Popover open={showEdgePopup} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>
+          <div className="pointer-events-none h-4 w-4" />
+        </PopoverTrigger>
+        <PopoverContent
+          className="shadow-1 border-border bg-background-3 max-h-96 max-w-xl overflow-auto border-1"
+          side="bottom"
+          align="end"
+          sideOffset={5}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
+          {edgePopupContent && (
+            <div className="space-y-3">
+              <div className="mb-2">
+                <h4 className="leading-none font-medium">Edge Details</h4>
+              </div>
+
+              {/* Edge Type */}
+              <div>
+                <span className="font-medium text-black dark:text-white">Type:</span>{" "}
+                <span className="text-muted-foreground">{edgePopupContent.relation.type}</span>
+              </div>
+
+              {/* Edge Attributes */}
+              {edgePopupContent.relation.attributes && (
+                <div className="space-y-2">
+                  <h5 className="text-sm font-medium">Shared Information:</h5>
+
+                  {/* Total count */}
+                  {edgePopupContent.relation.attributes.totalSharedEntities && (
+                    <p className="text-sm">
+                      <span className="font-medium text-black dark:text-white">Total Shared Entities:</span>{" "}
+                      <span className="text-muted-foreground">
+                        {edgePopupContent.relation.attributes.totalSharedEntities}
+                      </span>
+                    </p>
+                  )}
+
+                  {/* Subjects */}
+                  {edgePopupContent.relation.attributes.subjects?.length > 0 && (
+                    <div className="text-sm">
+                      <span className="font-medium text-black dark:text-white">
+                        Shared Subjects ({edgePopupContent.relation.attributes.subjectCount}):
+                      </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {edgePopupContent.relation.attributes.subjects.map((s: any, i: number) => (
+                          <span key={i} className="rounded bg-blue-100 dark:bg-blue-900 px-2 py-0.5 text-xs">
+                            {s.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Predicates */}
+                  {edgePopupContent.relation.attributes.predicates?.length > 0 && (
+                    <div className="text-sm">
+                      <span className="font-medium text-black dark:text-white">
+                        Shared Predicates ({edgePopupContent.relation.attributes.predicateCount}):
+                      </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {edgePopupContent.relation.attributes.predicates.map((p: any, i: number) => (
+                          <span key={i} className="rounded bg-purple-100 dark:bg-purple-900 px-2 py-0.5 text-xs">
+                            {p.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Objects */}
+                  {edgePopupContent.relation.attributes.objects?.length > 0 && (
+                    <div className="text-sm">
+                      <span className="font-medium text-black dark:text-white">
+                        Shared Objects ({edgePopupContent.relation.attributes.objectCount}):
+                      </span>
+                      <div className="mt-1 flex flex-wrap gap-1">
+                        {edgePopupContent.relation.attributes.objects.map((o: any, i: number) => (
+                          <span key={i} className="rounded bg-green-100 dark:bg-green-900 px-2 py-0.5 text-xs">
+                            {o.name}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Source and Target nodes */}
+              <div className="border-t pt-2 text-sm">
+                <div className="mb-1">
+                  <span className="font-medium text-black dark:text-white">From:</span>{" "}
+                  <span className="text-muted-foreground">{edgePopupContent.source.name}</span>
+                </div>
+                <div>
+                  <span className="font-medium text-black dark:text-white">To:</span>{" "}
+                  <span className="text-muted-foreground">{edgePopupContent.target.name}</span>
+                </div>
+              </div>
+            </div>
+          )}
         </PopoverContent>
       </Popover>
     </div>

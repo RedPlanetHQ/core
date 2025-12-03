@@ -1,5 +1,6 @@
 import { handleSchedule } from './schedule';
-import { integrationCreate, integrationCreateForMCP } from './account-create';
+import { integrationCreate } from './account-create';
+import { getTools, callTool } from './mcp';
 
 import {
   IntegrationCLI,
@@ -11,12 +12,28 @@ import {
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
-      return eventPayload.eventBody.mcp
-        ? await integrationCreateForMCP(eventPayload.eventBody)
-        : await integrationCreate(eventPayload.eventBody);
+      return await integrationCreate(eventPayload.eventBody);
 
     case IntegrationEventType.SYNC:
       return await handleSchedule(eventPayload.config, eventPayload.state);
+
+    case IntegrationEventType.GET_TOOLS: {
+      const tools = await getTools();
+      return tools;
+    }
+
+    case IntegrationEventType.CALL_TOOL: {
+      const config = eventPayload.config as any;
+      const { name, arguments: args } = eventPayload.eventBody;
+
+      const result = await callTool(
+        name,
+        args,
+        config?.apiKey
+      );
+
+      return result;
+    }
 
     default:
       return { message: `The event payload type is ${eventPayload.event}` };
@@ -50,9 +67,7 @@ class LinearCLI extends IntegrationCLI {
         },
       },
       mcp: {
-        type: 'http',
-        url: 'https://mcp.linear.app/mcp',
-        needsAuth: true,
+        type: 'cli',
       },
     };
   }

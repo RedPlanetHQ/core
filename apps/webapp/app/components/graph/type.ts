@@ -14,6 +14,7 @@ export interface Edge {
   target_node_uuid: string;
   type: string;
   createdAt: string;
+  attributes?: Record<string, any>;
 }
 
 export interface RawTriplet {

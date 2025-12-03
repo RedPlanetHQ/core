@@ -166,40 +166,21 @@ export class LabelService {
   }
 
   /**
-   * Search labels by name in workspace
-   */
-  async searchLabelsByName(
-    query: string,
-    workspaceId: string,
-  ): Promise<Label[]> {
-    if (!query || query.trim().length === 0) {
-      return [];
-    }
-
-    return await prisma.label.findMany({
-      where: {
-        workspaceId,
-        name: {
-          contains: query,
-          mode: "insensitive",
-        },
-      },
-    });
-  }
-
-  /**
    * Validate label access (check if label exists and belongs to workspace)
    */
   async validateLabelAccess(
-    labelId: string,
+    labelIds: string[],
     workspaceId: string,
   ): Promise<boolean> {
-    const label = await prisma.label.findUnique({
+    const label = await prisma.label.findMany({
       where: {
-        id: labelId,
+        id: {
+          in: labelIds,
+        },
         workspaceId: workspaceId,
       },
     });
-    return label !== null;
+
+    return label.length === labelIds.length;
   }
 }

@@ -4,6 +4,7 @@ import { type IngestBodyRequest } from "../ingest/ingest";
 import { prisma } from "./prisma";
 import { hasCredits } from "./utils";
 import { preprocessTask } from "../ingest/preprocess-episode";
+import { LabelService } from "~/services/label.server";
 
 // Used in the trigger
 export const addToQueue = async (
@@ -51,6 +52,21 @@ export const addToQueue = async (
 
     if (lastEpisode?.labels && lastEpisode?.labels.length > 0) {
       labels = lastEpisode?.labels;
+    }
+  }
+
+  // Validate label access if labelIds are provided
+  if (body.labelIds && body.labelIds.length > 0) {
+    const labelService = new LabelService();
+    const hasAccess = await labelService.validateLabelAccess(
+      body.labelIds,
+      user.Workspace.id,
+    );
+
+    if (!hasAccess) {
+      throw new Error(
+        "One or more labels are invalid or not accessible in this workspace",
+      );
     }
   }
 

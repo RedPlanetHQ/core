@@ -7,6 +7,7 @@ import { hasCredits } from "~/services/billing.server";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
+import { LabelService } from "~/services/label.server";
 
 // Used in the server
 export const addToQueue = async (
@@ -41,7 +42,26 @@ export const addToQueue = async (
     throw new Error("no credits");
   }
 
-  let labels: string[] = body.labelIds ?? [];
+  // Filter out invalid labels if labelIds are provided
+  let validatedLabelIds: string[] = [];
+  if (body.labelIds && body.labelIds.length > 0) {
+    // Get only the valid labels for this workspace
+    const validLabels = await prisma.label.findMany({
+      where: {
+        id: {
+          in: body.labelIds,
+        },
+        workspaceId: user.Workspace.id,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    validatedLabelIds = validLabels.map((label) => label.id);
+  }
+
+  let labels: string[] = validatedLabelIds.length > 0 ? validatedLabelIds : [];
   let title = body.title;
 
   if (body.sessionId) {

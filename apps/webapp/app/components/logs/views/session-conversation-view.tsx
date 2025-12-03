@@ -3,6 +3,13 @@ import { type LogItem } from "~/hooks/use-logs";
 import { StyledMarkdown } from "~/components/common/styled-markdown";
 import { Loader2 } from "lucide-react";
 import { Badge } from "~/components/ui/badge";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "~/components/ui/accordion";
+import { cn } from "~/lib/utils";
 
 interface SessionConversationViewProps {
   log: LogItem;
@@ -14,6 +21,7 @@ interface SessionEpisode {
   originalContent: string;
   createdAt: string;
   labelIds?: string[];
+  id: string;
 }
 
 interface InvalidFact {
@@ -58,7 +66,7 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
         if (fetchedEpisodes.length > 0) {
           setFactsLoading(true);
           const episodeIds = fetchedEpisodes
-            .map((ep: SessionEpisode) => ep.uuid)
+            .map((ep: SessionEpisode) => ep.id)
             .join(",");
 
           fetch(
@@ -89,14 +97,14 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin" />
+        <Loader2 className="h-4 w-4 animate-spin" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="p-4 text-center text-red-600">
+      <div className="text-destructive p-4 text-center">
         <p>Error loading session episodes: {error}</p>
       </div>
     );
@@ -110,71 +118,89 @@ export function SessionConversationView({ log }: SessionConversationViewProps) {
     );
   }
 
+  console.log(episodes);
+
   return (
     <div className="flex flex-col gap-4 p-4 pt-0">
       <div className="flex flex-col gap-4">
-        {episodes.map((episode, index) => (
-          <div
-            key={episode.uuid}
-            className="flex flex-col gap-3 rounded-md border-t border-gray-300 p-4"
-          >
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex-1">
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="text-muted-foreground text-sm font-medium">
+        <Accordion
+          type="single"
+          collapsible
+          className="w-full"
+          defaultValue={episodes[0]?.id}
+        >
+          {episodes.map((episode, index) => (
+            <AccordionItem value={episode.id} key={episode.id} className="mb-2">
+              <AccordionTrigger className="bg-background-3 hover:shadow-1 flex w-full flex-col justify-between rounded p-4 text-base">
+                <div className="flex w-full justify-between">
+                  <div className="text-md font-medium">
+                    {" "}
                     Episode {index + 1}
-                  </span>
-                  <span className="text-muted-foreground truncate font-mono text-sm">
+                  </div>
+                  <span className="text-muted-foreground shrink-0 text-sm">
+                    {" "}
                     {new Date(episode.createdAt).toLocaleString()}
                   </span>
                 </div>
-              </div>
-            </div>
-
-            <div className="border-grayAlpha-200 border-t pt-3">
-              <div className="text-base">
-                <StyledMarkdown>{episode.content}</StyledMarkdown>
-              </div>
-            </div>
-
-            {/* Invalidated Facts for this episode */}
-            {factsLoading ? (
-              <div className="border-grayAlpha-200 text-muted-foreground flex items-center gap-2 border-t pt-3 text-sm">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                Loading facts...
-              </div>
-            ) : invalidFactsByEpisode[episode.uuid]?.length > 0 ? (
-              <div className="border-grayAlpha-200 border-t pt-3">
-                <div className="text-muted-foreground mb-2 text-sm font-medium">
-                  Invalidated Facts (
-                  {invalidFactsByEpisode[episode.uuid].length})
-                </div>
-                <div className="flex flex-col gap-2">
-                  {invalidFactsByEpisode[episode.uuid].map((fact) => (
-                    <div
-                      key={fact.uuid}
-                      className="rounded-md border border-red-200 bg-red-50 p-2"
-                    >
-                      <p className="mb-1 text-sm">{fact.fact}</p>
-                      <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
-                        {fact.invalidAt && (
-                          <span>
-                            Invalid: {new Date(fact.invalidAt).toLocaleString()}
-                          </span>
-                        )}
-                        {Object.keys(fact.attributes).length > 0 && (
-                          <Badge variant="secondary" className="text-[10px]">
-                            {Object.keys(fact.attributes).length} attributes
-                          </Badge>
-                        )}
-                      </div>
+                <div className="flex w-full">
+                  <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start gap-2">
+                    <div className={cn("truncate text-left")}>
+                      {episode.content.replace(/<[^>]+>/g, "")}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
-            ) : null}
-          </div>
-        ))}
+              </AccordionTrigger>
+              <AccordionContent className="border-border flex flex-col gap-4 border-b p-4 text-balance">
+                <div className="pt-3">
+                  <div className="text-base">
+                    <StyledMarkdown>{episode.content}</StyledMarkdown>
+                  </div>
+                </div>
+
+                {/* Invalidated Facts for this episode */}
+                {factsLoading ? (
+                  <div className="border-grayAlpha-200 text-muted-foreground flex items-center gap-2 border-t pt-3 text-sm">
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                    Loading facts...
+                  </div>
+                ) : invalidFactsByEpisode[episode.id]?.length > 0 ? (
+                  <div className="">
+                    <div className="text-muted-foreground mb-2 font-medium">
+                      Invalidated Facts (
+                      {invalidFactsByEpisode[episode.id].length})
+                    </div>
+                    <div className="flex flex-col gap-2">
+                      {invalidFactsByEpisode[episode.id].map((fact) => (
+                        <div
+                          key={fact.uuid}
+                          className="rounded-md border border-red-200 bg-red-50 p-2"
+                        >
+                          <p className="mb-1">{fact.fact}</p>
+                          <div className="text-muted-foreground flex items-center gap-2 text-[10px]">
+                            {fact.invalidAt && (
+                              <span>
+                                Invalid:{" "}
+                                {new Date(fact.invalidAt).toLocaleString()}
+                              </span>
+                            )}
+                            {Object.keys(fact.attributes).length > 0 && (
+                              <Badge
+                                variant="secondary"
+                                className="text-[10px]"
+                              >
+                                {Object.keys(fact.attributes).length} attributes
+                              </Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </AccordionContent>
+            </AccordionItem>
+          ))}
+        </Accordion>
       </div>
     </div>
   );
