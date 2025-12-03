@@ -260,6 +260,7 @@ export const updateIngestionQueue = async (
       id: true,
       data: true,
       graphIds: true,
+      workspaceId: true,
     },
   });
 
@@ -269,6 +270,25 @@ export const updateIngestionQueue = async (
 
   const logData = log.data as any;
   const sessionId = logData?.sessionId;
+
+  // Filter out invalid labels if labelIds are provided
+  let validatedLabelIds: string[] = [];
+  if (data.labels && data.labels.length > 0) {
+    // Get only the valid labels for this workspace
+    const validLabels = await prisma.label.findMany({
+      where: {
+        id: {
+          in: data.labels,
+        },
+        workspaceId: log.workspaceId,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    validatedLabelIds = validLabels.map((label) => label.id);
+  }
 
   // If there's a sessionId, find the latest log for that session
   if (sessionId) {
@@ -282,11 +302,13 @@ export const updateIngestionQueue = async (
     });
 
     const episodes = allSessionLogs.flatMap((log) => log.graphIds);
-
-    if (data.labels && episodes.length > 0) {
-      await updateEpisodeLabels(episodes, data.labels as string[], userId);
+    if (validatedLabelIds && episodes.length > 0) {
+      await updateEpisodeLabels(
+        episodes,
+        validatedLabelIds as string[],
+        userId,
+      );
     }
-
     const latestLog = allSessionLogs[0];
 
     if (latestLog) {
@@ -295,7 +317,10 @@ export const updateIngestionQueue = async (
         where: {
           id: latestLog.id,
         },
-        data,
+        data: {
+          ...data,
+          labels: validatedLabelIds,
+        },
       });
     }
   }
@@ -310,7 +335,10 @@ export const updateIngestionQueue = async (
     where: {
       id,
     },
-    data,
+    data: {
+      ...data,
+      labels: validatedLabelIds,
+    },
   });
 };
 

@@ -108,91 +108,270 @@ export const getNodeLinks = async (userId: string) => {
   return triplets;
 };
 
-// Get graph data with cluster information for reified graph
-export const getClusteredGraphData = async (userId: string) => {
+// Get graph data with episode-episode connections based on shared entities
+export const getClusteredGraphData = async (userId: string, limit?: number) => {
   const session = driver.session();
   try {
-    // Get Episode -> Entity graph, only showing entities connected to more than 1 episode
-    const result = await session.run(
-      `// Find entities connected to more than 1 episode
-       MATCH (e:Episode{userId: $userId})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
-       WITH entity, count(DISTINCT e) as episodeCount
-       WHERE episodeCount > 1
-       WITH collect(entity.uuid) as validEntityUuids
-
-       // Get all episodes and optionally connect to valid entities
-       MATCH (e:Episode {userId: $userId})
-       WITH e, validEntityUuids,
-            CASE WHEN size(e.labelIds) > 0 THEN e.labelIds[0] ELSE null END as clusterId
-
-       OPTIONAL MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})-[r:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(entity:Entity)
-       WHERE entity.uuid IN validEntityUuids
-
-       RETURN DISTINCT
-         e.uuid as sourceUuid,
-         e.content as sourceContent,
-         'Episode' as sourceNodeType,
-         entity.uuid as targetUuid,
-         entity.name as targetName,
-         'Entity' as targetNodeType,
-         type(r) as edgeType,
-         clusterId,
-         s.createdAt as createdAt`,
+    // Step 1: Check total episode count
+    const countResult = await session.run(
+      `MATCH (e:Episode {userId: $userId})
+       RETURN count(e) as totalCount`,
       { userId },
     );
 
-    const triplets: RawTriplet[] = [];
-    const processedEdges = new Set<string>();
+    const totalEpisodes =
+      countResult.records[0]?.get("totalCount")?.toNumber() || 0;
+    const shouldLimit = totalEpisodes > 2000;
 
+    logger.info(
+      `Total episodes: ${totalEpisodes}, applying limit: ${shouldLimit}`,
+    );
+
+    // Step 2: Get episodes with their entities (much simpler and faster)
+    const episodeQuery = shouldLimit
+      ? `MATCH (e:Episode {userId: $userId})
+         WITH e ORDER BY e.updatedAt DESC LIMIT 1000
+         WITH collect(e.uuid) as episodeUuids
+         MATCH (e:Episode {userId: $userId})
+         WHERE e.uuid IN episodeUuids`
+      : `MATCH (e:Episode {userId: $userId})`;
+
+    const result = await session.run(
+      `${episodeQuery}
+       MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+       -[r:HAS_SUBJECT|HAS_PREDICATE|HAS_OBJECT]->(entity:Entity)
+
+       RETURN
+         e.uuid as episodeUuid,
+         e.content as episodeContent,
+         e.createdAt as episodeCreatedAt,
+         CASE WHEN size(e.labelIds) > 0 THEN e.labelIds[0] ELSE null END as clusterId,
+         entity.uuid as entityUuid,
+         entity.name as entityName,
+         type(r) as entityRole`,
+      { userId },
+    );
+
+    logger.info(
+      `Fetched ${result.records.length} episode-entity relationships`,
+    );
+
+    // Step 3: Build episode → entities map, then compute pairs in memory
+    interface EpisodeData {
+      uuid: string;
+      content: string;
+      createdAt: string;
+      clusterId: string | null;
+      subjects: Map<string, string>;
+      predicates: Map<string, string>;
+      objects: Map<string, string>;
+    }
+
+    interface EpisodePairData {
+      source: EpisodeData;
+      target: EpisodeData;
+      subjects: Map<string, string>;
+      predicates: Map<string, string>;
+      objects: Map<string, string>;
+    }
+
+    const episodeMap = new Map<string, EpisodeData>();
+    const entityToEpisodes = new Map<string, Set<string>>(); // entity uuid -> episode uuids
+
+    // Build episode map and entity index
     result.records.forEach((record) => {
-      const sourceUuid = record.get("sourceUuid");
-      const sourceContent = record.get("sourceContent");
-      const targetUuid = record.get("targetUuid");
-      const targetName = record.get("targetName");
-      const edgeType = record.get("edgeType");
+      const episodeUuid = record.get("episodeUuid");
+      const episodeContent = record.get("episodeContent");
+      const episodeCreatedAt = record.get("episodeCreatedAt");
       const clusterId = record.get("clusterId");
-      const createdAt = record.get("createdAt");
+      const entityUuid = record.get("entityUuid");
+      const entityName = record.get("entityName");
+      const entityRole = record.get("entityRole");
 
-      // Create unique edge identifier to avoid duplicates
-      const edgeKey = `${sourceUuid}-${targetUuid}-${edgeType}`;
-      if (processedEdges.has(edgeKey)) return;
-      processedEdges.add(edgeKey);
+      // Add episode to map if not exists
+      if (!episodeMap.has(episodeUuid)) {
+        episodeMap.set(episodeUuid, {
+          uuid: episodeUuid,
+          content: episodeContent,
+          createdAt: episodeCreatedAt,
+          clusterId,
+          subjects: new Map(),
+          predicates: new Map(),
+          objects: new Map(),
+        });
+      }
+
+      const episode = episodeMap.get(episodeUuid)!;
+
+      // Add entity to episode's collections
+      if (entityRole === "HAS_SUBJECT") {
+        episode.subjects.set(entityUuid, entityName);
+      } else if (entityRole === "HAS_PREDICATE") {
+        episode.predicates.set(entityUuid, entityName);
+      } else if (entityRole === "HAS_OBJECT") {
+        episode.objects.set(entityUuid, entityName);
+      }
+
+      // Track which episodes share this entity
+      if (!entityToEpisodes.has(entityUuid)) {
+        entityToEpisodes.set(entityUuid, new Set());
+      }
+      entityToEpisodes.get(entityUuid)!.add(episodeUuid);
+    });
+
+    logger.info(
+      `Built map of ${episodeMap.size} episodes with ${entityToEpisodes.size} unique entities`,
+    );
+
+    // Find episode pairs that share entities
+    const episodePairMap = new Map<string, EpisodePairData>();
+
+    for (const [entityUuid, episodeUuids] of entityToEpisodes) {
+      if (episodeUuids.size < 2) continue; // Skip entities not shared
+
+      const episodeArray = Array.from(episodeUuids);
+
+      // Create pairs from episodes sharing this entity
+      for (let i = 0; i < episodeArray.length; i++) {
+        for (let j = i + 1; j < episodeArray.length; j++) {
+          const ep1Uuid = episodeArray[i];
+          const ep2Uuid = episodeArray[j];
+
+          // Create canonical pair key (alphabetically sorted)
+          const pairKey =
+            ep1Uuid < ep2Uuid
+              ? `${ep1Uuid}|${ep2Uuid}`
+              : `${ep2Uuid}|${ep1Uuid}`;
+
+          const sourceEp = episodeMap.get(
+            ep1Uuid < ep2Uuid ? ep1Uuid : ep2Uuid,
+          )!;
+          const targetEp = episodeMap.get(
+            ep1Uuid < ep2Uuid ? ep2Uuid : ep1Uuid,
+          )!;
+
+          if (!episodePairMap.has(pairKey)) {
+            episodePairMap.set(pairKey, {
+              source: sourceEp,
+              target: targetEp,
+              subjects: new Map(),
+              predicates: new Map(),
+              objects: new Map(),
+            });
+          }
+
+          const pair = episodePairMap.get(pairKey)!;
+
+          // Add this shared entity to the pair's collections
+          const entityName =
+            sourceEp.subjects.get(entityUuid) ||
+            sourceEp.predicates.get(entityUuid) ||
+            sourceEp.objects.get(entityUuid) ||
+            targetEp.subjects.get(entityUuid) ||
+            targetEp.predicates.get(entityUuid) ||
+            targetEp.objects.get(entityUuid) ||
+            "";
+
+          if (
+            sourceEp.subjects.has(entityUuid) ||
+            targetEp.subjects.has(entityUuid)
+          ) {
+            pair.subjects.set(entityUuid, entityName);
+          }
+          if (
+            sourceEp.predicates.has(entityUuid) ||
+            targetEp.predicates.has(entityUuid)
+          ) {
+            pair.predicates.set(entityUuid, entityName);
+          }
+          if (
+            sourceEp.objects.has(entityUuid) ||
+            targetEp.objects.has(entityUuid)
+          ) {
+            pair.objects.set(entityUuid, entityName);
+          }
+        }
+      }
+    }
+
+    logger.info(`Built ${episodePairMap.size} unique episode pairs`);
+
+    // Step 4: Convert to final triplet format
+    const triplets: RawTriplet[] = [];
+
+    for (const [pairKey, data] of episodePairMap) {
+      const subjects = Array.from(data.subjects.entries()).map(
+        ([uuid, name]) => ({ uuid, name }),
+      );
+      const predicates = Array.from(data.predicates.entries()).map(
+        ([uuid, name]) => ({ uuid, name }),
+      );
+      const objects = Array.from(data.objects.entries()).map(
+        ([uuid, name]) => ({ uuid, name }),
+      );
+
+      const totalSharedEntities =
+        subjects.length + predicates.length + objects.length;
+
+      // Skip pairs with very few connections (noise reduction)
+      if (totalSharedEntities < 2) continue;
+
+      const subjectNames = subjects.map((s) => s.name).join(", ");
+      const predicateNames = predicates.map((p) => p.name).join(", ");
+      const objectNames = objects.map((o) => o.name).join(", ");
 
       triplets.push({
         sourceNode: {
-          uuid: sourceUuid,
+          uuid: data.source.uuid,
           labels: ["Episode"],
           attributes: {
             nodeType: "Episode",
-            content: sourceContent,
-            episodeUuid: sourceUuid,
-            clusterId,
+            content: data.source.content,
+            episodeUuid: data.source.uuid,
+            clusterId: data.source.clusterId,
           },
-          name: sourceContent || sourceUuid,
-          clusterId,
-          createdAt: createdAt || "",
+          name: data.source.content || data.source.uuid,
+          clusterId: data.source.clusterId || undefined,
+          createdAt: data.source.createdAt || "",
         },
         edge: {
-          uuid: `${sourceUuid}-${targetUuid}-${edgeType}`,
-          type: edgeType,
-          source_node_uuid: sourceUuid,
-          target_node_uuid: targetUuid,
-          createdAt: createdAt || "",
+          uuid: pairKey,
+          type: "SHARES_ENTITIES_WITH",
+          source_node_uuid: data.source.uuid,
+          target_node_uuid: data.target.uuid,
+          attributes: {
+            totalSharedEntities,
+            subjectCount: subjects.length,
+            predicateCount: predicates.length,
+            objectCount: objects.length,
+            subjects,
+            predicates,
+            objects,
+            subjectNames,
+            predicateNames,
+            objectNames,
+          },
+          createdAt: data.source.createdAt || "",
         },
         targetNode: {
-          uuid: targetUuid,
-          labels: ["Entity"],
+          uuid: data.target.uuid,
+          labels: ["Episode"],
           attributes: {
-            nodeType: "Entity",
-            name: targetName,
-            clusterId,
+            nodeType: "Episode",
+            content: data.target.content,
+            episodeUuid: data.target.uuid,
+            clusterId: data.target.clusterId,
           },
-          name: targetName || targetUuid,
-          clusterId,
-          createdAt: createdAt || "",
+          name: data.target.content || data.target.uuid,
+          clusterId: data.target.clusterId || undefined,
+          createdAt: data.target.createdAt || "",
         },
       });
-    });
+    }
+
+    logger.info(
+      `Returning ${triplets.length} final episode-episode connections`,
+    );
 
     return triplets;
   } catch (error) {

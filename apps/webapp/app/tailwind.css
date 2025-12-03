@@ -507,8 +507,16 @@
 @layer base {
 
 
-  .episode-details p {
+  .episode-details p, .episode-details li {
     @apply text-md;
+  }
+
+  .episode-details code {
+    @apply !text-base;
+  }
+
+  .episode-details strong {
+    @apply !font-medium;
   }
 
   .tiptap {

@@ -219,7 +219,7 @@ export const ExampleUseCases = ({ onSelectPrompt }: ExampleUseCasesProps) => {
   return (
     <div className="flex w-full max-w-[90ch] flex-col items-center justify-center pb-8">
       <Tabs defaultValue={categories[0].category} className="w-full">
-        <TabsList className="mb-2 h-10">
+        <TabsList className="mb-2 h-10 gap-2">
           {categories.map((category) => {
             const Icon = category.icon;
 
@@ -227,7 +227,7 @@ export const ExampleUseCases = ({ onSelectPrompt }: ExampleUseCasesProps) => {
               <TabsTrigger
                 key={category.category}
                 value={category.category}
-                className="mr-2 flex h-8 gap-2"
+                className="flex h-8 gap-2"
               >
                 <Icon className="h-5 w-5" />
                 {category.category}

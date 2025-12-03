@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@redplanethq/sdk':
-        specifier: 0.1.6
-        version: 0.1.6
+        specifier: 0.1.9
+        version: 0.1.9
       axios:
         specifier: ^1.7.9
         version: 1.10.0
@@ -29,6 +29,12 @@ importers:
       react-query:
         specifier: ^3.39.3
         version: 3.39.3(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      zod:
+        specifier: ^3.22.4
+        version: 3.25.67
+      zod-to-json-schema:
+        specifier: ^3.22.1
+        version: 3.25.0(zod@3.25.67)
     devDependencies:
       '@babel/preset-typescript':
         specifier: ^7.26.0
@@ -301,8 +307,8 @@ packages:
     resolution: {integrity: sha512-YLT9Zo3oNPJoBjBc4q8G2mjU4tqIbf5CEOORbUUr48dCD9q3umJ3IPlVqOqDakPfd2HuwccBaqlGhN4Gmr5OWg==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@redplanethq/sdk@0.1.6':
-    resolution: {integrity: sha512-1juEP6b7k8yYfkbxc5pBPWGEF3Nwfe9DrRzggWfn0sOPOhhifrUaiR1ZYenf8YSHPb1Xvs2PiMhVDplRFr8eiw==}
+  '@redplanethq/sdk@0.1.9':
+    resolution: {integrity: sha512-fi+mtKTTdKPp1E6gCl9W8Ri7ZuULs0J/s5Hy5am1mg/lQ1foX+mLoBE08kr4p1LTNXJYJFsY7J4PHMe16AcN/g==}
     engines: {node: '>=18.0.0'}
 
   '@rtsao/scc@1.1.0':
@@ -1546,6 +1552,11 @@ packages:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
     engines: {node: '>=10'}
 
+  zod-to-json-schema@3.25.0:
+    resolution: {integrity: sha512-HvWtU2UG41LALjajJrML6uQejQhNJx+JBO9IflpSja4R03iNWfKXrj6W2h7ljuLyc1nKS+9yDyL/9tD1U/yBnQ==}
+    peerDependencies:
+      zod: ^3.25 || ^4
+
   zod@3.25.67:
     resolution: {integrity: sha512-idA2YXwpCdqUSKRCACDE6ItZD9TZzy3OZMtpfLoh6oPR47lipysRrJfjzMqFxQ3uJuUPyUeWe1r9vLH33xO/Qw==}
 
@@ -1834,7 +1845,7 @@ snapshots:
 
   '@pkgr/core@0.2.7': {}
 
-  '@redplanethq/sdk@0.1.6':
+  '@redplanethq/sdk@0.1.9':
     dependencies:
       commander: 14.0.0
 
@@ -3261,5 +3272,8 @@ snapshots:
 
   yocto-queue@0.1.0: {}
 
-  zod@3.25.67:
-    optional: true
+  zod-to-json-schema@3.25.0(zod@3.25.67):
+    dependencies:
+      zod: 3.25.67
+
+  zod@3.25.67: {}
