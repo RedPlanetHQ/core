@@ -1,17 +1,16 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import { deleteEpisodeWithRelatedNodes } from "~/services/graphModels/episode";
 import {
-  deleteIngestionQueue,
   getIngestionQueue,
   getIngestionQueueForFrontend,
   updateIngestionQueue,
+  deleteLog,
+  deleteSession,
 } from "~/services/ingestionLogs.server";
 import {
   createHybridActionApiRoute,
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
-import { findRunningJobs, cancelJob } from "~/services/jobManager.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 
 // Schema for space ID parameter
@@ -124,66 +123,59 @@ const { action } = createHybridActionApiRoute(
 
     // Handle DELETE requests
     try {
+      const url = new URL(request.url);
+      const deleteSessionParam = url.searchParams.get("deleteSession");
+
       const ingestionQueue = await getIngestionQueue(params.logId);
 
       if (!ingestionQueue) {
         return json(
           {
-            error: "Episode not found or unauthorized",
+            error: "Log not found or unauthorized",
             code: "not_found",
           },
           { status: 404 },
         );
       }
 
-      const output = ingestionQueue.output as any;
-      const runningTasks = await findRunningJobs({
-        tags: [authentication.userId, ingestionQueue.id],
-        taskIdentifier: "ingest-episode",
-      });
+      const logData = ingestionQueue.data as any;
+      const sessionId = logData?.sessionId;
 
-      const latestTask = runningTasks[0];
+      // If deleteSession param is true and log has a sessionId, delete entire session
+      if (deleteSessionParam === "true" && sessionId) {
+        const result = await deleteSession(sessionId, authentication.userId);
 
-      if (latestTask && !latestTask.isCompleted) {
-        await cancelJob(latestTask.id);
-      }
-
-      let result;
-
-      if (output?.episodeUuid) {
-        result = await deleteEpisodeWithRelatedNodes({
-          episodeUuid: output?.episodeUuid,
-          userId: authentication.userId,
+        return json({
+          success: true,
+          message: "Session deleted successfully",
+          logsDeleted: result.logsDeleted,
+          deleted: result.deleted,
         });
-
-        if (!result.episodeDeleted) {
-          return json(
-            {
-              error: "Episode not found or unauthorized",
-              code: "not_found",
-            },
-            { status: 404 },
-          );
-        }
       }
 
-      await deleteIngestionQueue(ingestionQueue.id);
+      // Otherwise, delete only this single log
+      const result = await deleteLog(params.logId, authentication.userId);
+
+      if (!result.success) {
+        return json(
+          {
+            error: result.error || "Failed to delete log",
+            code: "not_found",
+          },
+          { status: 404 },
+        );
+      }
 
       return json({
         success: true,
-        message: "Episode deleted successfully",
-        deleted: {
-          episode: result?.episodeDeleted,
-          statements: result?.statementsDeleted,
-          entities: result?.entitiesDeleted,
-          facts: result?.factsDeleted,
-        },
+        message: "Log deleted successfully",
+        deleted: result.deleted,
       });
     } catch (error) {
-      console.error("Error deleting episode:", error);
+      console.error("Error deleting log:", error);
       return json(
         {
-          error: "Failed to delete episode",
+          error: "Failed to delete log",
           code: "internal_error",
         },
         { status: 500 },

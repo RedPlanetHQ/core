@@ -1,6 +1,5 @@
 export interface Node {
   uuid: string;
-  name: string;
   summary?: string;
   labels?: string[];
   attributes?: Record<string, any>;

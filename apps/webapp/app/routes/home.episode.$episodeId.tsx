@@ -48,7 +48,13 @@ export default function InboxNotSelected() {
       <div className="flex h-[calc(100vh)] w-full flex-col overflow-hidden md:h-[calc(100vh_-_16px)]">
         <PageHeader
           title="Episode"
-          actionsNode={<LogOptions id={log.id} status={log.status} />}
+          actionsNode={
+            <LogOptions
+              id={log.id}
+              status={log.status}
+              sessionId={log.sessionId}
+            />
+          }
         />
 
         <ResizablePanelGroup direction="horizontal">

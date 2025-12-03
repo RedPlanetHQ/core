@@ -4,14 +4,19 @@ import {
   GraphClustering,
   type GraphClusteringRef,
 } from "./graph-clustering";
-import { GraphPopovers } from "./graph-popover";
 import { GraphFilters } from "./graph-filters";
 import { SpaceSearch } from "./space-search";
-import type { RawTriplet, NodePopupContent, EdgePopupContent } from "./type";
+import { EpisodeSidebar } from "./episode-sidebar";
+import type { RawTriplet } from "./type";
 
 import { createLabelColorMap } from "./node-colors";
 import { toGraphTriplets } from "./utils";
 import { cn } from "~/lib/utils";
+import {
+  ResizablePanelGroup,
+  ResizablePanel,
+  ResizableHandle,
+} from "~/components/ui/resizable";
 
 export interface GraphClusteringVisualizationProps {
   triplets: RawTriplet[];
@@ -45,15 +50,10 @@ export const GraphClusteringVisualization = forwardRef<
     },
     ref,
   ) => {
-    // Graph state for popovers
-    const [showNodePopup, setShowNodePopup] = useState<boolean>(false);
-    const [showEdgePopup, setShowEdgePopup] = useState<boolean>(false);
-    const [nodePopupContent, setNodePopupContent] =
-      useState<NodePopupContent | null>(null);
-    const [edgePopupContent, setEdgePopupContent] =
-      useState<EdgePopupContent | null>(null);
-
     const [searchQuery, setSearchQuery] = useState<string>("");
+
+    // Sidebar state for episode details
+    const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
 
     // Combined filter logic for all filters
     const filteredTriplets = useMemo(() => {
@@ -170,31 +170,14 @@ export const GraphClusteringVisualization = forwardRef<
 
       if (!foundNode) return;
 
-      // Set popup content and show the popup
-      setNodePopupContent({
-        id: nodeId,
-        node: foundNode,
-      });
-      setShowNodePopup(true);
-      setShowEdgePopup(false);
-    };
+      // Check if it's an Episode node with queueId
+      const isEpisode = foundNode.labels?.includes("Episode");
+      const queueId = foundNode.attributes?.queueId;
 
-    // Handle edge click
-    const handleEdgeClick = (edgeId: string) => {
-      // Find the triplet that contains this edge
-      const triplet = triplets.find((t) => t.edge.uuid === edgeId);
-
-      if (!triplet) return;
-
-      // Set popup content and show the popup
-      setEdgePopupContent({
-        id: edgeId,
-        source: triplet.sourceNode,
-        target: triplet.targetNode,
-        relation: triplet.edge,
-      });
-      setShowEdgePopup(true);
-      setShowNodePopup(false);
+      if (isEpisode && queueId) {
+        // Show sidebar for episodes
+        setSelectedQueueId(queueId);
+      }
     };
 
     // Handle cluster click - toggle filter like Marvel
@@ -205,66 +188,69 @@ export const GraphClusteringVisualization = forwardRef<
       }
     };
 
-    // Handle popover close
-    const handlePopoverClose = () => {
-      setShowNodePopup(false);
-      setShowEdgePopup(false);
-    };
-
     return (
-      <div className={cn("flex flex-col gap-4", className)}>
-        {/* Filter Controls */}
-        {!singleClusterView && (
-          <div className="flex flex-col">
-            {/* Graph Filters and Search in same row */}
-            <div className="flex items-center gap-1">
-              <GraphFilters
+      <ResizablePanelGroup
+        direction="horizontal"
+        className={cn("h-full", className)}
+      >
+        <ResizablePanel defaultSize={selectedQueueId ? 70 : 100}>
+          <div className="flex h-full flex-col gap-4 p-3">
+            {/* Filter Controls */}
+            {!singleClusterView && (
+              <div className="flex flex-col">
+                {/* Graph Filters and Search in same row */}
+                <div className="flex items-center gap-1">
+                  <GraphFilters
+                    clusters={clusters}
+                    selectedCluster={selectedClusterId}
+                    onClusterChange={onClusterSelect as any}
+                  />
+                  <SpaceSearch
+                    triplets={triplets}
+                    searchQuery={searchQuery}
+                    onSearchChange={setSearchQuery}
+                  />
+                </div>
+              </div>
+            )}
+
+            {filteredTriplets.length > 0 ? (
+              <GraphClustering
+                ref={ref}
+                triplets={graphTriplets}
                 clusters={clusters}
-                selectedCluster={selectedClusterId}
-                onClusterChange={onClusterSelect as any}
+                width={width}
+                height={height}
+                onNodeClick={handleNodeClick}
+                onClusterClick={handleClusterClick}
+                zoomOnMount={zoomOnMount}
+                labelColorMap={sharedLabelColorMap}
+                showClusterLabels={!selectedClusterId}
+                enableClusterColors={true}
+                forOnboarding={forOnboarding}
               />
-              <SpaceSearch
-                triplets={triplets}
-                searchQuery={searchQuery}
-                onSearchChange={setSearchQuery}
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <p className="text-muted-foreground">
+                  No graph data to visualize.
+                </p>
+              </div>
+            )}
+          </div>
+        </ResizablePanel>
+
+        {selectedQueueId && (
+          <>
+            <ResizableHandle />
+            <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
+              <EpisodeSidebar
+                queueId={selectedQueueId}
+                onClose={() => setSelectedQueueId(null)}
               />
-            </div>
-          </div>
+            </ResizablePanel>
+          </>
         )}
-
-        {filteredTriplets.length > 0 ? (
-          <GraphClustering
-            ref={ref}
-            triplets={graphTriplets}
-            clusters={clusters}
-            width={width}
-            height={height}
-            onNodeClick={handleNodeClick}
-            onEdgeClick={handleEdgeClick}
-            onClusterClick={handleClusterClick}
-            onBlur={handlePopoverClose}
-            zoomOnMount={zoomOnMount}
-            labelColorMap={sharedLabelColorMap}
-            showClusterLabels={!selectedClusterId} // Show cluster labels when not filtering
-            enableClusterColors={true} // Always enable cluster colors
-            forOnboarding={forOnboarding}
-          />
-        ) : (
-          <div className="flex h-full items-center justify-center">
-            <p className="text-muted-foreground">No graph data to visualize.</p>
-          </div>
-        )}
-
-        {/* Standard Graph Popovers */}
-        <GraphPopovers
-          showNodePopup={showNodePopup}
-          showEdgePopup={showEdgePopup}
-          nodePopupContent={nodePopupContent}
-          edgePopupContent={edgePopupContent}
-          onOpenChange={handlePopoverClose}
-          labelColorMap={sharedLabelColorMap}
-        />
-      </div>
+      </ResizablePanelGroup>
     );
   },
 );

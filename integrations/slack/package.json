@@ -60,6 +60,6 @@
     "commander": "^12.0.0",
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
-    "@redplanethq/sdk": "0.1.2"
+    "@redplanethq/sdk": "0.1.9"
   }
 }

@@ -1,5 +1,9 @@
 import { prisma } from "~/db.server";
-import { updateEpisodeLabels } from "./graphModels/episode";
+import {
+  deleteEpisodeWithRelatedNodes,
+  updateEpisodeLabels,
+} from "./graphModels/episode";
+import { cancelJob, findRunningJobs } from "./jobManager.server";
 
 export async function getIngestionLogs(
   userId: string,
@@ -246,6 +250,90 @@ export const deleteIngestionQueue = async (id: string) => {
       id,
     },
   });
+};
+
+// Delete a single log with its episode and related nodes
+export const deleteLog = async (logId: string, userId: string) => {
+  const ingestionQueue = await getIngestionQueue(logId);
+
+  if (!ingestionQueue) {
+    return {
+      success: false,
+      error: "Log not found",
+    };
+  }
+
+  const output = ingestionQueue.output as any;
+
+  // Cancel any running jobs
+  const runningTasks = await findRunningJobs({
+    tags: [userId, ingestionQueue.id],
+    taskIdentifier: "ingest-episode",
+  });
+
+  const latestTask = runningTasks[0];
+  if (latestTask && !latestTask.isCompleted) {
+    await cancelJob(latestTask.id);
+  }
+
+  let graphResult;
+
+  // Delete episode from graph if it exists
+  if (output?.episodeUuid) {
+    graphResult = await deleteEpisodeWithRelatedNodes({
+      episodeUuid: output.episodeUuid,
+      userId,
+    });
+  }
+
+  // Delete ingestion queue
+  await deleteIngestionQueue(ingestionQueue.id);
+
+  return {
+    success: true,
+    deleted: {
+      episode: graphResult?.episodesDeleted || 0,
+      statements: graphResult?.statementsDeleted || 0,
+      entities: graphResult?.entitiesDeleted || 0,
+    },
+  };
+};
+
+// Delete all logs in a session
+export const deleteSession = async (sessionId: string, userId: string) => {
+  // Get all ingestion queues for this session
+  const logs = await prisma.ingestionQueue.findMany({
+    where: {
+      data: {
+        path: ["sessionId"],
+        equals: sessionId,
+      },
+    },
+  });
+
+  let totalEpisodesDeleted = 0;
+  let totalStatementsDeleted = 0;
+  let totalEntitiesDeleted = 0;
+
+  // Delete each log in the session
+  for (const log of logs) {
+    const result = await deleteLog(log.id, userId);
+    if (result.success && result.deleted) {
+      totalEpisodesDeleted += result.deleted.episode;
+      totalStatementsDeleted += result.deleted.statements;
+      totalEntitiesDeleted += result.deleted.entities;
+    }
+  }
+
+  return {
+    success: true,
+    logsDeleted: logs.length,
+    deleted: {
+      episodes: totalEpisodesDeleted,
+      statements: totalStatementsDeleted,
+      entities: totalEntitiesDeleted,
+    },
+  };
 };
 
 export const updateIngestionQueue = async (
