@@ -6,7 +6,7 @@ description: "Connect Roo Code to CORE's memory system via MCP"
 ### Prerequisites
 
 - Roo Code installed
-- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+- CORE account (sign up at [app.getcore.me](https://app.getcore.me))
 
 ### Step 1: Configure CORE MCP Server
 
@@ -17,7 +17,7 @@ Add the following to your Roo Code MCP configuration:
   "mcpServers": {
     "core-memory": {
       "type": "streamable-http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Roo-Code",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Roo-Code",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -28,7 +28,7 @@ Add the following to your Roo Code MCP configuration:
 
 ### Step 2: Generate API Key
 
-1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+1. Log in to your CORE dashboard at [app.getcore.me](https://app.getcore.me)
 2. Navigate to **Settings** → **API Key**
 3. Click **Generate new key**
 4. Name it "roo-code"

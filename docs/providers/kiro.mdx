@@ -6,7 +6,7 @@ description: "Connect AWS Kiro to CORE's memory system via MCP"
 ### Prerequisites
 
 - Kiro (AWS coding assistant) installed
-- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+- CORE account (sign up at [app.getcore.me](https://app.getcore.me))
 
 ### Step 1: Configure CORE MCP Server
 
@@ -16,7 +16,7 @@ Add the following in Kiro → MCP Servers:
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Kiro",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Kiro",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -27,7 +27,7 @@ Add the following in Kiro → MCP Servers:
 
 ### Step 2: Generate API Key
 
-1. Log in to your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+1. Log in to your CORE dashboard at [app.getcore.me](https://app.getcore.me)
 2. Navigate to **Settings** → **API Key**
 3. Click **Generate new key**
 4. Name it "kiro"
