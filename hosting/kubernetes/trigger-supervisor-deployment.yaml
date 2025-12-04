@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trigger-supervisor
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-supervisor
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+      app.kubernetes.io/component: trigger-supervisor
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: trigger-supervisor
+    spec:
+      containers:
+      - name: trigger-supervisor
+        image: ghcr.io/triggerdotdev/supervisor:v4-beta
+        env:
+        - name: TRIGGER_WORKER_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: TRIGGER_WORKER_TOKEN
+        - name: MANAGED_WORKER_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: MANAGED_WORKER_SECRET
+        - name: TRIGGER_API_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: API_ORIGIN
+        - name: OTEL_EXPORTER_OTLP_ENDPOINT
+          value: "http://trigger-webapp:3000/otel"
+        - name: TRIGGER_WORKLOAD_API_DOMAIN
+          value: "supervisor"
+        - name: TRIGGER_WORKLOAD_API_PORT_EXTERNAL
+          value: "8020"
+        - name: DEBUG
+          value: "1"
+        - name: ENFORCE_MACHINE_PRESETS
+          value: "1"
+        - name: TRIGGER_DEQUEUE_INTERVAL_MS
+          value: "1000"
+        - name: DOCKER_REGISTRY_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DOCKER_REGISTRY_URL
+        - name: DOCKER_REGISTRY_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: DOCKER_REGISTRY_USERNAME
+          optional: true
+        - name: DOCKER_REGISTRY_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: DOCKER_REGISTRY_PASSWORD
+          optional: true
+        - name: DOCKER_AUTOREMOVE_EXITED_CONTAINERS
+          value: "0"
+        command: ["/bin/sh", "-c", "chown -R node:node /home/node/shared && exec /usr/bin/dumb-init -- pnpm run --filter supervisor start"]
+        securityContext:
+          runAsUser: 0 # Run as root for bootstrap
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /home/node/shared
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8020
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8020
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: shared-storage
+        emptyDir: {}
