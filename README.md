@@ -128,6 +128,13 @@ rmcp_client=true
 
 [mcp_servers.memory]
 url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
+http_headers = { "Authorization" = "Bearer CORE_API_KEY" }
+```
+
+Then run:
+
+```bash
+codex mcp memory login
 ```
 
 </details>
