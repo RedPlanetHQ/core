@@ -29,11 +29,11 @@
 </div>
 
 <div align="center">
-  <a href="https://heysol.ai">
+  <a href="https://getcore.me">
     <img src="https://github.com/user-attachments/assets/89066cdd-204b-46c2-8ad4-4935f5ca9edd" width="200px" alt="CORE logo" />
   </a>
 
-### CORE: Your Personal Memory Layer for AI Apps
+### CORE: Memory + Actions for Your AI Tools
 
 <p align="center">
     <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
@@ -42,7 +42,7 @@
 </p>
 <p align="center">
     <a href="https://heysol.ai">
-        <img src="https://img.shields.io/badge/Website-heysol.ai-c15e50" alt="Website" />
+        <img src="https://img.shields.io/badge/Website-getcore.me-c15e50" alt="Website" />
     </a>
     <a href="https://docs.getcore.me">
         <img src="https://img.shields.io/badge/Docs-docs.getcore.me-green" alt="Docs" />
@@ -53,48 +53,119 @@
 </p>
 </div>
 
-## ❌ Without CORE
+---
 
-LLMs lose context every time you switch tools or end conversation. You get:
+## ❌ Without CORE
 
 - ❌ Re-explain your project context to each AI tool
 - ❌ Lost conversations and decisions across ChatGPT, Claude, Cursor
 - ❌ No memory of past discussions, preferences, or project history
+- ❌ Can't take actions in Linear, GitHub, Slack, Gmail from your AI tools
 
 ## ✅ With CORE
 
-CORE creates a unified memory layer across all your AI tools — placing persistent context directly into your LLM's awareness.
+CORE gives your AI tools persistent memory and the ability to act in the apps you use.
 
-Add CORE to your workflow:
+- ✅ Remember everything across Claude, Cursor, ChatGPT, Claude Code
+- ✅ Take actions in Linear, GitHub, Slack, Gmail, Google Sheets
+- ✅ Connect once, works everywhere via MCP
+- ✅ Your data, your control: open-source and self-hostable
 
-Add `search core memory` to your prompt in Cursor:
+---
 
+## What You Can Do
+
+### 1. Perform actions in your apps from Claude/Cursor
+
+Connect your apps once, take actions from anywhere.
 ```txt
-What were the architecture decisions we made for the
-payment service last week?. Search core memory
+Create/Read GitHub, Linear issues from claude
+```
+```txt
+Draft/Send/Read an email and store relevant info in CORE from claude
+```
+```txt
+Manage your calendar, update spreadsheet from claude
+```
+![actions](https://github.com/user-attachments/assets/60295a77-bdfd-4d57-aff5-d77ecb41e72d)
+
+---
+
+### 2. Get on-demand context from CORE so you never have to repeat yourself
+
+CORE becomes your personal knowledge base. Ask any AI tool to pull relevant context.
+```txt
+Search core memory for architecture decisions on the payment service
+```
+```txt
+What my content guidelines from core to create the blog?
+```
+![core_as_memory](https://github.com/user-attachments/assets/7ac5d3f3-ca36-428d-8e97-3412c398f74b)
+
+---
+
+### 3. Catch up on past context for any feature in claude code/cursor
+
+Switching back to a feature after a week? Get caught up instantly.
+```txt
+What did we discuss about the checkout flow? Summarize from memory.
+```
+```txt
+Refer to past discussions and remind me where we left off on the API refactor
+```
+![claude-code-in-core](https://github.com/user-attachments/assets/0bd9566b-a8cc-49d9-a3cf-368658906c39)
+
+---
+
+## 🚀 Quick Start
+
+Choose your path:
+
+| | **CORE Cloud** | **Self-Host** |
+|---|---|---|
+| Setup time | 5 minutes | 15 minutes |
+| Best for | Try quickly, no infra | Full control, your servers |
+| Requirements | Just an account | Docker, 4GB RAM |
+
+### Cloud
+
+1. **Sign up** at [app.getcore.me](https://app.getcore.me)
+2. **Connect a source** (Claude, Cursor, or any MCP-compatible tool)
+3. **Start using** CORE to perform any action or store about you in memory
+
+### Self-Host
+
+**Quick Deploy**
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/...)
+
+**Or with Docker**
+
+1. Clone the repository:
+
+```
+git clone https://github.com/RedPlanetHQ/core.git
+cd core
 ```
 
-Add `add to core memory` to your prompt in Cursor:
+2. Configure environment variables in `core/.env`:
 
-```txt
-Set up authentication for my API service using JWT tokens.
-Remember my preference for TypeScript strict mode. Add to core memory
+```
+OPENAI_API_KEY=your_openai_api_key
 ```
 
-CORE builds a temporal knowledge graph that remembers everything and makes it available across claude code, windsurf, cursor, claude and any MCP-compatible tool.
+3. Start the service
 
-- 1️⃣ Connect CORE to your AI tools via MCP
-- 2️⃣ Work naturally, your context gets captured automatically
-- 3️⃣ Get persistent memory across all sessions and tools
+```
+docker-compose up -d
+```
 
-No context loss, no re-explaining projects, no forgotten decisions.
+Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start building your memory graph.
 
-## Why CORE?
+👉 [View complete self-hosting guide](https://docs.getcore.me/self-hosting/docker)
 
-1. **Persistent Memory Across Tools**: Your conversations in ChatGPT become available in Cursor. Decisions made in Claude are recalled in your next coding session. One unified memory graph.
-2. **Temporal Knowledge Graph**: Not just storage — CORE tracks who said what, when, and why. Full provenance tracking means you can see how decisions evolved over time.
-3. **88.24% Benchmark Accuracy**: State-of-the-art performance on the LoCoMo benchmark — outperforming competitors by 20+ percentage points in multi-hop and temporal reasoning.
-4. **Your Data, Your Control**: Open-source, self-hostable, and designed for user ownership. Your memory belongs to you.
+
+> Note: We tried open-source models like Ollama or GPT OSS but facts generation were not good, we are still figuring out how to improve on that and then will also support OSS models.
 
 ## 🛠️ Installation
 
@@ -664,71 +735,23 @@ CORE Memory MCP provides the following tools that LLMs can use:
 - `get_integrations_actions`: Fetches what tool to be used from that integrations tools for the task.
 - `execute_integrations_actions`: Execute the tool for that integration .
 
-## 🚀 CORE Self-Hosting
+---
 
-Want to run CORE on your own infrastructure? Self-hosting gives you complete control over your data and deployment.
+## Why CORE?
 
-**Quick Deploy Options:**
+1. **Your AI tools understand context evolution**: "We decided X, then changed to Y because of Z" — CORE preserves the full story, not just the latest state.
 
-[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core?referralCode=LHvbIb&utm_medium=integration&utm_source=template&utm_campaign=generic)
+2. **Recall that handles complex queries**: "What did we discuss about payments before we switched to Stripe?" — CORE handles temporal and multi-hop reasoning. 88.24% on LoCoMo (SOTA).
 
-**Prerequisites**:
+3. **One auth, every tool**: Connect GitHub once. Create issues from Claude. Read PRs from Cursor. Search code from Claude Code. Same for Linear, Slack, Gmail.
 
-- Docker (20.10.0+) and Docker Compose (2.20.0+) installed
-- OpenAI API key
+4. **No vendor lock-in**: Open-source. Self-host on your infra. Export your data anytime.
 
-> **Note on Open-Source Models:** We tested OSS options like Ollama and GPT models, but their fact extraction and graph quality fell short. We're actively looking for options.
+---
 
-### Setup
+## How it Works
 
-1. Clone the repository:
-
-```
-git clone https://github.com/RedPlanetHQ/core.git
-cd core
-```
-
-2. Configure environment variables in `core/.env`:
-
-```
-OPENAI_API_KEY=your_openai_api_key
-```
-
-3. Start the service
-
-```
-docker-compose up -d
-```
-
-Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start building your memory graph.
-
-👉 [View complete self-hosting guide](https://docs.getcore.me/self-hosting/docker)
-
-Note: We tried open-source models like Ollama or GPT OSS but facts generation were not good, we are still figuring out how to improve on that and then will also support OSS models.
-
-## 🚀 CORE Cloud
-
-**Build your unified memory graph in 5 minutes:**
-
-Don't want to manage infrastructure? CORE Cloud lets you build your personal memory system instantly - no setup, no servers, just memory that works.
-
-1. **Sign Up** at [app.getcore.me](https://app.getcore.me) and create your account
-2. **Visualize your memory graph** and see how CORE automatically forms connections between facts
-3. **Test it out** - ask "What do you know about me?" in conversation section
-4. Connect to your tools:
-   - [Claude](https://docs.getcore.me/providers/claude) & [Cursor](https://docs.getcore.me/providers/cursor) - coding with context
-   - [CLaude Code CLI](https://docs.getcore.me/providers/claude-code) & [Codex CLI](https://docs.getcore.me/providers/codex) - terminal-based coding with memory
-   - [Add Browser Extension](https://docs.getcore.me/providers/browser-extension) - bring your memory to any website
-   - [Linear](https://docs.getcore.me/integrations/linear), [Github](https://docs.getcore.me/integrations/github) - add project context automatically
-
-## 🔥 Research Highlights
-
-CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers. Check out this [blog](https://blog.heysol.ai/core-build-memory-knowledge-graph-for-individuals-and-achieved-sota-on-locomo-benchmark/) for more info.
-
-<img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
-(1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
-
-## How CORE create memory
+### How CORE create memory
 
 <img width="12885" height="3048" alt="memory-ingest-diagram" src="https://github.com/user-attachments/assets/c51679de-8260-4bee-bebf-aff32c6b8e13" />
 
@@ -743,7 +766,7 @@ The Result: Instead of a flat database, CORE gives you a memory that grows and c
 
 ![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
 
-## How CORE recalls from memory
+### How CORE recalls from memory
 
 <img width="10610" height="3454" alt="memory-search-diagram" src="https://github.com/user-attachments/assets/3541893e-f7c9-42b9-8fad-6dabf138dbeb" />
 
@@ -756,66 +779,54 @@ When you ask CORE a question, it doesn’t just look up text - it digs into your
 
 The result: CORE doesn’t just recall facts - it recalls them in the right context, time, and story, so agents can respond the way you would remember.
 
-## 🧩 Key Features
+---
 
-### 🧠 **Unified, Portable Memory**:
+## 🛠️ For Agent Builders
 
-Add and recall your memory across **Cursor, Windsurf, Claude Desktop, Claude Code, Gemini CLI, AWS's Kiro, VS Code, and Roo Code** via MCP
+Building AI agents? CORE gives you memory infrastructure + integrations infrastructure so you can focus on your agent's logic.
 
-![core-claude](https://github.com/user-attachments/assets/56c98288-ee87-4cd0-8b02-860aca1c7f9a)
+### What You Get
 
-### 🕸️ **Temporal + Reified Knowledge Graph**:
+**Memory Infrastructure**
+- Temporal knowledge graph with 88.24% LoCoMo accuracy
+- Hybrid search: semantic + keyword + graph traversal
+- Tracks context evolution and contradictions
 
-Remember the story behind every fact—track who said what, when, and why with rich relationships and full provenance, not just flat storage
+**Integrations Infrastructure**
+- Connect GitHub, Linear, Slack, Gmail once
+- Your agent gets MCP tools for all connected apps
+- No OAuth flows to build, no API maintenance
 
-![core-memory-graph](https://github.com/user-attachments/assets/5d1ee659-d519-4624-85d1-e0497cbdd60a)
+### Examples
 
-### 🌐 **Browser Extension**:
+**[core-cli](https://github.com/RedPlanetHQ/core-cli)** — A task manager agent that connects to CORE for memory and syncs with Linear, GitHub Issues.
 
-Save conversations and content from ChatGPT, Grok, Gemini, Twitter, YouTube, blog posts, and any webpage directly into your CORE memory.
+**[holo](https://github.com/RedPlanetHQ/holo)** — Turn your CORE memory into a personal website with chat.
 
-**How to Use Extension**
+### Get Started
 
-1. [Download the Extension](https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc) from the Chrome Web Store.
-2. Login to [CORE dashboard](https://app.getcore.me)
-   - Navigate to Settings (bottom left)
-   - Go to API Key → Generate new key → Name it “extension.”
-3. Open the extension, paste your API key, and save.
+- [API Reference](https://docs.getcore.me/api-reference)
+- [SDK Documentation](https://docs.getcore.me)
+- Need a specific integration? [Open a GitHub issue](https://github.com/RedPlanetHQ/core/issues)
 
-https://github.com/user-attachments/assets/6e629834-1b9d-4fe6-ae58-a9068986036a
+---
 
-### 💬 **Chat with Memory**:
+## 🔥 Research Highlights
 
-Ask questions like "What are my writing preferences?" with instant insights from your connected knowledge
+CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers. Check out this [blog](https://blog.heysol.ai/core-build-memory-knowledge-graph-for-individuals-and-achieved-sota-on-locomo-benchmark/) for more info.
 
-![chat-with-memory](https://github.com/user-attachments/assets/d798802f-bd51-4daf-b2b5-46de7d206f66)
+<img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
+(1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
 
-### ⚡ **Auto-Sync from Apps**:
-
-Automatically capture relevant context from Linear, Slack, Notion, GitHub and other connected apps into your CORE memory
-
-📖 **[View All Integrations](./integrations/README.md)** - Complete list of supported services and their features
-
-![core-slack](https://github.com/user-attachments/assets/d5fefe38-221e-4076-8a44-8ed673960f03)
-
-### 🔗 **MCP Integration Hub**:
-
-Connect Linear, Slack, GitHub, Notion once to CORE—then use all their tools in Claude, Cursor, or any MCP client with a single URL
-
-![core-linear-claude](https://github.com/user-attachments/assets/7d59d92b-8c56-4745-a7ab-9a3c0341aa32)
+---
 
 ## Documentation
 
 Explore our documentation to get the most out of CORE
 
-- [Basic Concepts](https://docs.getcore.me/concepts/memory_graph)
 - [Self Hosting](https://docs.getcore.me/self-hosting/overview)
-- [Connect Core MCP with Claude](https://docs.getcore.me/providers/claude)
-- [Connect Core MCP with Cursor](https://docs.getcore.me/providers/cursor)
-- [Connect Core MCP with Claude Code](https://docs.getcore.me/providers/claude-code)
-- [Connect Core MCP with Codex](https://docs.getcore.me/providers/codex)
-
 - [Basic Concepts](https://docs.getcore.me/overview)
+- [Memory Graph](https://docs.getcore.me/concepts/memory_graph)
 - [API Reference](https://docs.getcore.me/api-reference/get-user-profile)
 
 ## 🔒 Security
@@ -858,3 +869,4 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
