@@ -6,7 +6,7 @@ description: "Connect your VS Code editor to CORE's memory system via MCP"
 ### Prerequisites
 
 - VS Code (version 1.95.0 or later) with GitHub Copilot extension
-- CORE account (sign up at [core.heysol.ai](https://core.heysol.ai))
+- CORE account (sign up at [app.getcore.me](https://app.getcore.me))
 - [MCP support enabled](https://code.visualstudio.com/docs/copilot/chat/mcp-servers) in VS Code
 
 ### Step 1: Create MCP Configuration
@@ -20,7 +20,7 @@ description: "Connect your VS Code editor to CORE's memory system via MCP"
    {
      "servers": {
        "core-memory": {
-         "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
+         "url": "https://mcp.getcore.me/api/v1/mcp?source=Vscode",
          "type": "http"
        }
      }
@@ -32,7 +32,7 @@ description: "Connect your VS Code editor to CORE's memory system via MCP"
 - Go to Extensions -> MCP Servers -> `core-memory` server
 - Click on settings icon in core-memory server and start server
   ![Core vscode](/images/core-vscode-start-server.png)
-- Allow domain core.heysol.ai to authenticate this MCP server
+- Allow domain app.getcore.me to authenticate this MCP server
   ![Core vscode](/images/allow-domain.png)
 - Select `MCP` when this is prompted on your screen
   ![Core vscode](/images/authenticate-vscode.png)

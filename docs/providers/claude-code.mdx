@@ -6,14 +6,14 @@ description: "Connect your Claude Code CLI to CORE's memory system"
 ### Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
-- CORE account - [Sign up at core.heysol.ai](https://core.heysol.ai)
+- CORE account - [Sign up at app.getcore.me](https://app.getcore.me)
 
 ### Step 1: Install the CORE MCP Server
 
 Run this command in your terminal to connect CORE with Claude Code:
 
 ```bash
-claude mcp add --transport http --scope user core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/api/v1/mcp?source=Claude-Code
 ```
 
 What this does: This command registers CORE's MCP server with Claude Code, establishing the connection endpoint for memory operations.

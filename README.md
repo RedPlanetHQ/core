@@ -106,7 +106,7 @@ No context loss, no re-explaining projects, no forgotten decisions.
 1. Run this command in your terminal to connect CORE with Claude Code:
 
 ```sh
-claude mcp add --transport http --scope user core-memory https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/api/v1/mcp?source=Claude-Code
 ```
 
 2. Type `/mcp` and open core-memory MCP for authentication
@@ -127,7 +127,7 @@ trust_level = "trusted"
 rmcp_client=true
 
 [mcp_servers.memory]
-url = "https://core.heysol.ai/api/v1/mcp?source=codex"
+url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
 ```
 
 </details>
@@ -144,7 +144,7 @@ See [Gemini CLI Configuration](https://google-gemini.github.io/gemini-cli/docs/t
 {
   "mcpServers": {
     "corememory": {
-      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=geminicli",
+      "httpUrl": "https://mcp.getcore.me/api/v1/mcp?source=geminicli",
       "timeout": 5000
     }
   }
@@ -165,7 +165,7 @@ Add the following to your `~/.copilot/mcp-config.json` file:
   "mcpServers": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-CLI",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Copilot-CLI",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -194,7 +194,7 @@ OR
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=cursor",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=cursor",
       "headers": {}
     }
   }
@@ -212,7 +212,7 @@ Enter the below in `mcp.json` file:
 {
   "servers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Vscode",
       "type": "http",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
@@ -235,7 +235,7 @@ Add to your VS Code Insiders MCP config:
     "servers": {
       "core-memory": {
         "type": "http",
-        "url": "https://core.heysol.ai/api/v1/mcp?source=VSCode-Insiders",
+        "url": "https://mcp.getcore.me/api/v1/mcp?source=VSCode-Insiders",
         "headers": {
           "Authorization": "Bearer YOUR_API_KEY"
         }
@@ -256,7 +256,7 @@ Enter the below in `mcp_config.json` file:
 {
   "mcpServers": {
     "core-memory": {
-      "serverUrl": "https://core.heysol.ai/api/v1/mcp/source=windsurf",
+      "serverUrl": "https://mcp.getcore.me/api/v1/mcp/source=windsurf",
       "headers": {
         "Authorization": "Bearer <YOUR_API_KEY>"
       }
@@ -277,7 +277,7 @@ Enter the below in `mcp_config.json` file:
 {
   "core-memory": {
     "command": "npx",
-    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Zed"]
+    "args": ["-y", "mcp-remote", "https://mcp.getcore.me/api/v1/mcp?source=Zed"]
   }
 }
 ```
@@ -292,7 +292,7 @@ Enter the below in `mcp_config.json` file:
 Run this command in your terminal:
 
 ```sh
-amp mcp add core-memory https://core.heysol.ai/api/v1/mcp?source=amp
+amp mcp add core-memory https://mcp.getcore.me/api/v1/mcp?source=amp
 ```
 
 </details>
@@ -307,7 +307,7 @@ Add to your `~/.augment/settings.json` file:
   "mcpServers": {
     "core-memory": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=augment-code",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=augment-code",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -329,7 +329,7 @@ Add to your `~/.augment/settings.json` file:
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Cline",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Cline",
       "type": "streamableHttp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
@@ -351,7 +351,7 @@ Add to your `~/.augment/settings.json` file:
 {
   "core-memory": {
     "type": "streamable-http",
-    "url": "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code",
+    "url": "https://mcp.getcore.me/api/v1/mcp?source=Kilo-Code",
     "headers": {
       "Authorization": "Bearer your-token"
     }
@@ -370,7 +370,7 @@ Add in Kiro → MCP Servers:
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Kiro",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Kiro",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -392,7 +392,7 @@ Add to `~/.qwen/settings.json`:
 {
   "mcpServers": {
     "core-memory": {
-      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=Qwen",
+      "httpUrl": "https://mcp.getcore.me/api/v1/mcp?source=Qwen",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY",
         "Accept": "application/json, text/event-stream"
@@ -414,7 +414,7 @@ Add to your Roo Code MCP configuration:
   "mcpServers": {
     "core-memory": {
       "type": "streamable-http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Roo-Code",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Roo-Code",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -435,7 +435,7 @@ Add to your Opencode configuration:
   "mcp": {
     "core-memory": {
       "type": "remote",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Opencode",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Opencode",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       },
@@ -457,7 +457,7 @@ Add to Repository Settings → Copilot → Coding agent → MCP configuration:
   "mcpServers": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-Agent",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Copilot-Agent",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -479,7 +479,7 @@ Add to Repository Settings → Copilot → Coding agent → MCP configuration:
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Qodo-Gen"
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Qodo-Gen"
     }
   }
 }
@@ -497,7 +497,7 @@ Add in Settings → AI → Manage MCP servers:
 ```json
 {
   "core": {
-    "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
+    "url": "https://mcp.getcore.me/api/v1/mcp?source=Warp",
     "headers": {
       "Authorization": "Bearer YOUR_API_KEY"
     }
@@ -518,7 +518,7 @@ Add to your Crush configuration:
   "mcp": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Crush",
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Crush",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -537,7 +537,7 @@ Add to your Crush configuration:
 1. Copy CORE MCP URL:
 
 ```
-https://core.heysol.ai/api/v1/mcp?source=Claude
+https://mcp.getcore.me/api/v1/mcp?source=Claude
 ```
 
 2. Navigate to Settings → Connectors → Click Add custom connector
@@ -576,7 +576,7 @@ Connect Gemini to CORE's memory system via browser extension:
 {
   "core-memory": {
     "command": "npx",
-    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=perplexity"]
+    "args": ["-y", "mcp-remote", "https://mcp.getcore.me/api/v1/mcp?source=perplexity"]
   }
 }
 ```
@@ -594,7 +594,7 @@ Connect Gemini to CORE's memory system via browser extension:
 Run in terminal:
 
 ```sh
-droid mcp add core https://core.heysol.ai/api/v1/mcp?source=Factory --type http --header "Authorization: Bearer YOUR_API_KEY"
+droid mcp add core https://mcp.getcore.me/api/v1/mcp?source=Factory --type http --header "Authorization: Bearer YOUR_API_KEY"
 ```
 
 Type /mcp within droid to manage servers and view available tools.
@@ -616,7 +616,7 @@ acli rovodev mcp
 {
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Rovo-Dev"
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Rovo-Dev"
     }
   }
 }
@@ -633,7 +633,7 @@ Add to your Trae MCP configuration:
 {
   "mcpServers": {
     "core": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Trae"
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=Trae"
     }
   }
 }
@@ -701,7 +701,7 @@ Note: We tried open-source models like Ollama or GPT OSS but facts generation we
 
 Don't want to manage infrastructure? CORE Cloud lets you build your personal memory system instantly - no setup, no servers, just memory that works.
 
-1. **Sign Up** at [core.heysol.ai](https://core.heysol.ai) and create your account
+1. **Sign Up** at [app.getcore.me](https://app.getcore.me) and create your account
 2. **Visualize your memory graph** and see how CORE automatically forms connections between facts
 3. **Test it out** - ask "What do you know about me?" in conversation section
 4. Connect to your tools:
@@ -766,7 +766,7 @@ Save conversations and content from ChatGPT, Grok, Gemini, Twitter, YouTube, blo
 **How to Use Extension**
 
 1. [Download the Extension](https://chromewebstore.google.com/detail/core-extension/cglndoindnhdbfcbijikibfjoholdjcc) from the Chrome Web Store.
-2. Login to [CORE dashboard](https://core.heysol.ai)
+2. Login to [CORE dashboard](https://app.getcore.me)
    - Navigate to Settings (bottom left)
    - Go to API Key → Generate new key → Name it “extension.”
 3. Open the extension, paste your API key, and save.

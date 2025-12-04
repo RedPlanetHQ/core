@@ -6,7 +6,7 @@ description: "Connect your Windsurf IDE to CORE's memory system"
 ### Prerequisites
 
 - Windsurf IDE installed
-- CORE account - [Sign up at core.heysol.ai](https://core.heysol.ai)
+- CORE account - [Sign up at app.getcore.me](https://app.getcore.me)
 
 ### Step 1: Add CORE MCP in Windsurf
 
@@ -19,7 +19,7 @@ description: "Connect your Windsurf IDE to CORE's memory system"
 {
   "mcpServers": {
     "core-memory": {
-      "serverUrl": "https://core.heysol.ai/api/v1/mcp?source=windsurf"
+      "serverUrl": "https://mcp.getcore.me/api/v1/mcp?source=windsurf"
     }
   }
 }
@@ -49,7 +49,7 @@ If the OAuth authentication doesn't work, use the API key method instead:
 
 ### Step 1: Get Your API Key
 
-1. Log into your CORE dashboard at [core.heysol.ai](https://core.heysol.ai)
+1. Log into your CORE dashboard at [app.getcore.me](https://app.getcore.me)
 2. Navigate to **Settings** (bottom left)
 3. Go to **API Key** → **Generate new key** → Name it "windsurf"
 4. Copy the generated key
@@ -62,7 +62,7 @@ Replace your `mcp_config.json` configuration with:
 {
   "mcpServers": {
     "core-memory": {
-      "serverUrl": "https://core.heysol.ai/api/v1/mcp/source=windsurf",
+      "serverUrl": "https://mcp.getcore.me/api/v1/mcp/source=windsurf",
       "headers": {
         "Authorization": "Bearer <YOUR_TOKEN>"
       }
@@ -250,7 +250,7 @@ Once connected, CORE memory integrates with Windsurf's Cascade:
 **Authentication Problems:**
 
 - Make sure you completed the OAuth flow in browser
-- Check that your CORE account is active at core.heysol.ai
+- Check that your CORE account is active at app.getcore.me
 
 **MCP Not Appearing:**
 
