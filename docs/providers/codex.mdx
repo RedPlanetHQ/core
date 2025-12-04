@@ -22,13 +22,31 @@ code ~/.codex/config.toml -r
 
 ### Step 2: Add CORE MCP Configuration
 
-Add the following to your `config.toml` file:
+**Option 1: URL-based Configuration (Recommended)**
+
+Try this simpler configuration first. Add the following to your `config.toml` file:
 
 ```toml
-model = "gpt-5-codex"
-model_reasoning_effort = "medium"
-trust_level = "trusted"
+[features]
+rmcp_client=true
 
+[mcp_servers.memory]
+url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
+```
+
+Then run the login command:
+
+```bash
+codex mcp memory login
+```
+
+This will authenticate your Codex CLI with CORE's memory system.
+
+**Option 2: API Key Configuration (If Option 1 doesn't work)**
+
+If the URL-based configuration doesn't work, use this API key-based configuration:
+
+```toml
 [features]
 rmcp_client=true
 
@@ -37,9 +55,7 @@ url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
 http_headers = { "Authorization" = "Bearer CORE_API_KEY" }
 ```
 
-What this does: This registers CORE's MCP server with Codex, establishing the connection endpoint for memory operations using Bearer token authentication.
-
-### Step 3: Get Your API Key
+To get your API key:
 
 1. Log into your CORE dashboard at [app.getcore.me](https://app.getcore.me)
 2. Navigate to **Settings** (bottom left)
@@ -48,17 +64,13 @@ What this does: This registers CORE's MCP server with Codex, establishing the co
    ![Create API Key](/images/create-api-key.png)
 4. Copy the generated key and replace `CORE_API_KEY` in your config file
 
-### Step 4: Login to CORE MCP
-
-Run the following command in Codex to complete the authentication:
+Then run:
 
 ```bash
 codex mcp memory login
 ```
 
-This will authenticate your Codex CLI with CORE's memory system.
-
-### Step 5: Verify Connection
+### Step 3: Verify Connection
 
 Start Codex CLI and test your setup:
 

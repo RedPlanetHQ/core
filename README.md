@@ -116,13 +116,21 @@ claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/
 <details>
 <summary><b>Install in Codex CLI</b></summary>
 
-Add the following to your `~/.codex/config.toml` file:
+**Option 1 (Recommended):** Add to your `~/.codex/config.toml` file:
 
 ```toml
-model = "gpt-5-codex"
-model_reasoning_effort = "medium"
-trust_level = "trusted"
+[features]
+rmcp_client=true
 
+[mcp_servers.memory]
+url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
+```
+
+Then run: `codex mcp memory login`
+
+**Option 2 (If Option 1 doesn't work):** Add API key configuration:
+
+```toml
 [features]
 rmcp_client=true
 
@@ -131,11 +139,7 @@ url = "https://mcp.getcore.me/api/v1/mcp?source=codex"
 http_headers = { "Authorization" = "Bearer CORE_API_KEY" }
 ```
 
-Then run:
-
-```bash
-codex mcp memory login
-```
+Get your API key from [app.getcore.me](https://app.getcore.me) → Settings → API Key, then run: `codex mcp memory login`
 
 </details>
 
