@@ -288,8 +288,12 @@ def extract_temporal_metrics(episodes: List[Dict[str, Any]], quiet: bool = False
     # Sort by date
     dates = sorted([episode['createdAt'] for episode in episodes])
 
-    oldest_episode = datetime.fromisoformat(dates[0])
-    newest_episode = datetime.fromisoformat(dates[-1])
+    # Handle Z timezone suffix (Python 3.9 fromisoformat doesn't support 'Z')
+    oldest_date_str = dates[0].replace('Z', '+00:00') if dates[0].endswith('Z') else dates[0]
+    newest_date_str = dates[-1].replace('Z', '+00:00') if dates[-1].endswith('Z') else dates[-1]
+
+    oldest_episode = datetime.fromisoformat(oldest_date_str)
+    newest_episode = datetime.fromisoformat(newest_date_str)
 
     # Calculate time span
     time_span_days = (newest_episode - oldest_episode).days + 1
