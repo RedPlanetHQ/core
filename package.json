@@ -1,7 +1,7 @@
 {
   "name": "core",
   "private": true,
-  "version": "0.1.31",
+  "version": "0.1.32",
   "workspaces": [
     "apps/*",
     "packages/*"
