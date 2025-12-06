@@ -13,6 +13,7 @@ import {
   performBM25Search,
   performVectorSearch,
   performEpisodeGraphSearch,
+  performEpisodeVectorSearch,
   extractEntitiesFromQuery,
   type EpisodeGraphResult,
 } from "./search/utils";
@@ -109,9 +110,10 @@ export class SearchService {
       vector: 0,
       bfs: 0,
       episodeGraph: 0,
+      episodeVector: 0,
     };
 
-    const [bm25Results, vectorResults, bfsResults, episodeGraphResults] =
+    const [bm25Results, vectorResults, bfsResults, episodeGraphResults, episodeVectorResults] =
       await Promise.all([
         performBM25Search(query, userId, opts).then((r) => {
           searchTimings.bm25 = Date.now() - searchStartTime;
@@ -139,10 +141,19 @@ export class SearchService {
             return r;
           },
         ),
+        performEpisodeVectorSearch(queryVector, userId, opts).then(
+          (r) => {
+            searchTimings.episodeVector = Date.now() - searchStartTime;
+            logger.info(
+              `Episode vector search completed in ${searchTimings.episodeVector}ms`,
+            );
+            return r;
+          },
+        ),
       ]);
 
     logger.info(
-      `Search results - BM25: ${bm25Results.length}, Vector: ${vectorResults.length}, BFS: ${bfsResults.length}, EpisodeGraph: ${episodeGraphResults.length}`,
+      `Search results - BM25: ${bm25Results.length}, Vector: ${vectorResults.length}, BFS: ${bfsResults.length}, EpisodeGraph: ${episodeGraphResults.length}, EpisodeVector: ${episodeVectorResults.length}`,
     );
 
     // 2. TWO-STAGE RANKING PIPELINE: Quality-based filtering with hierarchical scoring
@@ -150,6 +161,7 @@ export class SearchService {
     // Stage 1: Extract episodes with provenance tracking
     let episodesWithProvenance = await this.extractEpisodesWithProvenance({
       episodeGraph: episodeGraphResults,
+      episodeVector: episodeVectorResults,
       bfs: bfsResults,
       vector: vectorResults,
       bm25: bm25Results,
@@ -699,7 +711,7 @@ export class SearchService {
             createdAt: compact.startTime,
             labelIds: sessionLabelIds,
             isCompact: true,
-            relevanceScore: group.highestScore, // Use highest score from session episodes
+            relevanceScore: Number(group.highestScore.toFixed(2)), // Use highest score from session episodes
             originalIndex: group.firstIndex, // Use position of first episode from this session
           });
           processedSessions.add(sessionId);
@@ -713,7 +725,7 @@ export class SearchService {
             content: ep.episode.originalContent,
             createdAt: ep.episode.createdAt,
             labelIds: ep.episode.labelIds || [],
-            relevanceScore: ep.rerankScore,
+            relevanceScore: Number(ep.rerankScore.toFixed(2)),
             originalIndex: index,
           });
         }
@@ -725,7 +737,7 @@ export class SearchService {
           createdAt: ep.episode.createdAt,
           labelIds: ep.episode.labelIds || [],
           isDocument: isDocument,
-          relevanceScore: ep.rerankScore,
+          relevanceScore: Number(ep.rerankScore.toFixed(2)),
           originalIndex: index,
         });
       }
@@ -746,6 +758,7 @@ export class SearchService {
    */
   private async extractEpisodesWithProvenance(sources: {
     episodeGraph: EpisodeGraphResult[];
+    episodeVector: EpisodeSearchResult[];
     bfs: EpisodeSearchResult[];
     vector: EpisodeSearchResult[];
     bm25: EpisodeSearchResult[];
@@ -756,7 +769,7 @@ export class SearchService {
     const mergeEpisode = (
       episode: EpisodicNode,
       score: number,
-      source: "episodeGraph" | "bfs" | "vector" | "bm25",
+      source: "episodeGraph" | "episodeVector" | "bfs" | "vector" | "bm25",
       statementCount: number,
       topStatements: StatementNode[],
       invalidatedStatements: StatementNode[],
@@ -767,11 +780,13 @@ export class SearchService {
           episode,
           statements: [],
           episodeGraphScore: 0,
+          episodeVectorScore: 0,
           bfsScore: 0,
           vectorScore: 0,
           bm25Score: 0,
           sourceBreakdown: {
             fromEpisodeGraph: 0,
+            fromEpisodeVector: 0,
             fromBFS: 0,
             fromVector: 0,
             fromBM25: 0,
@@ -792,6 +807,9 @@ export class SearchService {
       if (source === "episodeGraph") {
         ep.episodeGraphScore = numericScore;
         ep.sourceBreakdown.fromEpisodeGraph = numericStatementCount;
+      } else if (source === "episodeVector") {
+        ep.episodeVectorScore = numericScore;
+        ep.sourceBreakdown.fromEpisodeVector = numericStatementCount;
       } else if (source === "bfs") {
         ep.bfsScore = numericScore;
         ep.sourceBreakdown.fromBFS = numericStatementCount;
@@ -843,6 +861,18 @@ export class SearchService {
         result.statements,
         result.statements.filter((s) => s.invalidAt !== null),
         result.metrics.entityMatchCount,
+      );
+    });
+
+    // Process Episode Vector results (episode-level semantic search)
+    sources.episodeVector.forEach((result) => {
+      mergeEpisode(
+        result.episode,
+        result.score,
+        "episodeVector",
+        result.statementCount,
+        result.topStatements,
+        result.invalidatedStatements,
       );
     });
 

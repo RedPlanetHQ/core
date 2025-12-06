@@ -1105,4 +1105,4 @@ export const SUGGESTED_INGESTION_PROMPTS = [
   "I'm a DevOps engineer managing Kubernetes clusters. I work primarily with Terraform, Helm, and CI/CD pipelines using GitHub Actions.",
 ];
 
-export const VERIFICATION_PROMPT = "Who am I? Tell me what you know about me.";
+export const VERIFICATION_PROMPT = "Use the memory search tool with query: 'What do you know about my technical background, skills, and development preferences?'";

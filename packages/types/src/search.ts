@@ -30,11 +30,12 @@ export interface StatementWithSource {
   statement: StatementNode;
   sources: {
     episodeGraph?: { score: number; entityMatches: number };
+    episodeVector?: { score: number };
     bfs?: { score: number; hopDistance: number; relevance: number };
     vector?: { score: number; similarity: number };
     bm25?: { score: number; rank: number };
   };
-  primarySource: "episodeGraph" | "bfs" | "vector" | "bm25";
+  primarySource: "episodeGraph" | "episodeVector" | "bfs" | "vector" | "bm25";
 }
 
 /**
@@ -46,6 +47,7 @@ export interface EpisodeWithProvenance {
 
   // Aggregated scores from each source
   episodeGraphScore: number;
+  episodeVectorScore: number;
   bfsScore: number;
   vectorScore: number;
   bm25Score: number;
@@ -53,6 +55,7 @@ export interface EpisodeWithProvenance {
   // Source distribution
   sourceBreakdown: {
     fromEpisodeGraph: number;
+    fromEpisodeVector: number;
     fromBFS: number;
     fromVector: number;
     fromBM25: number;
