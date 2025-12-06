@@ -423,7 +423,7 @@ export async function applyEpisodeReranking(
       // Map cohereScore to rerankScore for consistency
       return cohereResults.map((ep: any) => ({
         ...ep,
-        rerankScore: Number(ep.cohereScore.toFixed(2)),
+        rerankScore: ep.cohereScore,
       }));
     } catch (error) {
       logger.error("Cohere reranking failed, falling back to original algorithm:", {error});

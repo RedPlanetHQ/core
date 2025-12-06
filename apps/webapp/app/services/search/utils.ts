@@ -240,6 +240,107 @@ export async function performVectorSearch(
 }
 
 /**
+ * Perform vector similarity search on episode-level embeddings
+ * Better for broad/vague queries where statement-level search is too granular
+ */
+export async function performEpisodeVectorSearch(
+  queryEmbedding: Embedding,
+  userId: string,
+  options: Required<SearchOptions>,
+): Promise<EpisodeSearchResult[]> {
+  try {
+    const EPISODE_LIMIT = 50;
+
+    // Build episode label filter condition
+    let episodeLabelCondition = "";
+    if (options.labelIds.length > 0) {
+      episodeLabelCondition = `
+        AND ep.labelIds IS NOT NULL
+        AND size(ep.labelIds) > 0
+        AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
+      `;
+    }
+
+    // Build timeframe condition
+    let timeframeCondition = `
+      AND ep.validAt <= $validAt
+    `;
+    if (options.startTime) {
+      timeframeCondition += ` AND ep.validAt >= $startTime`;
+    }
+
+    const cypher = `
+      MATCH (ep:Episode {userId: $userId})
+      WHERE ep.contentEmbedding IS NOT NULL
+        AND size(ep.contentEmbedding) > 0
+        ${timeframeCondition}
+        ${episodeLabelCondition}
+
+      WITH ep, gds.similarity.cosine(ep.contentEmbedding, $queryEmbedding) AS score
+      WHERE score >= 0.2
+
+      // Get statements from matching episodes
+      MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+      WHERE s.validAt <= $validAt
+        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
+
+      WITH ep, score,
+           COLLECT(s) as allStatements,
+           COUNT(s) as stmtCount
+
+      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "ep.")} as episode,
+             score,
+             stmtCount,
+             allStatements[0..5] as topStatements,
+             [] as invalidatedStatements
+      ORDER BY score DESC
+      LIMIT ${EPISODE_LIMIT}
+    `;
+
+    const params = {
+      queryEmbedding,
+      userId,
+      validAt: options.endTime.toISOString(),
+      ...(options.startTime && { startTime: options.startTime.toISOString() }),
+      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
+    };
+
+    const records = await runQuery(cypher, params);
+
+    logger.info(
+      `Episode vector search: found ${records.length} episodes, ` +
+        `top score: ${records[0]?.get("score") || "N/A"}`,
+    );
+
+    return records.map((record) => {
+      const episode = record.get("episode") as EpisodicNode;
+      const scoreValue = record.get("score");
+      const stmtCountValue = record.get("stmtCount");
+      const topStatementsRaw = record.get("topStatements") || [];
+
+      return {
+        episode,
+        score:
+          typeof scoreValue === "number"
+            ? scoreValue
+            : (scoreValue?.toNumber?.() ?? 0),
+        statementCount:
+          typeof stmtCountValue === "bigint"
+            ? Number(stmtCountValue)
+            : (stmtCountValue ?? 0),
+        topStatements: topStatementsRaw.map(
+          (s: any) => s.properties as StatementNode,
+        ),
+        invalidatedStatements: [],
+      };
+    });
+  } catch (error) {
+    logger.error("Episode vector search error:", { error });
+    return [];
+  }
+}
+
+/**
  * Perform BFS traversal starting from entities mentioned in the query
  * Uses guided search with semantic filtering to reduce noise
  */
