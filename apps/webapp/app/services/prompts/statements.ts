@@ -659,21 +659,15 @@ You MUST wrap your response in <output> tags. Do not include any text outside th
 
 <output>
 [{
-    "statementId": "new_statement_uuid",
-    "isDuplicate": false,
-    "duplicateId": null,
-    "contradictions": ["contradicted_statement_uuid"]
-  },
-  {
-    "statementId": "new_statement_uuid",
-    "isDuplicate": false,
-    "duplicateId": null,
-    "contradictions": ["contradicted_statement_uuid"]
-  },
-  {
-    "statementId": "another_statement_uuid",
+    "statementId": "statement_uuid_that_is_duplicate",
     "isDuplicate": true,
     "duplicateId": "existing_duplicate_uuid",
+    "contradictions": []
+  },
+  {
+    "statementId": "statement_uuid_with_contradictions",
+    "isDuplicate": false,
+    "duplicateId": null,
     "contradictions": ["contradicted_statement_uuid"]
   }]
 </output>
@@ -681,7 +675,9 @@ You MUST wrap your response in <output> tags. Do not include any text outside th
 CRITICAL FORMATTING RULES:
 - ALWAYS use <output> and </output> tags
 - Include NO text before <output> or after </output>
-- Return valid JSON array with all statement IDs from NEW_STATEMENTS
+- **ONLY include statements that ARE duplicates OR have contradictions** (sparse output for performance)
+- **OMIT all statements with no issues** (isDuplicate=false AND contradictions=[])
+- Return empty array [] if no duplicates or contradictions found
 - If the new statement is a duplicate, include the UUID of the duplicate statement
 - For TRUE contradictions AND superseding evolution, list statement UUIDs that the new statement contradicts
 - If a statement is both a contradiction AND a duplicate (rare case), mark it as a duplicate
@@ -716,9 +712,6 @@ CRITICAL FORMATTING RULES:
       (stmt: any) => `
   StatementId: ${stmt.statementId}
   Fact: ${stmt.fact}
-  Subject: ${stmt.subject}
-  Predicate: ${stmt.predicate}
-  Object: ${stmt.object}
   ---------------------------
   `,
     )

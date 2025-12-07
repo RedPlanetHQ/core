@@ -27,7 +27,7 @@ import {
   findContradictoryStatementsBatch,
   findSimilarStatements,
   findStatementsWithSameSubjectObjectBatch,
-  getTripleForStatementsBatch,
+  getStatementsBatch,
   invalidateStatements,
 } from "~/services/graphModels/statement";
 import {
@@ -41,7 +41,6 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
-
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -197,14 +196,19 @@ export async function processGraphResolution(
         select: { output: true },
       });
 
-      let finalOutput: any = payload.episodeDetails
+      let finalOutput: any = payload.episodeDetails;
       let currentStatus: IngestionStatus = IngestionStatus.COMPLETED;
       const currentOutput = queue?.output as any;
       let episodeUuids: string[] = finalOutput?.episodeUuid
         ? [finalOutput.episodeUuid]
         : [];
 
-      const episodeStatements = finalOutput?.episodeUuid ? await getEpisodeStatements({ episodeUuid: finalOutput.episodeUuid, userId: payload.userId }) : [];
+      const episodeStatements = finalOutput?.episodeUuid
+        ? await getEpisodeStatements({
+            episodeUuid: finalOutput.episodeUuid,
+            userId: payload.userId,
+          })
+        : [];
       const statementsCount = episodeStatements.length;
 
       if (currentOutput && currentOutput.episodes.length > 0) {
@@ -212,14 +216,23 @@ export async function processGraphResolution(
         episodeUuids = currentOutput.episodes.map(
           (episode: any) => episode.episodeUuid,
         );
-        finalOutput = {
-          ...currentOutput,
-          statementsCreated: currentOutput.statementsCreated + statementsCount,
-          resolutionTokenUsage: {
-            low: tokenMetrics.low + currentOutput.resolutionTokenUsage.low,
-          },
-        };
 
+        try {
+          finalOutput = {
+            ...currentOutput,
+            statementsCreated:
+              currentOutput.statementsCreated + statementsCount,
+            resolutionTokenUsage: {
+              low: tokenMetrics?.low + currentOutput.resolutionTokenUsage.low,
+            },
+          };
+        } catch (e) {
+          finalOutput = {
+            ...currentOutput,
+            statementsCreated:
+              currentOutput.statementsCreated + statementsCount,
+          };
+        }
       } else {
         finalOutput = {
           episodes: [payload.episodeDetails],
@@ -238,23 +251,16 @@ export async function processGraphResolution(
         },
       });
 
-
       // Deduct credits for episode creation
-      await deductCredits(
-        payload.workspaceId,
-        "addEpisode",
-        statementsCount,
-      );
-
+      await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
 
       logger.info(
         `Updated ingestion queue ${payload.queueId} with resolution metrics`,
       );
     } catch (error) {
-      logger.warn(
-        `Failed to update ingestion queue with resolution metrics:`,
-        { error },
-      );
+      logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
+        error,
+      });
     }
 
     return {
@@ -314,6 +320,8 @@ async function resolveExtractedNodesWithMerges(
   // Get all entity UUIDs from this episode to exclude from searches
   const currentEntityIds = uniqueEntities.map((e) => e.uuid);
 
+  logger.info("start finding similar entities");
+
   // Step 2: For each entity, find similar entities for LLM evaluation
   // Note: Exact name matches are already deduplicated before this function is called
   const allEntityResults = await Promise.all(
@@ -333,6 +341,8 @@ async function resolveExtractedNodesWithMerges(
       };
     }),
   );
+
+  logger.info("end finding similar entities");
 
   // Step 3: Separate entities that need LLM resolution from those that don't
   const entityResolutionMap = new Map<string, EntityNode>();
@@ -391,8 +401,14 @@ async function resolveExtractedNodesWithMerges(
         const parsedResponse = JSON.parse(outputMatch[1].trim());
         const nodeResolutions = parsedResponse.entity_resolutions || [];
 
-        nodeResolutions.forEach((resolution: any, index: number) => {
-          const originalEntity = entitiesNeedingLLM[resolution.id ?? index];
+        // First, assume all entities are kept as-is (non-duplicates)
+        for (const result of entitiesNeedingLLM) {
+          entityResolutionMap.set(result.entity.uuid, result.entity);
+        }
+
+        // Then, process ONLY the duplicates returned by LLM
+        nodeResolutions.forEach((resolution: any) => {
+          const originalEntity = entitiesNeedingLLM[resolution.id];
           if (!originalEntity) return;
 
           const duplicateIdx = resolution.duplicate_idx ?? -1;
@@ -411,19 +427,7 @@ async function resolveExtractedNodesWithMerges(
                 sourceUuid: originalEntity.entity.uuid,
                 targetUuid: targetEntity.uuid,
               });
-            } else {
-              // Target entity is invalid, keep original
-              entityResolutionMap.set(
-                originalEntity.entity.uuid,
-                originalEntity.entity,
-              );
             }
-          } else {
-            // Keep original
-            entityResolutionMap.set(
-              originalEntity.entity.uuid,
-              originalEntity.entity,
-            );
           }
         });
       } catch (error) {
@@ -513,6 +517,7 @@ async function resolveStatementsWithDuplicates(
     excludePredicateId: t.predicate.uuid,
   }));
 
+  logger.info("starting batch queries to find contradictory statements");
   // Execute batch queries in parallel
   const [
     contradictoryResults,
@@ -539,6 +544,8 @@ async function resolveStatementsWithDuplicates(
       }),
     ).then((results) => results.flat()),
   ]);
+
+  logger.info("finished finding contradictory statements");
 
   // Step 1: Collect structural matches (from batch queries) for each triple
   const structuralMatches: Map<
@@ -574,6 +581,8 @@ async function resolveStatementsWithDuplicates(
     });
   }
 
+  logger.info("start finding similar statements");
+
   // Step 2: Run all semantic similarity searches in parallel
   const semanticResults = await Promise.all(
     triples.map((triple) => {
@@ -591,6 +600,8 @@ async function resolveStatementsWithDuplicates(
       });
     }),
   );
+
+  logger.info("end finding similar statements");
 
   // Step 3: Combine all matches
   const allPotentialMatches: Map<
@@ -637,8 +648,8 @@ async function resolveStatementsWithDuplicates(
   }
 
   // Batch fetch all triple data
-  const allExistingTripleData = await getTripleForStatementsBatch({
-    statementIds: Array.from(allStatementIdsToFetch),
+  const allExistingTripleData: Array<StatementNode> = await getStatementsBatch({
+    statementUuids: Array.from(allStatementIdsToFetch),
   });
 
   // Build LLM context
@@ -656,17 +667,16 @@ async function resolveStatementsWithDuplicates(
     const potentialMatches =
       allPotentialMatches.get(triple.statement.uuid) || [];
     for (const match of potentialMatches) {
-      const existingTripleData = allExistingTripleData.get(match.uuid);
+      const existingTripleData = allExistingTripleData.find(
+        (statement) => statement.uuid === match.uuid,
+      );
       if (
         existingTripleData &&
         !similarStatements.find((s) => s.statementId === match.uuid)
       ) {
         similarStatements.push({
           statementId: match.uuid,
-          fact: existingTripleData.statement.fact,
-          subject: existingTripleData.subject.name,
-          predicate: existingTripleData.predicate.name,
-          object: existingTripleData.object.name,
+          fact: existingTripleData.fact,
         });
       }
     }
@@ -704,6 +714,20 @@ async function resolveStatementsWithDuplicates(
       const jsonMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
       const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
 
+      // LLM now returns ONLY statements with issues (sparse output for performance)
+      // First, assume all statements are kept as-is (no issues)
+      const statementIdsWithIssues = new Set(
+        analysisResult.map((r: any) => r.statementId),
+      );
+
+      // Keep all statements that weren't flagged by LLM
+      for (const triple of triples) {
+        if (!statementIdsWithIssues.has(triple.statement.uuid)) {
+          resolvedStatements.push(triple);
+        }
+      }
+
+      // Then, process ONLY the flagged statements from LLM
       for (const result of analysisResult) {
         const triple = triples.find(
           (t) => t.statement.uuid === result.statementId,
@@ -720,7 +744,7 @@ async function resolveStatementsWithDuplicates(
             `Statement is duplicate, will delete and link to existing: ${triple.statement.fact}`,
           );
         } else {
-          // Keep the new statement
+          // Keep the new statement (it has contradictions but isn't a duplicate)
           resolvedStatements.push(triple);
 
           // Handle contradictions - invalidate old statements

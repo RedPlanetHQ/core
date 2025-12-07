@@ -287,11 +287,10 @@ Format your response as follows:
 {
   "entity_resolutions": [
     {
-      "id": 0,
+      "id": 1,
       "name": "Entity Name",
-      "duplicate_idx": -1
-    },
-    // Additional entity resolutions...
+      "duplicate_idx": 2
+    }
   ]
 }
 </output>
@@ -306,9 +305,10 @@ Format your response as follows:
 5. **REQUIRED structure:** Must follow exact JSON schema shown above
 
 ## Important Instructions:
-- Always include all entities from the input in your response
+- **ONLY include entities that ARE duplicates** (duplicate_idx >= 0)
+- **OMIT all non-duplicate entities** - empty array if no duplicates found
 - Always wrap the output in these tags <output> </output>
-- When in doubt, prefer NOT marking as duplicate (duplicate_idx = -1)
+- When in doubt, prefer NOT marking as duplicate (omit from output)
     `,
     },
     {

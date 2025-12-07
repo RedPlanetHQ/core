@@ -71,7 +71,7 @@ class GoogleDocCLI extends IntegrationCLI {
           authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
           scopes: [
             'https://www.googleapis.com/auth/documents',
-            'https://www.googleapis.com/auth/drive.file',
+            'https://www.googleapis.com/auth/drive',
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
           ],

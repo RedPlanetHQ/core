@@ -144,10 +144,7 @@ export const LogOptions = ({ id, status, sessionId }: LogOptionsProps) => {
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             {sessionId ? (
               <>
-                <AlertDialogAction
-                  onClick={() => handleDelete(false)}
-                  variant="outline"
-                >
+                <AlertDialogAction onClick={() => handleDelete(false)}>
                   Delete This Episode Only
                 </AlertDialogAction>
                 <AlertDialogAction

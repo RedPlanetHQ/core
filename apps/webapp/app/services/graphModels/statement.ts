@@ -418,6 +418,27 @@ export async function getTripleForStatementsBatch({
   return triplesMap;
 }
 
+export async function getStatementsBatch({
+  statementUuids,
+}: {
+  statementUuids: string[];
+}) {
+  if (statementUuids.length === 0) return [];
+
+  const result = await runQuery(
+    `
+    UNWIND $statementUuids AS uuid
+    MATCH (s:Statement {uuid: uuid})
+    RETURN ${STATEMENT_NODE_PROPERTIES} as statement
+  `,
+    { statementUuids },
+  );
+
+  return result.map((record) => {
+    return parseStatementNode(record.get("statement"));
+  });
+}
+
 /**
  * Batch version of findContradictoryStatements - find contradictory statements for multiple subject-predicate pairs
  */
@@ -459,7 +480,7 @@ export async function findContradictoryStatementsBatch({
 
     resultsMap.set(
       pairKey,
-      statements.map((s: any) => parseStatementNode(s))
+      statements.map((s: any) => parseStatementNode(s)),
     );
   }
 
@@ -474,7 +495,11 @@ export async function findStatementsWithSameSubjectObjectBatch({
   userId,
   excludeStatementIds = [],
 }: {
-  pairs: Array<{ subjectId: string; objectId: string; excludePredicateId?: string }>;
+  pairs: Array<{
+    subjectId: string;
+    objectId: string;
+    excludePredicateId?: string;
+  }>;
   userId: string;
   excludeStatementIds?: string[];
 }): Promise<Map<string, Omit<StatementNode, "factEmbedding">[]>> {
@@ -509,7 +534,7 @@ export async function findStatementsWithSameSubjectObjectBatch({
 
     resultsMap.set(
       pairKey,
-      statements.map((s: any) => parseStatementNode(s))
+      statements.map((s: any) => parseStatementNode(s)),
     );
   }
 
@@ -519,12 +544,17 @@ export async function findStatementsWithSameSubjectObjectBatch({
 /**
  * Delete statements by their UUIDs
  */
-export async function deleteStatements(statementUuids: string[]): Promise<void> {
+export async function deleteStatements(
+  statementUuids: string[],
+): Promise<void> {
   if (statementUuids.length === 0) return;
 
-  await runQuery(`
+  await runQuery(
+    `
     UNWIND $statementUuids AS uuid
     MATCH (s:Statement {uuid: uuid})
     DETACH DELETE s
-  `, { statementUuids });
+  `,
+    { statementUuids },
+  );
 }

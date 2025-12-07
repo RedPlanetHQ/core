@@ -59,11 +59,11 @@ export async function findSimilarEntities(params: {
 
   const limit = params.limit || 5;
   const query = `
-  MATCH (entity:Entity{userId: $userId})
-  WHERE entity.nameEmbedding IS NOT NULL and size(entity.nameEmbedding) > 0
-  WITH entity, gds.similarity.cosine(entity.nameEmbedding, $queryEmbedding) AS score
+  MATCH (ent:Entity{userId: $userId})
+  WHERE ent.nameEmbedding IS NOT NULL and size(ent.nameEmbedding) > 0
+  WITH ent, gds.similarity.cosine(ent.nameEmbedding, $queryEmbedding) AS score
   WHERE score >= $threshold
-  RETURN entity, score
+  RETURN ${ENTITY_NODE_PROPERTIES} as entity, score
   ORDER BY score DESC
   LIMIT ${limit}
   `;

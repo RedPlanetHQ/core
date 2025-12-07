@@ -172,7 +172,7 @@ export async function callTool(
         ListSpreadsheetsSchema.parse(args);
 
         // Use Drive API to list all spreadsheets
-        const drive = google.drive({ version: 'v3', auth: oauth2Client });
+        const drive = google.docs({ version: 'v3', auth: oauth2Client });
         const response = await drive.files.list({
           q: "mimeType='application/vnd.google-apps.spreadsheet'",
           fields: 'files(id, name, createdTime, modifiedTime, webViewLink)',

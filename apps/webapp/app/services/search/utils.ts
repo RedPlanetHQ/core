@@ -414,6 +414,9 @@ async function bfsTraversal(
       LIMIT 200
     `;
 
+    /// Depth statementids
+    /// Staemeids -> relevance from
+
     const records = await runQuery(cypher, {
       entityIds: currentLevelEntities,
       userId,

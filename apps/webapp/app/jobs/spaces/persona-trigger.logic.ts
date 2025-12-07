@@ -89,7 +89,7 @@ export async function checkPersonaUpdateThreshold(
     const totalEpisodesQuery = lastPersonaGenerationAt
       ? `
       MATCH (e:Episode {userId: $userId})
-      WHERE e.createdAt > datetime($lastPersonaGenerationAt)
+      WHERE e.createdAt > $lastPersonaGenerationAt
       RETURN count(e) as newEpisodeCount
     `
       : `
@@ -125,9 +125,8 @@ export async function checkPersonaUpdateThreshold(
         hasExistingPersona: !!latestPersona,
       });
 
-      const mode = lastPersonaGenerationAt && latestPersona
-        ? "incremental"
-        : "full";
+      const mode =
+        lastPersonaGenerationAt && latestPersona ? "incremental" : "full";
 
       return {
         shouldGenerate: true,
