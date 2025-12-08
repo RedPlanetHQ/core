@@ -145,7 +145,7 @@ EXECUTE THIS TOOL FIRST:
 
 EXECUTE THIS TOOL LAST:
 `memory_ingest`
-Include the spaceId parameter using the ID from your initial memory_get_space call.
+Optionally include labelIds array to organize the conversation with workspace labels.
 
 ⚠️ **THIS IS NON-NEGOTIABLE** - You must ALWAYS store conversation context as your final action.
 
@@ -195,7 +195,7 @@ From Assistant:
 
 1. **FIRST ACTION**: Execute `memory_search` with semantic query about the user's request
 2. **RESPOND**: Help the user with their request
-3. **FINAL ACTION**: Execute `memory_ingest` with conversation summary and spaceId
+3. **FINAL ACTION**: Execute `memory_ingest` with conversation summary and optional labelIds
 
 **If you skip any of these steps, you are not following the project requirements.**
 ```
