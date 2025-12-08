@@ -51,6 +51,18 @@ import {
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
 import { addToQueue } from "~/lib/ingest.server";
+import {
+  type IntegrationRunPayload,
+  processIntegrationRun,
+} from "~/jobs/integrations/integration-run.logic";
+import {
+  createActivities,
+  createIntegrationAccount,
+  saveIntegrationAccountState,
+  saveMCPConfig,
+} from "~/trigger/utils/message-utils";
+import { extractMessagesFromOutput } from "~/trigger/utils/cli-message-handler";
+import { triggerIntegrationWebhook } from "~/trigger/webhooks/integration-webhook-delivery";
 
 /**
  * Episode preprocessing worker
@@ -214,6 +226,40 @@ export const graphResolutionWorker = new Worker(
 );
 
 /**
+ * Integration run worker
+ * Handles integration execution (SETUP, SYNC, PROCESS, IDENTIFY events)
+ */
+export const integrationRunWorker = new Worker(
+  "integration-run-queue",
+  async (job) => {
+    const payload = job.data as IntegrationRunPayload;
+
+    // Call common logic with BullMQ-specific callbacks
+    return await processIntegrationRun(payload, {
+      createActivities,
+      saveState: saveIntegrationAccountState,
+      createAccount: createIntegrationAccount,
+      saveMCPConfig,
+      triggerWebhook: triggerIntegrationWebhook,
+      extractMessages: extractMessagesFromOutput,
+      log: (level, message, data) => {
+        if (level === "error") {
+          logger.error(message, data);
+        } else if (level === "warn") {
+          logger.warn(message, data);
+        } else {
+          logger.log(message, data);
+        }
+      },
+    });
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 3, // Process up to 3 integrations in parallel
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -227,6 +273,7 @@ export async function closeAllWorkers(): Promise<void> {
     titleGenerationWorker.close(),
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
+    integrationRunWorker.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }
