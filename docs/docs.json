@@ -26,7 +26,7 @@
               "concepts/memory_graph",
               "concepts/entity_types",
               "concepts/chat",
-              "concepts/spaces"
+              "concepts/labels"
             ]
           },
           {
@@ -156,14 +156,9 @@
             ]
           },
           {
-            "group": "Spaces",
+            "group": "Labels",
             "pages": [
-              "GET /api/v1/spaces",
-              "POST /api/v1/spaces",
-              "PUT /api/v1/spaces",
-              "GET /api/v1/spaces/{spaceId}",
-              "PUT /api/v1/spaces/{spaceId}",
-              "DELETE /api/v1/spaces/{spaceId}"
+              "GET /api/v1/labels"
             ]
           },
           {

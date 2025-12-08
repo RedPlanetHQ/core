@@ -47,11 +47,14 @@ description: "Product updates and announcements"
 
 ## 🔧 Improvements
 
-- **Spaces**:
+- **Labels** (Migration from Spaces):
 
-  - Option to remove episodes from spaces for better organization
-  - Removed restrictive space description requirements
-  - Queue-based space assignment for improved reliability
+  - Complete migration from Spaces to Labels organizational model
+  - Workspace-scoped labels with Linear-style tagging
+  - Labels stored in PostgreSQL, scoped by workspace
+  - Episodes now use `labelIds` array instead of `spaceIds`
+  - Multiple labels can be assigned to any episode
+  - Simplified label management via web interface and API
 
 - **MCP Tooling**:
   - Clear error messages when credits run low
@@ -67,7 +70,7 @@ description: "Product updates and announcements"
 - Fixed graph visualization issues in Chrome 140
 - Corrected ingestion queue handling for deleted episodes
 - Fixed MCP tool call failures for (`get_user_profile`)
-- Resolved space description validation blocking space creation
+- Resolved label description validation blocking label creation
 
 ## 🔒 Security & Privacy
 
@@ -76,7 +79,7 @@ description: "Product updates and announcements"
 - **Complete Account Wipe**: Account deletion now removes all traces from both relational and graph databases
 - **Cascade Delete Logic**: Simplified deletion flows with proper relationship cleanup for users and workspaces
 - **Neo4j Graph Cleanup**: Automated cleanup of knowledge graph nodes when deleting accounts
-- **Proper Resource Cleanup**: Removes all associated API keys, spaces, and episodes
+- **Proper Resource Cleanup**: Removes all associated API keys, labels, and episodes
 
 </Update>
 
@@ -86,11 +89,11 @@ description: "Product updates and announcements"
 
 **Capabilities users can now access**
 
-**Spaces**
+**Organization** (Note: This feature evolved into Labels in later releases)
 
 - Organize your memory into project-specific contexts (Health, Personal, Work, Client Projects)
-- Share memory spaces with team members for collaborative AI assistance
-- Default user profile space with seamless node linking across contexts
+- Share memory contexts with team members for collaborative AI assistance
+- Default user profile context with seamless node linking across projects
 
 **Enhanced Logging & Monitoring**
 
@@ -119,7 +122,7 @@ description: "Product updates and announcements"
 **Enhanced existing functionality**
 
 - **Enhanced MCP OAuth Scopes**: Better integration support for Windsurf and other coding tools
-- **Refined Facts Page UI**: Improved space-specific fact browsing and search
+- **Refined Facts Page UI**: Improved label-specific fact browsing and search
 - **Optimized Memory Tools**: Better source tracking and metadata preservation
 - **Unified MCP Server**: Single server instance handling all integrations for improved performance
 
@@ -130,7 +133,7 @@ description: "Product updates and announcements"
 - Fixed MCP server stream failures that interrupted AI client connections
 - Resolved OAuth scope issues affecting Windsurf integration
 - Corrected source attribution problems in memory tools
-- Fixed facts page access issues for space-specific content
+- Fixed facts page access issues for label-specific content
 - Resolved database dependency conflicts in trigger service deployment
 
 ## 🔒 Security & Privacy

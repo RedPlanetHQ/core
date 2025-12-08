@@ -3,7 +3,7 @@
   "info": {
     "title": "CORE API",
     "version": "1.0.0",
-    "description": "CORE is a memory sharing platform for LLMs with graph-based storage, temporal facts, and comprehensive search capabilities.\n\n## Authentication\n\nCORE supports multiple authentication methods:\n- **Bearer Token**: Personal API tokens or OAuth2 access tokens\n- **OAuth2**: Full OAuth2 authorization code flow with PKCE support\n- **Session Cookies**: For web interface access\n\nMost API endpoints support Bearer token authentication via the Authorization header:\n```\nAuthorization: Bearer YOUR_TOKEN_HERE\n```\n\n## Features\n\n- **Temporal Knowledge Graph**: Store and query facts with temporal validity\n- **Spaces**: Organize knowledge into logical spaces/projects\n- **Search**: Advanced semantic search with graph traversal\n- **Ingestion**: Process and extract facts from various data sources  \n- **Integrations**: Connect with external platforms via OAuth2\n- **MCP Support**: Model Context Protocol for AI assistant integration\n- **Webhooks**: Real-time notifications for data changes\n",
+    "description": "CORE is a memory sharing platform for LLMs with graph-based storage, temporal facts, and comprehensive search capabilities.\n\n## Authentication\n\nCORE supports multiple authentication methods:\n- **Bearer Token**: Personal API tokens or OAuth2 access tokens\n- **OAuth2**: Full OAuth2 authorization code flow with PKCE support\n- **Session Cookies**: For web interface access\n\nMost API endpoints support Bearer token authentication via the Authorization header:\n```\nAuthorization: Bearer YOUR_TOKEN_HERE\n```\n\n## Features\n\n- **Temporal Knowledge Graph**: Store and query facts with temporal validity\n- **Labels**: Organize knowledge with workspace-scoped tags\n- **Search**: Advanced semantic search with graph traversal\n- **Ingestion**: Process and extract facts from various data sources  \n- **Integrations**: Connect with external platforms via OAuth2\n- **MCP Support**: Model Context Protocol for AI assistant integration\n- **Webhooks**: Real-time notifications for data changes\n",
     "contact": {
       "name": "Core",
       "url": "https://github.com/redplanethq/core"
@@ -179,13 +179,13 @@
             "format": "date-time",
             "description": "Filter facts before this timestamp"
           },
-          "spaceIds": {
+          "labelIds": {
             "type": "array",
             "items": {
               "type": "string"
             },
             "default": [ ],
-            "description": "Filter results to specific spaces"
+            "description": "Filter results to specific labels"
           },
           "limit": {
             "type": "integer",
@@ -325,9 +325,12 @@
             "type": "string",
             "description": "Source identifier"
           },
-          "spaceId": {
-            "type": "string",
-            "description": "Space to assign the content to"
+          "labelIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Labels to assign the content to"
           },
           "sessionId": {
             "type": "string",
@@ -365,93 +368,38 @@
           }
         }
       },
-      "Space": {
+      "Label": {
         "type": "object",
         "properties": {
           "id": {
-            "type": "string"
+            "type": "string",
+            "description": "Unique label identifier"
           },
           "name": {
-            "type": "string"
+            "type": "string",
+            "description": "Label name (unique within workspace)"
           },
           "description": {
-            "type": "string"
+            "type": "string",
+            "description": "Optional label description"
+          },
+          "color": {
+            "type": "string",
+            "description": "Label color (hex format)"
+          },
+          "workspaceId": {
+            "type": "string",
+            "description": "Workspace this label belongs to"
           },
           "createdAt": {
             "type": "string",
-            "format": "date-time"
+            "format": "date-time",
+            "description": "Label creation timestamp"
           },
           "updatedAt": {
             "type": "string",
-            "format": "date-time"
-          },
-          "userId": {
-            "type": "string"
-          }
-        }
-      },
-      "CreateSpaceRequest": {
-        "type": "object",
-        "required": [
-          "name"
-        ],
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Space name"
-          },
-          "description": {
-            "type": "string",
-            "description": "Space description"
-          }
-        }
-      },
-      "UpdateSpaceRequest": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string",
-            "description": "Updated space name"
-          },
-          "description": {
-            "type": "string",
-            "description": "Updated space description"
-          }
-        }
-      },
-      "BulkSpaceOperation": {
-        "type": "object",
-        "required": [
-          "intent"
-        ],
-        "properties": {
-          "intent": {
-            "type": "string",
-            "enum": [
-              "assign_statements",
-              "remove_statements",
-              "bulk_assign",
-              "initialize_space_ids"
-            ],
-            "description": "Type of bulk operation"
-          },
-          "spaceId": {
-            "type": "string",
-            "description": "Target space ID (required for some operations)"
-          },
-          "statementIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Statement IDs to operate on"
-          },
-          "spaceIds": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "description": "Space IDs for bulk operations"
+            "format": "date-time",
+            "description": "Label last update timestamp"
           }
         }
       },
@@ -1218,175 +1166,28 @@
         }
       }
     },
-    "/api/v1/spaces": {
+    "/api/v1/labels": {
       "get": {
-        "summary": "List/Search Spaces",
-        "description": "Get list of spaces with optional search filtering",
+        "summary": "List Labels",
+        "description": "Get list of all labels in the authenticated user's workspace",
         "security": [
           {
             "bearerAuth": [ ]
           }
         ],
-        "parameters": [
-          {
-            "name": "q",
-            "in": "query",
-            "schema": {
-              "type": "string"
-            },
-            "description": "Search query for space names"
-          }
-        ],
         "responses": {
           "200": {
-            "description": "List of spaces",
+            "description": "List of workspace labels",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/components/schemas/Space"
+                    "$ref": "#/components/schemas/Label"
                   }
                 }
               }
             }
-          }
-        }
-      },
-      "post": {
-        "summary": "Create New Space",
-        "description": "Create a new space for organizing knowledge",
-        "security": [
-          {
-            "bearerAuth": [ ]
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateSpaceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Space created successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Space"
-                }
-              }
-            }
-          }
-        }
-      },
-      "put": {
-        "summary": "Bulk Space Operations",
-        "description": "Perform bulk operations on spaces including:\n- assign_statements: Assign statements to a space\n- remove_statements: Remove statements from a space  \n- bulk_assign: Bulk assign multiple statements\n- initialize_space_ids: Initialize space IDs for statements\n",
-        "security": [
-          {
-            "bearerAuth": [ ]
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BulkSpaceOperation"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Bulk operation completed"
-          }
-        }
-      }
-    },
-    "/api/v1/spaces/{spaceId}": {
-      "parameters": [
-        {
-          "name": "spaceId",
-          "in": "path",
-          "required": true,
-          "schema": {
-            "type": "string"
-          },
-          "description": "Space identifier"
-        }
-      ],
-      "get": {
-        "summary": "Get Space Details",
-        "description": "Retrieve detailed information about a specific space",
-        "security": [
-          {
-            "bearerAuth": [ ]
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Space details",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Space"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Space not found"
-          }
-        }
-      },
-      "put": {
-        "summary": "Update Space",
-        "description": "Update space name and/or description",
-        "security": [
-          {
-            "bearerAuth": [ ]
-          }
-        ],
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpdateSpaceRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Space updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Space"
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "summary": "Delete Space",
-        "description": "Delete a space and optionally reassign its content",
-        "security": [
-          {
-            "bearerAuth": [ ]
-          }
-        ],
-        "responses": {
-          "204": {
-            "description": "Space deleted successfully"
           }
         }
       }
