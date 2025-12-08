@@ -1,9 +1,4 @@
-import { logger, task } from "@trigger.dev/sdk/v3";
-import {
-  type IntegrationDefinitionV2,
-  type IntegrationAccount,
-} from "@core/database";
-import { IntegrationEventType } from "@core/types";
+import { task } from "@trigger.dev/sdk/v3";
 import {
   type IntegrationRunPayload,
   processIntegrationRun,
@@ -30,17 +25,8 @@ export const integrationRun = task({
       saveState: saveIntegrationAccountState,
       createAccount: createIntegrationAccount,
       saveMCPConfig,
-      triggerWebhook: triggerIntegrationWebhook,
+      triggerWebhook: void triggerIntegrationWebhook,
       extractMessages: extractMessagesFromOutput,
-      log: (level, message, data) => {
-        if (level === "error") {
-          logger.error(message, data);
-        } else if (level === "warn") {
-          logger.warn(message, data);
-        } else {
-          logger.info(message, data);
-        }
-      },
     });
   },
 });
