@@ -11,11 +11,7 @@
  */
 
 import { env } from "~/env.server";
-import type { z } from "zod";
-import type {
-  IngestBodyRequest,
-  IngestEpisodePayload,
-} from "~/jobs/ingest/ingest-episode.logic";
+import type { IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
