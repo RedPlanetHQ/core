@@ -9,12 +9,13 @@ import {
   type SessionRecord,
 } from "./oauth-utils.server";
 import { getIntegrationDefinitionWithId } from "../integrationDefinition.server";
-import { type scheduler } from "~/trigger/integrations/scheduler";
+
 import { logger } from "../logger.service";
 import { runIntegrationTrigger } from "../integration.server";
 import type { IntegrationDefinitionV2 } from "@core/database";
 import { env } from "~/env.server";
 import { createMCPAuthClient } from "@core/mcp-proxy";
+import { scheduler } from "./scheduler";
 
 // Use process.env for config in Remix
 const CALLBACK_URL = `${env.APP_ORIGIN}/api/v1/oauth/callback`;
@@ -143,7 +144,7 @@ export async function callbackHandler(params: CallbackParams) {
       sessionRecord.workspaceId,
     );
 
-    await tasks.trigger<typeof scheduler>("scheduler", {
+    await scheduler({
       integrationAccountId: setupResult?.account?.id,
     });
 

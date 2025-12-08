@@ -9,35 +9,6 @@ import type {
 } from "@core/database";
 
 /**
- * Triggers an integration run asynchronously.
- */
-export async function runIntegrationTriggerAsync(
-  integrationDefinition: IntegrationDefinitionV2,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  event: any,
-  userId?: string,
-  workspaceId?: string,
-) {
-  logger.info(
-    `Triggering async integration run for ${integrationDefinition.slug}`,
-    {
-      integrationId: integrationDefinition.id,
-      event: event.event,
-      userId,
-      workspaceId,
-    },
-  );
-
-  return await tasks.trigger<typeof integrationRun>("integration-run", {
-    integrationDefinition,
-    event: event.event,
-    eventBody: event.eventBody,
-    integrationAccount: event.integrationAccount,
-    workspaceId,
-  });
-}
-
-/**
  * Triggers an integration run and waits for completion.
  */
 export async function runIntegrationTrigger(
@@ -83,12 +54,16 @@ export async function runIntegrationTrigger(
         status: run.status,
         integrationSlug: integrationDefinition.slug,
       });
-      throw new Error(`Integration run timed out after ${maxAttempts * 2} seconds`);
+      throw new Error(
+        `Integration run timed out after ${maxAttempts * 2} seconds`,
+      );
     }
 
     await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
     run = await runs.retrieve(response.id);
-    logger.info(`Task status: ${run.status} (attempt ${attempts}/${maxAttempts})`);
+    logger.info(
+      `Task status: ${run.status} (attempt ${attempts}/${maxAttempts})`,
+    );
   }
 
   if (run.status === "FAILED") {
