@@ -59,7 +59,8 @@ services:
 
   postgres:
     container_name: core-postgres
-    image: tegonhq/tegon-postgres:0.1.0-alpha
+    image: postgres:14
+    restart: ${RESTART_POLICY:-unless-stopped}
     environment:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
