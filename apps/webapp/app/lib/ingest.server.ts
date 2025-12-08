@@ -109,12 +109,15 @@ export const addToQueue = async (
   });
 
   // Use preprocessing flow for all types (preprocessing handles chunking, versioning, then enqueues ingestion)
-  const handler = await enqueuePreprocessEpisode({
-    body,
-    userId,
-    workspaceId: user.Workspace.id,
-    queueId: queuePersist.id,
-  });
+  const handler = await enqueuePreprocessEpisode(
+    {
+      body,
+      userId,
+      workspaceId: user.Workspace.id,
+      queueId: queuePersist.id,
+    },
+    rawBody.delay,
+  );
 
   // Track feature usage
   if (body.type === EpisodeType.DOCUMENT) {

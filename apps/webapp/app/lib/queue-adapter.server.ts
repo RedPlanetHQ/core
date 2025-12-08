@@ -12,7 +12,10 @@
 
 import { env } from "~/env.server";
 import type { z } from "zod";
-import type { IngestBodyRequest, IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
+import type {
+  IngestBodyRequest,
+  IngestEpisodePayload,
+} from "~/jobs/ingest/ingest-episode.logic";
 import type { CreateConversationTitlePayload } from "~/jobs/conversation/create-title.logic";
 import type { SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
@@ -24,15 +27,21 @@ type QueueProvider = "trigger" | "bullmq";
 /**
  * Enqueue episode preprocessing job
  */
-export async function enqueuePreprocessEpisode(payload: IngestEpisodePayload): Promise<{ id?: string; token?: string }> {
+export async function enqueuePreprocessEpisode(
+  payload: IngestEpisodePayload,
+  delay?: boolean,
+): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { preprocessTask } = await import("~/trigger/ingest/preprocess-episode");
+    const { preprocessTask } = await import(
+      "~/trigger/ingest/preprocess-episode"
+    );
     const handler = await preprocessTask.trigger(payload, {
       queue: "preprocessing-queue",
       concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
+      delay: delay ? "5m" : undefined,
     });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {
@@ -42,6 +51,7 @@ export async function enqueuePreprocessEpisode(payload: IngestEpisodePayload): P
       jobId: payload.queueId,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
+      delay: delay ? 5 * 60 * 1000 : undefined, // 5 minutes in milliseconds
     });
     return { id: job.id };
   }
@@ -50,7 +60,9 @@ export async function enqueuePreprocessEpisode(payload: IngestEpisodePayload): P
 /**
  * Enqueue episode ingestion job
  */
-export async function enqueueIngestEpisode(payload: IngestEpisodePayload): Promise<{ id?: string; token?: string }> {
+export async function enqueueIngestEpisode(
+  payload: IngestEpisodePayload,
+): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
@@ -72,7 +84,6 @@ export async function enqueueIngestEpisode(payload: IngestEpisodePayload): Promi
     return { id: job.id };
   }
 }
-
 
 /**
  * Enqueue conversation title creation job
