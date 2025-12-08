@@ -202,3 +202,25 @@ export const graphResolutionQueue = new Queue("graph-resolution-queue", {
     },
   },
 });
+
+/**
+ * Integration run queue
+ * Handles integration execution (SETUP, SYNC, PROCESS, IDENTIFY events)
+ */
+export const integrationRunQueue = new Queue("integration-run-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 2000,
+    },
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400, // Keep failed jobs for 24 hours for debugging
+    },
+  },
+});

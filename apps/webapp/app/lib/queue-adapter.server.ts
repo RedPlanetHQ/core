@@ -17,6 +17,7 @@ import type { SessionCompactionPayload } from "~/jobs/session/session-compaction
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
 import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
 import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logic";
+import type { IntegrationRunPayload } from "~/jobs/integrations/integration-run.logic";
 
 type QueueProvider = "trigger" | "bullmq";
 
@@ -279,6 +280,42 @@ export async function enqueueGraphResolution(
     const { graphResolutionQueue } = await import("~/bullmq/queues");
     const job = await graphResolutionQueue.add("graph-resolution", payload, {
       jobId: `resolution-${payload.episodeUuid}`,
+      attempts: 3,
+      backoff: { type: "exponential", delay: 2000 },
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue integration run job
+ */
+export async function enqueueIntegrationRun(
+  payload: IntegrationRunPayload,
+): Promise<{ id?: string; token?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { integrationRun } = await import(
+      "~/trigger/integrations/integration-run"
+    );
+    const handler = await integrationRun.trigger(payload, {
+      queue: "integration-run-queue",
+      tags: [
+        payload.userId || "unknown",
+        payload.integrationDefinition.slug,
+        payload.event,
+      ],
+    });
+    return { id: handler.id, token: handler.publicAccessToken };
+  } else {
+    // BullMQ
+    const { integrationRunQueue } = await import("~/bullmq/queues");
+    const job = await integrationRunQueue.add("integration-run", payload, {
+      // Use integration account ID + event type for deduplication
+      jobId: payload.integrationAccount?.id
+        ? `integration-${payload.integrationAccount.id}-${payload.event}-${Date.now()}`
+        : `integration-${payload.integrationDefinition.id}-${payload.event}-${Date.now()}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
     });

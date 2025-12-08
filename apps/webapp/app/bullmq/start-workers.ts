@@ -18,6 +18,7 @@ import {
   bertTopicWorker,
   labelAssignmentWorker,
   titleGenerationWorker,
+  integrationRunWorker,
 } from "./workers";
 import {
   ingestQueue,
@@ -27,6 +28,7 @@ import {
   labelAssignmentQueue,
   titleGenerationQueue,
   preprocessQueue,
+  integrationRunQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -65,6 +67,11 @@ export async function initWorkers(): Promise<void> {
     titleGenerationQueue,
     "title-generation",
   );
+  setupWorkerLogging(
+    integrationRunWorker,
+    integrationRunQueue,
+    "integration-run",
+  );
 
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
@@ -100,6 +107,11 @@ export async function initWorkers(): Promise<void> {
         queue: titleGenerationQueue,
         name: "title-generation",
       },
+      {
+        worker: integrationRunWorker,
+        queue: integrationRunQueue,
+        name: "integration-run",
+      },
     ],
     60000, // Log metrics every 60 seconds
   );
@@ -123,6 +135,9 @@ export async function initWorkers(): Promise<void> {
   );
   logger.log(
     `✓ Title generation worker: ${titleGenerationWorker.name} (concurrency: 10)`,
+  );
+  logger.log(
+    `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
   );
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");
