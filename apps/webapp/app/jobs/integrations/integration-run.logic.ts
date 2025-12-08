@@ -22,6 +22,7 @@ import {
 } from "@core/database";
 import { IntegrationEventType, type Message } from "@core/types";
 import { logger } from "~/services/logger.service";
+import { log } from "console";
 
 /**
  * Payload for integration run job
@@ -93,9 +94,6 @@ export interface IntegrationRunCallbacks {
 
   // Callback for extracting messages from CLI output
   extractMessages?: (output: string) => Message[];
-
-  // Logger callback (allows provider-specific logging)
-  log?: (level: "info" | "error" | "warn", message: string, data?: any) => void;
 }
 
 /**
@@ -281,9 +279,7 @@ async function handleMessageResponse(
   callbacks: IntegrationRunCallbacks,
 ): Promise<any> {
   try {
-    const log = callbacks.log || logger.info.bind(logger);
-
-    log("info", "Handling CLI message response", {
+    logger.info("Handling CLI message response", {
       integrationId: integrationDefinition.id,
       messageCount: messages.length,
       messageTypes: messages.map((m) => m.type),
@@ -377,8 +373,7 @@ async function handleMessageResponse(
               workspaceId,
             });
           } catch (error) {
-            const logError = callbacks.log || logger.error.bind(logger);
-            logError("error", "Failed to trigger OAuth integration webhook", {
+            logger.error("Failed to trigger OAuth integration webhook", {
               integrationAccountId: integrationAccount.id,
               userId,
               error: error instanceof Error ? error.message : String(error),
@@ -400,8 +395,7 @@ async function handleMessageResponse(
 
     return responses;
   } catch (error) {
-    const logError = callbacks.log || logger.error.bind(logger);
-    logError("error", "Failed to handle CLI message response", {
+    logger.error("Failed to handle CLI message response", {
       error: error instanceof Error ? error.message : "Unknown error",
       integrationId: integrationDefinition.id,
       messages,
@@ -427,11 +421,8 @@ export async function processIntegrationRun(
     userId,
   } = payload;
 
-  const log = callbacks.log || logger.info.bind(logger);
-  const logError = callbacks.log || logger.error.bind(logger);
-
   try {
-    log("info", `Starting integration run for ${integrationDefinition.slug}`, {
+    logger.info(`Starting integration run for ${integrationDefinition.slug}`, {
       event,
       integrationId: integrationDefinition.id,
     });
@@ -439,7 +430,7 @@ export async function processIntegrationRun(
     // Load the integration file from a URL or a local path
     const integrationSource = integrationDefinition.url as string;
     const integrationFile = await loadIntegrationSource(integrationSource);
-    log("info", `Loaded integration file from ${integrationSource}`);
+    logger.info(`Loaded integration file from ${integrationSource}`);
 
     // Prepare enhanced event body based on event type
     let enhancedEventBody = eventBody;
@@ -458,7 +449,7 @@ export async function processIntegrationRun(
       };
     }
 
-    log("info", `Executing integration CLI`, {
+    logger.info(`Executing integration CLI`, {
       event,
       integrationId: integrationDefinition.id,
       hasConfig: !!integrationAccount?.integrationConfiguration,
@@ -476,14 +467,14 @@ export async function processIntegrationRun(
       settings?.state,
     );
 
-    log("info", "Integration CLI executed successfully");
+    logger.info("Integration CLI executed successfully");
 
     // Process the output messages
     const messages = callbacks.extractMessages
       ? callbacks.extractMessages(output)
       : [];
 
-    log("info", "Integration run completed", {
+    logger.info("Integration run completed", {
       messageCount: messages.length,
       messageTypes: messages.map((m) => m.type),
     });
@@ -504,7 +495,7 @@ export async function processIntegrationRun(
     };
   } catch (error) {
     const errorMessage = `Integration run failed: ${error instanceof Error ? error.message : "Unknown error"}`;
-    logError("error", errorMessage, {
+    logger.error(errorMessage, {
       integrationId: integrationDefinition.id,
       event,
       error,
