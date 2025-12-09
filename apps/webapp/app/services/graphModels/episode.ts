@@ -660,33 +660,6 @@ export async function moveAllProvenanceToStatement(
 }
 
 /**
- * Get all sessions for a user (replaces getUserDocuments)
- * Returns first episode of each session for session-level metadata
- * @param userId - User ID
- * @param type - Optional filter by episode type (CONVERSATION or DOCUMENT)
- * @param limit - Optional limit on number of sessions
- */
-export async function getUserSessions(
-  userId: string,
-  type?: string,
-  limit: number = 50,
-): Promise<EpisodicNode[]> {
-  const typeFilter = type ? `AND e.type = $type` : "";
-
-  const query = `
-    MATCH (e:Episode {userId: $userId})
-    WHERE e.chunkIndex = 0 ${typeFilter}
-    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
-    ORDER BY e.createdAt DESC
-    LIMIT ${limit}
-  `;
-
-  const result = await runQuery(query, { userId, type });
-
-  return result.map((record) => parseEpisodicNode(record.get("episode")));
-}
-
-/**
  * Invalidate all statements from a previous document version
  * Marks statements as invalid but keeps episodes for version history
  * Optionally filter by specific chunk indices for differential invalidation

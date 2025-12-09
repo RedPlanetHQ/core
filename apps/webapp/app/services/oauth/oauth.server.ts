@@ -60,6 +60,14 @@ export async function callbackHandler(params: CallbackParams) {
     integrationDefinition as IntegrationDefinitionV2,
   )) as ProviderTemplateOAuth2;
 
+  // Zoho fix
+  if (params["accounts-server"]) {
+    template["token_url"] = template.token_url.replace(
+      "https://accounts.zoho.com",
+      params["accounts-server"],
+    );
+  }
+
   if (integrationDefinition === null) {
     const errorMessage = "No matching integration definition found";
     return new Response(null, {

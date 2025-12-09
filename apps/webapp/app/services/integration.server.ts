@@ -79,7 +79,10 @@ export async function runIntegrationTrigger(
   const response = await enqueueIntegrationRun(payload);
 
   if (!response.id) {
-    throw new Error("Failed to enqueue integration run - no job ID returned");
+    return {
+      error: true,
+      message: "Failed to enqueue integration run - no job ID returned",
+    };
   }
 
   // Wait for completion based on provider
@@ -101,9 +104,11 @@ export async function runIntegrationTrigger(
             integrationSlug: integrationDefinition.slug,
           },
         );
-        throw new Error(
-          `Integration run timed out after ${maxAttempts * 2} seconds`,
-        );
+
+        return {
+          error: true,
+          message: `Integration run timed out after ${maxAttempts * 2} seconds`,
+        };
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
@@ -118,7 +123,11 @@ export async function runIntegrationTrigger(
         runId: response.id,
         integrationSlug: integrationDefinition.slug,
       });
-      throw new Error(`Integration run failed`);
+
+      return {
+        error: true,
+        message: `Integration failed`,
+      };
     }
 
     return run.output;
@@ -136,7 +145,10 @@ export async function runIntegrationTrigger(
           jobId: response.id,
           integrationSlug: integrationDefinition.slug,
         });
-        throw new Error(`Integration job not found: ${response.id}`);
+        return {
+          error: true,
+          message: `Integration job not found: ${response.id}`,
+        };
       }
 
       const state = await job.getState();
@@ -154,9 +166,11 @@ export async function runIntegrationTrigger(
           integrationSlug: integrationDefinition.slug,
           failedReason: job.failedReason,
         });
-        throw new Error(
-          `Integration run failed: ${job.failedReason || "Unknown error"}`,
-        );
+
+        return {
+          error: true,
+          message: job.failedReason,
+        };
       }
 
       attempts++;
@@ -170,14 +184,19 @@ export async function runIntegrationTrigger(
             integrationSlug: integrationDefinition.slug,
           },
         );
-        throw new Error(
-          `Integration run timed out after ${maxAttempts * 2} seconds`,
-        );
+
+        return {
+          error: true,
+          message: `Integration run timed out after ${maxAttempts * 2} seconds`,
+        };
       }
 
       await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2s
     }
 
-    throw new Error("Integration run exceeded maximum wait time");
+    return {
+      error: true,
+      message: "Integration run exceeded maximum wait time",
+    };
   }
 }

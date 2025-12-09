@@ -132,113 +132,81 @@ export const loader = createHybridLoaderApiRoute(
       };
     }
 
-    // Fetch logs with over-fetching to handle deduplication
-    // We fetch more than needed and deduplicate until we have enough unique items
-    const fetchLimit = limit * 3; // Over-fetch to account for duplicates
-
-    const allLogs = await prisma.ingestionQueue.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        createdAt: true,
-        processedAt: true,
-        status: true,
-        error: true,
-        type: true,
-        output: true,
-        title: true,
-        labels: true,
-        data: true,
-        sessionId: true,
-        activity: {
-          select: {
-            text: true,
-            sourceURL: true,
-            integrationAccount: {
-              select: {
-                integrationDefinition: {
-                  select: {
-                    name: true,
-                    slug: true,
+    // Fetch logs with simple pagination - no deduplication
+    const [logs, totalCount] = await Promise.all([
+      prisma.ingestionQueue.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          createdAt: true,
+          processedAt: true,
+          status: true,
+          error: true,
+          type: true,
+          output: true,
+          title: true,
+          labels: true,
+          data: true,
+          sessionId: true,
+          activity: {
+            select: {
+              text: true,
+              sourceURL: true,
+              integrationAccount: {
+                select: {
+                  integrationDefinition: {
+                    select: {
+                      name: true,
+                      slug: true,
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      distinct: "sessionId",
-      take: fetchLimit,
-    });
+        orderBy: {
+          createdAt: "desc",
+        },
+        take: limit,
+        distinct: "sessionId",
+      }),
+      prisma.ingestionQueue.count({
+        where: whereClause,
+      }),
+    ]);
 
-    const totalCount = await prisma.ingestionQueue.count({
-      where: {
-        ...whereClause,
-      },
-    });
+    // Get session counts for all sessionIds in the result
+    const sessionIds = logs
+      .map((log) => log.sessionId)
+      .filter((id): id is string => id !== null);
 
-    // Deduplicate by sessionId - keep only the first (latest) log per session
-    const seenSessions = new Set<string>();
-    const uniqueLogs: typeof allLogs = [];
+    const sessionCounts =
+      sessionIds.length > 0
+        ? await prisma.ingestionQueue.groupBy({
+            by: ["sessionId"],
+            where: {
+              workspaceId: user.Workspace.id,
+              sessionId: {
+                in: sessionIds,
+              },
+            },
+            _count: {
+              sessionId: true,
+            },
+          })
+        : [];
 
-    for (const log of allLogs) {
-      const logSessionId = log.sessionId || (log.data as any)?.sessionId;
+    // Create a map for quick lookup
+    const sessionCountMap = new Map(
+      sessionCounts.map((sc) => [sc.sessionId, sc._count.sessionId]),
+    );
 
-      if (!logSessionId) {
-        // No sessionId, always include
-        uniqueLogs.push(log);
-      } else if (!seenSessions.has(logSessionId)) {
-        // First time seeing this sessionId
-        seenSessions.add(logSessionId);
-        uniqueLogs.push(log);
-      }
-      // else: skip duplicate session
-
-      // Stop once we have enough unique logs
-      if (uniqueLogs.length >= limit) {
-        break;
-      }
-    }
-
-    // Get only the requested page size
-    const paginatedLogs = uniqueLogs.slice(0, limit);
-
-    // Determine if there are more results
-    const hasMore =
-      uniqueLogs.length === limit && allLogs.length === fetchLimit;
-
-    // Get unique session IDs from paginated logs
-    const sessionIds = [
-      ...new Set(allLogs.map((log) => log.sessionId).filter(Boolean)),
-    ] as string[];
-
-    // Fetch episode counts for each session
-    const sessionEpisodeCounts: Record<string, number> = {};
-
-    if (sessionIds.length > 0) {
-      const sessionData = await Promise.all(
-        sessionIds.map(async (sessionId: string) => {
-          const count = await prisma.ingestionQueue.count({
-            where: { sessionId },
-          });
-
-          return {
-            sessionId: sessionId as string,
-            count: count as number,
-          };
-        }),
-      );
-
-      sessionData.forEach(({ sessionId, count }) => {
-        sessionEpisodeCounts[sessionId] = count;
-      });
-    }
+    // Check if there are more results for hasMore flag
+    const hasMore = logs.length === limit && totalCount > limit;
 
     // Format logs
-    const formattedLogs = paginatedLogs.map((log: any) => {
+    const formattedLogs = logs.map((log: any) => {
       const integrationDef =
         log.activity?.integrationAccount?.integrationDefinition;
       const logData = log.data as any;
@@ -246,22 +214,12 @@ export const loader = createHybridLoaderApiRoute(
       const type = logData?.type || "CONVERSATION";
       const sessionIdValue = log.sessionId;
 
-      // Since we fetched the latest log per session, use its data directly
       const title = log.title;
       const labels = log.labels || [];
 
-      // Build episodes array based on type
-      let episodes: string[] = [];
-      if (type === "DOCUMENT") {
-        // DOCUMENT type: use episodes array from output
-        const outputEpisodes = (log.output as any)?.episodes || [];
-        episodes = outputEpisodes.map((e: any) => e.episodeUuid);
-      } else {
-        // CONVERSATION type: use episodeUuid if exists
-        if (episodeUUID) {
-          episodes = [episodeUUID];
-        }
-      }
+      const sessionCount = sessionIdValue
+        ? sessionCountMap.get(sessionIdValue) || 0
+        : 0;
 
       return {
         id: log.id,
@@ -283,19 +241,15 @@ export const loader = createHybridLoaderApiRoute(
         data: log.data,
         sessionId: sessionIdValue,
         type,
-        episodes,
+        episodes: log.graphIds,
         isSessionGroup: !!sessionIdValue,
-        sessionEpisodeCount: sessionIdValue
-          ? sessionEpisodeCounts[sessionIdValue]
-          : undefined,
+        sessionEpisodeCount: sessionIdValue ? sessionCount : undefined,
       };
     });
 
     // Get the cursor for the next page (last item's createdAt)
     const nextCursor =
-      paginatedLogs.length > 0
-        ? paginatedLogs[paginatedLogs.length - 1].createdAt.toISOString()
-        : null;
+      logs.length > 0 ? logs[logs.length - 1].createdAt.toISOString() : null;
 
     return json({
       logs: formattedLogs,

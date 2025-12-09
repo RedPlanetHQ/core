@@ -82,7 +82,7 @@ export default function Integrations() {
             },
           ]}
         />
-        <div className="home flex h-[calc(100vh)] flex-col gap-6 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+        <div className="home flex h-[calc(100vh_-_40px)] flex-col gap-6 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
           {/* Providers Section */}
           <div className="space-y-3">
             <div>

@@ -56,31 +56,29 @@ class ZohoMailCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'Zoho Mail',
       key: 'zoho-mail',
-      description:
-        'Connect your workspace to Zoho Mail. Send, receive, and manage emails with powerful automation',
-      icon: 'zoho-mail',
-      mcp: {
-        type: 'cli',
-      },
+      mcp: { type: 'cli' },
       auth: {
         OAuth2: {
+          scopes: [
+            'ZohoMail.tasks.ALL',
+            'ZohoMail.notes.ALL',
+            'ZohoMail.messages.ALL',
+            'ZohoMail.folders.ALL',
+            'ZohoMail.accounts.ALL',
+          ],
           token_url: 'https://accounts.zoho.com/oauth/v2/token',
-          authorization_url: 'https://accounts.zoho.com/oauth/v2/auth',
-          scopes: ['ZohoMail.messages.ALL', 'ZohoMail.folders.ALL', 'ZohoMail.accounts.READ'],
-          scope_identifier: 'scope',
+          token_params: { prompt: 'consent', access_type: 'offline' },
           scope_separator: ',',
-          token_params: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
-          authorization_params: {
-            access_type: 'offline',
-            prompt: 'consent',
-          },
+          scope_identifier: 'scope',
+          authorization_url: 'https://accounts.zoho.com/oauth/v2/auth',
+          authorization_params: { prompt: 'consent', access_type: 'offline' },
         },
       },
+      icon: 'zoho-mail',
+      name: 'Zoho Mail',
+      description:
+        'Connect your workspace to Zoho Mail. Send, receive, and manage emails with powerful automation',
     };
   }
 }

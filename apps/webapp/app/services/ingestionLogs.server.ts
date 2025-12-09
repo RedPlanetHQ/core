@@ -438,7 +438,7 @@ export const getUserDocuments = async (workspaceId: string, limit: number) => {
       status: "COMPLETED",
     },
     orderBy: {
-      createdAt: "desc", // or updatedAt: 'desc' depending on your needs
+      createdAt: "desc",
     },
     distinct: ["sessionId"],
     take: limit,

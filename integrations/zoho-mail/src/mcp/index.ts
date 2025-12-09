@@ -1,18 +1,18 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
+import { getAccountsZohoUrl, getMailZohoUrl } from '../region-config';
 
 let zohoClient: AxiosInstance;
 
 async function refreshAccessToken(
   clientId: string,
   clientSecret: string,
-  refreshToken: string
+  refreshToken: string,
+  location?: string
 ): Promise<string> {
-  const response = await axios.post('https://accounts.zoho.com/oauth/v2/token', null, {
+  const accountsZohoUrl = getAccountsZohoUrl(location);
+  const response = await axios.post(`${accountsZohoUrl}/oauth/v2/token`, null, {
     params: {
       refresh_token: refreshToken,
       client_id: clientId,
@@ -29,16 +29,23 @@ async function initializeClient(
   config: Record<string, string>
 ) {
   let accessToken = config.access_token;
+  const location = config.location;
   if (config.refresh_token) {
     try {
-      accessToken = await refreshAccessToken(clientId, clientSecret, config.refresh_token);
+      accessToken = await refreshAccessToken(
+        clientId,
+        clientSecret,
+        config.refresh_token,
+        location
+      );
     } catch (error) {
       console.error('Token refresh failed, using existing token');
     }
   }
 
+  const mailZohoUrl = getMailZohoUrl(location);
   zohoClient = axios.create({
-    baseURL: 'https://mail.zoho.com/api',
+    baseURL: `${mailZohoUrl}/api`,
     headers: {
       Authorization: `Zoho-oauthtoken ${accessToken}`,
       'Content-Type': 'application/json',

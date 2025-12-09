@@ -1,10 +1,12 @@
 import axios from 'axios';
+import { getMailZohoUrl } from './region-config';
 
 export async function integrationCreate(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any
 ) {
   const { oauthResponse, oauthParams } = data;
+  const location = oauthParams.location;
 
   // Fetch user information using the access token from Zoho
   let userEmail = null;
@@ -12,17 +14,19 @@ export async function integrationCreate(
   let displayName = null;
 
   try {
-    // Zoho Mail API endpoint to get user info
-    const userInfoResponse = await axios.get('https://mail.zoho.com/api/accounts', {
+    // Zoho Mail API endpoint to get user info (region-specific)
+    const mailZohoUrl = getMailZohoUrl(location);
+    const userInfoResponse = await axios.get(`${mailZohoUrl}/api/accounts`, {
       headers: {
         Authorization: `Zoho-oauthtoken ${oauthResponse.access_token}`,
       },
     });
 
     const accountData = userInfoResponse.data.data?.[0];
+
     if (accountData) {
       userEmail = accountData.primaryEmailAddress || accountData.accountName;
-      userId = accountData.accountId;
+      userId = `${accountData.zuid}`;
       displayName = accountData.displayName;
     }
   } catch (error) {
@@ -43,11 +47,13 @@ export async function integrationCreate(
     userId: userId,
     displayName: displayName,
     redirect_uri: oauthParams.redirect_uri || null,
+    location: oauthParams.location,
+    accountServer: oauthParams['accounts-server'],
   };
 
   const payload = {
     settings: {},
-    accountId: integrationConfiguration.userEmail || integrationConfiguration.userId,
+    accountId: integrationConfiguration.userId,
     config: integrationConfiguration,
   };
 

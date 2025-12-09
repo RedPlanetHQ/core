@@ -138,7 +138,7 @@ export function LogTextCollapse({ text, log, labels }: LogTextCollapseProps) {
                   </TooltipTrigger>
                   <TooltipPortal>
                     <TooltipContent>
-                      <p>{getIngestType(log).label}</p>
+                      <p>{log.source}</p>
                     </TooltipContent>
                   </TooltipPortal>
                 </Tooltip>

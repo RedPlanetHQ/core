@@ -40,7 +40,13 @@ export interface UseLogsOptions {
   label?: string;
 }
 
-export function useLogs({ endpoint, source, status, type, label }: UseLogsOptions) {
+export function useLogs({
+  endpoint,
+  source,
+  status,
+  type,
+  label,
+}: UseLogsOptions) {
   const fetcher = useFetcher<LogsResponse>();
   const [logs, setLogs] = useState<LogItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -82,7 +88,12 @@ export function useLogs({ endpoint, source, status, type, label }: UseLogsOption
   // Effect to handle fetcher data
   useEffect(() => {
     if (fetcher.data) {
-      const { logs: newLogs, hasMore: newHasMore, nextCursor, availableSources: apiSources } = fetcher.data;
+      const {
+        logs: newLogs,
+        hasMore: newHasMore,
+        nextCursor,
+        availableSources: apiSources,
+      } = fetcher.data;
 
       // Check if we're resetting (no cursor and no existing logs)
       const isReset = cursor === null && logs.length === 0;

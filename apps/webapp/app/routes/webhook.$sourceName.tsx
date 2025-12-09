@@ -1,8 +1,12 @@
 import { json } from "@remix-run/node";
-import { type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/server-runtime";
+import {
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/server-runtime";
 import { z } from "zod";
 import { webhookService } from "~/services/webhook.server";
 import { logger } from "~/services/logger.service";
+import { isTriggerDeployment } from "~/lib/queue-adapter.server";
 
 const ParamsSchema = z.object({
   sourceName: z.string(),
@@ -17,7 +21,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     const { sourceName } = ParamsSchema.parse(params);
     const url = new URL(request.url);
     const { integrationAccountId } = SearchParamsSchema.parse(
-      Object.fromEntries(url.searchParams)
+      Object.fromEntries(url.searchParams),
     );
 
     // Extract headers
@@ -31,7 +35,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
     logger.log(`Webhook received for ${sourceName}`, {
       integrationAccountId,
-      eventBody: typeof eventBody === 'object' ? JSON.stringify(eventBody).substring(0, 200) : eventBody,
+      eventBody:
+        typeof eventBody === "object"
+          ? JSON.stringify(eventBody).substring(0, 200)
+          : eventBody,
     });
 
     // Check if the event is a URL verification challenge (Slack)
@@ -44,15 +51,18 @@ export async function action({ request, params }: ActionFunctionArgs) {
       sourceName,
       integrationAccountId,
       eventHeaders,
-      eventBody
+      eventBody,
     );
 
-    return json({ status: 'acknowledged' }, { status: 200 });
+    return json({ status: "acknowledged" }, { status: 200 });
   } catch (error) {
-    logger.error('Webhook processing failed', { error, params });
-    
+    logger.error("Webhook processing failed", { error, params });
+
     // Still return 200 to acknowledge receipt
-    return json({ status: 'error', message: 'Webhook processing failed' }, { status: 200 });
+    return json(
+      { status: "error", message: "Webhook processing failed" },
+      { status: 200 },
+    );
   }
 }
 
@@ -61,8 +71,12 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     const { sourceName } = ParamsSchema.parse(params);
     const url = new URL(request.url);
     const { integrationAccountId } = SearchParamsSchema.parse(
-      Object.fromEntries(url.searchParams)
+      Object.fromEntries(url.searchParams),
     );
+
+    if (!isTriggerDeployment()) {
+      return json({ status: "acknowledged" }, { status: 200 });
+    }
 
     // Extract headers
     const eventHeaders: Record<string, string | string[]> = {};
@@ -88,14 +102,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       sourceName,
       integrationAccountId,
       eventHeaders,
-      eventBody
+      eventBody,
     );
 
-    return json({ status: 'acknowledged' }, { status: 200 });
+    return json({ status: "acknowledged" }, { status: 200 });
   } catch (error) {
-    logger.error('Webhook GET processing failed', { error, params });
-    
+    logger.error("Webhook GET processing failed", { error, params });
+
     // Still return 200 to acknowledge receipt
-    return json({ status: 'error', message: 'Webhook processing failed' }, { status: 200 });
+    return json(
+      { status: "error", message: "Webhook processing failed" },
+      { status: 200 },
+    );
   }
 }

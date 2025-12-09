@@ -18,18 +18,43 @@ const posthogProxy = async (request: Request) => {
   const headers = new Headers(request.headers);
   headers.set("host", hostname);
 
-  const response = await fetch(newUrl, {
-    duplex: "half",
-    method: request.method,
-    headers,
-    body: request.body,
-  });
+  try {
+    const response = await fetch(newUrl, {
+      duplex: "half",
+      method: request.method,
+      headers,
+      body: request.body,
+    });
 
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: response.headers,
-  });
+    // Remove encoding headers to prevent double-decompression errors
+    const responseHeaders = new Headers(response.headers);
+    responseHeaders.delete("content-encoding");
+    responseHeaders.delete("content-length");
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    // Handle network errors gracefully (ECONNREFUSED, DNS failures, etc.)
+    console.error("PostHog proxy error:", error);
+
+    // Return empty success responses for analytics endpoints
+    // This prevents breaking the app when PostHog is unreachable
+    if (request.method === "POST") {
+      return new Response(JSON.stringify({ status: 1 }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    // For GET requests (config, etc.), return minimal valid response
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
 };
 
 export const loader: LoaderFunction = async ({ request }) =>
