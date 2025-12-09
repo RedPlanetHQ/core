@@ -137,7 +137,7 @@ Choose your path:
 
 **Quick Deploy**
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/template/...)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.com/deploy/core)
 
 **Or with Docker**
 
@@ -869,4 +869,5 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
