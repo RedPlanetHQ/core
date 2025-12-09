@@ -210,7 +210,7 @@ export const graphResolutionQueue = new Queue("graph-resolution-queue", {
 export const integrationRunQueue = new Queue("integration-run-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
-    attempts: 3,
+    attempts: 1,
     backoff: {
       type: "exponential",
       delay: 2000,

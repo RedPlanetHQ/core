@@ -1,6 +1,6 @@
 {
   "name": "@core/zoho-mail",
-  "version": "0.1.7",
+  "version": "0.1.9",
   "description": "Zoho Mail integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

@@ -22,7 +22,6 @@ import {
 } from "@core/database";
 import { IntegrationEventType, type Message } from "@core/types";
 import { logger } from "~/services/logger.service";
-import { log } from "console";
 
 /**
  * Payload for integration run job

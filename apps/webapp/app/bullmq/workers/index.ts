@@ -62,7 +62,6 @@ import {
   saveMCPConfig,
 } from "~/trigger/utils/message-utils";
 import { extractMessagesFromOutput } from "~/trigger/utils/cli-message-handler";
-import { triggerIntegrationWebhook } from "~/trigger/webhooks/integration-webhook-delivery";
 
 /**
  * Episode preprocessing worker
@@ -240,17 +239,8 @@ export const integrationRunWorker = new Worker(
       saveState: saveIntegrationAccountState,
       createAccount: createIntegrationAccount,
       saveMCPConfig,
-      triggerWebhook: triggerIntegrationWebhook,
+      triggerWebhook: undefined,
       extractMessages: extractMessagesFromOutput,
-      log: (level, message, data) => {
-        if (level === "error") {
-          logger.error(message, data);
-        } else if (level === "warn") {
-          logger.warn(message, data);
-        } else {
-          logger.log(message, data);
-        }
-      },
     });
   },
   {

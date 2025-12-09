@@ -7,7 +7,6 @@ import { hasCredits } from "~/services/billing.server";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
-import { LabelService } from "~/services/label.server";
 
 // Used in the server
 export const addToQueue = async (

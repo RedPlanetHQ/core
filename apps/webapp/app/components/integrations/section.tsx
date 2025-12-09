@@ -14,7 +14,7 @@ export function Section({
   children,
 }: SectionProps) {
   return (
-    <div className="flex h-full w-full gap-6">
+    <div className="flex h-full w-full flex-col gap-6 p-4 md:flex-row md:p-0">
       <div className="flex w-[400px] shrink-0 flex-col">
         {icon && <>{icon}</>}
         <h3 className="text-lg"> {title} </h3>

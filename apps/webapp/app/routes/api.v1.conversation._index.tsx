@@ -164,8 +164,6 @@ ${integrationsList}
 Use these integrations proactively to help the user. Load tools with \`load_mcp\` when needed.
 </connected_integrations>`;
 
-    console.log(integrationsContext);
-
     systemPrompt = `${systemPrompt}${integrationsContext}`;
 
     // Add current date and time context

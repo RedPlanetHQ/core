@@ -124,6 +124,8 @@ model IngestionQueue {
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
   processedAt DateTime?
+
+  @@index([workspaceId, sessionId])
 }
 
 model IngestionRule {
