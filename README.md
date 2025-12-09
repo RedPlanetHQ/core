@@ -37,7 +37,10 @@
 
 <p align="center">
     <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
-        <img src="https://cursor.com/deeplink/mcp-install-dark.svg" alt="Add to Cursor" />
+        <img src="https://cursor.com/deeplink/mcp-install-dark.svg" width="150px" alt="Add to Cursor" />
+    </a>
+    <a href="https://railway.com/deploy/core">
+        <img src="https://railway.app/button.svg" width="150px" alt="Deploy on Railway" />
     </a>
 </p>
 <p align="center">
@@ -869,5 +872,6 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
