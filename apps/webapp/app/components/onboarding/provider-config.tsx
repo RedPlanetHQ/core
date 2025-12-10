@@ -61,7 +61,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
               <div>Run in terminal:</div>
               <code className="text-sm">
                 claude mcp add --transport http --scope user core-memory
-                https://core.heysol.ai/api/v1/mcp?source=Claude-Code
+                https://app.getcore.me/api/v1/mcp?source=Claude-Code
               </code>
             </div>
           </StepCodeBlock>
@@ -116,7 +116,7 @@ export const PROVIDER_CONFIGS: Record<Provider, ProviderConfig> = {
           <StepCodeBlock>
             <div className="space-y-2">
               <code className="text-sm">
-                https://core.heysol.ai/api/v1/mcp?source=Claude
+                https://app.getcore.me/api/v1/mcp?source=Claude
               </code>
             </div>
           </StepCodeBlock>
@@ -178,7 +178,7 @@ trust_level = "trusted"
 rmcp_client = true
 
 [mcp_servers.memory]
-url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
+url = "https://app.getcore.me/api/v1/mcp?source=codex"`}
               </pre>
             </div>
           </StepCodeBlock>
@@ -215,7 +215,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
         title: "Click on Add to Cursor",
         component: (
           <a
-            href="cursor://mcp/install?name=core-memory&type=streamableHttp&url=https://core.heysol.ai/api/v1/mcp?source=cursor"
+            href="cursor://mcp/install?name=core-memory&type=streamableHttp&url=https://app.getcore.me/api/v1/mcp?source=cursor"
             target="_blank"
             rel="noopener noreferrer"
           >
@@ -243,7 +243,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 <div className="flex items-center gap-2">
                   <span className="text-sm text-gray-400">URL:</span>
                   <span className="text-sm">
-                    https://core.heysol.ai/api/v1/mcp?source=cursor
+                    https://app.getcore.me/api/v1/mcp?source=cursor
                   </span>
                 </div>
               </div>
@@ -355,7 +355,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "core-memory": {
     "type": "streamable-http",
-    "url": "https://core.heysol.ai/api/v1/mcp?source=Kilo-Code",
+    "url": "https://app.getcore.me/api/v1/mcp?source=Kilo-Code",
     "headers": {
       "Authorization": "Bearer your-token"
     },
@@ -385,7 +385,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "servers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Vscode",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Vscode",
       "type": "http"
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
@@ -417,7 +417,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "serverUrl": "https://core.heysol.ai/api/v1/mcp/source=windsurf",
+      "serverUrl": "https://app.getcore.me/api/v1/mcp/source=windsurf",
       "headers": {
         "Authorization": "Bearer <YOUR_API_KEY>"
       }
@@ -484,7 +484,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "core-memory": {
     "command": "npx",
-    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=Zed"]
+    "args": ["-y", "mcp-remote", "https://app.getcore.me/api/v1/mcp?source=Zed"]
   }
 }`}
               </pre>
@@ -512,7 +512,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "servers": {
     "core-memory": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=VSCode-Insiders",
+      "url": "https://app.getcore.me/api/v1/mcp?source=VSCode-Insiders",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -550,7 +550,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               <div>Run in terminal:</div>
               <code className="text-sm">
                 amp mcp add core-memory
-                https://core.heysol.ai/api/v1/mcp?source=amp
+                https://app.getcore.me/api/v1/mcp?source=amp
               </code>
             </div>
           </StepCodeBlock>
@@ -576,7 +576,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "mcpServers": {
     "core-memory": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=augment-code",
+      "url": "https://app.getcore.me/api/v1/mcp?source=augment-code",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -616,7 +616,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "mcpServers": {
     "core-memory": {
       "type": "streamable-http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Roo-Code",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Roo-Code",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -647,7 +647,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`"mcp": {
   "core-memory": {
     "type": "remote",
-    "url": "https://core.heysol.ai/api/v1/mcp?source=Opencode",
+    "url": "https://app.getcore.me/api/v1/mcp?source=Opencode",
     "headers": {
       "Authorization": "Bearer YOUR_API_KEY"
     },
@@ -678,7 +678,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "httpUrl": "https://core.heysol.ai/api/v1/mcp?source=Qwen",
+      "httpUrl": "https://app.getcore.me/api/v1/mcp?source=Qwen",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY",
         "Accept": "application/json, text/event-stream"
@@ -711,7 +711,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "mcpServers": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-CLI",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Copilot-CLI",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -746,7 +746,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "mcpServers": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Copilot-Agent",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Copilot-Agent",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -776,7 +776,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               <pre className="text-sm">
                 {`{
   "core": {
-    "url": "https://core.heysol.ai/api/v1/mcp?source=Warp",
+    "url": "https://app.getcore.me/api/v1/mcp?source=Warp",
     "headers": {
       "Authorization": "Bearer YOUR_API_KEY"
     }
@@ -814,7 +814,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Rovo-Dev",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Rovo-Dev",
     }
   }
 }`}
@@ -859,7 +859,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Cline",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Cline",
       "type": "streamableHttp",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
@@ -899,7 +899,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Kiro",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Kiro",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -930,7 +930,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Trae"
+      "url": "https://app.getcore.me/api/v1/mcp?source=Trae"
     }
   }
 }`}
@@ -962,7 +962,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "core-memory": {
     "command": "npx",
-    "args": ["-y", "mcp-remote", "https://core.heysol.ai/api/v1/mcp?source=perplexity"]
+    "args": ["-y", "mcp-remote", "https://app.getcore.me/api/v1/mcp?source=perplexity"]
   }
 }`}
               </pre>
@@ -1021,7 +1021,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
                 {`{
   "mcpServers": {
     "core-memory": {
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Qodo-Gen"
+      "url": "https://app.getcore.me/api/v1/mcp?source=Qodo-Gen"
     }
   }
 }`}
@@ -1051,7 +1051,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
   "mcp": {
     "core": {
       "type": "http",
-      "url": "https://core.heysol.ai/api/v1/mcp?source=Crush",
+      "url": "https://app.getcore.me/api/v1/mcp?source=Crush",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
@@ -1080,7 +1080,7 @@ url = "https://core.heysol.ai/api/v1/mcp?source=codex"`}
               <div>Run in terminal:</div>
               <code className="text-sm">
                 droid mcp add core
-                https://core.heysol.ai/api/v1/mcp?source=Factory --type http
+                https://app.getcore.me/api/v1/mcp?source=Factory --type http
                 --header "Authorization: Bearer YOUR_API_KEY"
               </code>
             </div>
@@ -1105,4 +1105,5 @@ export const SUGGESTED_INGESTION_PROMPTS = [
   "I'm a DevOps engineer managing Kubernetes clusters. I work primarily with Terraform, Helm, and CI/CD pipelines using GitHub Actions.",
 ];
 
-export const VERIFICATION_PROMPT = "Use the memory search tool with query: 'What do you know about my technical background, skills, and development preferences?'";
+export const VERIFICATION_PROMPT =
+  "Use the memory search tool with query: 'What do you know about my technical background, skills, and development preferences?'";

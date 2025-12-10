@@ -1,4 +1,4 @@
-import { task } from "@trigger.dev/sdk/v3";
+import { queue, task } from "@trigger.dev/sdk/v3";
 import {
   type IntegrationRunPayload,
   processIntegrationRun,
@@ -15,8 +15,14 @@ import { triggerIntegrationWebhook } from "../webhooks/integration-webhook-deliv
 // All core business logic has been moved to ~/jobs/integrations/integration-run.logic.ts
 // This Trigger.dev task now just calls the common logic with Trigger-specific callbacks
 
+const integrationRunQueue = queue({
+  name: "integration-run-queue",
+  concurrencyLimit: 50,
+});
+
 export const integrationRun = task({
   id: "integration-run",
+  queue: integrationRunQueue,
   machine: "medium-2x",
   run: async (payload: IntegrationRunPayload) => {
     // Use common logic with Trigger-specific callbacks

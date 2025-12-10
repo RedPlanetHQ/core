@@ -41,7 +41,7 @@ export default function WelcomeEmail() {
               display: "inline-flex",
             }}
           >
-            https://core.heysol.ai/api/v1/mcp?source='Your Coding Agent'
+            https://app.getcore.me/api/v1/mcp?source='Your Coding Agent'
           </Link>
           . Check how to connect{" "}
           <Link

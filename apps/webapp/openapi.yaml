@@ -40,7 +40,7 @@ servers:
         enum: [http, https]
         description: The protocol to use
       domain:
-        default: core.heysol.ai
+        default: app.getcore.me
         description: The Core API domain
 
 security:

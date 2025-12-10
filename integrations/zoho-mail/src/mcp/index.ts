@@ -139,7 +139,20 @@ const schemas = {
   }),
 };
 
+const data = {
+  clientId: '1000.WB5B60VXRGYIVDDYLHFAZ07ICOJHQH',
+  clientSecret: '23a4898b422c254958fa05b72be2df15db0a36be54',
+};
 export async function getTools() {
+  const token = await refreshAccessToken(
+    data.clientId,
+    data.clientSecret,
+    '1000.b4803dc72d53d131aaa75a5efddee434.93d28e9db10f18e3b1ebd9a47f6e6d5d',
+    'eu'
+  );
+
+  console.log(token);
+
   return [
     {
       name: 'zoho_send_email',

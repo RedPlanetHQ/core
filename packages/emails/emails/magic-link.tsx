@@ -30,7 +30,7 @@ export default function MagicLinkEmail({ magicLink }: { magicLink: string }) {
           >
             If you didn&apos;t try to log in, you can safely ignore this email.
           </Text>
-          <Image path="/emails/logo-mono.png" width="120" height="22" alt="core.heysol.ai" />
+          <Image path="/emails/logo-mono.png" width="120" height="22" alt="app.getcore.me" />
           <Footer />
         </Container>
       </Body>

@@ -50,7 +50,7 @@ function createSearchMemoryTool(token: string) {
     execute: async ({ query }: { query: string }) => {
       try {
         const response = await axios.post(
-          `${process.env.API_BASE_URL || "https://core.heysol.ai"}/api/v1/search`,
+          `${process.env.API_BASE_URL || "https://app.getcore.me"}/api/v1/search`,
           { query, structured: false },
           {
             headers: {

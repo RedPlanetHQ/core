@@ -19,9 +19,10 @@ We appreciate responsible disclosure of security vulnerabilities. If you discove
 
 ### How to Report
 
-**📧 Email**: harshith@tegon.ai
+**📧 Email**: harshith@poozle.dev
 
 Please include the following information in your report:
+
 - A clear description of the vulnerability
 - Steps to reproduce the issue
 - Potential impact and severity assessment
@@ -45,7 +46,7 @@ Please include the following information in your report:
 
 ## Security Best Practices for Users
 
-### For Cloud Users (core.heysol.ai)
+### For Cloud Users (app.getcore.me)
 
 - Use strong, unique passwords for your account
 - Enable two-factor authentication when available
@@ -119,7 +120,8 @@ Security updates will be:
 ## Contact Information
 
 For security-related inquiries:
-- **Security Team**: harshith@tegon.ai
+
+- **Security Team**: harshith@poozle.dev
 - **General Support**: [Discord Community](https://discord.gg/YGUZcvDjUa)
 
 ## Bug Bounty Program
@@ -128,5 +130,5 @@ We are currently evaluating the implementation of a formal bug bounty program. I
 
 ---
 
-*Last Updated: January 2025*
-*Version: 1.0*
+_Last Updated: January 2025_
+_Version: 1.0_
