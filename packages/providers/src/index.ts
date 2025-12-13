@@ -17,8 +17,7 @@ export { VECTOR_NAMESPACES, type VectorNamespace } from "./vector/constants";
 
 // Implementations
 export { Neo4jGraphProvider } from "./graph";
-export { StubVectorProvider, PgVectorProvider, TurbopufferVectorProvider, QdrantVectorProvider } from "./vector";
-export { StubModelProvider, VercelAIModelProvider } from "./model";
+export { PgVectorProvider } from "./vector";
 
 // Factory
 export { ProviderFactory } from "./factory";
