@@ -65,8 +65,10 @@ export async function processEpisodePreprocessing(
     let preprocessedChunks: z.infer<typeof IngestBodyRequest>[] = [];
     let preprocessingStrategy = "single_episode";
 
+    // Step 1: Generate chunks with proper metadata (always generate hashes)
+    let chunked;
     if (!needsChunking) {
-      // Content below threshold - prepare as single episode
+      // Content below threshold - create single chunk with metadata
       logger.info(
         `Content below chunking threshold - preparing single episode`,
         {
@@ -75,14 +77,14 @@ export async function processEpisodePreprocessing(
         },
       );
 
-      preprocessedChunks = [
-        {
-          ...payload.body,
-          sessionId,
-          chunkIndex: 0,
-          totalChunks: 1,
-        },
-      ];
+      // Use chunkEpisode which will internally call createSingleChunk with proper metadata
+      chunked = await episodeChunker.chunkEpisode(
+        episodeBody.episodeBody,
+        type,
+        sessionId,
+        episodeBody.title || "Untitled",
+        episodeBody.metadata,
+      );
     } else {
       // Content needs chunking
       logger.info(`Chunking content for preprocessing`, {
@@ -90,7 +92,7 @@ export async function processEpisodePreprocessing(
         sessionId,
       });
 
-      const chunked = await episodeChunker.chunkEpisode(
+      chunked = await episodeChunker.chunkEpisode(
         episodeBody.episodeBody,
         type,
         sessionId,
@@ -105,145 +107,145 @@ export async function processEpisodePreprocessing(
       });
 
       preprocessingStrategy = "chunked";
+    }
 
-      // For documents, check versioning and differential processing
-      if (type === EpisodeType.DOCUMENT) {
-        const versioningService = new EpisodeVersioningService();
-        const versionInfo = await versioningService.analyzeVersionChanges(
-          sessionId,
-          payload.userId,
+    // Step 2: For documents, ALWAYS run versioning and differential processing
+    if (type === EpisodeType.DOCUMENT) {
+      const versioningService = new EpisodeVersioningService();
+      const versionInfo = await versioningService.analyzeVersionChanges(
+        sessionId,
+        payload.userId,
+        chunked.originalContent,
+        chunked.chunkHashes,
+        type,
+      );
+
+      logger.info(`Version analysis complete`, {
+        isNewSession: versionInfo.isNewSession,
+        version: versionInfo.newVersion,
+        hasContentChanged: versionInfo.hasContentChanged,
+        changePercentage:
+          versionInfo.chunkLevelChanges.changePercentage.toFixed(1),
+      });
+
+      let chunksToProcess = chunked.chunks;
+
+      // Apply differential processing for existing documents with changes
+      if (!versionInfo.isNewSession && versionInfo.hasContentChanged) {
+        const differentialService = new DocumentDifferentialService();
+        const decision = await differentialService.analyzeDifferentialNeed(
           chunked.originalContent,
-          chunked.chunkHashes,
-          type,
+          versionInfo.existingFirstEpisode,
+          chunked,
         );
 
-        logger.info(`Version analysis complete`, {
-          isNewSession: versionInfo.isNewSession,
-          version: versionInfo.newVersion,
-          hasContentChanged: versionInfo.hasContentChanged,
-          changePercentage:
-            versionInfo.chunkLevelChanges.changePercentage.toFixed(1),
-        });
+        preprocessingStrategy = decision.strategy;
 
-        let chunksToProcess = chunked.chunks;
+        if (decision.strategy === "chunk_level_diff") {
+          // Invalidate statements from changed chunks only
+          const changedIndices =
+            versionInfo.chunkLevelChanges.changedChunkIndices;
 
-        // Apply differential processing for existing documents with changes
-        if (!versionInfo.isNewSession && versionInfo.hasContentChanged) {
-          const differentialService = new DocumentDifferentialService();
-          const decision = await differentialService.analyzeDifferentialNeed(
-            chunked.originalContent,
-            versionInfo.existingFirstEpisode,
-            chunked,
+          logger.info(
+            `Invalidating statements from changed chunks only: ${changedIndices.length} chunks`,
           );
 
-          preprocessingStrategy = decision.strategy;
+          const previousVersion =
+            versionInfo.existingFirstEpisode?.version || 1;
 
-          if (decision.strategy === "chunk_level_diff") {
-            // Invalidate statements from changed chunks only
-            const changedIndices =
-              versionInfo.chunkLevelChanges.changedChunkIndices;
-
-            logger.info(
-              `Invalidating statements from changed chunks only: ${changedIndices.length} chunks`,
-            );
-
-            const previousVersion =
-              versionInfo.existingFirstEpisode?.version || 1;
-
-            const invalidationResult =
-              await invalidateStatementsFromPreviousVersion({
-                sessionId: sessionId, // Same sessionId (documentId) across versions
-                userId: payload.userId,
-                previousVersion: previousVersion,
-                changedChunkIndices: changedIndices,
-                invalidatedBy: sessionId,
-              });
-
-            logger.info(`Chunk-level statement invalidation completed`, {
-              previousVersion,
-              changedChunks: changedIndices.length,
-              invalidatedStatements: invalidationResult.invalidatedCount,
+          const invalidationResult =
+            await invalidateStatementsFromPreviousVersion({
+              sessionId: sessionId, // Same sessionId (documentId) across versions
+              userId: payload.userId,
+              previousVersion: previousVersion,
+              changedChunkIndices: changedIndices,
+              invalidatedBy: sessionId,
             });
 
-            chunksToProcess = chunked.chunks.filter((c) =>
-              decision.changedChunkIndices.includes(c.chunkIndex),
-            );
+          logger.info(`Chunk-level statement invalidation completed`, {
+            previousVersion,
+            changedChunks: changedIndices.length,
+            invalidatedStatements: invalidationResult.invalidatedCount,
+          });
 
-            logger.info(
-              `Differential processing: processing changed chunks only`,
-              {
-                totalChunks: chunked.totalChunks,
-                chunksToProcess: chunksToProcess.length,
-                changedIndices: decision.changedChunkIndices,
-              },
-            );
-          } else if (decision.strategy === "skip_processing") {
-            logger.info(`No changes detected, skipping processing`);
-            chunksToProcess = [];
-          } else if (decision.strategy === "full_reingest") {
-            logger.info(
-              `Full reingest strategy: invalidating all statements from previous version`,
-            );
+          chunksToProcess = chunked.chunks.filter((c) =>
+            decision.changedChunkIndices.includes(c.chunkIndex),
+          );
 
-            const previousVersion =
-              versionInfo.existingFirstEpisode?.version || 1;
-            const invalidationResult =
-              await invalidateStatementsFromPreviousVersion({
-                sessionId: sessionId,
-                userId: payload.userId,
-                previousVersion: previousVersion,
-                invalidatedBy: sessionId,
-              });
+          logger.info(
+            `Differential processing: processing changed chunks only`,
+            {
+              totalChunks: chunked.totalChunks,
+              chunksToProcess: chunksToProcess.length,
+              changedIndices: decision.changedChunkIndices,
+            },
+          );
+        } else if (decision.strategy === "skip_processing") {
+          logger.info(`No changes detected, skipping processing`);
+          chunksToProcess = [];
+        } else if (decision.strategy === "full_reingest") {
+          logger.info(
+            `Full reingest strategy: invalidating all statements from previous version`,
+          );
 
-            logger.info(`Full version invalidation completed`, {
-              previousVersion,
-              invalidatedStatements: invalidationResult.invalidatedCount,
+          const previousVersion =
+            versionInfo.existingFirstEpisode?.version || 1;
+          const invalidationResult =
+            await invalidateStatementsFromPreviousVersion({
+              sessionId: sessionId,
+              userId: payload.userId,
+              previousVersion: previousVersion,
+              invalidatedBy: sessionId,
             });
-          }
-        }
 
-        // Convert chunks to preprocessed format
-        for (const chunk of chunksToProcess) {
-          const isFirstChunk = chunk.chunkIndex === 0;
-
-          preprocessedChunks.push({
-            episodeBody: chunk.content,
-            referenceTime: episodeBody.referenceTime,
-            metadata: episodeBody.metadata || {},
-            source: episodeBody.source,
-            labelIds: episodeBody.labelIds,
-            sessionId,
-            type,
-            title: episodeBody.title,
-            chunkIndex: chunk.chunkIndex,
-            version: versionInfo.newVersion,
-            totalChunks: chunked.totalChunks,
-            contentHash: chunked.contentHash,
-            previousVersionSessionId:
-              versionInfo.previousVersionSessionId || undefined,
-            // chunkHashes only on first chunk
-            ...(isFirstChunk &&
-              versionInfo && {
-                chunkHashes: chunked.chunkHashes,
-              }),
+          logger.info(`Full version invalidation completed`, {
+            previousVersion,
+            invalidatedStatements: invalidationResult.invalidatedCount,
           });
         }
-      } else {
-        // Conversations - process all chunks (no differential)
-        for (const chunk of chunked.chunks) {
-          preprocessedChunks.push({
-            episodeBody: chunk.content,
-            referenceTime: episodeBody.referenceTime,
-            metadata: episodeBody.metadata || {},
-            source: episodeBody.source,
-            labelIds: episodeBody.labelIds,
-            sessionId,
-            type,
-            title: episodeBody.title,
-            chunkIndex: chunk.chunkIndex,
-            totalChunks: chunked.totalChunks,
-          });
-        }
+      }
+
+      // Convert chunks to preprocessed format with version metadata
+      for (const chunk of chunksToProcess) {
+        const isFirstChunk = chunk.chunkIndex === 0;
+
+        preprocessedChunks.push({
+          episodeBody: chunk.content,
+          referenceTime: episodeBody.referenceTime,
+          metadata: episodeBody.metadata || {},
+          source: episodeBody.source,
+          labelIds: episodeBody.labelIds,
+          sessionId,
+          type,
+          title: episodeBody.title,
+          chunkIndex: chunk.chunkIndex,
+          version: versionInfo.newVersion,
+          totalChunks: chunked.totalChunks,
+          contentHash: chunked.contentHash,
+          previousVersionSessionId:
+            versionInfo.previousVersionSessionId || undefined,
+          // chunkHashes only on first chunk
+          ...(isFirstChunk &&
+            versionInfo && {
+              chunkHashes: chunked.chunkHashes,
+            }),
+        });
+      }
+    } else {
+      // Conversations - process all chunks (no differential)
+      for (const chunk of chunked.chunks) {
+        preprocessedChunks.push({
+          episodeBody: chunk.content,
+          referenceTime: episodeBody.referenceTime,
+          metadata: episodeBody.metadata || {},
+          source: episodeBody.source,
+          labelIds: episodeBody.labelIds,
+          sessionId,
+          type,
+          title: episodeBody.title,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunked.totalChunks,
+        });
       }
     }
 

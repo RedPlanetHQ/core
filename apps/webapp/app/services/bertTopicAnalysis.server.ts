@@ -1,6 +1,6 @@
 import { prisma } from "~/trigger/utils/prisma";
 import { logger } from "~/services/logger.service";
-import { runQuery } from "~/lib/neo4j.server";
+import { ProviderFactory } from "@core/providers";
 
 interface WorkspaceMetadata {
   lastTopicAnalysisAt?: string;
@@ -30,26 +30,10 @@ export async function shouldTriggerTopicAnalysis(
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastAnalysisAt = metadata.lastTopicAnalysisAt;
 
-    // Count episodes since last analysis
-    const query = lastAnalysisAt
-      ? `
-        MATCH (e:Episode {userId: $userId})
-        WHERE e.createdAt > datetime($lastAnalysisAt)
-        RETURN count(e) as newEpisodeCount
-      `
-      : `
-        MATCH (e:Episode {userId: $userId})
-        RETURN count(e) as totalEpisodeCount
-      `;
+    const graphProvider = ProviderFactory.getGraphProvider();
 
-    const result = await runQuery(query, {
-      userId,
-      lastAnalysisAt,
-    });
-
-    const episodeCount = lastAnalysisAt
-      ? result[0]?.get("newEpisodeCount")?.toNumber() || 0
-      : result[0]?.get("totalEpisodeCount")?.toNumber() || 0;
+    // Get current total episode count for user
+    const episodeCount = await graphProvider.getEpisodeCountByUser(userId, lastAnalysisAt ? new Date(lastAnalysisAt) : undefined);
 
     logger.info(
       `[Topic Analysis Check] User: ${userId}, New episodes: ${episodeCount}, Last analysis: ${lastAnalysisAt || "never"}`,

@@ -2,9 +2,8 @@ import type { Prisma, User } from "@core/database";
 import type { GoogleProfile } from "@coji/remix-auth-google";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
-import { runQuery } from "~/lib/neo4j.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
-export type { User } from "@core/database";
+import { ProviderFactory } from "@core/providers";
 
 type FindOrCreateMagicLink = {
   authenticationMethod: "MAGIC_LINK";
@@ -269,13 +268,9 @@ export async function deleteUser(id: User["id"]) {
   try {
     // Delete all nodes (Episodes, Entities, Statements, Spaces, Documents, Clusters)
     // and their relationships where userId matches
-    await runQuery(
-      `
-      MATCH (n {userId: $userId})
-      DETACH DELETE n
-      `,
-      { userId: id }
-    );
+    const graphProvider = ProviderFactory.getGraphProvider();
+    await graphProvider.deleteUser(id);
+
     console.log(`Deleted all graph nodes for user ${id}`);
   } catch (error) {
     console.error("Failed to delete graph nodes:", error);

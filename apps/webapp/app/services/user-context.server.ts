@@ -1,6 +1,6 @@
-import { runQuery } from "~/lib/neo4j.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
+import { ProviderFactory } from "@core/providers";
 
 export interface UserContext {
   // Identity (from User table)
@@ -13,6 +13,15 @@ export interface UserContext {
   tools?: string[];
   source: "onboarding" | "inferred" | "none";
 }
+
+// Lazy proxy to avoid initialization order issues
+// ProviderFactory is initialized in startup.ts, but this module may be imported before that
+const graphProvider = new Proxy({} as ReturnType<typeof ProviderFactory.getGraphProvider>, {
+  get(_target, prop) {
+    const provider = ProviderFactory.getGraphProvider();
+    return provider[prop as keyof typeof provider];
+  }
+})
 
 /**
  * Get user context with 3-tier fallback:
@@ -61,25 +70,16 @@ async function getOnboardingContext(userId: string): Promise<{
   goal?: string;
   tools?: string[];
 }> {
-  const query = `
-    MATCH (user:Entity {userId: $userId})
-    MATCH (s:Statement)-[:HAS_SUBJECT]->(user)
-    WHERE s.fact CONTAINS 'onboarding' OR EXISTS((s)-[:SOURCED_FROM]->(:Episode {source: 'onboarding'}))
-    MATCH (s)-[:HAS_PREDICATE]->(p:Entity)
-    MATCH (s)-[:HAS_OBJECT]->(o:Entity)
-    RETURN p.name as predicate, o.name as object
-  `;
-
   try {
-    const result = await runQuery(query, { userId });
+    const result = await graphProvider.getOnboardingEntities(userId);
 
     let role: string | undefined;
     let goal: string | undefined;
     const tools: string[] = [];
 
     for (const record of result) {
-      const predicate = record.get("predicate") as string;
-      const object = record.get("object") as string;
+      const predicate = record.predicate as string;
+      const object = record.object as string;
 
       if (predicate === "IS_A" && !role) {
         role = object;
@@ -115,23 +115,12 @@ async function inferContextFromEpisodes(userId: string): Promise<{
   role?: string;
   tools?: string[];
 }> {
-  const query = `
-    MATCH (e:Episode {userId: $userId})
-    RETURN e.content as content, e.source as source
-    ORDER BY e.createdAt DESC
-    LIMIT 100
-  `;
-
   try {
-    const result = await runQuery(query, { userId });
-
-    if (result.length === 0) {
-      return {};
-    }
+    const episodes = await graphProvider.getEpisodesByUser(userId, "createdAt", 100, true);
 
     // Combine all episode content for pattern analysis
-    const allContent = result
-      .map((record) => record.get("content") as string)
+    const allContent = episodes
+      .map((episode) => episode.content)
       .join(" ")
       .toLowerCase();
 
@@ -224,7 +213,7 @@ async function inferContextFromEpisodes(userId: string): Promise<{
       userId,
       role,
       toolsCount: tools.length,
-      episodesAnalyzed: result.length,
+      episodesAnalyzed: episodes.length,
     });
 
     return {

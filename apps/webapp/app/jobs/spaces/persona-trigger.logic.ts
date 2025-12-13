@@ -1,8 +1,8 @@
 import { logger } from "~/services/logger.service";
-import { runQuery } from "~/lib/neo4j.server";
 
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
+import { ProviderFactory } from "@core/providers";
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
   [key: string]: any;
@@ -85,24 +85,10 @@ export async function checkPersonaUpdateThreshold(
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastPersonaGenerationAt = metadata.lastPersonaGenerationAt;
 
+    const graphProvider = ProviderFactory.getGraphProvider();
+
     // Get current total episode count for user
-    const totalEpisodesQuery = lastPersonaGenerationAt
-      ? `
-      MATCH (e:Episode {userId: $userId})
-      WHERE e.createdAt > $lastPersonaGenerationAt
-      RETURN count(e) as newEpisodeCount
-    `
-      : `
-      MATCH (e:Episode {userId: $userId})
-      RETURN count(e) as totalEpisodeCount
-    `;
-    const countResult = await runQuery(totalEpisodesQuery, {
-      userId,
-      lastPersonaGenerationAt,
-    });
-    const episodeCount = lastPersonaGenerationAt
-      ? countResult[0]?.get("newEpisodeCount").toNumber() || 0
-      : countResult[0]?.get("totalEpisodeCount").toNumber() || 0;
+    const episodeCount = await graphProvider.getEpisodeCountByUser(userId, lastPersonaGenerationAt ? new Date(lastPersonaGenerationAt) : undefined);
 
     logger.debug("Checking persona space update eligibility", {
       userId,

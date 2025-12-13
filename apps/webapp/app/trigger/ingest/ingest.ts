@@ -10,6 +10,7 @@ import { titleGenerationTask } from "../titles/title-generation";
 import { bertTopicAnalysisTask } from "../bert/bert";
 import { personaGenerationTask } from "../spaces/persona-generation";
 import { graphResolutionTask } from "./graph-resolution";
+import { initializeProvider } from "../utils/provider";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
@@ -25,6 +26,9 @@ export const ingestTask = task({
   queue: ingestionQueue,
   machine: "medium-2x",
   run: async (payload: IngestEpisodePayload) => {
+    // Initialize ProviderFactory for Trigger.dev job context
+    await initializeProvider();
+
     // Use common logic with Trigger-specific callbacks for follow-up jobs
     return await processEpisodeIngestion(
       payload,
