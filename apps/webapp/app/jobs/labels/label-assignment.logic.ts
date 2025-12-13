@@ -165,16 +165,15 @@ export async function processLabelAssignment(
     });
 
     // Update Neo4j Episodes with the same labelIds
-    const graphIds = (ingestionQueue.graphIds as string[]) || [];
-    if (graphIds.length > 0) {
+    if (ingestionQueue.sessionId) {
       const updatedCount = await updateEpisodeLabels(
-        graphIds,
+        ingestionQueue.sessionId,
         allLabelIds,
         payload.userId,
       );
+
       logger.info(`Updated ${updatedCount} Neo4j episodes with labels`, {
         queueId: payload.queueId,
-        episodeCount: graphIds.length,
         updatedCount,
       });
     }

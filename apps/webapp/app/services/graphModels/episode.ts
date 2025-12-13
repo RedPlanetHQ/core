@@ -6,6 +6,7 @@ import {
   type Triple,
 } from "@core/types";
 import { parseEntityNode } from "./entity";
+import { batchDeleteEntityEmbeddings, batchDeleteEpisodeEmbeddings, batchDeleteStatementEmbeddings } from "../vectorStorage.server";
 
 // Get the graph provider instance
 const graphProvider = () => ProviderFactory.getGraphProvider();
@@ -93,6 +94,17 @@ export async function deleteEpisodeWithRelatedNodes(params: {
     params.userId
   );
 
+  // Delete embeddings from vector database
+  if (result.deletedEpisodeUuids.length > 0) {
+    await batchDeleteEpisodeEmbeddings(result.deletedEpisodeUuids);
+  }
+  if (result.deletedStatementUuids.length > 0) {
+    await batchDeleteStatementEmbeddings(result.deletedStatementUuids);
+  }
+  if (result.deletedEntityUuids.length > 0) {
+    await batchDeleteEntityEmbeddings(result.deletedEntityUuids);
+  }
+
   return {
     deleted: result.episodesDeleted > 0,
     episodesDeleted: result.episodesDeleted,
@@ -176,13 +188,12 @@ export async function addLabelToEpisodes(
 }
 
 export async function updateEpisodeLabels(
-  episodeUuids: string[],
+  sessionId: string,
   labelIds: string[],
   userId: string,
 ): Promise<number> {
-  if (episodeUuids.length === 0) return 0;
-
-  return await graphProvider().addLabelsToEpisodes(episodeUuids, labelIds, userId, true);
+  vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId);
+  return await graphProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId, true);
 }
 
 export async function getSessionEpisodes(

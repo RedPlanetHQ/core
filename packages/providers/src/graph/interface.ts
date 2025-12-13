@@ -227,6 +227,13 @@ export interface IGraphProvider {
     forceUpdate?: boolean
   ): Promise<number>;
 
+  addLabelsToEpisodesBySessionId(
+    sessionId: string,
+    labelIds: string[],
+    userId: string,
+    forceUpdate?: boolean
+  ): Promise<number>;
+
   /**
    * Get episode with adjacent chunks for context
    */
