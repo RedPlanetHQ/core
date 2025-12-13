@@ -4,6 +4,7 @@ import {
   updateEpisodeLabels,
 } from "./graphModels/episode";
 import { cancelJob, findRunningJobs } from "./jobManager.server";
+import { batchDeleteEntityEmbeddings, batchDeleteEpisodeEmbeddings, batchDeleteStatementEmbeddings, getEpisodeByQueueId } from "./vectorStorage.server";
 
 export async function getIngestionLogs(
   userId: string,
@@ -263,8 +264,6 @@ export const deleteLog = async (logId: string, userId: string) => {
     };
   }
 
-  const output = ingestionQueue.output as any;
-
   // Cancel any running jobs
   const runningTasks = await findRunningJobs({
     tags: [userId, ingestionQueue.id],
@@ -277,25 +276,49 @@ export const deleteLog = async (logId: string, userId: string) => {
   }
 
   let graphResult;
+  let finalResult: {
+    deleted: boolean;
+    episodesDeleted: number;
+    statementsDeleted: number;
+    entitiesDeleted: number;
+  } = {
+    deleted: false,
+    episodesDeleted: 0,
+    statementsDeleted: 0,
+    entitiesDeleted: 0,
+  };
 
+
+  const episodes = await getEpisodeByQueueId(logId);
   // Delete episode from graph if it exists
-  if (output?.episodeUuid) {
-    graphResult = await deleteEpisodeWithRelatedNodes({
-      episodeUuid: output.episodeUuid,
-      userId,
-    });
+  if (episodes?.length > 0) {
+    for (const episode of episodes) {
+      const result = await deleteEpisodeWithRelatedNodes({
+        episodeUuid: episode.id,
+        userId,
+      });
+
+      if (result.episodesDeleted === 0) {
+        return {
+          success: false,
+          error: "Episode not found or unauthorized",
+        };
+      }
+
+      finalResult = {
+        deleted: true,
+        episodesDeleted: finalResult.episodesDeleted + Number(result.episodesDeleted),
+        statementsDeleted: finalResult.statementsDeleted + Number(result.statementsDeleted),
+        entitiesDeleted: finalResult.entitiesDeleted + Number(result.entitiesDeleted),
+      };
+    }
   }
 
-  // Delete ingestion queue
-  await deleteIngestionQueue(ingestionQueue.id);
+  await deleteIngestionQueue(logId);
 
   return {
     success: true,
-    deleted: {
-      episode: graphResult?.episodesDeleted || 0,
-      statements: graphResult?.statementsDeleted || 0,
-      entities: graphResult?.entitiesDeleted || 0,
-    },
+    deleted: finalResult,
   };
 };
 
@@ -319,9 +342,9 @@ export const deleteSession = async (sessionId: string, userId: string) => {
   for (const log of logs) {
     const result = await deleteLog(log.id, userId);
     if (result.success && result.deleted) {
-      totalEpisodesDeleted += result.deleted.episode;
-      totalStatementsDeleted += result.deleted.statements;
-      totalEntitiesDeleted += result.deleted.entities;
+      totalEpisodesDeleted += result.deleted.episodesDeleted;
+      totalStatementsDeleted += result.deleted.statementsDeleted;
+      totalEntitiesDeleted += result.deleted.entitiesDeleted;
     }
   }
 
@@ -389,11 +412,10 @@ export const updateIngestionQueue = async (
       },
     });
 
-    const episodes = allSessionLogs.flatMap((log) => log.graphIds);
-    if (validatedLabelIds && episodes.length > 0) {
+    if (validatedLabelIds && sessionId) {
       await updateEpisodeLabels(
-        episodes,
-        validatedLabelIds as string[],
+        sessionId,
+        validatedLabelIds,
         userId,
       );
     }
@@ -411,11 +433,6 @@ export const updateIngestionQueue = async (
         },
       });
     }
-  }
-
-  const graphIds = (log.graphIds as string[]) || [];
-  if (data.labels && graphIds.length > 0) {
-    await updateEpisodeLabels(graphIds, data.labels as string[], userId);
   }
 
   // If no sessionId or no latest log found, update the original log

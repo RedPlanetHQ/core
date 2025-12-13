@@ -1,10 +1,11 @@
 import {
-  COMPACTED_SESSION_NODE_PROPERTIES,
   type CompactedSessionNode,
-  EPISODIC_NODE_PROPERTIES,
   type EpisodicNode,
 } from "@core/types";
-import { runQuery } from "~/lib/neo4j.server";
+import { ProviderFactory } from "@core/providers";
+
+// Get the graph provider instance
+const graphProvider = () => ProviderFactory.getGraphProvider();
 
 /**
  * Save or update a compacted session
@@ -12,52 +13,7 @@ import { runQuery } from "~/lib/neo4j.server";
 export async function saveCompactedSession(
   compact: CompactedSessionNode,
 ): Promise<string> {
-  const query = `
-    MERGE (cs:CompactedSession {uuid: $uuid})
-    ON CREATE SET
-      cs.sessionId = $sessionId,
-      cs.summary = $summary,
-      cs.summaryEmbedding = $summaryEmbedding,
-      cs.episodeCount = $episodeCount,
-      cs.startTime = $startTime,
-      cs.endTime = $endTime,
-      cs.createdAt = $createdAt,
-      cs.confidence = $confidence,
-      cs.userId = $userId,
-      cs.source = $source,
-      cs.compressionRatio = $compressionRatio,
-      cs.metadata = $metadata
-    ON MATCH SET
-      cs.summary = $summary,
-      cs.summaryEmbedding = $summaryEmbedding,
-      cs.episodeCount = $episodeCount,
-      cs.endTime = $endTime,
-      cs.updatedAt = $updatedAt,
-      cs.confidence = $confidence,
-      cs.compressionRatio = $compressionRatio,
-      cs.metadata = $metadata
-    RETURN cs.uuid as uuid
-  `;
-
-  const params = {
-    uuid: compact.uuid,
-    sessionId: compact.sessionId,
-    summary: compact.summary,
-    summaryEmbedding: compact.summaryEmbedding,
-    episodeCount: compact.episodeCount,
-    startTime: compact.startTime.toISOString(),
-    endTime: compact.endTime.toISOString(),
-    createdAt: compact.createdAt.toISOString(),
-    updatedAt: compact.updatedAt?.toISOString() || null,
-    confidence: compact.confidence,
-    userId: compact.userId,
-    source: compact.source,
-    compressionRatio: compact.compressionRatio,
-    metadata: JSON.stringify(compact.metadata || {}),
-  };
-
-  const result = await runQuery(query, params);
-  return result[0].get("uuid");
+  return graphProvider().saveCompactedSession(compact);
 }
 
 /**
@@ -65,17 +21,9 @@ export async function saveCompactedSession(
  */
 export async function getCompactedSession(
   uuid: string,
+  userId: string,
 ): Promise<CompactedSessionNode | null> {
-  const query = `
-    MATCH (cs:CompactedSession {uuid: $uuid})
-    RETURN cs
-  `;
-
-  const result = await runQuery(query, { uuid });
-  if (result.length === 0) return null;
-
-  const compact = result[0].get("cs").properties;
-  return parseCompactedSessionNode(compact);
+  return graphProvider().getCompactedSession(uuid, userId);
 }
 
 /**
@@ -85,18 +33,7 @@ export async function getCompactedSessionBySessionId(
   sessionId: string,
   userId: string,
 ): Promise<CompactedSessionNode | null> {
-  const query = `
-    MATCH (cs:CompactedSession {sessionId: $sessionId, userId: $userId})
-    RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact
-    ORDER BY compact.endTime DESC
-    LIMIT 1
-  `;
-
-  const result = await runQuery(query, { sessionId, userId });
-  if (result.length === 0) return null;
-
-  const compact = result[0].get("compact");
-  return parseCompactedSessionNode(compact);
+  return graphProvider().getCompactedSessionBySessionId(sessionId, userId);
 }
 
 /**
@@ -104,15 +41,10 @@ export async function getCompactedSessionBySessionId(
  */
 export async function getCompactedSessionEpisodes(
   compactUuid: string,
+  userId: string,
 ): Promise<string[]> {
-  const query = `
-    MATCH (cs:CompactedSession {uuid: $compactUuid})-[:COMPACTS]->(e:Episode)
-    RETURN e.uuid as episodeUuid
-    ORDER BY e.createdAt ASC
-  `;
-
-  const result = await runQuery(query, { compactUuid });
-  return result.map((r) => r.get("episodeUuid"));
+  const episodes = await graphProvider().getEpisodesForCompact(compactUuid, userId);
+  return episodes.map(e => e.uuid);
 }
 
 /**
@@ -123,27 +55,14 @@ export async function linkEpisodesToCompact(
   episodeUuids: string[],
   userId: string,
 ): Promise<void> {
-  const query = `
-    MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId})
-    UNWIND $episodeUuids as episodeUuid
-    MATCH (e:Episode {uuid: episodeUuid, userId: $userId})
-    MERGE (cs)-[:COMPACTS {createdAt: datetime()}]->(e)
-    MERGE (e)-[:COMPACTED_INTO {createdAt: datetime()}]->(cs)
-  `;
-
-  await runQuery(query, { compactUuid, episodeUuids, userId });
+  return graphProvider().linkEpisodesToCompact(compactUuid, episodeUuids, userId);
 }
 
 /**
  * Delete a compacted session
  */
-export async function deleteCompactedSession(uuid: string): Promise<void> {
-  const query = `
-    MATCH (cs:CompactedSession {uuid: $uuid})
-    DETACH DELETE cs
-  `;
-
-  await runQuery(query, { uuid });
+export async function deleteCompactedSession(uuid: string, userId: string): Promise<void> {
+  return graphProvider().deleteCompactedSession(uuid, userId);
 }
 
 /**
@@ -155,33 +74,13 @@ export async function getCompactionStats(userId: string): Promise<{
   averageCompressionRatio: number;
   mostRecentCompaction: Date | null;
 }> {
-  const query = `
-    MATCH (cs:CompactedSession {userId: $userId})
-    RETURN
-      count(cs) as totalCompacts,
-      sum(cs.episodeCount) as totalEpisodes,
-      avg(cs.compressionRatio) as avgCompressionRatio,
-      max(cs.endTime) as mostRecent
-  `;
+  const stats = await graphProvider().getCompactionStats(userId);
 
-  const result = await runQuery(query, { userId });
-  if (result.length === 0) {
-    return {
-      totalCompacts: 0,
-      totalEpisodes: 0,
-      averageCompressionRatio: 0,
-      mostRecentCompaction: null,
-    };
-  }
-
-  const stats = result[0];
   return {
-    totalCompacts: stats.get("totalCompacts")?.toNumber() || 0,
-    totalEpisodes: stats.get("totalEpisodes")?.toNumber() || 0,
-    averageCompressionRatio: stats.get("avgCompressionRatio") || 0,
-    mostRecentCompaction: stats.get("mostRecent")
-      ? new Date(stats.get("mostRecent"))
-      : null,
+    totalCompacts: stats.totalSessions,
+    totalEpisodes: stats.totalEpisodes,
+    averageCompressionRatio: stats.averageCompressionRatio,
+    mostRecentCompaction: null, // Provider doesn't return this yet
   };
 }
 
@@ -193,20 +92,7 @@ export async function getSessionEpisodes(
   userId: string,
   afterTime?: Date,
 ): Promise<EpisodicNode[]> {
-  const query = `
-    MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
-    ${afterTime ? "WHERE e.createdAt > $afterTime" : ""}
-    RETURN ${EPISODIC_NODE_PROPERTIES} as episode
-    ORDER BY episode.createdAt ASC
-  `;
-
-  const result = await runQuery(query, {
-    sessionId,
-    userId,
-    afterTime: afterTime?.toISOString(),
-  });
-
-  return result.map((r) => r.get("episode"));
+  return graphProvider().getSessionEpisodes(sessionId, userId, afterTime);
 }
 
 /**
@@ -219,29 +105,4 @@ export async function getSessionEpisodeCount(
 ): Promise<number> {
   const episodes = await getSessionEpisodes(sessionId, userId, afterTime);
   return episodes.length;
-}
-
-/**
- * Helper to parse raw compact node from Neo4j
- */
-function parseCompactedSessionNode(raw: any): CompactedSessionNode {
-  return {
-    uuid: raw.uuid,
-    sessionId: raw.sessionId,
-    summary: raw.summary,
-    summaryEmbedding: raw.summaryEmbedding || [],
-    episodeCount: raw.episodeCount || 0,
-    startTime: new Date(raw.startTime),
-    endTime: new Date(raw.endTime),
-    createdAt: new Date(raw.createdAt),
-    updatedAt: raw.updatedAt ? new Date(raw.updatedAt) : undefined,
-    confidence: raw.confidence || 0,
-    userId: raw.userId,
-    source: raw.source,
-    compressionRatio: raw.compressionRatio || 1,
-    metadata:
-      typeof raw.metadata === "string"
-        ? JSON.parse(raw.metadata)
-        : raw.metadata || {},
-  };
 }

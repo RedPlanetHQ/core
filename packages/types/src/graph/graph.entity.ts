@@ -242,3 +242,47 @@ export interface CompactedSessionNode {
   compressionRatio?: number;
   metadata?: Record<string, any>;
 }
+
+/**
+ * Interface for space node - a collection of related episodes
+ * Spaces help organize memory by topics, projects, or contexts
+ */
+export interface SpaceNode {
+  uuid: string;
+  name: string;
+  description: string;
+  userId: string;
+  createdAt: Date;
+  updatedAt: Date;
+  isActive: boolean;
+  contextCount?: number; // Number of episodes assigned to this space
+  type?: string; // Space type (e.g., 'classification')
+  summaryStructure?: string; // Optional structure for space summaries
+}
+
+/**
+ * Result type for space deletion operations
+ */
+export interface SpaceDeletionResult {
+  deleted: boolean;
+  statementsUpdated: number;
+  error?: string;
+}
+
+/**
+ * Result type for space assignment operations
+ */
+export interface SpaceAssignmentResult {
+  success: boolean;
+  statementsUpdated: number;
+  error?: string;
+}
+
+/**
+ * Adjacent episode chunks result
+ */
+export interface AdjacentChunks {
+  matchedChunk: EpisodicNode;
+  previousChunk?: EpisodicNode;
+  nextChunk?: EpisodicNode;
+}

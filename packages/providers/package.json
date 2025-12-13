@@ -1,0 +1,24 @@
+{
+  "name": "@core/providers",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Provider abstraction layer for CORE - supports multiple graph, vector, and model providers",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "neo4j-driver": "^5.23.0",
+    "@core/types": "workspace:*",
+    "@core/database": "workspace:*",
+    "pg": "^8.11.3"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "@types/pg": "^8.10.9",
+    "typescript": "^5.3.3"
+  }
+}

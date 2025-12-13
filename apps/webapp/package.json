@@ -28,6 +28,7 @@
     "@conform-to/zod": "^0.6.1",
     "@core/database": "workspace:*",
     "@core/mcp-proxy": "workspace:*",
+    "@core/providers": "workspace:*",
     "@core/types": "workspace:*",
     "@mjackson/headers": "0.11.1",
     "@modelcontextprotocol/sdk": "1.13.2",

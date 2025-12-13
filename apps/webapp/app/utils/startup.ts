@@ -1,9 +1,10 @@
 import { logger } from "~/services/logger.service";
 import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
-import { initNeo4jSchemaOnce, verifyConnectivity } from "~/lib/neo4j.server";
+import { ProviderFactory } from "@core/providers";
 import { env } from "~/env.server";
 import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
+import { prisma } from "~/db.server";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
@@ -16,7 +17,8 @@ async function waitForNeo4j(maxRetries = 30, retryDelay = 2000) {
 
   for (let i = 0; i < maxRetries; i++) {
     try {
-      const connected = await verifyConnectivity();
+      const graphProvider = ProviderFactory.getGraphProvider() as any;
+      const connected = await graphProvider.verifyConnectivity();
       if (connected) {
         logger.info("✓ Neo4j is ready!");
         return true;
@@ -67,8 +69,15 @@ export async function initializeStartupServices() {
     process.exit(1);
   }
 
-  if (env.QUEUE_PROVIDER === "trigger") {
-    try {
+  try {
+    logger.info("Starting application initialization...");
+
+    // Initialize ProviderFactory from environment FIRST (needed by workers and graph operations)
+    ProviderFactory.initializeFromEnv({ prisma });
+    logger.info("ProviderFactory initialized successfully");
+
+    // Now initialize queue provider
+    if (env.QUEUE_PROVIDER === "trigger") {
       const triggerApiUrl = env.TRIGGER_API_URL;
       // At this point, env validation should have already ensured these are present
       // But we add a runtime check for safety
@@ -84,36 +93,33 @@ export async function initializeStartupServices() {
       }
       await waitForTriggerLogin(triggerApiUrl);
       await addEnvVariablesInTrigger();
-    } catch (e) {
-      console.error(e);
-      console.error("Trigger is not configured");
-      process.exit(1);
+    } else {
+      // Start BullMQ workers (they need ProviderFactory to be initialized)
+      await initWorkers();
+
+      // Handle graceful shutdown
+      process.on("SIGTERM", async () => {
+        await shutdownWorkers();
+      });
+      process.on("SIGINT", async () => {
+        await shutdownWorkers();
+        process.exit(0);
+      });
     }
-  } else {
-    await initWorkers();
-
-    // Handle graceful shutdown
-    process.on("SIGTERM", async () => {
-      await shutdownWorkers();
-    });
-    process.on("SIGINT", async () => {
-      await shutdownWorkers();
-      process.exit(0);
-    });
-  }
-
-  try {
-    logger.info("Starting application initialization...");
 
     // Wait for Neo4j to be ready
     await waitForNeo4j();
 
-    // Initialize Neo4j schema
-    await initNeo4jSchemaOnce();
+    // Initialize Neo4j schema through provider
+    await ProviderFactory.initializeSchemaOnce();
     logger.info("Neo4j schema initialization completed");
 
     await fetchAndSaveIntegrations();
     logger.info("Stdio integrations initialization completed");
+
+    // Initialize vector infrastructure through provider
+    await ProviderFactory.initializeVectorInfrastructureOnce();
+    logger.info("Vector infrastructure initialization completed");
 
     // Track system configuration once at startup
     await trackConfig();
@@ -157,6 +163,9 @@ const Keys = [
   "NEO4J_URI",
   "NEO4J_USERNAME",
   "OPENAI_API_KEY",
+  "GRAPH_PROVIDER",
+  "VECTOR_PROVIDER",
+  "MODEL_PROVIDER",
 ];
 
 export async function addEnvVariablesInTrigger() {
@@ -170,6 +179,9 @@ export async function addEnvVariablesInTrigger() {
     NEO4J_URI,
     NEO4J_USERNAME,
     OPENAI_API_KEY,
+    GRAPH_PROVIDER,
+    VECTOR_PROVIDER,
+    MODEL_PROVIDER,
     TRIGGER_PROJECT_ID,
     TRIGGER_API_URL,
     TRIGGER_SECRET_KEY,
@@ -198,6 +210,9 @@ export async function addEnvVariablesInTrigger() {
     NEO4J_URI: NEO4J_URI ?? "",
     NEO4J_USERNAME: NEO4J_USERNAME ?? "",
     OPENAI_API_KEY: OPENAI_API_KEY ?? "",
+    GRAPH_PROVIDER: GRAPH_PROVIDER ?? "neo4j",
+    VECTOR_PROVIDER: VECTOR_PROVIDER ?? "pgvector",
+    MODEL_PROVIDER: MODEL_PROVIDER ?? "vercel-ai",
   };
 
   const envName = env.NODE_ENV === "production" ? "prod" : "dev";

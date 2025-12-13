@@ -48,6 +48,9 @@ services:
       - POSTHOG_PROJECT_KEY=${POSTHOG_PROJECT_KEY}
       - TELEMETRY_ENABLED=${TELEMETRY_ENABLED}
       - TELEMETRY_ANONYMOUS=${TELEMETRY_ANONYMOUS}
+      - GRAPH_PROVIDER=${GRAPH_PROVIDER}
+      - VECTOR_PROVIDER=${VECTOR_PROVIDER}
+      - MODEL_PROVIDER=${MODEL_PROVIDER}
     ports:
       - "3033:3000"
     depends_on:
@@ -60,7 +63,7 @@ services:
 
   postgres:
     container_name: core-postgres
-    image: postgres:14
+    image: pgvector/pgvector:pg18-trixie
     restart: ${RESTART_POLICY:-unless-stopped}
     environment:
       - POSTGRES_USER=${POSTGRES_USER}

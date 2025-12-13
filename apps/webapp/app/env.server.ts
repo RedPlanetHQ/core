@@ -131,6 +131,11 @@ const EnvironmentSchema = z
 
     // Queue provider
     QUEUE_PROVIDER: z.enum(["trigger", "bullmq"]).default("trigger"),
+
+    // Provider configuration
+    GRAPH_PROVIDER: z.enum(["neo4j", "falkordb", "helix"]).default("neo4j"),
+    VECTOR_PROVIDER: z.enum(["pgvector", "turbopuffer", "qdrant"]).default("pgvector"),
+    MODEL_PROVIDER: z.enum(["vercel-ai"]).default("vercel-ai"),
   })
   .refine(
     (data) => {

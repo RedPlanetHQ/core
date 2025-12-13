@@ -4,6 +4,7 @@ import {
   processTopicAnalysis,
   type TopicAnalysisPayload,
 } from "~/jobs/bert/topic-analysis.logic";
+import { initializeProvider } from "../utils/provider";
 
 /**
  * Python runner for Trigger.dev using python.runScript
@@ -39,6 +40,7 @@ export const bertTopicAnalysisTask = task({
   queue: bertQueue,
   maxDuration: 36000,
   run: async (payload: TopicAnalysisPayload) => {
+    await initializeProvider();
     return await processTopicAnalysis(
       payload,
       // Python runner for Trigger.dev

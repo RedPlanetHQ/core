@@ -8,6 +8,7 @@ import {
   getSessionEpisodes,
   saveCompactedSession,
 } from "~/services/graphModels/compactedSession";
+import { storeCompactedSessionEmbedding } from "~/services/vectorStorage.server";
 import { type CompactedSessionNode, type EpisodicNode } from "@core/types";
 
 export interface SessionCompactionPayload {
@@ -192,11 +193,20 @@ async function createCompaction(
   };
 
   console.log("compactNode", compactNode);
-  // Use graph model functions
-  await saveCompactedSession(compactNode);
-  await linkEpisodesToCompact(compactUuid, episodeUuids, userId);
 
-  logger.info(`Compaction created`, {
+  // Save to graph and vector DB in parallel
+  await Promise.all([
+    saveCompactedSession(compactNode),
+    linkEpisodesToCompact(compactUuid, episodeUuids, userId),
+    storeCompactedSessionEmbedding(
+      compactUuid,
+      compactionData.summary,
+      summaryEmbedding,
+      userId,
+    ),
+  ]);
+
+  logger.info(`Compaction created and stored in vector DB`, {
     compactUuid,
     episodeCount: episodes.length,
   });
@@ -245,11 +255,19 @@ async function updateCompaction(
     metadata: { triggerType: "update", newEpisodesAdded: newEpisodes.length },
   };
 
-  // Use graph model functions
-  await saveCompactedSession(updatedNode);
-  await linkEpisodesToCompact(existingCompact.uuid, episodeUuids, userId);
+  // Update graph and vector DB in parallel
+  await Promise.all([
+    saveCompactedSession(updatedNode),
+    linkEpisodesToCompact(existingCompact.uuid, episodeUuids, userId),
+    storeCompactedSessionEmbedding(
+      existingCompact.uuid,
+      compactionData.summary,
+      summaryEmbedding,
+      userId,
+    ),
+  ]);
 
-  logger.info(`Compaction updated`, {
+  logger.info(`Compaction updated and stored in vector DB`, {
     compactUuid: existingCompact.uuid,
     totalEpisodeCount,
   });

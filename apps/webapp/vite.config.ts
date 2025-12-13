@@ -31,6 +31,9 @@ export default defineConfig({
     target: "node",
     noExternal: [
       "@core/database",
+      "@core/providers",
+      "@core/types",
+      "@core/mcp-proxy",
       "tailwindcss",
       "@tiptap/react",
       "react-tweet",

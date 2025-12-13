@@ -6,6 +6,7 @@ import {
   type PersonaGenerationPayload,
 } from "~/jobs/spaces/persona-generation.logic";
 import { addToQueue } from "../utils/queue";
+import { initializeProvider } from "../utils/provider";
 
 export type { PersonaGenerationPayload };
 
@@ -77,6 +78,7 @@ export const personaGenerationTask = task({
   machine: "large-2x",
   maxDuration: 36000,
   run: async (payload: PersonaGenerationPayload) => {
+    await initializeProvider();
     logger.info(`[Trigger.dev] Starting persona generation task`, {
       userId: payload.userId,
       workspaceId: payload.workspaceId,

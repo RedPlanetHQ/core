@@ -1,102 +1,24 @@
 import {
-  ENTITY_NODE_PROPERTIES,
-  EPISODIC_NODE_PROPERTIES,
-  STATEMENT_NODE_PROPERTIES,
-  type EntityNode,
-  type EpisodicNode,
   type StatementNode,
   type Triple,
 } from "@core/types";
-import { runQuery } from "~/lib/neo4j.server";
-import { parseEntityNode, saveEntity } from "./entity";
-import { parseEpisodicNode, saveEpisode } from "./episode";
-import crypto from "crypto";
+import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
+
+// Get the graph provider instance
+const getGraphProvider = () => ProviderFactory.getGraphProvider();
+// Get the vector provider instance
+const getVectorProvider = () => ProviderFactory.getVectorProvider();
 
 export async function saveTriple(triple: Triple): Promise<string> {
-  // First, update the Episode
-  await saveEpisode(triple.provenance);
-
-  // Then, save the Statement
-  const statementQuery = `
-        MERGE (n:Statement {uuid: $uuid, userId: $userId})
-        ON CREATE SET
-          n.fact = $fact,
-          n.factEmbedding = $factEmbedding,
-          n.createdAt = $createdAt,
-          n.validAt = $validAt,
-          n.invalidAt = $invalidAt,
-          n.invalidatedBy = $invalidatedBy,
-          n.attributes = $attributes,
-          n.userId = $userId
-        ON MATCH SET
-          n.fact = $fact,
-          n.factEmbedding = $factEmbedding,
-          n.validAt = $validAt,
-          n.invalidAt = $invalidAt,
-          n.invalidatedBy = $invalidatedBy,
-          n.attributes = $attributes
-        RETURN n.uuid as uuid
-      `;
-
-  const statementParams = {
-    uuid: triple.statement.uuid,
-    fact: triple.statement.fact,
-    factEmbedding: triple.statement.factEmbedding,
-    createdAt: triple.statement.createdAt.toISOString(),
-    validAt: triple.statement.validAt.toISOString(),
-    invalidAt: triple.statement.invalidAt
-      ? triple.statement.invalidAt.toISOString()
-      : null,
-    invalidatedBy: triple.statement.invalidatedBy || null,
-    attributes: JSON.stringify(triple.statement.attributes || {}),
-    userId: triple.provenance.userId,
-  };
-
-  const statementResult = await runQuery(statementQuery, statementParams);
-  const statementUuid = statementResult[0].get("uuid");
-
-  // Then, save the Entities
-  const subjectUuid = await saveEntity(triple.subject);
-  const predicateUuid = await saveEntity(triple.predicate);
-  const objectUuid = await saveEntity(triple.object);
-
-  // Then, create relationships
-  const relationshipsQuery = `
-  MATCH (statement:Statement {uuid: $statementUuid, userId: $userId})
-  MATCH (subject:Entity {uuid: $subjectUuid, userId: $userId})   
-  MATCH (predicate:Entity {uuid: $predicateUuid, userId: $userId})
-  MATCH (object:Entity {uuid: $objectUuid, userId: $userId})
-  MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
-  
-  MERGE (episode)-[prov:HAS_PROVENANCE]->(statement)
-    ON CREATE SET prov.uuid = $provenanceEdgeUuid, prov.createdAt = $createdAt, prov.userId = $userId
-  MERGE (statement)-[subj:HAS_SUBJECT]->(subject)
-    ON CREATE SET subj.uuid = $subjectEdgeUuid, subj.createdAt = $createdAt, subj.userId = $userId
-  MERGE (statement)-[pred:HAS_PREDICATE]->(predicate)
-    ON CREATE SET pred.uuid = $predicateEdgeUuid, pred.createdAt = $createdAt, pred.userId = $userId
-  MERGE (statement)-[obj:HAS_OBJECT]->(object)
-    ON CREATE SET obj.uuid = $objectEdgeUuid, obj.createdAt = $createdAt
-  
-  RETURN statement.uuid as uuid
-  `;
-
-  const now = new Date().toISOString();
-  const relationshipsParams = {
-    statementUuid,
-    subjectUuid,
-    predicateUuid,
-    objectUuid,
+  // Use the provider's saveTriple method
+  return getGraphProvider().saveTriple({
+    statement: triple.statement,
+    subject: triple.subject,
+    predicate: triple.predicate,
+    object: triple.object,
     episodeUuid: triple.provenance.uuid,
-    subjectEdgeUuid: crypto.randomUUID(),
-    predicateEdgeUuid: crypto.randomUUID(),
-    objectEdgeUuid: crypto.randomUUID(),
-    provenanceEdgeUuid: crypto.randomUUID(),
-    createdAt: now,
     userId: triple.provenance.userId,
-  };
-
-  await runQuery(relationshipsQuery, relationshipsParams);
-  return statementUuid;
+  });
 }
 
 /**
@@ -112,22 +34,23 @@ export async function findContradictoryStatements({
   predicateId: string;
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
-  const query = `
-      MATCH (subject:Entity {uuid: $subjectId}), (predicate:Entity {uuid: $predicateId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_PREDICATE]->(predicate)
-      WHERE s.userId = $userId
-        AND s.invalidAt IS NULL
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
-    `;
+  // Map subject/predicate IDs to names for provider method
+  const subject = await getGraphProvider().getEntity(subjectId, userId);
+  const predicate = await getGraphProvider().getEntity(predicateId, userId);
 
-  const result = await runQuery(query, { subjectId, predicateId, userId });
-
-  if (!result || result.length === 0) {
+  if (!subject || !predicate) {
     return [];
   }
 
-  return result.map((record) => {
-    return parseStatementNode(record.get("statement"));
+  const results = await getGraphProvider().findContradictoryStatements({
+    subjectName: subject.name,
+    predicateName: predicate.name,
+    userId,
+  });
+
+  return results.map(s => {
+    const { factEmbedding, ...rest } = s;
+    return rest;
   });
 }
 
@@ -146,30 +69,17 @@ export async function findStatementsWithSameSubjectObject({
   excludePredicateId?: string;
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
-  const query = `
-      MATCH (subject:Entity {uuid: $subjectId}), (object:Entity {uuid: $objectId})
-      MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_OBJECT]->(object)
-      MATCH (s)-[:HAS_PREDICATE]->(predicate:Entity)
-      WHERE s.userId = $userId
-        AND s.invalidAt IS NULL
-        ${excludePredicateId ? "AND predicate.uuid <> $excludePredicateId" : ""}
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
-    `;
-
-  const params = {
+  const results = await getGraphProvider().findStatementsWithSameSubjectObject({
     subjectId,
     objectId,
+    excludePredicateId,
     userId,
-    ...(excludePredicateId && { excludePredicateId }),
-  };
-  const result = await runQuery(query, params);
+  });
 
-  if (!result || result.length === 0) {
-    return [];
-  }
-
-  return result.map((record) => {
-    return parseStatementNode(record.get("statement"));
+  // Remove factEmbedding from results
+  return results.map(s => {
+    const { factEmbedding, ...rest } = s;
+    return rest;
   });
 }
 
@@ -187,30 +97,29 @@ export async function findSimilarStatements({
   excludeIds?: string[];
   userId: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
-  const limit = 100;
-  const query = `
-      MATCH (s:Statement{userId: $userId})
-      WHERE s.factEmbedding IS NOT NULL AND size(s.factEmbedding) > 0 AND NOT s.uuid IN $excludeIds
-      WITH s, gds.similarity.cosine(s.factEmbedding, $factEmbedding) AS score
-      WHERE score >= $threshold
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
-      ORDER BY score DESC
-      LIMIT ${limit}
-    `;
-
-  const result = await runQuery(query, {
-    factEmbedding,
+  // Step 1: Search vector provider for similar statement IDs
+  const vectorResults = await getVectorProvider().search({
+    vector: factEmbedding,
+    limit: 100,
     threshold,
-    excludeIds,
-    userId,
+    namespace: VECTOR_NAMESPACES.STATEMENT,
+    filter: { userId, excludeIds },
   });
 
-  if (!result || result.length === 0) {
+  if (vectorResults.length === 0) {
     return [];
   }
 
-  return result.map((record) => {
-    return parseStatementNode(record.get("statement"));
+  // Step 2: Fetch full statement data from Neo4j
+  const statements = await getGraphProvider().getStatements(
+    vectorResults.map(r => r.id),
+    userId,
+  );
+
+  // Step 3: Remove factEmbedding from results
+  return statements.map(s => {
+    const { factEmbedding, ...rest } = s;
+    return rest;
   });
 }
 
@@ -219,94 +128,51 @@ export async function getTripleForStatement({
 }: {
   statementId: string;
 }): Promise<Triple | null> {
-  const query = `
-      MATCH (statement:Statement {uuid: $statementId})
-      MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
-      MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
-      MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
-      OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
-      RETURN ${STATEMENT_NODE_PROPERTIES.replace(/s\./g, "statement.")} as statement, 
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "subject.")} as subject, 
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "predicate.")} as predicate, 
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "object.")} as object, 
-      ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
-    `;
+  // Get the statement first to get userId
+  const graphProvider = getGraphProvider();
 
-  const result = await runQuery(query, { statementId });
+  // Use getTriplesForStatementsBatch with single statement
+  const triplesMap = await graphProvider.getTriplesForStatementsBatch([statementId], "");
 
-  if (!result || result.length === 0) {
+  if (triplesMap.size === 0) {
     return null;
   }
 
-  const record = result[0];
-
-  const statementProps = record.get("statement");
-  const subjectProps = record.get("subject");
-  const predicateProps = record.get("predicate");
-  const objectProps = record.get("object");
-  const episodeProps = record.get("episode");
-
-  const statement: StatementNode = parseStatementNode(statementProps);
-
-  const subject: EntityNode = parseEntityNode(subjectProps);
-
-  const predicate: EntityNode = parseEntityNode(predicateProps);
-
-  const object: EntityNode = parseEntityNode(objectProps);
-
-  // Episode might be null
-  const provenance: EpisodicNode = parseEpisodicNode(episodeProps);
-
-  return {
-    statement,
-    subject,
-    predicate,
-    object,
-    provenance,
-  };
+  return triplesMap.get(statementId) || null;
 }
 
 export async function invalidateStatement({
   statementId,
   invalidAt,
   invalidatedBy,
+  userId,
 }: {
   statementId: string;
   invalidAt: string;
   invalidatedBy?: string;
+  userId: string;
 }) {
-  const query = `
-      MATCH (s:Statement {uuid: $statementId})
-      SET s.invalidAt = $invalidAt
-      ${invalidatedBy ? "SET s.invalidatedBy = $invalidatedBy" : ""}
-      RETURN ${STATEMENT_NODE_PROPERTIES} as statement
-    `;
-
-  const params = {
+  await getGraphProvider().invalidateStatement(
     statementId,
-    invalidAt,
-    ...(invalidatedBy && { invalidatedBy }),
-  };
-  const result = await runQuery(query, params);
-
-  if (!result || result.length === 0) {
-    return null;
-  }
-
-  return result[0].get("statement");
+    invalidatedBy || "",
+    new Date(invalidAt),
+    userId
+  );
 }
 
 export async function invalidateStatements({
   statementIds,
   invalidatedBy,
+  userId,
 }: {
   statementIds: string[];
   invalidatedBy?: string;
+  userId: string;
 }) {
   const invalidAt = new Date().toISOString();
   return statementIds.map(
     async (statementId) =>
-      await invalidateStatement({ statementId, invalidAt, invalidatedBy }),
+      await invalidateStatement({ statementId, invalidAt, invalidatedBy, userId }),
   );
 }
 
@@ -316,31 +182,21 @@ export async function searchStatementsByEmbedding(params: {
   limit?: number;
   minSimilarity?: number;
 }) {
-  const limit = params.limit || 100;
-  const query = `
-  MATCH (s:Statement{userId: $userId})
-  WHERE s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
-  WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
-  WHERE score >= $minSimilarity
-  RETURN ${STATEMENT_NODE_PROPERTIES} as statement, score
-  ORDER BY score DESC
-  LIMIT ${limit}
-`;
-
-  const result = await runQuery(query, {
-    embedding: params.embedding,
-    minSimilarity: params.minSimilarity,
-    limit: params.limit,
-    userId: params.userId,
+  // Step 1: Search vector provider for similar episode IDs
+  const vectorResults = await getVectorProvider().search({
+    vector: params.embedding,
+    limit: params.limit || 100,
+    threshold: params.minSimilarity || 0.7,
+    namespace: VECTOR_NAMESPACES.EPISODE,
+    filter: { userId: params.userId },
   });
 
-  if (!result || result.length === 0) {
+  if (vectorResults.length === 0) {
     return [];
   }
 
-  return result.map((record) => {
-    return parseStatementNode(record.get("statement"));
-  });
+  const statementUuids = vectorResults.map(r => r.id);
+  return await getGraphProvider().getStatements(statementUuids, params.userId);
 }
 
 export function parseStatementNode(node: Record<string, any>): StatementNode {
@@ -352,8 +208,11 @@ export function parseStatementNode(node: Record<string, any>): StatementNode {
     validAt: new Date(node.validAt),
     invalidAt: node.invalidAt ? new Date(node.invalidAt) : null,
     invalidatedBy: node.invalidatedBy || undefined,
-    attributes: node.attributes ? JSON.parse(node.attributes) : {},
+    attributes: node.attributes ? (typeof node.attributes === 'string' ? JSON.parse(node.attributes) : node.attributes) : {},
     userId: node.userId,
+    labelIds: node.labelIds || undefined,
+    recallCount: node.recallCount || undefined,
+    provenanceCount: node.provenanceCount || undefined,
   };
 }
 
@@ -362,81 +221,22 @@ export function parseStatementNode(node: Record<string, any>): StatementNode {
  */
 export async function getTripleForStatementsBatch({
   statementIds,
+  userId,
 }: {
   statementIds: string[];
+  userId: string;
 }): Promise<Map<string, Triple>> {
-  if (statementIds.length === 0) {
-    return new Map();
-  }
-
-  const query = `
-    UNWIND $statementIds AS statementId
-    MATCH (statement:Statement {uuid: statementId})
-    MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
-    MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
-    MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
-    OPTIONAL MATCH (episode:Episode)-[:HAS_PROVENANCE]->(statement)
-    RETURN statementId,
-      ${STATEMENT_NODE_PROPERTIES.replace(/s\./g, "statement.")} as statement,
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "subject.")} as subject,
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "predicate.")} as predicate,
-      ${ENTITY_NODE_PROPERTIES.replace(/ent\./g, "object.")} as object,
-      ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
-  `;
-
-  const result = await runQuery(query, { statementIds });
-
-  const triplesMap = new Map<string, Triple>();
-
-  if (!result || result.length === 0) {
-    return triplesMap;
-  }
-
-  for (const record of result) {
-    const statementId = record.get("statementId");
-    const statementProps = record.get("statement");
-    const subjectProps = record.get("subject");
-    const predicateProps = record.get("predicate");
-    const objectProps = record.get("object");
-    const episodeProps = record.get("episode");
-
-    const statement: StatementNode = parseStatementNode(statementProps);
-    const subject: EntityNode = parseEntityNode(subjectProps);
-    const predicate: EntityNode = parseEntityNode(predicateProps);
-    const object: EntityNode = parseEntityNode(objectProps);
-    const provenance: EpisodicNode = parseEpisodicNode(episodeProps);
-
-    triplesMap.set(statementId, {
-      statement,
-      subject,
-      predicate,
-      object,
-      provenance,
-    });
-  }
-
-  return triplesMap;
+  return getGraphProvider().getTriplesForStatementsBatch(statementIds, userId);
 }
 
-export async function getStatementsBatch({
+export async function getStatements({
   statementUuids,
+  userId,
 }: {
   statementUuids: string[];
+  userId: string;
 }) {
-  if (statementUuids.length === 0) return [];
-
-  const result = await runQuery(
-    `
-    UNWIND $statementUuids AS uuid
-    MATCH (s:Statement {uuid: uuid})
-    RETURN ${STATEMENT_NODE_PROPERTIES} as statement
-  `,
-    { statementUuids },
-  );
-
-  return result.map((record) => {
-    return parseStatementNode(record.get("statement"));
-  });
+  return getGraphProvider().getStatements(statementUuids, userId);
 }
 
 /**
@@ -455,36 +255,11 @@ export async function findContradictoryStatementsBatch({
     return new Map();
   }
 
-  const query = `
-    UNWIND $pairs AS pair
-    MATCH (subject:Entity {uuid: pair.subjectId}), (predicate:Entity {uuid: pair.predicateId})
-    MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_PREDICATE]->(predicate)
-    WHERE s.userId = $userId
-      AND s.invalidAt IS NULL
-      AND NOT s.uuid IN $excludeStatementIds
-    RETURN pair.subjectId + '_' + pair.predicateId AS pairKey,
-           collect(${STATEMENT_NODE_PROPERTIES}) as statements
-  `;
-
-  const result = await runQuery(query, { pairs, userId, excludeStatementIds });
-
-  const resultsMap = new Map<string, Omit<StatementNode, "factEmbedding">[]>();
-
-  if (!result || result.length === 0) {
-    return resultsMap;
-  }
-
-  for (const record of result) {
-    const pairKey = record.get("pairKey");
-    const statements = record.get("statements");
-
-    resultsMap.set(
-      pairKey,
-      statements.map((s: any) => parseStatementNode(s)),
-    );
-  }
-
-  return resultsMap;
+  return getGraphProvider().findContradictoryStatementsBatch({
+    pairs,
+    userId,
+    excludeStatementIds,
+  });
 }
 
 /**
@@ -507,38 +282,11 @@ export async function findStatementsWithSameSubjectObjectBatch({
     return new Map();
   }
 
-  const query = `
-    UNWIND $pairs AS pair
-    MATCH (subject:Entity {uuid: pair.subjectId}), (object:Entity {uuid: pair.objectId})
-    MATCH (subject)<-[:HAS_SUBJECT]-(s:Statement)-[:HAS_OBJECT]->(object)
-    MATCH (s)-[:HAS_PREDICATE]->(predicate:Entity)
-    WHERE s.userId = $userId
-      AND s.invalidAt IS NULL
-      AND NOT s.uuid IN $excludeStatementIds
-      AND (pair.excludePredicateId IS NULL OR predicate.uuid <> pair.excludePredicateId)
-    RETURN pair.subjectId + '_' + pair.objectId AS pairKey,
-           collect(${STATEMENT_NODE_PROPERTIES}) as statements
-  `;
-
-  const result = await runQuery(query, { pairs, userId, excludeStatementIds });
-
-  const resultsMap = new Map<string, Omit<StatementNode, "factEmbedding">[]>();
-
-  if (!result || result.length === 0) {
-    return resultsMap;
-  }
-
-  for (const record of result) {
-    const pairKey = record.get("pairKey");
-    const statements = record.get("statements");
-
-    resultsMap.set(
-      pairKey,
-      statements.map((s: any) => parseStatementNode(s)),
-    );
-  }
-
-  return resultsMap;
+  return getGraphProvider().findStatementsWithSameSubjectObjectBatch({
+    pairs,
+    userId,
+    excludeStatementIds,
+  });
 }
 
 /**
@@ -546,15 +294,12 @@ export async function findStatementsWithSameSubjectObjectBatch({
  */
 export async function deleteStatements(
   statementUuids: string[],
+  userId: string,
 ): Promise<void> {
-  if (statementUuids.length === 0) return;
+  await getGraphProvider().deleteStatements(statementUuids, userId);
+}
 
-  await runQuery(
-    `
-    UNWIND $statementUuids AS uuid
-    MATCH (s:Statement {uuid: uuid})
-    DETACH DELETE s
-  `,
-    { statementUuids },
-  );
+
+export async function getEpisodeIdsForStatements(statementUuids: string[]): Promise<Map<string, string>> {
+  return getGraphProvider().getEpisodeIdsForStatements(statementUuids);
 }
