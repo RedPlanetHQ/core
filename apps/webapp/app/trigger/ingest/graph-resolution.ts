@@ -3,6 +3,7 @@ import {
   processGraphResolution,
   type GraphResolutionPayload,
 } from "~/jobs/ingest/graph-resolution.logic";
+import { initializeProvider } from "../utils/provider";
 
 const graphResolutionQueue = queue({
   name: "graph-resolution-queue",
@@ -21,6 +22,7 @@ export const graphResolutionTask = task({
     outOfMemory: { machine: "medium-1x" },
   },
   run: async (payload: GraphResolutionPayload) => {
+    await initializeProvider();
     return await processGraphResolution(payload);
   },
 });

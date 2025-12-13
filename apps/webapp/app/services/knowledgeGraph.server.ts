@@ -16,6 +16,7 @@ import { extractEntities } from "./prompts/nodes";
 import { extractStatements, extractStatementsOSS } from "./prompts/statements";
 import {
   getRecentEpisodes,
+  saveEpisode,
   searchEpisodesByEmbedding,
 } from "./graphModels/episode";
 import {
@@ -29,10 +30,14 @@ import {
   makeModelCall,
   isProprietaryModel,
 } from "~/lib/model.server";
-import { runQuery } from "~/lib/neo4j.server";
 import { Apps, getNodeTypesString } from "~/utils/presets/nodes";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
 import { type PrismaClient } from "@prisma/client";
+import {
+  storeEpisodeEmbedding,
+  batchStoreEntityEmbeddings,
+  batchStoreStatementEmbeddings,
+} from "./vectorStorage.server";
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
@@ -87,7 +92,6 @@ export class KnowledgeGraphService {
       };
 
       // Save episode immediately to Neo4j
-      const { saveEpisode } = await import("./graphModels/episode");
       await saveEpisode(episode);
 
       const episodeSavedTime = Date.now();
@@ -139,10 +143,13 @@ export class KnowledgeGraphService {
 
       // Step 3: Update episode with normalized content and embedding
       episode.content = normalizedEpisodeBody;
-      episode.contentEmbedding = await this.getEmbedding(normalizedEpisodeBody);
+      const episodeEmbedding = await this.getEmbedding(normalizedEpisodeBody);
+
+      // Store episode embedding in vector provider
+      await storeEpisodeEmbedding(episode.uuid, normalizedEpisodeBody, episodeEmbedding, params.userId);
 
       const episodeUpdatedTime = Date.now();
-      logger.log(`Updated episode with normalized content in ${episodeUpdatedTime - normalizedTime} ms`);
+      logger.log(`Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`);
 
       // Step 3: Entity Extraction - Extract entities from the episode content
       const extractedNodes = await this.extractEntities(
@@ -182,9 +189,71 @@ export class KnowledgeGraphService {
         await saveTriple(triple);
       }
 
+      // Generate and store embeddings in batch (more efficient than per-triple)
+      if (extractedStatements.length > 0) {
+        // Collect unique entities and facts
+        
+        const uniqueEntities = new Map<string, EntityNode>();
+        const facts: Array<{ uuid: string; text: string }> = [];
+
+        for (const triple of extractedStatements) {
+          // Collect statement facts
+          facts.push({
+            uuid: triple.statement.uuid,
+            text: triple.statement.fact,
+          });
+
+          // Collect unique entities (subject, predicate, object)
+          if (!uniqueEntities.has(triple.subject.uuid)) {
+            uniqueEntities.set(triple.subject.uuid, triple.subject);
+          }
+          if (!uniqueEntities.has(triple.predicate.uuid)) {
+            uniqueEntities.set(triple.predicate.uuid, triple.predicate);
+          }
+          if (!uniqueEntities.has(triple.object.uuid)) {
+            uniqueEntities.set(triple.object.uuid, triple.object);
+          }
+        }
+
+        const embeddingTime = Date.now();
+        // Batch generate embeddings
+        const entities = Array.from(uniqueEntities.values());
+        const [factEmbeddings, entityEmbeddings] = await Promise.all([
+          Promise.all(facts.map((f) => this.getEmbedding(f.text))),
+          Promise.all(entities.map((e) => this.getEmbedding(e.name))),
+        ]);
+        const embeddingEndTime = Date.now();
+        logger.log(`Generated embeddings in ${embeddingEndTime - embeddingTime} ms`);
+
+        // Batch store statement embeddings (single database call)
+        await batchStoreStatementEmbeddings(
+          facts.map((fact, index) => ({
+            uuid: fact.uuid,
+            fact: fact.text,
+            embedding: factEmbeddings[index],
+            userId: params.userId,
+          })),
+        );
+        const embeddingStoreEndTime = Date.now();
+        logger.log(`Stored embeddings in ${embeddingStoreEndTime - embeddingEndTime} ms`);
+
+        // Batch store entity embeddings (single database call)
+        await batchStoreEntityEmbeddings(
+          entities.map((entity, index) => ({
+            uuid: entity.uuid,
+            name: entity.name,
+            embedding: entityEmbeddings[index],
+            userId: params.userId,
+          })),
+        );
+        const embeddingEntityStoreEndTime = Date.now();
+        logger.log(`Stored entity embeddings in ${embeddingEntityStoreEndTime - embeddingEndTime} ms`);
+
+      }
+
       const saveTriplesTime = Date.now();
       logger.log(
-        `Saved unresolved triples in ${saveTriplesTime - extractedStatementsTime} ms`,
+        `Saved ${extractedStatements.length} triples and stored embeddings in ${saveTriplesTime - extractedStatementsTime} ms`,
       );
 
       const endTime = Date.now();
@@ -278,7 +347,7 @@ export class KnowledgeGraphService {
         name: typeof entity === "string" ? entity : entity.name,
         type: undefined, // Type will be inferred from statements
         attributes: typeof entity === "string" ? {} : entity.attributes || {},
-        nameEmbedding: nameEmbeddings[index],
+        nameEmbedding: [], // Don't store in Neo4j
         typeEmbedding: undefined, // No type embedding needed
         createdAt: new Date(),
         userId: episode.userId,
@@ -397,24 +466,10 @@ export class KnowledgeGraphService {
 
     // Batch generate embeddings for predicates and facts
     const uniquePredicates = Array.from(predicateMap.values());
-    const factTexts = extractedTriples.map((t) => t.fact);
-    const predicateNames = uniquePredicates.map((p) => p.name);
-
-    const [predicateNameEmbeddings, predicateTypeEmbeddings, factEmbeddings] =
-      await Promise.all([
-        Promise.all(predicateNames.map((name) => this.getEmbedding(name))),
-        Promise.all(predicateNames.map(() => this.getEmbedding("Predicate"))),
-        Promise.all(factTexts.map((fact) => this.getEmbedding(fact))),
-      ]);
-
-    // Update predicate embeddings
-    uniquePredicates.forEach((predicate, index) => {
-      predicate.nameEmbedding = predicateNameEmbeddings[index];
-    });
 
     // Convert extracted triples to Triple objects with Statement nodes
     const triples = extractedTriples.map(
-      (triple: ExtractedTripleData, tripleIndex: number) => {
+      (triple: ExtractedTripleData) => {
         // Find the subject and object nodes by matching name (type-free approach)
         const subjectNode = allEntities.find(
           (node) => node.name.toLowerCase() === triple.source.toLowerCase(),
@@ -448,10 +503,11 @@ export class KnowledgeGraphService {
           }
 
           // Create a statement node
+          const statementUuid = crypto.randomUUID();
           const statement: StatementNode = {
-            uuid: crypto.randomUUID(),
+            uuid: statementUuid,
             fact: triple.fact,
-            factEmbedding: factEmbeddings[tripleIndex],
+            factEmbedding: [], // Don't store in Neo4j
             createdAt: new Date(),
             validAt: validAtDate,
             invalidAt: null,

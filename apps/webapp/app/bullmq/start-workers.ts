@@ -34,11 +34,17 @@ import {
   setupWorkerLogging,
   startPeriodicMetricsLogging,
 } from "./utils/worker-logger";
+import { ProviderFactory } from "@core/providers";
+import { prisma } from "~/db.server";
 
 let metricsInterval: NodeJS.Timeout | null = null;
 
 /**
  * Initialize and start all BullMQ workers with comprehensive logging
+ *
+ * IMPORTANT: This function assumes ProviderFactory has already been initialized
+ * by the caller (usually startup.ts). If running standalone, you must initialize
+ * ProviderFactory first.
  */
 export async function initWorkers(): Promise<void> {
   // Setup comprehensive logging for all workers
@@ -155,8 +161,12 @@ export async function shutdownWorkers(): Promise<void> {
   await closeAllWorkers();
 }
 
-// If running as standalone script, initialize workers
+// If running as standalone script, initialize ProviderFactory then workers
 if (import.meta.url === `file://${process.argv[1]}`) {
+  // Initialize ProviderFactory with prisma instance before starting workers
+  ProviderFactory.initializeFromEnv({ prisma });
+  logger.info("ProviderFactory initialized for standalone BullMQ workers");
+
   initWorkers();
 
   // Handle graceful shutdown

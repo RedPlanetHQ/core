@@ -1,7 +1,7 @@
-import { runQuery } from "~/lib/neo4j.server";
-import { EpisodeType, EPISODIC_NODE_PROPERTIES, type EpisodicNode } from "@core/types";
+import { EpisodeType, type EpisodicNode } from "@core/types";
 import { logger } from "./logger.service";
 import { EpisodeChunker } from "./episodeChunker.server";
+import { ProviderFactory } from "@core/providers";
 
 /**
  * Version information for an episode session
@@ -41,8 +41,9 @@ export class EpisodeVersioningService {
       return this.createNewSessionInfo(newChunkHashes.length);
     }
 
+    const graphProvider = ProviderFactory.getGraphProvider();
     // Find existing version's first episode (chunkIndex=0 stores version metadata)
-    const existingFirstEpisode = await this.findLatestVersionFirstEpisode(
+    const existingFirstEpisode = await graphProvider.getLatestVersionFirstEpisode(
       sessionId,
       userId,
     );
@@ -102,34 +103,6 @@ export class EpisodeVersioningService {
         totalChunks: newChunkHashes.length,
       },
     };
-  }
-
-  /**
-   * Find the first episode (chunkIndex=0) of the latest version for a session
-   * This episode stores version metadata
-   */
-  private async findLatestVersionFirstEpisode(
-    sessionId: string,
-    userId: string,
-  ): Promise<EpisodicNode | null> {
-    const query = `
-      MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
-      WHERE e.chunkIndex = 0
-      RETURN ${EPISODIC_NODE_PROPERTIES} as episode
-      ORDER BY e.version DESC
-      LIMIT 1
-    `;
-
-    const result = await runQuery(query, { sessionId, userId });
-
-    if (result.length === 0) {
-      return null;
-    }
-
-    const record = result[0];
-    const episodeNode = record.get("episode");
-
-    return episodeNode;
   }
 
   /**

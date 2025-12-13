@@ -46,6 +46,33 @@ model AuthorizationCode {
   updatedAt DateTime @updatedAt
 }
 
+model BillingHistory {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Billing period
+  periodStart DateTime
+  periodEnd   DateTime
+
+  // Credits tracking
+  monthlyCreditsAllocated Int
+  creditsUsed             Int
+  overageCreditsUsed      Int
+
+  // Charges
+  subscriptionAmount Float
+  usageAmount        Float // Overage charges
+  totalAmount        Float
+
+  // Stripe integration
+  stripeInvoiceId     String? @unique
+  stripePaymentStatus String?
+
+  // Relations
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  subscriptionId String
+}
+
 model Conversation {
   id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
@@ -65,6 +92,22 @@ model Conversation {
 
   ConversationHistory ConversationHistory[]
   RecallLog           RecallLog[]
+}
+
+model CompactedSessionEmbedding {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  vector   Unsupported("vector")
+  summary  String
+  metadata Json?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String 
+
+  @@index([userId])
+  @@map("compacted_session_embeddings")
 }
 
 model ConversationHistory {
@@ -88,6 +131,40 @@ model ConversationHistory {
 
   conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
   conversationId String
+}
+
+model EntityEmbedding {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name     String
+  vector   Unsupported("vector")
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("entity_embeddings")
+}
+
+model EpisodeEmbedding {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  content  String
+  vector   Unsupported("vector")
+  labelIds String[]
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, labelIds])
+  @@map("episode_embeddings")
 }
 
 model IngestionQueue {
@@ -197,6 +274,21 @@ model InvitationCode {
   users User[]
 
   createdAt DateTime @default(now())
+}
+
+model Label {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+
+  color String
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model MCPSession {
@@ -458,19 +550,58 @@ model RecallLog {
   metadata Json? @default("{}")
 }
 
-model Label {
-  id          String  @id @default(cuid())
-  name        String
-  description String?
-
-  color String
-
-  // Relations
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId String
-
+model StatementEmbedding {
+  id        String   @id
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  fact     String
+  vector   Unsupported("vector")
+  labelIds String[]
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, labelIds])
+  @@map("statement_embeddings")
+}
+
+model Subscription {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Stripe integration
+  stripeCustomerId       String?   @unique
+  stripeSubscriptionId   String?   @unique
+  stripePriceId          String?
+  stripeCurrentPeriodEnd DateTime?
+
+  // Plan details
+  planType PlanType           @default(FREE)
+  status   SubscriptionStatus @default(ACTIVE)
+
+  // Monthly credits allocation
+  monthlyCredits Int @default(0)
+
+  // Billing cycle tracking
+  currentPeriodStart DateTime @default(now())
+  currentPeriodEnd   DateTime
+
+  // Usage-based pricing (for PRO plan)
+  enableUsageBilling  Boolean @default(false)
+  usagePricePerCredit Float? // Price per credit after monthly quota
+
+  // Overage tracking
+  overageCreditsUsed Int   @default(0)
+  overageAmount      Float @default(0)
+
+  // Relations
+  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId    String           @unique
+  BillingHistory BillingHistory[]
 }
 
 model User {
@@ -515,14 +646,18 @@ model User {
   IngestionRule        IngestionRule[]
 
   // OAuth2 relations
-  oauthAuthorizationCodes OAuthAuthorizationCode[]
-  oauthAccessTokens       OAuthAccessToken[]
-  oauthRefreshTokens      OAuthRefreshToken[]
-  oauthClientsCreated     OAuthClient[]
-  oauthIntegrationGrants  OAuthIntegrationGrant[]
-  oAuthClientInstallation OAuthClientInstallation[]
-  UserUsage               UserUsage?
-  RecallLog               RecallLog[]
+  oauthAuthorizationCodes   OAuthAuthorizationCode[]
+  oauthAccessTokens         OAuthAccessToken[]
+  oauthRefreshTokens        OAuthRefreshToken[]
+  oauthClientsCreated       OAuthClient[]
+  oauthIntegrationGrants    OAuthIntegrationGrant[]
+  oAuthClientInstallation   OAuthClientInstallation[]
+  UserUsage                 UserUsage?
+  RecallLog                 RecallLog[]
+  StatementEmbedding        StatementEmbedding[]
+  EpisodeEmbedding          EpisodeEmbedding[]
+  EntityEmbedding           EntityEmbedding[]
+  CompactedSessionEmbedding CompactedSessionEmbedding[]
 }
 
 model UserUsage {
@@ -580,69 +715,6 @@ model WebhookDeliveryLog {
   deliveredAt        DateTime              @default(now())
 
   createdAt DateTime @default(now())
-}
-
-model Subscription {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Stripe integration
-  stripeCustomerId       String?   @unique
-  stripeSubscriptionId   String?   @unique
-  stripePriceId          String?
-  stripeCurrentPeriodEnd DateTime?
-
-  // Plan details
-  planType PlanType           @default(FREE)
-  status   SubscriptionStatus @default(ACTIVE)
-
-  // Monthly credits allocation
-  monthlyCredits Int @default(0)
-
-  // Billing cycle tracking
-  currentPeriodStart DateTime @default(now())
-  currentPeriodEnd   DateTime
-
-  // Usage-based pricing (for PRO plan)
-  enableUsageBilling  Boolean @default(false)
-  usagePricePerCredit Float? // Price per credit after monthly quota
-
-  // Overage tracking
-  overageCreditsUsed Int   @default(0)
-  overageAmount      Float @default(0)
-
-  // Relations
-  workspace      Workspace        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  workspaceId    String           @unique
-  BillingHistory BillingHistory[]
-}
-
-model BillingHistory {
-  id        String   @id @default(uuid())
-  createdAt DateTime @default(now())
-
-  // Billing period
-  periodStart DateTime
-  periodEnd   DateTime
-
-  // Credits tracking
-  monthlyCreditsAllocated Int
-  creditsUsed             Int
-  overageCreditsUsed      Int
-
-  // Charges
-  subscriptionAmount Float
-  usageAmount        Float // Overage charges
-  totalAmount        Float
-
-  // Stripe integration
-  stripeInvoiceId     String? @unique
-  stripePaymentStatus String?
-
-  // Relations
-  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
-  subscriptionId String
 }
 
 model Workspace {

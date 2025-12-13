@@ -1,5 +1,4 @@
 import {
-  EPISODIC_NODE_PROPERTIES,
   type EntityNode,
   type StatementNode,
   type EpisodicNode,
@@ -8,9 +7,16 @@ import {
 } from "@core/types";
 import type { Embedding } from "ai";
 import { logger } from "../logger.service";
-import { runQuery } from "~/lib/neo4j.server";
 import { getEmbedding } from "~/lib/model.server";
 import { findSimilarEntities } from "../graphModels/entity";
+import {
+  searchStatements,
+  searchEpisodes,
+  batchScoreStatements,
+} from "../vectorStorage.server";
+
+import { ProviderFactory } from "@core/providers";
+import { getEpisodeIdsForStatements } from "../graphModels/statement";
 
 /**
  * Perform BM25 keyword-based search on statements
@@ -24,95 +30,27 @@ export async function performBM25Search(
     // Sanitize the query for Lucene syntax
     const sanitizedQuery = sanitizeLuceneQuery(query);
 
-    // Build the WHERE clause based on timeframe options
-    let timeframeCondition = `
-      AND s.validAt <= $validAt
-      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-    `;
+    // BM25 limit reduced to improve precision (fewer low-quality results)
+    const STATEMENT_LIMIT = 75; // ~40-50 episodes vs 80+ previously
 
-    // If startTime is provided, add condition to filter by validAt >= startTime
-    if (options.startTime) {
-      timeframeCondition = `
-        AND s.validAt <= $validAt
-        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-        AND s.validAt >= $startTime
-      `;
-    }
-
-    // Use Neo4j's built-in fulltext search capabilities with provenance count
-    // Optimized: Single query to avoid expensive UNWIND + MATCH pattern
-    // BM25 gets 3x limit since keyword matching is less precise than semantic search
-    const STATEMENT_LIMIT = 150;
-
-    // Build episode label filter condition (hard filter: exclude episodes with no labels)
-    let episodeLabelCondition = "";
-    if (options.labelIds.length > 0) {
-      episodeLabelCondition = `
-        AND e.labelIds IS NOT NULL
-        AND size(e.labelIds) > 0
-        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-      `;
-    }
-
-    // Combined query: search statements and group by episode in one pass
-    // Use statement uuid for indexed lookup instead of node reference
-    const cypher = `
-        CALL db.index.fulltext.queryNodes("statement_fact_index", $query)
-        YIELD node AS s, score
-        WHERE s.userId = $userId
-          AND score >= 0.5
-          ${timeframeCondition}
-        WITH s, score
-        ORDER BY score DESC
-        LIMIT ${STATEMENT_LIMIT}
-        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-        WHERE true ${episodeLabelCondition}
-        WITH e,
-             COLLECT(s) as statements,
-             COLLECT(score) as scores
-        WITH e,
-             statements,
-             reduce(sum = 0.0, sc IN scores | sum + sc) / size(scores) as avgScore,
-             size(statements) as stmtCount
-        RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
-               avgScore as score,
-               stmtCount,
-               statements[0..5] as topStatements,
-               [] as invalidatedStatements
-        ORDER BY avgScore DESC
-      `;
-
-    const params = {
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const results = await graphProvider.performBM25Search({
       query: sanitizedQuery,
       userId,
-      validAt: options.endTime.toISOString(),
-      ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
-    };
-
-    const records = await runQuery(cypher, params);
-    return records.map((record) => {
-      const episode = record.get("episode") as EpisodicNode;
-      const scoreValue = record.get("score");
-      const stmtCountValue = record.get("stmtCount");
-      const topStatementsRaw = record.get("topStatements") || [];
-
-      return {
-        episode,
-        score:
-          typeof scoreValue === "number"
-            ? scoreValue
-            : (scoreValue?.toNumber?.() ?? 0),
-        statementCount:
-          typeof stmtCountValue === "bigint"
-            ? Number(stmtCountValue)
-            : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
-        topStatements: topStatementsRaw.map(
-          (s: any) => s.properties as StatementNode,
-        ),
-        invalidatedStatements: [], // Will be filtered at the end in search.server.ts
-      };
+      validAt: options.endTime,
+      startTime: options.startTime ?? undefined,
+      includeInvalidated: options.includeInvalidated,
+      labelIds: options.labelIds,
+      statementLimit: STATEMENT_LIMIT,
     });
+
+    return results.map((result) => ({
+      episode: result.episode,
+      score: result.score,
+      statementCount: result.statementCount,
+      topStatements: result.topStatements,
+      invalidatedStatements: [], // Will be filtered at the end in search.server.ts
+    }));
   } catch (error) {
     logger.error("BM25 search error:", { error });
     return [];
@@ -148,91 +86,59 @@ export async function performVectorSearch(
   options: Required<SearchOptions>,
 ): Promise<EpisodeSearchResult[]> {
   try {
-    // Build the WHERE clause based on timeframe options
-    let timeframeCondition = `
-      AND s.validAt <= $validAt
-      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-    `;
-
-    // If startTime is provided, add condition to filter by validAt >= startTime
-    if (options.startTime) {
-      timeframeCondition = `
-        AND s.validAt <= $validAt
-        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-        AND s.validAt >= $startTime
-      `;
-    }
-
-    // Internal statement limit (not exposed to users)
-    const STATEMENT_LIMIT = 100;
-
-    // Build episode label filter condition (hard filter: exclude episodes with no labels)
-    let episodeLabelCondition = "";
-    if (options.labelIds.length > 0) {
-      episodeLabelCondition = `
-        AND e.labelIds IS NOT NULL
-        AND size(e.labelIds) > 0
-        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-      `;
-    }
-
-    const cypher = `
-    MATCH (s:Statement{userId: $userId})
-    WHERE s.factEmbedding IS NOT NULL
-      AND s.validAt <= $validAt
-      AND size(s.factEmbedding) > 0
-      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-      ${options.startTime ? "AND s.validAt >= $startTime" : ""}
-    WITH s, gds.similarity.cosine(s.factEmbedding, $embedding) AS score
-    WHERE score >= 0.5
-    WITH s, score
-    ORDER BY score DESC
-    LIMIT ${STATEMENT_LIMIT}
-    MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-    WHERE true ${episodeLabelCondition}
-    WITH e,
-         COLLECT({stmt: s, score: score}) as allStatements,
-         AVG(score) as avgScore,
-         COUNT(s) as stmtCount
-    RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
-           avgScore as score,
-           stmtCount,
-           [item IN allStatements | item.stmt][0..5] as topStatements,
-           [] as invalidatedStatements
-    ORDER BY avgScore DESC
-  `;
-
-    const params = {
-      embedding: query,
+    // Step 1: Get similar statement IDs from vector provider (pgvector)
+    const scoredStatements = await searchStatements({
+      queryVector: query,
       userId,
-      validAt: options.endTime.toISOString(),
-      ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
-    };
+      labelIds: options.labelIds.length > 0 ? options.labelIds : undefined,
+      threshold: 0.5,
+      limit: 100,
+    });
 
-    const records = await runQuery(cypher, params);
-    return records.map((record) => {
-      const episode = record.get("episode") as EpisodicNode;
-      const scoreValue = record.get("score");
-      const stmtCountValue = record.get("stmtCount");
-      const topStatementsRaw = record.get("topStatements") || [];
+    if (scoredStatements.length === 0) {
+      return [];
+    }
+
+    // Step 2: Fetch episodes and statements from graph provider (no scoring in Cypher)
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const episodeData = await graphProvider.getEpisodesForStatements({
+      statementUuids: scoredStatements.map((s) => s.uuid),
+      userId,
+      validAt: options.endTime,
+      startTime: options.startTime ?? undefined,
+      includeInvalidated: options.includeInvalidated,
+      labelIds: options.labelIds,
+    });
+
+    if (episodeData.length === 0) {
+      return [];
+    }
+
+    // Step 3: Aggregate scores in JavaScript
+    const scoreMap = new Map(scoredStatements.map((s) => [s.uuid, s.score]));
+
+    return episodeData.map(({ episode, statements }) => {
+      // Calculate average score from statement scores
+      const scores = statements.map((s) => scoreMap.get(s.uuid) || 0);
+      const avgScore = scores.length > 0
+        ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+        : 0;
+
+      // Get top 5 statements sorted by score
+      const topStatements = statements
+        .map((s) => ({ stmt: s, score: scoreMap.get(s.uuid) || 0 }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 5)
+        .map((x) => x.stmt);
 
       return {
         episode,
-        score:
-          typeof scoreValue === "number"
-            ? scoreValue
-            : (scoreValue?.toNumber?.() ?? 0),
-        statementCount:
-          typeof stmtCountValue === "bigint"
-            ? Number(stmtCountValue)
-            : (stmtCountValue?.toNumber?.() ?? stmtCountValue ?? 0),
-        topStatements: topStatementsRaw.map(
-          (s: any) => s.properties as StatementNode,
-        ),
+        score: avgScore,
+        statementCount: statements.length,
+        topStatements,
         invalidatedStatements: [], // Will be filtered at the end in search.server.ts
       };
-    });
+    }).sort((a, b) => b.score - a.score); // Sort by score descending
   } catch (error) {
     logger.error("Vector search error:", { error });
     return [];
@@ -249,91 +155,58 @@ export async function performEpisodeVectorSearch(
   options: Required<SearchOptions>,
 ): Promise<EpisodeSearchResult[]> {
   try {
-    const EPISODE_LIMIT = 50;
-
-    // Build episode label filter condition
-    let episodeLabelCondition = "";
-    if (options.labelIds.length > 0) {
-      episodeLabelCondition = `
-        AND ep.labelIds IS NOT NULL
-        AND size(ep.labelIds) > 0
-        AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
-      `;
-    }
-
-    // Build timeframe condition
-    let timeframeCondition = `
-      AND ep.validAt <= $validAt
-    `;
-    if (options.startTime) {
-      timeframeCondition += ` AND ep.validAt >= $startTime`;
-    }
-
-    const cypher = `
-      MATCH (ep:Episode {userId: $userId})
-      WHERE ep.contentEmbedding IS NOT NULL
-        AND size(ep.contentEmbedding) > 0
-        ${timeframeCondition}
-        ${episodeLabelCondition}
-
-      WITH ep, gds.similarity.cosine(ep.contentEmbedding, $queryEmbedding) AS score
-      WHERE score >= 0.2
-
-      // Get statements from matching episodes
-      MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
-      WHERE s.validAt <= $validAt
-        ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-
-      WITH ep, score,
-           COLLECT(s) as allStatements,
-           COUNT(s) as stmtCount
-
-      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "ep.")} as episode,
-             score,
-             stmtCount,
-             allStatements[0..5] as topStatements,
-             [] as invalidatedStatements
-      ORDER BY score DESC
-      LIMIT ${EPISODE_LIMIT}
-    `;
-
-    const params = {
-      queryEmbedding,
+    // Step 1: Get similar episode IDs from vector provider (pgvector)
+    const scoredEpisodes = await searchEpisodes({
+      queryVector: queryEmbedding,
       userId,
-      validAt: options.endTime.toISOString(),
-      ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
-    };
+      labelIds: options.labelIds.length > 0 ? options.labelIds : undefined,
+      threshold: 0.5,
+      limit: 50,
+    });
 
-    const records = await runQuery(cypher, params);
+    if (scoredEpisodes.length === 0) {
+      return [];
+    }
 
-    logger.info(
-      `Episode vector search: found ${records.length} episodes, ` +
-        `top score: ${records[0]?.get("score") || "N/A"}`,
-    );
+    // Step 2: Fetch episodes and statements from graph provider (no scoring in Cypher)
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const episodeData = await graphProvider.getEpisodesByIdsWithStatements({
+      episodeUuids: scoredEpisodes.map((e) => e.uuid),
+      userId,
+      validAt: options.endTime,
+      startTime: options.startTime ?? undefined,
+      includeInvalidated: options.includeInvalidated,
+      labelIds: options.labelIds,
+    });
 
-    return records.map((record) => {
-      const episode = record.get("episode") as EpisodicNode;
-      const scoreValue = record.get("score");
-      const stmtCountValue = record.get("stmtCount");
-      const topStatementsRaw = record.get("topStatements") || [];
+    if (episodeData.length === 0) {
+      return [];
+    }
+
+    // Step 3: Add scores in JavaScript (scores are from pgvector, not calculated here)
+    const scoreMap = new Map(scoredEpisodes.map((e) => [e.uuid, e.score]));
+
+    const results = episodeData.map(({ episode, statements }) => {
+      const score = scoreMap.get(episode.uuid) || 0;
+
+      // Get top 5 statements (no scoring needed for episode-level search)
+      const topStatements = statements.slice(0, 5);
 
       return {
         episode,
-        score:
-          typeof scoreValue === "number"
-            ? scoreValue
-            : (scoreValue?.toNumber?.() ?? 0),
-        statementCount:
-          typeof stmtCountValue === "bigint"
-            ? Number(stmtCountValue)
-            : (stmtCountValue ?? 0),
-        topStatements: topStatementsRaw.map(
-          (s: any) => s.properties as StatementNode,
-        ),
+        score,
+        statementCount: statements.length,
+        topStatements,
         invalidatedStatements: [],
       };
-    });
+    }).sort((a, b) => b.score - a.score); // Sort by score descending
+
+    logger.info(
+      `Episode vector search: found ${results.length} episodes, ` +
+        `top score: ${results[0]?.score || "N/A"}`,
+    );
+
+    return results;
   } catch (error) {
     logger.error("Episode vector search error:", { error });
     return [];
@@ -360,7 +233,7 @@ export async function performBfsSearch(
     const { statements, hopDistanceMap } = await bfsTraversal(
       entities,
       embedding,
-      options.maxBfsDepth || 3,
+      options.maxBfsDepth || 2,
       options.endTime,
       userId,
       options.includeInvalidated,
@@ -401,39 +274,22 @@ export async function performBfsSearch(
       });
     });
 
-    // Fetch episodes in ONE efficient query
+    // Fetch episodes in ONE efficient query from graph provider
     const episodeIds = Array.from(episodeStatementsMap.keys());
     if (episodeIds.length === 0) {
       return [];
     }
 
-    // Build episode label filter condition (hard filter: exclude episodes with no labels)
-    let episodeLabelCondition = "";
-    if (options.labelIds.length > 0) {
-      episodeLabelCondition = `
-        AND e.labelIds IS NOT NULL
-        AND size(e.labelIds) > 0
-        AND ANY(labelId IN $labelIds WHERE labelId IN e.labelIds)
-      `;
-    }
-
-    const cypher = `
-      MATCH (e:Episode{userId: $userId})
-      WHERE e.uuid IN $episodeIds
-        ${episodeLabelCondition}
-      RETURN ${EPISODIC_NODE_PROPERTIES} as episode
-    `;
-
-    const records = await runQuery(cypher, {
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const episodes = await graphProvider.fetchEpisodesByIds({
       episodeIds,
       userId,
-      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
+      labelIds: options.labelIds,
     });
 
     // Build results with aggregated scores (in-memory aggregation)
-    return records
-      .map((record) => {
-        const episode = record.get("episode") as EpisodicNode;
+    return episodes
+      .map((episode) => {
         const episodeData = episodeStatementsMap.get(episode.uuid)!;
 
         const avgScore =
@@ -459,7 +315,8 @@ export async function performBfsSearch(
 }
 
 /**
- * Iterative BFS traversal - explores up to 3 hops level-by-level using Neo4j cosine similarity
+ * Iterative BFS traversal - explores up to 3 hops level-by-level
+ * Uses graph provider for traversal and vector provider for scoring
  */
 async function bfsTraversal(
   startEntities: EntityNode[],
@@ -475,6 +332,7 @@ async function bfsTraversal(
 }> {
   const RELEVANCE_THRESHOLD = 0.65;
   const EXPLORATION_THRESHOLD = 0.3;
+  const EARLY_TERMINATION_THRESHOLD = 50; // Stop if we have enough high-quality results
 
   const allStatements = new Map<
     string,
@@ -485,78 +343,86 @@ async function bfsTraversal(
   // Track entities per level for iterative BFS
   let currentLevelEntities = startEntities.map((e) => e.uuid);
 
-  // Timeframe condition for temporal filtering
-  let timeframeCondition = `
-    AND s.validAt <= $validAt
-    ${includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-  `;
-  if (startTime) {
-    timeframeCondition += ` AND s.validAt >= $startTime`;
-  }
+  const graphProvider = ProviderFactory.getGraphProvider();
 
   // Process each depth level
   for (let depth = 0; depth < maxDepth; depth++) {
     if (currentLevelEntities.length === 0) break;
 
+    // Early termination: if we already have enough high-quality statements from hop 1, skip hop 2
+    const currentHighQualityCount = Array.from(allStatements.values())
+      .filter((s) => s.relevance >= RELEVANCE_THRESHOLD)
+      .length;
+    if (depth > 0 && currentHighQualityCount >= EARLY_TERMINATION_THRESHOLD) {
+      logger.info(
+        `BFS early termination at depth ${depth}: ${currentHighQualityCount} high-quality statements found`
+      );
+      break;
+    }
+
     // Mark entities as visited at this depth
     currentLevelEntities.forEach((id) => visitedEntities.add(`${id}`));
 
-    // Get statements for current level entities with cosine similarity calculated in Neo4j
-    // Optimized: userId in MATCH for index usage + named rel variable for relationship index
-    const cypher = `
-      MATCH (e:Entity{userId: $userId})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
-      WHERE e.uuid IN $entityIds and s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0
-        ${timeframeCondition}
-      WITH DISTINCT s  // Deduplicate first
-      WITH s, gds.similarity.cosine(s.factEmbedding, $queryEmbedding) AS relevance
-      WHERE relevance >= $explorationThreshold
-      RETURN s.uuid AS uuid, relevance
-      ORDER BY relevance DESC
-      LIMIT 200
-    `;
-
-    /// Depth statementids
-    /// Staemeids -> relevance from
-
-    const records = await runQuery(cypher, {
+    // Step 1: Get statements connected to entities from graph provider (no scoring)
+    const statementResults = await graphProvider.bfsGetStatements({
       entityIds: currentLevelEntities,
       userId,
-      queryEmbedding,
-      explorationThreshold: EXPLORATION_THRESHOLD,
-      validAt: validAt.toISOString(),
-      ...(startTime && { startTime: startTime.toISOString() }),
+      validAt,
+      startTime: startTime ?? undefined,
+      includeInvalidated,
+      limit: 200,
+    });
+    console.log(`Statement fetch lenght for depth ${depth}: ${statementResults.length}`);
+
+    if (statementResults.length === 0) {
+      currentLevelEntities = [];
+      continue;
+    }
+
+    // Step 2: Batch score statements using vector provider (pgvector)
+    const statementIds = statementResults.map((r) => r.uuid);
+    const scores = await batchScoreStatements({
+      queryVector: queryEmbedding,
+      statementIds,
+      userId,
     });
 
-    // Store statement relevance scores and hop distance
+    // Step 3: Store statement relevance scores and hop distance, filter by exploration threshold
+    // Use stricter thresholds for deeper hops to reduce noise
+    const depthAdjustedThreshold = EXPLORATION_THRESHOLD + (depth * 0.15); // +0.15 per hop
     const currentLevelStatementUuids: string[] = [];
-    for (const record of records) {
-      const uuid = record.get("uuid");
-      const relevance = record.get("relevance");
+    for (const result of statementResults) {
+      const { uuid } = result;
+      const relevance = scores.get(uuid) || 0;
 
-      if (!allStatements.has(uuid)) {
+      // Apply depth-adjusted exploration threshold to filter statements
+      if (relevance >= depthAdjustedThreshold && !allStatements.has(uuid)) {
         allStatements.set(uuid, { relevance, hopDistance: depth + 1 }); // Store hop distance (1-indexed)
         currentLevelStatementUuids.push(uuid);
       }
     }
 
-    // Get connected entities for next level
-    // Optimized: userId in MATCH + named rel variable for relationship index
+    // Get connected entities for next level from graph provider
     if (depth < maxDepth - 1 && currentLevelStatementUuids.length > 0) {
-      const nextCypher = `
-        MATCH (s:Statement{userId: $userId})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(e:Entity{userId: $userId})
-        WHERE s.uuid IN $statementUuids
-        RETURN DISTINCT e.uuid AS entityId
-      `;
-
-      const nextRecords = await runQuery(nextCypher, {
+      const nextLevelResults = await graphProvider.bfsGetNextLevel({
         statementUuids: currentLevelStatementUuids,
         userId,
       });
 
-      // Filter out already visited entities
-      currentLevelEntities = nextRecords
-        .map((r) => r.get("entityId"))
+      // Filter out already visited entities and limit expansion to prevent explosion
+      const MAX_ENTITIES_PER_HOP = depth === 0 ? 50 : 20; // Fewer entities in deeper hops
+      const unvisitedEntities = nextLevelResults
+        .map((r) => r.entityId)
         .filter((id) => !visitedEntities.has(`${id}`));
+
+      // Take only the first N entities to limit exponential growth
+      currentLevelEntities = unvisitedEntities.slice(0, MAX_ENTITIES_PER_HOP);
+
+      if (unvisitedEntities.length > MAX_ENTITIES_PER_HOP) {
+        logger.info(
+          `BFS depth ${depth + 1}: Limiting entity expansion from ${unvisitedEntities.length} to ${MAX_ENTITIES_PER_HOP}`
+        );
+      }
     } else {
       currentLevelEntities = [];
     }
@@ -573,24 +439,14 @@ async function bfsTraversal(
 
   const relevantUuids = relevantResults.map(([uuid]) => uuid);
 
-  // Fetch statements WITH their episode IDs for in-memory grouping
-  const fetchCypher = `
-    MATCH (s:Statement{userId: $userId})
-    WHERE s.uuid IN $uuids
-    OPTIONAL MATCH (e:Episode)-[:HAS_PROVENANCE]->(s)
-    WITH s, collect(e.uuid) as episodeIds
-    RETURN s, episodeIds
-  `;
-  const fetchRecords = await runQuery(fetchCypher, {
-    uuids: relevantUuids,
+  // Fetch statements WITH their episode IDs from graph provider for in-memory grouping
+  const fetchResults = await graphProvider.bfsFetchStatements({
+    statementUuids: relevantUuids,
     userId,
   });
+
   const statementMap = new Map(
-    fetchRecords.map((r) => {
-      const stmt = r.get("s").properties as StatementNode;
-      const episodeIds = r.get("episodeIds") || [];
-      return [stmt.uuid, { statement: stmt, episodeIds }];
-    }),
+    fetchResults.map((r) => [r.statement.uuid, { statement: r.statement, episodeIds: r.episodeIds }]),
   );
 
   // Create hop distance and relevance maps for later use
@@ -712,23 +568,6 @@ export function combineAndDeduplicateStatements(
   );
 }
 
-export async function getEpisodesByStatements(
-  statements: StatementNode[],
-): Promise<EpisodicNode[]> {
-  const cypher = `
-    MATCH (s:Statement)<-[:HAS_PROVENANCE]-(e:Episode)
-    WHERE s.uuid IN $statementUuids
-    RETURN distinct e
-  `;
-
-  const params = {
-    statementUuids: statements.map((s) => s.uuid),
-  };
-
-  const records = await runQuery(cypher, params);
-  return records.map((record) => record.get("e").properties as EpisodicNode);
-}
-
 /**
  * Episode Graph Search Result
  */
@@ -769,130 +608,77 @@ export async function performEpisodeGraphSearch(
       },
     );
 
-    // Timeframe condition for temporal filtering
-    let timeframeCondition = `
-      AND s.validAt <= $validAt
-      ${options.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
-    `;
-    if (options.startTime) {
-      timeframeCondition += ` AND s.validAt >= $startTime`;
-    }
-
-    // Build episode label filter condition (hard filter: exclude episodes with no labels)
-    let episodeLabelCondition = "";
-    if (options.labelIds.length > 0) {
-      episodeLabelCondition = `
-        AND ep.labelIds IS NOT NULL
-        AND size(ep.labelIds) > 0
-        AND ANY(labelId IN $labelIds WHERE labelId IN ep.labelIds)
-      `;
-    }
-
-    const cypher = `
-      // Step 1: Find statements connected to query entities
-      // Optimized: userId in MATCH + named rel for relationship index
-      MATCH (queryEntity:Entity{userId: $userId})-[rel1:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
-      WHERE queryEntity.uuid IN $queryEntityIds
-        ${timeframeCondition}
-
-      // Step 2: Find episodes containing these statements and filter by labelIds
-      // Optimized: Named rel for HAS_PROVENANCE index
-      MATCH (s)<-[provRel:HAS_PROVENANCE]-(ep:Episode)
-      WHERE true and s.factEmbedding IS NOT NULL and size(s.factEmbedding) > 0 ${episodeLabelCondition}
-
-      // Step 3: Collect all statements from these episodes (for metrics only)
-      // Optimized: userId filter + named rel for relationship index
-      MATCH (ep)-[provRel2:HAS_PROVENANCE]->(epStatement:Statement{userId: $userId})
-      WHERE epStatement.validAt <= $validAt
-        AND (epStatement.invalidAt IS NULL OR epStatement.invalidAt > $validAt)
-        AND epStatement.factEmbedding IS NOT NULL
-        AND size(epStatement.factEmbedding) > 0
-
-      // Step 4: Calculate episode-level metrics
-      WITH ep,
-           collect(DISTINCT s) as entityMatchedStatements,
-           collect(DISTINCT epStatement) as allEpisodeStatements,
-           collect(DISTINCT queryEntity) as matchedEntities
-
-      // Step 5: Calculate all metrics in one pass (optimized: fewer WITH clauses)
-      // Direct reduce without intermediate array creation
-      // IMPORTANT: avgRelevance now computed from entityMatchedStatements ONLY (not all statements)
-      // This prevents irrelevant statements from diluting the relevance score
-      WITH ep,
-           entityMatchedStatements,
-           size(matchedEntities) as entityMatchCount,
-           size(entityMatchedStatements) as entityStmtCount,
-           size(allEpisodeStatements) as totalStmtCount,
-           reduce(sum = 0.0, stmt IN entityMatchedStatements |
-             sum + gds.similarity.cosine(stmt.factEmbedding, $queryEmbedding)
-           ) / CASE WHEN size(entityMatchedStatements) = 0 THEN 1 ELSE size(entityMatchedStatements) END as avgRelevance
-
-      // Step 6: Calculate connectivity and filter
-      WITH ep,
-           entityMatchedStatements,
-           entityMatchCount,
-           entityStmtCount,
-           totalStmtCount,
-           avgRelevance,
-           (toFloat(entityStmtCount) / CASE WHEN totalStmtCount = 0 THEN 1 ELSE totalStmtCount END) *
-             entityMatchCount as connectivityScore
-      WHERE entityMatchCount >= 1
-        AND avgRelevance >= 0.5
-        AND totalStmtCount >= 1
-
-      // Step 7: Calculate final score and return
-      RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "ep.")} as episode,
-             entityMatchedStatements as statements,
-             entityMatchCount,
-             totalStmtCount,
-             avgRelevance,
-             connectivityScore,
-             (entityMatchCount * 2.0) + connectivityScore + avgRelevance as episodeScore
-
-      ORDER BY episodeScore DESC, entityMatchCount DESC, totalStmtCount DESC
-      LIMIT 50
-    `;
-
-    const params = {
+    // Step 1: Get episodes with entity-matched statements from graph provider
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const graphResults = await graphProvider.performEpisodeGraphSearch({
       queryEntityIds,
       userId,
-      queryEmbedding,
-      validAt: options.endTime.toISOString(),
-      ...(options.startTime && { startTime: options.startTime.toISOString() }),
-      ...(options.labelIds.length > 0 && { labelIds: options.labelIds }),
-    };
-
-    const records = await runQuery(cypher, params);
-
-    const results: EpisodeGraphResult[] = records.map((record) => {
-      const episode = record.get("episode") as EpisodicNode;
-      const statements = record
-        .get("statements")
-        .map((s: any) => s.properties as StatementNode);
-      const entityMatchCount =
-        typeof record.get("entityMatchCount") === "bigint"
-          ? Number(record.get("entityMatchCount"))
-          : record.get("entityMatchCount");
-      const totalStmtCount =
-        typeof record.get("totalStmtCount") === "bigint"
-          ? Number(record.get("totalStmtCount"))
-          : record.get("totalStmtCount");
-      const avgRelevance = record.get("avgRelevance");
-      const connectivityScore = record.get("connectivityScore");
-      const episodeScore = record.get("episodeScore");
-
-      return {
-        episode,
-        statements,
-        score: episodeScore,
-        metrics: {
-          entityMatchCount,
-          totalStatementCount: totalStmtCount,
-          avgRelevance,
-          connectivityScore,
-        },
-      };
+      validAt: options.endTime,
+      startTime: options.startTime ?? undefined,
+      includeInvalidated: options.includeInvalidated,
+      labelIds: options.labelIds,
     });
+
+    if (graphResults.length === 0) {
+      return [];
+    }
+
+    const scoreStartTime = Date.now();
+    // Step 2: Batch score all entity-matched statements using vector provider (pgvector)
+    const allStatementIds = new Set<string>();
+    graphResults.forEach((result) => {
+      result.entityMatchedStmtIds.forEach((id) => allStatementIds.add(id));
+    });
+
+    const scores = await batchScoreStatements({
+      queryVector: queryEmbedding,
+      statementIds: Array.from(allStatementIds),
+      userId,
+    });
+
+    // Step 3: Calculate metrics in-memory and filter
+    const results: EpisodeGraphResult[] = graphResults
+      .map((result) => {
+        const entityMatchedStmtIds = result.entityMatchedStmtIds;
+        const entityMatchCount = Number(result.entityMatchCount);
+        const totalStmtCount = Number(result.totalStmtCount);
+        const connectivityScore = Number(result.connectivityScore);
+
+        // Calculate avgRelevance from scores
+        const relevanceScores = entityMatchedStmtIds
+          .map((id) => scores.get(id) || 0)
+          .filter((score) => score > 0);
+        const avgRelevance =
+          relevanceScores.length > 0
+            ? relevanceScores.reduce((sum, score) => sum + score, 0) /
+              relevanceScores.length
+            : 0;
+
+        const episodeScore =
+          entityMatchCount * 2.0 + connectivityScore + avgRelevance;
+
+        return {
+          episode: result.episode,
+          statements: result.statements,
+          score: episodeScore,
+          metrics: {
+            entityMatchCount,
+            totalStatementCount: totalStmtCount,
+            avgRelevance,
+            connectivityScore,
+          },
+        };
+      })
+      .filter((result) => result.metrics.avgRelevance >= 0.5)
+      .sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (
+          b.metrics.entityMatchCount !== a.metrics.entityMatchCount
+        )
+          return b.metrics.entityMatchCount - a.metrics.entityMatchCount;
+        return b.metrics.totalStatementCount - a.metrics.totalStatementCount;
+      })
+      .slice(0, 50);
 
     logger.info(
       `Episode graph search: found ${results.length} episodes, ` +
@@ -909,33 +695,6 @@ export async function performEpisodeGraphSearch(
     logger.error("Episode graph search error:", { error });
     return [];
   }
-}
-
-/**
- * Get episode IDs for statements in batch (efficient, no N+1 queries)
- */
-export async function getEpisodeIdsForStatements(
-  statementUuids: string[],
-): Promise<Map<string, string>> {
-  if (statementUuids.length === 0) {
-    return new Map();
-  }
-
-  // Optimized: Named rel for HAS_PROVENANCE relationship index
-  const cypher = `
-    MATCH (s:Statement)<-[provRel:HAS_PROVENANCE]-(e:Episode)
-    WHERE s.uuid IN $statementUuids
-    RETURN s.uuid as statementUuid, e.uuid as episodeUuid
-  `;
-
-  const records = await runQuery(cypher, { statementUuids });
-
-  const map = new Map<string, string>();
-  records.forEach((record) => {
-    map.set(record.get("statementUuid"), record.get("episodeUuid"));
-  });
-
-  return map;
 }
 
 /**
@@ -997,31 +756,4 @@ export async function groupStatementsByEpisode(
   });
 
   return grouped;
-}
-
-/**
- * Fetch episode objects by their UUIDs in batch
- */
-export async function getEpisodesByUuids(
-  episodeUuids: string[],
-): Promise<Map<string, EpisodicNode>> {
-  if (episodeUuids.length === 0) {
-    return new Map();
-  }
-
-  const cypher = `
-    MATCH (e:Episode)
-    WHERE e.uuid IN $episodeUuids
-    RETURN e
-  `;
-
-  const records = await runQuery(cypher, { episodeUuids });
-
-  const map = new Map<string, EpisodicNode>();
-  records.forEach((record) => {
-    const episode = record.get("e").properties as EpisodicNode;
-    map.set(episode.uuid, episode);
-  });
-
-  return map;
 }

@@ -3,6 +3,7 @@ import {
   processSessionCompaction,
   type SessionCompactionPayload,
 } from "~/jobs/session/session-compaction.logic";
+import { initializeProvider } from "../utils/provider";
 
 export const sessionCompactionQueue = queue({
   name: "session-compaction-queue",
@@ -13,6 +14,7 @@ export const sessionCompactionTask = task({
   id: "session-compaction",
   queue: sessionCompactionQueue,
   run: async (payload: SessionCompactionPayload) => {
+    await initializeProvider();
     return await processSessionCompaction(payload);
   },
 });

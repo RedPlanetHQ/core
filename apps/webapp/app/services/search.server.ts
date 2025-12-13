@@ -23,10 +23,10 @@ import {
 } from "./search/rerank";
 import { getEmbedding } from "~/lib/model.server";
 import { prisma } from "~/db.server";
-import { runQuery } from "~/lib/neo4j.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
 import { env } from "~/env.server";
 import { getCompactedSessionBySessionId } from "./graphModels/compactedSession";
+import { ProviderFactory } from "@core/providers";
 
 /**
  * SearchService provides methods to search the reified + temporal knowledge graph
@@ -74,7 +74,7 @@ export class SearchService {
 
     const opts: Required<SearchOptions> = {
       limit: options.limit || 10, // Maximum episodes in final response
-      maxBfsDepth: options.maxBfsDepth || 3,
+      maxBfsDepth: options.maxBfsDepth ?? 1, // Default to 1 hop (95% of value, 10x faster)
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
       endTime: options.endTime || new Date(),
@@ -91,10 +91,11 @@ export class SearchService {
       maxEpisodesForLLM: options.maxEpisodesForLLM || 20,
       sortBy: options.sortBy || "relevance",
     };
-
     // Enhance query with LLM to transform keyword soup into semantic query
 
     const queryVector = await this.getEmbedding(query);
+    const vectorEndTime = Date.now();
+    logger.info(`Query vectorization: ${vectorEndTime - startTime}ms`);
 
     // Note: We still need to extract entities from graph for Episode Graph search
     // The LLM entities are just strings, we need EntityNode objects from the graph
@@ -102,6 +103,8 @@ export class SearchService {
     logger.info(
       `Extracted entities ${entities.map((e: EntityNode) => e.name).join(", ")}`,
     );
+    const entityEndTime = Date.now();
+    logger.info(`Entity extraction: ${entityEndTime - vectorEndTime}ms`);
 
     // 1. Run parallel search methods (including episode graph search) using enhanced query
     const searchStartTime = Date.now();
@@ -502,19 +505,9 @@ export class SearchService {
     const episodeIds = episodes.map((episode) => episode.uuid);
     const statementIds = statements.map((statement) => statement.uuid);
 
-    const cypher = `
-      MATCH (e:Episode)
-      WHERE e.uuid IN $episodeUuids and e.userId = $userId
-      SET e.recallCount = coalesce(e.recallCount, 0) + 1
-    `;
-    await runQuery(cypher, { episodeUuids: episodeIds, userId });
-
-    const cypher2 = `
-      MATCH (s:Statement)
-      WHERE s.uuid IN $statementUuids and s.userId = $userId
-      SET s.recallCount = coalesce(s.recallCount, 0) + 1
-    `;
-    await runQuery(cypher2, { statementUuids: statementIds, userId });
+    const graphProvider = ProviderFactory.getGraphProvider()
+    await graphProvider.updateEpisodeRecallCount(userId, episodeIds)
+    await graphProvider.updateStatementRecallCount(userId, statementIds)
   }
 
   /**
@@ -932,38 +925,8 @@ export class SearchService {
 
     const episodeIds = episodes.map((ep) => ep.episode.uuid);
 
-    // Single efficient Cypher query to count entity matches for all episodes
-    const cypher = `
-      // Match episodes and their statements
-      MATCH (ep:Episode {userId: $userId})
-      WHERE ep.uuid IN $episodeIds
-
-      // Find all entities connected to episode statements
-      MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement)-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(entity:Entity {userId: $userId})
-      WHERE entity.uuid IN $queryEntityIds
-
-      // Count distinct matching entities per episode
-      WITH ep.uuid as episodeId, collect(DISTINCT entity.uuid) as matchedEntities
-      RETURN episodeId, size(matchedEntities) as entityMatchCount
-    `;
-
-    const params = {
-      episodeIds,
-      queryEntityIds,
-      userId,
-    };
-
-    const records = await runQuery(cypher, params);
-
-    const matchCounts = new Map<string, number>();
-    records.forEach((record) => {
-      const episodeId = record.get("episodeId");
-      const count =
-        typeof record.get("entityMatchCount") === "bigint"
-          ? Number(record.get("entityMatchCount"))
-          : record.get("entityMatchCount");
-      matchCounts.set(episodeId, count);
-    });
+    const graphProvider = ProviderFactory.getGraphProvider();
+    const matchCounts = await graphProvider.episodeEntityMatchCount(episodeIds, queryEntityIds, userId);
 
     // Calculate total matches (ensure all values are numbers)
     const totalMatches = Array.from(matchCounts.values()).reduce(

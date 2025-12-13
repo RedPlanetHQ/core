@@ -27,7 +27,7 @@ import {
   findContradictoryStatementsBatch,
   findSimilarStatements,
   findStatementsWithSameSubjectObjectBatch,
-  getStatementsBatch,
+  getStatements,
   invalidateStatements,
 } from "~/services/graphModels/statement";
 import {
@@ -41,6 +41,12 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
+import {
+  batchGetEntityEmbeddings,
+  batchGetStatementEmbeddings,
+  batchDeleteEntityEmbeddings,
+  batchDeleteStatementEmbeddings,
+} from "~/services/vectorStorage.server";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -78,10 +84,17 @@ export async function processGraphResolution(
     }
 
     // Step 0: Deduplicate entities with same name before resolution
-    const deduplicatedCount = await deduplicateEntitiesByName(payload.userId);
+    const { count: deduplicatedCount, deletedUuids: deduplicatedEntityUuids } =
+      await deduplicateEntitiesByName(payload.userId);
     if (deduplicatedCount > 0) {
       logger.info(
         `Pre-resolution: deduplicated ${deduplicatedCount} entities for user ${payload.userId}`,
+      );
+
+      // Delete embeddings for deduplicated entities
+      await batchDeleteEntityEmbeddings(deduplicatedEntityUuids);
+      logger.info(
+        `Deleted ${deduplicatedEntityUuids.length} embeddings for deduplicated entities`,
       );
     }
 
@@ -149,6 +162,15 @@ export async function processGraphResolution(
 
     logger.info(`Merged ${entityMerges.length} duplicate entities`);
 
+    // Step 3.5: Delete embeddings for merged entities
+    if (entityMerges.length > 0) {
+      const mergedEntityUuids = entityMerges.map((m) => m.sourceUuid);
+      await batchDeleteEntityEmbeddings(mergedEntityUuids);
+      logger.info(
+        `Deleted ${mergedEntityUuids.length} embeddings for merged entities`,
+      );
+    }
+
     // Step 4: Handle duplicate statements - move ALL provenance to existing, then delete duplicates
     if (duplicateStatements.length > 0) {
       // Move all provenance relationships from duplicate to existing statement
@@ -167,11 +189,18 @@ export async function processGraphResolution(
 
       // Batch delete all duplicate statements at once
       // This is safe even if some were already deleted in a previous attempt
-      await deleteStatements(
-        duplicateStatements.map((dup) => dup.newStatementUuid),
+      const duplicateStatementUuids = duplicateStatements.map(
+        (dup) => dup.newStatementUuid,
       );
+      await deleteStatements(duplicateStatementUuids, payload.userId);
       logger.info(
         `Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`,
+      );
+
+      // Delete embeddings for duplicate statements
+      await batchDeleteStatementEmbeddings(duplicateStatementUuids);
+      logger.info(
+        `Deleted ${duplicateStatementUuids.length} embeddings for duplicate statements`,
       );
     }
 
@@ -180,13 +209,21 @@ export async function processGraphResolution(
       await invalidateStatements({
         statementIds: invalidatedStatements,
         invalidatedBy: payload.episodeUuid,
+        userId: payload.userId,
       });
     }
 
     // Step 6: Clean up orphaned entities (entities with no relationships)
-    const orphanedCount = await deleteOrphanedEntities(payload.userId);
+    const { count: orphanedCount, deletedUuids: orphanedEntityUuids } =
+      await deleteOrphanedEntities(payload.userId);
     if (orphanedCount > 0) {
       logger.info(`Deleted ${orphanedCount} orphaned entities`);
+
+      // Delete embeddings for orphaned entities
+      await batchDeleteEntityEmbeddings(orphanedEntityUuids);
+      logger.info(
+        `Deleted ${orphanedEntityUuids.length} embeddings for orphaned entities`,
+      );
     }
 
     // Step 7: Update ingestion queue with resolution token usage
@@ -322,22 +359,34 @@ async function resolveExtractedNodesWithMerges(
 
   logger.info("start finding similar entities");
 
+  // Step 1.5: Fetch embeddings from vector provider for all entities
+  const entityEmbeddings = await batchGetEntityEmbeddings(
+    uniqueEntities.map(e => e.uuid)
+  );
+
   // Step 2: For each entity, find similar entities for LLM evaluation
   // Note: Exact name matches are already deduplicated before this function is called
   const allEntityResults = await Promise.all(
     uniqueEntities.map(async (entity) => {
+      const embedding = entityEmbeddings.get(entity.uuid);
+      if (!embedding || embedding.length === 0) {
+        // No embedding found, skip similarity search
+        return {
+          entity,
+          similarEntities: [],
+        };
+      }
+
       const similarEntities = await findSimilarEntities({
-        queryEmbedding: entity.nameEmbedding as number[],
+        queryEmbedding: embedding,
         limit: 5,
         threshold: 0.7,
         userId: episode.userId,
+        excludeUuids: currentEntityIds,
       });
       return {
         entity,
-        // Filter out all entities from current episode
-        similarEntities: similarEntities.filter(
-          (s) => !currentEntityIds.includes(s.uuid),
-        ),
+        similarEntities,
       };
     }),
   );
@@ -583,9 +632,20 @@ async function resolveStatementsWithDuplicates(
 
   logger.info("start finding similar statements");
 
+  // Step 1.5: Fetch statement embeddings from vector provider
+  const statementEmbeddings = await batchGetStatementEmbeddings(
+    triples.map(t => t.statement.uuid)
+  );
+
   // Step 2: Run all semantic similarity searches in parallel
   const semanticResults = await Promise.all(
     triples.map((triple) => {
+      const embedding = statementEmbeddings.get(triple.statement.uuid);
+      if (!embedding || embedding.length === 0) {
+        // No embedding found, skip similarity search
+        return Promise.resolve([]);
+      }
+
       const structural = structuralMatches.get(triple.statement.uuid);
       // Exclude current episode's statements AND already checked structural matches
       const excludeIds = [
@@ -593,7 +653,7 @@ async function resolveStatementsWithDuplicates(
         ...(structural?.checkedIds || []),
       ];
       return findSimilarStatements({
-        factEmbedding: triple.statement.factEmbedding,
+        factEmbedding: embedding,
         threshold: 0.7,
         excludeIds,
         userId: triple.provenance.userId,
@@ -648,8 +708,10 @@ async function resolveStatementsWithDuplicates(
   }
 
   // Batch fetch all triple data
-  const allExistingTripleData: Array<StatementNode> = await getStatementsBatch({
+  const userId = triples[0].provenance.userId;
+  const allExistingTripleData: Array<StatementNode> = await getStatements({
     statementUuids: Array.from(allStatementIdsToFetch),
+    userId,
   });
 
   // Build LLM context
