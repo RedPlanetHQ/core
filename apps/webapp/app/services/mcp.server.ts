@@ -78,7 +78,13 @@ async function createMcpServer(
       const workspace = await getWorkspaceByUser(userId);
       return await callMemoryTool(
         name,
-        { ...args, sessionId, workspaceId: workspace?.id, spaceId },
+        {
+          // Only use MCP sessionId if not provided in args
+          sessionId: args?.sessionId ?? sessionId,
+          workspaceId: workspace?.id,
+          spaceId,
+          ...args,
+        },
         userId,
         source,
       );
