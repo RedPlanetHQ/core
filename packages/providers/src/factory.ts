@@ -4,14 +4,18 @@
  * Singleton pattern - initialize once, use everywhere
  */
 
-import type { ProviderConfig, GraphProviderType, VectorProviderType, ModelProviderType } from "./types";
+import type {
+  ProviderConfig,
+  GraphProviderType,
+  VectorProviderType,
+  ModelProviderType,
+} from "./types";
 import type { IGraphProvider } from "./graph/interface";
 import type { IVectorProvider } from "./vector/interface";
 import type { IModelProvider } from "./model/interface";
 
-import { Neo4jGraphProvider, StubGraphProvider } from "./graph";
-import { PgVectorProvider, StubVectorProvider } from "./vector";
-import { StubModelProvider } from "./model";
+import { Neo4jGraphProvider } from "./graph";
+import { PgVectorProvider } from "./vector";
 
 export class ProviderFactory {
   private static graphProvider: IGraphProvider | null = null;
@@ -26,7 +30,6 @@ export class ProviderFactory {
   static initialize(config: ProviderConfig): void {
     this.graphProvider = this.createGraphProvider(config.graph);
     this.vectorProvider = this.createVectorProvider(config.vector);
-    this.modelProvider = this.createModelProvider(config.model);
   }
 
   /**
@@ -57,7 +60,9 @@ export class ProviderFactory {
   }): IGraphProvider {
     switch (config.type) {
       case "neo4j":
-        return new Neo4jGraphProvider(config.config as { uri: string; username: string; password: string });
+        return new Neo4jGraphProvider(
+          config.config as { uri: string; username: string; password: string }
+        );
       case "falkordb":
       case "helix":
       default:
@@ -77,14 +82,6 @@ export class ProviderFactory {
       default:
         throw new Error(`Unknown vector provider: ${config.type}`);
     }
-  }
-
-  private static createModelProvider(config: {
-    type: ModelProviderType;
-    config: Record<string, any>;
-  }): IModelProvider {
-    // All model providers are stubs for now
-    return new StubModelProvider(config.type);
   }
 
   private static getGraphConfig(): Record<string, any> {
@@ -158,18 +155,6 @@ export class ProviderFactory {
   }
 
   /**
-   * Get the model provider instance
-   */
-  static getModelProvider(): IModelProvider {
-    if (!this.modelProvider) {
-      throw new Error(
-        "ProviderFactory not initialized. Call ProviderFactory.initializeFromEnv() first."
-      );
-    }
-    return this.modelProvider;
-  }
-
-  /**
    * Initialize database schema (for graph providers that support it)
    */
   static async initializeSchemaOnce(): Promise<void> {
@@ -178,7 +163,7 @@ export class ProviderFactory {
     const graphProvider = this.getGraphProvider();
 
     // Check if provider has schema initialization
-    if ('initNeo4jSchemaOnce' in graphProvider) {
+    if ("initNeo4jSchemaOnce" in graphProvider) {
       await (graphProvider as any).initNeo4jSchemaOnce();
       this.schemaInitialized = true;
     }
@@ -195,11 +180,15 @@ export class ProviderFactory {
     const vectorProvider = this.getVectorProvider();
 
     // Check if provider has infrastructure initialization
-    if ('initializeInfrastructure' in vectorProvider &&
-        typeof vectorProvider.initializeInfrastructure === 'function') {
+    if (
+      "initializeInfrastructure" in vectorProvider &&
+      typeof vectorProvider.initializeInfrastructure === "function"
+    ) {
       const success = await vectorProvider.initializeInfrastructure();
       if (!success) {
-        console.warn('[ProviderFactory] Vector infrastructure initialization failed, but continuing...');
+        console.warn(
+          "[ProviderFactory] Vector infrastructure initialization failed, but continuing..."
+        );
       }
     }
 
