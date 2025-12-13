@@ -191,10 +191,10 @@ export class PgVectorProvider implements IVectorProvider {
         return "content";
       case "entity":
         return "name";
-      case "compactedSession":
+      case "compacted_session":
         return "summary";
       default:
-        throw new Error("Invalid namespace");
+        throw new Error(`Invalid namespace: ${namespace}`);
     }
   }
 
