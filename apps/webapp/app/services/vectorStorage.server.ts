@@ -12,6 +12,7 @@
 
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 import { logger } from "./logger.service";
+import { type EpisodeEmbedding } from "@core/database";
 
 /**
  * Get vector provider instance
@@ -38,7 +39,7 @@ export async function storeEntityEmbedding(
       metadata: { userId, type: "entity" },
     });
   } catch (error) {
-    logger.error(`Failed to store entity embedding for ${entityUuid}:`, {error});
+    logger.error(`Failed to store entity embedding for ${entityUuid}:`, { error });
     throw error;
   }
 }
@@ -66,7 +67,7 @@ export async function batchStoreEntityEmbeddings(
 
     await vectorProvider().batchUpsert(items, VECTOR_NAMESPACES.ENTITY);
   } catch (error) {
-    logger.error(`Failed to batch store ${entities.length} entity embeddings:`, {error});
+    logger.error(`Failed to batch store ${entities.length} entity embeddings:`, { error });
     throw error;
   }
 }
@@ -83,7 +84,7 @@ export async function getEntityEmbedding(
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to get entity embedding for ${entityUuid}:`, {error});
+    logger.error(`Failed to get entity embedding for ${entityUuid}:`, { error });
     return null;
   }
 }
@@ -100,7 +101,7 @@ export async function batchGetEntityEmbeddings(
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to batch get entity embeddings:`, {error});
+    logger.error(`Failed to batch get entity embeddings:`, { error });
     return new Map();
   }
 }
@@ -115,7 +116,7 @@ export async function deleteEntityEmbedding(entityUuid: string): Promise<void> {
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to delete entity embedding for ${entityUuid}:`, {error});
+    logger.error(`Failed to delete entity embedding for ${entityUuid}:`, { error });
   }
 }
 
@@ -131,7 +132,7 @@ export async function batchDeleteEntityEmbeddings(
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to batch delete entity embeddings:`, {error});
+    logger.error(`Failed to batch delete entity embeddings:`, { error });
   }
 }
 
@@ -157,7 +158,7 @@ export async function storeStatementEmbedding(
   } catch (error) {
     logger.error(
       `Failed to store statement embedding for ${statementUuid}:`,
-      {error},
+      { error },
     );
     throw error;
   }
@@ -186,7 +187,7 @@ export async function batchStoreStatementEmbeddings(
 
     await vectorProvider().batchUpsert(items, VECTOR_NAMESPACES.STATEMENT);
   } catch (error) {
-    logger.error(`Failed to batch store ${statements.length} statement embeddings:`, {error});
+    logger.error(`Failed to batch store ${statements.length} statement embeddings:`, { error });
     throw error;
   }
 }
@@ -205,7 +206,7 @@ export async function getStatementEmbedding(
   } catch (error) {
     logger.error(
       `Failed to get statement embedding for ${statementUuid}:`,
-      {error},
+      { error },
     );
     return null;
   }
@@ -223,7 +224,7 @@ export async function batchGetStatementEmbeddings(
       namespace: VECTOR_NAMESPACES.STATEMENT,
     });
   } catch (error) {
-    logger.error(`Failed to batch get statement embeddings:`, {error});
+    logger.error(`Failed to batch get statement embeddings:`, { error });
     return new Map();
   }
 }
@@ -242,7 +243,7 @@ export async function deleteStatementEmbedding(
   } catch (error) {
     logger.error(
       `Failed to delete statement embedding for ${statementUuid}:`,
-      {error},
+      { error },
     );
   }
 }
@@ -259,7 +260,7 @@ export async function batchDeleteStatementEmbeddings(
       namespace: VECTOR_NAMESPACES.STATEMENT,
     });
   } catch (error) {
-    logger.error(`Failed to batch delete statement embeddings:`, {error});
+    logger.error(`Failed to batch delete statement embeddings:`, { error });
   }
 }
 
@@ -285,7 +286,7 @@ export async function storeEpisodeEmbedding(
   } catch (error) {
     logger.error(
       `Failed to store episode embedding for ${episodeUuid}:`,
-      {error},
+      { error },
     );
     throw error;
   }
@@ -303,7 +304,7 @@ export async function getEpisodeEmbedding(
       namespace: VECTOR_NAMESPACES.EPISODE,
     });
   } catch (error) {
-    logger.error(`Failed to get episode embedding for ${episodeUuid}:`, {error});
+    logger.error(`Failed to get episode embedding for ${episodeUuid}:`, { error });
     return null;
   }
 }
@@ -320,7 +321,7 @@ export async function batchGetEpisodeEmbeddings(
       namespace: VECTOR_NAMESPACES.EPISODE,
     });
   } catch (error) {
-    logger.error(`Failed to batch get episode embeddings:`, {error});
+    logger.error(`Failed to batch get episode embeddings:`, { error });
     return new Map();
   }
 }
@@ -337,7 +338,7 @@ export async function deleteEpisodeEmbedding(episodeUuid: string): Promise<void>
   } catch (error) {
     logger.error(
       `Failed to delete episode embedding for ${episodeUuid}:`,
-      {error},
+      { error },
     );
   }
 }
@@ -354,8 +355,20 @@ export async function batchDeleteEpisodeEmbeddings(
       namespace: VECTOR_NAMESPACES.EPISODE,
     });
   } catch (error) {
-    logger.error(`Failed to batch delete episode embeddings:`, {error});
+    logger.error(`Failed to batch delete episode embeddings:`, { error });
   }
+}
+
+export async function updateEpisodeLabels(episodeUuids: string[], labelId: string, userId: string, forceUpdate: boolean = false): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, forceUpdate);
+}
+
+export async function updateEpisodeLabelsBySessionId(sessionId: string, labelId: string, userId: string, forceUpdate: boolean = false): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodesBySessionId(sessionId, [labelId], userId, forceUpdate);
+}
+
+export async function getEpisodeByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {
+  return await vectorProvider().getEpisodesByQueueId(queueId);
 }
 
 // ==================== COMPACTED SESSION EMBEDDINGS ====================
@@ -380,7 +393,7 @@ export async function storeCompactedSessionEmbedding(
   } catch (error) {
     logger.error(
       `Failed to store compacted session embedding for ${compactedSessionUuid}:`,
-      {error},
+      { error },
     );
     throw error;
   }
@@ -400,7 +413,7 @@ export async function getCompactedSessionEmbedding(
   } catch (error) {
     logger.error(
       `Failed to get compacted session embedding for ${compactedSessionUuid}:`,
-      {error},
+      { error },
     );
     return null;
   }
@@ -418,7 +431,7 @@ export async function batchGetCompactedSessionEmbeddings(
       namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
     });
   } catch (error) {
-    logger.error(`Failed to batch get compacted session embeddings:`, {error});
+    logger.error(`Failed to batch get compacted session embeddings:`, { error });
     return new Map();
   }
 }
@@ -437,7 +450,7 @@ export async function deleteCompactedSessionEmbedding(
   } catch (error) {
     logger.error(
       `Failed to delete compacted session embedding for ${compactedSessionUuid}:`,
-      {error},
+      { error },
     );
   }
 }
@@ -454,7 +467,7 @@ export async function batchDeleteCompactedSessionEmbeddings(
       namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
     });
   } catch (error) {
-    logger.error(`Failed to batch delete compacted session embeddings:`, {error});
+    logger.error(`Failed to batch delete compacted session embeddings:`, { error });
   }
 }
 

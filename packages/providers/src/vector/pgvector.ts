@@ -3,7 +3,7 @@
  * Vector database provider using PostgreSQL with pgvector extension via Prisma Client
  */
 
-import { PrismaClient, Prisma } from "@core/database";
+import { PrismaClient, Prisma, EpisodeEmbedding } from "@core/database";
 import type {
   Embedding,
   VectorSearchResult,
@@ -488,6 +488,130 @@ export class PgVectorProvider implements IVectorProvider {
       maxBatchSize: 1000,
       supportsHybridSearch: false,
     };
+  }
+
+  /**
+   * Add labels to episodes by episode UUIDs
+   * @param episodeUuids - Array of episode UUIDs to update
+   * @param labelIds - Array of label IDs to add
+   * @param userId - User ID for authorization
+   * @param forceUpdate - If true, replace existing labels; if false, append to existing labels
+   * @returns Number of episodes updated
+   */
+  async addLabelsToEpisodes(
+    episodeUuids: string[],
+    labelIds: string[],
+    userId: string,
+    forceUpdate: boolean = false
+  ): Promise<number> {
+    if (episodeUuids.length === 0 || labelIds.length === 0) {
+      return 0;
+    }
+
+    try {
+      if (forceUpdate) {
+        // Replace existing labels with new ones
+        const result = await this.prisma.episodeEmbedding.updateMany({
+          where: {
+            id: { in: episodeUuids },
+            userId,
+          },
+          data: {
+            labelIds: labelIds,
+          },
+        });
+        return result.count;
+      } else {
+        // Append labels to existing ones (need to fetch, merge, update)
+        const episodes = await this.prisma.episodeEmbedding.findMany({
+          where: {
+            id: { in: episodeUuids },
+            userId,
+          },
+          select: { id: true, labelIds: true },
+        });
+
+        // Update each episode with merged labels
+        const updates = await Promise.all(
+          episodes.map((episode) => {
+            const mergedLabels = Array.from(new Set([...episode.labelIds, ...labelIds]));
+            return this.prisma.episodeEmbedding.update({
+              where: { id: episode.id },
+              data: { labelIds: mergedLabels },
+            });
+          })
+        );
+
+        return updates.length;
+      }
+    } catch (error) {
+      console.error('[PgVector] Failed to add labels to episodes:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * Add labels to episodes by session ID
+   * @param sessionId - Session ID to filter episodes
+   * @param labelIds - Array of label IDs to add
+   * @param userId - User ID for authorization
+   * @param forceUpdate - If true, replace existing labels; if false, append to existing labels
+   * @returns Number of episodes updated
+   */
+  async addLabelsToEpisodesBySessionId(
+    sessionId: string,
+    labelIds: string[],
+    userId: string,
+    forceUpdate: boolean = false
+  ): Promise<number> {
+    if (!sessionId || labelIds.length === 0) {
+      return 0;
+    }
+
+    try {
+      if (forceUpdate) {
+        // Replace existing labels with new ones
+        const result = await this.prisma.episodeEmbedding.updateMany({
+          where: {
+            sessionId,
+            userId,
+          },
+          data: {
+            labelIds: labelIds,
+          },
+        });
+        return result.count;
+      } else {
+        // Append labels to existing ones (need to fetch, merge, update)
+        const episodes = await this.prisma.episodeEmbedding.findMany({
+          where: {
+            sessionId,
+            userId,
+          },
+          select: { id: true, labelIds: true },
+        });
+
+        // Update each episode with merged labels
+        const updates = await Promise.all(
+          episodes.map((episode) => {
+            const mergedLabels = Array.from(new Set([...episode.labelIds, ...labelIds]));
+            return this.prisma.episodeEmbedding.update({
+              where: { id: episode.id },
+              data: { labelIds: mergedLabels },
+            });
+          })
+        );
+
+        return updates.length;
+      }
+    } catch (error) {
+      console.error('[PgVector] Failed to add labels to episodes by sessionId:', error);
+      throw error;
+    }
+  }
+
+  async getEpisodesByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {
+    return await this.prisma.episodeEmbedding.findMany({where: {ingestionQueueId: queueId}})
   }
 
   /**

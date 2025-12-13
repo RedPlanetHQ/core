@@ -2,6 +2,7 @@
  * IVectorProvider - Interface for vector database providers
  */
 
+import { EpisodeEmbedding } from "@core/database";
 import type { Embedding, VectorSearchResult, SearchParams, VectorItem, VectorCapabilities } from "../types";
 
 export interface IVectorProvider {
@@ -58,6 +59,22 @@ export interface IVectorProvider {
     ids: string[];
     namespace?: string;
   }): Promise<Map<string, Embedding>>;
+
+  addLabelsToEpisodes(
+    episodeUuids: string[],
+    labelIds: string[],
+    userId: string,
+    forceUpdate?: boolean
+  ): Promise<number>;
+
+  addLabelsToEpisodesBySessionId(
+    sessionId: string,
+    labelIds: string[],
+    userId: string,
+    forceUpdate?: boolean
+  ): Promise<number>;
+
+  getEpisodesByQueueId(queueId: string): Promise<EpisodeEmbedding[]>;
 
   /**
    * Get provider name

@@ -104,7 +104,7 @@ model CompactedSessionEmbedding {
   metadata Json?
 
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId String 
+  userId String
 
   @@index([userId])
   @@map("compacted_session_embeddings")
@@ -133,6 +133,24 @@ model ConversationHistory {
   conversationId String
 }
 
+model Document {
+  id        String    @id
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deleted   DateTime?
+
+  title    String
+  content  String
+  labelIds String[]
+  source   String
+  metadata Json?
+  type     String
+
+  editedBy    String
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+}
+
 model EntityEmbedding {
   id        String   @id
   createdAt DateTime @default(now())
@@ -154,16 +172,21 @@ model EpisodeEmbedding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  content  String
-  vector   Unsupported("vector")
-  labelIds String[]
-  metadata Json?
+  content   String
+  vector    Unsupported("vector")
+  labelIds  String[]
+  metadata  Json?
+  sessionId String
+
+  ingestionQueueId String
+  ingestionQueue   IngestionQueue @relation(fields: [ingestionQueueId], references: [id], onDelete: Cascade)
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@index([userId, labelIds])
+  @@index([userId, sessionId])
   @@map("episode_embeddings")
 }
 
@@ -198,9 +221,11 @@ model IngestionQueue {
   retryCount Int     @default(0)
 
   // Timestamps
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-  processedAt DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  processedAt       DateTime?
+
+  episodeEmbeddings EpisodeEmbedding[]
 
   @@index([workspaceId, sessionId])
 }
@@ -749,6 +774,7 @@ model Workspace {
   Label                   Label[]
   MCPSession              MCPSession[]
   Subscription            Subscription?
+  documents               Document[]
 }
 
 enum PlanType {

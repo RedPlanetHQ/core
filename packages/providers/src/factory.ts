@@ -74,8 +74,6 @@ export class ProviderFactory {
         return new PgVectorProvider({ prisma: config.config.prisma });
       case "turbopuffer":
       case "qdrant":
-        // These are stubs for now
-        return new StubVectorProvider(config.type);
       default:
         throw new Error(`Unknown vector provider: ${config.type}`);
     }

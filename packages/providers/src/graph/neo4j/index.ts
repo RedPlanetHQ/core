@@ -38,6 +38,7 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
   deleteEpisodeWithRelatedNodes!: IGraphProvider["deleteEpisodeWithRelatedNodes"];
   searchEpisodesByEmbedding!: IGraphProvider["searchEpisodesByEmbedding"];
   addLabelsToEpisodes!: IGraphProvider["addLabelsToEpisodes"];
+  addLabelsToEpisodesBySessionId!: IGraphProvider["addLabelsToEpisodesBySessionId"];
   getEpisodeWithAdjacentChunks!: IGraphProvider["getEpisodeWithAdjacentChunks"];
   getAllSessionChunks!: IGraphProvider["getAllSessionChunks"];
   getSessionMetadata!: IGraphProvider["getSessionMetadata"];

@@ -351,6 +351,25 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result[0].get("updatedEpisodes").toNumber();
     },
 
+    async addLabelsToEpisodesBySessionId(
+      sessionId: string,
+      labelIds: string[],
+      userId: string,
+      forceUpdate: boolean = false
+    ): Promise<number> {
+      const query = `
+        MATCH (e:Episode {userId: $userId, sessionId: $sessionId})
+        SET e.labelIds = CASE
+          WHEN e.labelIds IS NULL or $forceUpdate THEN $labelIds
+          ELSE e.labelIds + [labelId IN $labelIds WHERE NOT labelId IN e.labelIds]
+        END
+        RETURN count(e) as updatedEpisodes
+      `;
+
+      const result = await core.runQuery(query, { sessionId, labelIds, userId, forceUpdate });
+      return result[0].get("updatedEpisodes").toNumber();
+    },
+
     async getEpisodeWithAdjacentChunks(
       episodeUuid: string,
       userId: string,
