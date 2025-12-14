@@ -274,6 +274,9 @@ export async function storeEpisodeEmbedding(
   content: string,
   embedding: number[],
   userId: string,
+  queueId: string,
+  labelIds: string[],
+  sessionId?: string,
 ): Promise<void> {
   try {
     await vectorProvider().upsert({
@@ -281,7 +284,13 @@ export async function storeEpisodeEmbedding(
       vector: embedding,
       content: content,
       namespace: VECTOR_NAMESPACES.EPISODE,
-      metadata: { userId, type: "episode" },
+      metadata: {
+        userId,
+        type: "episode",
+        ingestionQueueId: queueId,
+        labelIds: labelIds,
+        sessionId: sessionId,
+      },
     });
   } catch (error) {
     logger.error(

@@ -146,7 +146,15 @@ export class KnowledgeGraphService {
       const episodeEmbedding = await this.getEmbedding(normalizedEpisodeBody);
 
       // Store episode embedding in vector provider
-      await storeEpisodeEmbedding(episode.uuid, normalizedEpisodeBody, episodeEmbedding, params.userId);
+      await storeEpisodeEmbedding(
+        episode.uuid,
+        normalizedEpisodeBody,
+        episodeEmbedding,
+        params.userId,
+        params.queueId,
+        params.labelIds || [],
+        params.sessionId
+      );
 
       const episodeUpdatedTime = Date.now();
       logger.log(`Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`);
