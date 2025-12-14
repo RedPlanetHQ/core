@@ -111,7 +111,7 @@ export class PgVectorProvider implements IVectorProvider {
    */
   async initializeInfrastructure(): Promise<boolean> {
     if (this.infrastructureInitialized) {
-      console.log('[PgVector] Infrastructure already initialized, skipping...');
+      console.log("[PgVector] Infrastructure already initialized, skipping...");
       return true;
     }
 
@@ -124,10 +124,10 @@ export class PgVectorProvider implements IVectorProvider {
       }
 
       this.infrastructureInitialized = true;
-      console.log('[PgVector] Infrastructure initialization completed successfully');
+      console.log("[PgVector] Infrastructure initialization completed successfully");
       return true;
     } catch (error) {
-      console.error('[PgVector] Infrastructure initialization failed:', error);
+      console.error("[PgVector] Infrastructure initialization failed:", error);
       // Don't throw - allow app to start even if indexes fail
       // Vector search will work, just slower without indexes
       return false;
@@ -181,7 +181,7 @@ export class PgVectorProvider implements IVectorProvider {
   }
 
   private getContentName(namespace?: string): string {
-    switch(namespace) {
+    switch (namespace) {
       case "statement":
         return "fact";
       case "episode":
@@ -261,70 +261,41 @@ export class PgVectorProvider implements IVectorProvider {
 
     // Use Prisma transaction with extended timeout for large batches
     // Default timeout is 5s, we set to 60s to handle large batches
-    await this.prisma.$transaction(async (tx) => {
-      for (const item of items) {
-        const userId = item.metadata?.userId;
-        if (!userId) {
-          throw new Error(`userId is required in metadata for item ${item.id}`);
-        }
+    await this.prisma.$transaction(
+      async (tx) => {
+        for (const item of items) {
+          const userId = item.metadata?.userId;
+          if (!userId) {
+            throw new Error(`userId is required in metadata for item ${item.id}`);
+          }
 
-        const vectorString = `[${item.vector.join(",")}]`;
-        const metadataString = JSON.stringify(item.metadata);
-
-        // For episode embeddings, also store ingestionQueueId, labelIds, and sessionId
-        if (namespace === "episode") {
-          const ingestionQueueId = item.metadata?.ingestionQueueId;
-          const labelIds = item.metadata?.labelIds || [];
-          const sessionId = item.metadata?.sessionId;
+          const vectorString = `[${item.vector.join(",")}]`;
+          const metadataString = JSON.stringify(item.metadata);
 
           await tx.$executeRaw`
-            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "createdAt", "updatedAt")
-            VALUES (
-              ${item.id},
-              ${userId},
-              ${vectorString}::vector,
-              ${metadataString}::jsonb,
-              ${item.content},
-              ${ingestionQueueId},
-              ${labelIds},
-              ${sessionId},
-              NOW(),
-              NOW()
-            )
-            ON CONFLICT (id) DO UPDATE
-            SET vector = EXCLUDED.vector,
-                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
-                metadata = EXCLUDED.metadata,
-                "ingestionQueueId" = EXCLUDED."ingestionQueueId",
-                "labelIds" = EXCLUDED."labelIds",
-                "sessionId" = EXCLUDED."sessionId",
-                "updatedAt" = NOW()
-          `;
-        } else {
-          // For other namespaces
-          await tx.$executeRaw`
-            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
-            VALUES (
-              ${item.id},
-              ${userId},
-              ${vectorString}::vector,
-              ${metadataString}::jsonb,
-              ${item.content},
-              NOW(),
-              NOW()
-            )
-            ON CONFLICT (id) DO UPDATE
-            SET vector = EXCLUDED.vector,
-                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
-                metadata = EXCLUDED.metadata,
-                "updatedAt" = NOW()
-          `;
+          INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+          VALUES (
+            ${item.id},
+            ${userId},
+            ${vectorString}::vector,
+            ${metadataString}::jsonb,
+            ${item.content},
+            NOW(),
+            NOW()
+          )
+          ON CONFLICT (id) DO UPDATE
+          SET vector = EXCLUDED.vector,
+              ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+              metadata = EXCLUDED.metadata,
+              "updatedAt" = NOW()
+        `;
         }
+      },
+      {
+        maxWait: 60000, // 60 seconds max wait to acquire transaction
+        timeout: 60000, // 60 seconds transaction timeout
       }
-    }, {
-      maxWait: 60000, // 60 seconds max wait to acquire transaction
-      timeout: 60000, // 60 seconds transaction timeout
-    });
+    );
   }
 
   /**
@@ -341,14 +312,16 @@ export class PgVectorProvider implements IVectorProvider {
     }
 
     // Build labelIds filter condition
-    const labelIdsCondition = labelIds && labelIds.length > 0
-      ? Prisma.sql`AND "labelIds" && ARRAY[${Prisma.join(labelIds.map(id => Prisma.sql`${id}`))}]::text[]`
-      : Prisma.empty;
+    const labelIdsCondition =
+      labelIds && labelIds.length > 0
+        ? Prisma.sql`AND "labelIds" && ARRAY[${Prisma.join(labelIds.map((id) => Prisma.sql`${id}`))}]::text[]`
+        : Prisma.empty;
 
     // Build excludeIds filter condition
-    const excludeIdsCondition = excludeIds && excludeIds.length > 0
-      ? Prisma.sql`AND id::text NOT IN (${Prisma.join(excludeIds.map(id => Prisma.sql`${id}`))})`
-      : Prisma.empty;
+    const excludeIdsCondition =
+      excludeIds && excludeIds.length > 0
+        ? Prisma.sql`AND id::text NOT IN (${Prisma.join(excludeIds.map((id) => Prisma.sql`${id}`))})`
+        : Prisma.empty;
 
     // Use $queryRaw for vector similarity search
     // pgvector uses <=> for cosine distance
@@ -395,7 +368,9 @@ export class PgVectorProvider implements IVectorProvider {
     `;
 
     const endTime = Date.now();
-    console.log(`[PgVector] Search completed: ${results.length} results in ${endTime - startTime}ms (wall clock)`);
+    console.log(
+      `[PgVector] Search completed: ${results.length} results in ${endTime - startTime}ms (wall clock)`
+    );
 
     return results.map((row: any) => ({
       id: row.id,
@@ -447,10 +422,7 @@ export class PgVectorProvider implements IVectorProvider {
   /**
    * Delete vectors by ID using Prisma
    */
-  async delete(params: {
-    ids: string[];
-    namespace?: string;
-  }): Promise<void> {
+  async delete(params: { ids: string[]; namespace?: string }): Promise<void> {
     if (params.ids.length === 0) return;
 
     const tableName = this.getTableName(params.namespace);
@@ -465,10 +437,7 @@ export class PgVectorProvider implements IVectorProvider {
   /**
    * Get a single vector by ID
    */
-  async get(params: {
-    id: string;
-    namespace?: string;
-  }): Promise<Embedding | null> {
+  async get(params: { id: string; namespace?: string }): Promise<Embedding | null> {
     const tableName = this.getTableName(params.namespace);
 
     const results = await this.prisma.$queryRaw<
@@ -491,10 +460,7 @@ export class PgVectorProvider implements IVectorProvider {
   /**
    * Get multiple vectors by IDs in batch
    */
-  async batchGet(params: {
-    ids: string[];
-    namespace?: string;
-  }): Promise<Map<string, Embedding>> {
+  async batchGet(params: { ids: string[]; namespace?: string }): Promise<Map<string, Embedding>> {
     if (params.ids.length === 0) {
       return new Map();
     }
@@ -595,7 +561,7 @@ export class PgVectorProvider implements IVectorProvider {
         return updates.length;
       }
     } catch (error) {
-      console.error('[PgVector] Failed to add labels to episodes:', error);
+      console.error("[PgVector] Failed to add labels to episodes:", error);
       throw error;
     }
   }
@@ -655,13 +621,13 @@ export class PgVectorProvider implements IVectorProvider {
         return updates.length;
       }
     } catch (error) {
-      console.error('[PgVector] Failed to add labels to episodes by sessionId:', error);
+      console.error("[PgVector] Failed to add labels to episodes by sessionId:", error);
       throw error;
     }
   }
 
   async getEpisodesByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {
-    return await this.prisma.episodeEmbedding.findMany({where: {ingestionQueueId: queueId}})
+    return await this.prisma.episodeEmbedding.findMany({ where: { ingestionQueueId: queueId } });
   }
 
   /**
