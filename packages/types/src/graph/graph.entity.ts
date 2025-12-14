@@ -189,7 +189,7 @@ export type AddEpisodeParams = {
   userId: string;
   labelIds?: string[];
   sessionId: string;
-  queueId?: string;
+  queueId: string;
   type?: EpisodeType;
 
   // Chunking metadata

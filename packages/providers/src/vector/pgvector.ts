@@ -118,9 +118,6 @@ export class PgVectorProvider implements IVectorProvider {
     try {
       console.log(`[PgVector] Initializing HNSW indexes with dimension ${this.dimensions}...`);
 
-      // Set search_path to include public schema for vector type
-      await this.prisma.$executeRawUnsafe(`SET search_path TO core, public;`);
-
       // Create indexes if they don't exist
       for (const { table, name } of this.INDEX_CONFIGS) {
         await this.ensureIndex(table, name);
@@ -221,15 +218,36 @@ export class PgVectorProvider implements IVectorProvider {
     const vectorString = `[${params.vector.join(",")}]`;
     const metadataString = JSON.stringify(params.metadata);
 
-    await this.prisma.$executeRaw`
-      INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
-      VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, NOW(), NOW())
-      ON CONFLICT (id) DO UPDATE
-      SET vector = EXCLUDED.vector,
-          ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
-          metadata = EXCLUDED.metadata,
-          "updatedAt" = NOW()
-    `;
+    // For episode embeddings, also store ingestionQueueId, labelIds, and sessionId
+    if (params.namespace === "episode") {
+      const ingestionQueueId = params.metadata?.ingestionQueueId;
+      const labelIds = params.metadata?.labelIds || [];
+      const sessionId = params.metadata?.sessionId;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET vector = EXCLUDED.vector,
+            ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+            metadata = EXCLUDED.metadata,
+            "ingestionQueueId" = EXCLUDED."ingestionQueueId",
+            "labelIds" = EXCLUDED."labelIds",
+            "sessionId" = EXCLUDED."sessionId",
+            "updatedAt" = NOW()
+      `;
+    } else {
+      // For other namespaces (statement, entity, compacted_session)
+      await this.prisma.$executeRaw`
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET vector = EXCLUDED.vector,
+            ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+            metadata = EXCLUDED.metadata,
+            "updatedAt" = NOW()
+      `;
+    }
   }
 
   /**
@@ -253,23 +271,55 @@ export class PgVectorProvider implements IVectorProvider {
         const vectorString = `[${item.vector.join(",")}]`;
         const metadataString = JSON.stringify(item.metadata);
 
-        await tx.$executeRaw`
-          INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
-          VALUES (
-            ${item.id},
-            ${userId},
-            ${vectorString}::vector,
-            ${metadataString}::jsonb,
-            ${item.content},
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (id) DO UPDATE
-          SET vector = EXCLUDED.vector,
-              ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
-              metadata = EXCLUDED.metadata,
-              "updatedAt" = NOW()
-        `;
+        // For episode embeddings, also store ingestionQueueId, labelIds, and sessionId
+        if (namespace === "episode") {
+          const ingestionQueueId = item.metadata?.ingestionQueueId;
+          const labelIds = item.metadata?.labelIds || [];
+          const sessionId = item.metadata?.sessionId;
+
+          await tx.$executeRaw`
+            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "createdAt", "updatedAt")
+            VALUES (
+              ${item.id},
+              ${userId},
+              ${vectorString}::vector,
+              ${metadataString}::jsonb,
+              ${item.content},
+              ${ingestionQueueId},
+              ${labelIds},
+              ${sessionId},
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET vector = EXCLUDED.vector,
+                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+                metadata = EXCLUDED.metadata,
+                "ingestionQueueId" = EXCLUDED."ingestionQueueId",
+                "labelIds" = EXCLUDED."labelIds",
+                "sessionId" = EXCLUDED."sessionId",
+                "updatedAt" = NOW()
+          `;
+        } else {
+          // For other namespaces
+          await tx.$executeRaw`
+            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+            VALUES (
+              ${item.id},
+              ${userId},
+              ${vectorString}::vector,
+              ${metadataString}::jsonb,
+              ${item.content},
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET vector = EXCLUDED.vector,
+                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+                metadata = EXCLUDED.metadata,
+                "updatedAt" = NOW()
+          `;
+        }
       }
     }, {
       maxWait: 60000, // 60 seconds max wait to acquire transaction
