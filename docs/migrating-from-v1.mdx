@@ -1,0 +1,176 @@
+---
+title: "Migrating from V1"
+description: "Step-by-step guide to migrate your CORE instance from V1 to V2"
+---
+
+## What's New in V2
+
+### Provider-Based Architecture
+
+V2 introduces a flexible provider-based system for vector and graph storage, giving you the freedom to choose and switch between different backends:
+
+- **Vector Providers**: pgvector (more coming soon)
+- **Graph Providers**: Neo4j (more coming soon)
+
+This architectural change makes CORE more adaptable to your infrastructure needs and allows us to support additional providers in the future.
+
+### Massive Performance Improvements
+
+By migrating embeddings to pgvector, we've achieved significant performance gains:
+
+- **Query Response Time**: Reduced from ~26 seconds to ~1 second
+- **26x faster** embedding retrieval for memory operations
+- Improved overall system responsiveness
+
+The pgvector integration leverages PostgreSQL's proven reliability while providing vector similarity search capabilities that are essential for AI memory operations.
+
+---
+
+## Migration Steps
+
+> **Warning:**
+> This migration process involves database operations that will temporarily take your CORE instance offline. Make sure to plan accordingly and inform your users if applicable.
+
+### Prerequisites
+
+- Docker installed and running
+- Access to your CORE instance
+- Sufficient disk space for database dump
+
+---
+
+### Step 1: Backup Your Database
+
+First, create a complete backup of your existing database:
+
+```bash
+docker exec core-postgres pg_dump -U docker -d core > database_dump.sql
+```
+
+This command will create a SQL dump file containing all your data. Store this file safely as it's your backup.
+
+---
+
+### Step 2: Remove Old PostgreSQL Volume
+
+Stop the PostgreSQL container:
+
+```bash
+docker stop core-postgres
+```
+
+Remove the old PostgreSQL volume:
+
+```bash
+docker volume rm docker_postgres_data
+```
+
+> **Note:** If you're using a different volume name, you can list all volumes with `docker volume ls` to find the correct one.
+
+---
+
+### Step 3: Update Configuration Files
+
+Pull the latest `docker-compose.yaml` from the repository or update your existing file to include the new PostgreSQL 18 with pgvector support.
+
+Add the following environment variables to your `.env` file:
+
+```bash
+GRAPH_PROVIDER=neo4j
+VECTOR_PROVIDER=pgvector
+```
+
+These variables configure CORE to use Neo4j for graph storage and pgvector for vector embeddings.
+
+---
+
+### Step 4: Start PostgreSQL Container
+
+Start the PostgreSQL container with the new configuration:
+
+```bash
+docker-compose up -d postgres
+```
+
+Wait for PostgreSQL to fully initialize (check with `docker logs core-postgres`).
+
+---
+
+### Step 5: Restore Database
+
+Drop the existing database (if it exists) and create a fresh one:
+
+```bash
+# Drop the existing database
+docker exec core-postgres dropdb -U docker --if-exists core
+
+# Create a fresh database
+docker exec core-postgres createdb -U docker core
+```
+
+Now restore your data from the backup:
+
+```bash
+cat database_dump.sql | docker exec -i core-postgres psql -U docker -d core
+```
+
+---
+
+### Step 6: Start CORE Application
+
+Start all CORE services:
+
+```bash
+docker-compose up -d
+```
+
+---
+
+### Step 7: Automatic Embedding Migration
+
+When CORE starts for the first time after the migration, it will automatically:
+
+1. Detect embeddings stored in Neo4j
+2. Migrate them to pgvector for each user
+3. Update all references to use the new vector storage
+
+This process happens automatically in the background. You can monitor the migration progress in the application logs:
+
+```bash
+docker logs -f core-app
+```
+
+---
+
+## Rollback
+
+If you encounter issues, you can rollback by:
+
+1. Stopping all containers: `docker-compose down`
+2. Restoring the old volume or reverting configuration changes
+3. Using your `database_dump.sql` backup to restore the previous state
+
+---
+
+## Troubleshooting
+
+### Migration Takes Too Long
+
+The embedding migration time depends on the amount of data stored. For large datasets, this process may take several minutes. Monitor the logs to ensure progress is being made.
+
+### Connection Errors
+
+If you encounter connection errors after migration:
+
+- Verify PostgreSQL is running: `docker ps | grep postgres`
+- Check PostgreSQL logs: `docker logs core-postgres`
+- Ensure environment variables are correctly set in `.env`
+
+---
+
+## Support
+
+If you encounter issues during migration:
+
+- Check the [GitHub Issues](https://github.com/redplanethq/core/issues) for similar problems
+- Join our community discussions

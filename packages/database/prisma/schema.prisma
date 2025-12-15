@@ -221,9 +221,9 @@ model IngestionQueue {
   retryCount Int     @default(0)
 
   // Timestamps
-  createdAt         DateTime           @default(now())
-  updatedAt         DateTime           @updatedAt
-  processedAt       DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  processedAt DateTime?
 
   episodeEmbeddings EpisodeEmbedding[]
 
@@ -267,6 +267,7 @@ model IntegrationAccount {
   workspaceId             String
   Activity                Activity[]
   oauthIntegrationGrants  OAuthIntegrationGrant[]
+  IntegrationCallLog      IntegrationCallLog[]
 
   @@unique([accountId, integrationDefinitionId, workspaceId])
 }
@@ -530,6 +531,22 @@ model PersonalAccessToken {
   authorizationCodes AuthorizationCode[]
 }
 
+model IntegrationCallLog {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Integration account information
+  integrationAccount   IntegrationAccount @relation(fields: [integrationAccountId], references: [id], onDelete: Cascade)
+  integrationAccountId String
+
+  // Tool/action information
+  toolName String // The tool that was called (e.g., "gmail_send_email")
+
+  // Error tracking
+  error String? // Error message if the call failed
+}
+
 model RecallLog {
   id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
@@ -752,7 +769,8 @@ model Workspace {
   slug String  @unique
   icon String?
 
-  metadata Json @default("{}")
+  version  WorkspaceVersion @default(V1)
+  metadata Json             @default("{}")
 
   integrations String[]
 
@@ -814,4 +832,9 @@ enum UserType {
 enum WebhookDeliveryStatus {
   SUCCESS
   FAILED
+}
+
+enum WorkspaceVersion {
+  V1
+  V2
 }

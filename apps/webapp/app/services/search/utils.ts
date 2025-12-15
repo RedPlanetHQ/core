@@ -117,28 +117,31 @@ export async function performVectorSearch(
     // Step 3: Aggregate scores in JavaScript
     const scoreMap = new Map(scoredStatements.map((s) => [s.uuid, s.score]));
 
-    return episodeData.map(({ episode, statements }) => {
-      // Calculate average score from statement scores
-      const scores = statements.map((s) => scoreMap.get(s.uuid) || 0);
-      const avgScore = scores.length > 0
-        ? scores.reduce((sum, score) => sum + score, 0) / scores.length
-        : 0;
+    return episodeData
+      .map(({ episode, statements }) => {
+        // Calculate average score from statement scores
+        const scores = statements.map((s) => scoreMap.get(s.uuid) || 0);
+        const avgScore =
+          scores.length > 0
+            ? scores.reduce((sum, score) => sum + score, 0) / scores.length
+            : 0;
 
-      // Get top 5 statements sorted by score
-      const topStatements = statements
-        .map((s) => ({ stmt: s, score: scoreMap.get(s.uuid) || 0 }))
-        .sort((a, b) => b.score - a.score)
-        .slice(0, 5)
-        .map((x) => x.stmt);
+        // Get top 5 statements sorted by score
+        const topStatements = statements
+          .map((s) => ({ stmt: s, score: scoreMap.get(s.uuid) || 0 }))
+          .sort((a, b) => b.score - a.score)
+          .slice(0, 5)
+          .map((x) => x.stmt);
 
-      return {
-        episode,
-        score: avgScore,
-        statementCount: statements.length,
-        topStatements,
-        invalidatedStatements: [], // Will be filtered at the end in search.server.ts
-      };
-    }).sort((a, b) => b.score - a.score); // Sort by score descending
+        return {
+          episode,
+          score: avgScore,
+          statementCount: statements.length,
+          topStatements,
+          invalidatedStatements: [], // Will be filtered at the end in search.server.ts
+        };
+      })
+      .sort((a, b) => b.score - a.score); // Sort by score descending
   } catch (error) {
     logger.error("Vector search error:", { error });
     return [];
@@ -186,20 +189,22 @@ export async function performEpisodeVectorSearch(
     // Step 3: Add scores in JavaScript (scores are from pgvector, not calculated here)
     const scoreMap = new Map(scoredEpisodes.map((e) => [e.uuid, e.score]));
 
-    const results = episodeData.map(({ episode, statements }) => {
-      const score = scoreMap.get(episode.uuid) || 0;
+    const results = episodeData
+      .map(({ episode, statements }) => {
+        const score = scoreMap.get(episode.uuid) || 0;
 
-      // Get top 5 statements (no scoring needed for episode-level search)
-      const topStatements = statements.slice(0, 5);
+        // Get top 5 statements (no scoring needed for episode-level search)
+        const topStatements = statements.slice(0, 5);
 
-      return {
-        episode,
-        score,
-        statementCount: statements.length,
-        topStatements,
-        invalidatedStatements: [],
-      };
-    }).sort((a, b) => b.score - a.score); // Sort by score descending
+        return {
+          episode,
+          score,
+          statementCount: statements.length,
+          topStatements,
+          invalidatedStatements: [],
+        };
+      })
+      .sort((a, b) => b.score - a.score); // Sort by score descending
 
     logger.info(
       `Episode vector search: found ${results.length} episodes, ` +
@@ -218,7 +223,7 @@ export async function performEpisodeVectorSearch(
  * Uses guided search with semantic filtering to reduce noise
  */
 export async function performBfsSearch(
-  query: string,
+  _query: string,
   embedding: Embedding,
   userId: string,
   entities: EntityNode[],
@@ -350,12 +355,12 @@ async function bfsTraversal(
     if (currentLevelEntities.length === 0) break;
 
     // Early termination: if we already have enough high-quality statements from hop 1, skip hop 2
-    const currentHighQualityCount = Array.from(allStatements.values())
-      .filter((s) => s.relevance >= RELEVANCE_THRESHOLD)
-      .length;
+    const currentHighQualityCount = Array.from(allStatements.values()).filter(
+      (s) => s.relevance >= RELEVANCE_THRESHOLD,
+    ).length;
     if (depth > 0 && currentHighQualityCount >= EARLY_TERMINATION_THRESHOLD) {
       logger.info(
-        `BFS early termination at depth ${depth}: ${currentHighQualityCount} high-quality statements found`
+        `BFS early termination at depth ${depth}: ${currentHighQualityCount} high-quality statements found`,
       );
       break;
     }
@@ -372,7 +377,9 @@ async function bfsTraversal(
       includeInvalidated,
       limit: 200,
     });
-    console.log(`Statement fetch lenght for depth ${depth}: ${statementResults.length}`);
+    console.log(
+      `Statement fetch lenght for depth ${depth}: ${statementResults.length}`,
+    );
 
     if (statementResults.length === 0) {
       currentLevelEntities = [];
@@ -389,7 +396,7 @@ async function bfsTraversal(
 
     // Step 3: Store statement relevance scores and hop distance, filter by exploration threshold
     // Use stricter thresholds for deeper hops to reduce noise
-    const depthAdjustedThreshold = EXPLORATION_THRESHOLD + (depth * 0.15); // +0.15 per hop
+    const depthAdjustedThreshold = EXPLORATION_THRESHOLD + depth * 0.15; // +0.15 per hop
     const currentLevelStatementUuids: string[] = [];
     for (const result of statementResults) {
       const { uuid } = result;
@@ -410,19 +417,12 @@ async function bfsTraversal(
       });
 
       // Filter out already visited entities and limit expansion to prevent explosion
-      const MAX_ENTITIES_PER_HOP = depth === 0 ? 50 : 20; // Fewer entities in deeper hops
       const unvisitedEntities = nextLevelResults
         .map((r) => r.entityId)
         .filter((id) => !visitedEntities.has(`${id}`));
 
       // Take only the first N entities to limit exponential growth
-      currentLevelEntities = unvisitedEntities.slice(0, MAX_ENTITIES_PER_HOP);
-
-      if (unvisitedEntities.length > MAX_ENTITIES_PER_HOP) {
-        logger.info(
-          `BFS depth ${depth + 1}: Limiting entity expansion from ${unvisitedEntities.length} to ${MAX_ENTITIES_PER_HOP}`
-        );
-      }
+      currentLevelEntities = unvisitedEntities;
     } else {
       currentLevelEntities = [];
     }
@@ -446,7 +446,10 @@ async function bfsTraversal(
   });
 
   const statementMap = new Map(
-    fetchResults.map((r) => [r.statement.uuid, { statement: r.statement, episodeIds: r.episodeIds }]),
+    fetchResults.map((r) => [
+      r.statement.uuid,
+      { statement: r.statement, episodeIds: r.episodeIds },
+    ]),
   );
 
   // Create hop distance and relevance maps for later use
@@ -672,9 +675,7 @@ export async function performEpisodeGraphSearch(
       .filter((result) => result.metrics.avgRelevance >= 0.5)
       .sort((a, b) => {
         if (b.score !== a.score) return b.score - a.score;
-        if (
-          b.metrics.entityMatchCount !== a.metrics.entityMatchCount
-        )
+        if (b.metrics.entityMatchCount !== a.metrics.entityMatchCount)
           return b.metrics.entityMatchCount - a.metrics.entityMatchCount;
         return b.metrics.totalStatementCount - a.metrics.totalStatementCount;
       })

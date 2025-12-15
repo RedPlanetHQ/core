@@ -126,9 +126,7 @@ export function createSearchMethods(core: Neo4jCore) {
      * @param params - Search parameters
      * @returns Array of episodes with scores and matched statements
      */
-    async performBM25Search(
-      params: BM25SearchParams
-    ): Promise<BM25SearchResult[]> {
+    async performBM25Search(params: BM25SearchParams): Promise<BM25SearchResult[]> {
       // Build timeframe condition
       let timeframeCondition = `
         AND s.validAt <= $validAt
@@ -162,7 +160,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         // Find episodes containing these statements
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-        ${episodeLabelCondition ? 'WHERE ' + episodeLabelCondition.replace('AND ', '') : ''}
+        ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
 
         // Aggregate scores per episode
         WITH e,
@@ -243,7 +241,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         // Find episodes containing these statements
         MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
-        ${episodeLabelCondition ? 'WHERE ' + episodeLabelCondition.replace('AND ', '') : ''}
+        ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
 
         // Group by episode with distinct statements
         WITH e, COLLECT(DISTINCT s) as statements
@@ -337,9 +335,7 @@ export function createSearchMethods(core: Neo4jCore) {
      * @param params - Traversal parameters
      * @returns Array of statement UUIDs (scoring done separately by vector provider)
      */
-    async bfsGetStatements(
-      params: BfsTraversalParams
-    ): Promise<BfsTraversalResult[]> {
+    async bfsGetStatements(params: BfsTraversalParams): Promise<BfsTraversalResult[]> {
       let timeframeCondition = `
         AND s.validAt <= $validAt
         ${params.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
@@ -372,7 +368,7 @@ export function createSearchMethods(core: Neo4jCore) {
       // Return with placeholder relevance (will be scored by vector provider)
       return records.map((r) => ({
         uuid: r.get("uuid"),
-        relevance: 0 // Placeholder, will be replaced by vector provider scoring
+        relevance: 0, // Placeholder, will be replaced by vector provider scoring
       }));
     },
 
@@ -410,9 +406,7 @@ export function createSearchMethods(core: Neo4jCore) {
      * @param params - Next level parameters
      * @returns Array of entity IDs
      */
-    async bfsGetNextLevel(
-      params: BfsNextLevelParams
-    ): Promise<BfsNextLevelResult[]> {
+    async bfsGetNextLevel(params: BfsNextLevelParams): Promise<BfsNextLevelResult[]> {
       const cypher = `
         MATCH (s:Statement{userId: $userId})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(e:Entity{userId: $userId})
         WHERE s.uuid IN $statementUuids
@@ -517,9 +511,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
         return {
           episode: parseEpisodicNode(record.get("episode")),
-          statements: record
-            .get("statements")
-            .map((s: any) => parseStatementNode(s.properties)),
+          statements: record.get("statements").map((s: any) => parseStatementNode(s.properties)),
           entityMatchedStmtIds: record.get("entityMatchedStmtIds") as string[],
           entityMatchCount: Number(rawEntityMatchCount),
           totalStmtCount: Number(rawTotalStmtCount),
@@ -534,9 +526,7 @@ export function createSearchMethods(core: Neo4jCore) {
      * @param params - Fetch parameters
      * @returns Array of episodes
      */
-    async fetchEpisodesByIds(
-      params: FetchEpisodesByIdsParams
-    ): Promise<EpisodicNode[]> {
+    async fetchEpisodesByIds(params: FetchEpisodesByIdsParams): Promise<EpisodicNode[]> {
       // Build episode label filter condition
       let episodeLabelCondition = "";
       if (params.labelIds.length > 0) {

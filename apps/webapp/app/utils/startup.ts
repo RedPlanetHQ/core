@@ -5,6 +5,7 @@ import { env } from "~/env.server";
 import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
 import { prisma } from "~/db.server";
+import { migration } from "~/migration";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
@@ -124,6 +125,10 @@ export async function initializeStartupServices() {
     // Track system configuration once at startup
     await trackConfig();
     logger.info("System configuration tracked");
+
+    // // Run database migrations
+    await migration();
+    logger.info("Database migration completed");
 
     startupInitialized = true;
     logger.info("Application initialization completed successfully");
