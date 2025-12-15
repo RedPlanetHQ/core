@@ -6,10 +6,7 @@ import { createMCPAuthClient } from "@core/mcp-proxy";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
 import { getIntegrationDefinitionForState } from "~/services/oauth/oauth.server";
-import {
-  getIntegrationAccount,
-  getIntegrationAccountForId,
-} from "~/services/integrationAccount.server";
+import { getIntegrationAccountForId } from "~/services/integrationAccount.server";
 
 const CALLBACK_URL = `${env.APP_ORIGIN}/api/v1/oauth/callback`;
 const MCP_CALLBACK_URL = `${CALLBACK_URL}/mcp`;

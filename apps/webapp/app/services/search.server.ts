@@ -74,7 +74,7 @@ export class SearchService {
 
     const opts: Required<SearchOptions> = {
       limit: options.limit || 10, // Maximum episodes in final response
-      maxBfsDepth: options.maxBfsDepth ?? 1, // Default to 1 hop (95% of value, 10x faster)
+      maxBfsDepth: options.maxBfsDepth ?? 3, // Default to 1 hop (95% of value, 10x faster)
       validAt: options.validAt || new Date(),
       startTime: options.startTime || null,
       endTime: options.endTime || new Date(),
@@ -116,44 +116,45 @@ export class SearchService {
       episodeVector: 0,
     };
 
-    const [bm25Results, vectorResults, bfsResults, episodeGraphResults, episodeVectorResults] =
-      await Promise.all([
-        performBM25Search(query, userId, opts).then((r) => {
-          searchTimings.bm25 = Date.now() - searchStartTime;
-          logger.info(`BM25 search completed in ${searchTimings.bm25}ms`);
+    const [
+      bm25Results,
+      vectorResults,
+      bfsResults,
+      episodeGraphResults,
+      episodeVectorResults,
+    ] = await Promise.all([
+      performBM25Search(query, userId, opts).then((r) => {
+        searchTimings.bm25 = Date.now() - searchStartTime;
+        logger.info(`BM25 search completed in ${searchTimings.bm25}ms`);
+        return r;
+      }),
+      performVectorSearch(queryVector, userId, opts).then((r) => {
+        searchTimings.vector = Date.now() - searchStartTime;
+        logger.info(`Vector search completed in ${searchTimings.vector}ms`);
+        return r;
+      }),
+      performBfsSearch(query, queryVector, userId, entities, opts).then((r) => {
+        searchTimings.bfs = Date.now() - searchStartTime;
+        logger.info(`BFS search completed in ${searchTimings.bfs}ms`);
+        return r;
+      }),
+      performEpisodeGraphSearch(entities, queryVector, userId, opts).then(
+        (r) => {
+          searchTimings.episodeGraph = Date.now() - searchStartTime;
+          logger.info(
+            `Episode graph search completed in ${searchTimings.episodeGraph}ms`,
+          );
           return r;
-        }),
-        performVectorSearch(queryVector, userId, opts).then((r) => {
-          searchTimings.vector = Date.now() - searchStartTime;
-          logger.info(`Vector search completed in ${searchTimings.vector}ms`);
-          return r;
-        }),
-        performBfsSearch(query, queryVector, userId, entities, opts).then(
-          (r) => {
-            searchTimings.bfs = Date.now() - searchStartTime;
-            logger.info(`BFS search completed in ${searchTimings.bfs}ms`);
-            return r;
-          },
-        ),
-        performEpisodeGraphSearch(entities, queryVector, userId, opts).then(
-          (r) => {
-            searchTimings.episodeGraph = Date.now() - searchStartTime;
-            logger.info(
-              `Episode graph search completed in ${searchTimings.episodeGraph}ms`,
-            );
-            return r;
-          },
-        ),
-        performEpisodeVectorSearch(queryVector, userId, opts).then(
-          (r) => {
-            searchTimings.episodeVector = Date.now() - searchStartTime;
-            logger.info(
-              `Episode vector search completed in ${searchTimings.episodeVector}ms`,
-            );
-            return r;
-          },
-        ),
-      ]);
+        },
+      ),
+      performEpisodeVectorSearch(queryVector, userId, opts).then((r) => {
+        searchTimings.episodeVector = Date.now() - searchStartTime;
+        logger.info(
+          `Episode vector search completed in ${searchTimings.episodeVector}ms`,
+        );
+        return r;
+      }),
+    ]);
 
     logger.info(
       `Search results - BM25: ${bm25Results.length}, Vector: ${vectorResults.length}, BFS: ${bfsResults.length}, EpisodeGraph: ${episodeGraphResults.length}, EpisodeVector: ${episodeVectorResults.length}`,
@@ -505,9 +506,9 @@ export class SearchService {
     const episodeIds = episodes.map((episode) => episode.uuid);
     const statementIds = statements.map((statement) => statement.uuid);
 
-    const graphProvider = ProviderFactory.getGraphProvider()
-    await graphProvider.updateEpisodeRecallCount(userId, episodeIds)
-    await graphProvider.updateStatementRecallCount(userId, statementIds)
+    const graphProvider = ProviderFactory.getGraphProvider();
+    await graphProvider.updateEpisodeRecallCount(userId, episodeIds);
+    await graphProvider.updateStatementRecallCount(userId, statementIds);
   }
 
   /**
@@ -699,7 +700,7 @@ export class SearchService {
             new Set(group.episodes.flatMap((ep) => ep.episode.labelIds || [])),
           );
           result.push({
-            uuid: compact.id, // Use compact ID as uuid
+            uuid: sessionId, // Use compact ID as uuid
             content: compact.summary,
             createdAt: compact.startTime,
             labelIds: sessionLabelIds,
@@ -926,7 +927,11 @@ export class SearchService {
     const episodeIds = episodes.map((ep) => ep.episode.uuid);
 
     const graphProvider = ProviderFactory.getGraphProvider();
-    const matchCounts = await graphProvider.episodeEntityMatchCount(episodeIds, queryEntityIds, userId);
+    const matchCounts = await graphProvider.episodeEntityMatchCount(
+      episodeIds,
+      queryEntityIds,
+      userId,
+    );
 
     // Calculate total matches (ensure all values are numbers)
     const totalMatches = Array.from(matchCounts.values()).reduce(

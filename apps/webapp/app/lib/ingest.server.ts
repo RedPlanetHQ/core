@@ -67,6 +67,7 @@ export const addToQueue = async (
     const lastEpisode = await prisma.ingestionQueue.findFirst({
       where: {
         sessionId: body.sessionId,
+        workspaceId: user.Workspace?.id,
       },
       orderBy: {
         createdAt: "desc",

@@ -17,7 +17,8 @@
             "group": "Get Started",
             "pages": [
               "introduction",
-              "getting-started"
+              "getting-started",
+              "migrating-from-v1"
             ]
           },
           {

@@ -340,7 +340,7 @@ export class PgVectorProvider implements IVectorProvider {
     const vectorLiteral = Prisma.raw(`'[${params.vector.join(",")}]'::vector(${this.dimensions})`);
     const vectorCast = Prisma.raw(`vector::vector(${this.dimensions})`);
 
-    const startTime = Date.now();
+    // const startTime = Date.now();
 
     // Now run the actual query
     const results = await this.prisma.$queryRaw<
@@ -367,10 +367,11 @@ export class PgVectorProvider implements IVectorProvider {
       LIMIT ${limit}
     `;
 
-    const endTime = Date.now();
-    console.log(
-      `[PgVector] Search completed: ${results.length} results in ${endTime - startTime}ms (wall clock)`
-    );
+    // Enable this when debugging
+    // const endTime = Date.now();
+    // console.log(
+    //   `[PgVector] Search completed: ${results.length} results in ${endTime - startTime}ms (wall clock)`
+    // );
 
     return results.map((row: any) => ({
       id: row.id,
