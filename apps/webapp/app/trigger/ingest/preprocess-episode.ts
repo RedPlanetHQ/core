@@ -12,6 +12,7 @@ const preprocessingQueue = queue({
 // Register the Trigger.dev task for episode preprocessing
 export const preprocessTask = task({
   id: "preprocess-episode",
+  queue: preprocessingQueue,
   machine: "small-1x", // Preprocessing is less resource-intensive than graph operations
   run: async (payload: IngestEpisodePayload) => {
     await initializeProvider();

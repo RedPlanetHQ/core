@@ -20,8 +20,6 @@ import {
   searchEpisodesByEmbedding,
 } from "./graphModels/episode";
 import {
-  invalidateStatements,
-  parseStatementNode,
   saveTriple,
   searchStatementsByEmbedding,
 } from "./graphModels/statement";
@@ -41,7 +39,6 @@ import {
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
-
 
 export class KnowledgeGraphService {
   async getEmbedding(text: string) {
@@ -95,7 +92,9 @@ export class KnowledgeGraphService {
       await saveEpisode(episode);
 
       const episodeSavedTime = Date.now();
-      logger.log(`Saved episode to Neo4j in ${episodeSavedTime - startTime} ms`);
+      logger.log(
+        `Saved episode to Neo4j in ${episodeSavedTime - startTime} ms`,
+      );
 
       // Step 2: Context Retrieval - Get previous episodes for context (now includes earlier chunks)
       const previousEpisodes = await getRecentEpisodes({
@@ -143,6 +142,10 @@ export class KnowledgeGraphService {
 
       // Step 3: Update episode with normalized content and embedding
       episode.content = normalizedEpisodeBody;
+
+      // Save episode immediately to Neo4j
+      await saveEpisode(episode);
+
       const episodeEmbedding = await this.getEmbedding(normalizedEpisodeBody);
 
       // Store episode embedding in vector provider
@@ -153,11 +156,13 @@ export class KnowledgeGraphService {
         params.userId,
         params.queueId,
         params.labelIds || [],
-        params.sessionId
+        params.sessionId,
       );
 
       const episodeUpdatedTime = Date.now();
-      logger.log(`Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`);
+      logger.log(
+        `Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`,
+      );
 
       // Step 3: Entity Extraction - Extract entities from the episode content
       const extractedNodes = await this.extractEntities(
@@ -200,7 +205,7 @@ export class KnowledgeGraphService {
       // Generate and store embeddings in batch (more efficient than per-triple)
       if (extractedStatements.length > 0) {
         // Collect unique entities and facts
-        
+
         const uniqueEntities = new Map<string, EntityNode>();
         const facts: Array<{ uuid: string; text: string }> = [];
 
@@ -231,7 +236,9 @@ export class KnowledgeGraphService {
           Promise.all(entities.map((e) => this.getEmbedding(e.name))),
         ]);
         const embeddingEndTime = Date.now();
-        logger.log(`Generated embeddings in ${embeddingEndTime - embeddingTime} ms`);
+        logger.log(
+          `Generated embeddings in ${embeddingEndTime - embeddingTime} ms`,
+        );
 
         // Batch store statement embeddings (single database call)
         await batchStoreStatementEmbeddings(
@@ -243,7 +250,9 @@ export class KnowledgeGraphService {
           })),
         );
         const embeddingStoreEndTime = Date.now();
-        logger.log(`Stored embeddings in ${embeddingStoreEndTime - embeddingEndTime} ms`);
+        logger.log(
+          `Stored embeddings in ${embeddingStoreEndTime - embeddingEndTime} ms`,
+        );
 
         // Batch store entity embeddings (single database call)
         await batchStoreEntityEmbeddings(
@@ -255,8 +264,9 @@ export class KnowledgeGraphService {
           })),
         );
         const embeddingEntityStoreEndTime = Date.now();
-        logger.log(`Stored entity embeddings in ${embeddingEntityStoreEndTime - embeddingEndTime} ms`);
-
+        logger.log(
+          `Stored entity embeddings in ${embeddingEntityStoreEndTime - embeddingEndTime} ms`,
+        );
       }
 
       const saveTriplesTime = Date.now();
@@ -476,64 +486,62 @@ export class KnowledgeGraphService {
     const uniquePredicates = Array.from(predicateMap.values());
 
     // Convert extracted triples to Triple objects with Statement nodes
-    const triples = extractedTriples.map(
-      (triple: ExtractedTripleData) => {
-        // Find the subject and object nodes by matching name (type-free approach)
-        const subjectNode = allEntities.find(
-          (node) => node.name.toLowerCase() === triple.source.toLowerCase(),
-        );
+    const triples = extractedTriples.map((triple: ExtractedTripleData) => {
+      // Find the subject and object nodes by matching name (type-free approach)
+      const subjectNode = allEntities.find(
+        (node) => node.name.toLowerCase() === triple.source.toLowerCase(),
+      );
 
-        const objectNode = allEntities.find(
-          (node) => node.name.toLowerCase() === triple.target.toLowerCase(),
-        );
+      const objectNode = allEntities.find(
+        (node) => node.name.toLowerCase() === triple.target.toLowerCase(),
+      );
 
-        // Get the deduplicated predicate node
-        const predicateNode = predicateMap.get(triple.predicate.toLowerCase());
+      // Get the deduplicated predicate node
+      const predicateNode = predicateMap.get(triple.predicate.toLowerCase());
 
-        if (subjectNode && objectNode && predicateNode) {
-          // Determine the correct validAt date (when the fact actually occurred/occurs)
-          let validAtDate = episode.validAt; // Default fallback to episode date
+      if (subjectNode && objectNode && predicateNode) {
+        // Determine the correct validAt date (when the fact actually occurred/occurs)
+        let validAtDate = episode.validAt; // Default fallback to episode date
 
-          // Check if statement has event_date indicating when the fact actually happened/happens
-          if (triple.attributes?.event_date) {
-            try {
-              const eventDate = new Date(triple.attributes.event_date);
-              // Use the event date as validAt (when the fact is actually true)
-              if (!isNaN(eventDate.getTime())) {
-                validAtDate = eventDate;
-              }
-            } catch (error) {
-              // If parsing fails, use episode validAt as fallback
-              logger.log(
-                `Failed to parse event_date: ${triple.attributes.event_date}, using episode validAt`,
-              );
+        // Check if statement has event_date indicating when the fact actually happened/happens
+        if (triple.attributes?.event_date) {
+          try {
+            const eventDate = new Date(triple.attributes.event_date);
+            // Use the event date as validAt (when the fact is actually true)
+            if (!isNaN(eventDate.getTime())) {
+              validAtDate = eventDate;
             }
+          } catch (error) {
+            // If parsing fails, use episode validAt as fallback
+            logger.log(
+              `Failed to parse event_date: ${triple.attributes.event_date}, using episode validAt`,
+            );
           }
-
-          // Create a statement node
-          const statementUuid = crypto.randomUUID();
-          const statement: StatementNode = {
-            uuid: statementUuid,
-            fact: triple.fact,
-            factEmbedding: [], // Don't store in Neo4j
-            createdAt: new Date(),
-            validAt: validAtDate,
-            invalidAt: null,
-            attributes: triple.attributes || {},
-            userId: episode.userId,
-          };
-
-          return {
-            statement,
-            subject: subjectNode,
-            predicate: predicateNode,
-            object: objectNode,
-            provenance: episode,
-          };
         }
-        return null;
-      },
-    );
+
+        // Create a statement node
+        const statementUuid = crypto.randomUUID();
+        const statement: StatementNode = {
+          uuid: statementUuid,
+          fact: triple.fact,
+          factEmbedding: [], // Don't store in Neo4j
+          createdAt: new Date(),
+          validAt: validAtDate,
+          invalidAt: null,
+          attributes: triple.attributes || {},
+          userId: episode.userId,
+        };
+
+        return {
+          statement,
+          subject: subjectNode,
+          predicate: predicateNode,
+          object: objectNode,
+          provenance: episode,
+        };
+      }
+      return null;
+    });
 
     // Filter out null values (where subject or object wasn't found)
     return triples.filter(Boolean) as Triple[];
