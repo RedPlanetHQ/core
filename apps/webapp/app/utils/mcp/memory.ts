@@ -1,4 +1,3 @@
-import { logger } from "~/services/logger.service";
 import {
   handleUserProfile,
   handleMemoryIngest,

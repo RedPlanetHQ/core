@@ -16,6 +16,7 @@ export const preprocessTask = task({
   machine: "small-1x", // Preprocessing is less resource-intensive than graph operations
   run: async (payload: IngestEpisodePayload) => {
     await initializeProvider();
+
     // Use common logic with Trigger-specific callback for enqueueing ingestion jobs
     return await processEpisodePreprocessing(
       payload,

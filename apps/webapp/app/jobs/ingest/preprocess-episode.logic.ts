@@ -18,6 +18,7 @@ import {
 } from "./ingest-episode.logic";
 import { EpisodeChunker } from "~/services/episodeChunker.server";
 import { invalidateStatementsFromPreviousVersion } from "~/services/graphModels/episode";
+import { prisma } from "~/trigger/utils/prisma";
 
 export { IngestBodyRequest };
 
@@ -55,6 +56,17 @@ export async function processEpisodePreprocessing(
     const episodeBody = payload.body;
     const type = episodeBody.type || EpisodeType.CONVERSATION;
     const sessionId = episodeBody.sessionId || crypto.randomUUID();
+
+    if (!episodeBody.sessionId) {
+      await prisma.ingestionQueue.update({
+        where: {
+          id: payload.queueId,
+        },
+        data: {
+          sessionId,
+        },
+      });
+    }
 
     const episodeChunker = new EpisodeChunker();
     const needsChunking = episodeChunker.needsChunking(
@@ -192,7 +204,7 @@ export async function processEpisodePreprocessing(
             versionInfo.existingFirstEpisode?.version || 1;
           const invalidationResult =
             await invalidateStatementsFromPreviousVersion({
-              sessionId: sessionId,
+              sessionId,
               userId: payload.userId,
               previousVersion: previousVersion,
               invalidatedBy: sessionId,

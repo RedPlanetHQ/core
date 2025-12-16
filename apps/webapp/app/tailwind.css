@@ -431,11 +431,11 @@
 }
 
 .editor-container .heading-node:first-child {
-  margin-top: 0;
+  margin-top: 0!important;
 }
 
 .editor-container .paragraph-node:first-child {
-  margin-top: 0;
+  margin-top: 0!important;
 }
 
 .list-item--task {
@@ -524,7 +524,7 @@
     border: none;
 
     :first-child {
-      margin-top: 0;
+      margin-top: 0 !important;
     }
     
     strong {
