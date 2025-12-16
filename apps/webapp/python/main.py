@@ -13,46 +13,74 @@ import sys
 import json
 from typing import List, Tuple, Dict, Any, Optional
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 import click
 import numpy as np
-from neo4j import GraphDatabase
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer 
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.preprocessing import normalize
 from hdbscan import HDBSCAN
 from umap import UMAP
 
 
-class Neo4jConnection:
-    """Manages Neo4j database connection."""
+class PostgresConnection:
+    """Manages Postgres database connection for pgvector embeddings.
 
-    def __init__(self, uri: str, username: str, password: str, quiet: bool = False):
-        """Initialize Neo4j connection.
+    Note: Currently supports pgvector only. When other vector providers
+    (turbopuffer, qdrant) are implemented, this can be refactored into
+    a provider abstraction pattern.
+    """
+
+    def __init__(self, database_url: str, quiet: bool = False):
+        """Initialize Postgres connection.
 
         Args:
-            uri: Neo4j connection URI (e.g., bolt://localhost:7687)
-            username: Neo4j username
-            password: Neo4j password
+            database_url: Postgres connection string (e.g., postgresql://user:pass@host:port/db?schema=core)
             quiet: If True, suppress output messages
         """
         self.quiet = quiet
+
+        # Parse URL to extract and handle schema parameter (Prisma-specific)
+        parsed = urlparse(database_url)
+        query_params = parse_qs(parsed.query)
+
+        # Extract schema if present (psycopg2 doesn't support ?schema= in URL)
+        schema = query_params.pop('schema', ['public'])[0]
+
+        # Rebuild URL without schema parameter
+        clean_query = urlencode(query_params, doseq=True)
+        clean_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            clean_query,
+            parsed.fragment
+        ))
+
         try:
-            self.driver = GraphDatabase.driver(uri, auth=(username, password))
-            # Verify connection
-            self.driver.verify_connectivity()
+            self.conn = psycopg2.connect(clean_url)
+
+            # Set search_path to the specified schema (for pgvector extension)
+            with self.conn.cursor() as cursor:
+                cursor.execute(f"SET search_path TO {schema}, public")
+            self.conn.commit()
+
             if not quiet:
-                click.echo(f"✓ Connected to Neo4j at {uri}")
+                click.echo(f"✓ Connected to Postgres (schema: {schema})")
         except Exception as e:
             if not quiet:
-                click.echo(f"✗ Failed to connect to Neo4j: {e}", err=True)
+                click.echo(f"✗ Failed to connect to Postgres: {e}", err=True)
             sys.exit(1)
 
     def close(self):
-        """Close the Neo4j connection."""
-        if self.driver:
-            self.driver.close()
+        """Close the Postgres connection."""
+        if self.conn:
+            self.conn.close()
             if not self.quiet:
-                click.echo("✓ Neo4j connection closed")
+                click.echo("✓ Postgres connection closed")
 
     def get_episodes_with_embeddings(
         self,
@@ -60,7 +88,7 @@ class Neo4jConnection:
         start_time: Optional[str] = None,
         end_time: Optional[str] = None
     ) -> Tuple[List[str], List[str], np.ndarray]:
-        """Fetch episodes with their embeddings for a given user, optionally filtered by time range.
+        """Fetch episodes with their embeddings from episode_embeddings table.
 
         Args:
             user_id: The user ID to fetch episodes for
@@ -71,38 +99,29 @@ class Neo4jConnection:
             Tuple of (episode_uuids, episode_contents, embeddings_array)
         """
         # Build WHERE clause with time filters
-        where_conditions = [
-            "e.contentEmbedding IS NOT NULL",
-            "size(e.contentEmbedding) > 0",
-            "e.content IS NOT NULL",
-            "e.content <> ''"
-        ]
-
-        params = {"userId": user_id}
+        where_conditions = ["\"userId\" = %s"]
+        params = [user_id]
 
         if start_time:
-            where_conditions.append("e.createdAt >= $startTime")
-            params["startTime"] = start_time
+            where_conditions.append("\"createdAt\" >= %s")
+            params.append(start_time)
 
         if end_time:
-            where_conditions.append("e.createdAt <= $endTime")
-            params["endTime"] = end_time
+            where_conditions.append("\"createdAt\" <= %s")
+            params.append(end_time)
 
         where_clause = " AND ".join(where_conditions)
 
         query = f"""
-        MATCH (e:Episode {{userId: $userId}})
+        SELECT id, content, vector, "createdAt"
+        FROM episode_embeddings
         WHERE {where_clause}
-        RETURN e.uuid as uuid,
-               e.content as content,
-               e.contentEmbedding as embedding,
-               e.createdAt as createdAt
-        ORDER BY e.createdAt DESC
+        ORDER BY "createdAt" DESC
         """
 
-        with self.driver.session() as session:
-            result = session.run(query, **params)
-            records = list(result)
+        with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            records = cursor.fetchall()
 
             if not records:
                 if not self.quiet:
@@ -114,9 +133,16 @@ class Neo4jConnection:
             embeddings = []
 
             for record in records:
-                uuids.append(record["uuid"])
-                contents.append(record["content"])
-                embeddings.append(record["embedding"])
+                uuids.append(record['id'])
+                contents.append(record['content'])
+
+                # pgvector returns vector as string "[0.1, 0.2, ...]" or as list
+                vector = record['vector']
+                if isinstance(vector, str):
+                    # Parse string representation: "[0.1, 0.2, ...]"
+                    vector = json.loads(vector)
+
+                embeddings.append(np.array(vector, dtype=np.float32))
 
             embeddings_array = np.array(embeddings, dtype=np.float32)
 
@@ -391,22 +417,10 @@ def build_json_output(
     help='Filter episodes created before this time (ISO format: 2024-12-31T23:59:59Z)'
 )
 @click.option(
-    '--neo4j-uri',
-    envvar='NEO4J_URI',
-    default='bolt://localhost:7687',
-    help='Neo4j connection URI (default: bolt://localhost:7687)'
-)
-@click.option(
-    '--neo4j-username',
-    envvar='NEO4J_USERNAME',
-    default='neo4j',
-    help='Neo4j username (default: neo4j)'
-)
-@click.option(
-    '--neo4j-password',
-    envvar='NEO4J_PASSWORD',
+    '--database-url',
+    envvar='DATABASE_URL',
     required=True,
-    help='Neo4j password (required, can use NEO4J_PASSWORD env var)'
+    help='Postgres connection URL (required, can use DATABASE_URL env var)'
 )
 @click.option(
     '--json',
@@ -416,12 +430,11 @@ def build_json_output(
     help='Output only final results in JSON format (suppresses all other output)'
 )
 def main(user_id: str, min_cluster_size: int, min_samples: int, start_time: Optional[str],
-         end_time: Optional[str], neo4j_uri: str, neo4j_username: str, neo4j_password: str,
-         json_output: bool):
+         end_time: Optional[str], database_url: str, json_output: bool):
     """
     Run HDBSCAN clustering on episodes for a given USER_ID.
 
-    This tool connects to Neo4j, retrieves all episodes with embeddings for the specified user,
+    This tool connects to Postgres (pgvector), retrieves all episodes with embeddings for the specified user,
     and performs density-based clustering to discover thematic groups.
 
     Lightweight alternative to BERTopic (~500MB vs 9GB) with same quality clustering.
@@ -429,19 +442,19 @@ def main(user_id: str, min_cluster_size: int, min_samples: int, start_time: Opti
     Examples:
 
         # Using environment variables from .env file
-        python sample.py user-123
+        python main.py user-123
 
         # With custom cluster size
-        python sample.py user-123 --min-cluster-size 8
+        python main.py user-123 --min-cluster-size 8
 
         # Filter by time range
-        python sample.py user-123 --start-time 2024-01-01T00:00:00Z --end-time 2024-12-31T23:59:59Z
+        python main.py user-123 --start-time 2024-01-01T00:00:00Z --end-time 2024-12-31T23:59:59Z
 
         # JSON output for programmatic use
-        python sample.py user-123 --json
+        python main.py user-123 --json
 
-        # With explicit Neo4j credentials
-        python sample.py user-123 --neo4j-uri bolt://localhost:7687 --neo4j-password mypassword
+        # With explicit database URL
+        python main.py user-123 --database-url postgresql://user:pass@localhost:5432/core
     """
     # Print header only if not in JSON mode
     if not json_output:
@@ -457,12 +470,12 @@ def main(user_id: str, min_cluster_size: int, min_samples: int, start_time: Opti
             click.echo(f"End Time: {end_time}")
         click.echo(f"{'='*80}\n")
 
-    # Connect to Neo4j (quiet mode if JSON output)
-    neo4j_conn = Neo4jConnection(neo4j_uri, neo4j_username, neo4j_password, quiet=json_output)
+    # Connect to Postgres (quiet mode if JSON output)
+    pg_conn = PostgresConnection(database_url, quiet=json_output)
 
     try:
         # Fetch episodes with embeddings (with optional time filtering)
-        uuids, contents, embeddings = neo4j_conn.get_episodes_with_embeddings(
+        uuids, contents, embeddings = pg_conn.get_episodes_with_embeddings(
             user_id, start_time, end_time
         )
 
@@ -486,7 +499,7 @@ def main(user_id: str, min_cluster_size: int, min_samples: int, start_time: Opti
 
     finally:
         # Always close connection
-        neo4j_conn.close()
+        pg_conn.close()
 
 
 if __name__ == '__main__':

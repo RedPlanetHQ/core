@@ -17,49 +17,78 @@ import json
 import re
 from typing import List, Tuple, Dict, Any
 from datetime import datetime
+from urllib.parse import urlparse, parse_qs, urlencode, urlunparse
 import click
 import numpy as np
-from neo4j import GraphDatabase
+import psycopg2
+from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 
 
-class Neo4jConnection:
-    """Manages Neo4j database connection."""
+class PostgresConnection:
+    """Manages Postgres database connection for episode data.
 
-    def __init__(self, uri: str, username: str, password: str, quiet: bool = False):
-        """Initialize Neo4j connection.
+    Note: Currently supports pgvector only. When other vector providers
+    (turbopuffer, qdrant) are implemented, this can be refactored into
+    a provider abstraction pattern.
+    """
+
+    def __init__(self, database_url: str, quiet: bool = False):
+        """Initialize Postgres connection.
 
         Args:
-            uri: Neo4j connection URI (e.g., bolt://localhost:7687)
-            username: Neo4j username
-            password: Neo4j password
+            database_url: Postgres connection string (e.g., postgresql://user:pass@host:port/db?schema=core)
             quiet: If True, suppress output messages
         """
         self.quiet = quiet
+
+        # Parse URL to extract and handle schema parameter (Prisma-specific)
+        parsed = urlparse(database_url)
+        query_params = parse_qs(parsed.query)
+
+        # Extract schema if present (psycopg2 doesn't support ?schema= in URL)
+        schema = query_params.pop('schema', ['public'])[0]
+
+        # Rebuild URL without schema parameter
+        clean_query = urlencode(query_params, doseq=True)
+        clean_url = urlunparse((
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path,
+            parsed.params,
+            clean_query,
+            parsed.fragment
+        ))
+
         try:
-            self.driver = GraphDatabase.driver(uri, auth=(username, password))
-            self.driver.verify_connectivity()
+            self.conn = psycopg2.connect(clean_url)
+
+            # Set search_path to the specified schema (for pgvector extension)
+            with self.conn.cursor() as cursor:
+                cursor.execute(f"SET search_path TO {schema}, public")
+            self.conn.commit()
+
             if not quiet:
-                click.echo(f"✓ Connected to Neo4j at {uri}")
+                click.echo(f"✓ Connected to Postgres (schema: {schema})")
         except Exception as e:
             if not quiet:
-                click.echo(f"✗ Failed to connect to Neo4j: {e}", err=True)
+                click.echo(f"✗ Failed to connect to Postgres: {e}", err=True)
             sys.exit(1)
 
     def close(self):
-        """Close the Neo4j connection."""
-        if self.driver:
-            self.driver.close()
+        """Close the Postgres connection."""
+        if self.conn:
+            self.conn.close()
             if not self.quiet:
-                click.echo("✓ Neo4j connection closed")
+                click.echo("✓ Postgres connection closed")
 
     def get_episodes(
         self,
         user_id: str,
         start_time: str = None,
     ) -> Tuple[List[Dict[str, Any]], List[str]]:
-        """Fetch episodes with metadata for a given user.
+        """Fetch episodes with metadata from episode_embeddings table.
 
         Args:
             user_id: The user ID to fetch episodes for
@@ -68,32 +97,26 @@ class Neo4jConnection:
         Returns:
             Tuple of (episodes_with_metadata, episode_contents)
         """
-        where_conditions = [
-            "e.content IS NOT NULL",
-            "e.content <> ''"
-        ]
-
-        params = {"userId": user_id}
+        # Build WHERE clause with time filters
+        where_conditions = ['"userId" = %s']
+        params = [user_id]
 
         if start_time:
-            where_conditions.append("e.createdAt >= $startTime")
-            params["startTime"] = start_time
+            where_conditions.append('"createdAt" >= %s')
+            params.append(start_time)
 
         where_clause = " AND ".join(where_conditions)
 
         query = f"""
-        MATCH (e:Episode {{userId: $userId}})
+        SELECT id, content, metadata, "createdAt"
+        FROM episode_embeddings
         WHERE {where_clause}
-        RETURN e.uuid as uuid,
-               e.content as content,
-               e.source as source,
-               e.createdAt as createdAt
-        ORDER BY e.createdAt DESC
+        ORDER BY "createdAt" DESC
         """
 
-        with self.driver.session() as session:
-            result = session.run(query, **params)
-            records = list(result)
+        with self.conn.cursor(cursor_factory=RealDictCursor) as cursor:
+            cursor.execute(query, params)
+            records = cursor.fetchall()
 
             if not records:
                 if not self.quiet:
@@ -104,13 +127,17 @@ class Neo4jConnection:
             contents = []
 
             for record in records:
+                # Extract source from metadata JSON if available
+                metadata = record.get('metadata') or {}
+                source = metadata.get('source', 'unknown') if isinstance(metadata, dict) else 'unknown'
+
                 episodes.append({
-                    "uuid": record["uuid"],
-                    "content": record["content"],
-                    "source": record["source"],
-                    "createdAt": record["createdAt"],
+                    "uuid": record['id'],
+                    "content": record['content'],
+                    "source": source,
+                    "createdAt": record['createdAt'].isoformat() if hasattr(record['createdAt'], 'isoformat') else str(record['createdAt']),
                 })
-                contents.append(record["content"])
+                contents.append(record['content'])
 
             if not self.quiet:
                 click.echo(f"✓ Fetched {len(contents)} episodes")
@@ -327,22 +354,10 @@ def extract_temporal_metrics(episodes: List[Dict[str, Any]], quiet: bool = False
     help='Filter episodes created after this time (ISO format: 2024-01-01T00:00:00Z)'
 )
 @click.option(
-    '--neo4j-uri',
-    envvar='NEO4J_URI',
-    default='bolt://localhost:7687',
-    help='Neo4j connection URI (default: bolt://localhost:7687)'
-)
-@click.option(
-    '--neo4j-username',
-    envvar='NEO4J_USERNAME',
-    default='neo4j',
-    help='Neo4j username (default: neo4j)'
-)
-@click.option(
-    '--neo4j-password',
-    envvar='NEO4J_PASSWORD',
+    '--database-url',
+    envvar='DATABASE_URL',
     required=True,
-    help='Neo4j password (required, can use NEO4J_PASSWORD env var)'
+    help='Postgres connection URL (required, can use DATABASE_URL env var)'
 )
 @click.option(
     '--json',
@@ -351,12 +366,11 @@ def extract_temporal_metrics(episodes: List[Dict[str, Any]], quiet: bool = False
     default=False,
     help='Output only final results in JSON format (suppresses all other output)'
 )
-def main(user_id: str, start_time: str, neo4j_uri: str, neo4j_username: str,
-         neo4j_password: str, json_output: bool):
+def main(user_id: str, start_time: str, database_url: str, json_output: bool):
     """
     Extract persona analytics from episodes for a given USER_ID.
 
-    This tool connects to Neo4j, retrieves all episodes for the specified user,
+    This tool connects to Postgres (pgvector), retrieves all episodes for the specified user,
     and performs algorithmic analytics extraction (lexicon, style, temporal, receipts).
 
     Uses TF-IDF and pattern analysis (similar to BERTopic's approach) without clustering.
@@ -372,8 +386,8 @@ def main(user_id: str, start_time: str, neo4j_uri: str, neo4j_username: str,
         # JSON output for programmatic use
         python persona_analytics.py user-123 --json
 
-        # With explicit Neo4j credentials
-        python persona_analytics.py user-123 --neo4j-uri bolt://localhost:7687 --neo4j-password mypassword
+        # With explicit database URL
+        python persona_analytics.py user-123 --database-url postgresql://user:pass@localhost:5432/core
     """
     # Print header only if not in JSON mode
     if not json_output:
@@ -385,12 +399,12 @@ def main(user_id: str, start_time: str, neo4j_uri: str, neo4j_username: str,
             click.echo(f"Start Time: {start_time}")
         click.echo(f"{'='*80}\n")
 
-    # Connect to Neo4j (quiet mode if JSON output)
-    neo4j_conn = Neo4jConnection(neo4j_uri, neo4j_username, neo4j_password, quiet=json_output)
+    # Connect to Postgres (quiet mode if JSON output)
+    pg_conn = PostgresConnection(database_url, quiet=json_output)
 
     try:
         # Fetch episodes
-        episodes, contents = neo4j_conn.get_episodes(user_id, start_time)
+        episodes, contents = pg_conn.get_episodes(user_id, start_time)
 
         # Run analytics (objective metrics only)
         lexicon = extract_lexicon(contents, top_n=50, quiet=json_output)
@@ -429,7 +443,7 @@ def main(user_id: str, start_time: str, neo4j_uri: str, neo4j_username: str,
 
     finally:
         # Always close connection
-        neo4j_conn.close()
+        pg_conn.close()
 
 
 if __name__ == '__main__':

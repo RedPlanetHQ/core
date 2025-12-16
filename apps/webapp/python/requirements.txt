@@ -1,9 +1,9 @@
 # CLI and utilities
 click>=8.1.0
 python-dotenv>=1.0.0
-neo4j>=5.14.0
+psycopg2-binary>=2.9.0
 
-# Core dependencies for BERTopic (manually specified to avoid sentence-transformers)
+# Core dependencies for HDBSCAN clustering
 numpy>=1.24.0
 scipy>=1.11.0
 pandas>=2.0.0
