@@ -2,7 +2,7 @@ import { logger } from "~/services/logger.service";
 
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
-import { ProviderFactory } from "@core/providers";
+
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
   [key: string]: any;
@@ -85,10 +85,16 @@ export async function checkPersonaUpdateThreshold(
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastPersonaGenerationAt = metadata.lastPersonaGenerationAt;
 
-    const graphProvider = ProviderFactory.getGraphProvider();
-
-    // Get current total episode count for user
-    const episodeCount = await graphProvider.getEpisodeCountByUser(userId, lastPersonaGenerationAt ? new Date(lastPersonaGenerationAt) : undefined);
+    // Count episodes with embeddings from Postgres (same as Python scripts query)
+    // This ensures consistency between threshold check and actual persona generation
+    const episodeCount = await prisma.episodeEmbedding.count({
+      where: {
+        userId,
+        ...(lastPersonaGenerationAt && {
+          createdAt: { gt: new Date(lastPersonaGenerationAt) },
+        }),
+      },
+    });
 
     logger.debug("Checking persona space update eligibility", {
       userId,

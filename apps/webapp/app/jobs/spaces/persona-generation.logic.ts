@@ -11,7 +11,6 @@ import {
 import { EpisodeType, type EpisodicNode } from "@core/types";
 import {
   addLabelToEpisodes,
-  getEpisodesByUserId,
 } from "~/services/graphModels/episode";
 import { filterPersonaRelevantTopics } from "./persona-generation-filter";
 
@@ -20,6 +19,53 @@ import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 
 const execAsync = promisify(exec);
+
+/**
+ * Get episodes with embeddings from Postgres (instead of Neo4j)
+ * This is used for persona generation to ensure we only process episodes that have embeddings
+ * and to avoid Neo4j connection dependency in Trigger.dev environment
+ */
+async function getEpisodesWithEmbeddings(params: {
+  userId: string;
+  startTime?: string;
+  endTime?: string;
+}): Promise<EpisodicNode[]> {
+  const episodes = await prisma.episodeEmbedding.findMany({
+    where: {
+      userId: params.userId,
+      ...(params.startTime && {
+        createdAt: { gte: new Date(params.startTime) },
+      }),
+      ...(params.endTime && {
+        createdAt: { lte: new Date(params.endTime) },
+      }),
+    },
+    include: {
+      ingestionQueue: {
+        select: {
+          source: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  });
+
+  return episodes.map((ep) => ({
+    uuid: ep.id,
+    content: ep.content,
+    contentEmbedding: [], // Not needed for persona generation (Python scripts handle embeddings)
+    originalContent: ep.content,
+    source: ep.ingestionQueue?.source || 'unknown',
+    metadata: ep.metadata as Record<string, string>,
+    createdAt: ep.createdAt,
+    validAt: ep.createdAt,
+    userId: ep.userId,
+    labelIds: ep.labelIds,
+    sessionId: ep.sessionId,
+  }));
+}
 
 // Payload for BullMQ worker
 export interface PersonaGenerationPayload {
@@ -1238,8 +1284,9 @@ export async function processPersonaGeneration(
       ? (latestPersona.data as any).episodeBody
       : null;
 
-    // Get all episodes for persona generation
-    const episodes = await getEpisodesByUserId({ userId, startTime });
+    // Get all episodes with embeddings from Postgres (not Neo4j)
+    // This ensures we only process episodes that have embeddings (same as Python scripts)
+    const episodes = await getEpisodesWithEmbeddings({ userId, startTime });
 
     if (episodes.length === 0) {
       logger.warn("No episodes found for persona generation", {

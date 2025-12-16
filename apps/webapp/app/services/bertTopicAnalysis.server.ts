@@ -1,6 +1,5 @@
 import { prisma } from "~/trigger/utils/prisma";
 import { logger } from "~/services/logger.service";
-import { ProviderFactory } from "@core/providers";
 
 interface WorkspaceMetadata {
   lastTopicAnalysisAt?: string;
@@ -30,10 +29,16 @@ export async function shouldTriggerTopicAnalysis(
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastAnalysisAt = metadata.lastTopicAnalysisAt;
 
-    const graphProvider = ProviderFactory.getGraphProvider();
-
-    // Get current total episode count for user
-    const episodeCount = await graphProvider.getEpisodeCountByUser(userId, lastAnalysisAt ? new Date(lastAnalysisAt) : undefined);
+    // Count episodes with embeddings from Postgres (same as Python scripts query)
+    // This ensures consistency between threshold check and actual topic analysis
+    const episodeCount = await prisma.episodeEmbedding.count({
+      where: {
+        userId,
+        ...(lastAnalysisAt && {
+          createdAt: { gt: new Date(lastAnalysisAt) },
+        }),
+      },
+    });
 
     logger.info(
       `[Topic Analysis Check] User: ${userId}, New episodes: ${episodeCount}, Last analysis: ${lastAnalysisAt || "never"}`,
