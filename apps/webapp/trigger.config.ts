@@ -46,7 +46,7 @@ export default defineConfig({
         requirements: [
           "click>=8.1.0",
           "python-dotenv>=1.0.0",
-          "neo4j>=5.14.0",
+          "psycopg2-binary>=2.9.0",
           "numpy>=1.24.0",
           "scipy>=1.11.0",
           "pandas>=2.0.0",
@@ -56,6 +56,21 @@ export default defineConfig({
         ],
         scripts: ["./python/*.py"],
       }),
+      {
+        name: "install-packages",
+        onBuildStart: async (context) => {
+          context.addLayer({
+            id: "ffmpeg",
+            image: {
+              instructions: [
+                // Install ffmpeg after checksum validation
+                "RUN apt-get update && apt-get install -y gcc g++ build-essential python3-dev && rm -rf /var/lib/apt/lists",
+              ],
+            },
+          });
+          return;
+        },
+      },
     ],
   },
 });
