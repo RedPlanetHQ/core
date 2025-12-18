@@ -4,7 +4,7 @@ import type { DocumentNode, EpisodicNode } from "@core/types";
 
 export interface DifferentialDecision {
   shouldUseDifferential: boolean;
-  strategy: "full_reingest" | "chunk_level_diff" | "new_document" | "skip_processing";
+  strategy: "full_reingest" | "chunk_level_diff" | "semantic_diff" | "new_document" | "skip_processing";
   reason: string;
   changedChunkIndices: number[];
   changePercentage: number;
@@ -84,12 +84,12 @@ export class DocumentDifferentialService {
     documentSizeTokens: number,
     changePercentage: number,
   ): Pick<DifferentialDecision, "shouldUseDifferential" | "strategy" | "reason"> {
-    // Small documents: always full re-ingest (cheap)
+    // Small documents: use semantic diff (LLM-based change detection)
     if (documentSizeTokens < this.SMALL_DOC_THRESHOLD) {
       return {
-        shouldUseDifferential: false,
-        strategy: "full_reingest",
-        reason: `Document too small (${documentSizeTokens} tokens < ${this.SMALL_DOC_THRESHOLD})`,
+        shouldUseDifferential: true,
+        strategy: "semantic_diff",
+        reason: `Small document (${documentSizeTokens} tokens < ${this.SMALL_DOC_THRESHOLD}) - using semantic diff`,
       };
     }
 

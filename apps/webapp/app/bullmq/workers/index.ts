@@ -76,6 +76,8 @@ export const preprocessWorker = new Worker(
       payload,
       // Callback to enqueue individual chunk ingestion jobs
       enqueueIngestEpisode,
+      // Callback to enqueue session compaction for conversations
+      enqueueSessionCompaction,
     );
   },
   {

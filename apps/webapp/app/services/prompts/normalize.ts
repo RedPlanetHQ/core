@@ -292,7 +292,29 @@ export const normalizeDocumentPrompt = (
 
 Transform this document content into enriched factual statements for knowledge graph storage.
 
-CRITICAL: CAPTURE ALL DISTINCT PIECES OF INFORMATION from the document. Every separate fact, specification, procedure, data point, or detail mentioned must be preserved in your enriched output. Missing information is unacceptable.
+${context.previousVersionContent ? `
+SEMANTIC DIFF MODE ENABLED:
+You are comparing two versions of the same document. Your task is to extract ONLY the changes between versions.
+
+WHAT TO EXTRACT:
+- NEW INFORMATION: Facts added in the current version
+- MODIFIED INFORMATION: Facts that changed (describe what changed, e.g., "timeout changed from 30 to 60 seconds")
+- DELETED INFORMATION: Important facts removed from the previous version
+
+WHAT TO IGNORE:
+- Formatting changes (whitespace, line breaks, styling)
+- Trivial wording changes that don't affect meaning
+- Content identical in both versions
+
+OUTPUT FORMAT:
+Simply state what changed without version numbers. Examples:
+- "Added pagination support with 100 items per page limit"
+- "Timeout changed from 30 seconds to 60 seconds"
+- "Removed OAuth 1.0 authentication support"
+- "PostgreSQL version specified as 15, added BullMQ message queue"
+
+Focus on semantic meaning, not literal text matching.
+` : `CRITICAL: CAPTURE ALL DISTINCT PIECES OF INFORMATION from the document. Every separate fact, specification, procedure, data point, or detail mentioned must be preserved in your enriched output. Missing information is unacceptable.`}
 
 <document_processing_approach>
 Focus on STRUCTURED CONTENT EXTRACTION optimized for documents:
@@ -395,9 +417,19 @@ ALWAYS include opening <output> and closing </output> tags around your entire re
 `;
 
   const userPrompt = `
-<DOCUMENT_CONTENT>
+${context.previousVersionContent ? `<PREVIOUS_VERSION>
+${context.previousVersionContent}
+</PREVIOUS_VERSION>
+
+<CURRENT_VERSION>
+${context.episodeContent}
+</CURRENT_VERSION>
+
+Compare these versions and extract ONLY the semantic differences.
+` : `<DOCUMENT_CONTENT>
 ${context.episodeContent}
 </DOCUMENT_CONTENT>
+`}
 
 <SOURCE>
 ${context.source}

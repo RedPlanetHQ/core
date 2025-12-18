@@ -201,6 +201,9 @@ export type AddEpisodeParams = {
   contentHash?: string;
   previousVersionSessionId?: string;
   chunkHashes?: string[];
+
+  // Episode UUID (set in preprocessing, episode already saved to graph)
+  episodeUuid?: string;
 };
 
 export type AddEpisodeResult = {

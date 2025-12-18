@@ -9,7 +9,7 @@
 import { type z } from "zod";
 import crypto from "crypto";
 import { logger } from "~/services/logger.service";
-import { EpisodeType } from "@core/types";
+import { EpisodeType, type EpisodicNode } from "@core/types";
 import { EpisodeVersioningService } from "~/services/episodeVersioning.server";
 import { DocumentDifferentialService } from "~/services/documentDiffer.server";
 import {
@@ -17,8 +17,9 @@ import {
   type IngestEpisodePayload,
 } from "./ingest-episode.logic";
 import { EpisodeChunker } from "~/services/episodeChunker.server";
-import { invalidateStatementsFromPreviousVersion } from "~/services/graphModels/episode";
+import { invalidateStatementsFromPreviousVersion, saveEpisode } from "~/services/graphModels/episode";
 import { prisma } from "~/trigger/utils/prisma";
+import { type SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 
 export { IngestBodyRequest };
 
@@ -41,11 +42,14 @@ export interface PreprocessEpisodeResult {
  * 3. For documents: analyze versions and apply differential processing
  * 4. For conversations: chunk if needed
  * 5. Output array of pre-chunked episode payloads
+ * 6. Trigger session compaction for conversations (in parallel with ingestion)
  */
 export async function processEpisodePreprocessing(
   payload: IngestEpisodePayload,
   // Callback function for enqueueing ingestion jobs (one per chunk)
   enqueueIngestEpisode?: (params: IngestEpisodePayload) => Promise<any>,
+  // Callback function for enqueueing session compaction (for conversations)
+  enqueueSessionCompaction?: (params: SessionCompactionPayload) => Promise<any>,
 ): Promise<PreprocessEpisodeResult> {
   try {
     logger.info(`Preprocessing episode for user ${payload.userId}`, {
@@ -153,7 +157,17 @@ export async function processEpisodePreprocessing(
 
         preprocessingStrategy = decision.strategy;
 
-        if (decision.strategy === "chunk_level_diff") {
+        if (decision.strategy === "semantic_diff") {
+          // Small documents: use LLM-based semantic diff
+          logger.info(
+            `Using semantic diff strategy for small document (${decision.documentSizeTokens} tokens)`,
+          );
+
+          // No invalidation needed - LLM will detect changes and graph resolution handles contradictions
+          // Pass both versions to ingestion for semantic comparison
+          chunksToProcess = chunked.chunks;
+
+        } else if (decision.strategy === "chunk_level_diff") {
           // Invalidate statements from changed chunks only
           const changedIndices =
             versionInfo.chunkLevelChanges.changedChunkIndices;
@@ -267,18 +281,97 @@ export async function processEpisodePreprocessing(
       strategy: preprocessingStrategy,
     });
 
-    // Enqueue ingestion jobs for each chunk
+    // Save episodes to Neo4j BEFORE enqueueing ingestion
+    // This ensures episodes exist in graph before compaction runs (race condition fix)
+    const episodeUuids = new Map<number, string>(); // Map chunkIndex to UUID
+    if (preprocessedChunks.length > 0) {
+      logger.info(`Saving ${preprocessedChunks.length} episodes to Neo4j`, {
+        sessionId,
+      });
+
+      const now = new Date();
+      for (const chunk of preprocessedChunks) {
+        const episodeUuid = crypto.randomUUID();
+        const episode: EpisodicNode = {
+          uuid: episodeUuid,
+          content: chunk.episodeBody, // Will be updated with normalized content during ingestion
+          originalContent: chunk.episodeBody,
+          contentEmbedding: [], // Will be updated during ingestion
+          source: chunk.source,
+          metadata: chunk.metadata || {},
+          createdAt: now,
+          validAt: new Date(chunk.referenceTime),
+          labelIds: chunk.labelIds || [],
+          userId: payload.userId,
+          sessionId: chunk.sessionId!,
+          queueId: payload.queueId,
+          type: chunk.type,
+          chunkIndex: chunk.chunkIndex,
+          totalChunks: chunk.totalChunks,
+          version: chunk.version,
+          contentHash: chunk.contentHash,
+          previousVersionSessionId: chunk.previousVersionSessionId,
+          chunkHashes: chunk.chunkHashes,
+        };
+
+        await saveEpisode(episode);
+
+        // Store UUID for this chunk
+        if (chunk.chunkIndex !== undefined) {
+          episodeUuids.set(chunk.chunkIndex, episodeUuid);
+        }
+      }
+
+      logger.info(`Successfully saved ${preprocessedChunks.length} episodes to Neo4j`, {
+        sessionId,
+      });
+    }
+
+    // Enqueue ingestion jobs for each chunk, including the episode UUID
     if (enqueueIngestEpisode && preprocessedChunks.length > 0) {
       logger.info(`Enqueueing ${preprocessedChunks.length} ingestion jobs`, {
         sessionId,
       });
 
       for (const chunk of preprocessedChunks) {
+        // Add episode UUID to chunk
+        const chunkWithUuid = {
+          ...chunk,
+          episodeUuid: episodeUuids.get(chunk.chunkIndex!),
+        };
+
         await enqueueIngestEpisode({
-          body: chunk,
+          body: chunkWithUuid,
           userId: payload.userId,
           workspaceId: payload.workspaceId,
           queueId: payload.queueId,
+        });
+      }
+    }
+
+    // Trigger session compaction in parallel for conversations
+    if (
+      sessionId &&
+      type === EpisodeType.CONVERSATION &&
+      enqueueSessionCompaction
+    ) {
+      logger.info(`Enqueueing session compaction for conversation`, {
+        sessionId,
+        userId: payload.userId,
+      });
+
+      try {
+        await enqueueSessionCompaction({
+          userId: payload.userId,
+          sessionId: sessionId,
+          source: episodeBody.source,
+          workspaceId: payload.workspaceId,
+        });
+      } catch (compactionError) {
+        // Don't fail preprocessing if compaction enqueueing fails
+        logger.warn(`Failed to enqueue session compaction`, {
+          sessionId,
+          error: compactionError instanceof Error ? compactionError.message : String(compactionError),
         });
       }
     }

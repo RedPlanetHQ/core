@@ -29,6 +29,7 @@ export const IngestBodyRequest = z.object({
   contentHash: z.string().optional(),
   previousVersionSessionId: z.string().optional(),
   chunkHashes: z.array(z.string()).optional(),
+  episodeUuid: z.string().optional(), // UUID of episode already saved in preprocessing
 });
 
 export interface IngestEpisodePayload {
@@ -69,6 +70,7 @@ export async function processEpisodeIngestion(
     userId: string;
     sessionId: string;
     source: string;
+    workspaceId: string;
   }) => Promise<any>,
   enqueueBertTopicAnalysis?: (params: {
     userId: string;
@@ -256,6 +258,7 @@ export async function processEpisodeIngestion(
           userId: payload.userId,
           sessionId: episodeBody.sessionId,
           source: episodeBody.source,
+          workspaceId: payload.workspaceId,
         });
       }
     } catch (compactionError) {

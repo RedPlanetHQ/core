@@ -95,6 +95,7 @@ export class PgVectorProvider implements IVectorProvider {
     },
   ] as const;
 
+  
   constructor(config: PgVectorConfig) {
     this.prisma = config.prisma;
     // Get dimension from environment variable (same as vector-indexes.server.ts)
@@ -160,9 +161,10 @@ export class PgVectorProvider implements IVectorProvider {
 
       console.log(`[PgVector] Creating index ${name} on ${table}...`);
 
-      // Create HNSW index with explicit dimension casting
+      // Create HNSW index with CONCURRENTLY to avoid blocking writes
+      // Note: CONCURRENTLY cannot run inside a transaction block
       await this.prisma.$executeRawUnsafe(
-        `CREATE INDEX ${name} ON ${table} USING hnsw ((vector::vector(${this.dimensions})) vector_cosine_ops);`
+        `CREATE INDEX CONCURRENTLY ${name} ON ${table} USING hnsw ((vector::vector(${this.dimensions})) vector_cosine_ops);`
       );
 
       console.log(`[PgVector] ✓ Created index ${name}`);

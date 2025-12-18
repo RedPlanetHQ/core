@@ -15,6 +15,7 @@ import crypto from "crypto";
 import { extractEntities } from "./prompts/nodes";
 import { extractStatements, extractStatementsOSS } from "./prompts/statements";
 import {
+  getEpisode,
   getRecentEpisodes,
   saveEpisode,
   searchEpisodesByEmbedding,
@@ -64,57 +65,131 @@ export class KnowledgeGraphService {
     };
 
     try {
-      // Step 1: Create and save episode FIRST with original content
-      // This ensures parallel chunks can see this episode when they retrieve context
-      const episode: EpisodicNode = {
-        uuid: crypto.randomUUID(),
-        content: params.episodeBody, // Use original content initially
-        originalContent: params.episodeBody,
-        contentEmbedding: [], // Will update after normalization
-        source: params.source,
-        metadata: params.metadata || {},
-        createdAt: now,
-        validAt: new Date(params.referenceTime),
-        labelIds: params.labelIds || [],
-        userId: params.userId,
-        sessionId: params.sessionId,
-        queueId: params.queueId,
-        type: params.type,
-        chunkIndex: params.chunkIndex,
-        totalChunks: params.totalChunks,
-        version: params.version,
-        contentHash: params.contentHash,
-        previousVersionSessionId: params.previousVersionSessionId,
-        chunkHashes: params.chunkHashes,
-      };
+      // Step 1: Get or create episode
+      let episode: EpisodicNode;
 
-      // Save episode immediately to Neo4j
-      await saveEpisode(episode);
+      if (params.episodeUuid) {
+        // Episode was already saved in preprocessing - retrieve it
+        const existingEpisode = await getEpisode(params.episodeUuid, false);
+        if (!existingEpisode) {
+          throw new Error(`Episode ${params.episodeUuid} not found in graph`);
+        }
+        episode = existingEpisode;
+        logger.log(`Retrieved existing episode ${params.episodeUuid} from preprocessing`);
+      } else {
+        // Backwards compatibility: create and save episode if not from preprocessing
+        episode = {
+          uuid: crypto.randomUUID(),
+          content: params.episodeBody,
+          originalContent: params.episodeBody,
+          contentEmbedding: [],
+          source: params.source,
+          metadata: params.metadata || {},
+          createdAt: now,
+          validAt: new Date(params.referenceTime),
+          labelIds: params.labelIds || [],
+          userId: params.userId,
+          sessionId: params.sessionId,
+          queueId: params.queueId,
+          type: params.type,
+          chunkIndex: params.chunkIndex,
+          totalChunks: params.totalChunks,
+          version: params.version,
+          contentHash: params.contentHash,
+          previousVersionSessionId: params.previousVersionSessionId,
+          chunkHashes: params.chunkHashes,
+        };
 
-      const episodeSavedTime = Date.now();
-      logger.log(
-        `Saved episode to Neo4j in ${episodeSavedTime - startTime} ms`,
-      );
+        await saveEpisode(episode);
+        logger.log(`Created and saved new episode ${episode.uuid}`);
+      }
 
-      // Step 2: Context Retrieval - Get previous episodes for context (now includes earlier chunks)
-      const previousEpisodes = await getRecentEpisodes({
-        referenceTime: params.referenceTime,
-        limit: DEFAULT_EPISODE_WINDOW,
-        userId: params.userId,
-        source: params.source,
-        sessionId: params.sessionId,
-      });
+      // Step 2: Context Retrieval - Get episodes for context
+      let previousEpisodes: EpisodicNode[] = []
+      let sessionContext: string | undefined;
+      let previousVersionContent: string | undefined;
 
-      // Format session context from previous episodes
-      const sessionContext =
-        params.sessionId && previousEpisodes.length > 0
-          ? previousEpisodes
-              .map(
-                (ep, i) =>
-                  `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
-              )
-              .join("\n\n")
-          : undefined;
+      if (params.type === EpisodeTypeEnum.DOCUMENT) {
+        // For documents, we need TWO types of context:
+        // 1. Current version session context (already ingested chunks from current version)
+        // 2. Previous version context (matching chunk from previous version for diff)
+
+        // Get current version session context (earlier chunks already ingested)
+        previousEpisodes = await getRecentEpisodes({
+          referenceTime: params.referenceTime,
+          limit: DEFAULT_EPISODE_WINDOW,
+          userId: params.userId,
+          source: params.source,
+          sessionId: params.sessionId,
+        });
+
+        if (previousEpisodes.length > 0) {
+          sessionContext = previousEpisodes
+            .map(
+              (ep, i) =>
+                `Chunk ${ep.chunkIndex} (${ep.createdAt.toISOString()}): ${ep.content}`,
+            )
+            .join("\n\n");
+        }
+
+        // Get previous version episodes for diff context
+        if (params.version && params.version > 1) {
+          const previousVersion = params.version - 1;
+
+          // Query episodes with same sessionId, filter by previous version
+          const allEpisodes = await getRecentEpisodes({
+            referenceTime: params.referenceTime,
+            limit: 100,  // Get all chunks
+            userId: params.userId,
+            source: params.source,
+            sessionId: params.sessionId,  // Same sessionId for all versions
+          });
+
+          // Filter to get only episodes from previous version
+          const previousVersionEpisodes = allEpisodes.filter(
+            ep => ep.version === previousVersion
+          );
+
+          if (previousVersionEpisodes.length > 0) {
+            // Find the matching chunk from previous version
+            const matchingChunk = previousVersionEpisodes.find(
+              ep => ep.chunkIndex === params.chunkIndex
+            );
+
+            if (matchingChunk) {
+              // For chunk-level diff: use matching chunk content
+              previousVersionContent = matchingChunk.originalContent;
+            } else if (params.chunkIndex === 0 || params.totalChunks === 1) {
+              // For semantic diff (small docs): use first chunk which has full content
+              const firstChunk = previousVersionEpisodes.find(ep => ep.chunkIndex === 0);
+              if (firstChunk) {
+                previousVersionContent = firstChunk.originalContent;
+              }
+            }
+          }
+        }
+      } else {
+        // For conversations: get recent messages in same session
+        previousEpisodes = await getRecentEpisodes({
+          referenceTime: params.referenceTime,
+          limit: DEFAULT_EPISODE_WINDOW,
+          userId: params.userId,
+          source: params.source,
+          sessionId: params.sessionId,
+        });
+
+        if (previousEpisodes.length > 0) {
+          sessionContext = previousEpisodes
+            .map(
+              (ep, i) =>
+                `Episode ${i + 1} (${ep.createdAt.toISOString()}): ${ep.content}`,
+            )
+            .join("\n\n");
+        }
+      }
+
+      console.log("previousEpisodes: ", previousEpisodes)
+      console.log("previousVersionContent: ", previousVersionContent)
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
@@ -125,6 +200,7 @@ export class KnowledgeGraphService {
         new Date(params.referenceTime),
         sessionContext,
         params.type,
+        previousVersionContent,
       );
 
       const normalizedTime = Date.now();
@@ -562,12 +638,15 @@ export class KnowledgeGraphService {
     episodeTimestamp?: Date,
     sessionContext?: string,
     contentType?: EpisodeType,
+    previousVersionContent?: string,
   ) {
     let appEnumValues: Apps[] = [];
     if (Apps[source.toUpperCase() as keyof typeof Apps]) {
       appEnumValues = [Apps[source.toUpperCase() as keyof typeof Apps]];
     }
     const entityTypes = getNodeTypesString(appEnumValues);
+
+    // Get related memories
     const relatedMemories = await this.getRelatedMemories(episodeBody, userId);
 
     // Fetch ingestion rules for this source
@@ -586,6 +665,7 @@ export class KnowledgeGraphService {
       episodeTimestamp:
         episodeTimestamp?.toISOString() || new Date().toISOString(),
       sessionContext,
+      previousVersionContent,
     };
 
     // Route to appropriate normalization prompt based on content type

@@ -4,17 +4,17 @@ import { z } from "zod";
 import { getEmbedding, makeModelCall } from "~/lib/model.server";
 import {
   getCompactedSessionBySessionId,
-  linkEpisodesToCompact,
   getSessionEpisodes,
-  saveCompactedSession,
 } from "~/services/graphModels/compactedSession";
 import { storeCompactedSessionEmbedding } from "~/services/vectorStorage.server";
 import { type CompactedSessionNode, type EpisodicNode } from "@core/types";
+import { prisma } from "~/trigger/utils/prisma";
 
 export interface SessionCompactionPayload {
   userId: string;
   sessionId: string;
   source: string;
+  workspaceId: string;
   triggerSource?: "auto" | "manual" | "threshold";
 }
 
@@ -58,12 +58,13 @@ export const CONFIG = {
 export async function processSessionCompaction(
   payload: SessionCompactionPayload,
 ): Promise<SessionCompactionResult> {
-  const { userId, sessionId, source, triggerSource = "auto" } = payload;
+  const { userId, sessionId, source, workspaceId, triggerSource = "auto" } = payload;
 
   logger.info(`Starting session compaction`, {
     userId,
     sessionId,
     source,
+    workspaceId,
     triggerSource,
   });
 
@@ -111,8 +112,8 @@ export async function processSessionCompaction(
 
     // Generate or update compaction
     const compactionResult = existingCompact
-      ? await updateCompaction(existingCompact, episodes, userId)
-      : await createCompaction(sessionId, episodes, userId, source);
+      ? await updateCompaction(existingCompact, episodes, userId, workspaceId, source)
+      : await createCompaction(sessionId, episodes, userId, workspaceId, source);
 
     logger.info(`Session compaction completed`, {
       sessionId,
@@ -149,12 +150,72 @@ export async function processSessionCompaction(
 }
 
 /**
+ * Upsert Document table entry from compaction
+ * Uses sessionId as the Document.id for consistent lookups
+ */
+async function upsertDocumentFromCompaction(
+  sessionId: string,
+  summary: string,
+  source: string,
+  userId: string,
+  workspaceId: string,
+  episodes: EpisodicNode[],
+): Promise<void> {
+  try {
+    // Extract label IDs from first episode (if available)
+    const labelIds = episodes[0]?.labelIds || [];
+
+    // Get title from first episode metadata or generate default
+    const title = episodes[0]?.metadata?.title || `Session ${sessionId.substring(0, 8)}`;
+
+    await prisma.document.upsert({
+      where: { id: sessionId },
+      create: {
+        id: sessionId,
+        title,
+        content: summary,
+        labelIds,
+        source,
+        type: "conversation",
+        metadata: {
+          episodeCount: episodes.length,
+          compactedAt: new Date().toISOString(),
+        },
+        editedBy: userId,
+        workspaceId,
+      },
+      update: {
+        content: summary,
+        updatedAt: new Date(),
+        metadata: {
+          episodeCount: episodes.length,
+          compactedAt: new Date().toISOString(),
+        },
+      },
+    });
+
+    logger.info(`Document table updated for session`, {
+      sessionId,
+      workspaceId,
+      summaryLength: summary.length,
+    });
+  } catch (error) {
+    logger.error(`Failed to upsert Document table`, {
+      sessionId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    // Don't throw - allow compaction to succeed even if Document write fails
+  }
+}
+
+/**
  * Create new compaction
  */
 async function createCompaction(
   sessionId: string,
   episodes: EpisodicNode[],
   userId: string,
+  workspaceId: string,
   source: string,
 ): Promise<CompactedSessionNode> {
   logger.info(`Creating new compaction`, {
@@ -194,19 +255,25 @@ async function createCompaction(
 
   console.log("compactNode", compactNode);
 
-  // Save to graph and vector DB in parallel
+  // Save to graph, vector DB, and Document table in parallel
   await Promise.all([
-    saveCompactedSession(compactNode),
-    linkEpisodesToCompact(compactUuid, episodeUuids, userId),
     storeCompactedSessionEmbedding(
       compactUuid,
       compactionData.summary,
       summaryEmbedding,
       userId,
     ),
+    upsertDocumentFromCompaction(
+      sessionId,
+      compactionData.summary,
+      source,
+      userId,
+      workspaceId,
+      episodes,
+    ),
   ]);
 
-  logger.info(`Compaction created and stored in vector DB`, {
+  logger.info(`Compaction created and stored in vector DB and Document table`, {
     compactUuid,
     episodeCount: episodes.length,
   });
@@ -221,6 +288,8 @@ async function updateCompaction(
   existingCompact: CompactedSessionNode,
   newEpisodes: EpisodicNode[],
   userId: string,
+  workspaceId: string,
+  source: string,
 ): Promise<CompactedSessionNode> {
   logger.info(`Updating existing compaction`, {
     compactUuid: existingCompact.uuid,
@@ -255,19 +324,25 @@ async function updateCompaction(
     metadata: { triggerType: "update", newEpisodesAdded: newEpisodes.length },
   };
 
-  // Update graph and vector DB in parallel
+  // Update graph, vector DB, and Document table in parallel
   await Promise.all([
-    saveCompactedSession(updatedNode),
-    linkEpisodesToCompact(existingCompact.uuid, episodeUuids, userId),
     storeCompactedSessionEmbedding(
       existingCompact.uuid,
       compactionData.summary,
       summaryEmbedding,
       userId,
     ),
+    upsertDocumentFromCompaction(
+      existingCompact.sessionId,
+      compactionData.summary,
+      source,
+      userId,
+      workspaceId,
+      newEpisodes,
+    ),
   ]);
 
-  logger.info(`Compaction updated and stored in vector DB`, {
+  logger.info(`Compaction updated and stored in vector DB and Document table`, {
     compactUuid: existingCompact.uuid,
     totalEpisodeCount,
   });
