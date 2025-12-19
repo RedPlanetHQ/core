@@ -16,7 +16,6 @@ import { extractEntities } from "./prompts/nodes";
 import { extractStatements, extractStatementsOSS } from "./prompts/statements";
 import {
   getEpisode,
-  getRecentEpisodes,
   saveEpisode,
   searchEpisodesByEmbedding,
 } from "./graphModels/episode";
@@ -31,11 +30,12 @@ import {
 } from "~/lib/model.server";
 import { Apps, getNodeTypesString } from "~/utils/presets/nodes";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
-import { type PrismaClient } from "@prisma/client";
+import { EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
   batchStoreEntityEmbeddings,
   batchStoreStatementEmbeddings,
+  getRecentEpisodes,
 } from "./vectorStorage.server";
 
 // Default number of previous episodes to retrieve for context
@@ -105,23 +105,17 @@ export class KnowledgeGraphService {
       }
 
       // Step 2: Context Retrieval - Get episodes for context
-      let previousEpisodes: EpisodicNode[] = []
+      let previousEpisodes: EpisodeEmbedding[] = []
       let sessionContext: string | undefined;
       let previousVersionContent: string | undefined;
 
       if (params.type === EpisodeTypeEnum.DOCUMENT) {
         // For documents, we need TWO types of context:
         // 1. Current version session context (already ingested chunks from current version)
-        // 2. Previous version context (matching chunk from previous version for diff)
+        // 2. Previous version context via EMBEDDING SEARCH
 
         // Get current version session context (earlier chunks already ingested)
-        previousEpisodes = await getRecentEpisodes({
-          referenceTime: params.referenceTime,
-          limit: DEFAULT_EPISODE_WINDOW,
-          userId: params.userId,
-          source: params.source,
-          sessionId: params.sessionId,
-        });
+        previousEpisodes = await getRecentEpisodes(params.userId, DEFAULT_EPISODE_WINDOW,params.sessionId, [episode.uuid], params.version );
 
         if (previousEpisodes.length > 0) {
           sessionContext = previousEpisodes
@@ -132,51 +126,43 @@ export class KnowledgeGraphService {
             .join("\n\n");
         }
 
-        // Get previous version episodes for diff context
+        // Get previous version episodes via embedding search
         if (params.version && params.version > 1) {
           const previousVersion = params.version - 1;
 
-          // Query episodes with same sessionId, filter by previous version
-          const allEpisodes = await getRecentEpisodes({
-            referenceTime: params.referenceTime,
-            limit: 100,  // Get all chunks
+          // Use the changes blob (fast-diff extracted content) as query
+          const queryText = params.originalEpisodeBody;
+
+          // Generate embedding for changes
+          const changesEmbedding = await this.getEmbedding(queryText);
+
+          // Search previous version episodes by semantic similarity
+          const relatedPreviousChunks = await searchEpisodesByEmbedding({
+            embedding: changesEmbedding,
             userId: params.userId,
-            source: params.source,
-            sessionId: params.sessionId,  // Same sessionId for all versions
+            limit: 3, // Top 3 most related chunks
+            excludeIds: [episode.uuid],
+            sessionId: params.sessionId,
+            version: previousVersion,
           });
 
-          // Filter to get only episodes from previous version
-          const previousVersionEpisodes = allEpisodes.filter(
-            ep => ep.version === previousVersion
-          );
+          console.log("relatedPreviousChunks: ", relatedPreviousChunks.length)
 
-          if (previousVersionEpisodes.length > 0) {
-            // Find the matching chunk from previous version
-            const matchingChunk = previousVersionEpisodes.find(
-              ep => ep.chunkIndex === params.chunkIndex
-            );
+          if (relatedPreviousChunks.length > 0) {
+            // Concatenate related chunks as previous version context
+            previousVersionContent = relatedPreviousChunks
+              .map((ep) => `[Chunk ${ep.chunkIndex}]\n${ep.originalContent || ep.content}`)
+              .join("\n\n");
 
-            if (matchingChunk) {
-              // For chunk-level diff: use matching chunk content
-              previousVersionContent = matchingChunk.originalContent;
-            } else if (params.chunkIndex === 0 || params.totalChunks === 1) {
-              // For semantic diff (small docs): use first chunk which has full content
-              const firstChunk = previousVersionEpisodes.find(ep => ep.chunkIndex === 0);
-              if (firstChunk) {
-                previousVersionContent = firstChunk.originalContent;
-              }
-            }
+            logger.info(`Embedding search found ${relatedPreviousChunks.length} related chunks from previous version`, {
+              previousVersion,
+              chunkIndices: relatedPreviousChunks.map(ep => ep.chunkIndex),
+            });
           }
         }
       } else {
         // For conversations: get recent messages in same session
-        previousEpisodes = await getRecentEpisodes({
-          referenceTime: params.referenceTime,
-          limit: DEFAULT_EPISODE_WINDOW,
-          userId: params.userId,
-          source: params.source,
-          sessionId: params.sessionId,
-        });
+        previousEpisodes = await getRecentEpisodes(params.userId, DEFAULT_EPISODE_WINDOW,params.sessionId, [episode.uuid]);
 
         if (previousEpisodes.length > 0) {
           sessionContext = previousEpisodes
@@ -233,6 +219,8 @@ export class KnowledgeGraphService {
         params.queueId,
         params.labelIds || [],
         params.sessionId,
+        params.version,
+        params.chunkIndex,
       );
 
       const episodeUpdatedTime = Date.now();
@@ -376,7 +364,7 @@ export class KnowledgeGraphService {
    */
   private async extractEntities(
     episode: EpisodicNode,
-    previousEpisodes: EpisodicNode[],
+    previousEpisodes: EpisodeEmbedding[],
     tokenMetrics: {
       high: { input: number; output: number; total: number; cached: number };
       low: { input: number; output: number; total: number; cached: number };
@@ -461,7 +449,7 @@ export class KnowledgeGraphService {
       primary: EntityNode[];
       expanded: EntityNode[];
     },
-    previousEpisodes: EpisodicNode[],
+    previousEpisodes: EpisodeEmbedding[],
     tokenMetrics: {
       high: { input: number; output: number; total: number; cached: number };
       low: { input: number; output: number; total: number; cached: number };

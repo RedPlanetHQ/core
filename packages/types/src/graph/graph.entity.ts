@@ -183,6 +183,7 @@ export type EpisodeType = (typeof EpisodeType)[keyof typeof EpisodeType];
 
 export type AddEpisodeParams = {
   episodeBody: string;
+  originalEpisodeBody: string;
   referenceTime: Date;
   metadata?: Record<string, any>;
   source: string;

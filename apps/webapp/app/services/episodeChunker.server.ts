@@ -4,6 +4,7 @@ import { type EpisodeType } from "@core/types";
 
 export interface EpisodeChunk {
   content: string;
+  originalContent?: string;
   chunkIndex: number;
   title?: string;
   context?: string;

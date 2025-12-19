@@ -139,16 +139,21 @@ model Document {
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  title    String
-  content  String
-  labelIds String[]
-  source   String
-  metadata Json?
-  type     String
+  title       String
+  content     String
+  labelIds    String[]
+  source      String
+  metadata    Json?
+  type        String
+  version     Int      @default(1)
+  contentHash String?
+  chunkHashes String[]
 
   editedBy    String
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
 }
 
 model EntityEmbedding {
@@ -172,11 +177,15 @@ model EpisodeEmbedding {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  content   String
-  vector    Unsupported("vector")
-  labelIds  String[]
-  metadata  Json?
-  sessionId String
+  content         String
+  vector          Unsupported("vector")
+  labelIds        String[]
+  metadata        Json?
+  sessionId       String
+  originalContent String?
+  chunkIndex      Int?
+  chunkHash       String?
+  version         Int?
 
   ingestionQueueId String
   ingestionQueue   IngestionQueue @relation(fields: [ingestionQueueId], references: [id], onDelete: Cascade)
@@ -187,6 +196,7 @@ model EpisodeEmbedding {
   @@index([userId])
   @@index([userId, labelIds])
   @@index([userId, sessionId])
+  @@index([userId, sessionId, version])
   @@map("episode_embeddings")
 }
 

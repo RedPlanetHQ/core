@@ -95,7 +95,7 @@ export class PgVectorProvider implements IVectorProvider {
     },
   ] as const;
 
-  
+
   constructor(config: PgVectorConfig) {
     this.prisma = config.prisma;
     // Get dimension from environment variable (same as vector-indexes.server.ts)
@@ -225,10 +225,12 @@ export class PgVectorProvider implements IVectorProvider {
       const ingestionQueueId = params.metadata?.ingestionQueueId;
       const labelIds = params.metadata?.labelIds || [];
       const sessionId = params.metadata?.sessionId;
+      const version = params.metadata?.version;
+      const chunkIndex = params.metadata?.chunkIndex;
 
       await this.prisma.$executeRaw`
-        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "createdAt", "updatedAt")
-        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, NOW(), NOW())
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "version", "chunkIndex", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, ${version}, ${chunkIndex}, NOW(), NOW())
         ON CONFLICT (id) DO UPDATE
         SET vector = EXCLUDED.vector,
             ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
@@ -236,6 +238,8 @@ export class PgVectorProvider implements IVectorProvider {
             "ingestionQueueId" = EXCLUDED."ingestionQueueId",
             "labelIds" = EXCLUDED."labelIds",
             "sessionId" = EXCLUDED."sessionId",
+            "version" = EXCLUDED."version",
+            "chunkIndex" = EXCLUDED."chunkIndex",
             "updatedAt" = NOW()
       `;
     } else {
@@ -307,7 +311,7 @@ export class PgVectorProvider implements IVectorProvider {
     const tableName = this.getTableName(params.namespace);
     const limit = params.limit || 10;
     const threshold = params.threshold || 0;
-    const { userId, labelIds, excludeIds } = params.filter;
+    const { userId, labelIds, excludeIds, sessionId, version } = params.filter;
 
     if (!userId) {
       throw new Error("userId is required in filter for search");
@@ -323,6 +327,17 @@ export class PgVectorProvider implements IVectorProvider {
     const excludeIdsCondition =
       excludeIds && excludeIds.length > 0
         ? Prisma.sql`AND id::text NOT IN (${Prisma.join(excludeIds.map((id) => Prisma.sql`${id}`))})`
+        : Prisma.empty;
+
+
+    const sessionIdCondition =
+      sessionId
+        ? Prisma.sql`AND "sessionId" = ${sessionId}`
+        : Prisma.empty;
+
+    const versionCondition =
+      version
+        ? Prisma.sql`AND "version" = ${version}`
         : Prisma.empty;
 
     // Use $queryRaw for vector similarity search
@@ -361,11 +376,13 @@ export class PgVectorProvider implements IVectorProvider {
         WHERE "userId" = ${userId}
           ${labelIdsCondition}
           ${excludeIdsCondition}
-        ORDER BY ${vectorCast} <=> ${vectorLiteral}
+          ${sessionIdCondition}
+          ${versionCondition}
         LIMIT ${expandedLimit}
       )
       SELECT * FROM candidates
       WHERE score >= ${threshold}
+      ORDER BY score DESC
       LIMIT ${limit}
     `;
 
@@ -633,6 +650,18 @@ export class PgVectorProvider implements IVectorProvider {
     return await this.prisma.episodeEmbedding.findMany({ where: { ingestionQueueId: queueId } });
   }
 
+  async getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]> {
+    return await this.prisma.episodeEmbedding.findMany({
+      where: {
+        userId,
+        ...(sessionId && { sessionId }),
+        ...(excludeIds && excludeIds.length > 0 && { id: { notIn: excludeIds } }),
+        ...(version && { version }),
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+  }
   /**
    * Health check - verify connection and pgvector extension
    */

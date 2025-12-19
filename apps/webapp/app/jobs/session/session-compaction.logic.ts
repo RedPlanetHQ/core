@@ -1,14 +1,14 @@
 import { logger } from "~/services/logger.service";
-import type { CoreMessage } from "ai";
 import { z } from "zod";
-import { getEmbedding, makeModelCall } from "~/lib/model.server";
+import { makeModelCall } from "~/lib/model.server";
 import {
   getCompactedSessionBySessionId,
   getSessionEpisodes,
 } from "~/services/graphModels/compactedSession";
-import { storeCompactedSessionEmbedding } from "~/services/vectorStorage.server";
-import { type CompactedSessionNode, type EpisodicNode } from "@core/types";
+import { type EpisodicNode } from "@core/types";
 import { prisma } from "~/trigger/utils/prisma";
+import { Document } from "@prisma/client";
+import { CoreMessage } from "ai";
 
 export interface SessionCompactionPayload {
   userId: string;
@@ -21,14 +21,8 @@ export interface SessionCompactionPayload {
 export interface SessionCompactionResult {
   success: boolean;
   compactionResult?: {
-    compactUuid: string;
     sessionId: string;
     summary: string;
-    episodeCount: number;
-    startTime: Date;
-    endTime: Date;
-    confidence: number;
-    compressionRatio: number;
   };
   reason?: string;
   episodeCount?: number;
@@ -46,7 +40,7 @@ export const CompactionResultSchema = z.object({
 });
 
 export const CONFIG = {
-  minEpisodesForCompaction: 3, // Minimum episodes to trigger compaction
+  minEpisodesForCompaction: 1, // Minimum episodes to trigger compaction
   compactionThreshold: 1, // Trigger after N new episodes
   maxEpisodesPerBatch: 50, // Process in batches if needed
 };
@@ -70,16 +64,15 @@ export async function processSessionCompaction(
 
   try {
     // Check if compaction already exists
-    const existingCompact = await getCompactedSessionBySessionId(
-      sessionId,
-      userId,
-    );
+    const existingCompact = await prisma.document.findFirst({
+      where: { id: sessionId }
+    })
 
     // Fetch all episodes for this session
     const episodes = await getSessionEpisodes(
       sessionId,
       userId,
-      existingCompact?.endTime ? new Date(existingCompact.endTime) : undefined,
+      existingCompact?.updatedAt ? new Date(existingCompact.updatedAt) : undefined,
     );
 
     // Check if we have enough episodes
@@ -115,26 +108,23 @@ export async function processSessionCompaction(
       ? await updateCompaction(existingCompact, episodes, userId, workspaceId, source)
       : await createCompaction(sessionId, episodes, userId, workspaceId, source);
 
-    logger.info(`Session compaction completed`, {
-      sessionId,
-      compactUuid: compactionResult.uuid,
-      episodeCount: compactionResult.episodeCount,
-      compressionRatio: compactionResult.compressionRatio,
-    });
+    if (compactionResult) {
+      logger.info(`Session compaction completed`, {
+        sessionId,
+        compactUuid: compactionResult.id,
+      });
 
+      return {
+        success: true,
+        compactionResult: {
+          sessionId: compactionResult.id,
+          summary: compactionResult.content,
+        },
+      };
+    }
     return {
-      success: true,
-      compactionResult: {
-        compactUuid: compactionResult.uuid,
-        sessionId: compactionResult.sessionId,
-        summary: compactionResult.summary,
-        episodeCount: compactionResult.episodeCount,
-        startTime: compactionResult.startTime,
-        endTime: compactionResult.endTime,
-        confidence: compactionResult.confidence,
-        compressionRatio: compactionResult.compressionRatio || 0,
-      },
-    };
+      success: false,
+    }
   } catch (error) {
     logger.error(`Session compaction failed`, {
       sessionId,
@@ -160,7 +150,7 @@ async function upsertDocumentFromCompaction(
   userId: string,
   workspaceId: string,
   episodes: EpisodicNode[],
-): Promise<void> {
+): Promise<Document | undefined> {
   try {
     // Extract label IDs from first episode (if available)
     const labelIds = episodes[0]?.labelIds || [];
@@ -168,7 +158,7 @@ async function upsertDocumentFromCompaction(
     // Get title from first episode metadata or generate default
     const title = episodes[0]?.metadata?.title || `Session ${sessionId.substring(0, 8)}`;
 
-    await prisma.document.upsert({
+    const document = await prisma.document.upsert({
       where: { id: sessionId },
       create: {
         id: sessionId,
@@ -199,11 +189,13 @@ async function upsertDocumentFromCompaction(
       workspaceId,
       summaryLength: summary.length,
     });
+    return document
   } catch (error) {
     logger.error(`Failed to upsert Document table`, {
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
+    return undefined
     // Don't throw - allow compaction to succeed even if Document write fails
   }
 }
@@ -217,7 +209,7 @@ async function createCompaction(
   userId: string,
   workspaceId: string,
   source: string,
-): Promise<CompactedSessionNode> {
+): Promise<Document | undefined> {
   logger.info(`Creating new compaction`, {
     sessionId,
     episodeCount: episodes.length,
@@ -226,128 +218,59 @@ async function createCompaction(
   // Generate compaction using LLM
   const compactionData = await generateCompaction(episodes, null);
 
-  // Generate embedding for summary
-  const summaryEmbedding = await getEmbedding(compactionData.summary);
-
-  // Create CompactedSession node using graph model
-  const compactUuid = crypto.randomUUID();
-  const now = new Date();
-  const startTime = new Date(episodes[0].createdAt);
-  const endTime = new Date(episodes[episodes.length - 1].createdAt);
-  const episodeUuids = episodes.map((e) => e.uuid);
-  const compressionRatio = episodes.length / 1;
-
-  const compactNode: CompactedSessionNode = {
-    uuid: compactUuid,
-    sessionId,
-    summary: compactionData.summary,
-    summaryEmbedding,
-    episodeCount: episodes.length,
-    startTime,
-    endTime,
-    createdAt: now,
-    confidence: compactionData.confidence,
-    userId,
-    source,
-    compressionRatio,
-    metadata: { triggerType: "create" },
-  };
-
-  console.log("compactNode", compactNode);
-
   // Save to graph, vector DB, and Document table in parallel
-  await Promise.all([
-    storeCompactedSessionEmbedding(
-      compactUuid,
-      compactionData.summary,
-      summaryEmbedding,
-      userId,
-    ),
-    upsertDocumentFromCompaction(
-      sessionId,
-      compactionData.summary,
-      source,
-      userId,
-      workspaceId,
-      episodes,
-    ),
-  ]);
+  const document = await upsertDocumentFromCompaction(
+    sessionId,
+    compactionData.summary,
+    source,
+    userId,
+    workspaceId,
+    episodes,
+  );
 
   logger.info(`Compaction created and stored in vector DB and Document table`, {
-    compactUuid,
     episodeCount: episodes.length,
   });
 
-  return compactNode;
+  return document;
 }
 
 /**
  * Update existing compaction with new episodes
  */
 async function updateCompaction(
-  existingCompact: CompactedSessionNode,
+  existingCompact: Document,
   newEpisodes: EpisodicNode[],
   userId: string,
   workspaceId: string,
   source: string,
-): Promise<CompactedSessionNode> {
+): Promise<Document | undefined> {
   logger.info(`Updating existing compaction`, {
-    compactUuid: existingCompact.uuid,
+    compactUuid: existingCompact.id,
     newEpisodeCount: newEpisodes.length,
   });
 
   // Generate updated compaction using LLM (merging)
   const compactionData = await generateCompaction(
     newEpisodes,
-    existingCompact.summary,
+    existingCompact.content,
   );
 
-  // Generate new embedding for updated summary
-  const summaryEmbedding = await getEmbedding(compactionData.summary);
-
-  // Update CompactedSession node using graph model
-  const now = new Date();
-  const endTime = new Date(newEpisodes[newEpisodes.length - 1].createdAt);
-  const totalEpisodeCount = existingCompact.episodeCount + newEpisodes.length;
-  const compressionRatio = totalEpisodeCount / 1;
-  const episodeUuids = newEpisodes.map((e) => e.uuid);
-
-  const updatedNode: CompactedSessionNode = {
-    ...existingCompact,
-    summary: compactionData.summary,
-    summaryEmbedding,
-    episodeCount: totalEpisodeCount,
-    endTime,
-    updatedAt: now,
-    confidence: compactionData.confidence,
-    compressionRatio,
-    metadata: { triggerType: "update", newEpisodesAdded: newEpisodes.length },
-  };
-
   // Update graph, vector DB, and Document table in parallel
-  await Promise.all([
-    storeCompactedSessionEmbedding(
-      existingCompact.uuid,
-      compactionData.summary,
-      summaryEmbedding,
-      userId,
-    ),
-    upsertDocumentFromCompaction(
-      existingCompact.sessionId,
-      compactionData.summary,
-      source,
-      userId,
-      workspaceId,
-      newEpisodes,
-    ),
-  ]);
+  const document = await upsertDocumentFromCompaction(
+    existingCompact.id,
+    compactionData.summary,
+    source,
+    userId,
+    workspaceId,
+    newEpisodes,
+  );
 
   logger.info(`Compaction updated and stored in vector DB and Document table`, {
-    compactUuid: existingCompact.uuid,
-    totalEpisodeCount,
+    compactUuid: existingCompact.id
   });
 
-  return updatedNode;
+  return document;
 }
 
 /**
@@ -424,17 +347,27 @@ This summary will be retrieved by AI agents when the user references this sessio
 
 ## OUTPUT REQUIREMENTS
 
-- **summary**: A detailed, information-rich narrative that tells the complete story
-  - Structure naturally based on content - use as many paragraphs as needed
-  - Each distinct topic, decision, or phase should get its own paragraph(s)
-  - Start with context and initial problem/question
-  - Progress chronologically through discussions, decisions, and implementations
-  - **Final paragraph MUST**: State the outcome, results, and current state
-  - Don't artificially limit length - capture everything important
+Write a detailed, information-rich narrative summary that tells the complete story:
+- Structure naturally based on content - use as many paragraphs as needed
+- Each distinct topic, decision, or phase should get its own paragraph(s)
+- Start with context and initial problem/question
+- Progress chronologically through discussions, decisions, and implementations
+- **Final paragraph MUST**: State the outcome, results, and current state
+- Don't artificially limit length - capture everything important
 
-- **confidence**: Score (0-1) reflecting how well this summary captures the session's essence
+CRITICAL OUTPUT FORMAT:
+You MUST wrap your summary text in <output></output> tags. Output ONLY the summary text, nothing else.
 
-Your response MUST be valid JSON wrapped in <output></output> tags.
+Example:
+<output>
+The user asked about setting up a new development environment. They specified needing Node.js and Python support...
+
+After discussion, they decided to use nvm for Node.js and pyenv for Python management...
+
+The final setup includes VS Code with ESLint, Prettier configured, and git initialized with SSH keys.
+</output>
+
+DO NOT use JSON. DO NOT include field names. Just the summary text wrapped in <output> tags.
 
 ## KEY PRINCIPLES
 
@@ -497,17 +430,13 @@ function parseCompactionResponse(
       throw new Error("Invalid LLM response format - missing <output> tags");
     }
 
-    let jsonContent = outputMatch[1].trim();
+    const summaryText = outputMatch[1].trim();
 
-    // Remove markdown code blocks if present
-    jsonContent = jsonContent.replace(/```json\n?/g, "").replace(/```\n?/g, "");
-
-    const parsed = JSON.parse(jsonContent);
-
-    // Validate with schema
-    const validated = CompactionResultSchema.parse(parsed);
-
-    return validated;
+    // Return as schema-compliant object (confidence defaults to 1.0 since we're not scoring anymore)
+    return {
+      summary: summaryText,
+      confidence: 1.0,
+    };
   } catch (error) {
     logger.error("Failed to parse compaction response", {
       error: error instanceof Error ? error.message : String(error),

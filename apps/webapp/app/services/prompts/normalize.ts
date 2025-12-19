@@ -296,10 +296,16 @@ ${context.previousVersionContent ? `
 SEMANTIC DIFF MODE ENABLED:
 You are comparing two versions of the same document. Your task is to extract ONLY the changes between versions.
 
+IMPORTANT: The CURRENT_VERSION_CHANGES content is in GIT-STYLE DIFF FORMAT:
+- Lines prefixed with "+ " represent ADDITIONS (new content in current version)
+- Lines prefixed with "- " represent DELETIONS (content removed from previous version)
+- This diff shows ONLY what changed, not the full document
+- The PREVIOUS_VERSION shows full old content for reference
+
 WHAT TO EXTRACT:
-- NEW INFORMATION: Facts added in the current version
-- MODIFIED INFORMATION: Facts that changed (describe what changed, e.g., "timeout changed from 30 to 60 seconds")
-- DELETED INFORMATION: Important facts removed from the previous version
+- NEW INFORMATION: Facts added in the current version (lines with "+ " prefix)
+- MODIFIED INFORMATION: Facts that changed (combination of "- " and "+ " lines)
+- DELETED INFORMATION: Important facts removed (lines with "- " prefix)
 
 WHAT TO IGNORE:
 - Formatting changes (whitespace, line breaks, styling)
@@ -313,7 +319,7 @@ Simply state what changed without version numbers. Examples:
 - "Removed OAuth 1.0 authentication support"
 - "PostgreSQL version specified as 15, added BullMQ message queue"
 
-Focus on semantic meaning, not literal text matching.
+Focus on semantic meaning. Lines starting with "+ " are additions, lines starting with "- " are deletions. Extract the semantic changes they represent.
 ` : `CRITICAL: CAPTURE ALL DISTINCT PIECES OF INFORMATION from the document. Every separate fact, specification, procedure, data point, or detail mentioned must be preserved in your enriched output. Missing information is unacceptable.`}
 
 <document_processing_approach>
@@ -421,11 +427,11 @@ ${context.previousVersionContent ? `<PREVIOUS_VERSION>
 ${context.previousVersionContent}
 </PREVIOUS_VERSION>
 
-<CURRENT_VERSION>
+<CURRENT_VERSION_CHANGES>
 ${context.episodeContent}
-</CURRENT_VERSION>
+</CURRENT_VERSION_CHANGES>
 
-Compare these versions and extract ONLY the semantic differences.
+Note: The CURRENT_VERSION_CHANGES is in git-style diff format with "+ " prefixes for additions and "- " prefixes for deletions. Compare with PREVIOUS_VERSION to identify what was added, modified, or deleted, and extract the semantic differences.
 ` : `<DOCUMENT_CONTENT>
 ${context.episodeContent}
 </DOCUMENT_CONTENT>

@@ -1,4 +1,4 @@
-import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
+import { ProviderFactory, VECTOR_NAMESPACES, VectorSearchFilter } from "@core/providers";
 import {
   type StatementNode,
   type EntityNode,
@@ -25,25 +25,6 @@ export async function getEpisode(
   return graphProvider().getEpisode(uuid, withEmbedding);
 }
 
-// Get recent episodes with optional filters
-export async function getRecentEpisodes(params: {
-  referenceTime: Date;
-  limit: number;
-  userId: string;
-  source?: string;
-  sessionId?: string;
-}): Promise<EpisodicNode[]> {
-  // Map to provider's expected parameters
-  return graphProvider().getRecentEpisodes({
-    userId: params.userId,
-    limit: params.limit,
-    source: params.source,
-    sessionId: params.sessionId,
-    labelIds: undefined,
-    spaceIds: undefined,
-  });
-}
-
 // Get all episodes for a session ordered by createdAt
 export async function getEpisodesBySession(params: {
   sessionId: string;
@@ -57,14 +38,31 @@ export async function searchEpisodesByEmbedding(params: {
   userId: string;
   limit?: number;
   minSimilarity?: number;
+  sessionId?: string;
+  version?: number;
+  excludeIds?: string[];
 }) {
   // Step 1: Search vector provider for similar episode IDs
+  const filter: VectorSearchFilter = { userId: params.userId };
+
+  // Add optional filters for sessionId and version
+  if (params.sessionId) {
+    filter.sessionId = params.sessionId;
+  }
+  if (params.version !== undefined) {
+    filter.version = params.version;
+  }
+
+  if (params.excludeIds) {
+    filter.excludeIds = params.excludeIds;
+  }
+
   const vectorResults = await vectorProvider().search({
     vector: params.embedding,
     limit: params.limit || 100,
     threshold: params.minSimilarity || 0.7,
     namespace: VECTOR_NAMESPACES.EPISODE,
-    filter: { userId: params.userId },
+    filter,
   });
 
   if (vectorResults.length === 0) {
