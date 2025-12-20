@@ -319,7 +319,7 @@ async function generateCompaction(
  * System prompt for compaction (for agent recall/context retrieval)
  */
 function createCompactionSystemPrompt(): string {
-  return `You are a session compaction specialist. Your task is to create a rich, informative summary that will help AI agents understand what happened in this conversation session when they need context for future interactions.
+  return `You are a session compaction specialist. Your task is to create a rich, informative summary in Markdown format that will help AI agents understand what happened in this conversation session when they need context for future interactions.
 
 ## PURPOSE
 
@@ -340,44 +340,81 @@ This summary will be retrieved by AI agents when the user references this sessio
 ## COMPACTION RULES
 
 1. **Be Information-Dense**: Pack useful details without fluff or repetition
-2. **Structure Chronologically**: Start with problem/question, show progression, end with outcome
+2. **Structure with Markdown**: Use headings, lists, and formatting for clarity
 3. **Highlight Key Points**: Emphasize decisions, implementations, results, and learnings
 4. **Include Specifics**: Names of libraries, specific configurations, metrics, numbers matter
 5. **Resolve Contradictions**: Always use the most recent/final version when information conflicts
 
-## OUTPUT REQUIREMENTS
+## OUTPUT REQUIREMENTS - MARKDOWN FORMAT
 
-Write a detailed, information-rich narrative summary that tells the complete story:
-- Structure naturally based on content - use as many paragraphs as needed
-- Each distinct topic, decision, or phase should get its own paragraph(s)
-- Start with context and initial problem/question
-- Progress chronologically through discussions, decisions, and implementations
-- **Final paragraph MUST**: State the outcome, results, and current state
-- Don't artificially limit length - capture everything important
+Write a detailed, information-rich Markdown summary:
+
+**Structure:**
+- Use ## heading for main topic/context
+- Use ### subheadings for different phases (Discussion, Implementation, Outcome, etc.)
+- Use **bold** for key decisions and important terms
+- Use \`code\` for technical terms, library names, commands, file paths
+- Use bullet lists (-) for multiple items, steps, or specifications
+- Use numbered lists (1.) for sequential steps or chronological events
+- Include code blocks (\`\`\`) for commands, configurations, or code snippets if relevant
+
+**Content Organization:**
+- Start with context and initial problem/question under ## heading
+- Progress chronologically through phases with ### subheadings
+- **Final section MUST** be ### Outcome or ### Current State with results
+
+**Markdown Tips:**
+- Don't over-structure - use paragraphs for narrative flow
+- Lists are better for specifications, steps, or multiple related items
+- Code formatting makes technical details scannable
+- Headings help agents quickly find relevant sections
 
 CRITICAL OUTPUT FORMAT:
-You MUST wrap your summary text in <output></output> tags. Output ONLY the summary text, nothing else.
+You MUST wrap your Markdown summary in <output></output> tags. Output ONLY the Markdown text, nothing else.
 
 Example:
 <output>
-The user asked about setting up a new development environment. They specified needing Node.js and Python support...
+## Development Environment Setup
 
-After discussion, they decided to use nvm for Node.js and pyenv for Python management...
+The user requested help setting up a new **MacBook Pro** for full-stack development with **React**, **Node.js**, and **Python**.
 
-The final setup includes VS Code with ESLint, Prettier configured, and git initialized with SSH keys.
+### Requirements Gathering
+- Primary work: Full-stack web development
+- Stack: React + Node.js (frontend/backend)
+- Additional: Python for data analysis
+- Editor preference: VS Code
+
+### Implementation Plan
+The following toolchain was recommended:
+1. **Homebrew** - Package manager for macOS
+2. **nvm** - Node.js version management (v18 LTS recommended)
+3. **VS Code** - IDE with extensions:
+   - ESLint
+   - Prettier
+   - GitLens
+4. **pyenv** - Python version management (3.11+ recommended)
+5. **Git** - Version control with GitHub SSH keys
+
+### Installation Progress
+- ✅ Homebrew installed successfully
+- 🔄 nvm installation in progress
+- ⏳ VS Code, git, and pyenv pending
+
+### Outcome
+User successfully installed Homebrew and is proceeding with nvm setup. Next steps: complete nvm installation, configure VS Code with extensions, set up git with SSH keys, install Python via pyenv.
 </output>
 
-DO NOT use JSON. DO NOT include field names. Just the summary text wrapped in <output> tags.
+DO NOT use JSON. DO NOT include field names. Just Markdown text wrapped in <output> tags.
 
 ## KEY PRINCIPLES
 
 - Write for an AI agent that needs to help the user in future conversations
-- Include technical specifics that might be referenced (library names, configurations, metrics)
-- Make outcomes and current state crystal clear in the final paragraph
+- Use Markdown formatting to make technical details scannable
+- Make outcomes and current state crystal clear in the final section
 - Show the reasoning behind decisions, not just the decisions themselves
-- Be comprehensive but concise - every sentence should add value
-- Each major topic or phase deserves its own paragraph(s)
+- Be comprehensive but well-organized - use headings and lists effectively
 - Don't compress too much - agents need the details
+- Markdown makes complex information more readable and retrievable
 `;
 }
 
