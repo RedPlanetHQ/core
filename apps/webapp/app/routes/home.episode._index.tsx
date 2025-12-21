@@ -30,19 +30,17 @@ export default function NewEpisode() {
       <div className="episode-details flex h-full flex-col">
         <PageHeader title="New document" />
 
-        <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
-          <ClientOnly
-            fallback={
-              <div className="flex w-full justify-center">
-                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-              </div>
-            }
-          >
-            {() => {
-              return <Editor defaultLabelId={labelId} labels={labels as any} />;
-            }}
-          </ClientOnly>
-        </div>
+        <ClientOnly
+          fallback={
+            <div className="flex w-full justify-center">
+              <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+            </div>
+          }
+        >
+          {() => {
+            return <Editor defaultLabelId={labelId} labels={labels as any} />;
+          }}
+        </ClientOnly>
       </div>
     </>
   );

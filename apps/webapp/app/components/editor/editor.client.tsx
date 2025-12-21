@@ -75,33 +75,35 @@ export const Editor = ({ defaultLabelId, labels }: EditorProps) => {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <div className="flex h-full w-full flex-col items-center">
-      <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
-        <div>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-4 py-0 text-xl font-medium outline-none focus-visible:ring-0"
-          />
-        </div>
-
-        <div className="my-4 px-4">
-          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
-            <LabelDropdown value={labelIds} labels={labels} />
+    <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
+        <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
+          <div>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-4 py-0 text-xl font-medium outline-none focus-visible:ring-0"
+            />
           </div>
-        </div>
 
-        <EditorContent editor={editor} />
-        <div className="flex justify-end gap-2 px-4 pb-4">
-          <div className="flex gap-2">
-            <Button
-              variant="secondary"
-              onClick={handleAdd}
-              isLoading={fetcher.state !== "idle"}
-            >
-              Save document
-            </Button>
+          <div className="my-4 px-4">
+            <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
+              <LabelDropdown value={labelIds} labels={labels} />
+            </div>
           </div>
+
+          <EditorContent editor={editor} />
+        </div>
+      </div>
+      <div className="flex w-full justify-end gap-2 border-t border-gray-300 p-2">
+        <div className="flex gap-2">
+          <Button
+            variant="secondary"
+            onClick={handleAdd}
+            isLoading={fetcher.state !== "idle"}
+          >
+            Save document
+          </Button>
         </div>
       </div>
     </div>

@@ -52,7 +52,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
       <div className="relative">
         <div
           className={cn(
-            "mix-w-[400px] text-md rounded-md p-4",
+            "mix-w-[400px] text-md rounded-md py-4",
             hasChanges && "border-blue-500",
           )}
         >
