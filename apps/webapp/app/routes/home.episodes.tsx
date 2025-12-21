@@ -66,7 +66,7 @@ export default function LogsAll() {
     <>
       <div className="flex h-full flex-col">
         <PageHeader
-          title="Episodes"
+          title="Documents"
           actions={[
             {
               label: "Add document",

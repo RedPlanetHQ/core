@@ -48,7 +48,7 @@ export default function InboxNotSelected() {
     <TooltipProvider delayDuration={0}>
       <div className="flex h-[calc(100vh)] w-full flex-col overflow-hidden md:h-[calc(100vh_-_16px)]">
         <PageHeader
-          title="Episode"
+          title="Document"
           actionsNode={
             <LogOptions
               id={document.id as string}
