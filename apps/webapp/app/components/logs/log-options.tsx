@@ -86,7 +86,7 @@ export const LogOptions = ({ id, status }: LogOptionsProps) => {
           <Button
             variant="secondary"
             size="sm"
-            className="gap-2 rounded"
+            className="h-7 gap-2 rounded"
             onClick={handleRetry}
             disabled={retryFetcher.state !== "idle"}
           >
@@ -96,7 +96,7 @@ export const LogOptions = ({ id, status }: LogOptionsProps) => {
         <Button
           variant="secondary"
           size="sm"
-          className="gap-2 rounded"
+          className="h-7 gap-2 rounded"
           onClick={handleCopy}
         >
           <Copy size={15} /> Copy Id
@@ -104,7 +104,7 @@ export const LogOptions = ({ id, status }: LogOptionsProps) => {
         <Button
           variant="secondary"
           size="sm"
-          className="gap-2 rounded"
+          className="h-7 gap-2 rounded"
           onClick={(e) => {
             setDeleteDialogOpen(true);
           }}
