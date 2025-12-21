@@ -9,7 +9,7 @@ import {
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
-import { getDocument, updateDocument } from "~/services/document.server";
+import { deleteDocument, getDocument, updateDocument } from "~/services/document.server";
 
 // Schema for space ID parameter
 const DocumentParamsSchema = z.object({
@@ -140,6 +140,7 @@ const { action } = createHybridActionApiRoute(
         authentication.userId,
       );
 
+      await deleteDocument(document.id as string);
       return json({
         success: true,
         message: "Session deleted successfully",

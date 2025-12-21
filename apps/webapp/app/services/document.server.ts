@@ -50,3 +50,11 @@ export const updateDocument = async (
     },
   });
 };
+
+export const deleteDocument = async (id: string) => {
+  return await prisma.document.delete({
+    where: {
+      id,
+    },
+  });
+};

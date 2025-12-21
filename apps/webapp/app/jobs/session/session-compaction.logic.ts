@@ -9,6 +9,7 @@ import { type EpisodicNode } from "@core/types";
 import { prisma } from "~/trigger/utils/prisma";
 import { type Document } from "@prisma/client";
 import { type CoreMessage } from "ai";
+import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
 
 export interface SessionCompactionPayload {
   userId: string;
@@ -160,6 +161,73 @@ export async function processSessionCompaction(
 }
 
 /**
+ * Get title for compacted session
+ * Priority: ingestion queue -> first episode metadata -> generated from summary
+ */
+async function getTitleForCompactedSession(
+  sessionId: string,
+  summary: string,
+  episodes: EpisodicNode[],
+): Promise<string> {
+  // 1. Try to get title from ingestion queue (first episode)
+  const ingestionRecords = await prisma.ingestionQueue.findMany({
+    where: { sessionId },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      title: true,
+      id: true,
+    },
+    take: 1,
+  });
+
+  if (ingestionRecords.length > 0 && ingestionRecords[0].title) {
+    logger.info(`Using title from ingestion queue for session ${sessionId}`);
+    return ingestionRecords[0].title;
+  }
+
+  // 2. Try to get title from first episode metadata
+  const metadataTitle = episodes[0]?.metadata?.title;
+  if (metadataTitle && typeof metadataTitle === 'string' && metadataTitle.trim()) {
+    logger.info(`Using title from first episode metadata for session ${sessionId}`);
+    return metadataTitle.trim();
+  }
+
+  // 3. If ingestion queue has no title, try to generate one
+  if (ingestionRecords.length > 0) {
+    logger.info(`Generating title for session ${sessionId}`);
+    try {
+      const titleResult = await processTitleGeneration({
+        queueId: ingestionRecords[0].id,
+        userId: episodes[0]?.userId || '',
+        workspaceId: '', // Not critical for title generation
+      });
+
+      if (titleResult.success && titleResult.title) {
+        return titleResult.title;
+      }
+    } catch (error) {
+      logger.warn(`Failed to generate title for session ${sessionId}`, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // 4. Fallback: extract first few words from summary
+  const cleanSummary = summary
+    .replace(/<[^>]*>/g, '') // Strip HTML
+    .replace(/#{1,6}\s+/g, '') // Strip markdown headings
+    .replace(/\s+/g, ' ') // Normalize whitespace
+    .trim();
+
+  const truncated = cleanSummary.substring(0, 50);
+  const lastSpace = truncated.lastIndexOf(' ');
+  if (lastSpace > 20) {
+    return truncated.substring(0, lastSpace) + '...';
+  }
+  return truncated + (cleanSummary.length > 50 ? '...' : '');
+}
+
+/**
  * Upsert Document table entry from compaction
  * Uses sessionId as the Document.id for consistent lookups
  */
@@ -175,9 +243,8 @@ async function upsertDocumentFromCompaction(
     // Extract label IDs from first episode (if available)
     const labelIds = episodes[0]?.labelIds || [];
 
-    // Get title from first episode metadata or generate default
-    const title =
-      episodes[0]?.metadata?.title || `Session ${sessionId.substring(0, 8)}`;
+    // Get title using smart title generation
+    const title = await getTitleForCompactedSession(sessionId, summary, episodes);
 
     const document = await prisma.document.upsert({
       where: { id: sessionId },
@@ -196,6 +263,7 @@ async function upsertDocumentFromCompaction(
         workspaceId,
       },
       update: {
+        title,
         content: summary,
         updatedAt: new Date(),
         metadata: {
@@ -209,6 +277,7 @@ async function upsertDocumentFromCompaction(
       sessionId,
       workspaceId,
       summaryLength: summary.length,
+      title,
     });
     return document;
   } catch (error) {
