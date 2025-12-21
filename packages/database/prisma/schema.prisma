@@ -238,6 +238,7 @@ model IngestionQueue {
   episodeEmbeddings EpisodeEmbedding[]
 
   @@index([workspaceId, sessionId])
+  @@index([workspaceId, sessionId, createdAt(sort: Desc)])
 }
 
 model IngestionRule {

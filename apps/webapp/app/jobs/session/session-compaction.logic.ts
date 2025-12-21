@@ -7,8 +7,8 @@ import {
 } from "~/services/graphModels/compactedSession";
 import { type EpisodicNode } from "@core/types";
 import { prisma } from "~/trigger/utils/prisma";
-import { Document } from "@prisma/client";
-import { CoreMessage } from "ai";
+import { type Document } from "@prisma/client";
+import { type CoreMessage } from "ai";
 
 export interface SessionCompactionPayload {
   userId: string;
@@ -52,7 +52,13 @@ export const CONFIG = {
 export async function processSessionCompaction(
   payload: SessionCompactionPayload,
 ): Promise<SessionCompactionResult> {
-  const { userId, sessionId, source, workspaceId, triggerSource = "auto" } = payload;
+  const {
+    userId,
+    sessionId,
+    source,
+    workspaceId,
+    triggerSource = "auto",
+  } = payload;
 
   logger.info(`Starting session compaction`, {
     userId,
@@ -65,14 +71,16 @@ export async function processSessionCompaction(
   try {
     // Check if compaction already exists
     const existingCompact = await prisma.document.findFirst({
-      where: { id: sessionId }
-    })
+      where: { id: sessionId },
+    });
 
     // Fetch all episodes for this session
     const episodes = await getSessionEpisodes(
       sessionId,
       userId,
-      existingCompact?.updatedAt ? new Date(existingCompact.updatedAt) : undefined,
+      existingCompact?.updatedAt
+        ? new Date(existingCompact.updatedAt)
+        : undefined,
     );
 
     // Check if we have enough episodes
@@ -105,8 +113,20 @@ export async function processSessionCompaction(
 
     // Generate or update compaction
     const compactionResult = existingCompact
-      ? await updateCompaction(existingCompact, episodes, userId, workspaceId, source)
-      : await createCompaction(sessionId, episodes, userId, workspaceId, source);
+      ? await updateCompaction(
+          existingCompact,
+          episodes,
+          userId,
+          workspaceId,
+          source,
+        )
+      : await createCompaction(
+          sessionId,
+          episodes,
+          userId,
+          workspaceId,
+          source,
+        );
 
     if (compactionResult) {
       logger.info(`Session compaction completed`, {
@@ -124,7 +144,7 @@ export async function processSessionCompaction(
     }
     return {
       success: false,
-    }
+    };
   } catch (error) {
     logger.error(`Session compaction failed`, {
       sessionId,
@@ -156,7 +176,8 @@ async function upsertDocumentFromCompaction(
     const labelIds = episodes[0]?.labelIds || [];
 
     // Get title from first episode metadata or generate default
-    const title = episodes[0]?.metadata?.title || `Session ${sessionId.substring(0, 8)}`;
+    const title =
+      episodes[0]?.metadata?.title || `Session ${sessionId.substring(0, 8)}`;
 
     const document = await prisma.document.upsert({
       where: { id: sessionId },
@@ -189,13 +210,13 @@ async function upsertDocumentFromCompaction(
       workspaceId,
       summaryLength: summary.length,
     });
-    return document
+    return document;
   } catch (error) {
     logger.error(`Failed to upsert Document table`, {
       sessionId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return undefined
+    return undefined;
     // Don't throw - allow compaction to succeed even if Document write fails
   }
 }
@@ -267,7 +288,7 @@ async function updateCompaction(
   );
 
   logger.info(`Compaction updated and stored in vector DB and Document table`, {
-    compactUuid: existingCompact.id
+    compactUuid: existingCompact.id,
   });
 
   return document;

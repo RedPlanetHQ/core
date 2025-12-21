@@ -3,17 +3,17 @@ import { X, Loader2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 
 interface EpisodeSidebarProps {
-  queueId: string | null;
+  sessionId: string | null;
   onClose: () => void;
 }
 
-export function EpisodeSidebar({ queueId, onClose }: EpisodeSidebarProps) {
+export function EpisodeSidebar({ sessionId, onClose }: EpisodeSidebarProps) {
   const [logContent, setLogContent] = useState<any>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!queueId) {
+    if (!sessionId) {
       setLogContent(null);
       return;
     }
@@ -22,7 +22,7 @@ export function EpisodeSidebar({ queueId, onClose }: EpisodeSidebarProps) {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetch(`/api/v1/logs/${queueId}`);
+        const response = await fetch(`/api/v1/documents/${sessionId}`);
         if (response.ok) {
           const data = await response.json();
           setLogContent(data.log);
@@ -38,9 +38,9 @@ export function EpisodeSidebar({ queueId, onClose }: EpisodeSidebarProps) {
     };
 
     fetchLog();
-  }, [queueId]);
+  }, [sessionId]);
 
-  if (!queueId) return null;
+  if (!sessionId) return null;
 
   return (
     <div className="flex h-full flex-col">

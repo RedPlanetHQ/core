@@ -1,18 +1,20 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { IngestionStatus } from "@core/database";
-import { getIngestionQueue } from "~/services/ingestionLogs.server";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { addToQueue } from "~/lib/ingest.server";
+import { getDocument } from "~/services/document.server";
+import { getWorkspaceByUser } from "~/models/workspace.server";
+import { prisma } from "~/db.server";
 
 // Schema for log ID parameter
-const LogParamsSchema = z.object({
-  logId: z.string(),
+const DocumentParamsSchema = z.object({
+  documentId: z.string(),
 });
 
 const { action } = createHybridActionApiRoute(
   {
-    params: LogParamsSchema,
+    params: DocumentParamsSchema,
     allowJWT: true,
     method: "POST",
     authorization: {
@@ -22,9 +24,13 @@ const { action } = createHybridActionApiRoute(
   },
   async ({ params, authentication }) => {
     try {
-      const ingestionQueue = await getIngestionQueue(params.logId);
+      const workspace = await getWorkspaceByUser(authentication.userId);
+      const document = await getDocument(
+        params.documentId,
+        workspace?.id as string,
+      );
 
-      if (!ingestionQueue) {
+      if (!document) {
         return json(
           {
             error: "Ingestion log not found",
@@ -34,8 +40,17 @@ const { action } = createHybridActionApiRoute(
         );
       }
 
+      const latestIngestionLog = await prisma.ingestionQueue.findFirst({
+        where: {
+          sessionId: document?.id,
+        },
+        orderBy: {
+          createdAt: "desc",
+        },
+      });
+
       // Only allow retry for FAILED status
-      if (ingestionQueue.status !== IngestionStatus.FAILED) {
+      if (latestIngestionLog?.status !== IngestionStatus.FAILED) {
         return json(
           {
             error: "Only failed ingestion logs can be retried",
@@ -46,14 +61,14 @@ const { action } = createHybridActionApiRoute(
       }
 
       // Get the original ingestion data
-      const originalData = ingestionQueue.data as any;
+      const originalData = latestIngestionLog.data as any;
 
       // Re-enqueue the job with the existing queue ID (will upsert)
       await addToQueue(
         originalData,
         authentication.userId,
-        ingestionQueue.activityId || undefined,
-        ingestionQueue.id, // Pass the existing queue ID for upsert
+        latestIngestionLog.activityId || undefined,
+        latestIngestionLog.id, // Pass the existing queue ID for upsert
       );
 
       return json({

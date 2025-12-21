@@ -1,30 +1,21 @@
 import { useEffect, useState, useCallback } from "react";
 import { useFetcher } from "@remix-run/react";
 
-export interface LogItem {
+export interface DocumentItem {
   id: string;
   source: string;
   title?: string;
-  ingestText: string;
-  labels: string[];
-  time: string;
+  content: string;
+  labelIds: string[];
+  createdAt: string;
   processedAt?: string;
-  status: "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED" | "CANCELLED";
-  error?: string;
-  sourceURL?: string;
   type?: string;
-  integrationSlug?: string;
-  activityId?: string;
-  episodeUUID?: string;
-  data?: any;
-  sessionId?: string;
-  isSessionGroup?: boolean;
-  sessionEpisodeCount?: number;
-  episodes?: string[]; // Array of episode UUIDs
+  status?: string;
+  error?: string;
 }
 
-export interface LogsResponse {
-  logs: LogItem[];
+export interface DocumentsResponse {
+  documents: DocumentItem[];
   page: number;
   limit: number;
   hasMore: boolean;
@@ -32,23 +23,23 @@ export interface LogsResponse {
   availableSources?: Array<{ name: string; slug: string }>;
 }
 
-export interface UseLogsOptions {
-  endpoint: string; // '/api/v1/logs/all' or '/api/v1/logs/activity'
+export interface UseDocumentsOptions {
+  endpoint: string;
   source?: string;
   status?: string;
   type?: string;
   label?: string;
 }
 
-export function useLogs({
+export function useDocuments({
   endpoint,
   source,
   status,
   type,
   label,
-}: UseLogsOptions) {
-  const fetcher = useFetcher<LogsResponse>();
-  const [logs, setLogs] = useState<LogItem[]>([]);
+}: UseDocumentsOptions) {
+  const fetcher = useFetcher<DocumentsResponse>();
+  const [documents, setDocuments] = useState<DocumentItem[]>([]);
   const [cursor, setCursor] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(true);
   const [availableSources, setAvailableSources] = useState<
@@ -78,7 +69,7 @@ export function useLogs({
   }, [hasMore, cursor, buildUrl]);
 
   const reset = useCallback(() => {
-    setLogs([]);
+    setDocuments([]);
     setCursor(null);
     setHasMore(true);
     setIsInitialLoad(true);
@@ -89,22 +80,22 @@ export function useLogs({
   useEffect(() => {
     if (fetcher.data) {
       const {
-        logs: newLogs,
+        documents: newLogs,
         hasMore: newHasMore,
         nextCursor,
         availableSources: apiSources,
       } = fetcher.data;
 
       // Check if we're resetting (no cursor and no existing logs)
-      const isReset = cursor === null && logs.length === 0;
+      const isReset = cursor === null && documents.length === 0;
 
       if (isReset) {
         // First page or reset
-        setLogs(newLogs);
+        setDocuments(newLogs);
         setIsInitialLoad(false);
       } else if (nextCursor !== cursor) {
         // Only append if we got a new cursor (new page)
-        setLogs((prev) => [...prev, ...newLogs]);
+        setDocuments((prev) => [...prev, ...newLogs]);
       }
 
       setHasMore(newHasMore);
@@ -120,7 +111,7 @@ export function useLogs({
 
   // Effect to reset when filters change
   useEffect(() => {
-    setLogs([]);
+    setDocuments([]);
     setCursor(null);
     setHasMore(true);
     setIsInitialLoad(true);
@@ -135,7 +126,7 @@ export function useLogs({
   }, [isInitialLoad, buildUrl]);
 
   return {
-    logs,
+    documents,
     hasMore,
     loadMore,
     reset,

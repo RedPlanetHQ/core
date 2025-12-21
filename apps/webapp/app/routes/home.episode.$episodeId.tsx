@@ -6,38 +6,39 @@ import { LogDetails } from "~/components/logs/log-details";
 import { LogOptions } from "~/components/logs/log-options";
 import { ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { TooltipProvider } from "~/components/ui/tooltip";
-import { getIngestionQueueForFrontend } from "~/services/ingestionLogs.server";
+import { getDocument } from "~/services/document.server";
+
 import { LabelService } from "~/services/label.server";
 import { getUser } from "~/services/session.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await getUser(request);
-  const logId = params.episodeId;
+  const documentId = params.episodeId;
   const labelService = new LabelService();
   try {
-    const log = await getIngestionQueueForFrontend(
-      logId as string,
+    const document = await getDocument(
+      documentId as string,
       user?.Workspace?.id as string,
     );
     const labels = await labelService.getWorkspaceLabels(
       user?.Workspace?.id as string,
     );
-    return json({ log: log, labels });
+    return json({ document, labels });
   } catch (e) {
-    return json({ log: null, labels: [] });
+    return json({ document: null, labels: [] });
   }
 }
 
 export default function InboxNotSelected() {
-  const { log, labels } = useLoaderData<typeof loader>();
+  const { document, labels } = useLoaderData<typeof loader>();
 
-  if (!log) {
+  if (!document) {
     return (
       <div className="flex h-full w-full flex-col">
-        <PageHeader title="Episode" />
+        <PageHeader title="Document" />
         <div className="flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4 md:h-[calc(100vh_-_56px)]">
           <Inbox size={30} />
-          No episode data found
+          No document data found
         </div>
       </div>
     );
@@ -50,9 +51,8 @@ export default function InboxNotSelected() {
           title="Episode"
           actionsNode={
             <LogOptions
-              id={log.id}
-              status={log.status}
-              sessionId={log.sessionId}
+              id={document.id as string}
+              status={document.latestIngestionLog?.status}
             />
           }
         />
@@ -65,7 +65,7 @@ export default function InboxNotSelected() {
             collapsible
             collapsedSize={50}
           >
-            <LogDetails log={log as any} labels={labels} />
+            <LogDetails document={document as any} labels={labels} />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>

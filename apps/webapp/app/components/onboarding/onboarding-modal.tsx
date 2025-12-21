@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { type Provider, OnboardingStep } from "./types";
 import { ProviderSelectionStep } from "./provider-selection-step";
@@ -65,7 +65,7 @@ export function OnboardingModal({
         }
 
         // Check for new ingestion logs from the last 5 minutes
-        const response = await fetch("/api/v1/logs?limit=1");
+        const response = await fetch("/api/v1/documents?limit=1");
         const data = await response.json();
 
         // Check if there's a recent ingestion (created after we started polling)

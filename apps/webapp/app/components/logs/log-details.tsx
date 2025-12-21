@@ -2,19 +2,17 @@ import { type ReactNode, useState, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
 import { AlertCircle, LoaderCircle } from "lucide-react";
 import { Badge, BadgeColor } from "../ui/badge";
-import { type LogItem } from "~/hooks/use-logs";
+import { type DocumentItem } from "~/hooks/use-documents";
 import { getIconForAuthorise } from "../icon-utils";
 import { cn, formatString } from "~/lib/utils";
 import { getStatusColor } from "./utils";
-import { ConversationView } from "./views/conversation-view";
-import { SessionConversationView } from "./views/session-conversation-view";
 import { DocumentEditorView } from "./views/document-editor-view.client";
 import { ClientOnly } from "remix-utils/client-only";
 import { Input } from "../ui";
 import { type Label, LabelDropdown } from "./label-dropdown";
 
 interface LogDetailsProps {
-  log: LogItem;
+  document: DocumentItem;
   labels: Label[];
 }
 
@@ -74,15 +72,15 @@ function getStatusValue(status: string) {
   return formatString(status);
 }
 
-export function LogDetails({ log, labels }: LogDetailsProps) {
-  const [title, setTitle] = useState(log.title ?? "Untitled");
+export function LogDetails({ document, labels }: LogDetailsProps) {
+  const [title, setTitle] = useState(document.title ?? "Untitled");
   const fetcher = useFetcher();
   const debounceTimerRef = useRef<NodeJS.Timeout>();
 
-  // Update local state when log.title changes
+  // Update local state when document.title changes
   useEffect(() => {
-    setTitle(log.title ?? "Untitled");
-  }, [log.title]);
+    setTitle(document.title ?? "Untitled");
+  }, [document.title]);
 
   // Debounced API call to update title
   useEffect(() => {
@@ -92,7 +90,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
     }
 
     // Don't make API call if title hasn't changed or is just initial load
-    if (title === (log.title ?? "Untitled")) {
+    if (title === (document.title ?? "Untitled")) {
       return;
     }
 
@@ -102,7 +100,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
         { title },
         {
           method: "PATCH",
-          action: `/api/v1/logs/${log.id}`,
+          action: `/api/v1/documents/${document.id}`,
           encType: "application/json",
         },
       );
@@ -114,7 +112,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
         clearTimeout(debounceTimerRef.current);
       }
     };
-  }, [title, log.id, log.title]);
+  }, [title, document.id, document.title]);
 
   return (
     <div className="episode-details flex h-full w-full flex-col items-center overflow-auto">
@@ -126,39 +124,47 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
             className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
           />
         </div>
-        <div className="mt-5 mb-3 px-4">
-          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-2">
+        <div className="mt-3 mb-3 px-4">
+          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-1.5">
             <PropertyItem
               label="Source"
-              value={formatString(log.source?.toLowerCase())}
+              value={formatString(document.source?.toLowerCase())}
               icon={
-                log.source &&
-                getIconForAuthorise(log.source.toLowerCase(), 16, undefined)
+                document.source &&
+                getIconForAuthorise(
+                  document.source.toLowerCase(),
+                  16,
+                  undefined,
+                )
               }
               variant="ghost"
             />
 
-            {log.status !== "COMPLETED" && (
+            {document.status && document.status !== "COMPLETED" && (
               <PropertyItem
                 label="Status"
-                value={getStatusValue(log.status)}
+                value={getStatusValue(document.status)}
                 variant="status"
-                statusColor={log.status && getStatusColor(log.status)}
+                statusColor={document.status && getStatusColor(document.status)}
               />
             )}
 
-            <LabelDropdown value={log.labels} labels={labels} logId={log.id} />
+            <LabelDropdown
+              value={document.labelIds}
+              labels={labels}
+              documentId={document.id}
+            />
           </div>
         </div>
 
         {/* Error Details */}
-        {log.status !== "COMPLETED" && log.error && (
+        {document.status !== "COMPLETED" && document.error && (
           <div className="mb-6 px-4">
             <div className="bg-destructive/10 rounded-md p-3">
               <div className="flex items-start gap-2 text-red-600">
                 <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
                 <p className="text-sm break-words whitespace-pre-wrap">
-                  {log.error}
+                  {document.error}
                 </p>
               </div>
             </div>
@@ -172,21 +178,7 @@ export function LogDetails({ log, labels }: LogDetailsProps) {
             </div>
           }
         >
-          {() => (
-            <>
-              {/* Conditional Views Based on Log Type and Session */}
-              {log.data?.type === "CONVERSATION" && log.isSessionGroup ? (
-                // View 2: Session-based conversation (show all episodes in session)
-                <SessionConversationView log={log} />
-              ) : log.data?.type === "CONVERSATION" ? (
-                // View 1: Simple conversation (just show content)
-                <ConversationView log={log} />
-              ) : log.data?.type === "DOCUMENT" ? (
-                // View 3: Document with tiptap editor
-                <DocumentEditorView log={log} />
-              ) : null}
-            </>
-          )}
+          {() => <DocumentEditorView document={document} />}
         </ClientOnly>
       </div>
     </div>
