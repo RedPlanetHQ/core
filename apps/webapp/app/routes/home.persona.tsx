@@ -5,10 +5,7 @@ import { PageHeader } from "~/components/common/page-header";
 import { LogDetails } from "~/components/logs/log-details";
 import { ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { TooltipProvider } from "~/components/ui/tooltip";
-import {
-  getIngestionQueueForFrontend,
-  getPersonaForUser,
-} from "~/services/ingestionLogs.server";
+import { getDocument, getPersonaForUser } from "~/services/document.server";
 import { LabelService } from "~/services/label.server";
 import { getUser } from "~/services/session.server";
 
@@ -17,30 +14,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const labelService = new LabelService();
   try {
-    const logId = await getPersonaForUser(user?.Workspace?.id as string);
+    const documentId = await getPersonaForUser(user?.Workspace?.id as string);
+
     const labels = await labelService.getWorkspaceLabels(
       user?.Workspace?.id as string,
     );
 
-    if (!logId) {
-      return json({ log: undefined, labels });
+    if (!documentId) {
+      return json({ document: null, labels });
     }
 
-    const log = await getIngestionQueueForFrontend(
-      logId as string,
+    const document = await getDocument(
+      documentId as string,
       user?.Workspace?.id as string,
     );
 
-    return json({ log: log, labels });
+    return json({ document, labels });
   } catch (e) {
-    return json({ log: null, labels: [] });
+    return json({ document: null, labels: [] });
   }
 }
 
 export default function Persona() {
-  const { log, labels } = useLoaderData<typeof loader>();
+  const { document, labels } = useLoaderData<typeof loader>();
 
-  if (!log) {
+  if (!document) {
     return (
       <div className="flex h-full w-full flex-col">
         <PageHeader title="Episode" />
@@ -65,7 +63,7 @@ export default function Persona() {
             collapsible
             collapsedSize={50}
           >
-            <LogDetails log={log as any} labels={labels} />
+            <LogDetails document={document as any} labels={labels} />
           </ResizablePanel>
         </ResizablePanelGroup>
       </div>

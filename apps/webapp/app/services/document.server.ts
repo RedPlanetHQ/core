@@ -58,3 +58,17 @@ export const deleteDocument = async (id: string) => {
     },
   });
 };
+
+export const getPersonaForUser = async (workspaceId: string) => {
+  const document = await prisma.document.findFirst({
+    where: {
+      title: "Persona",
+      workspaceId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return document?.id;
+};

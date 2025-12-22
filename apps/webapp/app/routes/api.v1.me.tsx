@@ -2,10 +2,7 @@ import { json } from "@remix-run/node";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 import { getUserById } from "~/models/user.server";
-import {
-  getIngestionQueueForFrontend,
-  getPersonaForUser,
-} from "~/services/ingestionLogs.server";
+import { getDocument, getPersonaForUser } from "~/services/document.server";
 
 // This route handles the OAuth redirect URL generation, similar to the NestJS controller
 const loader = createHybridLoaderApiRoute(
@@ -19,9 +16,9 @@ const loader = createHybridLoaderApiRoute(
     let personaLog;
 
     try {
-      const logId = await getPersonaForUser(user?.Workspace?.id as string);
-      personaLog = await getIngestionQueueForFrontend(
-        logId as string,
+      const documentId = await getPersonaForUser(user?.Workspace?.id as string);
+      personaLog = await getDocument(
+        documentId as string,
         user?.Workspace?.id as string,
       );
     } catch (e) {}
@@ -29,7 +26,7 @@ const loader = createHybridLoaderApiRoute(
     return json({
       id: authentication.userId,
       name: user?.name,
-      persona: personaLog ? (personaLog?.data as any)?.episodeBody : undefined,
+      persona: personaLog?.content,
     });
   },
 );
