@@ -25,7 +25,10 @@ export async function initializeProvider() {
     ProviderFactory.initializeFromEnv({ prisma });
   } catch (error) {
     // If already initialized, ignore the error
-    if (error instanceof Error && !error.message.includes("already initialized")) {
+    if (
+      error instanceof Error &&
+      !error.message.includes("already initialized")
+    ) {
       throw error;
     }
   }

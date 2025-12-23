@@ -3,7 +3,7 @@ import { processEpisodePreprocessing } from "~/jobs/ingest/preprocess-episode.lo
 import { ingestTask } from "./ingest";
 import { type IngestEpisodePayload } from "~/jobs/ingest/ingest-episode.logic";
 import { initializeProvider } from "../utils/provider";
-import { enqueueSessionCompaction } from "~/lib/queue-adapter.server";
+import { sessionCompactionTask } from "../session/session-compaction";
 
 const preprocessingQueue = queue({
   name: "preprocessing-queue",
@@ -30,7 +30,11 @@ export const preprocessTask = task({
       },
       // Callback to enqueue session compaction for conversations
       async (compactionPayload) => {
-        await enqueueSessionCompaction(compactionPayload);
+        await sessionCompactionTask.trigger(compactionPayload, {
+          queue: "session-compaction-queue",
+          concurrencyKey: compactionPayload.userId,
+          tags: [compactionPayload.userId, compactionPayload.sessionId],
+        });
       },
     );
   },
