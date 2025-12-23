@@ -31,10 +31,7 @@ export interface IGraphProvider {
    * Execute a raw query (Cypher for Neo4j, equivalent for others)
    * Used for complex operations not covered by semantic methods
    */
-  runQuery<T = any>(
-    query: string,
-    params?: Record<string, any>
-  ): Promise<T[]>;
+  runQuery<T = any>(query: string, params?: Record<string, any>): Promise<T[]>;
 
   /**
    * Close the database connection
@@ -76,7 +73,6 @@ export interface IGraphProvider {
    */
   getEntity(uuid: string, userId: string): Promise<EntityNode | null>;
 
-
   /**
    * Get multiple entities by UUIDs in a single query
    *
@@ -108,21 +104,14 @@ export interface IGraphProvider {
   /**
    * Find exact entity match by name (case-insensitive)
    */
-  findExactEntityMatch(params: {
-    entityName: string;
-    userId: string;
-  }): Promise<EntityNode | null>;
+  findExactEntityMatch(params: { entityName: string; userId: string }): Promise<EntityNode | null>;
 
   /**
    * Merge source entity into target entity
    * Updates all statement relationships and deletes source
    * Idempotent - safe to retry
    */
-  mergeEntities(
-    sourceUuid: string,
-    targetUuid: string,
-    userId: string
-  ): Promise<void>;
+  mergeEntities(sourceUuid: string, targetUuid: string, userId: string): Promise<void>;
 
   /**
    * Deduplicate entities with same name for a user
@@ -162,7 +151,12 @@ export interface IGraphProvider {
   /**
    * Get episodes by user
    */
-  getEpisodesByUser(userId: string, orderBy?: string, limit?: number, descending?: boolean): Promise<EpisodicNode[]>;
+  getEpisodesByUser(
+    userId: string,
+    orderBy?: string,
+    limit?: number,
+    descending?: boolean
+  ): Promise<EpisodicNode[]>;
 
   /**
    * Get episode count by user
@@ -184,10 +178,7 @@ export interface IGraphProvider {
   /**
    * Get all episodes in a session ordered by chunkIndex
    */
-  getEpisodesBySession(
-    sessionId: string,
-    userId: string
-  ): Promise<EpisodicNode[]>;
+  getEpisodesBySession(sessionId: string, userId: string): Promise<EpisodicNode[]>;
 
   /**
    * Delete episode and related orphaned entities
@@ -252,10 +243,7 @@ export interface IGraphProvider {
   /**
    * Get session metadata from first episode (chunkIndex=0)
    */
-  getSessionMetadata(
-    sessionId: string,
-    userId: string
-  ): Promise<EpisodicNode | null>;
+  getSessionMetadata(sessionId: string, userId: string): Promise<EpisodicNode | null>;
 
   /**
    * Delete all episodes in a session with cascading cleanup
@@ -292,11 +280,7 @@ export interface IGraphProvider {
   /**
    * Link an episode to an existing statement (for duplicate handling)
    */
-  linkEpisodeToStatement(
-    episodeUuid: string,
-    statementUuid: string,
-    userId: string
-  ): Promise<void>;
+  linkEpisodeToStatement(episodeUuid: string, statementUuid: string, userId: string): Promise<void>;
 
   /**
    * Move all provenance relationships from source statement to target statement
@@ -312,10 +296,7 @@ export interface IGraphProvider {
   /**
    * Get statements invalidated by an episode
    */
-  getStatementsInvalidatedByEpisode(
-    episodeUuid: string,
-    userId: string
-  ): Promise<StatementNode[]>;
+  getStatementsInvalidatedByEpisode(episodeUuid: string, userId: string): Promise<StatementNode[]>;
 
   /**
    * Invalidate statements from previous version
@@ -338,12 +319,13 @@ export interface IGraphProvider {
   /**
    * Update recall count for episodes
    */
-  updateEpisodeRecallCount(
-    userId: string,
-    episodeUuids: string[],
-  ): Promise<void>;
+  updateEpisodeRecallCount(userId: string, episodeUuids: string[]): Promise<void>;
 
-  episodeEntityMatchCount(episodeIds: string[], entityIds: string[], userId: string): Promise<Map<string, number>>;
+  episodeEntityMatchCount(
+    episodeIds: string[],
+    entityIds: string[],
+    userId: string
+  ): Promise<Map<string, number>>;
 
   // ===== STATEMENTS =====
 
@@ -412,7 +394,6 @@ export interface IGraphProvider {
     userId: string;
   }): Promise<StatementNode[]>;
 
-
   /**
    * Find contradictory statements (same subject and predicate, different objects)
    */
@@ -427,7 +408,7 @@ export interface IGraphProvider {
    * Example: "John is_married_to Sarah" vs "John is_divorced_from Sarah"
    */
   findStatementsWithSameSubjectObjectBatch(params: {
-    pairs: Array<{ subjectId: string; objectId: string; excludePredicateId?: string; }>;
+    pairs: Array<{ subjectId: string; objectId: string; excludePredicateId?: string }>;
     userId: string;
     excludeStatementIds?: string[];
   }): Promise<Map<string, StatementNode[]>>;
@@ -435,14 +416,11 @@ export interface IGraphProvider {
   /**
    * Update recall count for statements
    */
-  updateStatementRecallCount(
-    userId: string,
-    statementUuids: string[],
-  ): Promise<void>;
+  updateStatementRecallCount(userId: string, statementUuids: string[]): Promise<void>;
 
   /**
    * Get EpisodeIds for statements
-   * @param statementUuids 
+   * @param statementUuids
    */
   getEpisodeIdsForStatements(statementUuids: string[]): Promise<Map<string, string>>;
 
@@ -486,10 +464,7 @@ export interface IGraphProvider {
   /**
    * Get compacted session by UUID
    */
-  getCompactedSession(
-    uuid: string,
-    userId: string
-  ): Promise<CompactedSessionNode | null>;
+  getCompactedSession(uuid: string, userId: string): Promise<CompactedSessionNode | null>;
 
   /**
    * Get compacted session by session ID
@@ -516,19 +491,12 @@ export interface IGraphProvider {
   /**
    * Link episodes to compacted session
    */
-  linkEpisodesToCompact(
-    compactUuid: string,
-    episodeUuids: string[],
-    userId: string
-  ): Promise<void>;
+  linkEpisodesToCompact(compactUuid: string, episodeUuids: string[], userId: string): Promise<void>;
 
   /**
    * Get episodes for a compacted session
    */
-  getEpisodesForCompact(
-    compactUuid: string,
-    userId: string
-  ): Promise<EpisodicNode[]>;
+  getEpisodesForCompact(compactUuid: string, userId: string): Promise<EpisodicNode[]>;
 
   /**
    * Get episodes for a session
@@ -550,10 +518,12 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
-  }): Promise<Array<{
-    episode: EpisodicNode;
-    statements: StatementNode[];
-  }>>;
+  }): Promise<
+    Array<{
+      episode: EpisodicNode;
+      statements: StatementNode[];
+    }>
+  >;
 
   /**
    * Get episodes by IDs with their statements (generic, reusable)
@@ -566,10 +536,12 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
-  }): Promise<Array<{
-    episode: EpisodicNode;
-    statements: StatementNode[];
-  }>>;
+  }): Promise<
+    Array<{
+      episode: EpisodicNode;
+      statements: StatementNode[];
+    }>
+  >;
 
   /**
    * Perform BM25 fulltext search on statements grouped by episodes
@@ -582,12 +554,14 @@ export interface IGraphProvider {
     includeInvalidated: boolean;
     labelIds: string[];
     statementLimit: number;
-  }): Promise<Array<{
-    episode: EpisodicNode;
-    score: number;
-    statementCount: number;
-    topStatements: StatementNode[];
-  }>>;
+  }): Promise<
+    Array<{
+      episode: EpisodicNode;
+      score: number;
+      statementCount: number;
+      topStatements: StatementNode[];
+    }>
+  >;
 
   /**
    * BFS traversal - get statements connected to entities
@@ -605,13 +579,12 @@ export interface IGraphProvider {
   /**
    * BFS traversal - fetch full statements with episode IDs
    */
-  bfsFetchStatements(params: {
-    statementUuids: string[];
-    userId: string;
-  }): Promise<Array<{
-    statement: StatementNode;
-    episodeIds: string[];
-  }>>;
+  bfsFetchStatements(params: { statementUuids: string[]; userId: string }): Promise<
+    Array<{
+      statement: StatementNode;
+      episodeIds: string[];
+    }>
+  >;
 
   /**
    * BFS traversal - get connected entities for next level
@@ -631,14 +604,16 @@ export interface IGraphProvider {
     startTime?: Date;
     includeInvalidated: boolean;
     labelIds: string[];
-  }): Promise<Array<{
-    episode: EpisodicNode;
-    statements: StatementNode[];
-    entityMatchedStmtIds: string[];
-    entityMatchCount: number;
-    totalStmtCount: number;
-    connectivityScore: number;
-  }>>;
+  }): Promise<
+    Array<{
+      episode: EpisodicNode;
+      statements: StatementNode[];
+      entityMatchedStmtIds: string[];
+      entityMatchCount: number;
+      totalStmtCount: number;
+      connectivityScore: number;
+    }>
+  >;
 
   /**
    * Fetch episodes by IDs (used by BFS search)

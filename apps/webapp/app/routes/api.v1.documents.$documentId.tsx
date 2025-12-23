@@ -2,9 +2,6 @@ import { json } from "@remix-run/node";
 import { z } from "zod";
 import {
   getIngestionQueue,
-  getIngestionQueueForFrontend,
-  updateIngestionQueue,
-  deleteLog,
   deleteSession,
 } from "~/services/ingestionLogs.server";
 import {
@@ -12,10 +9,15 @@ import {
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
+import {
+  deleteDocument,
+  getDocument,
+  updateDocument,
+} from "~/services/document.server";
 
 // Schema for space ID parameter
-const LogParamsSchema = z.object({
-  logId: z.string(),
+const DocumentParamsSchema = z.object({
+  documentId: z.string(),
 });
 
 export const LogUpdateBody = z.object({
@@ -25,7 +27,7 @@ export const LogUpdateBody = z.object({
 
 const loader = createHybridLoaderApiRoute(
   {
-    params: LogParamsSchema,
+    params: DocumentParamsSchema,
     findResource: async () => 1,
     corsStrategy: "all",
     allowJWT: true,
@@ -33,18 +35,18 @@ const loader = createHybridLoaderApiRoute(
   async ({ params, authentication }) => {
     const workspace = await getWorkspaceByUser(authentication.userId);
 
-    const formattedLog = await getIngestionQueueForFrontend(
-      params.logId,
+    const document = await getDocument(
+      params.documentId,
       workspace?.id as string,
     );
 
-    return json({ log: formattedLog });
+    return json({ document });
   },
 );
 
 const { action } = createHybridActionApiRoute(
   {
-    params: LogParamsSchema,
+    params: DocumentParamsSchema,
     allowJWT: true,
     authorization: {
       action: "update",
@@ -55,7 +57,7 @@ const { action } = createHybridActionApiRoute(
     // Handle PATCH requests for updating labels
     if (request.method === "PATCH") {
       try {
-        const ingestionQueue = await getIngestionQueue(params.logId);
+        const ingestionQueue = await getIngestionQueue(params.documentId);
 
         if (!ingestionQueue) {
           return json(
@@ -95,19 +97,15 @@ const { action } = createHybridActionApiRoute(
         }
 
         // Update the ingestion queue with new labels
-        const updatedQueue = await updateIngestionQueue(
-          params.logId,
-          {
-            labels,
-            title,
-          },
-          authentication.userId,
-        );
+        const updatedQueue = await updateDocument(params.documentId, {
+          labelIds: labels,
+          title,
+        });
 
         return json({
           success: true,
           message: "Labels updated successfully",
-          labels: updatedQueue.labels,
+          labels: updatedQueue.labelIds,
         });
       } catch (error) {
         console.error("Error updating labels:", error);
@@ -121,66 +119,58 @@ const { action } = createHybridActionApiRoute(
       }
     }
 
-    // Handle DELETE requests
-    try {
-      const url = new URL(request.url);
-      const deleteSessionParam = url.searchParams.get("deleteSession");
+    if (request.method === "DELETE") {
+      // Handle DELETE requests
+      try {
+        const workspace = await getWorkspaceByUser(authentication.userId);
 
-      const ingestionQueue = await getIngestionQueue(params.logId);
-
-      if (!ingestionQueue) {
-        return json(
-          {
-            error: "Log not found or unauthorized",
-            code: "not_found",
-          },
-          { status: 404 },
+        const document = await getDocument(
+          params.documentId,
+          workspace?.id as string,
         );
-      }
 
-      const logData = ingestionQueue.data as any;
-      const sessionId = logData?.sessionId;
+        if (!document) {
+          return json(
+            {
+              error: "Document not found or unauthorized",
+              code: "not_found",
+            },
+            { status: 404 },
+          );
+        }
 
-      // If deleteSession param is true and log has a sessionId, delete entire session
-      if (deleteSessionParam === "true" && sessionId) {
-        const result = await deleteSession(sessionId, authentication.userId);
+        // If deleteSession param is true and log has a sessionId, delete entire session
+        const result = await deleteSession(
+          document.id as string,
+          authentication.userId,
+        );
 
+        await deleteDocument(document.id as string);
         return json({
           success: true,
           message: "Session deleted successfully",
           logsDeleted: result.logsDeleted,
           deleted: result.deleted,
         });
-      }
-
-      // Otherwise, delete only this single log
-      const result = await deleteLog(params.logId, authentication.userId);
-
-      if (!result.success) {
+      } catch (error) {
+        console.error("Error deleting log:", error);
         return json(
           {
-            error: result.error || "Failed to delete log",
-            code: "not_found",
+            error: "Failed to delete log",
+            code: "internal_error",
           },
-          { status: 404 },
+          { status: 500 },
         );
       }
-
-      return json({
-        success: true,
-        message: "Log deleted successfully",
-        deleted: result.deleted,
-      });
-    } catch (error) {
-      console.error("Error deleting log:", error);
-      return json(
-        {
-          error: "Failed to delete log",
-          code: "internal_error",
-        },
-        { status: 500 },
-      );
     }
+
+    return json(
+      {
+        error: "No method available",
+        code: "internal_error",
+      },
+      { status: 404 },
+    );
   },
 );
 

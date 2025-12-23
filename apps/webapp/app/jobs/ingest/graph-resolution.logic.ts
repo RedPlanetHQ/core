@@ -776,6 +776,8 @@ async function resolveStatementsWithDuplicates(
       const jsonMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
       const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
 
+      console.log(`analysisResult`, analysisResult)
+
       // LLM now returns ONLY statements with issues (sparse output for performance)
       // First, assume all statements are kept as-is (no issues)
       const statementIdsWithIssues = new Set(

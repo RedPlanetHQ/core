@@ -3,12 +3,10 @@ import {
   Check,
   LayoutGrid,
   ListFilter,
-  ListTodo,
   File,
   MessageSquare,
   Tag,
   X,
-  FileText,
 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
@@ -33,38 +31,32 @@ interface LogsFiltersProps {
   availableSources: Array<{ name: string; slug: string }>;
   selectedSource?: string;
   selectedStatus?: string;
-  selectedType?: string;
+
   selectedLabel?: string;
   labels: Label[];
   onSourceChange: (source?: string) => void;
   onStatusChange: (status?: string) => void;
-  onTypeChange: (type?: string) => void;
+
   onLabelChange: (label?: string) => void;
 }
 
 const statusOptions = [
+  { value: "ERROR", label: "Error" },
   { value: "PENDING", label: "Pending" },
   { value: "PROCESSING", label: "Processing" },
   { value: "COMPLETED", label: "Completed" },
 ];
 
-const typeOptions = [
-  { value: "CONVERSATION", label: "Conversation" },
-  { value: "DOCUMENT", label: "Document" },
-];
-
-type FilterStep = "main" | "source" | "status" | "type" | "label";
+type FilterStep = "main" | "source" | "status" | "label";
 
 export function LogsFilters({
   availableSources = [],
   selectedSource,
   selectedStatus,
-  selectedType,
   selectedLabel,
   labels = [],
   onSourceChange,
   onStatusChange,
-  onTypeChange,
   onLabelChange,
 }: LogsFiltersProps) {
   const [popoverOpen, setPopoverOpen] = useState(false);
@@ -76,13 +68,10 @@ export function LogsFilters({
   const selectedStatusLabel = statusOptions.find(
     (s) => s.value === selectedStatus,
   )?.label;
-  const selectedTypeLabel = typeOptions.find(
-    (s) => s.value === selectedType,
-  )?.label;
+
   const selectedLabelObj = labels.find((l) => l.id === selectedLabel);
 
-  const hasFilters =
-    selectedSource || selectedStatus || selectedType || selectedLabel;
+  const hasFilters = selectedSource || selectedStatus || selectedLabel;
 
   const getIngestType = (type: string) => {
     return {
@@ -136,14 +125,7 @@ export function LogsFilters({
                   <Check size={14} />
                   Status
                 </Button>
-                <Button
-                  variant="ghost"
-                  className="justify-start gap-2"
-                  onClick={() => setStep("type")}
-                >
-                  <MessageSquare size={14} />
-                  Type
-                </Button>
+
                 <Button
                   variant="ghost"
                   className="justify-start gap-2"
@@ -236,39 +218,6 @@ export function LogsFilters({
               </div>
             )}
 
-            {step === "type" && (
-              <div className="flex flex-col gap-1 p-2">
-                <Button
-                  variant="ghost"
-                  className="w-full justify-start"
-                  onClick={() => {
-                    onTypeChange(undefined);
-                    setPopoverOpen(false);
-                    setStep("main");
-                  }}
-                >
-                  All types
-                </Button>
-                {typeOptions.map((type) => (
-                  <Button
-                    key={type.value}
-                    variant="ghost"
-                    className="w-full justify-start gap-2"
-                    onClick={() => {
-                      onTypeChange(
-                        type.value === selectedType ? undefined : type.value,
-                      );
-                      setPopoverOpen(false);
-                      setStep("main");
-                    }}
-                  >
-                    {getIngestType(type.label).icon}
-                    {type.label}
-                  </Button>
-                ))}
-              </div>
-            )}
-
             {step === "label" && (
               <div className="flex flex-col gap-1 p-2">
                 <Button
@@ -307,17 +256,6 @@ export function LogsFilters({
           </PopoverContent>
         </PopoverPortal>
       </Popover>
-
-      <Button
-        variant="secondary"
-        className="gap-1"
-        isActive={selectedType === "DOCUMENT"}
-        onClick={() => {
-          onTypeChange(selectedType ? undefined : "DOCUMENT");
-        }}
-      >
-        <FileText size={16} /> Document
-      </Button>
 
       {/* Active Filters */}
       {hasFilters && (
@@ -358,17 +296,7 @@ export function LogsFilters({
               />
             </Badge>
           )}
-          {selectedType && selectedType !== "DOCUMENT" && (
-            <Badge variant="secondary" className="h-7 gap-2 rounded px-2">
-              {getIngestType(selectedTypeLabel as string).icon}
-              <div className="mt-[1px]"> {selectedTypeLabel}</div>
 
-              <X
-                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
-                onClick={() => onTypeChange(undefined)}
-              />
-            </Badge>
-          )}
           {selectedLabel && selectedLabelObj && (
             <Badge
               variant="secondary"

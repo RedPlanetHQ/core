@@ -53,7 +53,9 @@ export const GraphClusteringVisualization = forwardRef<
     const [searchQuery, setSearchQuery] = useState<string>("");
 
     // Sidebar state for episode details
-    const [selectedQueueId, setSelectedQueueId] = useState<string | null>(null);
+    const [selectedSessionId, setSelectedSessionId] = useState<string | null>(
+      null,
+    );
 
     // Combined filter logic for all filters
     const filteredTriplets = useMemo(() => {
@@ -172,11 +174,11 @@ export const GraphClusteringVisualization = forwardRef<
 
       // Check if it's an Episode node with queueId
       const isEpisode = foundNode.labels?.includes("Episode");
-      const queueId = foundNode.attributes?.queueId;
+      const sessionId = foundNode.attributes?.sessionId;
 
-      if (isEpisode && queueId) {
+      if (isEpisode && sessionId) {
         // Show sidebar for episodes
-        setSelectedQueueId(queueId);
+        setSelectedSessionId(sessionId);
       }
     };
 
@@ -193,7 +195,7 @@ export const GraphClusteringVisualization = forwardRef<
         direction="horizontal"
         className={cn("h-full", className)}
       >
-        <ResizablePanel defaultSize={selectedQueueId ? 70 : 100}>
+        <ResizablePanel defaultSize={selectedSessionId ? 70 : 100}>
           <div className="flex h-full flex-col gap-4 p-3">
             {/* Filter Controls */}
             {!singleClusterView && (
@@ -239,13 +241,13 @@ export const GraphClusteringVisualization = forwardRef<
           </div>
         </ResizablePanel>
 
-        {selectedQueueId && (
+        {selectedSessionId && (
           <>
             <ResizableHandle />
             <ResizablePanel defaultSize={30} minSize={20} maxSize={50}>
               <EpisodeSidebar
-                queueId={selectedQueueId}
-                onClose={() => setSelectedQueueId(null)}
+                sessionId={selectedSessionId}
+                onClose={() => setSelectedSessionId(null)}
               />
             </ResizablePanel>
           </>

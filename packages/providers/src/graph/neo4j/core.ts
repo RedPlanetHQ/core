@@ -224,6 +224,12 @@ export class Neo4jCore {
         ON (r.userId)
       `);
 
+      await this.runQuery(`
+        CREATE INDEX rel_has_predicate IF NOT EXISTS
+        FOR ()-[r:HAS_PREDICATE]-()
+        ON (r.userId)
+      `);
+
       if (this.logger) {
         this.logger.info("Neo4j schema initialized successfully");
       }

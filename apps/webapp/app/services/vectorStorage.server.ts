@@ -277,6 +277,8 @@ export async function storeEpisodeEmbedding(
   queueId: string,
   labelIds: string[],
   sessionId?: string,
+  version?: number,
+  chunkIndex?: number,
 ): Promise<void> {
   try {
     await vectorProvider().upsert({
@@ -290,6 +292,8 @@ export async function storeEpisodeEmbedding(
         ingestionQueueId: queueId,
         labelIds: labelIds,
         sessionId: sessionId,
+        version: version,
+        chunkIndex
       },
     });
   } catch (error) {
@@ -378,6 +382,10 @@ export async function updateEpisodeLabelsBySessionId(sessionId: string, labelId:
 
 export async function getEpisodeByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {
   return await vectorProvider().getEpisodesByQueueId(queueId);
+}
+
+export async function getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]> {
+  return await vectorProvider().getRecentEpisodes(userId, limit, sessionId, excludeIds, version);
 }
 
 // ==================== COMPACTED SESSION EMBEDDINGS ====================

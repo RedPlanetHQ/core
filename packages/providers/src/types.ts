@@ -44,6 +44,8 @@ export interface VectorSearchFilter {
   userId: string;        // Required: Multi-tenancy filter
   labelIds?: string[];   // Optional: Filter by labels/spaces
   excludeIds?: string[]; // Optional: Exclude specific IDs from results
+  sessionId?: string;    // Optional: Filter by session ID
+  version?: number;      // Optional: Filter by version
 }
 
 export interface SearchParams {

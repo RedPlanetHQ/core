@@ -2,13 +2,15 @@ import { EpisodeType, type EpisodicNode } from "@core/types";
 import { logger } from "./logger.service";
 import { EpisodeChunker } from "./episodeChunker.server";
 import { ProviderFactory } from "@core/providers";
+import { prisma } from "~/db.server";
+import { Document } from "@prisma/client";
 
 /**
  * Version information for an episode session
  */
 export interface VersionedEpisodeInfo {
   isNewSession: boolean;
-  existingFirstEpisode: EpisodicNode | null;
+  document: Document | null;
   newVersion: number;
   previousVersionSessionId: string | null;
   hasContentChanged: boolean;
@@ -41,29 +43,28 @@ export class EpisodeVersioningService {
       return this.createNewSessionInfo(newChunkHashes.length);
     }
 
-    const graphProvider = ProviderFactory.getGraphProvider();
-    // Find existing version's first episode (chunkIndex=0 stores version metadata)
-    const existingFirstEpisode = await graphProvider.getLatestVersionFirstEpisode(
-      sessionId,
-      userId,
-    );
+    const document = await prisma.document.findUnique({
+      where: {
+        id: sessionId,
+      },
+    });
 
     // If no existing version, this is a new session
-    if (!existingFirstEpisode) {
+    if (!document) {
       return this.createNewSessionInfo(newChunkHashes.length);
     }
 
     // Compare content hashes
     const newContentHash = this.generateContentHash(newContent);
-    const existingContentHash = existingFirstEpisode.contentHash;
+    const existingContentHash = document.contentHash;
 
     // If content hash unchanged, no processing needed
     if (newContentHash === existingContentHash) {
       return {
         isNewSession: false,
-        existingFirstEpisode,
-        newVersion: existingFirstEpisode.version || 1,
-        previousVersionSessionId: existingFirstEpisode.sessionId,
+        document,
+        newVersion: document.version || 1,
+        previousVersionSessionId: document.id,
         hasContentChanged: false,
         chunkLevelChanges: {
           changedChunkIndices: [],
@@ -74,16 +75,16 @@ export class EpisodeVersioningService {
     }
 
     // Content changed - compare chunk hashes for differential detection
-    const existingChunkHashes = existingFirstEpisode.chunkHashes || [];
+    const existingChunkHashes = document.chunkHashes || [];
     const chunkComparison = EpisodeChunker.compareChunkHashes(
       existingChunkHashes,
       newChunkHashes,
     );
 
-    const newVersion = (existingFirstEpisode.version || 1) + 1;
+    const newVersion = (document.version || 1) + 1;
 
     logger.info(
-      `Version change detected for session ${sessionId}: v${existingFirstEpisode.version} → v${newVersion}`,
+      `Version change detected for session ${sessionId}: v${document.version} → v${newVersion}`,
       {
         changedChunks: chunkComparison.changedIndices.length,
         totalChunks: newChunkHashes.length,
@@ -93,9 +94,9 @@ export class EpisodeVersioningService {
 
     return {
       isNewSession: false,
-      existingFirstEpisode,
+      document,
       newVersion,
-      previousVersionSessionId: existingFirstEpisode.sessionId,
+      previousVersionSessionId: document.id,
       hasContentChanged: true,
       chunkLevelChanges: {
         changedChunkIndices: chunkComparison.changedIndices,
@@ -111,7 +112,7 @@ export class EpisodeVersioningService {
   private createNewSessionInfo(totalChunks: number): VersionedEpisodeInfo {
     return {
       isNewSession: true,
-      existingFirstEpisode: null,
+      document: null,
       newVersion: 1,
       previousVersionSessionId: null,
       hasContentChanged: true,

@@ -13,6 +13,7 @@ import {
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
+  originalEpisodeBody: z.string().optional(), // Full content (for semantic_diff where episodeBody is diff only)
   referenceTime: z.string(),
   metadata: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
   source: z.string(),
@@ -29,6 +30,7 @@ export const IngestBodyRequest = z.object({
   contentHash: z.string().optional(),
   previousVersionSessionId: z.string().optional(),
   chunkHashes: z.array(z.string()).optional(),
+  episodeUuid: z.string().optional(), // UUID of episode already saved in preprocessing
 });
 
 export interface IngestEpisodePayload {
@@ -69,6 +71,7 @@ export async function processEpisodeIngestion(
     userId: string;
     sessionId: string;
     source: string;
+    workspaceId: string;
   }) => Promise<any>,
   enqueueBertTopicAnalysis?: (params: {
     userId: string;
@@ -236,35 +239,6 @@ export async function processEpisodeIngestion(
           queueId: payload.queueId,
         },
       );
-    }
-
-    // Auto-trigger session compaction if episode has sessionId
-    try {
-      if (
-        episodeBody.sessionId &&
-        currentStatus === IngestionStatus.COMPLETED &&
-        episodeBody.type !== EpisodeType.DOCUMENT &&
-        enqueueSessionCompaction
-      ) {
-        logger.info(`Checking if session compaction should be triggered`, {
-          userId: payload.userId,
-          sessionId: episodeBody.sessionId,
-          source: episodeBody.source,
-        });
-
-        await enqueueSessionCompaction({
-          userId: payload.userId,
-          sessionId: episodeBody.sessionId,
-          source: episodeBody.source,
-        });
-      }
-    } catch (compactionError) {
-      // Don't fail the ingestion if compaction fails
-      logger.warn(`Failed to trigger session compaction after ingestion:`, {
-        error: compactionError,
-        userId: payload.userId,
-        sessionId: episodeBody.sessionId,
-      });
     }
 
     // Auto-trigger BERT topic analysis if threshold met (20+ new episodes)

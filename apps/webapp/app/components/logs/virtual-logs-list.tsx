@@ -7,14 +7,14 @@ import {
   type Index,
   type ListRowProps,
 } from "react-virtualized";
-import { type LogItem } from "~/hooks/use-logs";
+import { type DocumentItem } from "~/hooks/use-documents";
 import { ScrollManagedList } from "../virtualized-list";
 import { LogTextCollapse } from "./log-text-collapse";
 import { LoaderCircle } from "lucide-react";
 import { type Label } from "./label-dropdown";
 
 interface VirtualLogsListProps {
-  logs: LogItem[];
+  documents: DocumentItem[];
   hasMore: boolean;
   loadMore: () => void;
   isLoading: boolean;
@@ -23,16 +23,16 @@ interface VirtualLogsListProps {
   labels: Label[];
 }
 
-function LogItemRenderer(
+function DocumentItemRenderer(
   props: ListRowProps,
-  logs: LogItem[],
+  documents: DocumentItem[],
   cache: CellMeasurerCache,
   labels: Label[],
 ) {
   const { index, key, style, parent } = props;
-  const log = logs[index];
+  const document = documents[index];
 
-  if (!log) {
+  if (!document) {
     return (
       <CellMeasurer
         key={key}
@@ -59,11 +59,10 @@ function LogItemRenderer(
       <div key={key} style={style}>
         <div className="group mx-2 flex cursor-default gap-2">
           <LogTextCollapse
-            text={log.ingestText}
-            error={log.error}
-            logData={log.data}
-            log={log}
-            id={log.id}
+            text={document.content}
+            error={document.error}
+            document={document}
+            id={document.id}
             labels={labels}
           />
         </div>
@@ -73,7 +72,7 @@ function LogItemRenderer(
 }
 
 export function VirtualLogsList({
-  logs,
+  documents,
   hasMore,
   loadMore,
   isLoading,
@@ -91,10 +90,10 @@ export function VirtualLogsList({
 
   useEffect(() => {
     cache.clearAll();
-  }, [logs, cache]);
+  }, [documents, cache]);
 
   const isRowLoaded = ({ index }: { index: number }) => {
-    return !!logs[index];
+    return !!documents[index];
   };
 
   const loadMoreRows = async () => {
@@ -106,14 +105,14 @@ export function VirtualLogsList({
   };
 
   const rowRenderer = (props: ListRowProps) => {
-    return LogItemRenderer(props, logs, cache, labels);
+    return DocumentItemRenderer(props, documents, cache, labels);
   };
 
   const rowHeight = ({ index }: Index) => {
     return cache.getHeight(index, 0);
   };
 
-  const itemCount = hasMore ? logs.length + 1 : logs.length;
+  const itemCount = hasMore ? documents.length + 1 : documents.length;
 
   return (
     <div className="h-full grow overflow-hidden rounded-lg">

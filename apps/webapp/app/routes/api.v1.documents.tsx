@@ -5,7 +5,7 @@ import { prisma } from "~/db.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 // Schema for logs search parameters
-const LogsSearchParams = z.object({
+const DocumentsSearchParams = z.object({
   page: z.string().optional(),
   limit: z.string().optional(),
   source: z.string().optional(),
@@ -19,13 +19,13 @@ const LogsSearchParams = z.object({
 export const loader = createHybridLoaderApiRoute(
   {
     allowJWT: true,
-    searchParams: LogsSearchParams,
+    searchParams: DocumentsSearchParams,
     corsStrategy: "all",
     findResource: async () => 1,
   },
   async ({ authentication, searchParams }) => {
     const page = parseInt(searchParams.page || "1");
-    const limit = parseInt(searchParams.limit || "50");
+    const limit = parseInt(searchParams.limit || "25");
     const source = searchParams.source;
     const status = searchParams.status;
     const type = searchParams.type;
@@ -59,12 +59,12 @@ export const loader = createHybridLoaderApiRoute(
       distinct: ["integrationDefinitionId"],
     });
 
-    // Get unique sources from ingestion logs data field using raw SQL
+    // Get unique sources from document data field using raw SQL
     const uniqueDataSources = await prisma.$queryRaw<Array<{ source: string }>>`
-      SELECT DISTINCT (data->>'source')::text as source
-      FROM "IngestionQueue"
+      SELECT DISTINCT source
+      FROM "Document"
       WHERE "workspaceId" = ${user.Workspace.id}
-      AND (data->>'source')::text IS NOT NULL
+      AND source IS NOT NULL
     `;
 
     // Combine both sources
@@ -132,127 +132,85 @@ export const loader = createHybridLoaderApiRoute(
       };
     }
 
-    // Fetch logs with simple pagination - no deduplication
-    const [logs, totalCount] = await Promise.all([
-      prisma.ingestionQueue.findMany({
+    // Fetch Documents with simple pagination - no deduplication
+    const [documents, totalCount] = await Promise.all([
+      prisma.document.findMany({
         where: whereClause,
-        select: {
-          id: true,
-          createdAt: true,
-          processedAt: true,
-          status: true,
-          error: true,
-          type: true,
-          output: true,
-          title: true,
-          labels: true,
-          data: true,
-          sessionId: true,
-          activity: {
-            select: {
-              text: true,
-              sourceURL: true,
-              integrationAccount: {
-                select: {
-                  integrationDefinition: {
-                    select: {
-                      name: true,
-                      slug: true,
-                    },
-                  },
-                },
-              },
-            },
-          },
-        },
         orderBy: {
           createdAt: "desc",
         },
         take: limit,
-        distinct: "sessionId",
       }),
-      prisma.ingestionQueue.count({
+      prisma.document.count({
         where: whereClause,
       }),
     ]);
 
-    // Get session counts for all sessionIds in the result
-    const sessionIds = logs
-      .map((log) => log.sessionId)
-      .filter((id): id is string => id !== null);
-
-    const sessionCounts =
-      sessionIds.length > 0
-        ? await prisma.ingestionQueue.groupBy({
-            by: ["sessionId"],
-            where: {
-              workspaceId: user.Workspace.id,
-              sessionId: {
-                in: sessionIds,
-              },
-            },
-            _count: {
-              sessionId: true,
-            },
-          })
-        : [];
-
-    // Create a map for quick lookup
-    const sessionCountMap = new Map(
-      sessionCounts.map((sc) => [sc.sessionId, sc._count.sessionId]),
-    );
-
     // Check if there are more results for hasMore flag
-    const hasMore = logs.length === limit && totalCount > limit;
-
-    // Format logs
-    const formattedLogs = logs.map((log: any) => {
-      const integrationDef =
-        log.activity?.integrationAccount?.integrationDefinition;
-      const logData = log.data as any;
-      const episodeUUID = (log.output as any)?.episodeUuid;
-      const type = logData?.type || "CONVERSATION";
-      const sessionIdValue = log.sessionId;
-
-      const title = log.title;
-      const labels = log.labels || [];
-
-      const sessionCount = sessionIdValue
-        ? sessionCountMap.get(sessionIdValue) || 0
-        : 0;
-
-      return {
-        id: log.id,
-        source: integrationDef?.name || logData?.source || "Unknown",
-        title,
-        labels,
-        ingestText:
-          log.activity?.text ||
-          logData?.episodeBody ||
-          logData?.text ||
-          "No content",
-        time: log.createdAt,
-        processedAt: log.processedAt,
-        episodeUUID,
-        status: log.status,
-        error: log.error,
-        sourceURL: log.activity?.sourceURL,
-        integrationSlug: integrationDef?.slug,
-        data: log.data,
-        sessionId: sessionIdValue,
-        type,
-        episodes: log.graphIds,
-        isSessionGroup: !!sessionIdValue,
-        sessionEpisodeCount: sessionIdValue ? sessionCount : undefined,
-      };
-    });
+    const hasMore = documents.length === limit && totalCount > limit;
 
     // Get the cursor for the next page (last item's createdAt)
     const nextCursor =
-      logs.length > 0 ? logs[logs.length - 1].createdAt.toISOString() : null;
+      documents.length > 0
+        ? documents[documents.length - 1].createdAt.toISOString()
+        : null;
+
+    // Get document IDs for ingestion queue lookups
+    const documentIds = documents.map((d) => d.id);
+
+    // Fetch latest ingestion logs and counts in parallel for all documents
+    const [latestLogs, queueCounts] =
+      documentIds.length > 0
+        ? await Promise.all([
+            // Get latest log for each sessionId (document.id)
+            prisma.ingestionQueue.findMany({
+              where: {
+                sessionId: { in: documentIds },
+                workspaceId: user.Workspace.id,
+              },
+              select: {
+                id: true,
+                sessionId: true,
+                status: true,
+                createdAt: true,
+                updatedAt: true,
+                error: true,
+              },
+              orderBy: {
+                createdAt: "desc",
+              },
+              distinct: ["sessionId"],
+            }),
+            // Get count for each sessionId
+            prisma.ingestionQueue.groupBy({
+              by: ["sessionId"],
+              where: {
+                sessionId: { in: documentIds },
+                workspaceId: user.Workspace.id,
+              },
+              _count: {
+                id: true,
+              },
+            }),
+          ])
+        : [[], []];
+
+    // Create lookup maps for O(1) access
+    const latestLogMap = new Map(latestLogs.map((log) => [log.sessionId, log]));
+    const countMap = new Map(
+      queueCounts.map((count) => [count.sessionId, count._count.id]),
+    );
+
+    // Augment documents with ingestion queue data
+    const documentsWithQueueData = documents.map((doc) => ({
+      ...doc,
+      status: latestLogMap.get(doc.id)?.status || null,
+      error: latestLogMap.get(doc.id)?.error || null,
+      ingestionQueueCount: countMap.get(doc.id) || 0,
+    }));
 
     return json({
-      logs: formattedLogs,
+      documents: documentsWithQueueData,
       page,
       limit,
       hasMore,

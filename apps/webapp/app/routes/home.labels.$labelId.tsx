@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData, useNavigate, useParams } from "@remix-run/react";
-import { useLogs } from "~/hooks/use-logs";
+import { useDocuments } from "~/hooks/use-documents";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
 import { Card, CardContent } from "~/components/ui/card";
@@ -30,29 +30,27 @@ export default function LogsAll() {
   const [selectedSource, setSelectedSource] = useState<string | undefined>();
   const [selectedStatus, setSelectedStatus] = useState<string | undefined>();
   const [selectedLabel, setSelectedLabel] = useState<string | undefined>();
-  const [selectedType, setSelectedType] = useState<string | undefined>();
   const [onboarding, setOnboarding] = useState(false);
   const { labelId } = useParams();
   const currentLabel = labels.find((label) => label.id === labelId);
   const navigate = useNavigate();
 
   const {
-    logs,
+    documents,
     hasMore,
     loadMore,
     availableSources,
     isLoading,
     isInitialLoad,
-  } = useLogs({
-    endpoint: "/api/v1/logs",
+  } = useDocuments({
+    endpoint: "/api/v1/documents",
     source: selectedSource,
     status: selectedStatus,
-    type: selectedType,
     label: currentLabel?.id ?? "no_label",
   });
 
   useEffect(() => {
-    if (!isLoading && logs && logs.length === 1) {
+    if (!isLoading && documents && documents.length === 1) {
       // Check if onboarding has been completed before
       const hasCompletedOnboarding =
         typeof window !== "undefined" &&
@@ -62,7 +60,7 @@ export default function LogsAll() {
         setOnboarding(true);
       }
     }
-  }, [logs.length, isLoading]);
+  }, [documents.length, isLoading]);
 
   return (
     <>
@@ -92,18 +90,16 @@ export default function LogsAll() {
                 availableSources={availableSources}
                 selectedSource={selectedSource}
                 selectedStatus={selectedStatus}
-                selectedType={selectedType}
                 selectedLabel={selectedLabel}
                 labels={labels}
                 onSourceChange={setSelectedSource}
                 onStatusChange={setSelectedStatus}
-                onTypeChange={setSelectedType}
                 onLabelChange={setSelectedLabel}
               />
 
               {/* Logs List */}
               <div className="flex h-full w-full space-y-4 pb-2">
-                {logs.length === 0 ? (
+                {documents.length === 0 ? (
                   <Card className="bg-background-2 w-full">
                     <CardContent className="bg-background-2 flex w-full items-center justify-center py-16">
                       <div className="text-center">
@@ -112,10 +108,7 @@ export default function LogsAll() {
                           No logs found
                         </h3>
                         <p className="text-muted-foreground">
-                          {selectedSource ||
-                          selectedStatus ||
-                          selectedType ||
-                          selectedLabel
+                          {selectedSource || selectedStatus || selectedLabel
                             ? "Try adjusting your filters to see more results."
                             : "No ingestion logs are available yet."}
                         </p>
@@ -124,7 +117,7 @@ export default function LogsAll() {
                   </Card>
                 ) : (
                   <VirtualLogsList
-                    logs={logs}
+                    documents={documents}
                     hasMore={hasMore}
                     loadMore={loadMore}
                     isLoading={isLoading}

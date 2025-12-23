@@ -46,7 +46,7 @@ const data = {
       icon: MessageSquare,
     },
     {
-      title: "Episodes",
+      title: "Documents",
       url: "/home/episodes",
       icon: Inbox,
     },

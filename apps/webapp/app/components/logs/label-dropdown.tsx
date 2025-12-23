@@ -27,7 +27,7 @@ export interface Label {
 }
 
 interface LabelDropdownProps {
-  logId?: string;
+  documentId?: string;
   value: string[]; // Array of selected label IDs
   labels: Label[];
   onChange?: (labelIds: string[]) => void;
@@ -35,7 +35,7 @@ interface LabelDropdownProps {
 }
 
 export function LabelDropdown({
-  logId,
+  documentId,
   value: defaultValue,
   labels,
   onChange,
@@ -51,13 +51,13 @@ export function LabelDropdown({
       ? value.filter((id) => id !== labelId)
       : [...value, labelId];
 
-    if (logId) {
+    if (documentId) {
       // Update via API
       fetcher.submit(
         { labels: newValue },
         {
           method: "PATCH",
-          action: `/api/v1/logs/${logId}`,
+          action: `/api/v1/documents/${documentId}`,
           encType: "application/json",
         },
       );
@@ -73,7 +73,7 @@ export function LabelDropdown({
   const labelTitle = () => {
     if (value.length === 0) {
       return (
-        <span className="text-muted-foreground flex items-center gap-1">
+        <span className="text-muted-foreground flex items-center gap-1.5">
           <Tag size={16} />
           {!short && "Add label..."}
         </span>

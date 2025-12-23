@@ -183,6 +183,7 @@ export type EpisodeType = (typeof EpisodeType)[keyof typeof EpisodeType];
 
 export type AddEpisodeParams = {
   episodeBody: string;
+  originalEpisodeBody: string;
   referenceTime: Date;
   metadata?: Record<string, any>;
   source: string;
@@ -201,6 +202,9 @@ export type AddEpisodeParams = {
   contentHash?: string;
   previousVersionSessionId?: string;
   chunkHashes?: string[];
+
+  // Episode UUID (set in preprocessing, episode already saved to graph)
+  episodeUuid?: string;
 };
 
 export type AddEpisodeResult = {

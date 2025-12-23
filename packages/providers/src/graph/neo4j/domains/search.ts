@@ -244,7 +244,7 @@ export function createSearchMethods(core: Neo4jCore) {
         ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
 
         // Group by episode with distinct statements
-        WITH e, COLLECT(DISTINCT s) as statements
+        WITH e, COLLECT(DISTINCT ${STATEMENT_NODE_PROPERTIES}) as statements
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode, statements
       `;
 
