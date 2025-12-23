@@ -33,6 +33,8 @@ export const getDocument = async (id: string, workspaceId: string) => {
     ...document,
     latestIngestionLog,
     ingestionQueueCount,
+    error: latestIngestionLog?.error,
+    status: latestIngestionLog?.status,
   };
 };
 

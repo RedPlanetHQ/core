@@ -9,7 +9,11 @@ import {
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
-import { deleteDocument, getDocument, updateDocument } from "~/services/document.server";
+import {
+  deleteDocument,
+  getDocument,
+  updateDocument,
+} from "~/services/document.server";
 
 // Schema for space ID parameter
 const DocumentParamsSchema = z.object({
@@ -115,48 +119,58 @@ const { action } = createHybridActionApiRoute(
       }
     }
 
-    // Handle DELETE requests
-    try {
-      const workspace = await getWorkspaceByUser(authentication.userId);
+    if (request.method === "DELETE") {
+      // Handle DELETE requests
+      try {
+        const workspace = await getWorkspaceByUser(authentication.userId);
 
-      const document = await getDocument(
-        params.documentId,
-        workspace?.id as string,
-      );
+        const document = await getDocument(
+          params.documentId,
+          workspace?.id as string,
+        );
 
-      if (!document) {
+        if (!document) {
+          return json(
+            {
+              error: "Document not found or unauthorized",
+              code: "not_found",
+            },
+            { status: 404 },
+          );
+        }
+
+        // If deleteSession param is true and log has a sessionId, delete entire session
+        const result = await deleteSession(
+          document.id as string,
+          authentication.userId,
+        );
+
+        await deleteDocument(document.id as string);
+        return json({
+          success: true,
+          message: "Session deleted successfully",
+          logsDeleted: result.logsDeleted,
+          deleted: result.deleted,
+        });
+      } catch (error) {
+        console.error("Error deleting log:", error);
         return json(
           {
-            error: "Document not found or unauthorized",
-            code: "not_found",
+            error: "Failed to delete log",
+            code: "internal_error",
           },
-          { status: 404 },
+          { status: 500 },
         );
       }
-
-      // If deleteSession param is true and log has a sessionId, delete entire session
-      const result = await deleteSession(
-        document.id as string,
-        authentication.userId,
-      );
-
-      await deleteDocument(document.id as string);
-      return json({
-        success: true,
-        message: "Session deleted successfully",
-        logsDeleted: result.logsDeleted,
-        deleted: result.deleted,
-      });
-    } catch (error) {
-      console.error("Error deleting log:", error);
-      return json(
-        {
-          error: "Failed to delete log",
-          code: "internal_error",
-        },
-        { status: 500 },
-      );
     }
+
+    return json(
+      {
+        error: "No method available",
+        code: "internal_error",
+      },
+      { status: 404 },
+    );
   },
 );
 

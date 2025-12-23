@@ -1,12 +1,18 @@
-import { ProviderFactory, VECTOR_NAMESPACES, VectorSearchFilter } from "@core/providers";
+import {
+  ProviderFactory,
+  VECTOR_NAMESPACES,
+  type VectorSearchFilter,
+} from "@core/providers";
 import {
   type StatementNode,
-  type EntityNode,
   type EpisodicNode,
   type Triple,
 } from "@core/types";
-import { parseEntityNode } from "./entity";
-import { batchDeleteEntityEmbeddings, batchDeleteEpisodeEmbeddings, batchDeleteStatementEmbeddings } from "../vectorStorage.server";
+import {
+  batchDeleteEntityEmbeddings,
+  batchDeleteEpisodeEmbeddings,
+  batchDeleteStatementEmbeddings,
+} from "../vectorStorage.server";
 
 // Get the graph provider instance
 const graphProvider = () => ProviderFactory.getGraphProvider();
@@ -70,7 +76,7 @@ export async function searchEpisodesByEmbedding(params: {
   }
 
   // Step 2: Fetch full episode data from Neo4j
-  const episodeUuids = vectorResults.map(r => r.id);
+  const episodeUuids = vectorResults.map((r) => r.id);
   return await graphProvider().getEpisodes(episodeUuids, params.userId, false);
 }
 
@@ -89,7 +95,7 @@ export async function deleteEpisodeWithRelatedNodes(params: {
 }> {
   const result = await graphProvider().deleteEpisodeWithRelatedNodes(
     params.episodeUuid,
-    params.userId
+    params.userId,
   );
 
   // Delete embeddings from vector database
@@ -121,12 +127,12 @@ export async function getEpisodeStatements(params: {
   // Custom logic - get statements from triples
   const triples = await graphProvider().getTriplesForEpisode(
     params.episodeUuid,
-    params.userId
+    params.userId,
   );
 
   return triples
-    .filter(t => t.statement.invalidAt === null)
-    .map(t => {
+    .filter((t) => t.statement.invalidAt === null)
+    .map((t) => {
       const { factEmbedding, ...rest } = t.statement;
       return rest;
     });
@@ -136,7 +142,10 @@ export async function getStatementsInvalidatedByEpisode(params: {
   episodeUuid: string;
   userId: string;
 }) {
-  return graphProvider().getStatementsInvalidatedByEpisode(params.episodeUuid, params.userId);
+  return graphProvider().getStatementsInvalidatedByEpisode(
+    params.episodeUuid,
+    params.userId,
+  );
 }
 
 export async function getEpisodesByUserId(params: {
@@ -158,7 +167,11 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     contentEmbedding: raw.contentEmbedding || [],
     originalContent: raw.originalContent,
     source: raw.source,
-    metadata: raw.metadata ? (typeof raw.metadata === 'string' ? JSON.parse(raw.metadata) : raw.metadata) : {},
+    metadata: raw.metadata
+      ? typeof raw.metadata === "string"
+        ? JSON.parse(raw.metadata)
+        : raw.metadata
+      : {},
     createdAt: new Date(raw.createdAt),
     validAt: new Date(raw.validAt),
     userId: raw.userId,
@@ -191,7 +204,12 @@ export async function updateEpisodeLabels(
   userId: string,
 ): Promise<number> {
   vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId);
-  return await graphProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId, true);
+  return await graphProvider().addLabelsToEpisodesBySessionId(
+    sessionId,
+    labelIds,
+    userId,
+    true,
+  );
 }
 
 export async function getSessionEpisodes(
@@ -223,7 +241,11 @@ export async function linkEpisodeToExistingStatement(
   statementUuid: string,
   userId: string,
 ): Promise<void> {
-  return graphProvider().linkEpisodeToStatement(episodeUuid, statementUuid, userId);
+  return graphProvider().linkEpisodeToStatement(
+    episodeUuid,
+    statementUuid,
+    userId,
+  );
 }
 
 /**
@@ -238,7 +260,7 @@ export async function moveAllProvenanceToStatement(
   return graphProvider().moveProvenanceToStatement(
     sourceStatementUuid,
     targetStatementUuid,
-    userId
+    userId,
   );
 }
 
@@ -285,6 +307,6 @@ export async function invalidateStatementsFromPreviousVersion(params: {
     params.previousVersion,
     params.invalidatedBy,
     invalidatedAt,
-    params.changedChunkIndices
+    params.changedChunkIndices,
   );
 }

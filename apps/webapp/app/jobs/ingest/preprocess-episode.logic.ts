@@ -21,7 +21,7 @@ import { saveEpisode } from "~/services/graphModels/episode";
 import { prisma } from "~/trigger/utils/prisma";
 import { type SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import { getRecentEpisodes } from "~/services/vectorStorage.server";
-import { EpisodeEmbedding } from "@prisma/client";
+import { type EpisodeEmbedding } from "@prisma/client";
 
 export { IngestBodyRequest };
 
@@ -42,11 +42,7 @@ async function getPreviousVersionEpisodes(
   userId: string,
   previousVersion: number,
 ): Promise<EpisodeEmbedding[]> {
-  const allEpisodes = await getRecentEpisodes(
-    userId,
-    200,
-    sessionId
-  );
+  const allEpisodes = await getRecentEpisodes(userId, 200, sessionId);
 
   // Filter to get only episodes from previous version
   return allEpisodes.filter((ep) => ep.version === previousVersion);
@@ -79,18 +75,7 @@ export async function processEpisodePreprocessing(
 
     const episodeBody = payload.body;
     const type = episodeBody.type || EpisodeType.CONVERSATION;
-    const sessionId = episodeBody.sessionId || crypto.randomUUID();
-
-    if (!episodeBody.sessionId) {
-      await prisma.ingestionQueue.update({
-        where: {
-          id: payload.queueId,
-        },
-        data: {
-          sessionId,
-        },
-      });
-    }
+    const sessionId = episodeBody.sessionId as string;
 
     const episodeChunker = new EpisodeChunker();
     const needsChunking = episodeChunker.needsChunking(
@@ -169,7 +154,7 @@ export async function processEpisodePreprocessing(
 
       // Determine the actual episode type (CONVERSATION for compact conversations, DOCUMENT for regular documents)
       let episodeType = type;
-      if (versionInfo.document?.type === 'conversation') {
+      if (versionInfo.document?.type === "conversation") {
         episodeType = EpisodeType.CONVERSATION;
       }
 
@@ -185,7 +170,7 @@ export async function processEpisodePreprocessing(
         const episodeDiffer = new EpisodeDiffer();
 
         // For compact conversation updates, get old content from Document table
-        if (versionInfo.document?.type === 'conversation') {
+        if (versionInfo.document?.type === "conversation") {
           const document = await prisma.document.findUnique({
             where: {
               id: sessionId,
@@ -202,11 +187,18 @@ export async function processEpisodePreprocessing(
               chunked.originalContent,
             );
 
-            const diffStats = episodeDiffer.getChangeStats(document.content, chunked.originalContent);
+            const diffStats = episodeDiffer.getChangeStats(
+              document.content,
+              chunked.originalContent,
+            );
             logger.info(`Compact conversation git-style diff extracted`, {
               originalLength: chunked.originalContent.length,
               diffLength: diffContent.length,
-              tokenSavings: ((1 - diffContent.length / chunked.originalContent.length) * 100).toFixed(1) + '%',
+              tokenSavings:
+                (
+                  (1 - diffContent.length / chunked.originalContent.length) *
+                  100
+                ).toFixed(1) + "%",
               diffStats,
             });
 
@@ -214,7 +206,9 @@ export async function processEpisodePreprocessing(
             contentToProcess = diffContent;
             preprocessingStrategy = "compact_conversation_diff";
           } else {
-            logger.warn(`Previous compact content not found, using full content`);
+            logger.warn(
+              `Previous compact content not found, using full content`,
+            );
             preprocessingStrategy = "full_content";
           }
         } else {
@@ -228,11 +222,11 @@ export async function processEpisodePreprocessing(
           if (previousVersionEpisodes.length > 0) {
             // Reconstruct full previous document
             const sortedPreviousChunks = previousVersionEpisodes.sort(
-              (a, b) => (a.chunkIndex || 0) - (b.chunkIndex || 0)
+              (a, b) => (a.chunkIndex || 0) - (b.chunkIndex || 0),
             );
             const oldContent = sortedPreviousChunks
-              .map(ep => ep.originalContent || ep.content)
-              .join('');
+              .map((ep) => ep.originalContent || ep.content)
+              .join("");
 
             // Extract whole-document diff in git-style format
             const diffContent = episodeDiffer.getGitStyleDiff(
@@ -240,11 +234,18 @@ export async function processEpisodePreprocessing(
               chunked.originalContent,
             );
 
-            const diffStats = episodeDiffer.getChangeStats(oldContent, chunked.originalContent);
+            const diffStats = episodeDiffer.getChangeStats(
+              oldContent,
+              chunked.originalContent,
+            );
             logger.info(`Whole-document git-style diff extracted`, {
               originalLength: chunked.originalContent.length,
               diffLength: diffContent.length,
-              tokenSavings: ((1 - diffContent.length / chunked.originalContent.length) * 100).toFixed(1) + '%',
+              tokenSavings:
+                (
+                  (1 - diffContent.length / chunked.originalContent.length) *
+                  100
+                ).toFixed(1) + "%",
               diffStats,
             });
 
@@ -257,19 +258,27 @@ export async function processEpisodePreprocessing(
           }
         }
       } else {
-        preprocessingStrategy = versionInfo.isNewSession ? "new_document" : "no_changes";
+        preprocessingStrategy = versionInfo.isNewSession
+          ? "new_document"
+          : "no_changes";
       }
 
       // Chunk the content (either full content for new docs, or diff for updates)
       const episodeChunker = new EpisodeChunker();
-      const needsChunking = episodeChunker.needsChunking(contentToProcess, type);
+      const needsChunking = episodeChunker.needsChunking(
+        contentToProcess,
+        type,
+      );
 
       let finalChunks;
       if (needsChunking) {
         // Chunk the diff/content
-        logger.info(`Chunking ${preprocessingStrategy === "whole_document_diff" ? "diff" : "content"}`, {
-          contentLength: contentToProcess.length,
-        });
+        logger.info(
+          `Chunking ${preprocessingStrategy === "whole_document_diff" ? "diff" : "content"}`,
+          {
+            contentLength: contentToProcess.length,
+          },
+        );
 
         finalChunks = await episodeChunker.chunkEpisode(
           contentToProcess,
@@ -281,13 +290,19 @@ export async function processEpisodePreprocessing(
       } else {
         // Single chunk
         finalChunks = {
-          chunks: [{
-            content: contentToProcess,
-            chunkIndex: 0,
-            startPosition: 0,
-            endPosition: contentToProcess.length,
-            contentHash: crypto.createHash('sha256').update(contentToProcess).digest('hex').substring(0, 16),
-          }],
+          chunks: [
+            {
+              content: contentToProcess,
+              chunkIndex: 0,
+              startPosition: 0,
+              endPosition: contentToProcess.length,
+              contentHash: crypto
+                .createHash("sha256")
+                .update(contentToProcess)
+                .digest("hex")
+                .substring(0, 16),
+            },
+          ],
           totalChunks: 1,
           originalContent: chunked.originalContent, // Keep full content for reference
           contentHash: chunked.contentHash,
@@ -315,7 +330,8 @@ export async function processEpisodePreprocessing(
           version: versionInfo.newVersion,
           totalChunks: finalChunks.totalChunks,
           contentHash: chunked.contentHash,
-          previousVersionSessionId: versionInfo.previousVersionSessionId || undefined,
+          previousVersionSessionId:
+            versionInfo.previousVersionSessionId || undefined,
           // chunkHashes only on first chunk
           ...(isFirstChunk && { chunkHashes: chunked.chunkHashes }),
         });
@@ -385,9 +401,12 @@ export async function processEpisodePreprocessing(
         }
       }
 
-      logger.info(`Successfully saved ${preprocessedChunks.length} episodes to Neo4j`, {
-        sessionId,
-      });
+      logger.info(
+        `Successfully saved ${preprocessedChunks.length} episodes to Neo4j`,
+        {
+          sessionId,
+        },
+      );
     }
 
     // Enqueue ingestion jobs for each chunk, including the episode UUID
@@ -421,12 +440,12 @@ export async function processEpisodePreprocessing(
       // Check if this is a compact document update (type='conversation' in Document table)
       const document = await prisma.document.findUnique({
         where: { id: sessionId },
-        select: { type: true }
+        select: { type: true },
       });
 
       // Only trigger compaction if document type is 'conversation' or document doesn't exist yet
       // Skip if type is 'document' (shouldn't happen for CONVERSATION type episodes)
-      if (!document || document.type === 'conversation') {
+      if (!document || document.type === "conversation") {
         logger.info(`Enqueueing session compaction for conversation`, {
           sessionId,
           userId: payload.userId,
@@ -444,7 +463,10 @@ export async function processEpisodePreprocessing(
           // Don't fail preprocessing if compaction enqueueing fails
           logger.warn(`Failed to enqueue session compaction`, {
             sessionId,
-            error: compactionError instanceof Error ? compactionError.message : String(compactionError),
+            error:
+              compactionError instanceof Error
+                ? compactionError.message
+                : String(compactionError),
           });
         }
       } else {
@@ -491,11 +513,14 @@ export async function processEpisodePreprocessing(
         },
       });
 
-      logger.info(`Document record ${document.id} ${chunked.totalChunks > 0 ? 'updated' : 'created'}`, {
-        sessionId,
-        chunks: chunked.totalChunks,
-        version: documentVersion || 1,
-      });
+      logger.info(
+        `Document record ${document.id} ${chunked.totalChunks > 0 ? "updated" : "created"}`,
+        {
+          sessionId,
+          chunks: chunked.totalChunks,
+          version: documentVersion || 1,
+        },
+      );
     }
 
     return {
