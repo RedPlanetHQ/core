@@ -88,31 +88,61 @@ export async function getTools() {
       name: 'cal_get_all_schedules',
       description: 'Retrieve all schedules from Cal.com API.',
       inputSchema: zodToJsonSchema(GetAllSchedulesSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'cal_create_a_schedule',
       description: 'Create a new schedule in Cal.com.',
       inputSchema: zodToJsonSchema(CreateScheduleSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
     },
     {
       name: 'cal_update_a_schedule',
       description: 'Update an existing schedule in Cal.com.',
       inputSchema: zodToJsonSchema(UpdateScheduleSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'cal_get_default_schedule',
       description: 'Get the default schedule from Cal.com.',
       inputSchema: zodToJsonSchema(GetDefaultScheduleSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'cal_get_schedule',
       description: 'Get a specific schedule by its ID.',
       inputSchema: zodToJsonSchema(GetScheduleSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'cal_delete_a_schedule',
       description: 'Delete a schedule by its ID.',
       inputSchema: zodToJsonSchema(DeleteScheduleSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
   ];
 }

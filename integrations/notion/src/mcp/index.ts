@@ -135,21 +135,25 @@ export async function getTools() {
       name: 'notion_create_page',
       description: 'Create a new page',
       inputSchema: zodToJsonSchema(schemas.createPage),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'notion_get_page',
       description: 'Retrieve a page',
       inputSchema: zodToJsonSchema(schemas.getPage),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_update_page_properties',
       description: 'Update page properties',
       inputSchema: zodToJsonSchema(schemas.updatePage),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'notion_retrieve_page_property',
       description: 'Retrieve page property',
       inputSchema: zodToJsonSchema(schemas.retrievePageProperty),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Database tools (5)
@@ -157,26 +161,31 @@ export async function getTools() {
       name: 'notion_query_database',
       description: 'Query a database',
       inputSchema: zodToJsonSchema(schemas.queryDatabase),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_get_database',
       description: 'Retrieve a database',
       inputSchema: zodToJsonSchema(schemas.getDatabase),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_create_database',
       description: 'Create a database',
       inputSchema: zodToJsonSchema(schemas.createDatabase),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'notion_update_database',
       description: 'Update a database',
       inputSchema: zodToJsonSchema(schemas.updateDatabase),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'notion_create_database_item',
       description: 'Create database item',
       inputSchema: zodToJsonSchema(schemas.createDatabaseItem),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
 
     // Block tools (5)
@@ -184,26 +193,31 @@ export async function getTools() {
       name: 'notion_retrieve_block',
       description: 'Retrieve a block',
       inputSchema: zodToJsonSchema(schemas.retrieveBlock),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_update_block',
       description: 'Update a block',
       inputSchema: zodToJsonSchema(schemas.updateBlock),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'notion_delete_block',
       description: 'Delete a block',
       inputSchema: zodToJsonSchema(schemas.deleteBlock),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'notion_get_block_children',
       description: 'Get block children',
       inputSchema: zodToJsonSchema(schemas.getBlockChildren),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_append_block_children',
       description: 'Append block children',
       inputSchema: zodToJsonSchema(schemas.appendBlockChildren),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
 
     // Search & User tools (4)
@@ -211,21 +225,25 @@ export async function getTools() {
       name: 'notion_search',
       description: 'Search pages and databases',
       inputSchema: zodToJsonSchema(schemas.search),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_get_user',
       description: 'Retrieve a user',
       inputSchema: zodToJsonSchema(schemas.getUser),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_list_users',
       description: 'List all users',
       inputSchema: zodToJsonSchema(schemas.listUsers),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'notion_get_me',
       description: 'Get current bot user',
       inputSchema: zodToJsonSchema(schemas.getMe),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Comment tools (2)
@@ -233,11 +251,13 @@ export async function getTools() {
       name: 'notion_create_comment',
       description: 'Create a comment',
       inputSchema: zodToJsonSchema(schemas.createComment),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'notion_get_comments',
       description: 'Get comments',
       inputSchema: zodToJsonSchema(schemas.getComments),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
   ];
 }

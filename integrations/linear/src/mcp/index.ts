@@ -208,26 +208,31 @@ export async function getTools() {
       name: 'linear_create_issue',
       description: 'Creates a new issue in Linear',
       inputSchema: zodToJsonSchema(CreateIssueSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'linear_update_issue',
       description: 'Updates an existing issue',
       inputSchema: zodToJsonSchema(UpdateIssueSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'linear_get_issue',
       description: 'Gets details of a specific issue',
       inputSchema: zodToJsonSchema(GetIssueSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_search_issues',
       description: 'Searches for issues with filters',
       inputSchema: zodToJsonSchema(SearchIssuesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_delete_issue',
       description: 'Deletes an issue',
       inputSchema: zodToJsonSchema(DeleteIssueSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
 
     // Comment Management
@@ -235,16 +240,19 @@ export async function getTools() {
       name: 'linear_create_comment',
       description: 'Creates a comment on an issue',
       inputSchema: zodToJsonSchema(CreateCommentSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'linear_update_comment',
       description: 'Updates an existing comment',
       inputSchema: zodToJsonSchema(UpdateCommentSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'linear_delete_comment',
       description: 'Deletes a comment',
       inputSchema: zodToJsonSchema(DeleteCommentSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
 
     // Project Management
@@ -252,21 +260,25 @@ export async function getTools() {
       name: 'linear_create_project',
       description: 'Creates a new project',
       inputSchema: zodToJsonSchema(CreateProjectSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'linear_update_project',
       description: 'Updates an existing project',
       inputSchema: zodToJsonSchema(UpdateProjectSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'linear_list_projects',
       description: 'Lists all projects',
       inputSchema: zodToJsonSchema(ListProjectsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_get_project',
       description: 'Gets details of a specific project',
       inputSchema: zodToJsonSchema(GetProjectSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Team Management
@@ -274,11 +286,13 @@ export async function getTools() {
       name: 'linear_list_teams',
       description: 'Lists all teams',
       inputSchema: zodToJsonSchema(ListTeamsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_get_team',
       description: 'Gets details of a specific team',
       inputSchema: zodToJsonSchema(GetTeamSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // User Management
@@ -286,16 +300,19 @@ export async function getTools() {
       name: 'linear_list_users',
       description: 'Lists all users in the organization',
       inputSchema: zodToJsonSchema(ListUsersSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_get_user',
       description: 'Gets details of a specific user',
       inputSchema: zodToJsonSchema(GetUserSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_get_viewer',
       description: 'Gets details of the authenticated user',
       inputSchema: zodToJsonSchema(GetViewerSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Workflow States
@@ -303,6 +320,7 @@ export async function getTools() {
       name: 'linear_list_workflow_states',
       description: 'Lists all workflow states',
       inputSchema: zodToJsonSchema(ListWorkflowStatesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Labels
@@ -310,11 +328,13 @@ export async function getTools() {
       name: 'linear_create_label',
       description: 'Creates a new label',
       inputSchema: zodToJsonSchema(CreateLabelSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'linear_list_labels',
       description: 'Lists all labels',
       inputSchema: zodToJsonSchema(ListLabelsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
 
     // Cycles
@@ -322,16 +342,19 @@ export async function getTools() {
       name: 'linear_create_cycle',
       description: 'Creates a new cycle',
       inputSchema: zodToJsonSchema(CreateCycleSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'linear_list_cycles',
       description: 'Lists all cycles',
       inputSchema: zodToJsonSchema(ListCyclesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'linear_get_cycle',
       description: 'Gets details of a specific cycle',
       inputSchema: zodToJsonSchema(GetCycleSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
   ];
 }

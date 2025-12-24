@@ -20,9 +20,7 @@ import {
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
 import {
-  hasAnswer,
-  hasQuestion,
-  REACT_SYSTEM_PROMPT,
+  AGENT_SYSTEM_PROMPT,
 } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
@@ -90,7 +88,7 @@ const { loader, action } = createHybridActionApiRoute(
         name: mt.name,
         inputSchema: jsonSchema(mt.inputSchema as any),
         description: mt.description,
-        execute: async (params) => {
+        execute: async (params: any) => {
           return await callMemoryTool(
             mt.name,
             {
@@ -105,6 +103,20 @@ const { loader, action } = createHybridActionApiRoute(
         },
       });
     });
+
+    // Get user's connected integrations
+    const connectedIntegrations =
+      await IntegrationLoader.getMcpEnabledIntegrationAccounts(
+        authentication.userId,
+        workspace?.id ?? "",
+      );
+
+    const integrationsList = connectedIntegrations
+      .map(
+        (int, index) =>
+          `${index + 1}. **${int.integrationDefinition.name}** (${int.integrationDefinition.slug})`,
+      )
+      .join("\n");
 
     const finalMessages = [
       ...messages,
@@ -138,59 +150,48 @@ const { loader, action } = createHybridActionApiRoute(
       ? (latestPersona.data as any).episodeBody
       : null;
 
-    // Get user's connected integrations
-    const connectedIntegrations =
-      await IntegrationLoader.getMcpEnabledIntegrationAccounts(
-        authentication.userId,
-        workspace?.id ?? "",
-      );
-
-    const integrationsList = connectedIntegrations
-      .map(
-        (int, index) =>
-          `${index + 1}. **${int.integrationDefinition.name}** (${int.integrationDefinition.slug})`,
-      )
-      .join("\n");
-
     // Build system prompt with persona context if available
-    let systemPrompt = REACT_SYSTEM_PROMPT;
+    // Using minimal prompt for better execution without explanatory text
+    let systemPrompt = AGENT_SYSTEM_PROMPT;
 
     // Add connected integrations context
     const integrationsContext = `
-<connected_integrations>
-You have access to these ${connectedIntegrations.length} connected integrations:
-${integrationsList}
+    <connected_integrations>
+    You have ${connectedIntegrations.length} connected integrations:
+    ${integrationsList}
 
-Use these integrations proactively to help the user. Load tools with \`load_mcp\` when needed.
-</connected_integrations>`;
+    To use these integrations, follow the 3-step workflow:
+    1. get_integration_actions (to discover available actions)
+    2. execute_integration_action (to execute the action)
+    </connected_integrations>`;
 
     systemPrompt = `${systemPrompt}${integrationsContext}`;
 
     // Add current date and time context
     const now = new Date();
     const dateTimeContext = `
-<current_datetime>
-Current date and time: ${now.toLocaleString("en-US", {
-      weekday: "long",
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-      timeZoneName: "short",
-    })}
-</current_datetime>`;
+    <current_datetime>
+    Current date and time: ${now.toLocaleString("en-US", {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZoneName: "short",
+        })}
+    </current_datetime>`;
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
     if (personaContent) {
       systemPrompt = `${systemPrompt}
 
-<user_persona>
-You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
+      <user_persona>
+      You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
 
-${personaContent}
-</user_persona>`;
+      ${personaContent}
+      </user_persona>`;
     }
 
     const result = streamText({
@@ -205,7 +206,10 @@ ${personaContent}
         }),
       ],
       tools,
-      stopWhen: [stepCountIs(10)],
+      stopWhen: [
+        stepCountIs(10),
+      ],
+      temperature: 0.5,
     });
 
     result.consumeStream(); // no await

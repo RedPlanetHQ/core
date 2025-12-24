@@ -256,48 +256,78 @@ export async function getTools() {
       name: 'slack_send_message',
       description: 'Sends a message to a Slack channel or DM',
       inputSchema: zodToJsonSchema(SendMessageSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
     },
-    {
-      name: 'slack_update_message',
-      description: 'Updates an existing message',
-      inputSchema: zodToJsonSchema(UpdateMessageSchema),
-    },
-    {
-      name: 'slack_delete_message',
-      description: 'Deletes a message',
-      inputSchema: zodToJsonSchema(DeleteMessageSchema),
-    },
+    // {
+    //   name: 'slack_update_message',
+    //   description: 'Updates an existing message',
+    //   inputSchema: zodToJsonSchema(UpdateMessageSchema),
+    // },
+    // {
+    //   name: 'slack_delete_message',
+    //   description: 'Deletes a message',
+    //   inputSchema: zodToJsonSchema(DeleteMessageSchema),
+    // },
     {
       name: 'slack_get_message',
       description: 'Gets details of a specific message',
       inputSchema: zodToJsonSchema(GetMessageSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_list_messages',
       description: 'Lists messages from a channel',
       inputSchema: zodToJsonSchema(ListMessagesSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
-    {
-      name: 'slack_search_messages',
-      description: 'Searches for messages across workspace',
-      inputSchema: zodToJsonSchema(SearchMessagesSchema),
-    },
+    // {
+    //   name: 'slack_search_messages',
+    //   description: 'Searches for messages across workspace',
+    //   inputSchema: zodToJsonSchema(SearchMessagesSchema),
+    // },
 
     // Reactions
     {
       name: 'slack_add_reaction',
       description: 'Adds a reaction emoji to a message',
       inputSchema: zodToJsonSchema(AddReactionSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_remove_reaction',
       description: 'Removes a reaction from a message',
       inputSchema: zodToJsonSchema(RemoveReactionSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_get_reactions',
       description: 'Gets all reactions on a message',
       inputSchema: zodToJsonSchema(GetReactionsSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
 
     // Channel Management
@@ -305,151 +335,201 @@ export async function getTools() {
       name: 'slack_list_channels',
       description: 'Lists all channels in workspace',
       inputSchema: zodToJsonSchema(ListChannelsSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_get_channel',
       description: 'Gets details of a specific channel',
       inputSchema: zodToJsonSchema(GetChannelSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
-    {
-      name: 'slack_create_channel',
-      description: 'Creates a new channel',
-      inputSchema: zodToJsonSchema(CreateChannelSchema),
-    },
-    {
-      name: 'slack_archive_channel',
-      description: 'Archives a channel',
-      inputSchema: zodToJsonSchema(ArchiveChannelSchema),
-    },
-    {
-      name: 'slack_unarchive_channel',
-      description: 'Unarchives a channel',
-      inputSchema: zodToJsonSchema(UnarchiveChannelSchema),
-    },
-    {
-      name: 'slack_invite_to_channel',
-      description: 'Invites users to a channel',
-      inputSchema: zodToJsonSchema(InviteToChannelSchema),
-    },
-    {
-      name: 'slack_kick_from_channel',
-      description: 'Removes a user from a channel',
-      inputSchema: zodToJsonSchema(KickFromChannelSchema),
-    },
-    {
-      name: 'slack_join_channel',
-      description: 'Joins a channel',
-      inputSchema: zodToJsonSchema(JoinChannelSchema),
-    },
-    {
-      name: 'slack_leave_channel',
-      description: 'Leaves a channel',
-      inputSchema: zodToJsonSchema(LeaveChannelSchema),
-    },
-    {
-      name: 'slack_rename_channel',
-      description: 'Renames a channel',
-      inputSchema: zodToJsonSchema(RenameChannelSchema),
-    },
-    {
-      name: 'slack_set_channel_topic',
-      description: 'Sets channel topic',
-      inputSchema: zodToJsonSchema(SetChannelTopicSchema),
-    },
-    {
-      name: 'slack_set_channel_purpose',
-      description: 'Sets channel purpose',
-      inputSchema: zodToJsonSchema(SetChannelPurposeSchema),
-    },
+    // {
+    //   name: 'slack_create_channel',
+    //   description: 'Creates a new channel',
+    //   inputSchema: zodToJsonSchema(CreateChannelSchema),
+    // },
+    // {
+    //   name: 'slack_archive_channel',
+    //   description: 'Archives a channel',
+    //   inputSchema: zodToJsonSchema(ArchiveChannelSchema),
+    // },
+    // {
+    //   name: 'slack_unarchive_channel',
+    //   description: 'Unarchives a channel',
+    //   inputSchema: zodToJsonSchema(UnarchiveChannelSchema),
+    // },
+    // {
+    //   name: 'slack_invite_to_channel',
+    //   description: 'Invites users to a channel',
+    //   inputSchema: zodToJsonSchema(InviteToChannelSchema),
+    // },
+    // {
+    //   name: 'slack_kick_from_channel',
+    //   description: 'Removes a user from a channel',
+    //   inputSchema: zodToJsonSchema(KickFromChannelSchema),
+    // },
+    // {
+    //   name: 'slack_join_channel',
+    //   description: 'Joins a channel',
+    //   inputSchema: zodToJsonSchema(JoinChannelSchema),
+    // },
+    // {
+    //   name: 'slack_leave_channel',
+    //   description: 'Leaves a channel',
+    //   inputSchema: zodToJsonSchema(LeaveChannelSchema),
+    // },
+    // {
+    //   name: 'slack_rename_channel',
+    //   description: 'Renames a channel',
+    //   inputSchema: zodToJsonSchema(RenameChannelSchema),
+    // },
+    // {
+    //   name: 'slack_set_channel_topic',
+    //   description: 'Sets channel topic',
+    //   inputSchema: zodToJsonSchema(SetChannelTopicSchema),
+    // },
+    // {
+    //   name: 'slack_set_channel_purpose',
+    //   description: 'Sets channel purpose',
+    //   inputSchema: zodToJsonSchema(SetChannelPurposeSchema),
+    // },
 
     // User Management
     {
       name: 'slack_list_users',
       description: 'Lists all users in workspace',
       inputSchema: zodToJsonSchema(ListUsersSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_get_user',
       description: 'Gets details of a specific user',
       inputSchema: zodToJsonSchema(GetUserSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_get_user_by_email',
       description: 'Finds a user by email address',
       inputSchema: zodToJsonSchema(GetUserByEmailSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_get_user_presence',
       description: 'Gets user presence status',
       inputSchema: zodToJsonSchema(GetUserPresenceSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
-    {
-      name: 'slack_set_user_presence',
-      description: 'Sets your presence status',
-      inputSchema: zodToJsonSchema(SetUserPresenceSchema),
-    },
+    // {
+    //   name: 'slack_set_user_presence',
+    //   description: 'Sets your presence status',
+    //   inputSchema: zodToJsonSchema(SetUserPresenceSchema),
+    // },
 
     // Direct Messages
     {
       name: 'slack_open_dm',
       description: 'Opens a direct message or group DM',
       inputSchema: zodToJsonSchema(OpenDMSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
 
-    // File Management
-    {
-      name: 'slack_upload_file',
-      description: 'Uploads a file to Slack',
-      inputSchema: zodToJsonSchema(UploadFileSchema),
-    },
-    {
-      name: 'slack_list_files',
-      description: 'Lists files in workspace',
-      inputSchema: zodToJsonSchema(ListFilesSchema),
-    },
-    {
-      name: 'slack_get_file',
-      description: 'Gets details of a specific file',
-      inputSchema: zodToJsonSchema(GetFileSchema),
-    },
-    {
-      name: 'slack_delete_file',
-      description: 'Deletes a file',
-      inputSchema: zodToJsonSchema(DeleteFileSchema),
-    },
+    // File Management (requires files:read, files:write scopes)
+    // {
+    //   name: 'slack_upload_file',
+    //   description: 'Uploads a file to Slack',
+    //   inputSchema: zodToJsonSchema(UploadFileSchema),
+    // },
+    // {
+    //   name: 'slack_list_files',
+    //   description: 'Lists files in workspace',
+    //   inputSchema: zodToJsonSchema(ListFilesSchema),
+    // },
+    // {
+    //   name: 'slack_get_file',
+    //   description: 'Gets details of a specific file',
+    //   inputSchema: zodToJsonSchema(GetFileSchema),
+    // },
+    // {
+    //   name: 'slack_delete_file',
+    //   description: 'Deletes a file',
+    //   inputSchema: zodToJsonSchema(DeleteFileSchema),
+    // },
 
-    // Reminders
-    {
-      name: 'slack_create_reminder',
-      description: 'Creates a reminder',
-      inputSchema: zodToJsonSchema(CreateReminderSchema),
-    },
-    {
-      name: 'slack_list_reminders',
-      description: 'Lists all reminders',
-      inputSchema: zodToJsonSchema(ListRemindersSchema),
-    },
-    {
-      name: 'slack_delete_reminder',
-      description: 'Deletes a reminder',
-      inputSchema: zodToJsonSchema(DeleteReminderSchema),
-    },
+    // Reminders (requires reminders:read, reminders:write scopes)
+    // {
+    //   name: 'slack_create_reminder',
+    //   description: 'Creates a reminder',
+    //   inputSchema: zodToJsonSchema(CreateReminderSchema),
+    // },
+    // {
+    //   name: 'slack_list_reminders',
+    //   description: 'Lists all reminders',
+    //   inputSchema: zodToJsonSchema(ListRemindersSchema),
+    // },
+    // {
+    //   name: 'slack_delete_reminder',
+    //   description: 'Deletes a reminder',
+    //   inputSchema: zodToJsonSchema(DeleteReminderSchema),
+    // },
 
     // Stars
     {
       name: 'slack_add_star',
       description: 'Stars a message or file',
       inputSchema: zodToJsonSchema(AddStarSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_remove_star',
       description: 'Removes a star from message or file',
       inputSchema: zodToJsonSchema(RemoveStarSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'slack_list_stars',
       description: 'Lists all starred items',
       inputSchema: zodToJsonSchema(ListStarsSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
 
     // Workspace Info
@@ -457,6 +537,11 @@ export async function getTools() {
       name: 'slack_get_team_info',
       description: 'Gets workspace/team information',
       inputSchema: zodToJsonSchema(GetTeamInfoSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
   ];
 }

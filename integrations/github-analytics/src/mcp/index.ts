@@ -72,67 +72,117 @@ const hotfixRateSchemaJson = zodToJsonSchema(HotfixRateSchema) as any;
 /**
  * Get list of available tools without starting the MCP server
  */
-export async function getTools(): Promise<Array<{ name: string; description: string; inputSchema: any }>> {
+export async function getTools(): Promise<Array<{ name: string; description: string; inputSchema: any; annotations?: { readOnlyHint?: boolean; destructiveHint?: boolean; idempotentHint?: boolean } }>> {
   return [
     {
       name: "deployment_frequency",
       description:
         "Calculate deployment frequency - number of releases/deployments per week. DORA metric for delivery speed.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "lead_time_for_changes",
       description:
         "Calculate lead time for changes - time from first commit to production deployment (in hours/days). DORA metric for delivery speed.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "pr_merge_time",
       description:
         "Calculate PR merge time - average time from PR creation to merge (in hours). Delivery speed metric.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "pr_throughput",
       description:
         "Calculate PR throughput - number of PRs merged per week. Delivery speed metric.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "commit_frequency",
       description:
         "Calculate commit frequency - number of commits to main branch per week. Delivery speed metric.",
       inputSchema: commitFrequencySchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "change_failure_rate",
       description:
         "Calculate change failure rate - percentage of deployments that cause production failures. DORA metric for stability & reliability.",
       inputSchema: changeFailureRateSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "hotfix_rate",
       description:
         "Calculate hotfix rate - percentage of releases that are emergency hotfixes. Stability & reliability metric.",
       inputSchema: hotfixRateSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "revert_rate",
       description:
         "Calculate revert rate - percentage of merged PRs that get reverted. Stability & reliability metric.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "pr_size",
       description:
         "Calculate PR size - average lines changed (additions + deletions) per PR. Code quality metric.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: "all_metrics",
       description:
         "Calculate all GitHub analytics metrics at once - includes all DORA metrics, delivery speed, stability, and code quality metrics.",
       inputSchema: repoSchemaJson,
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
   ];
 }
