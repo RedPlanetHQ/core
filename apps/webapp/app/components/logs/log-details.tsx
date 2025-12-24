@@ -10,6 +10,7 @@ import { DocumentEditorView } from "./views/document-editor-view.client";
 import { ClientOnly } from "remix-utils/client-only";
 import { Input } from "../ui";
 import { type Label, LabelDropdown } from "./label-dropdown";
+import { format, isThisYear } from "date-fns";
 
 interface LogDetailsProps {
   document: DocumentItem;
@@ -24,6 +25,11 @@ interface PropertyItemProps {
   statusColor?: string;
   className?: string;
 }
+
+const formatDate = (dateString: string) => {
+  const date = new Date(dateString);
+  return isThisYear(date) ? format(date, "MMM d") : format(date, "MMM d, yyyy");
+};
 
 function PropertyItem({
   value,
@@ -124,8 +130,8 @@ export function LogDetails({ document, labels }: LogDetailsProps) {
             className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
           />
         </div>
-        <div className="mt-3 mb-3 px-4">
-          <div className="bg-grayAlpha-100 flex items-center gap-1 rounded-xl px-2 py-1.5">
+        <div className="bg-grayAlpha-100 mt-3 mb-3 flex w-full items-center rounded-xl px-3">
+          <div className="flex flex-1 items-center gap-1 px-2 py-1.5">
             <PropertyItem
               label="Source"
               value={formatString(document.source?.toLowerCase())}
@@ -154,6 +160,11 @@ export function LogDetails({ document, labels }: LogDetailsProps) {
               labels={labels}
               documentId={document.id}
             />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="text-muted-foreground text-sm">
+              {formatDate(document.createdAt)}
+            </div>
           </div>
         </div>
 

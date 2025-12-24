@@ -9,9 +9,12 @@ export interface DocumentItem {
   labelIds: string[];
   createdAt: string;
   processedAt?: string;
-  type?: string;
-  status?: string;
+  type: string;
+  status: string;
   error?: string;
+  latestIngestionLog: {
+    status: string;
+  };
 }
 
 export interface DocumentsResponse {

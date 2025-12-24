@@ -1,9 +1,6 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import {
-  getIngestionQueue,
-  deleteSession,
-} from "~/services/ingestionLogs.server";
+import { deleteSession } from "~/services/ingestionLogs.server";
 import {
   createHybridActionApiRoute,
   createHybridLoaderApiRoute,
@@ -13,7 +10,9 @@ import {
   deleteDocument,
   getDocument,
   updateDocument,
+  updateDocumentContent,
 } from "~/services/document.server";
+import { type Document } from "@prisma/client";
 
 // Schema for space ID parameter
 const DocumentParamsSchema = z.object({
@@ -23,6 +22,10 @@ const DocumentParamsSchema = z.object({
 export const LogUpdateBody = z.object({
   labels: z.array(z.string()).optional(),
   title: z.string().optional(),
+});
+
+export const ContentUpdateBody = z.object({
+  content: z.string(),
 });
 
 const loader = createHybridLoaderApiRoute(
@@ -54,21 +57,25 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ params, authentication, request }) => {
+    const workspace = await getWorkspaceByUser(authentication.userId);
+    const document = await getDocument(
+      params.documentId,
+      workspace?.id as string,
+    );
+
+    if (!document) {
+      return json(
+        {
+          error: "Document not found or unauthorized",
+          code: "not_found",
+        },
+        { status: 404 },
+      );
+    }
+
     // Handle PATCH requests for updating labels
     if (request.method === "PATCH") {
       try {
-        const ingestionQueue = await getIngestionQueue(params.documentId);
-
-        if (!ingestionQueue) {
-          return json(
-            {
-              error: "Episode not found or unauthorized",
-              code: "not_found",
-            },
-            { status: 404 },
-          );
-        }
-
         const body = await request.json();
         const validationResult = LogUpdateBody.safeParse(body);
 
@@ -85,7 +92,7 @@ const { action } = createHybridActionApiRoute(
 
         let { labels, title } = validationResult.data;
 
-        if (ingestionQueue.title === "Persona" || title === "Persona") {
+        if (document.title === "Persona" || title === "Persona") {
           return json(
             {
               error:
@@ -119,26 +126,35 @@ const { action } = createHybridActionApiRoute(
       }
     }
 
+    if (request.method === "POST") {
+      const body = await request.json();
+      const validationResult = ContentUpdateBody.safeParse(body);
+
+      if (!validationResult.success) {
+        return json(
+          {
+            error: "Invalid request body",
+            code: "validation_error",
+            details: validationResult.error.errors,
+          },
+          { status: 400 },
+        );
+      }
+
+      const { content } = validationResult.data;
+
+      const response = await updateDocumentContent(
+        document as Document,
+        content,
+        authentication.userId,
+      );
+
+      return json(response);
+    }
+
     if (request.method === "DELETE") {
       // Handle DELETE requests
       try {
-        const workspace = await getWorkspaceByUser(authentication.userId);
-
-        const document = await getDocument(
-          params.documentId,
-          workspace?.id as string,
-        );
-
-        if (!document) {
-          return json(
-            {
-              error: "Document not found or unauthorized",
-              code: "not_found",
-            },
-            { status: 404 },
-          );
-        }
-
         // If deleteSession param is true and log has a sessionId, delete entire session
         const result = await deleteSession(
           document.id as string,

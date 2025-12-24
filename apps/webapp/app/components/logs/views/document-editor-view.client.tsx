@@ -9,6 +9,7 @@ import {
   extensionsForConversation,
   getPlaceholder,
 } from "~/components/conversation/editor-extensions";
+import { LoaderCircle } from "lucide-react";
 
 interface DocumentEditorViewProps {
   document: DocumentItem;
@@ -52,7 +53,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
       <div className="relative">
         <div
           className={cn(
-            "mix-w-[400px] text-md rounded-md py-4",
+            "mix-w-[400px] text-md rounded-md",
             hasChanges && "border-blue-500",
           )}
         >
@@ -64,6 +65,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
                 },
               }}
               initialContent={document?.content as any}
+              editable={document.latestIngestionLog.status == "PROCESSING"}
               onCreate={({ editor }) => {
                 setEditor(editor);
               }}

@@ -4,7 +4,7 @@ import { type DocumentItem } from "~/hooks/use-documents";
 import { getIconForAuthorise } from "../icon-utils";
 import { useNavigate, useParams } from "@remix-run/react";
 import { getStatusColor, getStatusValue } from "./utils";
-import { File, MessageSquare } from "lucide-react";
+import { File } from "lucide-react";
 import { format, isThisYear } from "date-fns";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { TooltipPortal } from "@radix-ui/react-tooltip";
@@ -129,7 +129,7 @@ export function LogTextCollapse({
                 <LabelDropdown
                   value={document.labelIds}
                   labels={labels}
-                  logId={document.id}
+                  documentId={document.id}
                   short
                 />
 
