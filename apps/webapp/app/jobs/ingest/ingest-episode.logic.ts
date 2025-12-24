@@ -4,7 +4,7 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
-import { deductCredits, hasCredits } from "~/trigger/utils/utils";
+import { hasCredits } from "~/trigger/utils/utils";
 
 import {
   shouldTriggerTopicAnalysis,

@@ -361,7 +361,7 @@ async function resolveExtractedNodesWithMerges(
 
   // Step 1.5: Fetch embeddings from vector provider for all entities
   const entityEmbeddings = await batchGetEntityEmbeddings(
-    uniqueEntities.map(e => e.uuid)
+    uniqueEntities.map((e) => e.uuid),
   );
 
   // Step 2: For each entity, find similar entities for LLM evaluation
@@ -634,7 +634,7 @@ async function resolveStatementsWithDuplicates(
 
   // Step 1.5: Fetch statement embeddings from vector provider
   const statementEmbeddings = await batchGetStatementEmbeddings(
-    triples.map(t => t.statement.uuid)
+    triples.map((t) => t.statement.uuid),
   );
 
   // Step 2: Run all semantic similarity searches in parallel
@@ -775,8 +775,6 @@ async function resolveStatementsWithDuplicates(
     try {
       const jsonMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
       const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
-
-      console.log(`analysisResult`, analysisResult)
 
       // LLM now returns ONLY statements with issues (sparse output for performance)
       // First, assume all statements are kept as-is (no issues)

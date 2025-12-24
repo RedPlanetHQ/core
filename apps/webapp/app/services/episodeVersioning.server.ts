@@ -1,9 +1,9 @@
-import { EpisodeType, type EpisodicNode } from "@core/types";
+import { EpisodeType } from "@core/types";
 import { logger } from "./logger.service";
 import { EpisodeChunker } from "./episodeChunker.server";
-import { ProviderFactory } from "@core/providers";
-import { prisma } from "~/db.server";
-import { Document } from "@prisma/client";
+
+import { type Document } from "@prisma/client";
+import { prisma } from "~/trigger/utils/prisma";
 
 /**
  * Version information for an episode session

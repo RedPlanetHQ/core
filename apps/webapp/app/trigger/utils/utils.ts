@@ -10,9 +10,8 @@ import {
 
 import { type CoreMessage } from "ai";
 
-import { type HistoryStep } from "./types";
 import nodeCrypto from "node:crypto";
-import { customAlphabet, nanoid } from "nanoid";
+import { customAlphabet } from "nanoid";
 import { prisma } from "./prisma";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
 
