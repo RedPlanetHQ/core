@@ -19,7 +19,7 @@ import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logi
 import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logic";
 import type { IntegrationRunPayload } from "~/jobs/integrations/integration-run.logic";
 
-type QueueProvider = "trigger" | "bullmq";
+export type QueueProvider = "trigger" | "bullmq";
 
 /**
  * Enqueue episode preprocessing job
@@ -223,6 +223,7 @@ export async function enqueueLabelAssignment(
     // BullMQ
     const { labelAssignmentQueue } = await import("~/bullmq/queues");
     const job = await labelAssignmentQueue.add("label-assignment", payload, {
+      jobId: `label-${payload.queueId}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
     });
@@ -250,6 +251,7 @@ export async function enqueueTitleGeneration(
     // BullMQ
     const { titleGenerationQueue } = await import("~/bullmq/queues");
     const job = await titleGenerationQueue.add("title-generation", payload, {
+      jobId: `title-${payload.queueId}`,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
     });

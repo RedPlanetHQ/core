@@ -103,14 +103,20 @@ export async function processEpisodeIngestion(
     if (!hasSufficientCredits) {
       logger.warn(`Insufficient credits for workspace ${payload.workspaceId}`);
 
-      await prisma.ingestionQueue.update({
-        where: { id: payload.queueId },
-        data: {
-          status: IngestionStatus.NO_CREDITS,
-          error:
-            "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
-        },
-      });
+      try {
+        await prisma.ingestionQueue.update({
+          where: { id: payload.queueId },
+          data: {
+            status: IngestionStatus.NO_CREDITS,
+            error:
+              "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
+          },
+        });
+      } catch (error) {
+        logger.warn(
+          `Could not update ingestion queue ${payload.queueId} - may have been deleted`,
+        );
+      }
 
       return {
         success: false,
@@ -118,12 +124,20 @@ export async function processEpisodeIngestion(
       };
     }
 
-    await prisma.ingestionQueue.update({
-      where: { id: payload.queueId },
-      data: {
-        status: IngestionStatus.PROCESSING,
-      },
-    });
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          status: IngestionStatus.PROCESSING,
+        },
+      });
+    } catch (error) {
+      // Record may have been deleted - log and continue processing
+      logger.warn(
+        `Could not update ingestion queue ${payload.queueId} to PROCESSING - may have been deleted`,
+      );
+      // Continue processing anyway - the episode should still be added to the graph
+    }
 
     const knowledgeGraphService = new KnowledgeGraphService();
     const episodeBody = payload.body as any;
@@ -175,12 +189,18 @@ export async function processEpisodeIngestion(
       ? IngestionStatus.COMPLETED
       : IngestionStatus.FAILED;
 
-    await prisma.ingestionQueue.update({
-      where: { id: payload.queueId },
-      data: {
-        status: currentStatus,
-      },
-    });
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          status: currentStatus,
+        },
+      });
+    } catch (error) {
+      logger.warn(
+        `Could not update ingestion queue ${payload.queueId} status to ${currentStatus} - may have been deleted`,
+      );
+    }
 
     // Handle label assignment and title generation after successful ingestion
     try {
@@ -307,13 +327,19 @@ export async function processEpisodeIngestion(
 
     return { success: true, episodeDetails };
   } catch (err: any) {
-    await prisma.ingestionQueue.update({
-      where: { id: payload.queueId },
-      data: {
-        error: err.message,
-        status: IngestionStatus.FAILED,
-      },
-    });
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          error: err.message,
+          status: IngestionStatus.FAILED,
+        },
+      });
+    } catch (updateError) {
+      logger.warn(
+        `Could not update ingestion queue ${payload.queueId} with error - may have been deleted`,
+      );
+    }
 
     logger.error(`Error processing job for user ${payload.userId}:`, err);
     return { success: false, error: err.message };

@@ -81,12 +81,18 @@ export async function processTitleGeneration(
     logger.info(`Generated title for queue ${payload.queueId}: "${title}"`);
 
     // Update the ingestion queue with the title
-    await prisma.ingestionQueue.update({
-      where: { id: payload.queueId },
-      data: {
-        title: title,
-      },
-    });
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          title: title,
+        },
+      });
+    } catch (error) {
+      logger.warn(
+        `Could not update ingestion queue ${payload.queueId} with title - may have been deleted`,
+      );
+    }
 
     return {
       success: true,
