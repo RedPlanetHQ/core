@@ -2,6 +2,10 @@ import { prisma } from "~/db.server";
 import { deleteEpisodeWithRelatedNodes } from "./graphModels/episode";
 import { cancelJob, findRunningJobs } from "./jobManager.server";
 import { getEpisodeByQueueId } from "./vectorStorage.server";
+import { env } from "~/env.server";
+import { type QueueProvider } from "~/lib/queue-adapter.server";
+import { logger } from "./logger.service";
+import { cancelJobById } from "~/bullmq/utils/job-finder";
 
 export async function getIngestionLogs(
   userId: string,
@@ -75,15 +79,58 @@ export const deleteLog = async (logId: string, userId: string) => {
     };
   }
 
-  // Cancel any running jobs
-  const runningTasks = await findRunningJobs({
-    tags: [userId, ingestionQueue.id],
-    taskIdentifier: "ingest-episode",
-  });
+  // Cancel any running jobs for this ingestion (both Trigger and BullMQ)
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
 
-  const latestTask = runningTasks[0];
-  if (latestTask && !latestTask.isCompleted) {
-    await cancelJob(latestTask.id);
+  if (provider === "trigger") {
+    // Trigger.dev: cancel all task types with matching tags
+    const taskIdentifiers = [
+      "ingest-episode",
+      "graph-resolution",
+      "title-generation",
+      "label-assignment",
+      "bert-topic-analysis",
+      "persona-generation",
+    ];
+
+    for (const taskIdentifier of taskIdentifiers) {
+      const runningTasks = await findRunningJobs({
+        tags: [userId, ingestionQueue.id],
+        taskIdentifier,
+      });
+
+      for (const task of runningTasks) {
+        if (!task.isCompleted) {
+          await cancelJob(task.id);
+        }
+      }
+    }
+  } else {
+    // Get episodes for this queue to construct graph resolution jobIds
+    const episodes = await getEpisodeByQueueId(logId);
+
+    const jobIdsToCancel = [
+      ingestionQueue.id, // preprocess/ingest job
+      `title-${ingestionQueue.id}`, // title generation
+      `label-${ingestionQueue.id}`, // label assignment
+    ];
+
+    // Add graph resolution jobs for each episode
+    if (episodes?.length > 0) {
+      for (const episode of episodes) {
+        jobIdsToCancel.push(`resolution-${episode.id}`);
+      }
+    }
+
+    // Cancel all jobs
+    for (const jobId of jobIdsToCancel) {
+      try {
+        await cancelJobById(jobId);
+      } catch (error) {
+        // Job may not exist or already completed - that's okay
+        logger.debug(`Could not cancel job ${jobId}:`, { error });
+      }
+    }
   }
 
   let finalResult: {

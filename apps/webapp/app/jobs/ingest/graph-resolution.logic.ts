@@ -280,20 +280,28 @@ export async function processGraphResolution(
         };
       }
 
-      await prisma.ingestionQueue.update({
-        where: { id: payload.queueId },
-        data: {
-          output: finalOutput,
-          graphIds: episodeUuids,
-        },
-      });
+      try {
+        await prisma.ingestionQueue.update({
+          where: { id: payload.queueId },
+          data: {
+            output: finalOutput,
+            graphIds: episodeUuids,
+          },
+        });
+
+        logger.info(
+          `Updated ingestion queue ${payload.queueId} with resolution metrics`,
+        );
+      } catch (error) {
+        // Record may have been deleted via cascade during document deletion
+        logger.warn(
+          `Could not update ingestion queue ${payload.queueId} - may have been deleted`,
+        );
+        // Don't throw - the graph resolution work is still valid
+      }
 
       // Deduct credits for episode creation
       await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
-
-      logger.info(
-        `Updated ingestion queue ${payload.queueId} with resolution metrics`,
-      );
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
         error,
@@ -774,50 +782,63 @@ async function resolveStatementsWithDuplicates(
 
     try {
       const jsonMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
-      const analysisResult = jsonMatch ? JSON.parse(jsonMatch[1]) : [];
 
-      // LLM now returns ONLY statements with issues (sparse output for performance)
-      // First, assume all statements are kept as-is (no issues)
-      const statementIdsWithIssues = new Set(
-        analysisResult.map((r: any) => r.statementId),
-      );
-
-      // Keep all statements that weren't flagged by LLM
-      for (const triple of triples) {
-        if (!statementIdsWithIssues.has(triple.statement.uuid)) {
-          resolvedStatements.push(triple);
-        }
-      }
-
-      // Then, process ONLY the flagged statements from LLM
-      for (const result of analysisResult) {
-        const triple = triples.find(
-          (t) => t.statement.uuid === result.statementId,
+      if (!jsonMatch || !jsonMatch[1]) {
+        logger.warn(
+          "No valid JSON output found in LLM response for statement resolution",
         );
-        if (!triple) continue;
+        // Fallback: keep all statements as-is
+        resolvedStatements.push(...triples);
+      } else {
+        const analysisResult = JSON.parse(jsonMatch[1]);
 
-        if (result.isDuplicate && result.duplicateId) {
-          // Mark new statement for deletion, link episode to existing
-          duplicateStatements.push({
-            newStatementUuid: triple.statement.uuid,
-            existingStatementUuid: result.duplicateId,
-          });
-          logger.info(
-            `Statement is duplicate, will delete and link to existing: ${triple.statement.fact}`,
+        // LLM now returns ONLY statements with issues (sparse output for performance)
+        // First, assume all statements are kept as-is (no issues)
+        const statementIdsWithIssues = new Set(
+          analysisResult.map((r: any) => r.statementId),
+        );
+
+        // Keep all statements that weren't flagged by LLM
+        for (const triple of triples) {
+          if (!statementIdsWithIssues.has(triple.statement.uuid)) {
+            resolvedStatements.push(triple);
+          }
+        }
+
+        // Then, process ONLY the flagged statements from LLM
+        for (const result of analysisResult) {
+          const triple = triples.find(
+            (t) => t.statement.uuid === result.statementId,
           );
-        } else {
-          // Keep the new statement (it has contradictions but isn't a duplicate)
-          resolvedStatements.push(triple);
+          if (!triple) continue;
 
-          // Handle contradictions - invalidate old statements
-          if (result.contradictions && result.contradictions.length > 0) {
-            invalidatedStatements.push(...result.contradictions);
+          if (result.isDuplicate && result.duplicateId) {
+            // Mark new statement for deletion, link episode to existing
+            duplicateStatements.push({
+              newStatementUuid: triple.statement.uuid,
+              existingStatementUuid: result.duplicateId,
+            });
+            logger.info(
+              `Statement is duplicate, will delete and link to existing: ${triple.statement.fact}`,
+            );
+          } else {
+            // Keep the new statement (it has contradictions but isn't a duplicate)
+            resolvedStatements.push(triple);
+
+            // Handle contradictions - invalidate old statements
+            if (result.contradictions && result.contradictions.length > 0) {
+              invalidatedStatements.push(...result.contradictions);
+            }
           }
         }
       }
     } catch (e) {
-      logger.error("Error processing statement analysis:", { error: e });
-      // Fallback: keep all
+      logger.error("Error processing statement analysis:", {
+        error: e,
+        responseText: responseText.substring(0, 500), // Log sample for debugging
+        episodeUuid: episode.uuid,
+      });
+      // Fallback: keep all statements
       resolvedStatements.push(...triples);
     }
   } else {

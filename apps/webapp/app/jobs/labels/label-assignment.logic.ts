@@ -158,12 +158,18 @@ export async function processLabelAssignment(
     );
 
     // Update the ingestion queue with deduplicated label IDs
-    await prisma.ingestionQueue.update({
-      where: { id: payload.queueId },
-      data: {
-        labels: allLabelIds,
-      },
-    });
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          labels: allLabelIds,
+        },
+      });
+    } catch (error) {
+      logger.warn(
+        `Could not update ingestion queue ${payload.queueId} with labels - may have been deleted`,
+      );
+    }
 
     // Update the Document table if there's a sessionId
     if (ingestionQueue.sessionId) {
