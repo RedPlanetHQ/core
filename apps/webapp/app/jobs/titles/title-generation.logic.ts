@@ -39,19 +39,29 @@ export async function processTitleGeneration(
       throw new Error(`Ingestion queue ${payload.queueId} not found`);
     }
 
-    if (ingestionQueue.title) {
-      logger.info(`Title already exists for queue ${payload.queueId}`);
-      return {
-        success: true,
-        title: ingestionQueue.title,
-      };
-    }
-
     // Get episode body from the data field
     const data = ingestionQueue.data as any;
     const episodeBody = data?.episodeBody || "";
     const episodeType = ingestionQueue.type;
     const sessionId = ingestionQueue.sessionId;
+
+    // Check if Document already has a generated title (source of truth)
+    if (sessionId) {
+      const document = await prisma.document.findUnique({
+        where: { id: sessionId },
+        select: { title: true },
+      });
+
+      if (document?.title && document.title !== "Untitled Document") {
+        logger.info(
+          `Title already exists for document ${sessionId}: "${document.title}"`,
+        );
+        return {
+          success: true,
+          title: document.title,
+        };
+      }
+    }
 
     if (!episodeBody) {
       logger.warn(`No episode body found for queue ${payload.queueId}`);
@@ -87,6 +97,25 @@ export async function processTitleGeneration(
         title: title,
       },
     });
+
+    // Update the Document table if there's a sessionId
+    if (sessionId) {
+      try {
+        await prisma.document.update({
+          where: { id: sessionId },
+          data: { title },
+        });
+        logger.info(
+          `Updated document ${sessionId} with title: "${title}"`,
+        );
+      } catch (error: any) {
+        logger.warn(`Failed to update document title:`, {
+          error: error.message,
+          sessionId,
+          queueId: payload.queueId,
+        });
+      }
+    }
 
     return {
       success: true,

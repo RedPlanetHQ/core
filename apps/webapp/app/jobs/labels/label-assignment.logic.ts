@@ -52,22 +52,23 @@ export async function processLabelAssignment(
     }
     let existingLabelIds: string[] = [];
 
+    // Check Document table for existing labels (source of truth)
     if (ingestionQueue.sessionId) {
-      const latestLog = await prisma.ingestionQueue.findMany({
-        where: {
-          sessionId: ingestionQueue.sessionId,
-        },
-        select: {
-          labels: true,
-        },
-        orderBy: {
-          createdAt: "desc",
-        },
+      const document = await prisma.document.findUnique({
+        where: { id: ingestionQueue.sessionId },
+        select: { labelIds: true },
       });
 
-      existingLabelIds = Array.from(
-        new Set(latestLog.flatMap((log) => log.labels)),
-      );
+      if (document?.labelIds && document.labelIds.length > 0) {
+        existingLabelIds = document.labelIds;
+        logger.info(
+          `Found ${existingLabelIds.length} existing labels from document`,
+          {
+            sessionId: ingestionQueue.sessionId,
+            labelIds: existingLabelIds,
+          },
+        );
+      }
     }
 
     // Get episode body from the data field
@@ -164,8 +165,25 @@ export async function processLabelAssignment(
       },
     });
 
-    // Update Neo4j Episodes with the same labelIds
+    // Update the Document table if there's a sessionId
     if (ingestionQueue.sessionId) {
+      try {
+        await prisma.document.update({
+          where: { id: ingestionQueue.sessionId },
+          data: { labelIds: allLabelIds },
+        });
+        logger.info(
+          `Updated document ${ingestionQueue.sessionId} with ${allLabelIds.length} labels`,
+        );
+      } catch (error: any) {
+        logger.warn(`Failed to update document labels:`, {
+          error: error.message,
+          sessionId: ingestionQueue.sessionId,
+          queueId: payload.queueId,
+        });
+      }
+
+      // Update Neo4j Episodes with the same labelIds
       const updatedCount = await updateEpisodeLabels(
         ingestionQueue.sessionId,
         allLabelIds,
