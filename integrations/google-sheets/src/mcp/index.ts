@@ -108,42 +108,50 @@ export async function getTools() {
       name: 'list_spreadsheets',
       description: "List all Google Sheets spreadsheets in the user's Google Drive.",
       inputSchema: zodToJsonSchema(ListSpreadsheetsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'list_sheets',
       description:
         'List all sheets in a spreadsheet with metadata (sheetId, title, index, rowCount, columnCount). Does not include cell data. Use this to discover available sheets before fetching data.',
       inputSchema: zodToJsonSchema(ListSheetsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'write_to_cell',
       description: 'Writes a single value to a specific cell',
       inputSchema: zodToJsonSchema(WriteToCellSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'create_spreadsheet',
       description: 'Creates a new spreadsheet with optional initial sheets',
       inputSchema: zodToJsonSchema(CreateSpreadsheetSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'read_range',
       description: 'Reads values from a spreadsheet range',
       inputSchema: zodToJsonSchema(ReadRangeSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'write_range',
       description: 'Writes values to a spreadsheet range',
       inputSchema: zodToJsonSchema(WriteRangeSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'append_range',
       description: 'Appends values to a spreadsheet range',
       inputSchema: zodToJsonSchema(AppendRangeSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     {
       name: 'batch_update',
       description: 'Performs batch updates (formatting, sorting, filtering, adding sheets, etc.)',
       inputSchema: zodToJsonSchema(BatchUpdateSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
     },
     // Auto-generated tools from Discovery Document
     ...generatedTools,

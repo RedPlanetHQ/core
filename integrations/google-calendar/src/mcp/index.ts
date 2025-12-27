@@ -144,41 +144,81 @@ export async function getTools() {
       name: 'create_event',
       description: 'Creates a new calendar event',
       inputSchema: zodToJsonSchema(CreateEventSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
     },
     {
       name: 'get_event',
       description: 'Gets details of a specific calendar event',
       inputSchema: zodToJsonSchema(GetEventSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'list_events',
       description: 'Lists calendar events within a time range',
       inputSchema: zodToJsonSchema(ListEventsSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'update_event',
       description: 'Updates an existing calendar event',
       inputSchema: zodToJsonSchema(UpdateEventSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'delete_event',
       description: 'Deletes a calendar event',
       inputSchema: zodToJsonSchema(DeleteEventSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+      },
     },
     {
       name: 'list_calendars',
       description: 'Lists all calendars accessible to the user',
       inputSchema: zodToJsonSchema(ListCalendarsSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     {
       name: 'quick_add_event',
       description: 'Creates an event using natural language',
       inputSchema: zodToJsonSchema(QuickAddEventSchema),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+      },
     },
     {
       name: 'get_freebusy',
       description: 'Gets free/busy information for calendars',
       inputSchema: zodToJsonSchema(GetFreeBusySchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
     // Auto-generated tools from Discovery Document
     ...generatedTools,

@@ -103,6 +103,7 @@ export async function makeModelCall(
   options?: any,
   complexity: ModelComplexity = "high",
   cacheKey?: string,
+  reasoningEffort?: "low" | "medium" | "high",
 ) {
   let model = getModelForTask(complexity);
   logger.info(`complexity: ${complexity}, model: ${model}`);
@@ -123,6 +124,9 @@ export async function makeModelCall(
       } else {
         openaiOptions.promptCacheRetention = "24h";
         openaiOptions.reasoningEffort = "none";
+        if (reasoningEffort) {
+          openaiOptions.reasoningEffort = reasoningEffort;
+        }
       }
     }
 
@@ -144,10 +148,10 @@ export async function makeModelCall(
       onFinish: async ({ text, usage }) => {
         const tokenUsage = usage
           ? {
-              promptTokens: usage.inputTokens,
-              completionTokens: usage.outputTokens,
-              totalTokens: usage.totalTokens,
-            }
+            promptTokens: usage.inputTokens,
+            completionTokens: usage.outputTokens,
+            totalTokens: usage.totalTokens,
+          }
           : undefined;
 
         if (tokenUsage) {
@@ -169,11 +173,11 @@ export async function makeModelCall(
 
   const tokenUsage = usage
     ? {
-        promptTokens: usage.inputTokens,
-        completionTokens: usage.outputTokens,
-        totalTokens: usage.totalTokens,
-        cachedInputTokens: usage.cachedInputTokens,
-      }
+      promptTokens: usage.inputTokens,
+      completionTokens: usage.outputTokens,
+      totalTokens: usage.totalTokens,
+      cachedInputTokens: usage.cachedInputTokens,
+    }
     : undefined;
 
   if (tokenUsage) {
