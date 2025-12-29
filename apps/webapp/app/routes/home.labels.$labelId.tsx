@@ -60,7 +60,7 @@ export default function LogsAll() {
         setOnboarding(true);
       }
     }
-  }, [documents.length, isLoading]);
+  }, [documents?.length, isLoading]);
 
   return (
     <>
