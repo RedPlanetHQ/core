@@ -308,6 +308,10 @@ model InvitationCode {
   id   String @id @default(cuid())
   code String @unique
 
+  identifier String? // email or phone number for agent invites
+  source     String? // 'whatsapp' or 'email' for agent invites
+  expiresAt  DateTime? // expiry for agent invites
+
   users User[]
 
   createdAt DateTime @default(now())
@@ -687,6 +691,9 @@ model User {
   referralSource String?
 
   metadata Json @default("{}")
+
+  // WhatsApp agent authentication
+  phoneNumber String? @unique
 
   personalAccessTokens PersonalAccessToken[]
   InvitationCode       InvitationCode?        @relation(fields: [invitationCodeId], references: [id], onDelete: Cascade)

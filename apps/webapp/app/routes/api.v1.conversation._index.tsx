@@ -184,15 +184,15 @@ const { loader, action } = createHybridActionApiRoute(
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
-    if (personaContent) {
-      systemPrompt = `${systemPrompt}
+    // if (personaContent) {
+    //   systemPrompt = `${systemPrompt}
 
-      <user_persona>
-      You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
+    //   <user_persona>
+    //   You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
 
-      ${personaContent}
-      </user_persona>`;
-    }
+    //   ${personaContent}
+    //   </user_persona>`;
+    // }
 
     const result = streamText({
       model: getModel() as LanguageModel,
