@@ -33,7 +33,7 @@
     <img src="https://github.com/user-attachments/assets/89066cdd-204b-46c2-8ad4-4935f5ca9edd" width="200px" alt="CORE logo" />
   </a>
 
-### CORE: Memory + Actions for Your AI Tools
+### CORE: Your Digital Brain - Memory + Actions for AI Tools 
 
 <p align="center">
     <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
@@ -58,45 +58,26 @@
 
 ---
 
-## ❌ Without CORE
+Your critical info is scattered across tools that don't talk to each other. Your AI conversation starts with "let me give you some context." Your experiences and learnings are still in your head and your head doesn't scale. 
 
-- ❌ Re-explain your project context to each AI tool
-- ❌ Lost conversations and decisions across ChatGPT, Claude, Cursor
-- ❌ No memory of past discussions, preferences, or project history
-- ❌ Can't take actions in Linear, GitHub, Slack, Gmail from your AI tools
+**CORE remembers**. Not a database. Not a search box. A digital brain that learns what matters, connects what's related, and surfaces what you need.
 
-## ✅ With CORE
+## For Developers
 
 CORE gives your AI tools persistent memory and the ability to act in the apps you use.
 
-- ✅ Remember everything across Claude, Cursor, ChatGPT, Claude Code
-- ✅ Take actions in Linear, GitHub, Slack, Gmail, Google Sheets
-- ✅ Connect once, works everywhere via MCP
-- ✅ Your data, your control: open-source and self-hostable
+- Context preserved across Claude Code, Cursor and other coding agents
+- Take actions in Linear, GitHub, Slack, Gmail, Google Sheets and other apps you use
+- Connect once via MCP, works everywhere
+- Open-source and self-hostable; your data, your control
 
 ---
 
 ## What You Can Do
 
-### 1. Perform actions in your apps from Claude/Cursor
+### 1. Never repeat yourself, context flows automatically
 
-Connect your apps once, take actions from anywhere.
-```txt
-Create/Read GitHub, Linear issues from claude
-```
-```txt
-Draft/Send/Read an email and store relevant info in CORE from claude
-```
-```txt
-Manage your calendar, update spreadsheet from claude
-```
-![actions](https://github.com/user-attachments/assets/60295a77-bdfd-4d57-aff5-d77ecb41e72d)
-
----
-
-### 2. Get on-demand context from CORE so you never have to repeat yourself
-
-CORE becomes your personal knowledge base. Ask any AI tool to pull relevant context.
+CORE becomes your persistent memory layer for coding agents. Ask any AI tool to pull relevant context.
 ```txt
 Search core memory for architecture decisions on the payment service
 ```
@@ -107,7 +88,20 @@ What my content guidelines from core to create the blog?
 
 ---
 
-### 3. Catch up on past context for any feature in claude code/cursor
+### 2. Take actions in your apps from Claude/Cursor
+
+Connect your apps once, take actions from anywhere.
+
+- Create/Read GitHub, Linear issues
+- Draft/Send/Read an email and store relevant info in CORE
+- Manage your calendar, update spreadsheet
+
+
+![actions](https://github.com/user-attachments/assets/60295a77-bdfd-4d57-aff5-d77ecb41e72d)
+
+---
+
+### 3. Pick up where you left off claude code/cursor
 
 Switching back to a feature after a week? Get caught up instantly.
 ```txt
@@ -117,6 +111,18 @@ What did we discuss about the checkout flow? Summarize from memory.
 Refer to past discussions and remind me where we left off on the API refactor
 ```
 ![claude-code-in-core](https://github.com/user-attachments/assets/0bd9566b-a8cc-49d9-a3cf-368658906c39)
+
+---
+
+## What Makes CORE Different
+
+1. **Temporal Context Graph**: CORE doesn't just store facts — it remembers the story. When things happened, how your thinking evolved, what led to each decision. Your preferences, goals, and past choices — all connected in a graph that understands sequence and context.
+
+2. **88.24% Recall Accuracy**: Tested on the LoCoMo benchmark. When you ask CORE something, it finds what's relevant. Not keyword matching, true semantic understanding with multi-hop reasoning.
+
+3. **You Control It**: Your memory, your rules. Edit what's wrong. Delete what doesn't belong. Visualize how your knowledge connects. CORE is transparent, you see exactly what it knows.
+
+4. **Open Source**: No black boxes. No vendor lock-in. Your digital brain belongs to you.
 
 ---
 
@@ -172,7 +178,7 @@ Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start
 
 ## 🛠️ Installation
 
-### CLIs
+### Recommended
 
 <details>
 <summary><b>Install in Claude Code CLI</b></summary>
@@ -186,6 +192,47 @@ claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/
 2. Type `/mcp` and open core-memory MCP for authentication
 
 </details>
+
+<details>
+<summary><b>Install in Cursor</b></summary>
+
+> Since Cursor 1.0, you can click the install button below for instant one-click installation.
+
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
+
+OR
+
+1. Go to: `Settings` -> `Tools & Integrations` -> `Add Custom MCP`
+2. Enter the below in `mcp.json` file:
+
+```json
+{
+  "mcpServers": {
+    "core-memory": {
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=cursor",
+      "headers": {}
+    }
+  }
+}
+```
+
+</details>
+
+<details>
+<summary><b>Install in Claude Desktop</b></summary>
+
+1. Copy CORE MCP URL:
+
+```
+https://mcp.getcore.me/api/v1/mcp?source=Claude
+```
+
+2. Navigate to Settings → Connectors → Click Add custom connector
+3. Click on "Connect" and grant Claude permission to access CORE MCP
+
+</details>
+
+### CLIs
 
 <details>
 <summary><b>Install in Codex CLI</b></summary>
@@ -263,30 +310,6 @@ Add the following to your `~/.copilot/mcp-config.json` file:
 
 ### IDEs
 
-<details>
-<summary><b>Install in Cursor</b></summary>
-
-> Since Cursor 1.0, you can click the install button below for instant one-click installation.
-
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
-
-OR
-
-1. Go to: `Settings` -> `Tools & Integrations` -> `Add Custom MCP`
-2. Enter the below in `mcp.json` file:
-
-```json
-{
-  "mcpServers": {
-    "core-memory": {
-      "url": "https://mcp.getcore.me/api/v1/mcp?source=cursor",
-      "headers": {}
-    }
-  }
-}
-```
-
-</details>
 
 <details>
 <summary><b>Install in VS Code</b></summary>
@@ -617,20 +640,6 @@ Add to your Crush configuration:
 ### Desktop Apps
 
 <details>
-<summary><b>Install in Claude Desktop</b></summary>
-
-1. Copy CORE MCP URL:
-
-```
-https://mcp.getcore.me/api/v1/mcp?source=Claude
-```
-
-2. Navigate to Settings → Connectors → Click Add custom connector
-3. Click on "Connect" and grant Claude permission to access CORE MCP
-
-</details>
-
-<details>
 <summary><b>Install in ChatGPT</b></summary>
 
 Connect ChatGPT to CORE's memory system via browser extension:
@@ -740,47 +749,39 @@ CORE Memory MCP provides the following tools that LLMs can use:
 
 ---
 
-## Why CORE?
-
-1. **Your AI tools understand context evolution**: "We decided X, then changed to Y because of Z" — CORE preserves the full story, not just the latest state.
-
-2. **Recall that handles complex queries**: "What did we discuss about payments before we switched to Stripe?" — CORE handles temporal and multi-hop reasoning. 88.24% on LoCoMo (SOTA).
-
-3. **One auth, every tool**: Connect GitHub once. Create issues from Claude. Read PRs from Cursor. Search code from Claude Code. Same for Linear, Slack, Gmail.
-
-4. **No vendor lock-in**: Open-source. Self-host on your infra. Export your data anytime.
-
----
-
 ## How it Works
 
-### How CORE create memory
+### Memory Ingestion
 
 <img width="12885" height="3048" alt="memory-ingest-diagram" src="https://github.com/user-attachments/assets/c51679de-8260-4bee-bebf-aff32c6b8e13" />
 
-CORE’s ingestion pipeline has four phases designed to capture evolving context:
+When you save context to CORE, it goes through four phases:
 
-1. **Normalization**: Links new information to recent context, breaks long documents into coherent chunks while keeping cross-references, and standardizes terms so by the time CORE extracts knowledge, it’s working with clean, contextualized input instead of messy text.
-2. **Extraction**: Pulls meaning from normalized text by identifying entities (people, tools, projects, concepts), turning them into statements with context, source, and time, and mapping relationships. For example, “We wrote CORE in Next.js” becomes: Entities (Core, Next.js), Statement (CORE was developed using Next.js), and Relationship (was developed using).
-3. **Resolution**: Detects contradictions, tracks how preferences evolve, and preserves multiple perspectives with provenance instead of overwriting them so memory reflects your full journey, not just the latest snapshot.
-4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph that links facts to their context and history, turning isolated data into a living web of knowledge agents can actually use.
+1. **Normalization**: Links new info to recent context, breaks documents into coherent chunks while keeping cross-references
+2. **Extraction**: Identifies entities (people, tools, projects), creates statements with context and time, maps relationships
+3. **Resolution**: Detects contradictions, tracks how preferences evolve, preserves multiple perspectives with provenance
+4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph
 
-The Result: Instead of a flat database, CORE gives you a memory that grows and changes with you - preserving context, evolution, and ownership so agents can actually use it.
+Example: "We wrote CORE in Next.js" becomes:
+
+- Entities: `CORE`, `Next.js`
+- Statement: `CORE was developed using Next.js`
+- Relationship: `was developed using`
 
 ![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
 
-### How CORE recalls from memory
+### Memory Recall
 
 <img width="10610" height="3454" alt="memory-search-diagram" src="https://github.com/user-attachments/assets/3541893e-f7c9-42b9-8fad-6dabf138dbeb" />
 
-When you ask CORE a question, it doesn’t just look up text - it digs into your whole knowledge graph to find the most useful answers.
+When you query CORE:
 
-1. **Search**: CORE looks through memory from multiple angles at once - keyword search for exact matches, semantic search for related ideas even if phrased differently, and graph traversal to follow links between connected concepts.
-2. **Re-Rank**: The retrieved results are reordered to highlight the most relevant and diverse ones, ensuring you don’t just see obvious matches but also deeper connections.
-3. **Filtering**: CORE applies smart filters based on time, reliability, and relationship strength, so only the most meaningful knowledge surfaces.
-4. **Output**: You get back both facts (clear statements) and episodes (the original context they came from), so recall is always grounded in context, time, and story.
+1. **Search**: Hybrid approach: keyword + semantic + graph traversal
+2. **Re-rank**: Surfaces most relevant and diverse results
+3. **Filter**: Applies time, reliability, and relationship strength filters
+4. **Output**: Returns facts AND the episodes they came from
 
-The result: CORE doesn’t just recall facts - it recalls them in the right context, time, and story, so agents can respond the way you would remember.
+CORE doesn't just recall facts — it recalls them in context, with time and story, so agents respond the way you would remember.
 
 ---
 
@@ -800,13 +801,13 @@ Building AI agents? CORE gives you memory infrastructure + integrations infrastr
 - Your agent gets MCP tools for all connected apps
 - No OAuth flows to build, no API maintenance
 
-### Examples
+### Examples Projects
 
 **[core-cli](https://github.com/RedPlanetHQ/core-cli)** — A task manager agent that connects to CORE for memory and syncs with Linear, GitHub Issues.
 
 **[holo](https://github.com/RedPlanetHQ/holo)** — Turn your CORE memory into a personal website with chat.
 
-### Get Started
+### Resources
 
 - [API Reference](https://docs.getcore.me/api-reference)
 - [SDK Documentation](https://docs.getcore.me)
@@ -816,12 +817,41 @@ Building AI agents? CORE gives you memory infrastructure + integrations infrastr
 
 ## 🔥 Research Highlights
 
-CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers. Check out this [blog](https://blog.heysol.ai/core-build-memory-knowledge-graph-for-individuals-and-achieved-sota-on-locomo-benchmark/) for more info.
+CORE memory achieves **88.24%** average accuracy in Locomo dataset across all reasoning tasks, significantly outperforming other memory providers.
 
 <img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
-(1) Single-hop questions require answers based on a single session; (2) Multi-hop questions require synthesizing information from multiple different sessions; (3) Open-domain knowledge questions can be answered by integrating a speaker’s provided information with external knowledge such as commonsense or world facts; (4) Temporal reasoning questions can be answered through temporal reasoning and capturing time-related data cues within the conversation;
+
+| Task Type | Description |
+|-----------|-------------|
+| Single-hop | Answers based on a single session |
+| Multi-hop | Synthesizing info from multiple sessions |
+| Open-domain | Integrating user info with external knowledge |
+| Temporal reasoning | Time-related cues and sequence understanding |
+
+
+[View benchmark methodology and results →](https://github.com/RedPlanetHQ/core-benchmark)
 
 ---
+
+
+## 🔒 Security
+
+CASA Tier 2 Certified — Third-party audited to meet Google's OAuth requirements.
+
+- Encryption: TLS 1.3 (transit) + AES-256 (rest)
+- Authentication: OAuth 2.0 and magic link
+- Access Control: Workspace-based isolation, role-based permissions
+- Zero-trust architecture: Never trust, always verify
+
+Your data, your control:
+
+- Edit and delete anytime
+- Never used for AI model training
+- Self-hosting option for full isolation
+
+For detailed security information, see our [Security Policy](SECURITY.md).
+
+Vulnerability Reporting: harshith@poozle.dev
 
 ## Documentation
 
@@ -831,17 +861,6 @@ Explore our documentation to get the most out of CORE
 - [Basic Concepts](https://docs.getcore.me/overview)
 - [Memory Graph](https://docs.getcore.me/concepts/memory_graph)
 - [API Reference](https://docs.getcore.me/api-reference/get-user-profile)
-
-## 🔒 Security
-
-CORE takes security seriously. We implement industry-standard security practices to protect your data:
-
-- **Data Encryption**: All data in transit (TLS 1.3) and at rest (AES-256)
-- **Authentication**: OAuth 2.0 and magic link authentication
-- **Access Control**: Workspace-based isolation and role-based permissions
-- **Vulnerability Reporting**: Please report security issues to harshith@poozle.dev
-
-For detailed security information, see our [Security Policy](SECURITY.md).
 
 ## 🧑‍💻 Support
 
@@ -872,6 +891,7 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
+
 
 
 
