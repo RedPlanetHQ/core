@@ -596,3 +596,72 @@ export async function hasCredits(
   // Free plan with no credits left
   return false;
 }
+
+/**
+ * Reset monthly credits for a workspace
+ */
+export async function resetMonthlyCredits(workspaceId: string): Promise<void> {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    include: {
+      Subscription: true,
+      user: {
+        include: {
+          UserUsage: true,
+        },
+      },
+    },
+  });
+
+  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+    throw new Error("Workspace, subscription, or user usage not found");
+  }
+
+  const subscription = workspace.Subscription;
+  const userUsage = workspace.user.UserUsage;
+  const now = new Date();
+  const nextMonth = new Date(now);
+  nextMonth.setMonth(nextMonth.getMonth() + 1);
+
+  // Create billing history record
+  await prisma.billingHistory.create({
+    data: {
+      subscriptionId: subscription.id,
+      periodStart: subscription.currentPeriodStart,
+      periodEnd: subscription.currentPeriodEnd,
+      monthlyCreditsAllocated: subscription.monthlyCredits,
+      creditsUsed: userUsage.usedCredits,
+      overageCreditsUsed: userUsage.overageCredits,
+      subscriptionAmount: 0, // TODO: Get from Stripe
+      usageAmount: subscription.overageAmount,
+      totalAmount: subscription.overageAmount,
+    },
+  });
+
+  // Reset credits
+  await prisma.$transaction([
+    prisma.userUsage.update({
+      where: { id: userUsage.id },
+      data: {
+        availableCredits: subscription.monthlyCredits,
+        usedCredits: 0,
+        overageCredits: 0,
+        lastResetAt: now,
+        nextResetAt: nextMonth,
+        // Reset usage breakdown
+        episodeCreditsUsed: 0,
+        searchCreditsUsed: 0,
+        chatCreditsUsed: 0,
+      },
+    }),
+    prisma.subscription.update({
+      where: { id: subscription.id },
+      data: {
+        currentPeriodStart: now,
+        currentPeriodEnd: nextMonth,
+        overageCreditsUsed: 0,
+        overageAmount: 0,
+      },
+    }),
+  ]);
+}

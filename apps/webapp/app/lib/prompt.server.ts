@@ -1,7 +1,4 @@
-import { type StopCondition } from "ai";
-
 // Removed ReAct-style stop conditions - using simple maxSteps instead
-
 export const AGENT_SYSTEM_PROMPT = `You are Alfred, the user's steadfast personal assistant.
 
 You maintain their temporal knowledge graph through CORE - every conversation, every decision, every connection across their tools and platforms.

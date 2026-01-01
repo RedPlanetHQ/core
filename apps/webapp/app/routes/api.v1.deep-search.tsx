@@ -20,7 +20,7 @@ import {
 } from "ai";
 import axios from "axios";
 import { logger } from "~/services/logger.service";
-import { getReActPrompt, hasAnswer } from "~/lib/prompt.server";
+import { getReActPrompt } from "~/lib/prompt.server";
 import { getModel } from "~/lib/model.server";
 
 const DeepSearchBodySchema = z.object({
@@ -139,7 +139,7 @@ const { action, loader } = createActionApiRoute(
             ...convertToModelMessages(validatedMessages),
           ],
           tools,
-          stopWhen: [hasAnswer, stepCountIs(10)],
+          stopWhen: [stepCountIs(10)],
         });
 
         return result.toUIMessageStreamResponse({
@@ -156,7 +156,7 @@ const { action, loader } = createActionApiRoute(
             ...convertToModelMessages(validatedMessages),
           ],
           tools,
-          stopWhen: [hasAnswer, stepCountIs(10)],
+          stopWhen: [stepCountIs(10)],
         });
 
         await deletePersonalAccessToken(pat?.id);
