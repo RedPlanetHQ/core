@@ -136,7 +136,7 @@ export async function processEpisodePreprocessing(
       const versioningService = new EpisodeVersioningService();
       const versionInfo = await versioningService.analyzeVersionChanges(
         sessionId,
-        payload.userId,
+        payload.workspaceId,
         chunked.originalContent,
         chunked.chunkHashes,
         type,
@@ -174,6 +174,7 @@ export async function processEpisodePreprocessing(
           const document = await prisma.document.findUnique({
             where: {
               id: sessionId,
+              workspaceId: payload.workspaceId,
             },
             select: {
               content: true,
@@ -439,7 +440,7 @@ export async function processEpisodePreprocessing(
     ) {
       // Check if this is a compact document update (type='conversation' in Document table)
       const document = await prisma.document.findUnique({
-        where: { id: sessionId },
+        where: { id: sessionId, workspaceId: payload.workspaceId },
         select: { type: true },
       });
 
@@ -483,7 +484,7 @@ export async function processEpisodePreprocessing(
       });
 
       const document = await prisma.document.upsert({
-        where: { id: sessionId },
+        where: { id: sessionId, workspaceId: payload.workspaceId },
         create: {
           id: sessionId,
           title: episodeBody.title || "Untitled Document",

@@ -48,7 +48,7 @@ export async function processTitleGeneration(
     // Check if Document already has a generated title (source of truth)
     if (sessionId) {
       const document = await prisma.document.findUnique({
-        where: { id: sessionId },
+        where: { id: sessionId, workspaceId: ingestionQueue.workspaceId },
         select: { title: true },
       });
 
@@ -108,12 +108,10 @@ export async function processTitleGeneration(
     if (sessionId) {
       try {
         await prisma.document.update({
-          where: { id: sessionId },
+          where: { id: sessionId, workspaceId: ingestionQueue.workspaceId },
           data: { title },
         });
-        logger.info(
-          `Updated document ${sessionId} with title: "${title}"`,
-        );
+        logger.info(`Updated document ${sessionId} with title: "${title}"`);
       } catch (error: any) {
         logger.warn(`Failed to update document title:`, {
           error: error.message,

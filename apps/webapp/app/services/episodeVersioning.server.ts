@@ -32,7 +32,7 @@ export class EpisodeVersioningService {
    */
   async analyzeVersionChanges(
     sessionId: string,
-    userId: string,
+    workspaceId: string,
     newContent: string,
     newChunkHashes: string[],
     type: EpisodeType,
@@ -46,6 +46,7 @@ export class EpisodeVersioningService {
     const document = await prisma.document.findUnique({
       where: {
         id: sessionId,
+        workspaceId,
       },
     });
 

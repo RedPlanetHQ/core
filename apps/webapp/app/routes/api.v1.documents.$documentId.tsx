@@ -104,10 +104,14 @@ const { action } = createHybridActionApiRoute(
         }
 
         // Update the ingestion queue with new labels
-        const updatedQueue = await updateDocument(params.documentId, {
-          labelIds: labels,
-          title,
-        });
+        const updatedQueue = await updateDocument(
+          params.documentId,
+          workspace?.id as string,
+          {
+            labelIds: labels,
+            title,
+          },
+        );
 
         return json({
           success: true,
@@ -147,6 +151,7 @@ const { action } = createHybridActionApiRoute(
         document as Document,
         content,
         authentication.userId,
+        workspace?.id as string,
       );
 
       return json(response);
@@ -161,7 +166,7 @@ const { action } = createHybridActionApiRoute(
           authentication.userId,
         );
 
-        await deleteDocument(document.id as string);
+        await deleteDocument(document.id as string, workspace?.id as string);
         return json({
           success: true,
           message: "Session deleted successfully",

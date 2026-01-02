@@ -72,7 +72,7 @@ export async function processSessionCompaction(
   try {
     // Check if compaction already exists
     const existingCompact = await prisma.document.findFirst({
-      where: { id: sessionId },
+      where: { id: sessionId, workspaceId },
     });
 
     // Fetch all episodes for this session
@@ -172,7 +172,7 @@ async function getTitleForCompactedSession(
   // 1. Try to get title from ingestion queue (first episode)
   const ingestionRecords = await prisma.ingestionQueue.findMany({
     where: { sessionId },
-    orderBy: { createdAt: 'asc' },
+    orderBy: { createdAt: "asc" },
     select: {
       title: true,
       id: true,
@@ -187,8 +187,14 @@ async function getTitleForCompactedSession(
 
   // 2. Try to get title from first episode metadata
   const metadataTitle = episodes[0]?.metadata?.title;
-  if (metadataTitle && typeof metadataTitle === 'string' && metadataTitle.trim()) {
-    logger.info(`Using title from first episode metadata for session ${sessionId}`);
+  if (
+    metadataTitle &&
+    typeof metadataTitle === "string" &&
+    metadataTitle.trim()
+  ) {
+    logger.info(
+      `Using title from first episode metadata for session ${sessionId}`,
+    );
     return metadataTitle.trim();
   }
 
@@ -198,8 +204,8 @@ async function getTitleForCompactedSession(
     try {
       const titleResult = await processTitleGeneration({
         queueId: ingestionRecords[0].id,
-        userId: episodes[0]?.userId || '',
-        workspaceId: '', // Not critical for title generation
+        userId: episodes[0]?.userId || "",
+        workspaceId: "", // Not critical for title generation
       });
 
       if (titleResult.success && titleResult.title) {
@@ -214,17 +220,17 @@ async function getTitleForCompactedSession(
 
   // 4. Fallback: extract first few words from summary
   const cleanSummary = summary
-    .replace(/<[^>]*>/g, '') // Strip HTML
-    .replace(/#{1,6}\s+/g, '') // Strip markdown headings
-    .replace(/\s+/g, ' ') // Normalize whitespace
+    .replace(/<[^>]*>/g, "") // Strip HTML
+    .replace(/#{1,6}\s+/g, "") // Strip markdown headings
+    .replace(/\s+/g, " ") // Normalize whitespace
     .trim();
 
   const truncated = cleanSummary.substring(0, 50);
-  const lastSpace = truncated.lastIndexOf(' ');
+  const lastSpace = truncated.lastIndexOf(" ");
   if (lastSpace > 20) {
-    return truncated.substring(0, lastSpace) + '...';
+    return truncated.substring(0, lastSpace) + "...";
   }
-  return truncated + (cleanSummary.length > 50 ? '...' : '');
+  return truncated + (cleanSummary.length > 50 ? "..." : "");
 }
 
 /**
@@ -244,10 +250,14 @@ async function upsertDocumentFromCompaction(
     const labelIds = episodes[0]?.labelIds || [];
 
     // Get title using smart title generation
-    const title = await getTitleForCompactedSession(sessionId, summary, episodes);
+    const title = await getTitleForCompactedSession(
+      sessionId,
+      summary,
+      episodes,
+    );
 
     const document = await prisma.document.upsert({
-      where: { id: sessionId },
+      where: { id: sessionId, workspaceId },
       create: {
         id: sessionId,
         title,

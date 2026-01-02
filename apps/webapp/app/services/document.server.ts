@@ -42,11 +42,13 @@ export const getDocument = async (id: string, workspaceId: string) => {
 
 export const updateDocument = async (
   id: string,
+  workspaceId: string,
   updateData: DocumentUpdateParams,
 ) => {
   return await prisma.document.update({
     where: {
       id,
+      workspaceId,
     },
     data: {
       title: updateData.title,
@@ -55,10 +57,11 @@ export const updateDocument = async (
   });
 };
 
-export const deleteDocument = async (id: string) => {
+export const deleteDocument = async (id: string, workspaceId: string) => {
   return await prisma.document.delete({
     where: {
       id,
+      workspaceId,
     },
   });
 };
@@ -81,6 +84,7 @@ export const updateDocumentContent = async (
   document: Document,
   content: string,
   userId: string,
+  workspaceId: string,
 ) => {
   const id = document.id;
 
@@ -119,6 +123,7 @@ export const updateDocumentContent = async (
     await prisma.document.update({
       where: {
         id,
+        workspaceId,
       },
       data: {
         content,

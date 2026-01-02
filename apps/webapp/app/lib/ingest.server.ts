@@ -159,7 +159,7 @@ export const addToQueue = async (
 
     // Check if document exists (indicates successful completion)
     const document = await prisma.document.findUnique({
-      where: { id: sessionId },
+      where: { id: sessionId, workspaceId: user.Workspace.id },
       select: { id: true },
     });
 

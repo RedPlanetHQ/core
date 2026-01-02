@@ -55,7 +55,10 @@ export async function processLabelAssignment(
     // Check Document table for existing labels (source of truth)
     if (ingestionQueue.sessionId) {
       const document = await prisma.document.findUnique({
-        where: { id: ingestionQueue.sessionId },
+        where: {
+          id: ingestionQueue.sessionId,
+          workspaceId: ingestionQueue.workspaceId,
+        },
         select: { labelIds: true },
       });
 
@@ -175,7 +178,10 @@ export async function processLabelAssignment(
     if (ingestionQueue.sessionId) {
       try {
         await prisma.document.update({
-          where: { id: ingestionQueue.sessionId },
+          where: {
+            id: ingestionQueue.sessionId,
+            workspaceId: ingestionQueue.workspaceId,
+          },
           data: { labelIds: allLabelIds },
         });
         logger.info(
