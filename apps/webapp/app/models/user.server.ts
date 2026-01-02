@@ -272,3 +272,14 @@ export async function deleteUser(id: User["id"]) {
     where: { id },
   });
 }
+
+export const setPhoneNumber = async (phoneNumber: string, userId: string) => {
+  return await prisma.user.update({
+    where: {
+      id: userId,
+    },
+    data: {
+      phoneNumber,
+    },
+  });
+};

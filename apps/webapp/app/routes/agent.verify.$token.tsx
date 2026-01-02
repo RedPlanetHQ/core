@@ -4,10 +4,8 @@ import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
-import {
-  getInvitation,
-  linkWhatsappInvitation,
-} from "~/services/invitation.server";
+import { setPhoneNumber } from "~/models/user.server";
+
 import { logger } from "~/services/logger.service";
 
 import { createPersonalAccessTokenFromAuthorizationCode } from "~/services/personalAccessToken.server";
@@ -59,16 +57,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
         "whatsapp",
       );
 
-    const invitation = await getInvitation(codeDetails.invitationId);
-
-    // Link whatsapp number with user
-    if (invitation && invitation.source === "whatsapp") {
-      await linkWhatsappInvitation(
-        userId,
-        invitation.id,
-        invitation.identifier,
-      );
-    }
+    await setPhoneNumber(codeDetails.identifier, userId);
 
     return typedjson({
       success: true as const,
