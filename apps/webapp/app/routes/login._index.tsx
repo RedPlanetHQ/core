@@ -96,7 +96,10 @@ export default function LoginPage() {
                   variant="secondary"
                   className="rounded-lg text-base"
                   data-action="continue with google"
-                  onClick={() => (window.location.href = "/auth/google")}
+                  onClick={() => {
+                    const redirect = data.redirectTo ? `?redirectTo=${encodeURIComponent(data.redirectTo)}` : '';
+                    window.location.href = `/auth/google${redirect}`;
+                  }}
                 >
                   <RiGoogleLine className={"mr-1 size-5"} />
                   <span>Continue with Google</span>
@@ -109,7 +112,10 @@ export default function LoginPage() {
                   size="xl"
                   data-action="continue with email"
                   className="text-text-bright"
-                  onClick={() => (window.location.href = "/login/magic")}
+                  onClick={() => {
+                    const redirect = data.redirectTo ? `?redirectTo=${encodeURIComponent(data.redirectTo)}` : '';
+                    window.location.href = `/login/magic${redirect}`;
+                  }}
                 >
                   <Mail className="text-text-bright mr-2 size-5" />
                   Continue with Email

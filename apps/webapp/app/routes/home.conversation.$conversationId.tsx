@@ -97,7 +97,7 @@ export default function SingleConversation() {
           </ScrollAreaWithAutoScroll>
 
           <div className="flex w-full flex-col items-center">
-            <div className="w-full max-w-[80ch] px-1 pr-2">
+            <div className="w-full max-w-[90ch] px-1 pr-2">
               <ConversationTextarea
                 className="bg-background-3 w-full border-1 border-gray-300"
                 isLoading={status === "streaming" || status === "submitted"}

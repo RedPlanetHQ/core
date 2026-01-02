@@ -161,7 +161,7 @@ export const ScrollAreaWithAutoScroll = ({
         className,
       )}
     >
-      <div className="flex h-full w-full max-w-[80ch] flex-col pb-4">
+      <div className="flex h-full w-full max-w-[90ch] flex-col pb-4">
         {children}
       </div>
     </div>
