@@ -12,7 +12,7 @@ import { createPersonalAccessTokenFromAuthorizationCode } from "~/services/perso
 import { requireUserId } from "~/services/session.server";
 
 const ParamsSchema = z.object({
-  code: z.string(),
+  token: z.string(),
 });
 
 const SearchParamsSchema = z.object({
@@ -45,9 +45,10 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     "unknown";
 
   try {
-    const parsedBase64 = Buffer.from(parsedParams.data.code, "base64").toString(
-      "utf-8",
-    );
+    const parsedBase64 = Buffer.from(
+      parsedParams.data.token,
+      "base64",
+    ).toString("utf-8");
     const codeDetails = JSON.parse(parsedBase64);
 
     const personalAccessToken =
