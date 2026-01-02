@@ -2,10 +2,10 @@ import express from 'express';
 import type { Server } from 'http';
 import { env } from './config/env';
 import { logger } from './utils/logger';
-import { initializeWorkers } from './queue/workers';
 import { whatsappWebhook } from './webhooks/whatsapp';
 import { emailWebhook } from './webhooks/email';
 import { verifyEndpoint } from './auth/verify';
+import { chatEndpoint } from './routes/chat';
 
 const app = express();
 
@@ -20,6 +20,9 @@ app.use(express.urlencoded({ extended: true }));
 app.post('/webhooks/whatsapp', whatsappWebhook);
 app.post('/webhooks/email/inbound', emailWebhook);
 app.get('/verify/:token', verifyEndpoint);
+
+// API Routes (for testing)
+app.post('/api/chat', chatEndpoint);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -86,10 +89,6 @@ async function start() {
     logger.info('Process exiting');
   });
   try {
-    // Initialize BullMQ workers
-    await initializeWorkers();
-    logger.info('BullMQ workers initialized');
-
     // Start Express server
     const PORT = parseInt(env.PORT);
     const server = app.listen(PORT, '0.0.0.0', () => {

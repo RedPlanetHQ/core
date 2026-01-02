@@ -149,6 +149,83 @@ export class CoreMemoryClient {
     }
   }
 
+  async getIntegrationActions(
+    integrationSlug: string,
+    query: string
+  ): Promise<Array<{ name: string; description: string; inputSchema: Record<string, unknown> }>> {
+    if (!this.client) throw new Error('MCP client not connected');
+
+    try {
+      const response = await this.client.callTool({
+        name: 'get_integration_actions',
+        arguments: {
+          integrationSlug,
+          query,
+        },
+      });
+
+      if (response.isError) {
+        logger.error('Get integration actions error', response.content);
+        return [];
+      }
+
+      const content = (response.content as any)?.[0]?.text;
+      if (!content) return [];
+
+      try {
+        return JSON.parse(content);
+      } catch {
+        return [];
+      }
+    } catch (error) {
+      logger.error('Failed to get integration actions', error);
+      return [];
+    }
+  }
+
+  async executeIntegrationAction(
+    integrationSlug: string,
+    action: string,
+    parameters: Record<string, unknown>
+  ): Promise<unknown> {
+    if (!this.client) throw new Error('MCP client not connected');
+
+    try {
+      const response = await this.client.callTool({
+        name: 'execute_integration_action',
+        arguments: {
+          integrationSlug,
+          action,
+          parameters,
+        },
+      });
+
+      if (response.isError) {
+        logger.error('Execute integration action error', response.content);
+        throw new Error('service unavailable');
+      }
+
+      const content = (response.content as any)?.[0]?.text;
+      if (!content) return null;
+
+      // Check if the response contains error-like text
+      const lowerContent = content.toLowerCase();
+      if (lowerContent.includes('error') || lowerContent.includes('failed') || lowerContent.includes('unknown')) {
+        logger.warn('Integration action returned error-like response', content);
+        throw new Error('service unavailable');
+      }
+
+      try {
+        return JSON.parse(content);
+      } catch {
+        return content;
+      }
+    } catch (error) {
+      logger.error('Failed to execute integration action', error);
+      throw error;
+    }
+  }
+
   async initializeSession(): Promise<string> {
     if (!this.client) throw new Error('MCP client not connected');
 

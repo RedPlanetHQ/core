@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { Resend } from 'resend';
 import { prisma } from '../db.server';
 import { handleNewUser } from '../auth/verify';
-import { agentMessageQueue } from '../queue/queues';
+import { processMessage } from '../services/message-processor';
 import { logger } from '../utils/logger';
 import { env } from '../config/env';
 
@@ -88,8 +88,8 @@ export async function emailWebhook(req: Request, res: Response): Promise<void> {
       },
     });
 
-    // Enqueue for processing
-    await agentMessageQueue.add('process-message', {
+    // Process message synchronously (time-sensitive)
+    await processMessage({
       userId: user.id,
       conversationId: conversation.id,
       message: messageContent,
@@ -98,7 +98,7 @@ export async function emailWebhook(req: Request, res: Response): Promise<void> {
       messageId: message_id,
     });
 
-    logger.info(`Enqueued email message from ${from}`);
+    logger.info(`Processed email message from ${from}`);
     res.status(200).send();
   } catch (error) {
     logger.error('Email webhook error', error);

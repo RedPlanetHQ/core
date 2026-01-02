@@ -10,6 +10,46 @@ export interface GenerateResponseParams {
   persona?: string;
   integrations?: Array<{ slug: string; name: string }>;
 }
+export type ModelComplexity = "high" | "low";
+
+
+/**
+ * Get the appropriate model for a given complexity level.
+ * HIGH complexity uses the configured MODEL.
+ * LOW complexity automatically downgrades to cheaper variants if possible.
+ */
+export function getModelForTask(complexity: ModelComplexity = "high"): string {
+  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+
+  // HIGH complexity - always use the configured model
+  if (complexity === "high") {
+    return baseModel;
+  }
+
+  // LOW complexity - automatically downgrade expensive models to cheaper variants
+  // If already using a cheap model, keep it
+  const downgrades: Record<string, string> = {
+    // OpenAI downgrades
+    "gpt-5.2-2025-12-11": "gpt-5-mini-2025-08-07",
+    "gpt-5.1-2025-11-13": "gpt-5-mini-2025-08-07",
+    "gpt-5-2025-08-07": "gpt-5-mini-2025-08-07",
+    "gpt-4.1-2025-04-14": "gpt-4.1-mini-2025-04-14",
+
+    // Anthropic downgrades
+    "claude-sonnet-4-5": "claude-3-5-haiku-20241022",
+    "claude-3-7-sonnet-20250219": "claude-3-5-haiku-20241022",
+    "claude-3-opus-20240229": "claude-3-5-haiku-20241022",
+
+    // Google downgrades
+    "gemini-2.5-pro-preview-03-25": "gemini-2.5-flash-preview-04-17",
+    "gemini-2.0-flash": "gemini-2.0-flash-lite",
+
+    // AWS Bedrock downgrades (keep same model - already cost-optimized)
+    "us.amazon.nova-premier-v1:0": "us.amazon.nova-premier-v1:0",
+  };
+
+  return downgrades[baseModel] || baseModel;
+}
 
 export async function generateAgentResponse(params: GenerateResponseParams): Promise<string> {
   const { userMessage, memoryContext, persona, integrations } = params;
@@ -51,8 +91,8 @@ export async function generateAgentResponse(params: GenerateResponseParams): Pro
   }
 }
 
-function getModelInstance() {
-  const model = process.env.MODEL || process.env.AI_MODEL || 'gpt-4o';
+export function getModelInstance(complexity: ModelComplexity = 'high') {
+  const model = getModelForTask(complexity);
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;

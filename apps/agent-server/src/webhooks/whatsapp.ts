@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { prisma } from '../db.server';
 import { verifyWebhookSignature } from '../services/whatsapp';
 import { handleNewUser } from '../auth/verify';
-import { agentMessageQueue } from '../queue/queues';
+import { processMessage } from '../services/message-processor';
 import { logger } from '../utils/logger';
 
 export async function whatsappWebhook(req: Request, res: Response): Promise<void> {
@@ -72,15 +72,15 @@ export async function whatsappWebhook(req: Request, res: Response): Promise<void
       },
     });
 
-    // Enqueue for processing
-    await agentMessageQueue.add('process-message', {
+    // Process message synchronously (time-sensitive)
+    await processMessage({
       userId: user.id,
       conversationId: conversation.id,
       message: body,
       source: 'whatsapp',
     });
 
-    logger.info(`Enqueued WhatsApp message from ${phoneNumber}`);
+    logger.info(`Processed WhatsApp message from ${phoneNumber}`);
     res.status(200).send();
   } catch (error) {
     logger.error('WhatsApp webhook error', error);
