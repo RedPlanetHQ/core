@@ -27,6 +27,9 @@ const loader = createHybridLoaderApiRoute(
       id: authentication.userId,
       name: user?.name,
       persona: personaLog?.content,
+      workspaceId: user?.Workspace?.id,
+      phoneNumber: user?.phoneNumber,
+      email: user?.email,
     });
   },
 );

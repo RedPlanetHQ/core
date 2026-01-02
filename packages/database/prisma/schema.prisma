@@ -80,6 +80,7 @@ model Conversation {
   deleted   DateTime?
 
   unread Boolean @default(false)
+  source String  @default("core")
 
   title  String?
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)

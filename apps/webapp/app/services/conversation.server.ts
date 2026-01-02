@@ -154,6 +154,7 @@ export const GetConversationsListSchema = z.object({
   page: z.string().optional().default("1"),
   limit: z.string().optional().default("20"),
   search: z.string().optional(),
+  source: z.string().default("core"),
 });
 
 export type GetConversationsListDto = z.infer<
@@ -173,6 +174,7 @@ export async function getConversationsList(
     workspaceId,
     userId,
     deleted: null,
+    source: params.source,
     ...(params.search && {
       OR: [
         {

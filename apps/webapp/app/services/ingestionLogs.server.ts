@@ -240,3 +240,14 @@ export const getDocument = async (id: string, workspaceId: string) => {
     },
   });
 };
+
+export const getPendingIngestionsForSession = async (sessionId: string) => {
+  return await prisma.ingestionQueue.findMany({
+    where: {
+      sessionId,
+      status: {
+        in: ["PENDING", "PROCESSING"],
+      },
+    },
+  });
+};
