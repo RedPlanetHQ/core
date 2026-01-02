@@ -235,25 +235,6 @@ export function updateUser({
   });
 }
 
-export async function grantUserCloudAccess({
-  id,
-  inviteCode,
-}: {
-  id: string;
-  inviteCode: string;
-}) {
-  return prisma.user.update({
-    where: { id },
-    data: {
-      InvitationCode: {
-        connect: {
-          code: inviteCode,
-        },
-      },
-    },
-  });
-}
-
 export async function deleteUser(id: User["id"]) {
   // Get user to verify they exist
   const user = await prisma.user.findUnique({

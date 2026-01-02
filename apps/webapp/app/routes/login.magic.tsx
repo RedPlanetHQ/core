@@ -31,6 +31,8 @@ import {
 } from "~/services/sessionStorage.server";
 import { env } from "~/env.server";
 import Logo from "~/components/logo/logo";
+import { redirectCookie } from "./auth.google";
+import { requestUrl } from "~/utils/requestUrl.server";
 
 export const meta: MetaFunction = ({ matches }) => {
   const parentMeta = matches
@@ -103,9 +105,18 @@ export async function action({ request }: ActionFunctionArgs) {
     .parse(payload);
 
   if (action === "send") {
+    const url = requestUrl(request);
+    const redirectTo = url.searchParams.get("redirectTo");
+
     const headers = await authenticator
       .authenticate("email-link", request)
       .catch((headers) => headers);
+
+    // Store redirectTo in cookie if present
+    if (redirectTo && headers instanceof Headers) {
+      headers.append("Set-Cookie", await redirectCookie.serialize(redirectTo));
+    }
+
     throw redirect("/login/magic", { headers });
   } else {
     const myCookie = createCookie("core:magiclink");

@@ -63,6 +63,10 @@ export async function action({ request }: ActionFunctionArgs) {
     return json(submission);
   }
 
+  if (submission.value.name === "cli" || submission.value.name === "whatsapp") {
+    return json(submission);
+  }
+
   const results = await createPersonalAccessToken({
     name: submission.value.name,
     userId,

@@ -18,6 +18,25 @@ type CreatePersonalAccessTokenOptions = {
   userId: string;
 };
 
+export const GetPersonalAccessTokenRequestSchema = z.object({
+  authorizationCode: z.string(),
+});
+export type GetPersonalAccessTokenRequest = z.infer<
+  typeof GetPersonalAccessTokenRequestSchema
+>;
+
+export const GetPersonalAccessTokenResponseSchema = z.object({
+  token: z
+    .object({
+      token: z.string(),
+      obfuscatedToken: z.string(),
+    })
+    .nullable(),
+});
+export type GetPersonalAccessTokenResponse = z.infer<
+  typeof GetPersonalAccessTokenResponseSchema
+>;
+
 /** Returns obfuscated access tokens that aren't revoked */
 export async function getValidPersonalAccessTokens(userId: string) {
   const personalAccessTokens = await prisma.personalAccessToken.findMany({
@@ -31,6 +50,9 @@ export async function getValidPersonalAccessTokens(userId: string) {
     where: {
       userId,
       revokedAt: null,
+      name: {
+        notIn: ["cli", "whatsapp"],
+      },
     },
   });
 
@@ -179,6 +201,15 @@ export function isPersonalAccessToken(token: string) {
   return token.startsWith(tokenPrefix);
 }
 
+export const CreateAuthorizationCodeResponseSchema = z.object({
+  url: z.string().url(),
+  authorizationCode: z.string(),
+});
+
+export type CreateAuthorizationCodeResponse = z.infer<
+  typeof CreateAuthorizationCodeResponseSchema
+>;
+
 export function createAuthorizationCode() {
   return prisma.authorizationCode.create({
     data: {
@@ -191,6 +222,7 @@ export function createAuthorizationCode() {
 export async function createPersonalAccessTokenFromAuthorizationCode(
   authorizationCode: string,
   userId: string,
+  name?: string,
 ) {
   //only allow authorization codes that were created less than 10 mins ago
   const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
@@ -214,7 +246,7 @@ export async function createPersonalAccessTokenFromAuthorizationCode(
     await prisma.personalAccessToken.findFirst({
       where: {
         userId,
-        name: "cli",
+        name: name ?? "cli",
       },
     });
 

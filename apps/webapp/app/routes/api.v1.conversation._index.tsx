@@ -19,9 +19,7 @@ import {
 
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
-import {
-  AGENT_SYSTEM_PROMPT,
-} from "~/lib/prompt.server";
+import { AGENT_SYSTEM_PROMPT } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
@@ -172,27 +170,27 @@ const { loader, action } = createHybridActionApiRoute(
     const dateTimeContext = `
     <current_datetime>
     Current date and time: ${now.toLocaleString("en-US", {
-          weekday: "long",
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZoneName: "short",
-        })}
+      weekday: "long",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      timeZoneName: "short",
+    })}
     </current_datetime>`;
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
-    if (personaContent) {
-      systemPrompt = `${systemPrompt}
+    // if (personaContent) {
+    //   systemPrompt = `${systemPrompt}
 
-      <user_persona>
-      You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
+    //   <user_persona>
+    //   You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
 
-      ${personaContent}
-      </user_persona>`;
-    }
+    //   ${personaContent}
+    //   </user_persona>`;
+    // }
 
     const result = streamText({
       model: getModel() as LanguageModel,
@@ -206,9 +204,7 @@ const { loader, action } = createHybridActionApiRoute(
         }),
       ],
       tools,
-      stopWhen: [
-        stepCountIs(10),
-      ],
+      stopWhen: [stepCountIs(10)],
       temperature: 0.5,
     });
 
