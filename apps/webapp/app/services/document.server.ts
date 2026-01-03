@@ -40,6 +40,44 @@ export const getDocument = async (id: string, workspaceId: string) => {
   };
 };
 
+export const getDocumentForSession = async (
+  sessionId: string,
+  workspaceId: string,
+) => {
+  const document = await prisma.document.findUnique({
+    where: {
+      sessionId_workspaceId: {
+        sessionId,
+        workspaceId,
+      },
+    },
+  });
+
+  const [latestIngestionLog, ingestionQueueCount] = await Promise.all([
+    await prisma.ingestionQueue.findFirst({
+      where: {
+        sessionId: document?.sessionId,
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+    await prisma.ingestionQueue.count({
+      where: {
+        sessionId: document?.sessionId,
+      },
+    }),
+  ]);
+
+  return {
+    ...document,
+    latestIngestionLog,
+    ingestionQueueCount,
+    error: latestIngestionLog?.error,
+    status: latestIngestionLog?.status,
+  };
+};
+
 export const updateDocument = async (
   id: string,
   workspaceId: string,

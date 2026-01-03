@@ -206,9 +206,9 @@ export const loader = createHybridLoaderApiRoute(
     // Augment documents with ingestion queue data
     const documentsWithQueueData = documents.map((doc) => ({
       ...doc,
-      status: latestLogMap.get(doc.id)?.status || null,
-      error: latestLogMap.get(doc.id)?.error || null,
-      ingestionQueueCount: countMap.get(doc.id) || 0,
+      status: latestLogMap.get(doc.sessionId)?.status || null,
+      error: latestLogMap.get(doc.sessionId)?.error || null,
+      ingestionQueueCount: countMap.get(doc.sessionId) || 0,
     }));
 
     return json({

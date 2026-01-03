@@ -3,7 +3,7 @@ import { z } from "zod";
 import { getPendingIngestionsForSession } from "~/services/ingestionLogs.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
-import { getDocument } from "~/services/document.server";
+import { getDocumentForSession } from "~/services/document.server";
 
 // Schema for space ID parameter
 const DocumentParamsSchema = z.object({
@@ -29,7 +29,7 @@ const loader = createHybridLoaderApiRoute(
   async ({ params, authentication }) => {
     const workspace = await getWorkspaceByUser(authentication.userId);
 
-    const document = await getDocument(
+    const document = await getDocumentForSession(
       params.documentId,
       workspace?.id as string,
     );
@@ -40,6 +40,7 @@ const loader = createHybridLoaderApiRoute(
     const pendingIngestionContent = pendingIngestions
       .map((pi) => (pi.data as any).episodeBody)
       .join("-----\n");
+
     return json({
       context: `${document.content}\n\n---------------------------\n\n${pendingIngestionContent}`,
     });
