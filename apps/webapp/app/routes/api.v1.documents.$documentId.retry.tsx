@@ -42,7 +42,7 @@ const { action } = createHybridActionApiRoute(
 
       const latestIngestionLog = await prisma.ingestionQueue.findFirst({
         where: {
-          sessionId: document?.id,
+          sessionId: document?.sessionId,
         },
         orderBy: {
           createdAt: "desc",

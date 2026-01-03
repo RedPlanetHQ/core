@@ -135,10 +135,12 @@ model ConversationHistory {
 }
 
 model Document {
-  id        String    @id
+  id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
+
+  sessionId String?
 
   title       String
   content     String
@@ -154,7 +156,9 @@ model Document {
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([sessionId, workspaceId])
   @@index([workspaceId])
+  @@index([sessionId, workspaceId])
 }
 
 model EntityEmbedding {

@@ -8,10 +8,17 @@ interface DocumentUpdateParams {
 }
 
 export const getDocument = async (id: string, workspaceId: string) => {
+  const document = await prisma.document.findUnique({
+    where: {
+      id,
+      workspaceId,
+    },
+  });
+
   const [latestIngestionLog, ingestionQueueCount] = await Promise.all([
     await prisma.ingestionQueue.findFirst({
       where: {
-        sessionId: id,
+        sessionId: document?.sessionId,
       },
       orderBy: {
         createdAt: "desc",
@@ -19,17 +26,10 @@ export const getDocument = async (id: string, workspaceId: string) => {
     }),
     await prisma.ingestionQueue.count({
       where: {
-        sessionId: id,
+        sessionId: document?.sessionId,
       },
     }),
   ]);
-
-  const document = await prisma.document.findUnique({
-    where: {
-      id,
-      workspaceId,
-    },
-  });
 
   return {
     ...document,
@@ -91,7 +91,7 @@ export const updateDocumentContent = async (
   // Find the latest document-type log for this session
   const latestDocumentLog = await prisma.ingestionQueue.findFirst({
     where: {
-      sessionId: id,
+      sessionId: document.sessionId,
       type: "DOCUMENT",
     },
     orderBy: {
@@ -141,7 +141,7 @@ export const updateDocumentContent = async (
     const newLogData = {
       type: "DOCUMENT",
       episodeBody: content,
-      sessionId: id,
+      sessionId: document?.sessionId as string,
       source: document.source ?? "core",
       referenceTime: new Date().toISOString(),
       delay: true,

@@ -45,8 +45,10 @@ export class EpisodeVersioningService {
 
     const document = await prisma.document.findUnique({
       where: {
-        id: sessionId,
-        workspaceId,
+        sessionId_workspaceId: {
+          sessionId,
+          workspaceId,
+        },
       },
     });
 

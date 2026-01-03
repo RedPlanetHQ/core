@@ -171,9 +171,9 @@ export async function processEpisodePreprocessing(
 
         // For compact conversation updates, get old content from Document table
         if (versionInfo.document?.type === "conversation") {
-          const document = await prisma.document.findUnique({
+          const document = await prisma.document.findFirst({
             where: {
-              id: sessionId,
+              sessionId,
               workspaceId: payload.workspaceId,
             },
             select: {
@@ -439,8 +439,8 @@ export async function processEpisodePreprocessing(
       enqueueSessionCompaction
     ) {
       // Check if this is a compact document update (type='conversation' in Document table)
-      const document = await prisma.document.findUnique({
-        where: { id: sessionId, workspaceId: payload.workspaceId },
+      const document = await prisma.document.findFirst({
+        where: { sessionId, workspaceId: payload.workspaceId },
         select: { type: true },
       });
 
@@ -456,7 +456,7 @@ export async function processEpisodePreprocessing(
         try {
           await enqueueSessionCompaction({
             userId: payload.userId,
-            sessionId: sessionId,
+            sessionId,
             source: episodeBody.source,
             workspaceId: payload.workspaceId,
           });
@@ -484,7 +484,12 @@ export async function processEpisodePreprocessing(
       });
 
       const document = await prisma.document.upsert({
-        where: { id: sessionId, workspaceId: payload.workspaceId },
+        where: {
+          sessionId_workspaceId: {
+            sessionId,
+            workspaceId: payload.workspaceId,
+          },
+        },
         create: {
           id: sessionId,
           title: episodeBody.title || "Untitled Document",

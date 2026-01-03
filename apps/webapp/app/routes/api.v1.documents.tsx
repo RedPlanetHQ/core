@@ -156,7 +156,9 @@ export const loader = createHybridLoaderApiRoute(
         : null;
 
     // Get document IDs for ingestion queue lookups
-    const documentIds = documents.map((d) => d.id);
+    const documentIds = documents
+      .map((d) => d.sessionId)
+      .filter(Boolean) as string[];
 
     // Fetch latest ingestion logs and counts in parallel for all documents
     const [latestLogs, queueCounts] =

@@ -131,53 +131,7 @@ export const addToQueue = async (
     trackFeatureUsage("episode_ingested", userId).catch(console.error);
   }
 
-  // Poll for completion or failure
-  const maxAttempts = 60; // 60 attempts
-  const pollInterval = 1000; // 1 second between polls
-
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    // Wait before checking
-    await new Promise((resolve) => setTimeout(resolve, pollInterval));
-
-    // Check ingestion queue status
-    const queue = await prisma.ingestionQueue.findUnique({
-      where: { id: queuePersist.id },
-      select: { status: true, error: true },
-    });
-
-    if (queue?.status === IngestionStatus.FAILED) {
-      throw new Response(
-        JSON.stringify({
-          error: queue.error || "Ingestion failed",
-        }),
-        {
-          status: 500,
-          headers: { "Content-Type": "application/json" },
-        },
-      );
-    }
-
-    // Check if document exists (indicates successful completion)
-    const document = await prisma.document.findUnique({
-      where: { id: sessionId, workspaceId: user.Workspace.id },
-      select: { id: true },
-    });
-
-    if (document) {
-      return { id: sessionId };
-    }
-  }
-
-  // Timeout after max attempts
-  throw new Response(
-    JSON.stringify({
-      error: "Ingestion timeout - processing took too long",
-    }),
-    {
-      status: 500,
-      headers: { "Content-Type": "application/json" },
-    },
-  );
+  return { id: handler.id };
 };
 
 export { IngestBodyRequest };

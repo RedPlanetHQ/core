@@ -72,7 +72,7 @@ export async function processSessionCompaction(
   try {
     // Check if compaction already exists
     const existingCompact = await prisma.document.findFirst({
-      where: { id: sessionId, workspaceId },
+      where: { sessionId, workspaceId },
     });
 
     // Fetch all episodes for this session
@@ -257,7 +257,12 @@ async function upsertDocumentFromCompaction(
     );
 
     const document = await prisma.document.upsert({
-      where: { id: sessionId, workspaceId },
+      where: {
+        sessionId_workspaceId: {
+          sessionId,
+          workspaceId,
+        },
+      },
       create: {
         id: sessionId,
         title,
