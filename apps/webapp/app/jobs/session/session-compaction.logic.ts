@@ -364,7 +364,7 @@ async function updateCompaction(
 
   // Update graph, vector DB, and Document table in parallel
   const document = await upsertDocumentFromCompaction(
-    existingCompact.id,
+    existingCompact.sessionId as string,
     compactionData.summary,
     source,
     userId,
