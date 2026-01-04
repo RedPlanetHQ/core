@@ -264,7 +264,7 @@ async function upsertDocumentFromCompaction(
         },
       },
       create: {
-        id: sessionId,
+        sessionId,
         title,
         content: summary,
         labelIds,
@@ -279,6 +279,7 @@ async function upsertDocumentFromCompaction(
       },
       update: {
         title,
+        sessionId,
         content: summary,
         updatedAt: new Date(),
         metadata: {

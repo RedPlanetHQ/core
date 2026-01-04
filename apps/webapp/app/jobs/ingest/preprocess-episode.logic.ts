@@ -491,7 +491,7 @@ export async function processEpisodePreprocessing(
           },
         },
         create: {
-          id: sessionId,
+          sessionId,
           title: episodeBody.title || "Untitled Document",
           content: chunked.originalContent,
           labelIds: episodeBody.labelIds || [],
@@ -510,6 +510,7 @@ export async function processEpisodePreprocessing(
           title: episodeBody.title || "Untitled Document",
           content: chunked.originalContent,
           updatedAt: new Date(),
+          sessionId,
           metadata: {
             chunkCount: chunked.totalChunks,
             contentHash: chunked.contentHash,
