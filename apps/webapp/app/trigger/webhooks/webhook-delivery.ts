@@ -12,8 +12,10 @@ const webhookQueue = queue({
 });
 
 interface WebhookDeliveryPayload {
-  activityId: string;
+  activityId?: string;
   workspaceId: string;
+  raw?: boolean;
+  rawBody?: any;
 }
 
 export const webhookDeliveryTask = task({
@@ -24,24 +26,6 @@ export const webhookDeliveryTask = task({
       logger.log(
         `Processing webhook delivery for activity ${payload.activityId}`,
       );
-
-      // Get the activity data
-      const activity = await prisma.activity.findUnique({
-        where: { id: payload.activityId },
-        include: {
-          integrationAccount: {
-            include: {
-              integrationDefinition: true,
-            },
-          },
-          workspace: true,
-        },
-      });
-
-      if (!activity) {
-        logger.error(`Activity ${payload.activityId} not found`);
-        return { success: false, error: "Activity not found" };
-      }
 
       // Get active webhooks for this workspace
       const webhooks = await prisma.webhookConfiguration.findMany({
@@ -56,62 +40,88 @@ export const webhookDeliveryTask = task({
         },
       });
 
-      const oauthClients = await prisma.oAuthClientInstallation.findMany({
-        where: {
-          workspaceId: activity.workspaceId,
-          installedById: activity.workspace.userId!,
-          isActive: true,
-          grantedScopes: {
-            contains: "integration",
-          },
-          oauthClient: {
-            clientType: "regular",
-          },
-        },
-        select: {
-          id: true,
-          oauthClient: {
-            select: {
-              clientId: true,
-              webhookUrl: true,
-              webhookSecret: true,
+      let webhookPayload;
+      let oauthClients: Array<any> = [];
+
+      if (payload.activityId) {
+        oauthClients = await prisma.oAuthClientInstallation.findMany({
+          where: {
+            workspaceId: payload.workspaceId,
+            isActive: true,
+            grantedScopes: {
+              contains: "integration",
+            },
+            oauthClient: {
+              clientType: "regular",
             },
           },
-        },
-      });
-
-      if (webhooks.length === 0 && oauthClients.length === 0) {
-        logger.log(
-          `No active webhooks found for workspace ${payload.workspaceId}`,
-        );
-        return { success: true, message: "No webhooks to deliver to" };
-      }
-
-      // Prepare webhook payload
-      const webhookPayload = {
-        event: "activity.created",
-        timestamp: new Date().toISOString(),
-        data: {
-          id: activity.id,
-          text: activity.text,
-          sourceURL: activity.sourceURL,
-          createdAt: activity.createdAt,
-          updatedAt: activity.updatedAt,
-          integrationAccount: activity.integrationAccount
-            ? {
-                id: activity.integrationAccount.id,
-                integrationDefinition: {
-                  name: activity.integrationAccount.integrationDefinition.name,
-                  slug: activity.integrationAccount.integrationDefinition.slug,
-                },
-              }
-            : null,
-          workspace: {
-            id: activity.workspace.id,
-            name: activity.workspace.name,
+          select: {
+            id: true,
+            oauthClient: {
+              select: {
+                clientId: true,
+                webhookUrl: true,
+                webhookSecret: true,
+              },
+            },
           },
-        },
-      };
+        });
+
+        // Get the activity data
+        const activity = await prisma.activity.findUnique({
+          where: { id: payload.activityId },
+          include: {
+            integrationAccount: {
+              include: {
+                integrationDefinition: true,
+              },
+            },
+            workspace: true,
+          },
+        });
+
+        if (!activity) {
+          logger.error(`Activity ${payload.activityId} not found`);
+          return { success: false, error: "Activity not found" };
+        }
+
+        if (webhooks.length === 0 && oauthClients.length === 0) {
+          logger.log(
+            `No active webhooks found for workspace ${payload.workspaceId}`,
+          );
+          return { success: true, message: "No webhooks to deliver to" };
+        }
+
+        // Prepare webhook payload
+        webhookPayload = {
+          event: "activity.created",
+          timestamp: new Date().toISOString(),
+          data: {
+            id: activity.id,
+            text: activity.text,
+            sourceURL: activity.sourceURL,
+            createdAt: activity.createdAt,
+            updatedAt: activity.updatedAt,
+            integrationAccount: activity.integrationAccount
+              ? {
+                  id: activity.integrationAccount.id,
+                  integrationDefinition: {
+                    name: activity.integrationAccount.integrationDefinition
+                      .name,
+                    slug: activity.integrationAccount.integrationDefinition
+                      .slug,
+                  },
+                }
+              : null,
+            workspace: {
+              id: activity.workspace.id,
+              name: activity.workspace.name,
+            },
+          },
+        };
+      } else {
+        webhookPayload = payload.rawBody;
+      }
 
       // Convert webhooks to targets using common utils
       const targets = prepareWebhookTargets(
@@ -140,7 +150,7 @@ export const webhookDeliveryTask = task({
 
           return {
             webhookConfigurationId: webhook.id,
-            activityId: activity.id,
+            activityId: payload.activityId,
             status: deliveryResult.success
               ? WebhookDeliveryStatus.SUCCESS
               : WebhookDeliveryStatus.FAILED,

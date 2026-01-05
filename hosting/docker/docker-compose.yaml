@@ -53,6 +53,7 @@ services:
       - MODEL_PROVIDER=${MODEL_PROVIDER}
     ports:
       - "3033:3000"
+      - "5555:5555"
     depends_on:
       postgres:
         condition: service_healthy

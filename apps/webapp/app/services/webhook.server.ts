@@ -6,6 +6,9 @@ import { IntegrationEventType } from "@redplanethq/sdk";
 import { prisma } from "~/db.server";
 import { logger } from "./logger.service";
 import { runIntegrationTrigger } from "./integration.server";
+import { triggerWebhookDelivery } from "~/trigger/webhooks/webhook-delivery";
+import { tasks } from "@trigger.dev/sdk";
+import { webhookDeliveryTask } from "../trigger/webhooks/webhook-delivery";
 
 export type EventHeaders = Record<string, string | string[]>;
 export type EventBody = Record<string, any>;
@@ -121,6 +124,17 @@ export class WebhookService {
           integrationAccountId: integrationAccount.id,
           integrationSlug: integrationAccount.integrationDefinition.slug,
         });
+
+        await webhookDeliveryTask.trigger(
+          {
+            workspaceId: integrationAccount.workspaceId,
+            raw: true,
+            rawBody: eventBody,
+          },
+          {
+            tags: [integrationAccount.workspaceId, sourceName],
+          },
+        );
 
         const processResponse = await runIntegrationTrigger(
           integrationAccount.integrationDefinition,
