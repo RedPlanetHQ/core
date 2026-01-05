@@ -324,7 +324,12 @@ async function handleMessageResponse(
     // Handle "identifier" messages
     if (grouped["identifier"]) {
       const identifier = grouped["identifier"][0].data;
-      return identifier;
+      return {
+        success: true,
+        result: {
+          identifiers: [{ id: identifier }],
+        },
+      };
     }
 
     // Handle "account" messages
