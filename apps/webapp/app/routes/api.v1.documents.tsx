@@ -115,11 +115,11 @@ export const loader = createHybridLoaderApiRoute(
 
     if (label) {
       if (label === "no_label") {
-        whereClause.labels = {
+        whereClause.labelIds = {
           isEmpty: true,
         };
       } else {
-        whereClause.labels = {
+        whereClause.labelIds = {
           has: label,
         };
       }
