@@ -99,7 +99,7 @@ export default function LogsAll() {
 
               {/* Logs List */}
               <div className="flex h-full w-full space-y-4 pb-2">
-                {documents.length === 0 ? (
+                {!documents || documents.length === 0 ? (
                   <Card className="bg-background-2 w-full">
                     <CardContent className="bg-background-2 flex w-full items-center justify-center py-16">
                       <div className="text-center">
