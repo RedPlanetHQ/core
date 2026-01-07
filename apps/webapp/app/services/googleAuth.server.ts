@@ -45,7 +45,19 @@ export function addGoogleStrategy(
           authenticationExtraParams: {},
         });
 
-        await postAuthentication({ user, isNewUser, loginMethod: "GOOGLE" });
+        await postAuthentication({
+          user,
+          isNewUser,
+          loginMethod: "GOOGLE",
+          tokens: {
+            accessToken: tokens.accessToken(),
+            refreshToken: tokens.hasRefreshToken() ? tokens.refreshToken() : null,
+            expiresAt: tokens.accessTokenExpiresAt(),
+            scopes: tokens.hasScopes() ? tokens.scopes() : [],
+          },
+          clientId,
+          clientSecret,
+        });
 
         return {
           userId: user.id,

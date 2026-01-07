@@ -23,6 +23,8 @@ const loader = createHybridLoaderApiRoute(
       );
     } catch (e) {}
 
+    const metadata = user?.metadata as Record<string, unknown> | null;
+
     return json({
       id: authentication.userId,
       name: user?.name,
@@ -30,6 +32,7 @@ const loader = createHybridLoaderApiRoute(
       workspaceId: user?.Workspace?.id,
       phoneNumber: user?.phoneNumber,
       email: user?.email,
+      timezone: metadata?.timezone ?? null,
     });
   },
 );
