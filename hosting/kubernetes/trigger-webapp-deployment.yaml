@@ -1,0 +1,179 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trigger-webapp
+  namespace: RedPlanetHQcore
+  labels:
+    app.kubernetes.io/name: core
+    app.kubernetes.io/component: trigger-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: core
+      app.kubernetes.io/component: trigger-webapp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: core
+        app.kubernetes.io/component: trigger-webapp
+    spec:
+      containers:
+      - name: trigger-webapp
+        image: ghcr.io/triggerdotdev/trigger.dev@sha256:a19c438f348ac05c939f39ed455ed27b4f189f720b4c9810aef8e71fdc731211
+        ports:
+        - containerPort: 3000
+          name: http
+        env:
+        - name: APP_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: APP_ORIGIN
+        - name: LOGIN_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: LOGIN_ORIGIN
+        - name: API_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: API_ORIGIN
+        - name: ELECTRIC_ORIGIN
+          value: "http://electric:3000"
+        - name: DATABASE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: TRIGGER_DATABASE_URL
+        - name: DIRECT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: TRIGGER_DIRECT_URL
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: SESSION_SECRET
+        - name: MAGIC_LINK_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: MAGIC_LINK_SECRET
+        - name: ENCRYPTION_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: ENCRYPTION_KEY
+        - name: MANAGED_WORKER_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: MANAGED_WORKER_SECRET
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_PORT
+        - name: REDIS_TLS_DISABLED
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: REDIS_TLS_DISABLED
+        - name: APP_LOG_LEVEL
+          value: "info"
+        - name: DEV_OTEL_EXPORTER_OTLP_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DEV_OTEL_EXPORTER_OTLP_ENDPOINT
+        - name: DEPLOY_REGISTRY_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: core-config
+              key: DOCKER_REGISTRY_URL
+        - name: DEPLOY_REGISTRY_NAMESPACE
+          value: "trigger"
+        - name: OBJECT_STORE_BASE_URL
+          value: "http://minio:9000"
+        - name: OBJECT_STORE_ACCESS_KEY_ID
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: OBJECT_STORE_ACCESS_KEY_ID
+          optional: true
+        - name: OBJECT_STORE_SECRET_ACCESS_KEY
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: OBJECT_STORE_SECRET_ACCESS_KEY
+          optional: true
+        - name: GRACEFUL_SHUTDOWN_TIMEOUT
+          value: "1000"
+        - name: TRIGGER_BOOTSTRAP_ENABLED
+          value: "1"
+        - name: TRIGGER_BOOTSTRAP_WORKER_GROUP_NAME
+          value: "bootstrap"
+        - name: TRIGGER_BOOTSTRAP_WORKER_TOKEN_PATH
+          value: "/home/node/shared/worker_token"
+        - name: CLICKHOUSE_URL
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: CLICKHOUSE_URL
+        - name: CLICKHOUSE_LOG_LEVEL
+          value: "info"
+        - name: RUN_REPLICATION_ENABLED
+          value: "1"
+        - name: RUN_REPLICATION_CLICKHOUSE_URL
+          valueFrom:
+            secretKeyRef:
+              name: core-secrets
+              key: RUN_REPLICATION_CLICKHOUSE_URL
+        - name: RUN_REPLICATION_LOG_LEVEL
+          value: "info"
+        - name: INTERNAL_OTEL_TRACE_LOGGING_ENABLED
+          value: "0"
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 3000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthcheck
+            port: 3000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        volumeMounts:
+        - name: shared-storage
+          mountPath: /home/node/shared
+        # Only needed for bootstrap
+        command: ["/bin/sh", "-c", "chown -R node:node /home/node/shared && sleep 5 && exec ./scripts/entrypoint.sh"]
+        securityContext:
+          runAsUser: 0 # Run as root for bootstrap
+      initContainers:
+      - name: wait-for-postgres
+        image: postgres:15
+        command: ['sh', '-c', 'until pg_isready -h postgres -p 5432; do echo waiting for postgres; sleep 2; done;']
+      - name: wait-for-clickhouse
+        image: bitnami/clickhouse:latest
+        command: ['sh', '-c', 'until clickhouse-client --host clickhouse --port 9000 --user default --password password --query "SELECT 1"; do echo waiting for clickhouse; sleep 2; done;']
+      volumes:
+      - name: shared-storage
+        emptyDir: {}
