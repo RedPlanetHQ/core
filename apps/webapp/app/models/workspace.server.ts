@@ -18,6 +18,7 @@ export async function createWorkspace(
     data: {
       slug: input.name,
       name: input.name,
+      version: "V2",
       userId: input.userId,
     },
   });

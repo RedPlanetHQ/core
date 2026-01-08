@@ -15,6 +15,8 @@ export function addGoogleStrategy(
     {
       clientId,
       clientSecret,
+      prompt: "consent",
+      accessType: "offline",
       scopes: [
         "https://www.googleapis.com/auth/gmail.send",
         "https://www.googleapis.com/auth/gmail.modify",
@@ -51,7 +53,9 @@ export function addGoogleStrategy(
           loginMethod: "GOOGLE",
           tokens: {
             accessToken: tokens.accessToken(),
-            refreshToken: tokens.hasRefreshToken() ? tokens.refreshToken() : null,
+            refreshToken: tokens.hasRefreshToken()
+              ? tokens.refreshToken()
+              : null,
             expiresAt: tokens.accessTokenExpiresAt(),
             scopes: tokens.hasScopes() ? tokens.scopes() : [],
           },
