@@ -162,7 +162,7 @@ const { action } = createHybridActionApiRoute(
       try {
         // If deleteSession param is true and log has a sessionId, delete entire session
         const result = await deleteSession(
-          document.id as string,
+          document.sessionId as string,
           authentication.userId,
         );
 
