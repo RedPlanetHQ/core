@@ -100,6 +100,7 @@ export const Editor = ({ defaultLabelId, labels }: EditorProps) => {
           <Button
             variant="secondary"
             onClick={handleAdd}
+            size="xl"
             isLoading={fetcher.state !== "idle"}
           >
             Save document

@@ -7,7 +7,7 @@ import { clearRedirectTo, commitSession } from "~/services/redirectTo.server";
 
 import { AppSidebar } from "~/components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
-import { FloatingIngestionStatus } from "~/components/ingestion/floating-ingestion-status";
+
 import { redirect } from "@remix-run/node";
 import { confirmBasicDetailsPath, onboardingPath } from "~/utils/pathBuilder";
 import { LabelService } from "~/services/label.server";
@@ -61,7 +61,6 @@ export default function Home() {
             </div>
           </div>
         </div>
-        <FloatingIngestionStatus />
       </SidebarInset>
     </SidebarProvider>
   );
