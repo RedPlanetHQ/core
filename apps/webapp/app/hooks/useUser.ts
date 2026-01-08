@@ -1,8 +1,9 @@
 import { type UIMatch } from "@remix-run/react";
-import type { User } from "~/models/user.server";
+
 import { type loader } from "~/root";
 import { useChanged } from "./useChanged";
 import { useTypedMatchesData } from "./useTypedMatchData";
+import { type User } from "@prisma/client";
 
 export interface ExtendedUser extends User {
   availableCredits: number;

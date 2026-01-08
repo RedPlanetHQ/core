@@ -37,6 +37,7 @@ import {
 import { type Label } from "@prisma/client";
 import { DocumentList } from "./document-list";
 import { useNavigate } from "@remix-run/react";
+import { IngestionStatus } from "./ingestion-status";
 
 const data = {
   navMain: [
@@ -113,6 +114,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">
+          <IngestionStatus />
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
