@@ -420,6 +420,7 @@ export async function handleGeneratedTool(
           id: validatedArgs.id,
           format: validatedArgs.format,
           metadataHeaders: validatedArgs.metadataHeaders,
+          userId: 'me',
         },
         {}
       );

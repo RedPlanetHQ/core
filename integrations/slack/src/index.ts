@@ -35,11 +35,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 
-      const result = await callTool(
-        name,
-        args,
-        config?.access_token
-      );
+      const result = await callTool(name, args, config?.access_token);
 
       return result;
     }
@@ -73,27 +69,28 @@ class SlackCLI extends IntegrationCLI {
           token_url: 'https://slack.com/api/oauth.v2.access',
           authorization_url: 'https://slack.com/oauth/v2/authorize',
           scopes: [
-            'stars:read',
-            'team:read',
-            'stars:write',
-            'users:read',
+            'reactions:read',
+            'bookmarks:read',
+            'channels:history',
             'channels:read',
+            'channels:write',
+            'chat:write',
+            'groups:history',
             'groups:read',
-            'im:read',
+            'groups:write',
             'im:history',
+            'im:read',
+            'im:write',
+            'mpim:history',
             'mpim:read',
             'mpim:write',
-            'mpim:history',
-            'channels:history',
-            'chat:write',
             'reactions:read',
             'reactions:write',
-            'users.profile:read',
-            'files:read',
-            'files:write',
-            'reminders:read',
-            'reminders:write',
             'search:read',
+            'search:read.users',
+            'stars:read',
+            'team:read',
+            'users:read',
           ],
           scope_identifier: 'user_scope',
           scope_separator: ',',

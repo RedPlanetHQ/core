@@ -31,9 +31,7 @@ async function executeSlackAPI(method: string, data?: Record<string, any>) {
 
     return response.data;
   } catch (error: any) {
-    throw new Error(
-      `Slack API error: ${error.response?.data?.error || error.message}`
-    );
+    throw new Error(`Slack API error: ${error.response?.data?.error || error.message}`);
   }
 }
 
@@ -106,7 +104,11 @@ const GetReactionsSchema = z.object({
 // Channel Schemas
 const ListChannelsSchema = z.object({
   exclude_archived: z.boolean().optional().default(true).describe('Exclude archived channels'),
-  types: z.string().optional().default('public_channel,private_channel').describe('Channel types (comma-separated: public_channel,private_channel,mpim,im)'),
+  types: z
+    .string()
+    .optional()
+    .default('public_channel,private_channel')
+    .describe('Channel types (comma-separated: public_channel,private_channel,mpim,im)'),
   limit: z.number().optional().default(100).describe('Number of channels to return'),
 });
 
@@ -201,7 +203,10 @@ const ListFilesSchema = z.object({
   channel: z.string().optional().describe('Filter by channel ID'),
   user: z.string().optional().describe('Filter by user ID'),
   count: z.number().optional().default(100).describe('Number of files to return'),
-  types: z.string().optional().describe('File types (comma-separated: all,spaces,snippets,images,gdocs,zips,pdfs)'),
+  types: z
+    .string()
+    .optional()
+    .describe('File types (comma-separated: all,spaces,snippets,images,gdocs,zips,pdfs)'),
 });
 
 const GetFileSchema = z.object({
@@ -216,7 +221,10 @@ const DeleteFileSchema = z.object({
 const CreateReminderSchema = z.object({
   text: z.string().describe('Reminder text'),
   time: z.string().describe('Time for the reminder (Unix timestamp or natural language)'),
-  user: z.string().optional().describe('User ID to send reminder to (defaults to authenticated user)'),
+  user: z
+    .string()
+    .optional()
+    .describe('User ID to send reminder to (defaults to authenticated user)'),
 });
 
 const ListRemindersSchema = z.object({});
@@ -262,16 +270,16 @@ export async function getTools() {
         idempotentHint: false,
       },
     },
-    // {
-    //   name: 'slack_update_message',
-    //   description: 'Updates an existing message',
-    //   inputSchema: zodToJsonSchema(UpdateMessageSchema),
-    // },
-    // {
-    //   name: 'slack_delete_message',
-    //   description: 'Deletes a message',
-    //   inputSchema: zodToJsonSchema(DeleteMessageSchema),
-    // },
+    {
+      name: 'slack_update_message',
+      description: 'Updates an existing message',
+      inputSchema: zodToJsonSchema(UpdateMessageSchema),
+    },
+    {
+      name: 'slack_delete_message',
+      description: 'Deletes a message',
+      inputSchema: zodToJsonSchema(DeleteMessageSchema),
+    },
     {
       name: 'slack_get_message',
       description: 'Gets details of a specific message',
@@ -292,11 +300,11 @@ export async function getTools() {
         idempotentHint: true,
       },
     },
-    // {
-    //   name: 'slack_search_messages',
-    //   description: 'Searches for messages across workspace',
-    //   inputSchema: zodToJsonSchema(SearchMessagesSchema),
-    // },
+    {
+      name: 'slack_search_messages',
+      description: 'Searches for messages across workspace',
+      inputSchema: zodToJsonSchema(SearchMessagesSchema),
+    },
 
     // Reactions
     {
@@ -351,56 +359,56 @@ export async function getTools() {
         idempotentHint: true,
       },
     },
-    // {
-    //   name: 'slack_create_channel',
-    //   description: 'Creates a new channel',
-    //   inputSchema: zodToJsonSchema(CreateChannelSchema),
-    // },
-    // {
-    //   name: 'slack_archive_channel',
-    //   description: 'Archives a channel',
-    //   inputSchema: zodToJsonSchema(ArchiveChannelSchema),
-    // },
-    // {
-    //   name: 'slack_unarchive_channel',
-    //   description: 'Unarchives a channel',
-    //   inputSchema: zodToJsonSchema(UnarchiveChannelSchema),
-    // },
-    // {
-    //   name: 'slack_invite_to_channel',
-    //   description: 'Invites users to a channel',
-    //   inputSchema: zodToJsonSchema(InviteToChannelSchema),
-    // },
-    // {
-    //   name: 'slack_kick_from_channel',
-    //   description: 'Removes a user from a channel',
-    //   inputSchema: zodToJsonSchema(KickFromChannelSchema),
-    // },
-    // {
-    //   name: 'slack_join_channel',
-    //   description: 'Joins a channel',
-    //   inputSchema: zodToJsonSchema(JoinChannelSchema),
-    // },
-    // {
-    //   name: 'slack_leave_channel',
-    //   description: 'Leaves a channel',
-    //   inputSchema: zodToJsonSchema(LeaveChannelSchema),
-    // },
-    // {
-    //   name: 'slack_rename_channel',
-    //   description: 'Renames a channel',
-    //   inputSchema: zodToJsonSchema(RenameChannelSchema),
-    // },
-    // {
-    //   name: 'slack_set_channel_topic',
-    //   description: 'Sets channel topic',
-    //   inputSchema: zodToJsonSchema(SetChannelTopicSchema),
-    // },
-    // {
-    //   name: 'slack_set_channel_purpose',
-    //   description: 'Sets channel purpose',
-    //   inputSchema: zodToJsonSchema(SetChannelPurposeSchema),
-    // },
+    {
+      name: 'slack_create_channel',
+      description: 'Creates a new channel',
+      inputSchema: zodToJsonSchema(CreateChannelSchema),
+    },
+    {
+      name: 'slack_archive_channel',
+      description: 'Archives a channel',
+      inputSchema: zodToJsonSchema(ArchiveChannelSchema),
+    },
+    {
+      name: 'slack_unarchive_channel',
+      description: 'Unarchives a channel',
+      inputSchema: zodToJsonSchema(UnarchiveChannelSchema),
+    },
+    {
+      name: 'slack_invite_to_channel',
+      description: 'Invites users to a channel',
+      inputSchema: zodToJsonSchema(InviteToChannelSchema),
+    },
+    {
+      name: 'slack_kick_from_channel',
+      description: 'Removes a user from a channel',
+      inputSchema: zodToJsonSchema(KickFromChannelSchema),
+    },
+    {
+      name: 'slack_join_channel',
+      description: 'Joins a channel',
+      inputSchema: zodToJsonSchema(JoinChannelSchema),
+    },
+    {
+      name: 'slack_leave_channel',
+      description: 'Leaves a channel',
+      inputSchema: zodToJsonSchema(LeaveChannelSchema),
+    },
+    {
+      name: 'slack_rename_channel',
+      description: 'Renames a channel',
+      inputSchema: zodToJsonSchema(RenameChannelSchema),
+    },
+    {
+      name: 'slack_set_channel_topic',
+      description: 'Sets channel topic',
+      inputSchema: zodToJsonSchema(SetChannelTopicSchema),
+    },
+    {
+      name: 'slack_set_channel_purpose',
+      description: 'Sets channel purpose',
+      inputSchema: zodToJsonSchema(SetChannelPurposeSchema),
+    },
 
     // User Management
     {
@@ -443,11 +451,11 @@ export async function getTools() {
         idempotentHint: true,
       },
     },
-    // {
-    //   name: 'slack_set_user_presence',
-    //   description: 'Sets your presence status',
-    //   inputSchema: zodToJsonSchema(SetUserPresenceSchema),
-    // },
+    {
+      name: 'slack_set_user_presence',
+      description: 'Sets your presence status',
+      inputSchema: zodToJsonSchema(SetUserPresenceSchema),
+    },
 
     // Direct Messages
     {
@@ -550,11 +558,7 @@ export async function getTools() {
 // TOOL IMPLEMENTATIONS
 // ============================================================================
 
-export async function callTool(
-  name: string,
-  args: Record<string, any>,
-  accessToken: string
-) {
+export async function callTool(name: string, args: Record<string, any>, accessToken: string) {
   // Initialize client if not already done
   if (!slackClient) {
     await initializeSlackClient(accessToken);
@@ -570,10 +574,12 @@ export async function callTool(
         const data = await executeSlackAPI('chat.postMessage', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Message sent to <#${validatedArgs.channel}>\nTimestamp: ${data.ts}\nChannel: ${data.channel}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Message sent to <#${validatedArgs.channel}>\nTimestamp: ${data.ts}\nChannel: ${data.channel}`,
+            },
+          ],
         };
       }
 
@@ -582,10 +588,12 @@ export async function callTool(
         const data = await executeSlackAPI('chat.update', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Message updated\nTimestamp: ${data.ts}\nChannel: ${data.channel}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Message updated\nTimestamp: ${data.ts}\nChannel: ${data.channel}`,
+            },
+          ],
         };
       }
 
@@ -594,10 +602,12 @@ export async function callTool(
         await executeSlackAPI('chat.delete', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Message deleted from <#${validatedArgs.channel}>`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Message deleted from <#${validatedArgs.channel}>`,
+            },
+          ],
         };
       }
 
@@ -684,10 +694,12 @@ export async function callTool(
         await executeSlackAPI('reactions.add', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Added :${validatedArgs.name}: reaction`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Added :${validatedArgs.name}: reaction`,
+            },
+          ],
         };
       }
 
@@ -696,10 +708,12 @@ export async function callTool(
         await executeSlackAPI('reactions.remove', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Removed :${validatedArgs.name}: reaction`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Removed :${validatedArgs.name}: reaction`,
+            },
+          ],
         };
       }
 
@@ -775,10 +789,12 @@ export async function callTool(
 
         const ch = data.channel;
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel created: <#${ch.id}> (${ch.name})\nPrivate: ${ch.is_private ? 'Yes' : 'No'}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel created: <#${ch.id}> (${ch.name})\nPrivate: ${ch.is_private ? 'Yes' : 'No'}`,
+            },
+          ],
         };
       }
 
@@ -787,10 +803,12 @@ export async function callTool(
         await executeSlackAPI('conversations.archive', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel <#${validatedArgs.channel}> archived`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel <#${validatedArgs.channel}> archived`,
+            },
+          ],
         };
       }
 
@@ -799,10 +817,12 @@ export async function callTool(
         await executeSlackAPI('conversations.unarchive', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel <#${validatedArgs.channel}> unarchived`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel <#${validatedArgs.channel}> unarchived`,
+            },
+          ],
         };
       }
 
@@ -811,10 +831,12 @@ export async function callTool(
         await executeSlackAPI('conversations.invite', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Users invited to <#${validatedArgs.channel}>`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Users invited to <#${validatedArgs.channel}>`,
+            },
+          ],
         };
       }
 
@@ -823,10 +845,12 @@ export async function callTool(
         await executeSlackAPI('conversations.kick', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ User <@${validatedArgs.user}> removed from <#${validatedArgs.channel}>`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ User <@${validatedArgs.user}> removed from <#${validatedArgs.channel}>`,
+            },
+          ],
         };
       }
 
@@ -835,10 +859,12 @@ export async function callTool(
         await executeSlackAPI('conversations.join', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Joined <#${validatedArgs.channel}>`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Joined <#${validatedArgs.channel}>`,
+            },
+          ],
         };
       }
 
@@ -847,10 +873,12 @@ export async function callTool(
         await executeSlackAPI('conversations.leave', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Left <#${validatedArgs.channel}>`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Left <#${validatedArgs.channel}>`,
+            },
+          ],
         };
       }
 
@@ -859,10 +887,12 @@ export async function callTool(
         const data = await executeSlackAPI('conversations.rename', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel renamed to: ${data.channel.name}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel renamed to: ${data.channel.name}`,
+            },
+          ],
         };
       }
 
@@ -871,10 +901,12 @@ export async function callTool(
         await executeSlackAPI('conversations.setTopic', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel topic updated`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel topic updated`,
+            },
+          ],
         };
       }
 
@@ -883,10 +915,12 @@ export async function callTool(
         await executeSlackAPI('conversations.setPurpose', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Channel purpose updated`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Channel purpose updated`,
+            },
+          ],
         };
       }
 
@@ -904,12 +938,14 @@ export async function callTool(
         }
 
         let text = `Found ${data.members.length} user(s):\n\n`;
-        data.members.filter((u: any) => !u.is_bot && !u.deleted).forEach((user: any) => {
-          text += `<@${user.id}> - ${user.real_name || user.name}`;
-          if (user.profile?.email) text += ` (${user.profile.email})`;
-          if (user.is_admin) text += ' [admin]';
-          text += `\n`;
-        });
+        data.members
+          .filter((u: any) => !u.is_bot && !u.deleted)
+          .forEach((user: any) => {
+            text += `<@${user.id}> - ${user.real_name || user.name}`;
+            if (user.profile?.email) text += ` (${user.profile.email})`;
+            if (user.is_admin) text += ' [admin]';
+            text += `\n`;
+          });
 
         return {
           content: [{ type: 'text', text }],
@@ -954,10 +990,12 @@ export async function callTool(
         const data = await executeSlackAPI('users.getPresence', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `User <@${validatedArgs.user}> presence: ${data.presence}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `User <@${validatedArgs.user}> presence: ${data.presence}`,
+            },
+          ],
         };
       }
 
@@ -966,10 +1004,12 @@ export async function callTool(
         await executeSlackAPI('users.setPresence', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Presence set to: ${validatedArgs.presence}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Presence set to: ${validatedArgs.presence}`,
+            },
+          ],
         };
       }
 
@@ -981,10 +1021,12 @@ export async function callTool(
         const data = await executeSlackAPI('conversations.open', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ DM opened\nChannel ID: ${data.channel.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ DM opened\nChannel ID: ${data.channel.id}`,
+            },
+          ],
         };
       }
 
@@ -996,10 +1038,12 @@ export async function callTool(
         const data = await executeSlackAPI('files.upload', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ File uploaded: ${data.file.name}\nFile ID: ${data.file.id}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ File uploaded: ${data.file.name}\nFile ID: ${data.file.id}`,
+            },
+          ],
         };
       }
 
@@ -1047,10 +1091,12 @@ export async function callTool(
         await executeSlackAPI('files.delete', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ File deleted`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ File deleted`,
+            },
+          ],
         };
       }
 
@@ -1062,10 +1108,12 @@ export async function callTool(
         const data = await executeSlackAPI('reminders.add', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Reminder created\nID: ${data.reminder.id}\nTime: ${new Date(data.reminder.time * 1000).toISOString()}`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Reminder created\nID: ${data.reminder.id}\nTime: ${new Date(data.reminder.time * 1000).toISOString()}`,
+            },
+          ],
         };
       }
 
@@ -1094,10 +1142,12 @@ export async function callTool(
         await executeSlackAPI('reminders.delete', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Reminder deleted`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Reminder deleted`,
+            },
+          ],
         };
       }
 
@@ -1109,10 +1159,12 @@ export async function callTool(
         await executeSlackAPI('stars.add', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Item starred`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Item starred`,
+            },
+          ],
         };
       }
 
@@ -1121,10 +1173,12 @@ export async function callTool(
         await executeSlackAPI('stars.remove', validatedArgs);
 
         return {
-          content: [{
-            type: 'text',
-            text: `✓ Star removed`,
-          }],
+          content: [
+            {
+              type: 'text',
+              text: `✓ Star removed`,
+            },
+          ],
         };
       }
 
@@ -1176,10 +1230,12 @@ export async function callTool(
     }
   } catch (error: any) {
     return {
-      content: [{
-        type: 'text',
-        text: `Error: ${error.message}`,
-      }],
+      content: [
+        {
+          type: 'text',
+          text: `Error: ${error.message}`,
+        },
+      ],
     };
   }
 }
