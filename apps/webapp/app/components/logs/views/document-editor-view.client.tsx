@@ -65,7 +65,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
                 },
               }}
               initialContent={document?.content as any}
-              editable={document.latestIngestionLog.status == "PROCESSING"}
+              editable={document.latestIngestionLog.status != "PROCESSING"}
               onCreate={({ editor }) => {
                 setEditor(editor);
               }}
