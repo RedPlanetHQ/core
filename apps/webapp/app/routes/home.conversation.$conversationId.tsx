@@ -13,7 +13,10 @@ import { PageHeader } from "~/components/common/page-header";
 import { Plus } from "lucide-react";
 
 import { type UIMessage, useChat } from "@ai-sdk/react";
-import { DefaultChatTransport } from "ai";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
 import { UserTypeEnum } from "@core/types";
 import React from "react";
 import { HistoryDropdown } from "~/components/conversation/history-dropdown";
@@ -40,23 +43,35 @@ export default function SingleConversation() {
   const navigate = useNavigate();
   const { conversationId } = useParams();
 
-  const { sendMessage, messages, status, stop, regenerate } = useChat({
+  const {
+    sendMessage,
+    messages,
+    status,
+    stop,
+    regenerate,
+    addToolApprovalResponse,
+  } = useChat({
     id: conversationId, // use the provided chat ID
     messages: conversation.ConversationHistory.map(
       (history) =>
         ({
+          id: history.id,
           role: history.userType === UserTypeEnum.Agent ? "assistant" : "user",
           parts: history.parts
             ? history.parts
             : [{ text: history.message, type: "text" }],
-        }) as UIMessage,
+        }) as UIMessage & { createdAt: string },
     ), // load initial messages
     transport: new DefaultChatTransport({
       api: "/api/v1/conversation",
       prepareSendMessagesRequest({ messages, id }) {
+        if (needsApproval) {
+          return { body: { messages, needsApproval: true, id } };
+        }
         return { body: { message: messages[messages.length - 1], id } };
       },
     }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
   React.useEffect(() => {
@@ -64,6 +79,15 @@ export default function SingleConversation() {
       regenerate();
     }
   }, []);
+
+  // Check if the last assistant message needs approval
+  const lastAssistantMessage = [...messages]
+    .reverse()
+    .find((msg) => msg.role === "assistant") as UIMessage | undefined;
+
+  const needsApproval = !!lastAssistantMessage?.parts.find(
+    (part: any) => part.state === "approval-requested",
+  );
 
   if (typeof window === "undefined") {
     return null;
@@ -92,7 +116,13 @@ export default function SingleConversation() {
         <div className="flex h-full w-full flex-col justify-end overflow-hidden py-4 pb-12 lg:pb-4">
           <ScrollAreaWithAutoScroll>
             {messages.map((message: UIMessage, index: number) => {
-              return <ConversationItem key={index} message={message} />;
+              return (
+                <ConversationItem
+                  key={index}
+                  message={message}
+                  addToolApprovalResponse={addToolApprovalResponse}
+                />
+              );
             })}
           </ScrollAreaWithAutoScroll>
 
@@ -101,6 +131,7 @@ export default function SingleConversation() {
               <ConversationTextarea
                 className="bg-background-3 w-full border-1 border-gray-300"
                 isLoading={status === "streaming" || status === "submitted"}
+                disabled={needsApproval}
                 onConversationCreated={(message) => {
                   if (message) {
                     sendMessage({ text: message });

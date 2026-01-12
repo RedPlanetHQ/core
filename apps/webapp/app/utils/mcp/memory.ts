@@ -68,7 +68,7 @@ export const memoryTools = [
     annotations: {
       readOnlyHint: true,
       idempotentHint: true,
-      destructiveHint: false,
+      destructiveHint: true,
     },
   },
   {

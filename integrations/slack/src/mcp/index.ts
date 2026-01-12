@@ -83,6 +83,11 @@ const SearchMessagesSchema = z.object({
   sort_dir: z.enum(['asc', 'desc']).optional().describe('Sort direction'),
 });
 
+const GetUnreadSchema = z.object({
+  channel: z.string().describe('Channel ID to fetch unread messages from'),
+  limit: z.number().optional().default(100).describe('Maximum number of unread messages to return'),
+});
+
 // Reaction Schemas
 const AddReactionSchema = z.object({
   channel: z.string().describe('Channel ID'),
@@ -304,6 +309,16 @@ export async function getTools() {
       name: 'slack_search_messages',
       description: 'Searches for messages across workspace',
       inputSchema: zodToJsonSchema(SearchMessagesSchema),
+    },
+    {
+      name: 'slack_get_unread',
+      description: 'Gets unread messages from a specific channel',
+      inputSchema: zodToJsonSchema(GetUnreadSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
     },
 
     // Reactions
@@ -680,6 +695,79 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           text += `In <#${msg.channel.id}>: ${msg.text?.substring(0, 100)}\n`;
           text += `  From: <@${msg.username}> at ${msg.ts}\n\n`;
         });
+
+        return {
+          content: [{ type: 'text', text }],
+        };
+      }
+
+      case 'slack_get_unread': {
+        const validatedArgs = GetUnreadSchema.parse(args);
+
+        // Get channel info to retrieve the last_read timestamp
+        const channelInfo = await executeSlackAPI('conversations.info', {
+          channel: validatedArgs.channel,
+        });
+
+        const lastRead = channelInfo.channel.last_read;
+
+        if (!lastRead) {
+          // If there's no last_read, fetch all recent messages
+          const data = await executeSlackAPI('conversations.history', {
+            channel: validatedArgs.channel,
+            limit: validatedArgs.limit,
+          });
+
+          if (!data.messages || data.messages.length === 0) {
+            return {
+              content: [{ type: 'text', text: 'No unread messages found' }],
+            };
+          }
+
+          let text = `Found ${data.messages.length} unread message(s) in <#${validatedArgs.channel}>:\n\n`;
+          data.messages.slice(0, 20).forEach((msg: any) => {
+            text += `[${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}\n`;
+          });
+
+          if (data.messages.length > 20) {
+            text += `\n... and ${data.messages.length - 20} more messages`;
+          }
+
+          return {
+            content: [{ type: 'text', text }],
+          };
+        }
+
+        // Fetch messages after last_read timestamp
+        const data = await executeSlackAPI('conversations.history', {
+          channel: validatedArgs.channel,
+          oldest: lastRead,
+          limit: validatedArgs.limit,
+        });
+
+        if (!data.messages || data.messages.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'No unread messages found' }],
+          };
+        }
+
+        // Filter out the message at last_read timestamp itself
+        const unreadMessages = data.messages.filter((msg: any) => msg.ts !== lastRead);
+
+        if (unreadMessages.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'No unread messages found' }],
+          };
+        }
+
+        let text = `Found ${unreadMessages.length} unread message(s) in <#${validatedArgs.channel}>:\n\n`;
+        unreadMessages.slice(0, 20).forEach((msg: any) => {
+          text += `[${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}\n`;
+        });
+
+        if (unreadMessages.length > 20) {
+          text += `\n... and ${unreadMessages.length - 20} more messages`;
+        }
 
         return {
           content: [{ type: 'text', text }],

@@ -4,7 +4,11 @@ import { useEffect, memo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
 import { skillExtension } from "../editor/skill-extension";
-import { type ToolUIPart, type UIMessage } from "ai";
+import {
+  type ChatAddToolApproveResponseFunction,
+  type ToolUIPart,
+  type UIMessage,
+} from "ai";
 import {
   Collapsible,
   CollapsibleContent,
@@ -13,10 +17,12 @@ import {
 import StaticLogo from "../logo/logo";
 import { titleCase } from "~/utils";
 import { Button } from "../ui";
-import { ChevronsUpDown } from "lucide-react";
+import { ChevronsUpDown, LoaderCircle } from "lucide-react";
+import { ApprovalComponent } from "./approval-component";
 
 interface AIConversationItemProps {
   message: UIMessage;
+  addToolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
 
 function getMessage(message: string) {
@@ -28,9 +34,47 @@ function getMessage(message: string) {
   return finalMessage;
 }
 
-const Tool = ({ part }: { part: ToolUIPart<any> }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const textPart = part.output?.content ? part.output?.content[0]?.text : "";
+const Tool = ({
+  part,
+  addToolApprovalResponse,
+}: {
+  part: ToolUIPart<any>;
+  addToolApprovalResponse: ChatAddToolApproveResponseFunction;
+}) => {
+  const needsApproval = part.state === "approval-requested";
+  const [isOpen, setIsOpen] = useState(needsApproval);
+  const textPart = part.output ?? "";
+
+  const handleApprove = () => {
+    if (addToolApprovalResponse && part?.approval?.id) {
+      addToolApprovalResponse({ id: part?.approval?.id, approved: true });
+      setIsOpen(false);
+    }
+  };
+
+  const handleReject = () => {
+    if (addToolApprovalResponse && part?.approval?.id) {
+      addToolApprovalResponse({ id: part?.approval?.id, approved: false });
+      setIsOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    if (needsApproval) {
+      setIsOpen(needsApproval);
+    }
+  }, [needsApproval]);
+
+  function getIcon() {
+    if (
+      part.state === "output-available" ||
+      part.state === "approval-requested"
+    ) {
+      return <StaticLogo size={18} className="rounded-sm" />;
+    }
+
+    return <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />;
+  }
 
   return (
     <Collapsible
@@ -46,7 +90,7 @@ const Tool = ({ part }: { part: ToolUIPart<any> }) => {
           className="flex justify-between gap-4 px-2 py-2"
         >
           <div className="flex items-center gap-2">
-            <StaticLogo size={18} className="rounded-sm" />
+            {getIcon()}
             {titleCase(part.type.replace("tool-", "").replace(/_/g, " "))}
           </div>
 
@@ -61,17 +105,27 @@ const Tool = ({ part }: { part: ToolUIPart<any> }) => {
               {JSON.stringify(part.input, null, 2)}
             </p>
           </div>
-          <div className="bg-grayAlpha-50 mb-2 rounded p-2">
-            <p className="text-muted-foreground text-sm"> Response </p>
-            <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
-          </div>
+          {needsApproval ? (
+            <ApprovalComponent
+              onApprove={handleApprove}
+              onReject={handleReject}
+            />
+          ) : (
+            <div className="bg-grayAlpha-50 mb-2 rounded p-2">
+              <p className="text-muted-foreground text-sm"> Response </p>
+              <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
+            </div>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
   );
 };
 
-const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
+const ConversationItemComponent = ({
+  message,
+  addToolApprovalResponse,
+}: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
 
@@ -94,7 +148,12 @@ const ConversationItemComponent = ({ message }: AIConversationItemProps) => {
 
   const getComponent = (part: any) => {
     if (part.type.includes("tool-")) {
-      return <Tool part={part as any} />;
+      return (
+        <Tool
+          part={part as any}
+          addToolApprovalResponse={addToolApprovalResponse}
+        />
+      );
     }
 
     if (part.type.includes("text")) {
