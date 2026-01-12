@@ -19,7 +19,7 @@ import {
 
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
-import { AGENT_SYSTEM_PROMPT } from "~/lib/prompt.server";
+import { AGENT_SYSTEM_PROMPT, SOL_CAPABILITIES } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
@@ -102,6 +102,17 @@ const { loader, action } = createHybridActionApiRoute(
     const tools: Record<string, Tool> = {};
 
     memoryTools.forEach((mt) => {
+      if (
+        [
+          "memory_ingest",
+          "memory_about_user",
+          "initialize_conversation_session",
+          "get_integrations",
+        ].includes(mt.name)
+      ) {
+        return;
+      }
+
       // Check if any tool calls have destructiveHint: true
       const hasDestructiveTools = mt.annotations?.destructiveHint === true;
       const executeFn = async (params: any) => {
@@ -184,7 +195,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
-    let systemPrompt = AGENT_SYSTEM_PROMPT;
+    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n${SOL_CAPABILITIES}`;
 
     // Add connected integrations context
     const integrationsContext = `
