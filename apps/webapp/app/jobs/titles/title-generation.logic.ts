@@ -47,8 +47,13 @@ export async function processTitleGeneration(
 
     // Check if Document already has a generated title (source of truth)
     if (sessionId) {
-      const document = await prisma.document.findFirst({
-        where: { sessionId, workspaceId: ingestionQueue.workspaceId },
+      const document = await prisma.document.findUnique({
+        where: {
+          sessionId_workspaceId: {
+            sessionId,
+            workspaceId: ingestionQueue.workspaceId,
+          },
+        },
         select: { title: true },
       });
 

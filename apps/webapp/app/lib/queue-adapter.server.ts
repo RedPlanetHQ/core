@@ -303,6 +303,7 @@ export async function enqueueIntegrationRun(
     );
     const handler = await integrationRun.trigger(payload, {
       queue: "integration-run-queue",
+      concurrencyKey: payload.userId,
       tags: [
         payload.userId || "unknown",
         payload.integrationDefinition.slug,

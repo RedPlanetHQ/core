@@ -14,7 +14,7 @@ import { initializeProvider } from "../utils/provider";
 
 const ingestionQueue = queue({
   name: "ingestion-queue",
-  concurrencyLimit: 50,
+  concurrencyLimit: 5,
 });
 
 // Export for backwards compatibility

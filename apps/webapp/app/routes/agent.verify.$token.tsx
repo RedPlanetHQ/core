@@ -90,12 +90,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export default function Page() {
-  const result = {
-    success: true,
-    source: "whatsapp",
-    clientName: "whatsapp",
-    error: null,
-  };
+  const result = useTypedLoaderData<typeof loader>();
 
   const whatsappNumber = "+12314444889"; // Replace with your actual WhatsApp number
   const whatsappMessage = encodeURIComponent(

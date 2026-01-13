@@ -17,7 +17,7 @@ import { triggerIntegrationWebhook } from "../webhooks/integration-webhook-deliv
 
 const integrationRunQueue = queue({
   name: "integration-run-queue",
-  concurrencyLimit: 50,
+  concurrencyLimit: 20,
 });
 
 export const integrationRun = task({

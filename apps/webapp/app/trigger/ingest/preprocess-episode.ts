@@ -7,7 +7,7 @@ import { sessionCompactionTask } from "../session/session-compaction";
 
 const preprocessingQueue = queue({
   name: "preprocessing-queue",
-  concurrencyLimit: 50,
+  concurrencyLimit: 5,
 });
 
 // Register the Trigger.dev task for episode preprocessing
