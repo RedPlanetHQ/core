@@ -29,6 +29,7 @@ export function ConversationTextarea({
   onChange,
   onConversationCreated,
   stop,
+  disabled = false,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const [editor, setEditor] = useState<Editor>();
@@ -40,7 +41,7 @@ export function ConversationTextarea({
   };
 
   const handleSend = useCallback(() => {
-    if (!editor || !text) {
+    if (!editor || !text || disabled) {
       return;
     }
 
@@ -48,10 +49,15 @@ export function ConversationTextarea({
 
     editor?.commands.clearContent(true);
     setText("");
-  }, [editor, text]);
+  }, [editor, text, disabled]);
 
   return (
-    <div className="bg-background-3 rounded-lg border-1 border-gray-300 py-2">
+    <div
+      className={cn(
+        "bg-background-3 rounded-lg border-1 border-gray-300 py-2",
+        disabled && "cursor-not-allowed opacity-50",
+      )}
+    >
       <EditorRoot>
         <EditorContent
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,7 +71,10 @@ export function ConversationTextarea({
             }),
 
             Placeholder.configure({
-              placeholder: () => placeholder ?? "Ask sol...",
+              placeholder: () =>
+                disabled
+                  ? "Waiting for approval..."
+                  : placeholder ?? "Ask sol...",
               includeChildren: true,
             }),
             History,
@@ -73,10 +82,14 @@ export function ConversationTextarea({
           onCreate={async ({ editor }) => {
             setEditor(editor);
             await new Promise((resolve) => setTimeout(resolve, 100));
-            editor.commands.focus("end");
+            if (!disabled) {
+              editor.commands.focus("end");
+            }
           }}
           onUpdate={({ editor }) => {
-            onUpdate(editor);
+            if (!disabled) {
+              onUpdate(editor);
+            }
           }}
           shouldRerenderOnTransaction={false}
           editorProps={{
@@ -84,6 +97,10 @@ export function ConversationTextarea({
               class: `prose prose-lg dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full`,
             },
             handleKeyDown(view, event) {
+              if (disabled) {
+                return true; // Prevent all input when disabled
+              }
+
               if (event.key === "Enter" && !event.shiftKey) {
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 const target = event.target as any;
@@ -119,12 +136,13 @@ export function ConversationTextarea({
           variant="secondary"
           className="gap-1 shadow-none transition-all duration-500 ease-in-out"
           onClick={() => {
-            if (!isLoading) {
+            if (!isLoading && !disabled) {
               handleSend();
-            } else {
+            } else if (!disabled) {
               stop && stop();
             }
           }}
+          disabled={disabled}
           size="lg"
         >
           {isLoading ? (

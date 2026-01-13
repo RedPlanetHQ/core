@@ -103,7 +103,7 @@ export default function Integrations() {
           </div>
 
           {/* Integrations Section */}
-          <div className="space-y-3">
+          <div className="mb-10 space-y-3">
             <div>
               <h2 className="text-lg font-semibold">Integrations</h2>
               <p className="text-muted-foreground text-sm">

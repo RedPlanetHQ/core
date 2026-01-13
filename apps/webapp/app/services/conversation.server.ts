@@ -125,29 +125,57 @@ export const getConversationAndHistory = async (
       userId,
     },
     include: {
-      ConversationHistory: true,
+      ConversationHistory: {
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
     },
   });
 
   return conversation;
 };
 
-export const createConversationHistory = async (
+export const upsertConversationHistory = async (
+  id: string,
   parts: any,
   conversationId: string,
   userType: UserTypeEnum,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   thoughts?: Record<string, any>,
 ) => {
-  return await prisma.conversationHistory.create({
-    data: {
-      conversationId,
-      parts,
-      message: "",
-      thoughts,
-      userType,
-    },
-  });
+  if (id) {
+    return await prisma.conversationHistory.upsert({
+      where: {
+        id,
+      },
+      create: {
+        id,
+        conversationId,
+        parts,
+        message: "",
+        thoughts,
+        userType,
+      },
+      update: {
+        conversationId,
+        parts,
+        message: "",
+        thoughts,
+        userType,
+      },
+    });
+  } else {
+    await prisma.conversationHistory.create({
+      data: {
+        conversationId,
+        parts,
+        message: "",
+        thoughts,
+        userType,
+      },
+    });
+  }
 };
 
 export const GetConversationsListSchema = z.object({

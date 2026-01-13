@@ -13,26 +13,38 @@ import { z } from "zod";
 
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import {
-  createConversationHistory,
   getConversationAndHistory,
+  upsertConversationHistory,
 } from "~/services/conversation.server";
 
 import { getModel } from "~/lib/model.server";
 import { UserTypeEnum } from "@core/types";
-import { AGENT_SYSTEM_PROMPT } from "~/lib/prompt.server";
+import { AGENT_SYSTEM_PROMPT, SOL_CAPABILITIES } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getWorkspaceByUser } from "~/models/workspace.server";
-import { logger } from "~/services/logger.service";
+
 import { prisma } from "~/db.server";
 
 const ChatRequestSchema = z.object({
-  message: z.object({
-    id: z.string().optional(),
-    parts: z.array(z.any()),
-    role: z.string(),
-  }),
+  message: z
+    .object({
+      id: z.string().optional(),
+      parts: z.array(z.any()),
+      role: z.string(),
+    })
+    .optional(),
+  messages: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        parts: z.array(z.any()),
+        role: z.string(),
+      }),
+    )
+    .optional(),
+  needsApproval: z.boolean().optional(),
   id: z.string(),
 });
 
@@ -46,9 +58,8 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const message = body.message.parts[0].text;
-    const messageParts = body.message.parts;
-    const id = body.message.id;
+    const isAssistantApproval = body.needsApproval;
+
     const workspace = await getWorkspaceByUser(authentication.userId);
 
     const conversation = await getConversationAndHistory(
@@ -58,7 +69,8 @@ const { loader, action } = createHybridActionApiRoute(
 
     const conversationHistory = conversation?.ConversationHistory ?? [];
 
-    if (conversationHistory.length === 1) {
+    if (conversationHistory.length === 1 && !isAssistantApproval) {
+      const message = body.message?.parts[0].text;
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
         conversationId: body.id,
@@ -66,8 +78,16 @@ const { loader, action } = createHybridActionApiRoute(
       });
     }
 
-    if (conversationHistory.length > 1) {
-      await createConversationHistory(messageParts, body.id, UserTypeEnum.User);
+    if (conversationHistory.length > 1 && !isAssistantApproval) {
+      const message = body.message?.parts[0].text;
+      const messageParts = body.message?.parts;
+
+      await upsertConversationHistory(
+        message.id ?? crypto.randomUUID(),
+        messageParts,
+        body.id,
+        UserTypeEnum.User,
+      );
     }
 
     const messages = conversationHistory.map((history: any) => {
@@ -82,24 +102,40 @@ const { loader, action } = createHybridActionApiRoute(
     const tools: Record<string, Tool> = {};
 
     memoryTools.forEach((mt) => {
+      if (
+        [
+          "memory_ingest",
+          "memory_about_user",
+          "initialize_conversation_session",
+          "get_integrations",
+        ].includes(mt.name)
+      ) {
+        return;
+      }
+
+      // Check if any tool calls have destructiveHint: true
+      const hasDestructiveTools = mt.annotations?.destructiveHint === true;
+      const executeFn = async (params: any) => {
+        return await callMemoryTool(
+          mt.name,
+          {
+            sessionId: body.id,
+            ...params,
+            userId: authentication.userId,
+            workspaceId: workspace?.id,
+          },
+          authentication.userId,
+          "core",
+        );
+      };
+
       tools[mt.name] = tool({
         name: mt.name,
         inputSchema: jsonSchema(mt.inputSchema as any),
         description: mt.description,
-        execute: async (params: any) => {
-          return await callMemoryTool(
-            mt.name,
-            {
-              sessionId: body.id,
-              ...params,
-              userId: authentication.userId,
-              workspaceId: workspace?.id,
-            },
-            authentication.userId,
-            "core",
-          );
-        },
-      });
+        needsApproval: hasDestructiveTools,
+        execute: executeFn,
+      } as any);
     });
 
     // Get user's connected integrations
@@ -116,14 +152,23 @@ const { loader, action } = createHybridActionApiRoute(
       )
       .join("\n");
 
-    const finalMessages = [
-      ...messages,
-      {
-        parts: [{ text: message, type: "text" }],
-        role: "user",
-        id: id ?? generateId(),
-      },
-    ];
+    let finalMessages = messages;
+
+    if (!isAssistantApproval) {
+      const message = body.message?.parts[0].text;
+      const id = body.message?.id;
+
+      finalMessages = [
+        ...messages,
+        {
+          parts: [{ text: message, type: "text" }],
+          role: "user",
+          id: id ?? generateId(),
+        },
+      ];
+    } else {
+      finalMessages = body.messages as any;
+    }
 
     const validatedMessages = await validateUIMessages({
       messages: finalMessages,
@@ -150,7 +195,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
-    let systemPrompt = AGENT_SYSTEM_PROMPT;
+    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n${SOL_CAPABILITIES}`;
 
     // Add connected integrations context
     const integrationsContext = `
@@ -192,6 +237,10 @@ const { loader, action } = createHybridActionApiRoute(
     //   </user_persona>`;
     // }
 
+    const modelMessages = await convertToModelMessages(validatedMessages, {
+      tools,
+    });
+
     const result = streamText({
       model: getModel() as LanguageModel,
       messages: [
@@ -199,9 +248,7 @@ const { loader, action } = createHybridActionApiRoute(
           role: "system",
           content: systemPrompt,
         },
-        ...convertToModelMessages(validatedMessages, {
-          tools,
-        }),
+        ...modelMessages,
       ],
       tools,
       stopWhen: [stepCountIs(10)],
@@ -214,11 +261,15 @@ const { loader, action } = createHybridActionApiRoute(
       originalMessages: validatedMessages,
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();
-        await createConversationHistory(
-          lastMessage?.parts,
-          body.id,
-          UserTypeEnum.Agent,
-        );
+
+        if (lastMessage) {
+          await upsertConversationHistory(
+            lastMessage?.id ?? crypto.randomUUID(),
+            lastMessage?.parts,
+            body.id,
+            UserTypeEnum.Agent,
+          );
+        }
       },
       // async consumeSseStream({ stream }) {
       //   // Create a resumable stream from the SSE stream
