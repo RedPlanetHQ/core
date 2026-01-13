@@ -3,7 +3,9 @@ import { CheckCircleIcon } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
+import Logo from "~/components/logo/logo";
 import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
+import { Fieldset } from "~/components/ui/Fieldset";
 import { setPhoneNumber } from "~/models/user.server";
 
 import { logger } from "~/services/logger.service";
@@ -51,12 +53,11 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     ).toString("utf-8");
     const codeDetails = JSON.parse(parsedBase64);
 
-    const personalAccessToken =
-      await createPersonalAccessTokenFromAuthorizationCode(
-        codeDetails.authorizationCode,
-        userId,
-        "whatsapp",
-      );
+    await createPersonalAccessTokenFromAuthorizationCode(
+      codeDetails.authorizationCode,
+      userId,
+      "whatsapp",
+    );
 
     await setPhoneNumber(codeDetails.identifier, userId);
 
@@ -89,37 +90,63 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 };
 
 export default function Page() {
-  const result = useTypedLoaderData<typeof loader>();
+  const result = {
+    success: true,
+    source: "whatsapp",
+    clientName: "whatsapp",
+    error: null,
+  };
+
+  const whatsappNumber = "+12314444889"; // Replace with your actual WhatsApp number
+  const whatsappMessage = encodeURIComponent(
+    "hey I have connected. What can you do?",
+  );
 
   return (
     <LoginPageLayout>
       <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
         <CardHeader className="flex flex-col items-center">
-          <CardTitle className="text-2xl">Welcome to Core</CardTitle>
+          <CardTitle className="w-full text-center text-xl">
+            Successfully authenticated
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="flex flex-col items-center space-y-4">
-            {result.success ? (
-              <div>
-                <div className="mb-2 flex items-center gap-1">
-                  <CheckCircleIcon className="h-6 w-6 text-emerald-500" />{" "}
-                  Successfully authenticated
-                </div>
-                <p>
-                  {getInstructionsForSource(result.source, result.clientName)}
-                </p>
+          <Fieldset className="w-full">
+            <div className="flex flex-col gap-y-2">
+              <div className="mb-10 flex justify-center">
+                <Logo size={60} />
               </div>
-            ) : (
-              <div>
-                <div className="mb-2">Authentication failed</div>
-                <div className="my-2">{result.error}</div>
-                <p>
-                  There was a problem authenticating you, please try logging in
-                  again.
-                </p>
+
+              <div className="flex flex-col items-center space-y-4">
+                {result.success ? (
+                  <div className="flex flex-col items-center gap-4">
+                    <div className="text-md text-center">
+                      <p>{getInstructionsForSource(result.source)}</p>
+                    </div>
+                    {result.source === "whatsapp" && (
+                      <a
+                        href={`https://wa.me/${whatsappNumber}?text=${whatsappMessage}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center rounded-md bg-green-600 px-4 py-2 text-sm font-medium text-white hover:bg-green-700 focus:ring-2 focus:ring-green-500 focus:ring-offset-2 focus:outline-none"
+                      >
+                        Open WhatsApp
+                      </a>
+                    )}
+                  </div>
+                ) : (
+                  <div>
+                    <div className="mb-2">Authentication failed</div>
+                    <div className="my-2">{result.error}</div>
+                    <p>
+                      There was a problem authenticating you, please try logging
+                      in again.
+                    </p>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
+            </div>
+          </Fieldset>
         </CardContent>
       </Card>
     </LoginPageLayout>
@@ -136,11 +163,9 @@ const prettyClientNames: Record<string, string> = {
   "core-cli": "Core cli",
 };
 
-function getInstructionsForSource(source: string, clientName: string) {
-  if (source === "mcp") {
-    if (clientName) {
-      return `Return to your ${prettyClientNames[clientName] ?? clientName} to continue.`;
-    }
+function getInstructionsForSource(source: string) {
+  if (source) {
+    return `Return to your ${prettyClientNames[source] ?? source} to continue.`;
   }
 
   return `Return to your terminal to continue.`;
