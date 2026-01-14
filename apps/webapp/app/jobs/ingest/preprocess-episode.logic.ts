@@ -439,8 +439,13 @@ export async function processEpisodePreprocessing(
       enqueueSessionCompaction
     ) {
       // Check if this is a compact document update (type='conversation' in Document table)
-      const document = await prisma.document.findFirst({
-        where: { sessionId, workspaceId: payload.workspaceId },
+      const document = await prisma.document.findUnique({
+        where: {
+          sessionId_workspaceId: {
+            sessionId,
+            workspaceId: payload.workspaceId,
+          },
+        },
         select: { type: true },
       });
 

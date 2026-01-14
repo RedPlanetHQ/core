@@ -1,5 +1,9 @@
 import { type CoreMessage, embed, generateText, streamText } from "ai";
-import { openai, type OpenAIResponsesProviderOptions } from "@ai-sdk/openai";
+import {
+  createOpenAI,
+  openai,
+  type OpenAIResponsesProviderOptions,
+} from "@ai-sdk/openai";
 import { logger } from "~/services/logger.service";
 
 import { createOllama } from "ollama-ai-provider-v2";
@@ -148,10 +152,10 @@ export async function makeModelCall(
       onFinish: async ({ text, usage }) => {
         const tokenUsage = usage
           ? {
-            promptTokens: usage.inputTokens,
-            completionTokens: usage.outputTokens,
-            totalTokens: usage.totalTokens,
-          }
+              promptTokens: usage.inputTokens,
+              completionTokens: usage.outputTokens,
+              totalTokens: usage.totalTokens,
+            }
           : undefined;
 
         if (tokenUsage) {
@@ -173,11 +177,11 @@ export async function makeModelCall(
 
   const tokenUsage = usage
     ? {
-      promptTokens: usage.inputTokens,
-      completionTokens: usage.outputTokens,
-      totalTokens: usage.totalTokens,
-      cachedInputTokens: usage.cachedInputTokens,
-    }
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        cachedInputTokens: usage.cachedInputTokens,
+      }
     : undefined;
 
   if (tokenUsage) {
@@ -229,11 +233,19 @@ export async function getEmbedding(text: string) {
         });
         lastEmbedding = embedding;
       } else {
-        const ollama = createOllama({
-          baseURL: ollamaUrl,
+        // Use Ollama's OpenAI-compatible endpoint for embeddings
+        // This avoids EmbeddingModelV3/V2 compatibility issues with third-party providers
+        // Normalize the URL: remove trailing slash, /api, and /v1 if present, then add /v1
+        const baseUrl = ollamaUrl
+          ?.replace(/\/+$/, "")
+          .replace(/\/v1$/, "")
+          .replace(/\/api$/, "");
+        const ollamaOpenAI = createOpenAI({
+          baseURL: `${baseUrl}/v1`,
+          apiKey: "ollama", // Required but not used by Ollama
         });
         const { embedding } = await embed({
-          model: ollama.embedding(model as string),
+          model: ollamaOpenAI.embedding(model as string),
           value: text,
         });
         lastEmbedding = embedding;

@@ -86,6 +86,7 @@ export async function processTitleGeneration(
           episodeBody,
           sessionId,
           payload.queueId,
+          payload.workspaceId,
         );
       } else {
         // For conversations without sessionId, just use the episode body
@@ -181,6 +182,7 @@ async function generateTitleForConversationWithSession(
   currentContent: string,
   sessionId: string,
   currentQueueId: string,
+  workspaceId: string,
 ): Promise<string> {
   // Fetch other episodes in the same session
   const sessionQueues = await prisma.ingestionQueue.findMany({
@@ -189,6 +191,7 @@ async function generateTitleForConversationWithSession(
       id: {
         not: currentQueueId, // Exclude current queue
       },
+      workspaceId,
     },
     orderBy: {
       createdAt: "asc",
