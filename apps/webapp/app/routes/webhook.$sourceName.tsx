@@ -47,7 +47,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return json({ challenge: eventBody.challenge });
     }
 
-    await webhookService.handleEvents(
+    webhookService.handleEvents(
       sourceName,
       integrationAccountId,
       eventHeaders,
