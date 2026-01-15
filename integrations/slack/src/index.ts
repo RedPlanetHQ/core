@@ -1,5 +1,6 @@
 import { integrationCreate } from './account-create';
 import { createActivityEvent } from './create-activity';
+import { identify } from './identify';
 import { getTools, callTool } from './mcp';
 import {
   IntegrationCLI,
@@ -14,14 +15,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return await integrationCreate(eventPayload.eventBody);
 
     case IntegrationEventType.IDENTIFY:
-      return [
-        {
-          type: 'identifier',
-          data:
-            eventPayload.eventBody.event.event.user ||
-            eventPayload.eventBody.event.event.message.user,
-        },
-      ];
+      return await identify(eventPayload.integrationDefinition, eventPayload.eventBody);
 
     case IntegrationEventType.PROCESS:
       return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
