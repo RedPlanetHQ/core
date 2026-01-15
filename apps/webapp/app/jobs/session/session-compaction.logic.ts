@@ -8,7 +8,7 @@ import {
 import { type EpisodicNode } from "@core/types";
 import { prisma } from "~/trigger/utils/prisma";
 import { type Document } from "@prisma/client";
-import { type CoreMessage } from "ai";
+
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
 
 export interface SessionCompactionPayload {
@@ -168,10 +168,11 @@ async function getTitleForCompactedSession(
   sessionId: string,
   summary: string,
   episodes: EpisodicNode[],
+  workspaceId: string,
 ): Promise<string> {
   // 1. Try to get title from ingestion queue (first episode)
   const ingestionRecords = await prisma.ingestionQueue.findMany({
-    where: { sessionId },
+    where: { sessionId, workspaceId },
     orderBy: { createdAt: "asc" },
     select: {
       title: true,
@@ -254,6 +255,7 @@ async function upsertDocumentFromCompaction(
       sessionId,
       summary,
       episodes,
+      workspaceId,
     );
 
     const document = await prisma.document.upsert({
@@ -389,7 +391,7 @@ async function generateCompaction(
   const systemPrompt = createCompactionSystemPrompt();
   const userPrompt = createCompactionUserPrompt(episodes, existingSummary);
 
-  const messages: CoreMessage[] = [
+  const messages = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },
   ];

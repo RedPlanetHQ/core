@@ -5,7 +5,6 @@ import {
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-  Message,
 } from '@redplanethq/sdk';
 import { getTools, callTool } from './mcp';
 
@@ -51,9 +50,9 @@ export async function run(eventPayload: IntegrationEventPayload) {
 }
 
 // CLI implementation that extends the base class
-class GmailCLI extends IntegrationCLI {
+class GoogleTasksCLI extends IntegrationCLI {
   constructor() {
-    super('gmail', '1.0.0');
+    super('google-tasks', '1.0.0');
   }
 
   protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
@@ -62,25 +61,23 @@ class GmailCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'Gmail extension',
-      key: 'gmail',
+      name: 'Google Tasks extension',
+      key: 'google-tasks',
       description:
-        'Connect your workspace to Gmail. Monitor emails, send messages, and manage your email workflow',
-      icon: 'gmail',
+        'Connect your workspace to Google Tasks. Create, update, and manage your tasks and task lists',
+      icon: 'google-tasks',
       mcp: {
         type: 'cli',
       },
       schedule: {
-        frequency: '*/15 * * * *',
+        frequency: '*/30 * * * *',
       },
       auth: {
         OAuth2: {
           token_url: 'https://oauth2.googleapis.com/token',
           authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
           scopes: [
-            'https://www.googleapis.com/auth/gmail.send',
-            'https://www.googleapis.com/auth/gmail.modify',
-            'https://www.googleapis.com/auth/gmail.labels',
+            'https://www.googleapis.com/auth/tasks',
             'https://www.googleapis.com/auth/userinfo.email',
             'https://www.googleapis.com/auth/userinfo.profile',
           ],
@@ -103,8 +100,8 @@ class GmailCLI extends IntegrationCLI {
 // Define a main function and invoke it directly.
 // This works after bundling to JS and running with `node index.js`.
 function main() {
-  const gmailCLI = new GmailCLI();
-  gmailCLI.parse();
+  const googleTasksCLI = new GoogleTasksCLI();
+  googleTasksCLI.parse();
 }
 
 main();

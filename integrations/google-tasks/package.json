@@ -1,16 +1,16 @@
 {
-  "name": "@core/google-calendar",
-  "version": "0.1.8",
-  "description": "Google calendar integration for Core",
+  "name": "@core/google-tasks",
+  "version": "0.1.1",
+  "description": "Google Tasks integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
   "type": "module",
   "files": [
-    "google-calendar",
+    "google-tasks",
     "bin"
   ],
   "bin": {
-    "google_calendar": "./bin/index.js"
+    "google_tasks": "./bin/index.js"
   },
   "scripts": {
     "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
@@ -37,8 +37,7 @@
     "googleapis": "166.0.0",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.22.1",
-    "nodemailer": "^7.0.3"
+    "zod-to-json-schema": "^3.22.1"
   },
   "publishConfig": {
     "access": "public"
@@ -58,9 +57,6 @@
   "dependencies": {
     "axios": "^1.7.9",
     "commander": "^12.0.0",
-    "openai": "^4.0.0",
-    "react-query": "^3.39.3",
-    "@redplanethq/sdk": "0.1.9",
-    "turndown": "^7.2.0"
+    "@redplanethq/sdk": "0.1.9"
   }
 }

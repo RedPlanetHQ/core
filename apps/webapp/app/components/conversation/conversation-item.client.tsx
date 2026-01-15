@@ -43,7 +43,7 @@ const Tool = ({
 }) => {
   const needsApproval = part.state === "approval-requested";
   const [isOpen, setIsOpen] = useState(needsApproval);
-  const textPart = part.output ?? "";
+  const textPart = part.output?.content ? part.output?.content[0]?.text : "";
 
   const handleApprove = () => {
     if (addToolApprovalResponse && part?.approval?.id) {
@@ -80,7 +80,7 @@ const Tool = ({
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className="my-1 rounded border-1 border-gray-300 px-2"
+      className="my-1 w-full rounded border-1 border-gray-300 px-2"
     >
       <CollapsibleTrigger asChild>
         <Button
@@ -97,7 +97,7 @@ const Tool = ({
           <ChevronsUpDown size={16} />
         </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent>
+      <CollapsibleContent className="w-full">
         <div className="flex flex-col gap-2">
           <div className="bg-grayAlpha-50 rounded p-2">
             <p className="text-muted-foreground text-sm"> Request </p>
@@ -111,7 +111,7 @@ const Tool = ({
               onReject={handleReject}
             />
           ) : (
-            <div className="bg-grayAlpha-50 mb-2 rounded p-2">
+            <div className="bg-grayAlpha-50 mb-2 max-w-full rounded p-2">
               <p className="text-muted-foreground text-sm"> Response </p>
               <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
             </div>
@@ -172,7 +172,7 @@ const ConversationItemComponent = ({
     >
       <div
         className={cn(
-          "flex w-fit flex-col",
+          "flex w-full flex-col",
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >

@@ -24,7 +24,7 @@ async function createMcpClient(serverUrl: string, headers?: Record<string, strin
  * @returns Array of available tools
  */
 export async function getTools(config?: Record<string, string>) {
-  const client = await createMcpClient('https://api.githubcopilot.com/mcp/', {
+  const client = await createMcpClient('https://api.githubcopilot.com/mcp/x/all', {
     Authorization: `Bearer ${config?.access_token}`,
   });
 
@@ -49,7 +49,7 @@ export async function callTool(
   args: Record<string, any>,
   config?: Record<string, string>,
 ) {
-  const client = await createMcpClient('https://api.githubcopilot.com/mcp/', {
+  const client = await createMcpClient('https://api.githubcopilot.com/mcp/x/all', {
     Authorization: `Bearer ${config?.access_token}`,
   });
 

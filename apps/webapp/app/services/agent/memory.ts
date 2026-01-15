@@ -230,7 +230,28 @@ export async function searchMemoryWithAgent(
   intent: string,
   userId: string,
   source: string,
-): Promise<string> {
-  const result = await memoryAgent({ intent, userId, source });
-  return result.response;
+) {
+  try {
+    const result = await memoryAgent({ intent, userId, source });
+
+    return {
+      content: [
+        {
+          type: "text",
+          text: result.response,
+        },
+      ],
+      isError: false,
+    };
+  } catch (e: any) {
+    return {
+      content: [
+        {
+          type: "text",
+          text: e.message,
+        },
+      ],
+      isError: true,
+    };
+  }
 }
