@@ -189,11 +189,6 @@ const SetUserPresenceSchema = z.object({
   presence: z.enum(['auto', 'away']).describe('Presence state'),
 });
 
-// Direct Message Schemas
-const OpenDMSchema = z.object({
-  users: z.string().describe('Comma-separated list of user IDs (1 for DM, 2+ for group DM)'),
-});
-
 // File Schemas
 const UploadFileSchema = z.object({
   channels: z.string().optional().describe('Comma-separated list of channel IDs'),
@@ -231,8 +226,6 @@ const CreateReminderSchema = z.object({
     .optional()
     .describe('User ID to send reminder to (defaults to authenticated user)'),
 });
-
-const ListRemindersSchema = z.object({});
 
 const DeleteReminderSchema = z.object({
   reminder: z.string().describe('Reminder ID to delete'),
@@ -470,18 +463,6 @@ export async function getTools() {
       name: 'slack_set_user_presence',
       description: 'Sets your presence status',
       inputSchema: zodToJsonSchema(SetUserPresenceSchema),
-    },
-
-    // Direct Messages
-    {
-      name: 'slack_open_dm',
-      description: 'Opens a direct message or group DM',
-      inputSchema: zodToJsonSchema(OpenDMSchema),
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-        idempotentHint: true,
-      },
     },
 
     // File Management (requires files:read, files:write scopes)
@@ -1096,23 +1077,6 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
             {
               type: 'text',
               text: `✓ Presence set to: ${validatedArgs.presence}`,
-            },
-          ],
-        };
-      }
-
-      // ====================================================================
-      // DIRECT MESSAGE OPERATIONS
-      // ====================================================================
-      case 'slack_open_dm': {
-        const validatedArgs = OpenDMSchema.parse(args);
-        const data = await executeSlackAPI('conversations.open', validatedArgs);
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `✓ DM opened\nChannel ID: ${data.channel.id}`,
             },
           ],
         };

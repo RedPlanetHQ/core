@@ -1,6 +1,6 @@
 {
   "name": "@core/github",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "github extension for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
@@ -13,7 +13,7 @@
     "github": "./bin/index.js"
   },
   "scripts": {
-    "build": "rimraf bin && npx tsup",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx backend/ frontend/ --fix",
     "prettier": "prettier --config .prettierrc --write .",
     "copy:spec": "cp spec.json bin/"

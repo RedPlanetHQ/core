@@ -70,6 +70,11 @@ const CreateEventSchema = z.object({
     })
     .optional()
     .describe('Event reminders'),
+  addGoogleMeet: z
+    .boolean()
+    .optional()
+    .default(false)
+    .describe('Automatically add a Google Meet video conference link to the event'),
 });
 
 const GetEventSchema = z.object({
@@ -100,6 +105,10 @@ const UpdateEventSchema = z.object({
   startDateTime: z.string().optional().describe('New start date/time (ISO 8601)'),
   endDateTime: z.string().optional().describe('New end date/time (ISO 8601)'),
   timeZone: z.string().optional().describe('Time zone'),
+  attendees: z
+    .array(z.object({ email: z.string() }))
+    .optional()
+    .describe('List of attendee emails to add/update'),
 });
 
 const DeleteEventSchema = z.object({
@@ -260,16 +269,38 @@ export async function callTool(
           reminders: validatedArgs.reminders,
         };
 
+        // Add Google Meet conference data if requested
+        if (validatedArgs.addGoogleMeet) {
+          event.conferenceData = {
+            createRequest: {
+              requestId: `meet-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+              conferenceSolutionKey: {
+                type: 'hangoutsMeet',
+              },
+            },
+          };
+        }
+
         const response = await calendar.events.insert({
           calendarId: validatedArgs.calendarId,
           requestBody: event,
+          conferenceDataVersion: validatedArgs.addGoogleMeet ? 1 : 0,
         });
+
+        let resultText = `Event created successfully!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}\nLink: ${response.data.htmlLink}`;
+
+        if (validatedArgs.addGoogleMeet && response.data.conferenceData?.entryPoints) {
+          const meetLink = response.data.conferenceData.entryPoints.find(ep => ep.entryPointType === 'video')?.uri;
+          if (meetLink) {
+            resultText += `\nGoogle Meet: ${meetLink}`;
+          }
+        }
 
         return {
           content: [
             {
               type: 'text',
-              text: `Event created successfully!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}\nLink: ${response.data.htmlLink}`,
+              text: resultText,
             },
           ],
         };
@@ -364,6 +395,10 @@ export async function callTool(
           };
         }
 
+        if (validatedArgs.attendees) {
+          updatedEvent.attendees = validatedArgs.attendees;
+        }
+
         const response = await calendar.events.update({
           calendarId: validatedArgs.calendarId,
           eventId: validatedArgs.eventId,
@@ -374,7 +409,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Event updated successfully!\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}`,
+              text: `Event updated successfully!\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}${validatedArgs.attendees ? `\nAttendees: ${validatedArgs.attendees.map(a => a.email).join(', ')}` : ''}`,
             },
           ],
         };

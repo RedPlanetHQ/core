@@ -53,7 +53,7 @@ export const memoryTools = [
   {
     name: "memory_search",
     description:
-      "Intelligent memory search agent that analyzes user intent and performs multiple parallel searches when needed to gather comprehensive context. USE THIS TOOL: When you need deep contextual understanding that might require multiple search angles, or when the query is complex and multifaceted. The agent will automatically decompose your intent into optimal search queries, execute them in parallel, and synthesize the results. BENEFITS: Better context retrieval than single memory_search, handles complex multi-faceted queries, automatically determines best query patterns (entity-centric, temporal, relationship-based, semantic). HOW TO USE: Provide a natural language description of what context you need. Examples: 'What do we know about the authentication implementation and related bugs?', 'Recent work on MCP integrations and configuration', 'User preferences for code style and project setup'. Returns: Synthesized response with relevant context from multiple search angles.",
+      "Intelligent memory search agent that analyzes user intent and performs multiple parallel searches when needed to gather comprehensive context. USE THIS TOOL: When you need deep contextual understanding that might require multiple search angles, or when the query is complex and multifaceted. The agent will automatically decompose your intent into optimal search queries, execute them in parallel, and synthesize the results. BENEFITS: Handles complex multi-faceted queries, automatically determines best query patterns (entity-centric, temporal, relationship-based, semantic). HOW TO USE: Provide a natural language description of what context you need. Examples: 'What do we know about the authentication implementation and related bugs?', 'Recent work on MCP integrations and configuration', 'User preferences for code style and project setup'. Returns: Synthesized response with relevant context from multiple search angles.",
     inputSchema: {
       type: "object",
       properties: {
@@ -233,7 +233,7 @@ export const memoryTools = [
     annotations: {
       readOnlyHint: false,
       idempotentHint: false,
-      destructiveHint: false,
+      destructiveHint: true,
     },
   },
 ];

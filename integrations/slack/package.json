@@ -1,6 +1,6 @@
 {
   "name": "@core/slack",
-  "version": "0.1.3",
+  "version": "0.1.6",
   "description": "slack extension for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
@@ -13,7 +13,7 @@
     "slack": "./bin/index.js"
   },
   "scripts": {
-    "build": "rimraf bin && npx tsup",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx backend/ frontend/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
