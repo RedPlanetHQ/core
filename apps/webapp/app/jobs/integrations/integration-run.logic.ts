@@ -181,6 +181,10 @@ async function executeCLICommand(
 
         case IntegrationEventType.IDENTIFY:
           args.push("identify");
+          args.push(
+            "--integration-definition",
+            JSON.stringify(integrationDefinition || {}),
+          );
           args.push("--webhook-data", JSON.stringify(eventBody || {}));
           break;
 

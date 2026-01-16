@@ -97,13 +97,21 @@ export abstract class IntegrationCLI {
       .command('identify')
       .description('Identify webhook account')
       .requiredOption('--webhook-data <data>', 'Webhook data JSON')
+      .requiredOption(
+        '--integration-definition <definition>',
+        'Integration definition JSON',
+      )
       .action(async (options) => {
         try {
           const webhookData = JSON.parse(options.webhookData);
+          const integrationDefinition = JSON.parse(
+            options.integrationDefinition,
+          );
 
           const messages: Message[] = await this.handleEvent({
             event: IntegrationEventType.IDENTIFY,
             eventBody: webhookData,
+            integrationDefinition,
           });
 
           for (const message of messages) {

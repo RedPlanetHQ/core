@@ -68,7 +68,8 @@ const Tool = ({
   function getIcon() {
     if (
       part.state === "output-available" ||
-      part.state === "approval-requested"
+      part.state === "approval-requested" ||
+      part.state === "approval-responded"
     ) {
       return <StaticLogo size={18} className="rounded-sm" />;
     }

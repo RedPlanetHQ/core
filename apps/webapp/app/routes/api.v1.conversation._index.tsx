@@ -258,6 +258,7 @@ const { loader, action } = createHybridActionApiRoute(
     result.consumeStream(); // no await
 
     return result.toUIMessageStreamResponse({
+      generateMessageId: () => crypto.randomUUID(),
       originalMessages: validatedMessages,
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();

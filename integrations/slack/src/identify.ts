@@ -5,7 +5,7 @@ export const identify = async (integrationDefinition: any, eventBody: any) => {
     const response = await axios.post(
       'https://slack.com/api/apps.event.authorizations.list',
       {
-        event_context: eventBody.event_context,
+        event_context: eventBody.event.event_context,
       },
       {
         headers: {

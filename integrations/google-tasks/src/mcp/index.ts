@@ -38,7 +38,10 @@ async function loadCredentials(
 
 // Schema definitions for Google Tasks operations
 const ListTaskListsSchema = z.object({
-  maxResults: z.number().optional().describe('Maximum number of task lists to return (default: 100, max: 100)'),
+  maxResults: z
+    .number()
+    .optional()
+    .describe('Maximum number of task lists to return (default: 100, max: 100)'),
   pageToken: z.string().optional().describe('Token specifying the result page to return'),
 });
 
@@ -61,7 +64,10 @@ const DeleteTaskListSchema = z.object({
 
 const ListTasksSchema = z.object({
   taskListId: z.string().describe('Task list identifier'),
-  maxResults: z.number().optional().describe('Maximum number of tasks to return (default: 100, max: 100)'),
+  maxResults: z
+    .number()
+    .optional()
+    .describe('Maximum number of tasks to return (default: 100, max: 100)'),
   pageToken: z.string().optional().describe('Token specifying the result page to return'),
   showCompleted: z
     .boolean()
@@ -93,10 +99,7 @@ const CreateTaskSchema = z.object({
   notes: z.string().optional().describe('Notes describing the task'),
   due: z.string().optional().describe('Due date of the task (RFC 3339 timestamp)'),
   parent: z.string().optional().describe('Parent task identifier for subtasks'),
-  previous: z
-    .string()
-    .optional()
-    .describe('Previous sibling task identifier (for positioning)'),
+  previous: z.string().optional().describe('Previous sibling task identifier (for positioning)'),
 });
 
 const UpdateTaskSchema = z.object({
@@ -104,10 +107,7 @@ const UpdateTaskSchema = z.object({
   taskId: z.string().describe('Task identifier'),
   title: z.string().optional().describe('New title of the task'),
   notes: z.string().optional().describe('New notes for the task'),
-  status: z
-    .enum(['needsAction', 'completed'])
-    .optional()
-    .describe('Status of the task'),
+  status: z.enum(['needsAction', 'completed']).optional().describe('Status of the task'),
   due: z.string().optional().describe('Due date of the task (RFC 3339 timestamp)'),
   completed: z.string().optional().describe('Completion date (RFC 3339 timestamp)'),
 });
@@ -135,13 +135,13 @@ export async function getTools() {
   const tools = [
     {
       name: 'list_task_lists',
-      description: 'Returns all the authenticated user\'s task lists',
+      description: "Returns all the authenticated user's task lists",
       inputSchema: zodToJsonSchema(ListTaskListsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'get_task_list',
-      description: 'Returns the authenticated user\'s specified task list',
+      description: "Returns the authenticated user's specified task list",
       inputSchema: zodToJsonSchema(GetTaskListSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -153,13 +153,13 @@ export async function getTools() {
     },
     {
       name: 'update_task_list',
-      description: 'Updates the authenticated user\'s specified task list',
+      description: "Updates the authenticated user's specified task list",
       inputSchema: zodToJsonSchema(UpdateTaskListSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
     {
       name: 'delete_task_list',
-      description: 'Deletes the authenticated user\'s specified task list',
+      description: "Deletes the authenticated user's specified task list",
       inputSchema: zodToJsonSchema(DeleteTaskListSchema),
       annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
     },
@@ -237,10 +237,7 @@ export async function callTool(
 
         const taskLists = response.data.items || [];
         const formattedLists = taskLists
-          .map(
-            list =>
-              `ID: ${list.id}\nTitle: ${list.title}\nUpdated: ${list.updated}\n`
-          )
+          .map(list => `ID: ${list.id}\nTitle: ${list.title}\nUpdated: ${list.updated}\n`)
           .join('\n');
 
         let resultText = `Found ${taskLists.length} task lists:\n\n${formattedLists}`;

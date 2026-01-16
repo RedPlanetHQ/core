@@ -65,6 +65,15 @@ export default function SingleConversation() {
     transport: new DefaultChatTransport({
       api: "/api/v1/conversation",
       prepareSendMessagesRequest({ messages, id }) {
+        // Check if the last assistant message needs approval
+        const lastAssistantMessage = [...messages]
+          .reverse()
+          .find((msg) => msg.role === "assistant") as UIMessage | undefined;
+
+        const needsApproval = !!lastAssistantMessage?.parts.find(
+          (part: any) => part.state === "approval-responded",
+        );
+
         if (needsApproval) {
           return { body: { messages, needsApproval: true, id } };
         }

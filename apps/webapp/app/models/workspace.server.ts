@@ -14,9 +14,21 @@ interface CreateWorkspaceDto {
 export async function createWorkspace(
   input: CreateWorkspaceDto,
 ): Promise<Workspace> {
+  // Generate slug: remove spaces, lowercase, add 5 random letters
+  const generateRandomSuffix = () => {
+    const chars = "abcdefghijklmnopqrstuvwxyz";
+    return Array.from(
+      { length: 5 },
+      () => chars[Math.floor(Math.random() * chars.length)],
+    ).join("");
+  };
+
+  const slug =
+    input.name.replace(/\s+/g, "-").toLowerCase() + generateRandomSuffix();
+
   const workspace = await prisma.workspace.create({
     data: {
-      slug: input.name,
+      slug,
       name: input.name,
       version: "V2",
       userId: input.userId,

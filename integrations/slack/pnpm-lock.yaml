@@ -9,8 +9,8 @@ importers:
   .:
     dependencies:
       '@redplanethq/sdk':
-        specifier: 0.1.9
-        version: 0.1.9
+        specifier: 0.1.10
+        version: 0.1.10
       axios:
         specifier: ^1.7.9
         version: 1.9.0
@@ -19,7 +19,7 @@ importers:
         version: 12.1.0
       openai:
         specifier: ^4.0.0
-        version: 4.98.0(ws@2.3.1)(zod@3.24.4)
+        version: 4.98.0(zod@3.24.4)
       react:
         specifier: ^18.2.0
         version: 18.3.1
@@ -471,8 +471,8 @@ packages:
     resolution: {integrity: sha512-ROFF39F6ZrnzSUEmQQZUar0Jt4xVoP9WnDRdWwF4NNcXs3xBTLgBUDoOwW141y1jP+S8nahIbdxbFC7IShw9Iw==}
     engines: {node: ^12.20.0 || ^14.18.0 || >=16.0.0}
 
-  '@redplanethq/sdk@0.1.9':
-    resolution: {integrity: sha512-fi+mtKTTdKPp1E6gCl9W8Ri7ZuULs0J/s5Hy5am1mg/lQ1foX+mLoBE08kr4p1LTNXJYJFsY7J4PHMe16AcN/g==}
+  '@redplanethq/sdk@0.1.10':
+    resolution: {integrity: sha512-ylwwNGffTmO15hMQAkBrrII1m1gTV5JH6IF3Ag1Nw7wjFNCi8+7k/nQRnYqY44Z/P/H6WiNDkJ5HxZF0FnDj/A==}
     engines: {node: '>=18.0.0'}
 
   '@rollup/rollup-android-arm-eabi@4.40.2':
@@ -2699,7 +2699,7 @@ snapshots:
 
   '@pkgr/core@0.2.4': {}
 
-  '@redplanethq/sdk@0.1.9':
+  '@redplanethq/sdk@0.1.10':
     dependencies:
       commander: 14.0.0
 
@@ -4048,7 +4048,7 @@ snapshots:
     dependencies:
       wrappy: 1.0.2
 
-  openai@4.98.0(ws@2.3.1)(zod@3.24.4):
+  openai@4.98.0(zod@3.24.4):
     dependencies:
       '@types/node': 18.19.100
       '@types/node-fetch': 2.6.12
@@ -4058,7 +4058,6 @@ snapshots:
       formdata-node: 4.4.1
       node-fetch: 2.7.0
     optionalDependencies:
-      ws: 2.3.1
       zod: 3.24.4
     transitivePeerDependencies:
       - encoding
