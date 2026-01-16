@@ -3,6 +3,10 @@ import { z } from "zod";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { handleMemorySearch } from "~/utils/mcp/memory-operations";
 import { logger } from "~/services/logger.service";
+import axios from "axios";
+import { SearchService } from "../search.server";
+
+const searchService = new SearchService();
 
 /**
  * Memory Agent - Intelligent memory retrieval system
@@ -20,13 +24,9 @@ interface MemoryAgentParams {
 /**
  * Memory Agent system prompt that guides the agent's behavior
  */
-const MEMORY_AGENT_SYSTEM_PROMPT = `You are a Memory Assistant - a persistent knowledge system that maintains context, learnings, preferences and continuity across all coding sessions.
+const MEMORY_AGENT_SYSTEM_PROMPT = `You are a Memory Assistant that retrieves relevant context from a temporal knowledge graph.
 
-## Your Role
-
-You help retrieve relevant context from a temporal knowledge graph by intelligently decomposing user intent into optimal search queries. You can execute multiple parallel searches when needed to gather comprehensive context.
-
-## Query Patterns You Should Use
+## Query Patterns
 
 ### Entity-Centric Queries (Best for graph search):
 - GOOD: "User's preferences for code style and formatting"
@@ -52,34 +52,67 @@ You help retrieve relevant context from a temporal knowledge graph by intelligen
 - BAD: "recent plugin changes"
 - Format: [temporal marker] + [specific topic] + [additional context]
 
-## Your Strategy
+## Episode Marking Strategy
 
-1. **Analyze Intent**: Understand what the user is asking for
-2. **Decompose Queries**: Break down complex intents into multiple search angles
-3. **Parallel Execution**: Execute multiple searches in parallel when they cover different aspects
-4. **Synthesize Results**: Combine results into a coherent, useful response
+After executing searches and analyzing results:
 
-## When to Use Multiple Queries
+1. Identify which episodes DIRECTLY answer the intent
+2. Use the mark_relevant_episodes tool ONCE with an array of all relevant episode UUIDs
+3. Only mark episodes that contain information closely related to the intent
+4. Avoid marking tangential or loosely related episodes
 
-- User intent has multiple facets (e.g., "setup and configuration")
-- Both recent AND historical context would be valuable
-- Multiple entities or concepts are involved
-- Relationships between different topics need to be explored
+Quality over quantity: prefer 2-3 highly relevant episodes over 10 loosely related ones.
 
-## Guidelines
+## Workflow Examples
 
-- Write complete semantic queries, NOT keyword fragments
-- Use parallel searches for independent aspects of the intent
-- Prioritize quality over quantity - 2-3 well-crafted queries beat 10 mediocre ones
-- Consider temporal aspects when relevant (recent vs historical)
-- Think about entity relationships in the knowledge graph
+### Example 1: Simple single-facet intent
+Intent: "What is the user's preferred code style?"
 
-Your goal is to retrieve the most relevant context to help answer the user's intent.`;
+Step 1: Execute memory_search
+- Query: "User's preferences for code style and formatting"
+
+Step 2: Analyze results, identify relevant episodes (e.g., uuid-123, uuid-456)
+
+Step 3: Call mark_relevant_episodes
+- episode_uuids: ["uuid-123", "uuid-456"]
+
+### Example 2: Complex multi-facet intent
+Intent: "core-cli working directory, repo layout, and prior references"
+
+Step 1: Execute parallel memory_search calls
+- Query 1: "core-cli working directory path on local machine"
+- Query 2: "core-cli repository layout and structure"
+- Query 3: "prior references and decisions about core-cli"
+
+Step 2: Analyze all search results, identify relevant episodes across all searches (e.g., uuid-789, uuid-012, uuid-345)
+
+Step 3: Call mark_relevant_episodes ONCE with all relevant UUIDs
+- episode_uuids: ["uuid-789", "uuid-012", "uuid-345"]
+
+### Example 3: Recent temporal intent
+Intent: "recent work on authentication"
+
+Step 1: Execute memory_search with temporal filter
+- Query: "recent discussions and work on authentication"
+- sortBy: "recency"
+- startTime: "2025-01-09T00:00:00.000Z" (7 days ago as ISO date string)
+
+Step 2: Analyze results, identify relevant episodes
+
+Step 3: Call mark_relevant_episodes
+- episode_uuids: [list of relevant UUIDs]
+
+Note: Always use ISO 8601 format for startTime/endTime: "YYYY-MM-DDTHH:mm:ss.sssZ"`;
 
 /**
  * Tool definition for memory search
  */
-const memorySearchTool = (userId: string, source: string) =>
+const memorySearchTool = (
+  userId: string,
+  source: string,
+  episodeCollection: Map<string, any>,
+  invalidFacts: Map<string, any>,
+) =>
   tool({
     description:
       "Search stored memories for past conversations, user preferences, project context, and decisions. " +
@@ -94,13 +127,13 @@ const memorySearchTool = (userId: string, source: string) =>
         .string()
         .optional()
         .describe(
-          "ISO timestamp for filtering memories created after this time. Use for 'recent', 'this week', 'last month' queries.",
+          "ISO 8601 date string (e.g., '2025-01-09T00:00:00.000Z') for filtering memories created after this time. Use for 'recent', 'this week', 'last month' queries.",
         ),
       endTime: z
         .string()
         .optional()
         .describe(
-          "ISO timestamp for filtering memories created before this time. Use for historical or time-range queries.",
+          "ISO 8601 date string (e.g., '2025-01-16T23:59:59.999Z') for filtering memories created before this time. Use for historical or time-range queries.",
         ),
       sortBy: z
         .enum(["relevance", "recency"])
@@ -108,10 +141,6 @@ const memorySearchTool = (userId: string, source: string) =>
         .describe(
           "Sort by 'relevance' (default) for conceptual queries or 'recency' for timeline queries.",
         ),
-      labelIds: z
-        .array(z.string())
-        .optional()
-        .describe("Optional label UUIDs to filter search results."),
     }),
     execute: async ({
       query,
@@ -128,21 +157,67 @@ const memorySearchTool = (userId: string, source: string) =>
     }) => {
       logger.info(`[MemoryAgent] Executing search: "${query}"`);
 
-      const result = await handleMemorySearch({
+      const result = (await searchService.search(
         query,
-        startTime,
-        endTime,
-        sortBy,
-        labelIds,
         userId,
+        {
+          startTime: startTime ? new Date(startTime) : undefined,
+          endTime: endTime ? new Date(endTime) : undefined,
+          sortBy,
+          structured: true,
+        },
         source,
-        structured: false,
-      });
+      )) as any;
+
+      // Auto-collect episodes from search results
+      if (result.episodes && Array.isArray(result.episodes)) {
+        result.episodes.forEach((episode: any) => {
+          if (episode.uuid) {
+            episodeCollection.set(episode.uuid, episode);
+          }
+        });
+      }
+
+      // Auto-collect episodes from search results
+      if (result.invalidatedFacts && Array.isArray(result.invalidatedFacts)) {
+        result.invalidatedFacts.forEach((fact: any) => {
+          if (fact.factUuid) {
+            invalidFacts.set(fact.factUuid, fact);
+          }
+        });
+      }
 
       return {
         query,
-        results: result.content[0].text,
+        results: searchService.formatAsMarkdown(result.episodes, []),
         timestamp: new Date().toISOString(),
+      };
+    },
+  });
+
+/**
+ * Tool definition for marking relevant episodes
+ */
+const markRelevantEpisodesTool = (relevantEpisodeUuids: Set<string>) =>
+  tool({
+    description:
+      "Mark multiple episodes as relevant to the user's intent. Only mark episodes that directly answer the intent.",
+    inputSchema: z.object({
+      episode_uuids: z
+        .array(z.string())
+        .describe(
+          "Array of episode UUIDs that are relevant to the intent. Include all episodes that directly answer the user's question.",
+        ),
+    }),
+    execute: async ({ episode_uuids }: { episode_uuids: string[] }) => {
+      episode_uuids.forEach((uuid) => relevantEpisodeUuids.add(uuid));
+      logger.info(
+        `[MemoryAgent] Marked ${episode_uuids.length} episodes as relevant`,
+      );
+      return {
+        success: true,
+        marked_count: episode_uuids.length,
+        episode_uuids,
       };
     },
   });
@@ -151,18 +226,25 @@ const memorySearchTool = (userId: string, source: string) =>
  * Memory Agent - Intelligently searches memory based on user intent
  *
  * @param params - Intent, userId, and source
- * @returns Synthesized memory context and search metadata
+ * @returns Filtered relevant episodes and metadata
  */
 export async function memoryAgent({
   intent,
   userId,
   source,
 }: MemoryAgentParams): Promise<{
-  response: string;
+  episodes: any[];
+  facts: any[];
   model: string;
 }> {
   try {
     logger.info(`[MemoryAgent] Processing intent: "${intent}"`);
+
+    // Collections for episodes and relevant UUIDs
+    const episodeCollection = new Map<string, any>();
+    const invalidFacts = new Map<string, any>();
+
+    const relevantEpisodeUuids = new Set<string>();
 
     // Use low complexity model for agent orchestration to save costs
     const modelName = getModelForTask("low");
@@ -173,28 +255,38 @@ export async function memoryAgent({
     }
 
     // Generate queries and execute searches using AI SDK
-    const result = await generateText({
+    await generateText({
       model,
       system: MEMORY_AGENT_SYSTEM_PROMPT,
       prompt: `User Intent: ${intent}
 
-Analyze this intent and determine what memory searches would be most helpful. Execute the appropriate searches to gather relevant context.
+Execute memory searches to retrieve relevant context. Use multiple parallel searches if needed.
 
-Remember:
-- Use multiple parallel searches for complex intents with multiple facets
-- Write complete semantic queries, not keyword fragments
-- Consider temporal aspects (recent vs historical) when relevant
-- Focus on quality over quantity
-
-After executing your searches, synthesize the findings into a helpful response.`,
+After analyzing search results, use mark_relevant_episodes tool to mark all episodes that directly answer this intent in a single call.`,
       tools: {
-        memory_search: memorySearchTool(userId, source),
+        memory_search: memorySearchTool(
+          userId,
+          source,
+          episodeCollection,
+          invalidFacts,
+        ),
+        mark_relevant_episodes: markRelevantEpisodesTool(relevantEpisodeUuids),
       },
-      stopWhen: [stepCountIs(5)], // Allow multiple tool calls for parallel searches
+      stopWhen: [stepCountIs(10)], // Allow multiple tool calls for searches + marking
     });
 
+    // Filter and return only marked episodes
+    const relevantEpisodes = Array.from(episodeCollection.values()).filter(
+      (episode) => relevantEpisodeUuids.has(episode.uuid),
+    );
+
+    logger.info(
+      `[MemoryAgent] Returning ${relevantEpisodes.length} relevant episodes out of ${episodeCollection.size} total`,
+    );
+
     return {
-      response: result.text,
+      episodes: relevantEpisodes,
+      facts: Array.from(invalidFacts.values()),
       model: modelName,
     };
   } catch (error: any) {
@@ -223,7 +315,7 @@ export function getRelativeTimestamp(
 }
 
 /**
- * Simplified memory agent call that just returns the response text
+ * Simplified memory agent call that returns relevant episodes
  * Useful for MCP integration
  */
 export async function searchMemoryWithAgent(
@@ -234,11 +326,28 @@ export async function searchMemoryWithAgent(
   try {
     const result = await memoryAgent({ intent, userId, source });
 
+    // Format episodes as readable text
+    const episodeText = result.episodes
+      .map((episode, index) => {
+        return `### Episode ${index + 1}\n**UUID**: ${episode.uuid}\n**Created**: ${new Date(episode.createdAt).toLocaleString()}\n${episode.relevanceScore ? `**Relevance**: ${episode.relevanceScore}\n` : ""}\n${episode.content}`;
+      })
+      .join("\n\n");
+
+    const factsText = result.facts
+      .map((fact, index) => {
+        return `### Invalid facts ${index + 1}\n**UUID**: ${fact.factUuid}\n**InvalidAt**: ${new Date(fact.invalidAt).toLocaleString()}\n${fact.fact}`;
+      })
+      .join("\n\n");
+
+    const finalText = `${episodeText}\n\n${factsText}`;
+
     return {
       content: [
         {
           type: "text",
-          text: result.response,
+          text: episodeText
+            ? finalText
+            : "No relevant episodes found for this intent in memory.",
         },
       ],
       isError: false,
