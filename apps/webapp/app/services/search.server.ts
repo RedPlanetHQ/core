@@ -17,10 +17,7 @@ import {
   extractEntitiesFromQuery,
   type EpisodeGraphResult,
 } from "./search/utils";
-import {
-  applyEpisodeReranking,
-  applyMultiFactorReranking,
-} from "./search/rerank";
+import { applyEpisodeReranking } from "./search/rerank";
 import { getEmbedding } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
@@ -273,41 +270,6 @@ export class SearchService {
             `${finalEpisodes.length} passed threshold (>=${rerankConfig.threshold}), ` +
             `top score: ${reranked[0]?.rerankScore || "N/A"}`,
         );
-
-        if (
-          finalEpisodes.length === 0 &&
-          Math.abs(reranked[0].rerankScore - 0.0) > Number.EPSILON
-        ) {
-          logger.warn(
-            `No episodes passed ${rerankConfig.provider} threshold ${rerankConfig.threshold} for query: "${query}". ` +
-              `Falling back to original multi-stage reranking algorithm.`,
-          );
-
-          // Fallback to original multi-stage algorithm
-          const fallbackReranked = await applyMultiFactorReranking(
-            query,
-            episodesWithProvenance,
-            Math.min(episodesWithProvenance.length, 100),
-            opts,
-          );
-
-          logger.info(
-            `Fallback reranking: ${fallbackReranked.length} episodes returned using original algorithm`,
-          );
-          finalEpisodes = fallbackReranked.filter(
-            (ep) => ep.rerankScore >= rerankConfig.threshold,
-          );
-
-          // If even the fallback returns nothing, then return empty
-          if (fallbackReranked.length === 0) {
-            logger.warn(
-              `No episodes found even after fallback for query: "${query}"`,
-            );
-            return opts.structured
-              ? { episodes: [], invalidatedFacts: [] }
-              : this.formatAsMarkdown([], []);
-          }
-        }
       } else {
         // No threshold filtering for 'none' provider
         finalEpisodes = reranked;
