@@ -476,7 +476,7 @@ export class SearchService {
   /**
    * Format search results as markdown for agent consumption
    */
-  private formatAsMarkdown(
+  formatAsMarkdown(
     episodes: Array<{
       uuid: string;
       content: string;

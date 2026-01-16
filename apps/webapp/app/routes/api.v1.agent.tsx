@@ -41,6 +41,13 @@ const { action, loader } = createHybridActionApiRoute(
       source: body.source,
     });
 
+    // Format episodes as readable text
+    const episodeText = result.episodes
+      .map((episode, index) => {
+        return `### Episode ${index + 1}\n**UUID**: ${episode.uuid}\n**Created**: ${new Date(episode.createdAt).toLocaleString()}\n${episode.relevanceScore ? `**Relevance**: ${episode.relevanceScore}\n` : ""}\n${episode.content}`;
+      })
+      .join("\n\n");
+
     const executionTime = Date.now() - startTime;
 
     // Track feature usage
@@ -49,7 +56,8 @@ const { action, loader } = createHybridActionApiRoute(
     );
 
     return json({
-      response: result.response,
+      response:
+        episodeText || "No relevant episodes found for this intent in memory.",
       model: result.model,
       executionTimeMs: executionTime,
     });
