@@ -12,7 +12,7 @@ export function LoginPageLayout({ children }: { children: React.ReactNode }) {
         backgroundPosition: "center",
       }}
     >
-      <div className="flex w-full max-w-sm flex-col items-center gap-2">
+      <div className="flex h-full w-full max-w-sm flex-col items-center gap-2 overflow-y-auto">
         <div className="flex size-10 items-center justify-center rounded-md">
           <Logo size={60} />
         </div>

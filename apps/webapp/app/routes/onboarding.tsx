@@ -230,7 +230,7 @@ export default function Onboarding() {
           forOnboarding
         />
       </div>
-      <div className="col-span-1 flex flex-col gap-4 p-6 md:p-10">
+      <div className="col-span-1 flex h-full flex-col gap-4 overflow-y-auto p-6 md:p-10">
         <div className="flex justify-center gap-2 md:justify-start">
           <a href="#" className="flex items-center gap-2 font-medium">
             <div className="flex size-8 items-center justify-center rounded-md">
