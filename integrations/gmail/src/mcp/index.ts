@@ -162,7 +162,11 @@ const ReadEmailSchema = z.object({
 });
 
 const SearchEmailsSchema = z.object({
-  query: z.string().describe("Gmail search query (e.g., 'from:example@gmail.com')"),
+  query: z
+    .string()
+    .describe(
+      "Gmail search query (e.g., 'from:example@gmail.com'). All dates used in the search query are interpreted as midnight on that date in the PST timezone. To specify accurate dates for other timezones pass the value in seconds instead."
+    ),
   maxResults: z.number().optional().describe('Maximum number of results to return'),
 });
 

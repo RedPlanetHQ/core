@@ -75,6 +75,12 @@ const CreateEventSchema = z.object({
     .optional()
     .default(false)
     .describe('Automatically add a Google Meet video conference link to the event'),
+  recurrence: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Recurrence rules in RRULE format (RFC 5545). Examples: ["RRULE:FREQ=DAILY;COUNT=10"] for daily 10 times, ["RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20241231T235959Z"] for weekly on Mon/Wed/Fri until end of year'
+    ),
 });
 
 const GetEventSchema = z.object({
@@ -109,6 +115,10 @@ const UpdateEventSchema = z.object({
     .array(z.object({ email: z.string() }))
     .optional()
     .describe('List of attendee emails to add/update'),
+  recurrence: z
+    .array(z.string())
+    .optional()
+    .describe('Recurrence rules in RRULE format (RFC 5545)'),
 });
 
 const DeleteEventSchema = z.object({
@@ -267,6 +277,7 @@ export async function callTool(
           },
           attendees: validatedArgs.attendees,
           reminders: validatedArgs.reminders,
+          recurrence: validatedArgs.recurrence,
         };
 
         // Add Google Meet conference data if requested
@@ -397,6 +408,10 @@ export async function callTool(
 
         if (validatedArgs.attendees) {
           updatedEvent.attendees = validatedArgs.attendees;
+        }
+
+        if (validatedArgs.recurrence) {
+          updatedEvent.recurrence = validatedArgs.recurrence;
         }
 
         const response = await calendar.events.update({
