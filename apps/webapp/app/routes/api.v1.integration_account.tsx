@@ -6,9 +6,7 @@ import { runIntegrationTrigger } from "~/services/integration.server";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
 import { getWorkspaceByUser } from "~/models/workspace.server";
-import { tasks } from "@trigger.dev/sdk";
 
-import { isTriggerDeployment } from "~/lib/queue-adapter.server";
 import { scheduler } from "~/services/oauth/scheduler";
 
 // Schema for creating an integration account with API key

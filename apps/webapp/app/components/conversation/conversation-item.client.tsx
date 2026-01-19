@@ -17,7 +17,7 @@ import {
 import StaticLogo from "../logo/logo";
 import { titleCase } from "~/utils";
 import { Button } from "../ui";
-import { ChevronsUpDown, LoaderCircle } from "lucide-react";
+import { ChevronsUpDown, LoaderCircle, TriangleAlert } from "lucide-react";
 import { ApprovalComponent } from "./approval-component";
 
 interface AIConversationItemProps {
@@ -37,23 +37,25 @@ function getMessage(message: string) {
 const Tool = ({
   part,
   addToolApprovalResponse,
+  isDisabled = false,
 }: {
   part: ToolUIPart<any>;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
+  isDisabled?: boolean;
 }) => {
   const needsApproval = part.state === "approval-requested";
   const [isOpen, setIsOpen] = useState(needsApproval);
   const textPart = part.output?.content ? part.output?.content[0]?.text : "";
 
   const handleApprove = () => {
-    if (addToolApprovalResponse && part?.approval?.id) {
+    if (addToolApprovalResponse && part?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: part?.approval?.id, approved: true });
       setIsOpen(false);
     }
   };
 
   const handleReject = () => {
-    if (addToolApprovalResponse && part?.approval?.id) {
+    if (addToolApprovalResponse && part?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: part?.approval?.id, approved: false });
       setIsOpen(false);
     }
@@ -74,6 +76,10 @@ const Tool = ({
       return <StaticLogo size={18} className="rounded-sm" />;
     }
 
+    if (part.state === "output-denied") {
+      return <TriangleAlert size={18} className="rounded-dm" />;
+    }
+
     return <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />;
   }
 
@@ -81,7 +87,10 @@ const Tool = ({
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
-      className="my-1 w-full rounded border-1 border-gray-300 px-2"
+      className={cn(
+        "my-1 w-full rounded border-1 border-gray-300 px-2",
+        isDisabled && "cursor-not-allowed opacity-50",
+      )}
     >
       <CollapsibleTrigger asChild>
         <Button
@@ -89,6 +98,7 @@ const Tool = ({
           full
           size="xl"
           className="flex justify-between gap-4 px-2 py-2"
+          disabled={isDisabled}
         >
           <div className="flex items-center gap-2">
             {getIcon()}
@@ -100,17 +110,25 @@ const Tool = ({
       </CollapsibleTrigger>
       <CollapsibleContent className="w-full">
         <div className="flex flex-col gap-2">
-          <div className="bg-grayAlpha-50 rounded p-2">
-            <p className="text-muted-foreground text-sm"> Request </p>
-            <p className="mt-2 font-mono text-[#BF4594]">
-              {JSON.stringify(part.input, null, 2)}
-            </p>
-          </div>
+          {!isDisabled && (
+            <div className="bg-grayAlpha-50 rounded p-2">
+              <p className="text-muted-foreground text-sm"> Request </p>
+              <p className="mt-2 font-mono text-[#BF4594]">
+                {JSON.stringify(part.input, null, 2)}
+              </p>
+            </div>
+          )}
           {needsApproval ? (
-            <ApprovalComponent
-              onApprove={handleApprove}
-              onReject={handleReject}
-            />
+            isDisabled ? (
+              <div className="rounded p-3 text-sm">
+                Waiting for previous tool approval...
+              </div>
+            ) : (
+              <ApprovalComponent
+                onApprove={handleApprove}
+                onReject={handleReject}
+              />
+            )
           ) : (
             <div className="bg-grayAlpha-50 mb-2 max-w-full rounded p-2">
               <p className="text-muted-foreground text-sm"> Response </p>
@@ -129,6 +147,7 @@ const ConversationItemComponent = ({
 }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
+  const [showAllTools, setShowAllTools] = useState(false);
 
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
@@ -147,12 +166,50 @@ const ConversationItemComponent = ({
     return null;
   }
 
-  const getComponent = (part: any) => {
+  // Get all tool parts
+  const toolParts = message.parts.filter((part) => part.type.includes("tool-"));
+  const nonToolParts = message.parts.filter(
+    (part) => !part.type.includes("tool-"),
+  );
+
+  // Find the first pending approval tool or the first tool that needs approval
+  const firstPendingApprovalIndex = toolParts.findIndex(
+    (part: any) => part.state === "approval-requested",
+  );
+
+  // Enhanced addToolApprovalResponse that auto-rejects subsequent tools
+  const handleToolApproval = (params: { id: string; approved: boolean }) => {
+    addToolApprovalResponse(params);
+
+    // If rejected, auto-reject all subsequent tools that need approval
+    if (!params.approved && firstPendingApprovalIndex !== -1) {
+      const currentToolIndex = toolParts.findIndex(
+        (part: any) => part.approval?.id === params.id,
+      );
+
+      if (currentToolIndex !== -1) {
+        // Reject all subsequent tools that need approval
+        toolParts.slice(currentToolIndex + 1).forEach((part: any) => {
+          if (part.state === "approval-requested" && part.approval?.id) {
+            setTimeout(() => {
+              addToolApprovalResponse({
+                id: part.approval.id,
+                approved: false,
+              });
+            }, 100);
+          }
+        });
+      }
+    }
+  };
+
+  const getComponent = (part: any, isDisabled: boolean = false) => {
     if (part.type.includes("tool-")) {
       return (
         <Tool
           part={part as any}
-          addToolApprovalResponse={addToolApprovalResponse}
+          addToolApprovalResponse={handleToolApproval}
+          isDisabled={isDisabled}
         />
       );
     }
@@ -163,6 +220,12 @@ const ConversationItemComponent = ({
 
     return null;
   };
+
+  // Determine which tools to show
+  const shouldCollapse = toolParts.length > 3;
+  const visibleToolParts =
+    shouldCollapse && !showAllTools ? toolParts.slice(0, 3) : toolParts;
+  const hiddenToolCount = shouldCollapse ? toolParts.length - 3 : 0;
 
   return (
     <div
@@ -177,8 +240,39 @@ const ConversationItemComponent = ({
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >
-        {message.parts.map((part, index) => (
-          <div key={index}>{getComponent(part)}</div>
+        {/* Render visible tool parts */}
+        {visibleToolParts.map((part, index) => {
+          const actualIndex = toolParts.indexOf(part);
+          // Only enable the first pending approval tool, disable others
+          const isDisabled =
+            firstPendingApprovalIndex !== -1 &&
+            actualIndex > firstPendingApprovalIndex &&
+            (part as any).state === "approval-requested";
+
+          return (
+            <div key={`tool-${actualIndex}`}>
+              {getComponent(part, isDisabled)}
+            </div>
+          );
+        })}
+
+        {/* Show expand/collapse button if more than 3 tools */}
+        {shouldCollapse && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowAllTools(!showAllTools)}
+            className="text-muted-foreground hover:text-foreground mt-2 self-start text-sm"
+          >
+            {showAllTools
+              ? "Show less"
+              : `Show ${hiddenToolCount} more tool${hiddenToolCount > 1 ? "s" : ""}...`}
+          </Button>
+        )}
+
+        {/* Render non-tool parts first */}
+        {nonToolParts.map((part, index) => (
+          <div key={`non-tool-${index}`}>{getComponent(part)}</div>
         ))}
       </div>
     </div>

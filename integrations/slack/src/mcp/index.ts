@@ -21,9 +21,21 @@ async function initializeSlackClient(accessToken: string) {
 /**
  * Execute a Slack API call
  */
-async function executeSlackAPI(method: string, data?: Record<string, any>) {
+async function executeSlackAPI(
+  method: string,
+  data?: Record<string, any>,
+  httpMethod: 'GET' | 'POST' = 'POST'
+) {
   try {
-    const response = await slackClient.post(`/${method}`, data);
+    let response;
+
+    if (httpMethod === 'GET') {
+      // For GET requests, pass data as query parameters
+      response = await slackClient.get(`/${method}`, { params: data });
+    } else {
+      // For POST requests, pass data in request body
+      response = await slackClient.post(`/${method}`, data);
+    }
 
     if (!response.data.ok) {
       throw new Error(`Slack API error: ${response.data.error || 'Unknown error'}`);
@@ -88,6 +100,14 @@ const GetUnreadSchema = z.object({
   limit: z.number().optional().default(100).describe('Maximum number of unread messages to return'),
 });
 
+const GetThreadRepliesSchema = z.object({
+  channel: z.string().describe('Channel ID containing the thread'),
+  thread_ts: z.string().describe('Timestamp of the parent message (thread_ts)'),
+  limit: z.number().optional().default(100).describe('Maximum number of messages to return'),
+  oldest: z.string().optional().describe('Start of time range (timestamp)'),
+  latest: z.string().optional().describe('End of time range (timestamp)'),
+});
+
 // Reaction Schemas
 const AddReactionSchema = z.object({
   channel: z.string().describe('Channel ID'),
@@ -114,7 +134,9 @@ const ListChannelsSchema = z.object({
     .optional()
     .default('public_channel,private_channel')
     .describe('Channel types (comma-separated: public_channel,private_channel,mpim,im)'),
-  limit: z.number().optional().default(100).describe('Number of channels to return'),
+  limit: z.number().optional().default(100).describe('Number of channels to return (max 1000)'),
+  cursor: z.string().optional().describe('Pagination cursor from previous response'),
+  name: z.string().optional().describe('Filter channels by name (case-insensitive partial match)'),
 });
 
 const GetChannelSchema = z.object({
@@ -307,6 +329,16 @@ export async function getTools() {
       name: 'slack_get_unread',
       description: 'Gets unread messages from a specific channel',
       inputSchema: zodToJsonSchema(GetUnreadSchema),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+      },
+    },
+    {
+      name: 'slack_get_thread_replies',
+      description: 'Gets all replies in a thread',
+      inputSchema: zodToJsonSchema(GetThreadRepliesSchema),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -609,12 +641,16 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_message': {
         const validatedArgs = GetMessageSchema.parse(args);
-        const data = await executeSlackAPI('conversations.history', {
-          channel: validatedArgs.channel,
-          latest: validatedArgs.ts,
-          limit: 1,
-          inclusive: true,
-        });
+        const data = await executeSlackAPI(
+          'conversations.history',
+          {
+            channel: validatedArgs.channel,
+            latest: validatedArgs.ts,
+            limit: 1,
+            inclusive: true,
+          },
+          'GET'
+        );
 
         const message = data.messages[0];
         if (!message) {
@@ -639,7 +675,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_messages': {
         const validatedArgs = ListMessagesSchema.parse(args);
-        const data = await executeSlackAPI('conversations.history', validatedArgs);
+        const data = await executeSlackAPI('conversations.history', validatedArgs, 'GET');
 
         if (!data.messages || data.messages.length === 0) {
           return {
@@ -649,7 +685,16 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
         let text = `Found ${data.messages.length} message(s) in <#${validatedArgs.channel}>:\n\n`;
         data.messages.slice(0, 20).forEach((msg: any) => {
-          text += `[${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}\n`;
+          text += `[${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}`;
+
+          // Show thread information
+          if (msg.reply_count && msg.reply_count > 0) {
+            text += ` 💬 ${msg.reply_count} ${msg.reply_count === 1 ? 'reply' : 'replies'}`;
+          } else if (msg.thread_ts && msg.thread_ts !== msg.ts) {
+            text += ` ↪️ in thread`;
+          }
+
+          text += '\n';
         });
 
         if (data.messages.length > 20) {
@@ -663,7 +708,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_search_messages': {
         const validatedArgs = SearchMessagesSchema.parse(args);
-        const data = await executeSlackAPI('search.messages', validatedArgs);
+        const data = await executeSlackAPI('search.messages', validatedArgs, 'GET');
 
         if (!data.messages || data.messages.matches.length === 0) {
           return {
@@ -686,18 +731,26 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         const validatedArgs = GetUnreadSchema.parse(args);
 
         // Get channel info to retrieve the last_read timestamp
-        const channelInfo = await executeSlackAPI('conversations.info', {
-          channel: validatedArgs.channel,
-        });
+        const channelInfo = await executeSlackAPI(
+          'conversations.info',
+          {
+            channel: validatedArgs.channel,
+          },
+          'GET'
+        );
 
         const lastRead = channelInfo.channel.last_read;
 
         if (!lastRead) {
           // If there's no last_read, fetch all recent messages
-          const data = await executeSlackAPI('conversations.history', {
-            channel: validatedArgs.channel,
-            limit: validatedArgs.limit,
-          });
+          const data = await executeSlackAPI(
+            'conversations.history',
+            {
+              channel: validatedArgs.channel,
+              limit: validatedArgs.limit,
+            },
+            'GET'
+          );
 
           if (!data.messages || data.messages.length === 0) {
             return {
@@ -720,11 +773,15 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         }
 
         // Fetch messages after last_read timestamp
-        const data = await executeSlackAPI('conversations.history', {
-          channel: validatedArgs.channel,
-          oldest: lastRead,
-          limit: validatedArgs.limit,
-        });
+        const data = await executeSlackAPI(
+          'conversations.history',
+          {
+            channel: validatedArgs.channel,
+            oldest: lastRead,
+            limit: validatedArgs.limit,
+          },
+          'GET'
+        );
 
         if (!data.messages || data.messages.length === 0) {
           return {
@@ -748,6 +805,49 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
         if (unreadMessages.length > 20) {
           text += `\n... and ${unreadMessages.length - 20} more messages`;
+        }
+
+        return {
+          content: [{ type: 'text', text }],
+        };
+      }
+
+      case 'slack_get_thread_replies': {
+        const validatedArgs = GetThreadRepliesSchema.parse(args);
+        const data = await executeSlackAPI(
+          'conversations.replies',
+          {
+            channel: validatedArgs.channel,
+            ts: validatedArgs.thread_ts,
+            limit: validatedArgs.limit,
+            oldest: validatedArgs.oldest,
+            latest: validatedArgs.latest,
+          },
+          'GET'
+        );
+
+        if (!data.messages || data.messages.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'No messages found in thread' }],
+          };
+        }
+
+        // First message is the parent
+        const parentMsg = data.messages[0];
+        const replies = data.messages.slice(1);
+
+        let text = `Thread in <#${validatedArgs.channel}> (${data.messages.length} total messages):\n\n`;
+        text += `[Parent] <@${parentMsg.user}>: ${parentMsg.text?.substring(0, 100)}${parentMsg.text?.length > 100 ? '...' : ''}\n`;
+
+        if (replies.length > 0) {
+          text += `\nReplies (${replies.length}):\n`;
+          replies.slice(0, 20).forEach((msg: any) => {
+            text += `  [${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}\n`;
+          });
+
+          if (replies.length > 20) {
+            text += `\n... and ${replies.length - 20} more replies`;
+          }
         }
 
         return {
@@ -788,7 +888,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_reactions': {
         const validatedArgs = GetReactionsSchema.parse(args);
-        const data = await executeSlackAPI('reactions.get', validatedArgs);
+        const data = await executeSlackAPI('reactions.get', validatedArgs, 'GET');
 
         const message = data.message;
         if (!message.reactions || message.reactions.length === 0) {
@@ -812,7 +912,19 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_list_channels': {
         const validatedArgs = ListChannelsSchema.parse(args);
-        const data = await executeSlackAPI('conversations.list', validatedArgs);
+
+        // Extract name filter for client-side filtering
+        const nameFilter = validatedArgs.name?.toLowerCase();
+
+        // Build API params (exclude name as it's not supported by Slack API)
+        const apiParams = {
+          exclude_archived: validatedArgs.exclude_archived,
+          types: validatedArgs.types,
+          limit: validatedArgs.limit,
+          cursor: validatedArgs.cursor,
+        };
+
+        const data = await executeSlackAPI('conversations.list', apiParams, 'GET');
 
         if (!data.channels || data.channels.length === 0) {
           return {
@@ -820,14 +932,33 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           };
         }
 
-        let text = `Found ${data.channels.length} channel(s):\n\n`;
-        data.channels.forEach((ch: any) => {
+        // Apply client-side name filtering if provided
+        let channels = data.channels;
+        if (nameFilter) {
+          channels = channels.filter((ch: any) =>
+            ch.name?.toLowerCase().includes(nameFilter)
+          );
+        }
+
+        if (channels.length === 0) {
+          return {
+            content: [{ type: 'text', text: 'No channels found matching the name filter' }],
+          };
+        }
+
+        let text = `Found ${channels.length} channel(s)${nameFilter ? ` matching "${validatedArgs.name}"` : ''}:\n\n`;
+        channels.forEach((ch: any) => {
           text += `<#${ch.id}> - ${ch.name}`;
           if (ch.is_private) text += ' 🔒';
           if (ch.is_archived) text += ' [archived]';
           text += `\n`;
           if (ch.purpose?.value) text += `  Purpose: ${ch.purpose.value}\n`;
         });
+
+        // Add pagination info if there's a next cursor
+        if (data.response_metadata?.next_cursor) {
+          text += `\n📄 More channels available. Use cursor: "${data.response_metadata.next_cursor}"`;
+        }
 
         return {
           content: [{ type: 'text', text }],
@@ -836,7 +967,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_channel': {
         const validatedArgs = GetChannelSchema.parse(args);
-        const data = await executeSlackAPI('conversations.info', validatedArgs);
+        const data = await executeSlackAPI('conversations.info', validatedArgs, 'GET');
 
         const ch = data.channel;
         let text = `Channel: <#${ch.id}> (${ch.name})\n`;
@@ -998,7 +1129,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_list_users': {
         const validatedArgs = ListUsersSchema.parse(args);
-        const data = await executeSlackAPI('users.list', validatedArgs);
+        const data = await executeSlackAPI('users.list', validatedArgs, 'GET');
 
         if (!data.members || data.members.length === 0) {
           return {
@@ -1023,7 +1154,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user': {
         const validatedArgs = GetUserSchema.parse(args);
-        const data = await executeSlackAPI('users.info', validatedArgs);
+        const data = await executeSlackAPI('users.info', validatedArgs, 'GET');
 
         const user = data.user;
         let text = `User: <@${user.id}>\n`;
@@ -1041,7 +1172,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user_by_email': {
         const validatedArgs = GetUserByEmailSchema.parse(args);
-        const data = await executeSlackAPI('users.lookupByEmail', validatedArgs);
+        const data = await executeSlackAPI('users.lookupByEmail', validatedArgs, 'GET');
 
         const user = data.user;
         let text = `User: <@${user.id}>\n`;
@@ -1056,7 +1187,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user_presence': {
         const validatedArgs = GetUserPresenceSchema.parse(args);
-        const data = await executeSlackAPI('users.getPresence', validatedArgs);
+        const data = await executeSlackAPI('users.getPresence', validatedArgs, 'GET');
 
         return {
           content: [
@@ -1101,7 +1232,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_files': {
         const validatedArgs = ListFilesSchema.parse(args);
-        const data = await executeSlackAPI('files.list', validatedArgs);
+        const data = await executeSlackAPI('files.list', validatedArgs, 'GET');
 
         if (!data.files || data.files.length === 0) {
           return {
@@ -1123,7 +1254,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_file': {
         const validatedArgs = GetFileSchema.parse(args);
-        const data = await executeSlackAPI('files.info', validatedArgs);
+        const data = await executeSlackAPI('files.info', validatedArgs, 'GET');
 
         const file = data.file;
         let text = `File: ${file.name || 'Untitled'}\n`;
@@ -1170,7 +1301,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       }
 
       case 'slack_list_reminders': {
-        const data = await executeSlackAPI('reminders.list', {});
+        const data = await executeSlackAPI('reminders.list', {}, 'GET');
 
         if (!data.reminders || data.reminders.length === 0) {
           return {
@@ -1236,7 +1367,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_stars': {
         const validatedArgs = ListStarsSchema.parse(args);
-        const data = await executeSlackAPI('stars.list', validatedArgs);
+        const data = await executeSlackAPI('stars.list', validatedArgs, 'GET');
 
         if (!data.items || data.items.length === 0) {
           return {
@@ -1264,7 +1395,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // WORKSPACE OPERATIONS
       // ====================================================================
       case 'slack_get_team_info': {
-        const data = await executeSlackAPI('team.info', {});
+        const data = await executeSlackAPI('team.info', {}, 'GET');
 
         const team = data.team;
         let text = `Workspace: ${team.name}\n`;

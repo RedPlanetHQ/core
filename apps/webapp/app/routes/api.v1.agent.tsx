@@ -58,7 +58,6 @@ const { action, loader } = createHybridActionApiRoute(
     return json({
       response:
         episodeText || "No relevant episodes found for this intent in memory.",
-      model: result.model,
       executionTimeMs: executionTime,
     });
   },
