@@ -166,30 +166,53 @@ const ConversationItemComponent = ({
     return null;
   }
 
-  // Get all tool parts
-  const toolParts = message.parts.filter((part) => part.type.includes("tool-"));
-  const nonToolParts = message.parts.filter(
-    (part) => !part.type.includes("tool-"),
-  );
+  // Group consecutive tools together
+  const groupedParts: Array<{ type: 'tool-group' | 'single'; parts: any[] }> = [];
+  let currentToolGroup: any[] = [];
 
-  // Find the first pending approval tool or the first tool that needs approval
-  const firstPendingApprovalIndex = toolParts.findIndex(
-    (part: any) => part.state === "approval-requested",
-  );
+  message.parts.forEach((part, index) => {
+    if (part.type.includes("tool-")) {
+      currentToolGroup.push(part);
+    } else {
+      // If we have accumulated tools, add them as a group
+      if (currentToolGroup.length > 0) {
+        groupedParts.push({
+          type: 'tool-group',
+          parts: [...currentToolGroup],
+        });
+        currentToolGroup = [];
+      }
+      // Add the non-tool part
+      groupedParts.push({
+        type: 'single',
+        parts: [part],
+      });
+    }
+  });
+
+  // Don't forget the last tool group if exists
+  if (currentToolGroup.length > 0) {
+    groupedParts.push({
+      type: 'tool-group',
+      parts: [...currentToolGroup],
+    });
+  }
 
   // Enhanced addToolApprovalResponse that auto-rejects subsequent tools
   const handleToolApproval = (params: { id: string; approved: boolean }) => {
     addToolApprovalResponse(params);
 
     // If rejected, auto-reject all subsequent tools that need approval
-    if (!params.approved && firstPendingApprovalIndex !== -1) {
-      const currentToolIndex = toolParts.findIndex(
+    if (!params.approved) {
+      // Find all tools in the message
+      const allTools = message.parts.filter((part: any) => part.type.includes("tool-"));
+      const currentToolIndex = allTools.findIndex(
         (part: any) => part.approval?.id === params.id,
       );
 
       if (currentToolIndex !== -1) {
         // Reject all subsequent tools that need approval
-        toolParts.slice(currentToolIndex + 1).forEach((part: any) => {
+        allTools.slice(currentToolIndex + 1).forEach((part: any) => {
           if (part.state === "approval-requested" && part.approval?.id) {
             setTimeout(() => {
               addToolApprovalResponse({
@@ -221,11 +244,11 @@ const ConversationItemComponent = ({
     return null;
   };
 
-  // Determine which tools to show
-  const shouldCollapse = toolParts.length > 3;
-  const visibleToolParts =
-    shouldCollapse && !showAllTools ? toolParts.slice(0, 3) : toolParts;
-  const hiddenToolCount = shouldCollapse ? toolParts.length - 3 : 0;
+  // Find the first pending approval tool globally
+  const allTools = message.parts.filter((part: any) => part.type.includes("tool-"));
+  const firstPendingApprovalIndex = allTools.findIndex(
+    (part: any) => part.state === "approval-requested",
+  );
 
   return (
     <div
@@ -240,40 +263,56 @@ const ConversationItemComponent = ({
           isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
         )}
       >
-        {/* Render visible tool parts */}
-        {visibleToolParts.map((part, index) => {
-          const actualIndex = toolParts.indexOf(part);
-          // Only enable the first pending approval tool, disable others
-          const isDisabled =
-            firstPendingApprovalIndex !== -1 &&
-            actualIndex > firstPendingApprovalIndex &&
-            (part as any).state === "approval-requested";
+        {groupedParts.map((group, groupIndex) => {
+          if (group.type === 'single') {
+            // Render non-tool part
+            return (
+              <div key={`single-${groupIndex}`}>
+                {getComponent(group.parts[0])}
+              </div>
+            );
+          }
+
+          // Handle tool group
+          const toolGroup = group.parts;
+          const shouldCollapse = toolGroup.length > 3;
+          const visibleTools = shouldCollapse && !showAllTools
+            ? toolGroup.slice(0, 2)
+            : toolGroup;
+          const hiddenCount = shouldCollapse ? toolGroup.length - 2 : 0;
 
           return (
-            <div key={`tool-${actualIndex}`}>
-              {getComponent(part, isDisabled)}
+            <div key={`group-${groupIndex}`}>
+              {visibleTools.map((part, index) => {
+                const globalToolIndex = allTools.indexOf(part);
+                const isDisabled =
+                  firstPendingApprovalIndex !== -1 &&
+                  globalToolIndex > firstPendingApprovalIndex &&
+                  (part as any).state === "approval-requested";
+
+                return (
+                  <div key={`tool-${groupIndex}-${index}`}>
+                    {getComponent(part, isDisabled)}
+                  </div>
+                );
+              })}
+
+              {/* Show expand/collapse button for this group if needed */}
+              {shouldCollapse && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAllTools(!showAllTools)}
+                  className="text-muted-foreground hover:text-foreground mt-2 self-start text-sm"
+                >
+                  {showAllTools
+                    ? "Show less"
+                    : `Show ${hiddenCount} more tool${hiddenCount > 1 ? "s" : ""}...`}
+                </Button>
+              )}
             </div>
           );
         })}
-
-        {/* Show expand/collapse button if more than 3 tools */}
-        {shouldCollapse && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowAllTools(!showAllTools)}
-            className="text-muted-foreground hover:text-foreground mt-2 self-start text-sm"
-          >
-            {showAllTools
-              ? "Show less"
-              : `Show ${hiddenToolCount} more tool${hiddenToolCount > 1 ? "s" : ""}...`}
-          </Button>
-        )}
-
-        {/* Render non-tool parts first */}
-        {nonToolParts.map((part, index) => (
-          <div key={`non-tool-${index}`}>{getComponent(part)}</div>
-        ))}
       </div>
     </div>
   );
