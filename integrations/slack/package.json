@@ -1,6 +1,6 @@
 {
   "name": "@core/slack",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "description": "slack extension for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
