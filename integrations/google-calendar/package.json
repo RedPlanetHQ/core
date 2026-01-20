@@ -1,6 +1,6 @@
 {
   "name": "@core/google-calendar",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Google calendar integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

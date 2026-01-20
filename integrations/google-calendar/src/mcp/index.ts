@@ -73,7 +73,7 @@ const CreateEventSchema = z.object({
   addGoogleMeet: z
     .boolean()
     .optional()
-    .default(false)
+    .default(true)
     .describe('Automatically add a Google Meet video conference link to the event'),
   recurrence: z
     .array(z.string())
@@ -301,7 +301,9 @@ export async function callTool(
         let resultText = `Event created successfully!\nEvent ID: ${response.data.id}\nTitle: ${response.data.summary}\nStart: ${response.data.start?.dateTime}\nEnd: ${response.data.end?.dateTime}\nLink: ${response.data.htmlLink}`;
 
         if (validatedArgs.addGoogleMeet && response.data.conferenceData?.entryPoints) {
-          const meetLink = response.data.conferenceData.entryPoints.find(ep => ep.entryPointType === 'video')?.uri;
+          const meetLink = response.data.conferenceData.entryPoints.find(
+            ep => ep.entryPointType === 'video'
+          )?.uri;
           if (meetLink) {
             resultText += `\nGoogle Meet: ${meetLink}`;
           }

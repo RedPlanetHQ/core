@@ -24,7 +24,7 @@ async function initializeSlackClient(accessToken: string) {
 async function executeSlackAPI(
   method: string,
   data?: Record<string, any>,
-  httpMethod: 'GET' | 'POST' = 'POST'
+  httpMethod: 'GET' | 'POST' = 'POST',
 ) {
   try {
     let response;
@@ -86,6 +86,7 @@ const ListMessagesSchema = z.object({
   oldest: z.string().optional().describe('Start of time range (timestamp)'),
   latest: z.string().optional().describe('End of time range (timestamp)'),
   inclusive: z.boolean().optional().describe('Include messages with oldest/latest timestamps'),
+  cursor: z.string().optional().describe('Pagination cursor from previous response'),
 });
 
 const SearchMessagesSchema = z.object({
@@ -106,6 +107,7 @@ const GetThreadRepliesSchema = z.object({
   limit: z.number().optional().default(100).describe('Maximum number of messages to return'),
   oldest: z.string().optional().describe('Start of time range (timestamp)'),
   latest: z.string().optional().describe('End of time range (timestamp)'),
+  cursor: z.string().optional().describe('Pagination cursor from previous response'),
 });
 
 // Reaction Schemas
@@ -649,7 +651,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
             limit: 1,
             inclusive: true,
           },
-          'GET'
+          'GET',
         );
 
         const message = data.messages[0];
@@ -683,26 +685,32 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           };
         }
 
-        let text = `Found ${data.messages.length} message(s) in <#${validatedArgs.channel}>:\n\n`;
-        data.messages.slice(0, 20).forEach((msg: any) => {
-          text += `[${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}`;
+        const messages = [];
+
+        messages.push(`Found ${data.messages.length} message(s) in <#${validatedArgs.channel}>:`);
+
+        data.messages.forEach((msg: any) => {
+          let messageText = `[${msg.ts}] <@${msg.user}>: ${msg.text}`;
 
           // Show thread information
           if (msg.reply_count && msg.reply_count > 0) {
-            text += ` 💬 ${msg.reply_count} ${msg.reply_count === 1 ? 'reply' : 'replies'}`;
+            messageText += ` 💬 ${msg.reply_count} ${msg.reply_count === 1 ? 'reply' : 'replies'}`;
           } else if (msg.thread_ts && msg.thread_ts !== msg.ts) {
-            text += ` ↪️ in thread`;
+            messageText += ` ↪️ in thread`;
           }
 
-          text += '\n';
+          messages.push(messageText);
         });
 
-        if (data.messages.length > 20) {
-          text += `\n... and ${data.messages.length - 20} more messages`;
+        // Add pagination info if there's a next cursor
+        if (data.response_metadata?.next_cursor) {
+          messages.push(
+            `📄 More messages available. Use cursor: "${data.response_metadata.next_cursor}"`,
+          );
         }
 
         return {
-          content: [{ type: 'text', text }],
+          content: [{ type: 'text', text: JSON.stringify(messages, null, 2) }],
         };
       }
 
@@ -736,7 +744,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           {
             channel: validatedArgs.channel,
           },
-          'GET'
+          'GET',
         );
 
         const lastRead = channelInfo.channel.last_read;
@@ -749,7 +757,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
               channel: validatedArgs.channel,
               limit: validatedArgs.limit,
             },
-            'GET'
+            'GET',
           );
 
           if (!data.messages || data.messages.length === 0) {
@@ -780,7 +788,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
             oldest: lastRead,
             limit: validatedArgs.limit,
           },
-          'GET'
+          'GET',
         );
 
         if (!data.messages || data.messages.length === 0) {
@@ -822,8 +830,9 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
             limit: validatedArgs.limit,
             oldest: validatedArgs.oldest,
             latest: validatedArgs.latest,
+            cursor: validatedArgs.cursor,
           },
-          'GET'
+          'GET',
         );
 
         if (!data.messages || data.messages.length === 0) {
@@ -836,22 +845,30 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         const parentMsg = data.messages[0];
         const replies = data.messages.slice(1);
 
-        let text = `Thread in <#${validatedArgs.channel}> (${data.messages.length} total messages):\n\n`;
-        text += `[Parent] <@${parentMsg.user}>: ${parentMsg.text?.substring(0, 100)}${parentMsg.text?.length > 100 ? '...' : ''}\n`;
+        const messages = [];
+
+        messages.push(
+          `Thread in <#${validatedArgs.channel}> (${data.messages.length} total messages):`,
+        );
+
+        messages.push(`[Parent] <@${parentMsg.user}>: ${parentMsg.text}`);
 
         if (replies.length > 0) {
-          text += `\nReplies (${replies.length}):\n`;
-          replies.slice(0, 20).forEach((msg: any) => {
-            text += `  [${msg.ts}] <@${msg.user}>: ${msg.text?.substring(0, 100)}${msg.text?.length > 100 ? '...' : ''}\n`;
+          messages.push(`Replies (${replies.length}):`);
+          replies.forEach((msg: any) => {
+            messages.push(`  [${msg.ts}] <@${msg.user}>: ${msg.text}`);
           });
+        }
 
-          if (replies.length > 20) {
-            text += `\n... and ${replies.length - 20} more replies`;
-          }
+        // Add pagination info if there's a next cursor
+        if (data.response_metadata?.next_cursor) {
+          messages.push(
+            `📄 More messages available. Use cursor: "${data.response_metadata.next_cursor}"`,
+          );
         }
 
         return {
-          content: [{ type: 'text', text }],
+          content: [{ type: 'text', text: JSON.stringify(messages, null, 2) }],
         };
       }
 
@@ -935,9 +952,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         // Apply client-side name filtering if provided
         let channels = data.channels;
         if (nameFilter) {
-          channels = channels.filter((ch: any) =>
-            ch.name?.toLowerCase().includes(nameFilter)
-          );
+          channels = channels.filter((ch: any) => ch.name?.toLowerCase().includes(nameFilter));
         }
 
         if (channels.length === 0) {
