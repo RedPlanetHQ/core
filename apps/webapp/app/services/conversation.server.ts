@@ -136,6 +136,45 @@ export const getConversationAndHistory = async (
   return conversation;
 };
 
+export const getOnboardingConversation = async (
+  userId: string,
+  workspaceId: string,
+) => {
+  let conversation = await prisma.conversation.findFirst({
+    where: {
+      userId,
+      source: "onboarding",
+    },
+    include: {
+      ConversationHistory: {
+        orderBy: {
+          createdAt: "asc",
+        },
+      },
+    },
+  });
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        userId,
+        workspaceId,
+        source: "onboarding",
+        title: "Onboarding",
+      },
+      include: {
+        ConversationHistory: {
+          orderBy: {
+            createdAt: "asc",
+          },
+        },
+      },
+    });
+  }
+
+  return conversation;
+};
+
 export const upsertConversationHistory = async (
   id: string,
   parts: any,

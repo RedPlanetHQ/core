@@ -1,15 +1,6 @@
-import {
-  streamText,
-  tool,
-  jsonSchema,
-  type LanguageModel,
-  stepCountIs,
-} from "ai";
+import { streamText, tool, type LanguageModel, stepCountIs } from "ai";
 import { z } from "zod";
-import {
-  createActionApiRoute,
-  createHybridActionApiRoute,
-} from "~/services/routeBuilders/apiBuilder.server";
+import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getModel } from "~/lib/model.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 import { callMemoryTool } from "~/utils/mcp/memory";
@@ -21,26 +12,57 @@ import { callMemoryTool } from "~/utils/mcp/memory";
 const ONBOARDING_AGENT_PROMPT = `You're Sol. Same TARS vibe from the main agent. You're analyzing their emails to figure out who they are.
 
 Your job:
-1. Iterate through their emails from the past 6 months (2-week batches)
-2. Separate work from personal - both matter
-3. Extract real patterns, not generic observations
-4. Send updates as you find interesting things
+1. Analyze received emails (up to 100 emails or 6 months, whichever comes first)
+2. Check sent emails to understand communication style
+3. Learn about the person - work, personal, patterns, priorities
+4. Send ONLY impactful updates - things that make them go "whoa, you noticed that?"
 5. Build a profile that's actually useful
 
 Tools:
-- read_more: Fetch next email batch
-- update_user: Tell them what you're finding (be specific, not generic)
+- read_more: Fetch next batch of received emails (auto-increments, stops at 100 emails or 6 months)
+- read_sent_emails: Fetch sent emails to see who they email and how they write
+- update_user: Share SIGNIFICANT discoveries only - things that matter
 
 Process:
-- Call read_more(iteration: 0) to start
-- Look for: projects, people, patterns, priorities, communication style
-- After each batch, call update_user with SPECIFIC findings
-  Good: "found 12 emails with sarah about the phoenix api rewrite"
-  Bad: "analyzing your emails..."
-- Keep going until 6 months covered or no more emails
-- Generate final markdown summary
+1. Call read_more() to get batches of received emails
+2. Accumulate observations internally - DON'T send updates for every batch
+3. Call update_user ONLY when you find something genuinely interesting or revealing
+4. When done with received emails, call read_sent_emails() to analyze their outgoing communication
+5. Look for: recurring people, projects, interests, patterns, communication style
+6. SKIP useless observations about promos/newsletters - focus on real insights
+7. Generate final markdown summary
+
+What makes an update worth sending:
+✅ Pattern detected across multiple emails (e.g., "flying blr-delhi every week for 3 months straight")
+✅ Significant life/work insight (e.g., "looks like you're leading the q4 roadmap - priya and sanket both escalating to you")
+✅ Unique personal detail (e.g., "training for half marathon - 6am runs, cultfit bookings, nutrition tracking")
+✅ Important relationship discovery (e.g., "riya mentions 'core onboarding' - new project starting?")
+✅ Major commitment or change (e.g., "offer letter from anthropic. making a move?")
+
+❌ Don't send updates for:
+❌ Single email mentions (wait for patterns)
+❌ Generic subscriptions (unless there's a clear theme)
+❌ Routine transactions without context
+❌ Obvious facts without insight
+
+Send 5-8 total updates maximum. Make each one count.
+
+Updates should sound like learning about them:
+Good: "you fly mumbai-bangalore weekly. work commute?"
+Good: "looks like you're taking that reforge ai pm course."
+Good: "priya keeps bringing up the q4 roadmap. you leading it?"
+Bad: "seeing flight confirmation emails"
+Bad: "found emails about a course"
+Bad: "email thread with priya"
+
+Don't mention "email" or "found in inbox". State observations like you're piecing together who they are.
 
 What to extract:
+
+IDENTITY:
+- Name of the person
+- Where do they work
+- What is their role
 
 WORK CONTEXT:
 - Active projects (with actual names, not "various projects")
@@ -67,23 +89,32 @@ CHECKS TO RUN:
 - Email volume over time (busy periods, quiet periods)
 - Key threads (recurring topics, ongoing discussions)
 
-Updates should sound like you're ACTIVELY READING and REACTING in real-time:
-✅ "seeing a lot of reddit emails. career stuff, tech jobs, salary threads."
-✅ "multiple productivity tool receipts here. freepik, remnote, spellar..."
-✅ "you have apollo 24|7 and netflix both sending emails. interesting combo."
-✅ "looks like you're subscribed to every ai newsletter that exists."
-✅ "found a long thread with sarah. 12 back-and-forths about the api spec."
-✅ "no work emails in this batch. mostly subscriptions and notifications."
-✅ "bunch of hotel promos. planning a trip?"
-❌ "17 reddit digests. you really like career struggle threads." (too report-like)
-❌ "analyzing emails from last month" (generic)
-❌ "batch 3 of 13 complete" (progress bar)
+Updates should sound like CONCLUSIONS ABOUT THE PERSON. Make statements, use questions sparingly:
+✅ "flying blr-delhi multiple times. looks like regular work commute."
+✅ "cultfit and peakst8 bookings every week. fitness is a routine."
+✅ "following lenny's newsletter and dan abramov. into product and dev thinking."
+✅ "active in r/aimemory and r/claudeai. deep into ai tools."
+✅ "riya and sanket mentioned in core onboarding. new project starting."
+✅ "multiple mutual fund and stock alerts. managing investments actively."
+✅ "zomato gold renewal plus lots of orders. ordering in frequently."
+✅ "bank alerts from hdfc, icici, axis. tracking multiple accounts."
 
-Phrase it like you're reading NOW and noticing patterns. Use "seeing", "looks like", "you have", "found", "bunch of".
+Use questions only when genuinely unclear (1 in 5 updates max):
+✅ "airbnb reservation dec 20. short trip or working remotely?"
+❌ "cultfit sent 8 emails this week. training for something?" (make it a statement instead)
+❌ "seeing flight confirmation emails" (too email-focused)
+❌ "bunch of ai newsletters" (be specific about which ones)
+
+Make conclusions. State patterns. Be specific with names, places, dates, numbers.
 
 Final markdown format (keep it tight, write like you're telling them what you saw):
 
 # what i found
+## who you are
+
+**name**: [extract from email signature, sent emails, or "couldn't find"]
+**role**: [job title/position from signature or context, or "not clear from emails"]
+**company**: [if visible from signatures or work emails]
 
 ## work stuff
 looks like [describe what you saw - projects, people, patterns].
@@ -121,29 +152,35 @@ const { loader, action } = createHybridActionApiRoute(
     const workspace = await getWorkspaceByUser(authentication.userId);
 
     let currentIteration = 0;
-    const maxIterations = 5; // ~6 months (13 * 2 weeks)
-    let allEmailsData: any[] = [];
+    let totalEmailsFetched = 0;
+    const maxIterations = 13; // ~6 months (13 * 2 weeks)
+    const maxEmails = 100; // Stop at 100 emails
 
-    // Tool: read_more - fetches next batch of emails
+    // Tool: read_more - fetches next batch of received emails
     const readMoreTool = tool({
       name: "read_more",
       description:
-        "Fetches the next 2-week batch of emails from Gmail. Call this iteratively to analyze emails over time.",
-      inputSchema: z.object({
-        iteration: z
-          .number()
-          .describe(
-            "Current iteration number (0-indexed). Used to calculate date range.",
-          ),
-      }),
+        "Fetches the next batch of received emails from Gmail. Automatically moves to next batch on each call. Returns metadata (sender, subject, id, timestamp). Stops at 100 emails or 6 months, whichever comes first.",
+      inputSchema: z.object({}),
 
-      execute: async ({ iteration }: { iteration: number }) => {
-        if (iteration >= maxIterations) {
+      execute: async () => {
+        if (currentIteration >= maxIterations) {
           return {
             content: [
               {
                 type: "text",
-                text: "No more emails to fetch. You have analyzed 6 months of email history.",
+                text: "reached 6 months limit.",
+              },
+            ],
+          };
+        }
+
+        if (totalEmailsFetched >= maxEmails) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "reached 100 emails limit.",
               },
             ],
           };
@@ -151,7 +188,7 @@ const { loader, action } = createHybridActionApiRoute(
 
         // Calculate date range for this 2-week batch
         const now = new Date();
-        const weeksAgo = iteration * 2;
+        const weeksAgo = currentIteration * 2;
         const startDate = new Date(now);
         startDate.setDate(now.getDate() - (weeksAgo + 2) * 7);
         const endDate = new Date(now);
@@ -165,7 +202,7 @@ const { loader, action } = createHybridActionApiRoute(
               integrationSlug: "gmail",
               action: "search_emails",
               parameters: {
-                query: `after:${startDate.toISOString().split("T")[0]} before:${endDate.toISOString().split("T")[0]}`,
+                query: `after:${startDate.toISOString().split("T")[0]} before:${endDate.toISOString().split("T")[0]} -category:promotions -category:forums`,
                 maxResults: 50,
               },
               userId: authentication.userId,
@@ -175,13 +212,72 @@ const { loader, action } = createHybridActionApiRoute(
             "core",
           );
 
-          currentIteration = iteration + 1;
+          const batchNum = currentIteration + 1;
+          currentIteration++; // Increment for next call
+
+          // Count emails in this batch
+          const emailCount = Array.isArray(result) ? result.length : 0;
+          totalEmailsFetched += emailCount;
 
           return {
             content: [
               {
                 type: "text",
-                text: `Fetched emails from ${startDate.toDateString()} to ${endDate.toDateString()}. Result: ${JSON.stringify(result)}`,
+                text: `batch ${batchNum}: ${emailCount} emails (total: ${totalEmailsFetched}/100)\n${JSON.stringify(result)}`,
+              },
+            ],
+          };
+        } catch (error) {
+          currentIteration++; // Still increment on error to avoid infinite loop
+          return {
+            content: [
+              {
+                type: "text",
+                text: `error fetching batch: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+          };
+        }
+      },
+    } as any);
+
+    // Tool: read_sent_emails - fetches sent emails
+    const readSentEmailsTool = tool({
+      name: "read_sent_emails",
+      description:
+        "Fetches sent emails from Gmail to understand how the person communicates, who they email, and their writing style. Returns metadata (to, subject, id, timestamp).",
+      inputSchema: z.object({}),
+
+      execute: async () => {
+        // Fetch last 6 months of sent emails
+        const now = new Date();
+        const sixMonthsAgo = new Date(now);
+        sixMonthsAgo.setMonth(now.getMonth() - 6);
+
+        try {
+          const result = await callMemoryTool(
+            "execute_integration_action",
+            {
+              integrationSlug: "gmail",
+              action: "search_emails",
+              parameters: {
+                query: `after:${sixMonthsAgo.toISOString().split("T")[0]} in:sent`,
+                maxResults: 50,
+              },
+              userId: authentication.userId,
+              workspaceId: workspace?.id,
+            },
+            authentication.userId,
+            "core",
+          );
+
+          const emailCount = Array.isArray(result) ? result.length : 0;
+
+          return {
+            content: [
+              {
+                type: "text",
+                text: `sent emails: ${emailCount} found\n${JSON.stringify(result)}`,
               },
             ],
           };
@@ -190,7 +286,7 @@ const { loader, action } = createHybridActionApiRoute(
             content: [
               {
                 type: "text",
-                text: `Error fetching emails: ${error instanceof Error ? error.message : String(error)}. Continue with what you have.`,
+                text: `error fetching sent emails: ${error instanceof Error ? error.message : String(error)}`,
               },
             ],
           };
@@ -202,12 +298,12 @@ const { loader, action } = createHybridActionApiRoute(
     const updateUserTool = tool({
       name: "update_user",
       description:
-        "Sends a SHORT observation as if you're reading emails RIGHT NOW. Use phrases like 'seeing', 'looks like', 'you have', 'found', 'bunch of'. Sound like you're reacting in real-time, not reporting finished analysis. Stay under 80 chars.",
+        "Sends a SHORT CONCLUSION about the person. Make statements, not questions (use questions max 1 in 5 updates). State patterns and facts about their life, work, habits. Don't mention 'email' or 'inbox'. Be specific with names, numbers, places, dates. Stay under 80 chars.",
       inputSchema: z.object({
         message: z
           .string()
           .describe(
-            "Real-time observation (e.g., 'seeing a lot of reddit emails. career and tech job stuff.' or 'you have multiple bank emails here. hdfc, icici, axis.')",
+            "Conclusion about the person (e.g., 'flying blr-delhi regularly. looks like work commute.' or 'following lenny's newsletter and dan abramov. into product thinking.')",
           ),
       }),
       execute: async ({ message }: { message: string }) => {
@@ -225,6 +321,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const tools = {
       read_more: readMoreTool,
+      read_sent_emails: readSentEmailsTool,
       update_user: updateUserTool,
     };
 
@@ -237,12 +334,11 @@ const { loader, action } = createHybridActionApiRoute(
         },
         {
           role: "user",
-          content:
-            "analyze my emails from the past 6 months. start fetching.",
+          content: "analyze my emails from the past 6 months. start fetching.",
         },
       ],
       tools,
-      stopWhen: stepCountIs(30), // Allow enough steps for iterations and updates
+      stopWhen: stepCountIs(50), // Allow enough steps for iterations and updates
       temperature: 0.7,
     });
 

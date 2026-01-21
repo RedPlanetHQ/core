@@ -14,8 +14,10 @@ import { OnboardingAgentLoader } from "~/components/onboarding/onboarding-agent-
 import { OnboardingChat } from "~/components/onboarding/onboarding-chat";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
-import { episodesPath } from "~/utils/pathBuilder";
+
 import { Button } from "~/components/ui";
+import { getOnboardingConversation } from "~/services/conversation.server";
+import { useTypedLoaderData } from "remix-typedjson";
 
 const schema = z.object({
   conversationId: z.string(),
@@ -24,12 +26,16 @@ const schema = z.object({
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
+  const conversation = await getOnboardingConversation(
+    user.id,
+    user.workspaceId as string,
+  );
 
   // if (user.onboardingComplete) {
   //   return redirect(episodesPath());
   // }
 
-  return json({ user });
+  return { user, conversation };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -52,7 +58,7 @@ export async function action({ request }: ActionFunctionArgs) {
       await addToQueue(
         {
           episodeBody: summary,
-          source: "Onboarding",
+          source: "onboarding",
           referenceTime: new Date().toISOString(),
           type: EpisodeType.CONVERSATION,
         },
@@ -67,22 +73,27 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Onboarding() {
+  const { conversation } = useTypedLoaderData<typeof loader>();
+
   const navigate = useNavigate();
   const [step, setStep] = useState<"analysis" | "chat" | "complete">(
     "analysis",
   );
   const [summary, setSummary] = useState("");
   const [sessionId] = useState(() => crypto.randomUUID());
+  const [isCompleting, setIsCompleting] = useState(false);
 
   const handleAnalysisComplete = (generatedSummary: string) => {
     setSummary(generatedSummary);
     // Transition to chat after a brief delay
     setTimeout(() => {
       setStep("chat");
-    }, 1500);
+    }, 200);
   };
 
   const handleChatComplete = async () => {
+    setIsCompleting(true);
+
     // Submit to complete onboarding
     const formData = new FormData();
 
@@ -96,9 +107,12 @@ export default function Onboarding() {
 
       if (response.ok) {
         navigate("/home/episodes");
+      } else {
+        setIsCompleting(false);
       }
     } catch (e) {
       console.error("Error completing onboarding:", e);
+      setIsCompleting(false);
     }
   };
 
@@ -106,7 +120,7 @@ export default function Onboarding() {
     <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-6 md:px-10">
-        <div className="flex items-center gap-2 py-6 md:py-10">
+        <div className="flex items-center gap-2 py-4">
           <div className="flex size-8 items-center justify-center rounded-md">
             <Logo size={60} />
           </div>
@@ -115,16 +129,20 @@ export default function Onboarding() {
 
         {step === "chat" && (
           <div>
-            <Button variant="secondary" onClick={handleChatComplete}>
-              {" "}
-              Go to dashboard{" "}
+            <Button
+              variant="secondary"
+              onClick={handleChatComplete}
+              disabled={isCompleting}
+              isLoading={isCompleting}
+            >
+              "Go to dashboard"
             </Button>
           </div>
         )}
       </div>
 
       {/* Main Content */}
-      <div className="flex flex-1 items-center justify-center overflow-y-auto p-6">
+      <div className="flex flex-1 items-center justify-center overflow-y-auto">
         {step === "analysis" && (
           <OnboardingAgentLoader
             sessionId={sessionId}
@@ -137,7 +155,7 @@ export default function Onboarding() {
           <div className="flex h-full w-full flex-col">
             <div className="flex-1 overflow-hidden">
               <OnboardingChat
-                conversationId={sessionId}
+                conversation={conversation}
                 onboardingSummary={summary}
                 onComplete={handleChatComplete}
               />
