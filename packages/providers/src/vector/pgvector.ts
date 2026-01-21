@@ -378,6 +378,7 @@ export class PgVectorProvider implements IVectorProvider {
           ${excludeIdsCondition}
           ${sessionIdCondition}
           ${versionCondition}
+        ORDER BY ${vectorCast} <=> ${vectorLiteral}
         LIMIT ${expandedLimit}
       )
       SELECT * FROM candidates
