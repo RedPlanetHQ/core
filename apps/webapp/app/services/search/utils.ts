@@ -523,6 +523,7 @@ export async function extractEntitiesFromQuery(
     if (startEntities.length === 0) {
       // Generate chunks from query
       const chunks = generateQueryChunks(query);
+      console.log(chunks.map((chunk) => chunk).join(", "));
       // Get embeddings for each chunk
       chunkEmbeddings = await Promise.all(
         chunks.map((chunk) => getEmbedding(chunk)),

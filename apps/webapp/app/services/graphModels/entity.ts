@@ -15,7 +15,11 @@ export function parseEntityNode(raw: any): EntityNode {
     uuid: raw.uuid,
     name: raw.name,
     type: raw.type || undefined,
-    attributes: raw.attributes ? (typeof raw.attributes === 'string' ? JSON.parse(raw.attributes) : raw.attributes) : {},
+    attributes: raw.attributes
+      ? typeof raw.attributes === "string"
+        ? JSON.parse(raw.attributes)
+        : raw.attributes
+      : {},
     nameEmbedding: raw.nameEmbedding || [],
     createdAt: new Date(raw.createdAt),
     userId: raw.userId,
@@ -26,7 +30,10 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
   return graphProvider().saveEntity(entity);
 }
 
-export async function getEntity(uuid: string, userId: string): Promise<EntityNode | null> {
+export async function getEntity(
+  uuid: string,
+  userId: string,
+): Promise<EntityNode | null> {
   return graphProvider().getEntity(uuid, userId);
 }
 
@@ -50,15 +57,18 @@ export async function findSimilarEntities(params: {
     namespace: VECTOR_NAMESPACES.ENTITY,
     filter: { userId: params.userId, excludeIds: params.excludeUuids },
   });
-
+  console.log(vectorResults.map((r) => r.id).join(", "));
   if (vectorResults.length === 0) {
     return [];
   }
 
   // Step 2: Fetch full entity data from Neo4j
-  const entityUuids = vectorResults.map(r => r.id);
-  const entities = await graphProvider().getEntities(entityUuids, params.userId);
-  
+  const entityUuids = vectorResults.map((r) => r.id);
+  const entities = await graphProvider().getEntities(
+    entityUuids,
+    params.userId,
+  );
+
   return entities;
 }
 
@@ -112,6 +122,8 @@ export async function mergeEntities(
  * Delete orphaned entities (entities with no relationships)
  * @returns Object with count and array of deleted entity UUIDs
  */
-export async function deleteOrphanedEntities(userId: string): Promise<{ count: number; deletedUuids: string[] }> {
+export async function deleteOrphanedEntities(
+  userId: string,
+): Promise<{ count: number; deletedUuids: string[] }> {
   return graphProvider().deleteOrphanedEntities(userId);
 }
