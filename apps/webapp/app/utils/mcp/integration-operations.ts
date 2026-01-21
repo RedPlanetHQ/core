@@ -195,6 +195,8 @@ export async function handleExecuteIntegrationAction(args: any) {
       integrationAccountId = accounts[0].id;
     }
 
+    console.log(integrationAccountId);
+
     const result = await IntegrationLoader.callIntegrationTool(
       userId,
       workspaceId,

@@ -46,6 +46,8 @@ const ChatRequestSchema = z.object({
     .optional(),
   needsApproval: z.boolean().optional(),
   id: z.string(),
+  isOnboarding: z.boolean().optional(),
+  onboardingSummary: z.string().optional(),
 });
 
 const { loader, action } = createHybridActionApiRoute(
@@ -227,6 +229,32 @@ const { loader, action } = createHybridActionApiRoute(
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
+    // If this is an onboarding conversation, add the summary and modify behavior
+    if (body.isOnboarding && body.onboardingSummary) {
+      const onboardingContext = `
+      <onboarding_context>
+      You just analyzed their emails. Here's what you found:
+
+      ${body.onboardingSummary}
+
+      Now:
+      1. Say hi. Reference 2-3 specific things you found (projects, people, patterns)
+      2. Ask if you got it right or if anything's off
+      3. Keep it conversational. Same voice as always.
+      4. Don't explain what CORE is unless they ask - you already did the work, just confirm the details
+
+      Example greeting:
+      "looked through your emails. you've got the phoenix api rewrite with sarah, bunch of q4 planning stuff, and what looks like a side project on weekends. got that right?"
+
+      NOT:
+      "Hello! I've completed my analysis of your email history and I'm excited to share what I've learned about your professional profile..."
+
+      Stay TARS. Short. Direct. Lowercase.
+      </onboarding_context>`;
+
+      systemPrompt = `${systemPrompt}${onboardingContext}`;
+    }
+
     // if (personaContent) {
     //   systemPrompt = `${systemPrompt}
 
@@ -237,9 +265,16 @@ const { loader, action } = createHybridActionApiRoute(
     //   </user_persona>`;
     // }
 
-    const modelMessages = await convertToModelMessages(validatedMessages, {
-      tools,
-    });
+    // If onboarding and no messages yet, generate first message from agent
+    let modelMessages;
+    if (body.isOnboarding && conversationHistory.length === 0) {
+      // Start with agent greeting - no user message yet
+      modelMessages = [];
+    } else {
+      modelMessages = await convertToModelMessages(validatedMessages, {
+        tools,
+      });
+    }
 
     const result = streamText({
       model: getModel() as LanguageModel,
