@@ -11,14 +11,7 @@ import { commitSession } from "~/services/sessionStorage.server";
 import { requestUrl } from "~/utils/requestUrl.server";
 import { env } from "~/env.server";
 
-import { RiGoogleLine } from "@remixicon/react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui";
 import { Mail, Shield, Lock } from "lucide-react";
 import Logo from "~/components/logo/logo";
@@ -69,8 +62,8 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
           <Fieldset className="w-full">
             <div className="flex flex-col gap-y-4">
               <p className="text-muted-foreground mb-2 text-center text-sm leading-relaxed">
-                Core works best with access to your data from Google. You can
-                adjust these permissions in settings at any time.
+                Core is your digital brain that remembers your context,
+                conversations, and what matters to you. Connect to get started.
               </p>
 
               {/* Security Section */}
@@ -91,8 +84,8 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
                 <div>
                   <h2 className="mb-1 text-base font-semibold">Privacy</h2>
                   <p className="text-muted-foreground text-sm leading-relaxed">
-                    As long as you don't actively opt-in to sharing analytics
-                    with us: No human (except you) will see any of your data.
+                    Your digital brain is private. No human (except you) will
+                    see any of your data unless you opt-in to sharing analytics.
                   </p>
                 </div>
               </div>
