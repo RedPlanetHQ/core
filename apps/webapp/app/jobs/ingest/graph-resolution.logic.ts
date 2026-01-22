@@ -5,7 +5,6 @@
  * This runs as a background job after initial episode ingestion
  */
 
-import { type CoreMessage } from "ai";
 import {
   type Triple,
   type EntityNode,
@@ -47,6 +46,7 @@ import {
   batchDeleteEntityEmbeddings,
   batchDeleteStatementEmbeddings,
 } from "~/services/vectorStorage.server";
+import { ModelMessage } from "ai";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -421,10 +421,13 @@ async function resolveExtractedNodesWithMerges(
       extracted_nodes: entitiesNeedingLLM.map((result, index) => ({
         id: index,
         name: result.entity.name,
+        type: result.entity.type || null,
+        attributes: result.entity.attributes || {},
         duplication_candidates: result.similarEntities.map((candidate, j) => ({
           idx: j,
           name: candidate.name,
-          entity_type: candidate.type,
+          type: candidate.type || null,
+          attributes: candidate.attributes || {},
         })),
       })),
       episode_content: episode.content,
@@ -436,7 +439,7 @@ async function resolveExtractedNodesWithMerges(
 
     await makeModelCall(
       false,
-      messages as CoreMessage[],
+      messages as ModelMessage[],
       (text, _model, usage) => {
         responseText = text;
         if (usage) {

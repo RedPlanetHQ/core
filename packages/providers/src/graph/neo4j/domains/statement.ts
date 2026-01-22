@@ -35,6 +35,7 @@ export function createStatementMethods(core: Neo4jCore) {
           n.invalidAt = $invalidAt,
           n.invalidatedBy = $invalidatedBy,
           n.attributes = $attributes,
+          n.aspect = $aspect,
           n.userId = $userId
         ON MATCH SET
           n.fact = $fact,
@@ -42,7 +43,8 @@ export function createStatementMethods(core: Neo4jCore) {
           n.validAt = $validAt,
           n.invalidAt = $invalidAt,
           n.invalidatedBy = $invalidatedBy,
-          n.attributes = $attributes
+          n.attributes = $attributes,
+          n.aspect = $aspect
         RETURN n.uuid as uuid
       `;
 
@@ -55,6 +57,7 @@ export function createStatementMethods(core: Neo4jCore) {
         invalidAt: statement.invalidAt ? statement.invalidAt.toISOString() : null,
         invalidatedBy: statement.invalidatedBy || null,
         attributes: JSON.stringify(statement.attributes || {}),
+        aspect: statement.aspect || null,
         userId: statement.userId,
       };
 
