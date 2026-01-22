@@ -1,14 +1,39 @@
 /**
  * Label Assignment Logic
  *
- * Uses LLM to assign appropriate labels to episodes based on their content
+ * Uses LLM to extract and assign labels to episodes based on their content.
+ * Uses embedding-based similarity search to deduplicate semantically similar labels.
  */
 
-import { makeModelCall } from "~/lib/model.server";
+import { z } from "zod";
+import { makeStructuredModelCall, getEmbedding } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { LabelService } from "~/services/label.server";
 import { updateEpisodeLabels } from "~/services/graphModels/episode";
+import { generateOklchColor } from "~/components/ui/color-utils";
+import { ModelMessage } from "ai";
+import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
+
+// Similarity threshold for matching labels (higher = stricter matching)
+const LABEL_SIMILARITY_THRESHOLD = 0.85;
+
+
+/**
+ * Schema for label extraction
+ */
+const ExtractedLabelSchema = z.object({
+  name: z.string().describe("Label name - 1-3 words, Title Case"),
+  description: z
+    .string()
+    .describe("User-specific description of what they discuss - max 15 words"),
+});
+
+const LabelExtractionSchema = z.object({
+  labels: z
+    .array(ExtractedLabelSchema)
+    .describe("Extracted labels (1-3 per episode, empty if none)"),
+});
 
 export interface LabelAssignmentPayload {
   queueId: string;
@@ -18,18 +43,21 @@ export interface LabelAssignmentPayload {
 
 export interface LabelAssignmentResult {
   success: boolean;
-  assignedLabels?: string[];
+  assignedLabels?: string[]; // IDs of assigned existing labels
+  suggestedLabels?: ExtractedLabel[]; // New label suggestions
   error?: string;
 }
 
-interface LabelProposal {
-  labelName: string;
-  confidence: number;
-  reason: string;
+export interface ExtractedLabel {
+  name: string;
+  description: string;
+  isNew: boolean; // true = suggestion, false = matched existing
+  labelId?: string; // Set if matched existing label
 }
 
 /**
  * Process label assignment for an ingested episode
+ * Extracts labels from episode content - matches existing labels or suggests new ones
  */
 export async function processLabelAssignment(
   payload: LabelAssignmentPayload,
@@ -50,6 +78,7 @@ export async function processLabelAssignment(
       logger.info(`Title is Persona for queue ${payload.queueId}`);
       return { success: true, assignedLabels: [] };
     }
+
     let existingLabelIds: string[] = [];
 
     // Check Document table for existing labels (source of truth)
@@ -89,78 +118,100 @@ export async function processLabelAssignment(
       await labelService.getWorkspaceLabels(payload.workspaceId)
     ).filter((label) => label.name !== "Persona");
 
-    if (workspaceLabels.length === 0) {
-      logger.info(
-        `No labels defined for workspace ${payload.workspaceId}, skipping assignment`,
-      );
-      return { success: true, assignedLabels: [] };
-    }
-
-    // Get existing labels for this episode
-    const existingLabels =
-      existingLabelIds.length > 0
-        ? await prisma.label.findMany({
-            where: {
-              id: { in: existingLabelIds },
-              workspaceId: payload.workspaceId,
-            },
-          })
-        : [];
-
-    logger.info(`Found ${existingLabels.length} existing labels for episode`, {
-      queueId: payload.queueId,
-      existingLabels: existingLabels.map((l) => l.name),
-    });
-
-    // Call LLM to identify appropriate labels, passing existing labels
-    const labelProposals = await identifyLabelsForEpisode(
+    // Extract labels from episode (matches existing or suggests new)
+    const extractedLabels = await extractLabelsFromEpisode(
       episodeBody,
       workspaceLabels.map((l) => ({
         id: l.id,
         name: l.name,
         description: l.description,
       })),
-      existingLabels.map((l) => l.name),
+      payload.workspaceId,
     );
 
-    // Create a map of label names to IDs for quick lookup
-    const labelNameToIdMap = new Map(
-      workspaceLabels.map((l) => [l.name.toLowerCase(), l.id]),
-    );
+    // Separate matched vs new labels
+    const matchedLabels = extractedLabels.filter((l) => !l.isNew);
+    const suggestedLabels = extractedLabels.filter((l) => l.isNew);
 
-    // Filter high-confidence labels (>= 0.8) and map names to IDs
-    const newLabelIds = labelProposals
-      .filter((p) => p.confidence >= 0.8)
-      .map((p) => {
-        const labelId = labelNameToIdMap.get(p.labelName.toLowerCase());
-        if (!labelId) {
-          logger.warn(
-            `Label name from LLM not found in workspace labels: ${p.labelName}`,
-          );
-          return null;
+    // Get IDs of matched labels
+    const matchedLabelIds = matchedLabels
+      .map((l) => l.labelId)
+      .filter((id): id is string => id !== undefined);
+
+    // Create new labels if any were suggested
+    const createdLabelIds: string[] = [];
+    const vectorProvider = ProviderFactory.getVectorProvider();
+
+    if (suggestedLabels.length > 0) {
+      logger.info(`Creating ${suggestedLabels.length} new labels`, {
+        labels: suggestedLabels.map((l) => l.name),
+      });
+
+      for (const suggested of suggestedLabels) {
+        try {
+          const newLabel = await labelService.createLabel({
+            name: suggested.name,
+            description: suggested.description,
+            workspaceId: payload.workspaceId,
+            color: generateOklchColor(), // Use the same color generator as UI
+          });
+          createdLabelIds.push(newLabel.id);
+          logger.info(`Created new label: ${newLabel.name} (${newLabel.id})`);
+
+          // Store embedding for the new label
+          const labelText = `${suggested.name}: ${suggested.description}`;
+          const embedding = await getEmbedding(labelText);
+
+          if (embedding.length > 0) {
+            await vectorProvider.upsert({
+              id: newLabel.id,
+              vector: embedding,
+              content: suggested.name,
+              metadata: {
+                workspaceId: payload.workspaceId,
+                description: suggested.description,
+              },
+              namespace: VECTOR_NAMESPACES.LABEL,
+            });
+            logger.info(`Stored embedding for label: ${newLabel.name}`);
+          }
+        } catch (error: any) {
+          // If label already exists (race condition), try to find it
+          if (error.message.includes("already exists")) {
+            const existing = await labelService.getLabelByName(
+              suggested.name,
+              payload.workspaceId,
+            );
+            if (existing) {
+              createdLabelIds.push(existing.id);
+              logger.info(
+                `Label ${suggested.name} already exists, using existing ID`,
+              );
+            }
+          } else {
+            logger.error(`Failed to create label ${suggested.name}:`, error);
+          }
         }
-        return labelId;
-      })
-      .filter((id): id is string => id !== null);
+      }
+    }
 
-    // Deduplicate: combine existing + new labels
+    // Deduplicate: combine existing + matched + newly created labels
     const allLabelIds = Array.from(
-      new Set([...existingLabelIds, ...newLabelIds]),
+      new Set([...existingLabelIds, ...matchedLabelIds, ...createdLabelIds]),
     );
     const newlyAddedCount = allLabelIds.length - existingLabelIds.length;
 
-    logger.info(
-      `Label assignment complete: ${newlyAddedCount} new labels added`,
-      {
-        queueId: payload.queueId,
-        existingCount: existingLabelIds.length,
-        newCount: newLabelIds.length,
-        totalCount: allLabelIds.length,
-        newlyAdded: newlyAddedCount,
-      },
-    );
+    logger.info(`Label extraction complete`, {
+      queueId: payload.queueId,
+      existingCount: existingLabelIds.length,
+      matchedCount: matchedLabels.length,
+      suggestedCount: suggestedLabels.length,
+      createdCount: createdLabelIds.length,
+      totalAssigned: allLabelIds.length,
+      newlyAdded: newlyAddedCount,
+    });
 
-    // Update the ingestion queue with deduplicated label IDs
+    // Update the ingestion queue with label IDs
     try {
       await prisma.ingestionQueue.update({
         where: { id: payload.queueId },
@@ -184,7 +235,6 @@ export async function processLabelAssignment(
               workspaceId: ingestionQueue.workspaceId,
             },
           },
-
           data: { labelIds: allLabelIds },
         });
         logger.info(
@@ -214,6 +264,7 @@ export async function processLabelAssignment(
     return {
       success: true,
       assignedLabels: allLabelIds,
+      suggestedLabels: undefined, // All labels are now created and assigned
     };
   } catch (error: any) {
     logger.error(`Error processing label assignment:`, {
@@ -228,169 +279,194 @@ export async function processLabelAssignment(
 }
 
 /**
- * Use LLM to identify appropriate labels for episode content
+ * Extract labels from episode - matches existing labels OR suggests new ones
+ * Uses embedding-based similarity search for semantic deduplication
  */
-async function identifyLabelsForEpisode(
+export async function extractLabelsFromEpisode(
   episodeBody: string,
   availableLabels: Array<{
     id: string;
     name: string;
     description: string | null;
   }>,
-  existingLabelNames: string[] = [],
-): Promise<LabelProposal[]> {
-  const prompt = buildLabelAssignmentPrompt(
-    episodeBody,
-    availableLabels,
-    existingLabelNames,
-  );
+  workspaceId: string,
+): Promise<ExtractedLabel[]> {
+  const messages = buildLabelExtractionMessages(episodeBody, availableLabels);
 
-  logger.info("Identifying labels for episode", {
+  logger.info("Extracting labels from episode", {
     episodeLength: episodeBody.length,
     availableLabelCount: availableLabels.length,
-    existingLabelCount: existingLabelNames.length,
   });
 
-  // Call LLM with structured output
-  let responseText = "";
-  await makeModelCall(
-    false,
-    [{ role: "user", content: prompt }],
-    (text) => {
-      responseText = text;
-    },
-    {
-      temperature: 0.3,
-    },
+  const { object: response } = await makeStructuredModelCall(
+    LabelExtractionSchema,
+    messages,
     "high",
-    "label-assignment",
+    "label-extraction",
+    0.3, // Low temperature for consistent label extraction
   );
 
-  // Parse the response
-  const proposals = parseLabelProposals(responseText);
+  // Create lookup map for existing labels (case-insensitive) for exact matching
+  const labelMap = new Map(
+    availableLabels.map((l) => [l.name.toLowerCase(), l]),
+  );
 
-  logger.info("Label identification completed", {
-    proposalCount: proposals.length,
+  const vectorProvider = ProviderFactory.getVectorProvider();
+  const extractedLabels: ExtractedLabel[] = [];
+
+  // Process each extracted label
+  for (const raw of response.labels) {
+    // Step 1: Check for exact name match (case-insensitive)
+    const exactMatch = labelMap.get(raw.name.toLowerCase());
+    if (exactMatch) {
+      extractedLabels.push({
+        name: exactMatch.name,
+        description: raw.description,
+        isNew: false,
+        labelId: exactMatch.id,
+      });
+      logger.info(`Label "${raw.name}" matched existing label by exact name`);
+      continue;
+    }
+
+    // Step 2: Generate embedding and search for semantically similar labels
+    const labelText = `${raw.name}: ${raw.description}`;
+    const embedding = await getEmbedding(labelText);
+
+    if (embedding.length > 0) {
+      const similarLabels = await vectorProvider.search({
+        vector: embedding,
+        limit: 1,
+        threshold: LABEL_SIMILARITY_THRESHOLD,
+        namespace: VECTOR_NAMESPACES.LABEL,
+        filter: { workspaceId },
+      });
+
+      if (similarLabels.length > 0) {
+        // Found a semantically similar label - use it instead
+        const matchedLabelId = similarLabels[0].id;
+        const matchedLabel = availableLabels.find((l) => l.id === matchedLabelId);
+
+        if (matchedLabel) {
+          extractedLabels.push({
+            name: matchedLabel.name,
+            description: raw.description,
+            isNew: false,
+            labelId: matchedLabel.id,
+          });
+          logger.info(
+            `Label "${raw.name}" matched existing label "${matchedLabel.name}" by semantic similarity (score: ${similarLabels[0].score.toFixed(3)})`,
+          );
+          continue;
+        }
+      }
+    }
+
+    // Step 3: No match found - mark as new
+    extractedLabels.push({
+      name: raw.name,
+      description: raw.description,
+      isNew: true,
+    });
+    logger.info(`Label "${raw.name}" is new (no semantic match found)`);
+  }
+
+  logger.info("Label extraction completed", {
+    total: extractedLabels.length,
+    matched: extractedLabels.filter((l) => !l.isNew).length,
+    new: extractedLabels.filter((l) => l.isNew).length,
   });
 
-  return proposals;
+  return extractedLabels;
 }
 
 /**
- * Build the prompt for label assignment
+ * Build messages for label extraction
  */
-function buildLabelAssignmentPrompt(
+function buildLabelExtractionMessages(
   episodeBody: string,
   availableLabels: Array<{
     id: string;
     name: string;
     description: string | null;
   }>,
-  existingLabelNames: string[] = [],
-): string {
-  const labelsSection = `## Available Labels
-
-The following labels are available for assignment:
-
-${availableLabels
-  .map((l) => `- **${l.name}**${l.description ? `: ${l.description}` : ""}`)
-  .join("\n")}`;
-
+): ModelMessage[] {
   const existingLabelsSection =
-    existingLabelNames.length > 0
+    availableLabels.length > 0
       ? `## Existing Labels
 
-This episode already has the following labels assigned:
-${existingLabelNames.map((name) => `- **${name}**`).join("\n")}
+The user already has these labels. Use them if they match (prefer existing over creating new):
 
-**Note**: You should consider these existing labels when making new assignments. Only suggest additional labels that add meaningful categorization beyond what's already assigned.`
+${availableLabels.map((l) => `- **${l.name}**${l.description ? `: ${l.description}` : ""}`).join("\n")}`
       : "";
 
-  const contentSection = `## Episode Content
+  return [
+    {
+      role: "system",
+      content: `You extract LABELS from episodes for a USER'S PERSONAL KNOWLEDGE SYSTEM.
 
-${episodeBody.substring(0, 2000)}${episodeBody.length > 2000 ? "..." : ""}`;
+## CORE PRINCIPLE
 
-  return `You are a content categorization expert. Your task is to analyze episode content and assign the most appropriate labels from the available label set.
-
-${labelsSection}
+Labels are HIGH-LEVEL THEMES the user discusses. They help organize and retrieve episodes later.
+Extract ONLY labels that represent USER-SPECIFIC topics, projects, or themes.
 
 ${existingLabelsSection}
 
-${contentSection}
+## WHAT TO EXTRACT
 
-## Task
+Extract labels when the episode:
+1. **Substantially discusses** a theme (not just mentions)
+2. **Contains user-specific context** about the theme
+3. **Represents a searchable category** for future retrieval
 
-Analyze the episode content and identify ONLY the most essential labels that are clearly, directly, and substantially relevant.
+**EXTRACT labels for:**
+- User's projects and work (CORE, API Design, Mobile App)
+- User's professional domains (AI, TypeScript, DevOps)
+- User's personal interests (Fitness, Cooking, Photography)
+- Recurring activities (Code Review, Team Management, Learning)
 
-**Critical Requirements - All Must Be Met**:
-1. **Direct Relevance**: The episode content must explicitly and substantially discuss or demonstrate the label's theme. Tangential or passing mentions do NOT qualify.
-2. **High Confidence**: You must be highly confident (>= 0.8) that this label accurately represents a core aspect of the content.
-3. **Non-Redundant**: Do NOT suggest labels that overlap with existing labels or each other. Each label must add distinct categorization value.
-4. **Minimal Set**: Prefer fewer, more accurate labels over comprehensive coverage. Most episodes should have 0-2 labels, rarely 3+.
+**DO NOT extract labels for:**
+- ❌ Brief mentions without substantial content
+- ❌ Generic concepts not central to episode
+- ❌ Textbook terms (Progressive Overload, Calorie Deficit)
+- ❌ Tools only mentioned in passing
 
-**Strict Filtering Rules**:
-- If existing labels already cover the content adequately, return empty array []
-- If content only briefly mentions a topic, do NOT assign that label
-- If uncertain whether a label applies, do NOT assign it
-- If labels would overlap in meaning, choose only the most specific one
-- Generic or vague matches do NOT qualify
+## MATCHING RULES
 
-## Output Format
+1. **Check existing labels first** - if an existing label matches, use its EXACT name
+2. **Create new labels** only if no existing label covers the theme
+3. **Prefer broader labels** - use "Fitness" not "Evening Cycling" if "Fitness" exists
 
-Return ONLY a JSON array (empty if no labels meet the strict criteria):
+## LABEL NAMING RULES
 
-\`\`\`json
-[
-  {
-    "labelName": "Exact label name from available labels",
-    "confidence": 0.85,
-    "reason": "Specific evidence from content proving this label applies"
-  }
-]
-\`\`\`
+- 1-3 words, Title Case
+- Use noun form: "Fitness" not "Getting Fit"
+- Be specific but not verbose: "Code Review" not "Code Review Process Guidelines"
 
-**Validation Rules**:
-- **labelName**: Must EXACTLY match an available label name (case-sensitive)
-- **confidence**: Must be >= 0.8 to be considered (0.7-0.79 is too low)
-- **reason**: Must cite specific content evidence, not generic statements
-- **Empty array []**: Return if NO labels meet all strict requirements
-- **Maximum 2 labels**: Exceed only if content clearly spans 3+ distinct themes
+| ❌ TOO VERBOSE | ✅ CLEAN |
+|----------------|----------|
+| Code Review Process | Code Review |
+| Database Connection Setup | Database Setup |
+| Morning Exercise Routine | Morning Routine |
+| Project Documentation Standards | Documentation |
 
-Return ONLY the JSON array with no explanatory text.`;
-}
+## DESCRIPTION RULES
 
-/**
- * Parse label proposals from LLM response
- */
-function parseLabelProposals(responseText: string): LabelProposal[] {
-  try {
-    // Extract JSON from markdown code blocks if present
-    const jsonMatch = responseText.match(/```(?:json)?\s*(\[[\s\S]*?\])\s*```/);
-    const jsonText = jsonMatch ? jsonMatch[1] : responseText;
+- Max 15 words
+- Describe what USER does/discusses about this topic
+- User-specific, not a generic definition
 
-    const proposals = JSON.parse(jsonText.trim());
+| ❌ GENERIC DEFINITION | ✅ USER-SPECIFIC |
+|-----------------------|------------------|
+| "The practice of physical exercise" | "User's fat loss goals and workout routine" |
+| "A software project" | "Personal knowledge management system user is building" |
+| "Database technology" | "Graph storage architecture for CORE project" |`,
+    },
+    {
+      role: "user",
+      content: `Extract labels from this episode:
 
-    if (!Array.isArray(proposals)) {
-      throw new Error("Response is not an array");
-    }
-
-    // Validate and filter proposals
-    return proposals
-      .filter((p) => {
-        return (
-          p.labelName && typeof p.confidence === "number" && p.confidence > 0
-        );
-      })
-      .map((p) => ({
-        labelName: p.labelName.trim(),
-        confidence: p.confidence,
-        reason: (p.reason || "").trim(),
-      }));
-  } catch (error) {
-    logger.error("Failed to parse label proposals", {
-      error,
-      responseText: responseText.substring(0, 500),
-    });
-    return [];
-  }
+${episodeBody.substring(0, 4000)}${episodeBody.length > 4000 ? "..." : ""}`,
+    },
+  ];
 }

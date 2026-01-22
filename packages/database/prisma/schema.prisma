@@ -177,6 +177,22 @@ model EntityEmbedding {
   @@map("entity_embeddings")
 }
 
+model LabelEmbedding {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name        String
+  description String?
+  vector      Unsupported("vector")
+  metadata    Json?
+
+  workspaceId String
+
+  @@index([workspaceId])
+  @@map("label_embeddings")
+}
+
 model EpisodeEmbedding {
   id        String   @id
   createdAt DateTime @default(now())

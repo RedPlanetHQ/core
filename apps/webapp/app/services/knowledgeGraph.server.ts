@@ -1,6 +1,4 @@
-import { type CoreMessage } from "ai";
 import {
-  type ExtractedTripleData,
   type AddEpisodeParams,
   type EntityNode,
   type EpisodicNode,
@@ -9,11 +7,11 @@ import {
   EpisodeTypeEnum,
   EpisodeType,
   type AddEpisodeResult,
+  EntityTypes,
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";
-import { extractEntities } from "./prompts/nodes";
-import { extractStatements, extractStatementsOSS } from "./prompts/statements";
+import { extractCombined, CombinedExtractionSchema } from "./prompts/combined-extraction";
 import {
   getEpisode,
   saveEpisode,
@@ -26,9 +24,8 @@ import {
 import {
   getEmbedding,
   makeModelCall,
-  isProprietaryModel,
+  makeStructuredModelCall,
 } from "~/lib/model.server";
-import { Apps, getNodeTypesString } from "~/utils/presets/nodes";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
 import { EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
@@ -37,6 +34,7 @@ import {
   batchStoreStatementEmbeddings,
   getRecentEpisodes,
 } from "./vectorStorage.server";
+import { ModelMessage } from "ai";
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
@@ -187,6 +185,7 @@ export class KnowledgeGraphService {
         sessionContext,
         params.type,
         previousVersionContent,
+        params.userName,
       );
 
       const normalizedTime = Date.now();
@@ -228,38 +227,16 @@ export class KnowledgeGraphService {
         `Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`,
       );
 
-      // Step 3: Entity Extraction - Extract entities from the episode content
-      const extractedNodes = await this.extractEntities(
+      // Step 3 & 4: Combined Entity and Statement Extraction (single LLM call)
+      const extractedStatements = await this.extractCombinedEntitiesAndStatements(
         episode,
         previousEpisodes,
         tokenMetrics,
+        params.userName,
       );
-
-      console.log(extractedNodes.map((node) => node.name));
-
-      const extractedTime = Date.now();
-      logger.log(`Extracted entities in ${extractedTime - normalizedTime} ms`);
-
-      // Step 3.1: Simple entity categorization (no type-based expansion needed)
-      const categorizedEntities = {
-        primary: extractedNodes,
-        expanded: [], // No expansion needed with type-free approach
-      };
-
-      const expandedTime = Date.now();
-      logger.log(`Processed entities in ${expandedTime - extractedTime} ms`);
-
-      // Step 4: Statement Extrraction - Extract statements (triples) instead of direct edges
-      const extractedStatements = await this.extractStatements(
-        episode,
-        categorizedEntities,
-        previousEpisodes,
-        tokenMetrics,
-      );
-
       const extractedStatementsTime = Date.now();
       logger.log(
-        `Extracted statements in ${extractedStatementsTime - expandedTime} ms`,
+        `Combined extraction completed in ${extractedStatementsTime - episodeUpdatedTime} ms`,
       );
       // Save triples without resolution
       for (const triple of extractedStatements) {
@@ -360,255 +337,151 @@ export class KnowledgeGraphService {
   }
 
   /**
-   * Extract entities from an episode using LLM
+   * Combined extraction: Extract entities and statements in a single LLM call
+   * This ensures only entities that form meaningful user-specific statements are extracted
    */
-  private async extractEntities(
+  private async extractCombinedEntitiesAndStatements(
     episode: EpisodicNode,
     previousEpisodes: EpisodeEmbedding[],
     tokenMetrics: {
       high: { input: number; output: number; total: number; cached: number };
       low: { input: number; output: number; total: number; cached: number };
     },
-  ): Promise<EntityNode[]> {
-    // Use the prompt library to get the appropriate prompts
+    userName?: string,
+  ): Promise<Triple[]> {
     const context = {
       episodeContent: episode.content,
       previousEpisodes: previousEpisodes.map((ep) => ({
         content: ep.content,
         createdAt: ep.createdAt.toISOString(),
       })),
+      referenceTime: episode.validAt.toISOString(),
+      userName,
     };
 
-    // Get the unified entity extraction prompt
-    const extractionMode = episode.sessionId ? "conversation" : "document";
-    const messages = extractEntities(context, extractionMode);
+    const messages = extractCombined(context);
 
-    let responseText = "";
-
-    // Entity extraction requires HIGH complexity (creative reasoning, nuanced NER)
-    await makeModelCall(
-      false,
-      messages as CoreMessage[],
-      (text, _model, usage) => {
-        responseText = text;
-        if (usage) {
-          tokenMetrics.high.input += usage.promptTokens as number;
-          tokenMetrics.high.output += usage.completionTokens as number;
-          tokenMetrics.high.total += usage.totalTokens as number;
-          tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
-        }
-      },
-      undefined,
+    // Combined extraction uses HIGH complexity
+    const { object: response, usage } = await makeStructuredModelCall(
+      CombinedExtractionSchema,
+      messages as ModelMessage[],
       "high",
-      "entity-extraction",
+      "combined-extraction",
     );
 
-    // Convert to EntityNode objects
-    let entities: EntityNode[] = [];
+    // Track token usage
+    if (usage) {
+      tokenMetrics.high.input += usage.promptTokens as number;
+      tokenMetrics.high.output += usage.completionTokens as number;
+      tokenMetrics.high.total += usage.totalTokens as number;
+      tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
+    }
 
-    const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
+    const { entities: extractedEntities, statements: extractedStatements } = response;
 
-    if (outputMatch && outputMatch[1]) {
-      responseText = outputMatch[1].trim();
-      const parsedResponse = JSON.parse(responseText || "[]");
-      // Handle both old format {entities: [...]} and new format [...]
-      const extractedEntities = Array.isArray(parsedResponse)
-        ? parsedResponse
-        : parsedResponse.entities || [];
+    console.log("Combined extraction - Statements:", extractedStatements.length);
 
-      // Batch generate embeddings for entity names
-      const entityNames = Array.isArray(extractedEntities[0])
-        ? extractedEntities
-        : extractedEntities.map((entity: any) => entity.name || entity);
-      const nameEmbeddings = await Promise.all(
-        entityNames.map((name: string) => this.getEmbedding(name)),
-      );
-
-      entities = extractedEntities.map((entity: any, index: number) => ({
+    // Convert extracted entities to EntityNode objects
+    const entityMap = new Map<string, EntityNode>();
+    for (const entity of extractedEntities) {
+      const entityNode: EntityNode = {
         uuid: crypto.randomUUID(),
-        name: typeof entity === "string" ? entity : entity.name,
-        type: undefined, // Type will be inferred from statements
-        attributes: typeof entity === "string" ? {} : entity.attributes || {},
-        nameEmbedding: [], // Don't store in Neo4j
-        typeEmbedding: undefined, // No type embedding needed
+        name: entity.name,
+        type: entity.type,
+        attributes: entity.attributes || {}, // Use extracted attributes or empty object
+        nameEmbedding: [],
         createdAt: new Date(),
         userId: episode.userId,
-      }));
+      };
+      entityMap.set(entity.name.toLowerCase(), entityNode);
     }
 
-    return entities;
-  }
-
-  /**
-   * Extract statements as first-class objects from an episode using LLM
-   * This replaces the previous extractEdges method with a reified approach
-   */
-  private async extractStatements(
-    episode: EpisodicNode,
-    categorizedEntities: {
-      primary: EntityNode[];
-      expanded: EntityNode[];
-    },
-    previousEpisodes: EpisodeEmbedding[],
-    tokenMetrics: {
-      high: { input: number; output: number; total: number; cached: number };
-      low: { input: number; output: number; total: number; cached: number };
-    },
-  ): Promise<Triple[]> {
-    // Use the prompt library to get the appropriate prompts
-    const context = {
-      episodeContent: episode.content,
-      previousEpisodes: previousEpisodes.map((ep) => ({
-        content: ep.content,
-        createdAt: ep.createdAt.toISOString(),
-      })),
-      entities: {
-        primary: categorizedEntities.primary.map((node) => ({
-          name: node.name,
-          type: node.type,
-        })),
-        expanded: categorizedEntities.expanded.map((node) => ({
-          name: node.name,
-          type: node.type,
-        })),
-      },
-      referenceTime: episode.validAt.toISOString(),
-    };
-
-    console.log("proprietary model", isProprietaryModel(undefined, "high"));
-    // Statement extraction requires HIGH complexity (causal reasoning, emotional context)
-    // Choose between proprietary and OSS prompts based on model type
-    const messages = isProprietaryModel(undefined, "high")
-      ? extractStatements(context)
-      : extractStatementsOSS(context);
-
-    let responseText = "";
-    await makeModelCall(
-      false,
-      messages as CoreMessage[],
-      (text, _model, usage) => {
-        responseText = text;
-        if (usage) {
-          tokenMetrics.high.input += usage.promptTokens as number;
-          tokenMetrics.high.output += usage.completionTokens as number;
-          tokenMetrics.high.total += usage.totalTokens as number;
-          tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
-        }
-      },
-      undefined,
-      "high",
-      "statement-extraction",
-    );
-
-    const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);
-    if (outputMatch && outputMatch[1]) {
-      responseText = outputMatch[1].trim();
-    } else {
-      responseText = "{}";
-    }
-
-    // Parse the statements from the LLM response
-    const parsedResponse = JSON.parse(responseText || "[]");
-    // Handle both old format {"edges": [...]} and new format [...]
-    const extractedTriples: ExtractedTripleData[] = Array.isArray(
-      parsedResponse,
-    )
-      ? parsedResponse
-      : parsedResponse.edges || [];
-
-    console.log(`extracted triples length: ${extractedTriples.length}`);
-
-    // Create maps to deduplicate entities by name within this extraction
+    // Create predicate map for deduplication
     const predicateMap = new Map<string, EntityNode>();
-
-    // First pass: collect all unique predicates from the current extraction
-    for (const triple of extractedTriples) {
-      const predicateName = triple.predicate.toLowerCase();
+    for (const stmt of extractedStatements) {
+      const predicateName = stmt.predicate.toLowerCase();
       if (!predicateMap.has(predicateName)) {
-        // Create new predicate (embedding will be generated later in batch)
-        const newPredicate = {
+        predicateMap.set(predicateName, {
           uuid: crypto.randomUUID(),
-          name: triple.predicate,
+          name: stmt.predicate,
           type: "Predicate",
           attributes: {},
-          nameEmbedding: null as any, // Will be filled later
-          typeEmbedding: null as any, // Will be filled later
+          nameEmbedding: null as any,
           createdAt: new Date(),
           userId: episode.userId,
-        };
-        predicateMap.set(predicateName, newPredicate);
+        });
       }
     }
 
-    // Combine primary and expanded entities for entity matching
-    const allEntities = [
-      ...categorizedEntities.primary,
-      ...categorizedEntities.expanded,
-    ];
+    // Convert statements to Triple objects
+    const triples = extractedStatements.map((stmt) => {
+      // Find subject - must be in extracted entities
+      let subjectNode = entityMap.get(stmt.source.toLowerCase());
 
-    // Batch generate embeddings for predicates and facts
-    const uniquePredicates = Array.from(predicateMap.values());
-
-    // Convert extracted triples to Triple objects with Statement nodes
-    const triples = extractedTriples.map((triple: ExtractedTripleData) => {
-      // Find the subject and object nodes by matching name (type-free approach)
-      const subjectNode = allEntities.find(
-        (node) => node.name.toLowerCase() === triple.source.toLowerCase(),
-      );
-
-      const objectNode = allEntities.find(
-        (node) => node.name.toLowerCase() === triple.target.toLowerCase(),
-      );
-
-      // Get the deduplicated predicate node
-      const predicateNode = predicateMap.get(triple.predicate.toLowerCase());
-
-      if (subjectNode && objectNode && predicateNode) {
-        // Determine the correct validAt date (when the fact actually occurred/occurs)
-        let validAtDate = episode.validAt; // Default fallback to episode date
-
-        // Check if statement has event_date indicating when the fact actually happened/happens
-        if (triple.attributes?.event_date) {
-          try {
-            const eventDate = new Date(triple.attributes.event_date);
-            // Use the event date as validAt (when the fact is actually true)
-            if (!isNaN(eventDate.getTime())) {
-              validAtDate = eventDate;
-            }
-          } catch (error) {
-            // If parsing fails, use episode validAt as fallback
-            logger.log(
-              `Failed to parse event_date: ${triple.attributes.event_date}, using episode validAt`,
-            );
-          }
-        }
-
-        // Create a statement node
-        const statementUuid = crypto.randomUUID();
-        const statement: StatementNode = {
-          uuid: statementUuid,
-          fact: triple.fact,
-          factEmbedding: [], // Don't store in Neo4j
+      // If subject not found, create it without a default type
+      if (!subjectNode) {
+        subjectNode = {
+          uuid: crypto.randomUUID(),
+          name: stmt.source,
+          type: undefined,
+          attributes: {},
+          nameEmbedding: [],
           createdAt: new Date(),
-          validAt: validAtDate,
-          invalidAt: null,
-          attributes: triple.attributes || {},
           userId: episode.userId,
         };
-
-        return {
-          statement,
-          subject: subjectNode,
-          predicate: predicateNode,
-          object: objectNode,
-          provenance: episode,
-        };
+        entityMap.set(stmt.source.toLowerCase(), subjectNode);
       }
-      return null;
+
+      // Find object - can be entity or literal value
+      let objectNode = entityMap.get(stmt.target.toLowerCase());
+
+      // If object not found, create it without a default type
+      if (!objectNode) {
+        objectNode = {
+          uuid: crypto.randomUUID(),
+          name: stmt.target,
+          type: undefined,
+          attributes: {},
+          nameEmbedding: [],
+          createdAt: new Date(),
+          userId: episode.userId,
+        };
+        entityMap.set(stmt.target.toLowerCase(), objectNode);
+      }
+
+      const predicateNode = predicateMap.get(stmt.predicate.toLowerCase())!;
+
+      // IMPORTANT: validAt vs event_date distinction
+      // - validAt: When the FACT became true (when it entered the knowledge base)
+      // - event_date: When the EVENT actually occurs/occurred (past, present, or future)
+      const validAtDate = episode.validAt; // Always use episode timestamp
+
+      // Build attributes object
+      const attributes: Record<string, any> = {};
+      if (stmt.event_date) attributes.event_date = stmt.event_date;
+
+      const statement: StatementNode = {
+        uuid: crypto.randomUUID(),
+        fact: stmt.fact,
+        factEmbedding: [],
+        createdAt: new Date(),
+        validAt: validAtDate,
+        invalidAt: null,
+        attributes,
+        aspect: stmt.aspect || null,
+        userId: episode.userId,
+      };
+
+      return {
+        statement,
+        subject: subjectNode,
+        predicate: predicateNode,
+        object: objectNode,
+        provenance: episode,
+      };
     });
 
-    // Filter out null values (where subject or object wasn't found)
-    return triples.filter(Boolean) as Triple[];
+    return triples as Triple[];
   }
 
   /**
@@ -627,12 +500,12 @@ export class KnowledgeGraphService {
     sessionContext?: string,
     contentType?: EpisodeType,
     previousVersionContent?: string,
+    userName?: string,
   ) {
-    let appEnumValues: Apps[] = [];
-    if (Apps[source.toUpperCase() as keyof typeof Apps]) {
-      appEnumValues = [Apps[source.toUpperCase() as keyof typeof Apps]];
-    }
-    const entityTypes = getNodeTypesString(appEnumValues);
+    // Format entity types for prompt
+    const entityTypes = EntityTypes.filter(t => t !== "Predicate")
+      .map(t => `- ${t}`)
+      .join("\n");
 
     // Get related memories
     const relatedMemories = await this.getRelatedMemories(episodeBody, userId);
@@ -646,7 +519,7 @@ export class KnowledgeGraphService {
 
     const context = {
       episodeContent: episodeBody,
-      entityTypes: entityTypes,
+      entityTypes,
       source,
       relatedMemories,
       ingestionRules,
@@ -654,6 +527,7 @@ export class KnowledgeGraphService {
         episodeTimestamp?.toISOString() || new Date().toISOString(),
       sessionContext,
       previousVersionContent,
+      userName, // Pass user name for personalized normalization
     };
 
     // Route to appropriate normalization prompt based on content type

@@ -16,7 +16,11 @@ export function parseEntityNode(raw: any): EntityNode {
     name: raw.name,
     type: raw.type || null,
     nameEmbedding: raw.nameEmbedding || [],
-    attributes: raw.attributes ? JSON.parse(raw.attributes) : {},
+    attributes: raw.attributes
+      ? typeof raw.attributes === "string"
+        ? JSON.parse(raw.attributes)
+        : raw.attributes
+      : {},
     createdAt: new Date(raw.createdAt),
     userId: raw.userId,
   };
@@ -59,6 +63,7 @@ export function parseStatementNode(raw: any): StatementNode {
     attributes: raw.attributes ? JSON.parse(raw.attributes) : {},
     userId: raw.userId,
     labelIds: raw.labelIds || [],
+    aspect: raw.aspect || null,
     recallCount: raw.recallCount,
     provenanceCount: raw.provenanceCount,
   };

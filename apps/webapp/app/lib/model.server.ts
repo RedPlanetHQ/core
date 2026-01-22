@@ -1,4 +1,5 @@
-import { type CoreMessage, embed, generateText, streamText } from "ai";
+import { embed, generateText, generateObject, streamText, ModelMessage } from "ai";
+import { z } from "zod";
 import {
   createOpenAI,
   openai,
@@ -102,7 +103,7 @@ export interface TokenUsage {
 
 export async function makeModelCall(
   stream: boolean,
-  messages: CoreMessage[],
+  messages: ModelMessage[],
   onFinish: (text: string, model: string, usage?: TokenUsage) => void,
   options?: any,
   complexity: ModelComplexity = "high",
@@ -193,6 +194,76 @@ export async function makeModelCall(
   onFinish(text, model, tokenUsage);
 
   return text;
+}
+
+/**
+ * Make a model call that returns structured data using a Zod schema.
+ * Uses AI SDK's generateObject for guaranteed structured output.
+ */
+export async function makeStructuredModelCall<T extends z.ZodType>(
+  schema: T,
+  messages: ModelMessage[],
+  complexity: ModelComplexity = "high",
+  cacheKey?: string,
+  temperature?: number,
+): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
+  const model = getModelForTask(complexity);
+  logger.info(`[Structured] complexity: ${complexity}, model: ${model}`);
+
+  const modelInstance = getModel(model);
+  const generateObjectOptions: any = {};
+
+  if (temperature !== undefined) {
+    generateObjectOptions.temperature = temperature;
+  }
+
+  // Add OpenAI provider options for prompt caching
+  if (model.includes("gpt")) {
+    const openaiOptions: OpenAIResponsesProviderOptions = {
+      promptCacheKey: cacheKey || `structured-${complexity}`,
+    };
+
+    if (model.startsWith("gpt-5")) {
+      if (model.includes("mini")) {
+        openaiOptions.reasoningEffort = "low";
+      } else {
+        openaiOptions.promptCacheRetention = "24h";
+        openaiOptions.reasoningEffort = "none";
+      }
+    }
+
+    generateObjectOptions.providerOptions = {
+      openai: openaiOptions,
+    };
+  }
+
+  if (!modelInstance) {
+    throw new Error(`Unsupported model type: ${model}`);
+  }
+
+  const { object, usage } = await generateObject({
+    model: modelInstance,
+    schema,
+    messages,
+    ...generateObjectOptions,
+  });
+
+  const tokenUsage = usage
+    ? {
+        promptTokens: usage.inputTokens,
+        completionTokens: usage.outputTokens,
+        totalTokens: usage.totalTokens,
+        cachedInputTokens: usage.cachedInputTokens,
+      }
+    : undefined;
+
+  if (tokenUsage) {
+    logger.log(
+      `[Structured/${complexity.toUpperCase()}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens}, cached: ${tokenUsage.cachedInputTokens})`,
+    );
+  }
+
+  return { object, usage: tokenUsage };
 }
 
 /**

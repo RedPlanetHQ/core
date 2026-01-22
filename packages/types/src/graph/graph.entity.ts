@@ -94,6 +94,7 @@ export const STATEMENT_NODE_PROPERTIES = `{
   invalidAt: s.invalidAt,
   invalidatedBy: s.invalidatedBy,
   attributes: s.attributes,
+  aspect: s.aspect,
   recallCount: s.recallCount,
   provenanceCount: s.provenanceCount
 }`;
@@ -101,6 +102,7 @@ export const STATEMENT_NODE_PROPERTIES = `{
 export const ENTITY_NODE_PROPERTIES = `{
   uuid: ent.uuid,
   name: ent.name,
+  type: ent.type,
   createdAt: ent.createdAt,
   userId: ent.userId,
   attributes: ent.attributes
@@ -123,18 +125,72 @@ export const COMPACTED_SESSION_NODE_PROPERTIES = `{
 }`;
 
 /**
+ * Entity types for the knowledge graph (10 types)
+ * Only NAMED, SEARCHABLE entities - no generic vocabulary
+ */
+export const EntityTypes = [
+  "Person",       // People: Sarah, John, Dr. Chen, Mike
+  "Organization", // Companies/teams: Google, Red Planet, Design Team
+  "Place",        // Locations: Bangalore, San Francisco, Office HQ
+  "Event",        // Occurrences: React Conference, Q2 Planning, Sprint Review
+  "Project",      // Work initiatives: CORE, MVP, Website Redesign
+  "Task",         // Tracked items: CORE-123, Issue #456, TODO-789
+  "Technology",   // Tools/frameworks: TypeScript, PostgreSQL, React, Neo4j
+  "Product",      // Products/services: iPhone, Slack, ChatGPT, Figma
+  "Standard",     // Methodologies: OAuth 2.0, REST API, Agile, SOLID
+  "Concept",      // Abstract topics: Fat Loss, Code Review, Search Pipeline
+  "Predicate",    // Relationships: "works at", "lives in", "manages"
+] as const;
+
+export type EntityType = (typeof EntityTypes)[number];
+
+
+/**
  * Interface for entity node in the reified knowledge graph
  * Entities represent subjects, objects, or predicates in statements
  */
 export interface EntityNode {
   uuid: string;
   name: string;
-  type?: string; // Optional type - can be inferred from statements
+  type?: EntityType; // Optional type - can be inferred from statements
   nameEmbedding?: number[];
   attributes?: Record<string, any>;
   createdAt: Date;
   userId: string;
 }
+
+/**
+ * Statement aspects for classification
+ * These are the types of knowledge a statement can represent
+ *
+ * Categories:
+ * 1. Identity - Who they are (slow-changing): role, location, affiliation
+ * 2. Knowledge - What they know: expertise, skills, understanding
+ * 3. Belief - Why they think that way: values, opinions, reasoning
+ * 4. Preference - How they want things: likes, dislikes, style choices
+ * 5. Action - What they do: observable behaviors, habits, practices
+ * 6. Goal - What they want to achieve: future targets, aims
+ * 7. Directive - Rules and automation: always do X, notify when Y, remind me to Z
+ * 8. Decision - Choices made, conclusions reached
+ * 9. Event - Specific occurrences with timestamps
+ * 10. Problem - Blockers, issues, challenges
+ * 11. Relationship - Connections between people
+ */
+export const StatementAspects = [
+  "Identity",     // Who they are - role, location, affiliation (slow-changing)
+  "Knowledge",    // What they know - expertise, skills, understanding
+  "Belief",       // Why they think that way - values, opinions, reasoning
+  "Preference",   // How they want things - likes, dislikes, style choices
+  "Action",       // What they do - observable behaviors, habits, practices
+  "Goal",         // What they want to achieve - future targets, aims
+  "Directive",    // Rules and automation - always do X, notify when Y, remind me to Z
+  "Decision",     // Choices made, conclusions reached
+  "Event",        // Specific occurrences with timestamps
+  "Problem",      // Blockers, issues, challenges
+  "Relationship", // Connections between people
+] as const;
+
+export type StatementAspect = (typeof StatementAspects)[number];
 
 /**
  * Interface for statement node in the reified knowledge graph
@@ -151,6 +207,7 @@ export interface StatementNode {
   attributes: Record<string, any>;
   userId: string;
   labelIds?: string[];
+  aspect?: StatementAspect | null; // Classification of the statement type
   recallCount?: { low: number; high: number };
   provenanceCount?: number;
 }
@@ -188,6 +245,7 @@ export type AddEpisodeParams = {
   metadata?: Record<string, any>;
   source: string;
   userId: string;
+  userName?: string; // User's display name for user-centric extraction
   labelIds?: string[];
   sessionId: string;
   queueId: string;
@@ -227,6 +285,7 @@ export interface ExtractedTripleData {
   target: string;
   targetType?: string; // Optional - can be inferred from statements
   fact: string;
+  aspect?: StatementAspect | null; // Classification of the statement type
   attributes?: Record<string, any>;
 }
 

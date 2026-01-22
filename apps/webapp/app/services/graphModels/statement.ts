@@ -211,6 +211,7 @@ export function parseStatementNode(node: Record<string, any>): StatementNode {
     attributes: node.attributes ? (typeof node.attributes === 'string' ? JSON.parse(node.attributes) : node.attributes) : {},
     userId: node.userId,
     labelIds: node.labelIds || undefined,
+    aspect: node.aspect || null,
     recallCount: node.recallCount || undefined,
     provenanceCount: node.provenanceCount || undefined,
   };
