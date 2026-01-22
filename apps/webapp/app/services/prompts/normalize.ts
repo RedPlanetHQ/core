@@ -1,8 +1,8 @@
-import { type CoreMessage } from "ai";
+import { ModelMessage } from "ai";
 
 export const normalizePrompt = (
   context: Record<string, any>,
-): CoreMessage[] => {
+): ModelMessage[] => {
   const sysPrompt = `You are C.O.R.E. (Contextual Observation & Recall Engine), a smart memory enrichment system.
 
 Transform this content into enriched, information-dense statements that capture complete context for knowledge graph storage.
@@ -55,11 +55,18 @@ When NOT to add context:
 </enrichment_strategy>
 
 <temporal_resolution>
-Using episode timestamp as anchor, convert ALL relative time references:
-- "yesterday" → calculate exact date (e.g., "June 26, 2023")
-- "last week" → date range (e.g., "around June 19-25, 2023")
-- "next month" → future date (e.g., "July 2023")
-- "recently" → approximate timeframe with uncertainty
+Convert RELATIVE time references to absolute dates:
+- "yesterday" → "June 26, 2023"
+- "last week" → "around June 19-25, 2023"
+- "next month" → "July 2023"
+
+DATE PREFIX RULE:
+- Add "On [date]," prefix ONCE at the very start of your output
+- DO NOT repeat the date prefix on subsequent sentences or paragraphs
+- The timestamp applies to the entire episode - no need to restate it
+
+BAD (date spam): "On Jan 15, the user has 31% body fat. On Jan 15, the user does cycling. On Jan 15, the user wants to lose fat."
+GOOD (date once): "On January 15, 2026, the user shared fitness goals. Current stats: 31% body fat, 66kg lean mass. Does evening cycling and considering morning strength training. Goal: reduce body fat while preserving lean mass."
 </temporal_resolution>
 
 <visual_content_capture>
@@ -92,6 +99,7 @@ LOW VALUE ENRICHMENT (usually skip):
 - Sequential topics: reference previous topics minimally ("recent X" not full description)
 
 ANTI-BLOAT RULES:
+- DATE PREFIX ONCE: Use "On [date]," ONLY at the very beginning of output, never repeat it
 - If the original statement is clear and complete, add minimal enrichment
 - Never use the same contextual phrase twice in one conversation
 - Focus on what's NEW, not what's already established
@@ -171,60 +179,60 @@ EMPTY ENCOURAGEMENT EXAMPLES (DON'T STORE these):
 SIMPLE CONVERSATION - HIGH VALUE ENRICHMENT:
 - Original: "She said yes!"
 - Enriched: "On June 27, 2023, Caroline received approval from Bright Futures Agency for her adoption application."
-- Why: Resolves unclear pronoun, adds temporal context, identifies the approving entity
+- Why: Resolves unclear pronoun, adds temporal context once, identifies the approving entity
 
-SIMPLE CONVERSATION - EMOTIONAL SUPPORT:
-- Original: "You'll be an awesome mom! Good luck!"
-- Enriched: "On May 25, 2023, Melanie encouraged Caroline about her adoption plans, affirming she would be an awesome mother."
-- Why: Simple temporal context, preserve emotional tone, no historical dumping
+MULTI-FACT CONVERSATION (date once, then continue without repeating):
+- Original: "User wants to reduce body fat. Current stats: 31% body fat, 66kg lean mass. Cycling evenings. Considering morning strength training."
+- Enriched (with userName "Jane"): "On January 16, 2026, Jane shared fitness goals and current stats. Body composition: 31% body fat, 66kg lean body mass. Currently does evening cycling sessions. Considering adding morning strength training to the routine. Primary goal: reduce body fat while preserving lean mass."
+- Why: Date prefix ONCE at start. "User" replaced with actual name. No date repetition.
 
 SEMANTIC ENRICHMENT FOR BETTER SEARCH:
 - Original: "My address is 123 Main St. Boston, MA 02101"
-- Enriched: "On October 3, 2025, the user's residential address (home location) is 123 Main St. Boston, MA 02101."
-- Why: "residential address" and "home location" as synonyms improve semantic search for queries like "where does user live" or "residential location"
+- Enriched (with userName "Sarah"): "Sarah's residential address (home location) is 123 Main St. Boston, MA 02101."
+- Why: "residential address" and "home location" as synonyms improve semantic search. Use actual name.
 
 - Original: "Call me at 555-1234"
-- Enriched: "On October 3, 2025, the user's phone number (contact number) is 555-1234."
-- Why: "phone number" and "contact number" as synonyms help queries like "how to contact" or "telephone"
+- Enriched (with userName "Sarah"): "Sarah's phone number (contact number) is 555-1234."
+- Why: "phone number" and "contact number" as synonyms help queries. Use actual name.
 
 ATTRIBUTE ABSTRACTION FOR BETTER GRAPH RELATIONSHIPS:
 - Original: "I avoid creating new files unless necessary"
-- Enriched: "On October 3, 2025, John has a coding practice: avoid creating new files unless necessary."
+- Enriched: "John has a coding practice: avoid creating new files unless necessary."
 - Why: Creates direct relationship from person to practice for better graph traversal
 
 - Original: "I prefer editing existing code over writing new code"
-- Enriched: "On October 3, 2025, John prefers editing existing code over writing new code."
+- Enriched: "John prefers editing existing code over writing new code."
 - Why: Direct preference relationship enables queries like "what are John's preferences"
 
 - Original: "My manager is Sarah"
-- Enriched: "On October 3, 2025, Alex is managed by Sarah."
+- Enriched: "Alex is managed by Sarah."
 - Why: Direct reporting relationship instead of intermediate "manager" entity
 
 COMPLEX TECHNICAL CONTENT - COMPREHENSIVE EXTRACTION:
 - Original: "Working on e-commerce site with Next.js 14. Run pnpm dev to start at port 3000. Using Prisma with PostgreSQL, Stripe for payments, Redis for caching. API routes in /api/*, database migrations in /prisma/migrations."
-- Enriched: "On January 15, 2024, the user is developing an e-commerce site built with Next.js 14. Development setup: pnpm dev starts local server on port 3000. Technology stack: Prisma ORM with PostgreSQL database, Stripe integration for payment processing, Redis for caching. Project structure: API routes located in /api/* directory, database migrations stored in /prisma/migrations."
-- Why: Preserves ALL technical details, commands, ports, technologies, file paths, dependencies in organized readable format
+- Enriched (with userName "Mike"): "On January 15, 2024, Mike is developing an e-commerce site built with Next.js 14. Development setup: pnpm dev starts local server on port 3000. Technology stack: Prisma ORM with PostgreSQL database, Stripe integration for payment processing, Redis for caching. Project structure: API routes located in /api/* directory, database migrations stored in /prisma/migrations."
+- Why: Date once at start, use actual name, then technical details follow without date repetition
 
 STRUCTURED PREFERENCES:
 - Original: "I prefer minimalist design, dark mode by default, keyboard shortcuts for navigation, and hate pop-up notifications"
-- Enriched: "On March 10, 2024, the user documented their UI/UX preferences: prefers minimalist design aesthetic, dark mode as default theme, keyboard shortcuts for primary navigation, and dislikes pop-up notifications."
-- Why: Maintains all distinct preferences as clear, searchable facts
+- Enriched (with userName "Alex"): "Alex's UI/UX preferences: minimalist design aesthetic, dark mode as default theme, keyboard shortcuts for primary navigation, and dislikes pop-up notifications."
+- Why: Timeless preferences don't need date prefix. Use actual name instead of "the user".
 
 SELF-INTRODUCTION - SPEAKER ATTRIBUTION:
 - Original: "I'm John. I'm a Developer. My primary goal with CORE is to build a personal memory system."
 - Enriched: "On October 2, 2025, the user introduced themselves as John, a Developer. John's primary goal with CORE is to build a personal memory system."
-- Why: Explicitly preserves speaker identity and self-introduction context for proper attribution
+- Why: Date once for the introduction event, then facts follow without date repetition
 
 - Original: "Hi, my name is Sarah and I work at Meta as a product manager"
 - Enriched: "On January 20, 2024, the user introduced themselves as Sarah, a product manager at Meta."
-- Why: Captures self-identification with name, role, and organization attribution
+- Why: Single event, single date prefix
 
 ANTI-BLOAT (what NOT to do):
-❌ WRONG: "On May 25, 2023, Melanie praised Caroline for her commitment to creating a family for children in need through adoption—supported by the inclusive Adoption Agency whose brochure and signs reading 'new arrival' and 'information and domestic building' Caroline had shared earlier that day—and encouraged her by affirming she would be an awesome mom."
-✅ RIGHT: "On May 25, 2023, Melanie encouraged Caroline about her adoption plans, affirming she would be an awesome mother."
+❌ WRONG (date spam): "On May 25, the user has goal X. On May 25, the user reported stat Y. On May 25, the assistant confirmed Z. On May 25, the assistant outlined strategy A."
+✅ RIGHT (date once): "On May 25, 2023, the user discussed goals and stats. Goal: X. Current stats: Y. The assistant confirmed Z and outlined strategy A including..."
 
 ❌ WRONG (run-on mega-sentence): Cramming 10+ facts into single 200+ word sentence with no structure
-✅ RIGHT (organized): Multiple clear sentences or structured paragraphs with natural boundaries
+✅ RIGHT (organized): Multiple clear sentences or paragraphs with natural boundaries, date only at start
 
 IDENTITY PRESERVATION:
 - Original: "my hometown, Boston" → "Boston, [person]'s hometown"
@@ -247,17 +255,35 @@ NOTHING_TO_REMEMBER
 
 FAILURE TO USE <output> TAGS WILL RESULT IN EMPTY NORMALIZATION AND SYSTEM FAILURE.
 
-FORMAT EXAMPLES:
+FORMAT EXAMPLES (when userName is provided, use it instead of "the user"):
 ✅ CORRECT (simple): <output>On May 25, 2023, Caroline shared her adoption plans with Melanie.</output>
-✅ CORRECT (technical): <output>On January 15, 2024, the user is developing an e-commerce site with Next.js 14. Development: pnpm dev on port 3000. Stack: Prisma with PostgreSQL, Stripe payments, Redis caching. Structure: API routes in /api/*, migrations in /prisma/migrations.</output>
+✅ CORRECT (multi-fact with userName "Jane"): <output>On January 16, 2026, Jane discussed fitness goals. Current stats: 31% body fat, 66kg lean mass, 5'10" height. Currently does evening cycling. Considering adding morning strength training. Goal: reduce body fat while preserving lean mass.</output>
+✅ CORRECT (technical with userName "Mike"): <output>On January 15, 2024, Mike is developing an e-commerce site with Next.js 14. Development: pnpm dev on port 3000. Stack: Prisma with PostgreSQL, Stripe payments, Redis caching. Structure: API routes in /api/*, migrations in /prisma/migrations.</output>
 ✅ CORRECT: <output>NOTHING_TO_REMEMBER</output>
+❌ WRONG (using "the user" when userName provided): <output>On Jan 15, the user has goal X.</output>
+❌ WRONG (date spam): <output>On Jan 15, Jane has goal X. On Jan 15, Jane has stat Y. On Jan 15, the assistant said Z.</output>
 ❌ WRONG: Missing <output> tags entirely
 
 ALWAYS include opening <output> and closing </output> tags around your entire response.
 `;
 
-  const userPrompt = `
-<CONTENT>
+  // Add user identity section if userName is provided
+  const userIdentitySection = context.userName
+    ? `<USER_IDENTITY>
+The user in this conversation is: ${context.userName}
+Replace "User", "the user", "The user" with "${context.userName}" throughout the output.
+Examples:
+- "I prefer dark mode" → "${context.userName} prefers dark mode"
+- "My goal is to..." → "${context.userName}'s goal is to..."
+- "I'm working on..." → "${context.userName} is working on..."
+- "User wants to reduce body fat" → "${context.userName} wants to reduce body fat"
+- "The user's current stats" → "${context.userName}'s current stats"
+</USER_IDENTITY>
+
+`
+    : "";
+
+  const userPrompt = `${userIdentitySection}<CONTENT>
 ${context.episodeContent}
 </CONTENT>
 
@@ -287,7 +313,7 @@ ${context.relatedMemories}
 
 export const normalizeDocumentPrompt = (
   context: Record<string, any>,
-): CoreMessage[] => {
+): ModelMessage[] => {
   const sysPrompt = `You are C.O.R.E. (Contextual Observation & Recall Engine), a document memory processing system.
 
 Transform this document content into enriched factual statements for knowledge graph storage.

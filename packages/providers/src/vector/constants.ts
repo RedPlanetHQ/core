@@ -28,6 +28,13 @@ export const VECTOR_NAMESPACES = {
    * ID format: compacted session UUID
    */
   COMPACTED_SESSION: 'compacted_session',
+
+  /**
+   * Label embeddings (for label deduplication and similarity matching)
+   * ID format: label ID (cuid from Prisma)
+   * Used to match semantically similar labels during extraction
+   */
+  LABEL: 'label',
 } as const;
 
 export type VectorNamespace = typeof VECTOR_NAMESPACES[keyof typeof VECTOR_NAMESPACES];

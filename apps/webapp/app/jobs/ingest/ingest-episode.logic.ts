@@ -142,12 +142,20 @@ export async function processEpisodeIngestion(
     const knowledgeGraphService = new KnowledgeGraphService();
     const episodeBody = payload.body as any;
 
+    // Fetch user name for user-centric extraction
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { name: true, displayName: true },
+    });
+    const userName = user?.displayName || user?.name || undefined;
+
     let episodeDetails;
     try {
       episodeDetails = await knowledgeGraphService.addEpisode(
         {
           ...episodeBody,
           userId: payload.userId,
+          userName, // Pass user name for user-centric extraction
           queueId: payload.queueId,
         },
         prisma,

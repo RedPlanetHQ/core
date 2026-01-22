@@ -142,6 +142,26 @@ export function createEntityMethods(core: Neo4jCore) {
         WITH source, target
         WHERE source IS NOT NULL
 
+        // Merge attributes: source (newer) attributes overwrite target (older) attributes
+        // Newer values take precedence for conflicts
+        WITH source, target,
+             CASE WHEN source.attributes IS NOT NULL THEN source.attributes ELSE '{}' END AS sourceAttrs,
+             CASE WHEN target.attributes IS NOT NULL THEN target.attributes ELSE '{}' END AS targetAttrs
+
+        // Update target with merged attributes (source/newer wins for conflicts)
+        // Also update type if source has one (newer type wins)
+        SET target.attributes = apoc.convert.toJson(
+          apoc.map.merge(
+            apoc.convert.fromJsonMap(targetAttrs),
+            apoc.convert.fromJsonMap(sourceAttrs)
+          )
+        ),
+        target.type = CASE
+          WHEN source.type IS NOT NULL AND source.type <> '' THEN source.type
+          WHEN target.type IS NOT NULL AND target.type <> '' THEN target.type
+          ELSE target.type
+        END
+
         // Update HAS_SUBJECT relationships
         WITH source, target
         OPTIONAL MATCH (s1:Statement{userId: $userId})-[r1:HAS_SUBJECT]->(source)
@@ -183,7 +203,26 @@ export function createEntityMethods(core: Neo4jCore) {
         UNWIND duplicates AS source
 
         // Collect UUID before moving relationships
-        WITH source.uuid AS sourceUuid, source, target
+        WITH source.uuid AS sourceUuid, source, target,
+             CASE WHEN source.attributes IS NOT NULL THEN source.attributes ELSE '{}' END AS sourceAttrs,
+             CASE WHEN target.attributes IS NOT NULL THEN target.attributes ELSE '{}' END AS targetAttrs
+
+        // Merge attributes: source (newer) attributes overwrite target (older) attributes
+        // Newer values take precedence for conflicts
+        SET target.attributes = apoc.convert.toJson(
+          apoc.map.merge(
+            apoc.convert.fromJsonMap(targetAttrs),
+            apoc.convert.fromJsonMap(sourceAttrs)
+          )
+        ),
+        // Source (newer) type takes precedence if set, otherwise keep target type
+        target.type = CASE
+          WHEN source.type IS NOT NULL AND source.type <> '' THEN source.type
+          WHEN target.type IS NOT NULL AND target.type <> '' THEN target.type
+          ELSE target.type
+        END
+
+        WITH sourceUuid, source, target
 
         // Move HAS_SUBJECT relationships
         OPTIONAL MATCH (s1:Statement {userId: $userId})-[r1:HAS_SUBJECT]->(source)

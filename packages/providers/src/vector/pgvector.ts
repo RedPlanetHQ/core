@@ -93,6 +93,10 @@ export class PgVectorProvider implements IVectorProvider {
       table: "compacted_session_embeddings",
       name: "compacted_session_embeddings_vector_idx",
     },
+    {
+      table: "label_embeddings",
+      name: "label_embeddings_vector_idx",
+    },
   ] as const;
 
 
@@ -192,6 +196,8 @@ export class PgVectorProvider implements IVectorProvider {
         return "name";
       case "compacted_session":
         return "summary";
+      case "label":
+        return "name";
       default:
         throw new Error(`Invalid namespace: ${namespace}`);
     }
@@ -209,16 +215,38 @@ export class PgVectorProvider implements IVectorProvider {
   }): Promise<void> {
     const tableName = this.getTableName(params.namespace);
     const contentName = this.getContentName(params.namespace);
-    const userId = params.metadata?.userId;
-
-    if (!userId) {
-      throw new Error("userId is required in metadata for upsert");
-    }
 
     // Use $executeRaw for upsert with vector type
     // Note: Using Prisma.raw() for table/column names and regular template values for data
     const vectorString = `[${params.vector.join(",")}]`;
     const metadataString = JSON.stringify(params.metadata);
+
+    // For label embeddings, use workspaceId instead of userId
+    if (params.namespace === "label") {
+      const workspaceId = params.metadata?.workspaceId;
+      if (!workspaceId) {
+        throw new Error("workspaceId is required in metadata for label upsert");
+      }
+      const description = params.metadata?.description || null;
+
+      await this.prisma.$executeRaw`
+        INSERT INTO ${Prisma.raw(tableName)} (id, "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "description", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${description}, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET vector = EXCLUDED.vector,
+            ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+            "description" = EXCLUDED."description",
+            metadata = EXCLUDED.metadata,
+            "updatedAt" = NOW()
+      `;
+      return;
+    }
+
+    // For all other namespaces, userId is required
+    const userId = params.metadata?.userId;
+    if (!userId) {
+      throw new Error("userId is required in metadata for upsert");
+    }
 
     // For episode embeddings, also store ingestionQueueId, labelIds, and sessionId
     if (params.namespace === "episode") {
@@ -311,8 +339,62 @@ export class PgVectorProvider implements IVectorProvider {
     const tableName = this.getTableName(params.namespace);
     const limit = params.limit || 10;
     const threshold = params.threshold || 0;
-    const { userId, labelIds, excludeIds, sessionId, version } = params.filter;
+    const { userId, labelIds, excludeIds, sessionId, version, workspaceId } = params.filter;
 
+    // Use $queryRaw for vector similarity search
+    // pgvector uses <=> for cosine distance
+    // Convert distance to similarity: similarity = 1 - distance
+    //
+    // CRITICAL: We use a CTE (WITH clause) to let HNSW index work efficiently:
+    // 1. First CTE uses HNSW index for ORDER BY (fast neighbor search)
+    // 2. Outer query applies score threshold filter AFTER HNSW search
+    // This avoids the performance trap of filtering by score in WHERE clause,
+    // which would prevent HNSW index usage and force full table scan.
+    //
+    // IMPORTANT: Cast to exact dimension to match HNSW index: vector::vector(N)
+    const expandedLimit = threshold > 0 ? Math.max(limit * 2, 100) : limit;
+
+    // Build vector literal with explicit dimension using Prisma.raw for type modifier
+    const vectorLiteral = Prisma.raw(`'[${params.vector.join(",")}]'::vector(${this.dimensions})`);
+    const vectorCast = Prisma.raw(`vector::vector(${this.dimensions})`);
+
+    // For label namespace, filter by workspaceId instead of userId
+    if (params.namespace === "label") {
+      if (!workspaceId) {
+        throw new Error("workspaceId is required in filter for label search");
+      }
+
+      const results = await this.prisma.$queryRaw<
+        Array<{
+          id: string;
+          score: number;
+          metadata: any;
+        }>
+      >`
+        WITH candidates AS (
+          SELECT
+            id::text,
+            (1 - (${vectorCast} <=> ${vectorLiteral}))::float as score,
+            metadata
+          FROM ${Prisma.raw(tableName)}
+          WHERE "workspaceId" = ${workspaceId}
+          ORDER BY ${vectorCast} <=> ${vectorLiteral}
+          LIMIT ${expandedLimit}
+        )
+        SELECT * FROM candidates
+        WHERE score >= ${threshold}
+        ORDER BY score DESC
+        LIMIT ${limit}
+      `;
+
+      return results.map((row: any) => ({
+        id: row.id,
+        score: row.score,
+        metadata: row.metadata,
+      }));
+    }
+
+    // For all other namespaces, userId is required
     if (!userId) {
       throw new Error("userId is required in filter for search");
     }
@@ -339,23 +421,6 @@ export class PgVectorProvider implements IVectorProvider {
       version
         ? Prisma.sql`AND "version" = ${version}`
         : Prisma.empty;
-
-    // Use $queryRaw for vector similarity search
-    // pgvector uses <=> for cosine distance
-    // Convert distance to similarity: similarity = 1 - distance
-    //
-    // CRITICAL: We use a CTE (WITH clause) to let HNSW index work efficiently:
-    // 1. First CTE uses HNSW index for ORDER BY (fast neighbor search)
-    // 2. Outer query applies score threshold filter AFTER HNSW search
-    // This avoids the performance trap of filtering by score in WHERE clause,
-    // which would prevent HNSW index usage and force full table scan.
-    //
-    // IMPORTANT: Cast to exact dimension to match HNSW index: vector::vector(N)
-    const expandedLimit = threshold > 0 ? Math.max(limit * 2, 100) : limit;
-
-    // Build vector literal with explicit dimension using Prisma.raw for type modifier
-    const vectorLiteral = Prisma.raw(`'[${params.vector.join(",")}]'::vector(${this.dimensions})`);
-    const vectorCast = Prisma.raw(`vector::vector(${this.dimensions})`);
 
     // const startTime = Date.now();
 
