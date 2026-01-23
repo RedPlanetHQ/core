@@ -151,13 +151,13 @@ export class EpisodeDiffer {
   }
 
   /**
-   * Generate git-style diff with + and - markers
-   * Shows additions with + prefix and deletions with - prefix
-   * Uses diff-match-patch for semantic line-based comparison
+   * Generate git-style diff with [+] and [-] markers
+   * Shows additions with [+] prefix and deletions with [-] prefix
+   * Uses bracketed format to avoid markdown list interpretation
    *
    * @param oldContent - Previous version content
    * @param newContent - Current version content
-   * @returns Git-style diff format
+   * @returns Git-style diff format with bracketed markers
    */
   getGitStyleDiff(oldContent: string, newContent: string): string {
     // Use diff-match-patch for semantic diff
@@ -175,7 +175,7 @@ export class EpisodeDiffer {
         const lines = text.split('\n');
         for (const line of lines) {
           if (line.trim() || lines.length === 1) { // Include line if it has content or is the only line
-            diffLines.push(`+ ${line}`);
+            diffLines.push(`[+] ${line}`);
           }
         }
       } else if (op === -1) {
@@ -183,7 +183,7 @@ export class EpisodeDiffer {
         const lines = text.split('\n');
         for (const line of lines) {
           if (line.trim() || lines.length === 1) { // Include line if it has content or is the only line
-            diffLines.push(`- ${line}`);
+            diffLines.push(`[-] ${line}`);
           }
         }
       }

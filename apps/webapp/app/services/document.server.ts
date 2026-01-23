@@ -118,6 +118,51 @@ export const getPersonaForUser = async (workspaceId: string) => {
   return document?.id;
 };
 
+/**
+ * Save or update the persona document directly in the Document table.
+ * This does NOT ingest into the graph - the persona is derived FROM the graph,
+ * so we only store it for display/retrieval purposes.
+ */
+export const savePersonaDocument = async (
+  workspaceId: string,
+  userId: string,
+  content: string,
+  labelId?: string,
+) => {
+  const sessionId = `persona-${workspaceId}`;
+
+  const document = await prisma.document.upsert({
+    where: {
+      sessionId_workspaceId: {
+        sessionId,
+        workspaceId,
+      },
+    },
+    create: {
+      sessionId,
+      title: "Persona",
+      content,
+      labelIds: labelId ? [labelId] : [],
+      source: "persona",
+      type: "persona",
+      metadata: {
+        generatedAt: new Date().toISOString(),
+      },
+      editedBy: userId,
+      workspaceId,
+    },
+    update: {
+      content,
+      updatedAt: new Date(),
+      metadata: {
+        generatedAt: new Date().toISOString(),
+      },
+    },
+  });
+
+  return document;
+};
+
 export const updateDocumentContent = async (
   document: Document,
   content: string,
