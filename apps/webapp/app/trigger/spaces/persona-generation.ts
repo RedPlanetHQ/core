@@ -1,5 +1,4 @@
 import { queue, task } from "@trigger.dev/sdk/v3";
-import { python } from "@trigger.dev/python";
 import { logger } from "~/services/logger.service";
 import {
   processPersonaGeneration,
@@ -10,57 +9,6 @@ import { initializeProvider } from "../utils/provider";
 
 export type { PersonaGenerationPayload };
 
-/**
- * Python runner for Trigger.dev using python.runScript (clustering)
- */
-async function runClusteringWithTriggerPython(
-  userId: string,
-  startTime?: string,
-): Promise<string> {
-  const args = [userId, "--json"];
-
-  // Add time filter if provided
-  if (startTime) {
-    args.push("--start-time", startTime);
-  }
-
-  logger.info(
-    "[Trigger.dev] Running HDBSCAN clustering with python.runScript",
-    {
-      userId,
-      startTime,
-      args: args.join(" "),
-    },
-  );
-
-  const result = await python.runScript("./python/main.py", args);
-  return result.stdout;
-}
-
-/**
- * Python runner for Trigger.dev using python.runScript (analytics)
- */
-async function runAnalyticsWithTriggerPython(
-  userId: string,
-  startTime?: string,
-): Promise<string> {
-  const args = [userId, "--json"];
-
-  // Add time filter if provided
-  if (startTime) {
-    args.push("--start-time", startTime);
-  }
-
-  logger.info("[Trigger.dev] Running persona analytics with python.runScript", {
-    userId,
-    startTime,
-    args: args.join(" "),
-  });
-
-  const result = await python.runScript("./python/persona_analytics.py", args);
-  return result.stdout;
-}
-
 const personaQueue = queue({
   name: "persona-generation-queue",
   concurrencyLimit: 1,
@@ -69,8 +17,10 @@ const personaQueue = queue({
 /**
  * Trigger.dev task for persona generation
  *
- * This is a thin wrapper around the common logic in persona-generation.logic.ts
- * Passes Trigger.dev's Python runners for both clustering and analytics
+ * Uses aspect-based persona generation which queries statements grouped by aspect
+ * from the knowledge graph and uses provenance episodes for context.
+ *
+ * No longer requires Python scripts for BERT/HDBSCAN clustering.
  */
 export const personaGenerationTask = task({
   id: "persona-generation",
@@ -79,17 +29,12 @@ export const personaGenerationTask = task({
   maxDuration: 36000,
   run: async (payload: PersonaGenerationPayload) => {
     await initializeProvider();
-    logger.info(`[Trigger.dev] Starting persona generation task`, {
+    logger.info(`[Trigger.dev] Starting aspect-based persona generation task`, {
       userId: payload.userId,
       workspaceId: payload.workspaceId,
     });
 
-    // Use common business logic with Trigger.dev Python runners
-    return await processPersonaGeneration(
-      payload,
-      addToQueue,
-      runClusteringWithTriggerPython,
-      runAnalyticsWithTriggerPython,
-    );
+    // Use aspect-based persona generation (no Python runners needed)
+    return await processPersonaGeneration(payload, addToQueue);
   },
 });

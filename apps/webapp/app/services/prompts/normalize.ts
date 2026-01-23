@@ -323,15 +323,15 @@ SEMANTIC DIFF MODE ENABLED:
 You are comparing two versions of the same document. Your task is to extract ONLY the changes between versions.
 
 IMPORTANT: The CURRENT_VERSION_CHANGES content is in GIT-STYLE DIFF FORMAT:
-- Lines prefixed with "+ " represent ADDITIONS (new content in current version)
-- Lines prefixed with "- " represent DELETIONS (content removed from previous version)
+- Lines prefixed with "[+]" represent ADDITIONS (new content in current version)
+- Lines prefixed with "[-]" represent DELETIONS (content removed from previous version)
 - This diff shows ONLY what changed, not the full document
 - The PREVIOUS_VERSION shows full old content for reference
 
 WHAT TO EXTRACT:
-- NEW INFORMATION: Facts added in the current version (lines with "+ " prefix)
-- MODIFIED INFORMATION: Facts that changed (combination of "- " and "+ " lines)
-- DELETED INFORMATION: Important facts removed (lines with "- " prefix)
+- NEW INFORMATION: Facts added in the current version (lines with "[+]" prefix)
+- MODIFIED INFORMATION: Facts that changed (combination of "[-]" and "[+]" lines)
+- DELETED INFORMATION: Important facts removed (lines with "[-]" prefix) - describe as natural facts using verbs like "removed", "cancelled", "deleted"
 
 WHAT TO IGNORE:
 - Formatting changes (whitespace, line breaks, styling)
@@ -339,13 +339,15 @@ WHAT TO IGNORE:
 - Content identical in both versions
 
 OUTPUT FORMAT:
-Simply state what changed without version numbers. Examples:
+Describe all changes as natural factual statements. Examples:
 - "Added pagination support with 100 items per page limit"
 - "Timeout changed from 30 seconds to 60 seconds"
-- "Removed OAuth 1.0 authentication support"
+- "OAuth 1.0 authentication support was removed"
+- "The meeting scheduled for Friday was cancelled"
+- "Redis was removed from the project stack"
 - "PostgreSQL version specified as 15, added BullMQ message queue"
 
-Focus on semantic meaning. Lines starting with "+ " are additions, lines starting with "- " are deletions. Extract the semantic changes they represent.
+Focus on semantic meaning. Lines starting with "[+]" are additions, lines starting with "[-]" are deletions. For deletions, describe them as facts using natural language with verbs like "removed", "cancelled", "deleted", "no longer uses", etc.
 ` : `CRITICAL: CAPTURE ALL DISTINCT PIECES OF INFORMATION from the document. Every separate fact, specification, procedure, data point, or detail mentioned must be preserved in your enriched output. Missing information is unacceptable.`}
 
 <document_processing_approach>
@@ -457,7 +459,7 @@ ${context.previousVersionContent}
 ${context.episodeContent}
 </CURRENT_VERSION_CHANGES>
 
-Note: The CURRENT_VERSION_CHANGES is in git-style diff format with "+ " prefixes for additions and "- " prefixes for deletions. Compare with PREVIOUS_VERSION to identify what was added, modified, or deleted, and extract the semantic differences.
+Note: The CURRENT_VERSION_CHANGES is in git-style diff format with "[+]" prefixes for additions and "[-]" prefixes for deletions. Compare with PREVIOUS_VERSION to identify what was added, modified, or deleted. Describe deletions as natural facts (e.g., "X was removed", "Y was cancelled").
 ` : `<DOCUMENT_CONTENT>
 ${context.episodeContent}
 </DOCUMENT_CONTENT>

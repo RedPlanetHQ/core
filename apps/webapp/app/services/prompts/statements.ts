@@ -58,6 +58,14 @@ SUPERSEDING EVOLUTION (mark as contradictions - old statement becomes invalid):
    - "Caroline living in Boston" vs "Caroline moved to Seattle" (location change)
    - "Project using Python" vs "Project rewritten in TypeScript" (language migration)
 
+EXPLICIT DELETIONS (mark as contradictions - old statement becomes invalid):
+   - "Meeting scheduled for Friday" vs "Meeting for Friday was removed/deleted/cancelled" (explicit removal)
+   - "User prefers dark mode" vs "User removed preference for dark mode" (preference removed)
+   - "Project uses Redis" vs "Redis was removed from project" (component removed)
+   - "John's email is x@y.com" vs "John's email was deleted" (attribute removed)
+   - Any statement with predicate containing: removed, deleted, cancelled, no_longer_applies, was_removed
+   - These explicitly invalidate matching existing statements about the same subject/object
+
 SEMANTIC EQUIVALENCE (do NOT mark as contradictions or superseding evolution):
    These are statements that express the SAME UNDERLYING CONCEPT with different wording:
    - Same preference restated: "User allows lowercase only for Email Newsletter" vs "Lowercase exclusively for Email Newsletter" (same rule, different phrasing)
