@@ -10,6 +10,7 @@ import { prisma } from "~/trigger/utils/prisma";
 import { type Document } from "@prisma/client";
 
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
+import { ModelMessage } from "ai";
 
 export interface SessionCompactionPayload {
   userId: string;
@@ -115,19 +116,19 @@ export async function processSessionCompaction(
     // Generate or update compaction
     const compactionResult = existingCompact
       ? await updateCompaction(
-          existingCompact,
-          episodes,
-          userId,
-          workspaceId,
-          source,
-        )
+        existingCompact,
+        episodes,
+        userId,
+        workspaceId,
+        source,
+      )
       : await createCompaction(
-          sessionId,
-          episodes,
-          userId,
-          workspaceId,
-          source,
-        );
+        sessionId,
+        episodes,
+        userId,
+        workspaceId,
+        source,
+      );
 
     if (compactionResult) {
       logger.info(`Session compaction completed`, {
@@ -391,7 +392,7 @@ async function generateCompaction(
   const systemPrompt = createCompactionSystemPrompt();
   const userPrompt = createCompactionUserPrompt(episodes, existingSummary);
 
-  const messages = [
+  const messages: ModelMessage[] = [
     { role: "system", content: systemPrompt },
     { role: "user", content: userPrompt },
   ];
@@ -424,106 +425,75 @@ async function generateCompaction(
 }
 
 /**
- * System prompt for compaction (for agent recall/context retrieval)
+ * System prompt for compaction - user's digital brain
+ * Replaces multiple episodes in recall, also viewable as document by user
  */
 function createCompactionSystemPrompt(): string {
-  return `You are a session compaction specialist. Your task is to create a rich, informative summary in Markdown format that will help AI agents understand what happened in this conversation session when they need context for future interactions.
+  return `You are compressing a conversation into the user's digital brain. This compact:
+1. Replaces multiple episodes when recalled by AI agents
+2. Is viewable by the user as a document in their knowledge base
 
-## PURPOSE
+## COMPRESSION PRINCIPLES
 
-This summary will be retrieved by AI agents when the user references this session in future conversations. The agent needs enough context to:
-- Understand what was discussed and why
-- Know what decisions were made and their rationale
-- Grasp the outcome and current state
-- Have relevant technical details to provide informed responses
+- **Proportional length**: Simple sessions = 1-2 sentences. Complex sessions = longer. Never pad.
+- **No meta-commentary**: Never write "user requested", "assistant confirmed", "discussion about"
+- **No forced structure**: Don't use templates like "Discussion/Actions/Outcome". Let content dictate shape.
+- **Entity preservation**: Keep all names, projects, tools, files, URLs, dates, numbers exactly
+- **Outcome focus**: What happened matters more than how it happened
+- **One mention per fact**: No restating the same information differently
 
-## COMPACTION GOALS
+## MARKDOWN USAGE
 
-1. **Comprehensive Context**: Capture all important information that might be referenced later
-2. **Decision Documentation**: Clearly state what was decided, why, and what alternatives were considered
-3. **Technical Details**: Include specific implementations, tools, configurations, and technical choices
-4. **Outcome Clarity**: Make it clear what was accomplished and what the final state is
-5. **Evolution Tracking**: Show how thinking or decisions evolved during the session
+Use markdown naturally based on content needs:
+- **Bold** for key decisions, important terms
+- \`code\` for technical terms, commands, file paths
+- Lists only when there are actually multiple items
+- Headers only if the session has distinct phases worth separating
+- No formatting for simple single-action sessions
 
-## COMPACTION RULES
+## FEW-SHOT EXAMPLES
 
-1. **Be Information-Dense**: Pack useful details without fluff or repetition
-2. **Structure with Markdown**: Use headings, lists, and formatting for clarity
-3. **Highlight Key Points**: Emphasize decisions, implementations, results, and learnings
-4. **Include Specifics**: Names of libraries, specific configurations, metrics, numbers matter
-5. **Resolve Contradictions**: Always use the most recent/final version when information conflicts
-
-## OUTPUT REQUIREMENTS - MARKDOWN FORMAT
-
-Write a detailed, information-rich Markdown summary:
-
-**Structure:**
-- Use ## heading for main topic/context
-- Use ### subheadings for different phases (Discussion, Implementation, Outcome, etc.)
-- Use **bold** for key decisions and important terms
-- Use \`code\` for technical terms, library names, commands, file paths
-- Use bullet lists (-) for multiple items, steps, or specifications
-- Use numbered lists (1.) for sequential steps or chronological events
-- Include code blocks (\`\`\`) for commands, configurations, or code snippets if relevant
-
-**Content Organization:**
-- Start with context and initial problem/question under ## heading
-- Progress chronologically through phases with ### subheadings
-- **Final section MUST** be ### Outcome or ### Current State with results
-
-**Markdown Tips:**
-- Don't over-structure - use paragraphs for narrative flow
-- Lists are better for specifications, steps, or multiple related items
-- Code formatting makes technical details scannable
-- Headings help agents quickly find relevant sections
-
-CRITICAL OUTPUT FORMAT:
-You MUST wrap your Markdown summary in <output></output> tags. Output ONLY the Markdown text, nothing else.
-
-Example:
+**Simple session (1-2 episodes):**
 <output>
-## Development Environment Setup
-
-The user requested help setting up a new **MacBook Pro** for full-stack development with **React**, **Node.js**, and **Python**.
-
-### Requirements Gathering
-- Primary work: Full-stack web development
-- Stack: React + Node.js (frontend/backend)
-- Additional: Python for data analysis
-- Editor preference: VS Code
-
-### Implementation Plan
-The following toolchain was recommended:
-1. **Homebrew** - Package manager for macOS
-2. **nvm** - Node.js version management (v18 LTS recommended)
-3. **VS Code** - IDE with extensions:
-   - ESLint
-   - Prettier
-   - GitLens
-4. **pyenv** - Python version management (3.11+ recommended)
-5. **Git** - Version control with GitHub SSH keys
-
-### Installation Progress
-- ✅ Homebrew installed successfully
-- 🔄 nvm installation in progress
-- ⏳ VS Code, git, and pyenv pending
-
-### Outcome
-User successfully installed Homebrew and is proceeding with nvm setup. Next steps: complete nvm installation, configure VS Code with extensions, set up git with SSH keys, install Python via pyenv.
+Created calendar invite: **Manoj <> Ritwika**, Jan 25 1:00-1:30 PM for Core assistant onboarding. Sent to ritwika@unscript.ai.
 </output>
 
-DO NOT use JSON. DO NOT include field names. Just Markdown text wrapped in <output> tags.
+**Medium session (debugging):**
+<output>
+Fixed React re-render bug in \`ProductList.tsx\`. Issue: mutating array directly with \`push()\`. Solution: use spread operator \`setItems([...items, newItem])\` to create new reference.
+</output>
 
-## KEY PRINCIPLES
+**Technical decision session:**
+<output>
+Chose **JWT in httpOnly cookies** for API authentication. Rationale: stateless, horizontal scaling for microservices, XSS-safe. Implemented auth middleware in \`auth.server.ts\` with 24h token expiry and refresh token rotation.
+</output>
 
-- Write for an AI agent that needs to help the user in future conversations
-- Use Markdown formatting to make technical details scannable
-- Make outcomes and current state crystal clear in the final section
-- Show the reasoning behind decisions, not just the decisions themselves
-- Be comprehensive but well-organized - use headings and lists effectively
-- Don't compress too much - agents need the details
-- Markdown makes complex information more readable and retrievable
-`;
+**Multi-phase implementation session:**
+<output>
+## Session Compaction Feature
+
+Implemented session compaction for CORE's ingestion pipeline, similar to Claude Code's approach.
+
+**Architecture:**
+- \`CompactedSessionNode\` in Neo4j with summary, keyFacts, keyEntities, embeddings
+- Trigger after 5+ episodes, incremental updates after 1 new episode
+- LLM summarization via \`makeModelCall\` with "high" complexity
+
+**Key files:**
+- \`session-compaction.ts\` - Trigger.dev task
+- \`compactedSession.ts\` - Graph model
+- \`sessionCompaction.server.ts\` - Service layer
+
+Compacts are stored in Document table and searchable via vector similarity on summaryEmbedding.
+</output>
+
+## OUTPUT FORMAT
+
+Wrap in <output></output> tags. Markdown inside.
+
+<output>
+[Your compact here - length proportional to session complexity]
+</output>`;
 }
 
 /**
