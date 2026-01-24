@@ -15,10 +15,14 @@ export const getDocument = async (id: string, workspaceId: string) => {
     },
   });
 
+  if (!document) {
+    return null;
+  }
+
   const [latestIngestionLog, ingestionQueueCount] = await Promise.all([
     await prisma.ingestionQueue.findFirst({
       where: {
-        sessionId: document?.sessionId,
+        sessionId: document.sessionId,
       },
       orderBy: {
         createdAt: "desc",
@@ -26,7 +30,7 @@ export const getDocument = async (id: string, workspaceId: string) => {
     }),
     await prisma.ingestionQueue.count({
       where: {
-        sessionId: document?.sessionId,
+        sessionId: document.sessionId,
       },
     }),
   ]);
@@ -53,10 +57,14 @@ export const getDocumentForSession = async (
     },
   });
 
+  if (!document) {
+    return null;
+  }
+
   const [latestIngestionLog, ingestionQueueCount] = await Promise.all([
     await prisma.ingestionQueue.findFirst({
       where: {
-        sessionId: document?.sessionId,
+        sessionId: document.sessionId,
       },
       orderBy: {
         createdAt: "desc",
@@ -64,7 +72,7 @@ export const getDocumentForSession = async (
     }),
     await prisma.ingestionQueue.count({
       where: {
-        sessionId: document?.sessionId,
+        sessionId: document.sessionId,
       },
     }),
   ]);
