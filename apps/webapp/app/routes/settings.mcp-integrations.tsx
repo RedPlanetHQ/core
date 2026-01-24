@@ -142,8 +142,6 @@ function NewIntegrationForm({
     }
   }, [fetcher.data, onSuccess]);
 
-  console.log("same here");
-
   return (
     <Card className="p-4">
       <CardHeader className="p-0 pb-4">
