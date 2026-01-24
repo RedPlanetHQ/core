@@ -45,3 +45,21 @@ export const getIntegrationAccountForSlug = async (slug: string) => {
     },
   });
 };
+
+export const getIntegrationAccountBySlugAndUser = async (
+  slug: string,
+  userId: string,
+) => {
+  return await prisma.integrationAccount.findFirst({
+    where: {
+      integrationDefinition: {
+        slug,
+      },
+      integratedById: userId,
+      isActive: true,
+    },
+    include: {
+      integrationDefinition: true,
+    },
+  });
+};

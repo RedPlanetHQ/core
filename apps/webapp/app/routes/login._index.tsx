@@ -1,4 +1,5 @@
 import { type LoaderFunctionArgs } from "@remix-run/node";
+import { useState } from "react";
 
 import { redirect, typedjson, useTypedLoaderData } from "remix-typedjson";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
@@ -10,16 +11,9 @@ import { commitSession } from "~/services/sessionStorage.server";
 import { requestUrl } from "~/utils/requestUrl.server";
 import { env } from "~/env.server";
 
-import { RiGoogleLine } from "@remixicon/react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "~/components/ui/card";
 import { Button } from "~/components/ui";
-import { Mail } from "lucide-react";
+import { Mail, Shield, Lock } from "lucide-react";
 import Logo from "~/components/logo/logo";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -53,8 +47,95 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
+function SecurityScreen({ onContinue }: { onContinue: () => void }) {
+  return (
+    <LoginPageLayout>
+      <Card className="w-full max-w-[450px] rounded-md bg-transparent p-3">
+        <CardHeader className="flex flex-col items-center">
+          <div className="mb-4 flex justify-center">
+            <Logo size={60} />
+          </div>
+          <CardTitle className="text-3xl font-normal">Privacy</CardTitle>
+        </CardHeader>
+
+        <CardContent className="pt-2">
+          <Fieldset className="w-full">
+            <div className="flex flex-col gap-y-4">
+              <p className="text-muted-foreground mb-2 text-center text-sm leading-relaxed">
+                Core is your digital brain that remembers your context,
+                conversations, and what matters to you. Connect to get started.
+              </p>
+
+              {/* Security Section */}
+              <div className="flex gap-3 text-left">
+                <Shield className="mt-1 size-6 flex-shrink-0" />
+                <div>
+                  <h2 className="mb-1 text-base font-semibold">Security</h2>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    We take security as our top priority and are CASA Tier II
+                    certified by external auditors.
+                  </p>
+                </div>
+              </div>
+
+              {/* Privacy Section */}
+              <div className="mb-4 flex gap-3 text-left">
+                <Lock className="mt-1 size-6 flex-shrink-0" />
+                <div>
+                  <h2 className="mb-1 text-base font-semibold">Privacy</h2>
+                  <p className="text-muted-foreground text-sm leading-relaxed">
+                    Your digital brain is private. No human (except you) will
+                    see any of your data unless you opt-in to sharing analytics.
+                  </p>
+                </div>
+              </div>
+
+              {/* Continue Button */}
+              <Button
+                onClick={onContinue}
+                size="xl"
+                variant="secondary"
+                className="w-full rounded-lg text-base font-medium"
+              >
+                Continue
+              </Button>
+
+              {/* Footer Links */}
+              <div className="text-muted-foreground mt-2 flex flex-wrap items-center justify-center gap-2 text-xs">
+                <a href="https://getcore.me/privacy" target="_blank">
+                  Privacy
+                </a>
+                <span>|</span>
+                <a href="https://getcore.me/terms" target="_blank">
+                  Terms
+                </a>
+              </div>
+            </div>
+          </Fieldset>
+        </CardContent>
+      </Card>
+    </LoginPageLayout>
+  );
+}
+
 export default function LoginPage() {
   const data = useTypedLoaderData<typeof loader>();
+  const [showSecurity, setShowSecurity] = useState(false);
+
+  const handleGetStarted = () => {
+    setShowSecurity(true);
+  };
+
+  const handleSecurityContinue = () => {
+    const redirect = data.redirectTo
+      ? `?redirectTo=${encodeURIComponent(data.redirectTo)}`
+      : "";
+    window.location.href = `/auth/google${redirect}`;
+  };
+
+  if (showSecurity) {
+    return <SecurityScreen onContinue={handleSecurityContinue} />;
+  }
 
   return (
     <LoginPageLayout>
@@ -95,16 +176,10 @@ export default function LoginPage() {
                   size="xl"
                   variant="secondary"
                   className="rounded-lg text-base"
-                  data-action="continue with google"
-                  onClick={() => {
-                    const redirect = data.redirectTo
-                      ? `?redirectTo=${encodeURIComponent(data.redirectTo)}`
-                      : "";
-                    window.location.href = `/auth/google${redirect}`;
-                  }}
+                  data-action="get started"
+                  onClick={handleGetStarted}
                 >
-                  <RiGoogleLine className={"mr-1 size-5"} />
-                  <span>Continue with Google</span>
+                  <span>Get Started</span>
                 </Button>
               )}
 

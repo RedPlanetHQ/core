@@ -167,7 +167,8 @@ const ConversationItemComponent = ({
   }
 
   // Group consecutive tools together
-  const groupedParts: Array<{ type: 'tool-group' | 'single'; parts: any[] }> = [];
+  const groupedParts: Array<{ type: "tool-group" | "single"; parts: any[] }> =
+    [];
   let currentToolGroup: any[] = [];
 
   message.parts.forEach((part, index) => {
@@ -177,14 +178,14 @@ const ConversationItemComponent = ({
       // If we have accumulated tools, add them as a group
       if (currentToolGroup.length > 0) {
         groupedParts.push({
-          type: 'tool-group',
+          type: "tool-group",
           parts: [...currentToolGroup],
         });
         currentToolGroup = [];
       }
       // Add the non-tool part
       groupedParts.push({
-        type: 'single',
+        type: "single",
         parts: [part],
       });
     }
@@ -193,7 +194,7 @@ const ConversationItemComponent = ({
   // Don't forget the last tool group if exists
   if (currentToolGroup.length > 0) {
     groupedParts.push({
-      type: 'tool-group',
+      type: "tool-group",
       parts: [...currentToolGroup],
     });
   }
@@ -205,7 +206,9 @@ const ConversationItemComponent = ({
     // If rejected, auto-reject all subsequent tools that need approval
     if (!params.approved) {
       // Find all tools in the message
-      const allTools = message.parts.filter((part: any) => part.type.includes("tool-"));
+      const allTools = message.parts.filter((part: any) =>
+        part.type.includes("tool-"),
+      );
       const currentToolIndex = allTools.findIndex(
         (part: any) => part.approval?.id === params.id,
       );
@@ -245,7 +248,9 @@ const ConversationItemComponent = ({
   };
 
   // Find the first pending approval tool globally
-  const allTools = message.parts.filter((part: any) => part.type.includes("tool-"));
+  const allTools = message.parts.filter((part: any) =>
+    part.type.includes("tool-"),
+  );
   const firstPendingApprovalIndex = allTools.findIndex(
     (part: any) => part.state === "approval-requested",
   );
@@ -260,11 +265,11 @@ const ConversationItemComponent = ({
       <div
         className={cn(
           "flex w-full flex-col",
-          isUser && "bg-primary/20 max-w-[500px] rounded-md p-3",
+          isUser && "bg-primary/20 w-fit max-w-[500px] rounded-md p-3",
         )}
       >
         {groupedParts.map((group, groupIndex) => {
-          if (group.type === 'single') {
+          if (group.type === "single") {
             // Render non-tool part
             return (
               <div key={`single-${groupIndex}`}>
@@ -276,9 +281,8 @@ const ConversationItemComponent = ({
           // Handle tool group
           const toolGroup = group.parts;
           const shouldCollapse = toolGroup.length > 3;
-          const visibleTools = shouldCollapse && !showAllTools
-            ? toolGroup.slice(0, 2)
-            : toolGroup;
+          const visibleTools =
+            shouldCollapse && !showAllTools ? toolGroup.slice(0, 2) : toolGroup;
           const hiddenCount = shouldCollapse ? toolGroup.length - 2 : 0;
 
           return (

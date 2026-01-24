@@ -1,4 +1,12 @@
-import { ArrowLeft, Code, Webhook, CreditCard, User, Tag } from "lucide-react";
+import {
+  ArrowLeft,
+  Code,
+  Webhook,
+  CreditCard,
+  User,
+  Tag,
+  Plug,
+} from "lucide-react";
 
 import {
   Sidebar,
@@ -42,10 +50,11 @@ export default function Settings() {
   const data = {
     nav: [
       // { name: "Workspace", icon: Building },
-      { name: "Account", icon: User },
-      { name: "Billing", icon: CreditCard },
-      { name: "API", icon: Code },
-      { name: "Webhooks", icon: Webhook },
+      { name: "Account", icon: User, path: "account" },
+      { name: "Billing", icon: CreditCard, path: "billing" },
+      { name: "API", icon: Code, path: "api" },
+      { name: "Webhooks", icon: Webhook, path: "webhooks" },
+      { name: "MCP", icon: Plug, path: "mcp-integrations" },
     ],
   };
   const navigate = useNavigate();
@@ -85,12 +94,8 @@ export default function Settings() {
                     <SidebarMenuItem key={item.name}>
                       <Button
                         variant="secondary"
-                        isActive={location.pathname.includes(
-                          item.name.toLowerCase(),
-                        )}
-                        onClick={() =>
-                          navigate(`/settings/${item.name.toLowerCase()}`)
-                        }
+                        isActive={location.pathname.includes(item.path)}
+                        onClick={() => navigate(`/settings/${item.path}`)}
                         className={cn("flex w-fit min-w-0 justify-start gap-1")}
                       >
                         <item.icon size={18} />

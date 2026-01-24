@@ -46,14 +46,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     throw new Response("Integration not found", { status: 404 });
   }
 
-  const activeAccount = integrationAccounts.find(
+  const activeAccounts = integrationAccounts.filter(
     (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
   );
 
+  // Get ingestion rule for the first account (if exists)
   let ingestionRule = null;
-  if (activeAccount) {
+  if (activeAccounts.length > 0) {
     ingestionRule = await getIngestionRuleBySource(
-      activeAccount.id,
+      activeAccounts[0].id,
       workspace.id,
     );
   }
@@ -61,6 +62,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   return json({
     integration,
     integrationAccounts,
+    activeAccounts,
     userId,
     ingestionRule,
   });
@@ -94,20 +96,21 @@ export async function action({ request, params }: ActionFunctionArgs) {
     throw new Response("Integration not found", { status: 404 });
   }
 
-  const activeAccount = integrationAccounts.find(
+  const activeAccounts = integrationAccounts.filter(
     (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
   );
 
-  if (!activeAccount) {
+  if (activeAccounts.length === 0) {
     return json(
       { error: "No active integration account found" },
       { status: 400 },
     );
   }
 
+  // Apply ingestion rule to the first account (for now)
   await upsertIngestionRule({
     text: ingestionRuleText,
-    source: activeAccount.id,
+    source: activeAccounts[0].id,
     workspaceId: workspace.id,
     userId,
   });
@@ -130,22 +133,17 @@ function parseSpec(spec: any) {
 interface IntegrationDetailProps {
   integration: any;
   integrationAccounts: any;
+  activeAccounts: any[];
   ingestionRule: any;
 }
 
 export function IntegrationDetail({
   integration,
   integrationAccounts,
+  activeAccounts,
   ingestionRule,
 }: IntegrationDetailProps) {
-  const activeAccount = useMemo(
-    () =>
-      integrationAccounts.find(
-        (acc: IntegrationAccount) =>
-          acc.integrationDefinitionId === integration.id && acc.isActive,
-      ),
-    [integrationAccounts, integration.id],
-  );
+  const hasActiveAccounts = activeAccounts && activeAccounts.length > 0;
 
   const specData = useMemo(
     () => parseSpec(integration.spec),
@@ -179,7 +177,7 @@ export function IntegrationDetail({
           },
         ]}
       />
-      <div className="flex h-[calc(100vh)] flex-col items-center overflow-hidden p-4 px-5 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
         <div className="w-full md:max-w-5xl">
           <Section
             title={integration.name}
@@ -218,43 +216,45 @@ export function IntegrationDetail({
                 </div>
               </div>
 
-              {/* Connect Section */}
-              {!activeAccount && (hasApiKey || hasOAuth2) && (
+              {/* Connect Section - Always show to allow adding more accounts */}
+              {(hasApiKey || hasOAuth2) && (
                 <div className="mt-6 space-y-4">
                   <h3 className="text-lg font-medium">
-                    Connect to {integration.name}
+                    {hasActiveAccounts
+                      ? `Add Another ${integration.name} Account`
+                      : `Connect to ${integration.name}`}
                   </h3>
 
                   {/* API Key Authentication */}
                   <ApiKeyAuthSection
                     integration={integration}
                     specData={specData}
-                    activeAccount={activeAccount}
+                    activeAccount={null}
                   />
 
                   {/* OAuth Authentication */}
                   <OAuthAuthSection
                     integration={integration}
                     specData={specData}
-                    activeAccount={activeAccount}
+                    activeAccount={null}
                   />
                 </div>
               )}
 
-              {/* Connected Account Info */}
-              <ConnectedAccountSection activeAccount={activeAccount as any} />
+              {/* Connected Accounts Info */}
+              <ConnectedAccountSection activeAccounts={activeAccounts as any} />
 
               {/* MCP Authentication Section */}
               <MCPAuthSection
                 integration={integration}
-                activeAccount={activeAccount as any}
+                activeAccount={hasActiveAccounts ? activeAccounts[0] : null}
                 hasMCPAuth={hasMCPAuth}
               />
 
               {/* Ingestion Rule Section */}
               <IngestionRuleSection
                 ingestionRule={ingestionRule}
-                activeAccount={activeAccount}
+                activeAccount={hasActiveAccounts ? activeAccounts[0] : null}
               />
             </div>
           </Section>
@@ -265,13 +265,14 @@ export function IntegrationDetail({
 }
 
 export default function IntegrationDetailWrapper() {
-  const { integration, integrationAccounts, ingestionRule } =
+  const { integration, integrationAccounts, activeAccounts, ingestionRule } =
     useLoaderData<typeof loader>();
 
   return (
     <IntegrationDetail
       integration={integration}
       integrationAccounts={integrationAccounts}
+      activeAccounts={activeAccounts}
       ingestionRule={ingestionRule}
     />
   );

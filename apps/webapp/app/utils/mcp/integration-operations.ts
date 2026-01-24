@@ -28,14 +28,27 @@ export async function handleGetIntegrations(args: any) {
       slug: account.integrationDefinition.slug,
       name: account.integrationDefinition.name,
       accountId: account.id,
-      hasMcp: !!account.integrationDefinition.spec?.mcp,
     }));
+
+    // Format as readable text
+    const formattedText =
+      simplifiedIntegrations.length === 0
+        ? "No integrations connected."
+        : `Connected Integrations (${simplifiedIntegrations.length}):\n\n` +
+          simplifiedIntegrations
+            .map(
+              (integration, index) =>
+                `${index + 1}. ${integration.name}\n` +
+                `   Account ID: ${integration.accountId}\n` +
+                `   Slug: ${integration.slug}`,
+            )
+            .join("\n\n");
 
     return {
       content: [
         {
           type: "text",
-          text: JSON.stringify(simplifiedIntegrations),
+          text: formattedText,
         },
       ],
       isError: false,
@@ -61,25 +74,26 @@ export async function handleGetIntegrations(args: any) {
  */
 export async function handleGetIntegrationActions(args: any) {
   try {
-    const { integrationSlug, query, userId, workspaceId } = args;
+    const { accountId, query } = args;
 
-    if (!integrationSlug) {
-      throw new Error("integrationSlug is required");
+    if (!accountId) {
+      throw new Error("accountId is required");
     }
 
     if (!query) {
       throw new Error("query is required");
     }
 
-    // Get all available tools for the integration
-    const toolsJson = await IntegrationLoader.getIntegrationTools(
-      userId,
-      workspaceId,
-      integrationSlug,
-    );
+    // Get all available tools for the integration account
+    const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
 
     // Parse the tools JSON to get action details
     const tools = JSON.parse(toolsJson);
+
+    // Get account to get integration slug for the prompt
+    const account =
+      await IntegrationLoader.getIntegrationAccountById(accountId);
+    const integrationSlug = account.integrationDefinition.slug;
 
     // Build the LLM prompt
     const userPrompt = buildIntegrationActionSelectionPrompt(
@@ -163,80 +177,60 @@ export async function handleGetIntegrationActions(args: any) {
  * Handler for execute_integration_action
  */
 export async function handleExecuteIntegrationAction(args: any) {
-  let integrationAccountId: string | null = null;
-  let toolName = "";
-  const {
-    integrationSlug,
-    action,
-    parameters: actionArgs,
-    userId,
-    workspaceId,
-  } = args;
+  const { accountId, action, parameters: actionArgs } = args;
 
   try {
-    if (!integrationSlug) {
-      throw new Error("integrationSlug is required");
+    if (!accountId) {
+      throw new Error("accountId is required");
     }
 
     if (!action) {
       throw new Error("action is required");
     }
 
-    toolName = `${integrationSlug}_${action}`;
-
-    // Get the integration account to log the call
-    const accounts = await IntegrationLoader.getConnectedIntegrationAccounts(
-      userId,
-      workspaceId,
-      [integrationSlug],
-    );
-
-    if (accounts.length > 0) {
-      integrationAccountId = accounts[0].id;
-    }
+    // Get account to construct tool name
+    const account =
+      await IntegrationLoader.getIntegrationAccountById(accountId);
+    const integrationSlug = account.integrationDefinition.slug;
+    const toolName = `${integrationSlug}_${action}`;
 
     const result = await IntegrationLoader.callIntegrationTool(
-      userId,
-      workspaceId,
+      accountId,
       toolName,
       actionArgs || {},
     );
 
     // Log successful call
-    if (integrationAccountId) {
-      await prisma.integrationCallLog
-        .create({
-          data: {
-            integrationAccountId,
-            toolName: action,
-            error: null,
-          },
-        })
-        .catch((logError: any) => {
-          // Don't fail the request if logging fails
-          logger.error(`Failed to log integration call: ${logError}`);
-        });
-    }
+    await prisma.integrationCallLog
+      .create({
+        data: {
+          integrationAccountId: accountId,
+          toolName: action,
+          error: null,
+        },
+      })
+      .catch((logError: any) => {
+        // Don't fail the request if logging fails
+        logger.error(`Failed to log integration call: ${logError}`);
+      });
 
     return result;
   } catch (error) {
     logger.error(`MCP execute integration action error: ${error}`);
 
     // Log failed call
-    if (integrationAccountId) {
-      await prisma.integrationCallLog
-        .create({
-          data: {
-            integrationAccountId,
-            toolName: action,
-            error: error instanceof Error ? error.message : String(error),
-          },
-        })
-        .catch((logError: any) => {
-          // Don't fail the request if logging fails
-          logger.error(`Failed to log integration call error: ${logError}`);
-        });
-    }
+    await prisma.integrationCallLog
+      .create({
+        data: {
+          integrationAccountId: accountId,
+          toolName: action,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
+      .catch((logError: any) => {
+        // Don't fail the request if logging fails
+        logger.error(`Failed to log integration call error: ${logError}`);
+      });
 
     return {
       content: [

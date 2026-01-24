@@ -33,6 +33,7 @@ const loader = createHybridLoaderApiRoute(
       phoneNumber: user?.phoneNumber,
       email: user?.email,
       timezone: metadata?.timezone ?? null,
+      metadata: user?.metadata,
     });
   },
 );

@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { useLoaderData, useSubmit } from "@remix-run/react";
+import { useNavigate } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -10,71 +9,89 @@ import { requireUser, requireUserId } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import Logo from "~/components/logo/logo";
 import { useState } from "react";
-import { GraphVisualizationClient } from "~/components/graph/graph-client";
-import OnboardingQuestionComponent from "~/components/onboarding/onboarding-question";
-import {
-  ONBOARDING_QUESTIONS,
-  createInitialIdentityStatement,
-  createPreviewStatements,
-  createProgressiveEpisode,
-  type OnboardingAnswer,
-} from "~/components/onboarding/onboarding-utils";
-
-import { parse } from "@conform-to/zod";
-import { type RawTriplet } from "~/components/graph/type";
+import { OnboardingAgentLoader } from "~/components/onboarding/onboarding-agent-loader";
+import { OnboardingChat } from "~/components/onboarding/onboarding-chat";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
-import { episodesPath } from "~/utils/pathBuilder";
 
-const schema = z.object({
-  answers: z.string(),
-});
+import { Button } from "~/components/ui";
+import { getOnboardingConversation } from "~/services/conversation.server";
+import { useTypedLoaderData } from "remix-typedjson";
+import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
+import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
+import { getRedirectURL } from "~/services/oauth/oauth.server";
+import { getWorkspaceByUser } from "~/models/workspace.server";
+import { episodesPath } from "~/utils/pathBuilder";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
+  const conversation = await getOnboardingConversation(
+    user.id,
+    user.workspaceId as string,
+  );
+
+  // Check if Gmail is connected
+  const gmailAccount = await getIntegrationAccountBySlugAndUser(
+    "gmail",
+    user.id,
+  );
+
+  // Get Gmail integration definition
+  const gmailIntegration = await getIntegrationDefinitionWithSlug("gmail");
+
+  // Get OAuth redirect URL only if Gmail is not connected
+  let gmailOAuthUrl = null;
+  if (!gmailAccount && gmailIntegration) {
+    const workspace = await getWorkspaceByUser(user.id);
+    gmailOAuthUrl = await getRedirectURL(
+      {
+        integrationDefinitionId: gmailIntegration.id,
+        redirectURL: `${new URL(request.url).origin}/onboarding`,
+      },
+      user.id,
+      workspace?.id,
+    );
+  }
 
   if (user.onboardingComplete) {
     return redirect(episodesPath());
   }
 
-  return json({ user });
+  return {
+    user,
+    conversation,
+    hasGmail: !!gmailAccount,
+    gmailOAuthUrl,
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const formData = await request.formData();
-  const submission = parse(formData, { schema });
-
-  if (!submission.value || submission.intent !== "submit") {
-    return json(submission);
-  }
-
-  const { answers } = submission.value;
-  const parsedAnswers = JSON.parse(answers);
-  const user = await requireUser(request);
+  const summary = formData.get("summary") as string;
 
   try {
-    const userName = user.displayName || user.email;
-    const episodeText = createProgressiveEpisode(userName, parsedAnswers);
-
     // Update user's onboarding status
     await updateUser({
       id: userId,
       onboardingComplete: true,
       metadata: {
-        answers,
+        onboardingSummary: summary,
       },
     });
 
-    await addToQueue(
-      {
-        episodeBody: episodeText,
-        source: "Core",
-        referenceTime: new Date().toISOString(),
-        type: EpisodeType.CONVERSATION,
-      },
-      userId,
-    );
+    if (summary) {
+      // Ingest the summary as a document
+      await addToQueue(
+        {
+          episodeBody: summary,
+          source: "onboarding",
+          referenceTime: new Date().toISOString(),
+          type: EpisodeType.CONVERSATION,
+        },
+        userId,
+      );
+    }
 
     return redirect("/home/episodes");
   } catch (e: any) {
@@ -83,178 +100,164 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Onboarding() {
-  const { user } = useLoaderData<typeof loader>();
-  const submit = useSubmit();
-  const [loading, setLoading] = useState(false); // Add loading state
-  const [currentQuestion, setCurrentQuestion] = useState(0);
-  const [answers, setAnswers] = useState<OnboardingAnswer[]>([]);
-  // Initialize with default identity statement converted to triplets
-  const getInitialTriplets = () => {
-    const displayName = user.displayName || user.email || "User";
-    const identityStatement = createInitialIdentityStatement(displayName);
+  const { conversation, hasGmail, gmailOAuthUrl } = useTypedLoaderData<
+    typeof loader
+  >() as any;
 
-    // Convert identity statement to triplet format for visualization
-    return [
-      // Statement -> Subject relationship
-      {
-        sourceNode: identityStatement.statementNode,
-        edge: identityStatement.edges.hasSubject,
-        targetNode: identityStatement.subjectNode,
-      },
-      // Statement -> Predicate relationship
-      {
-        sourceNode: identityStatement.statementNode,
-        edge: identityStatement.edges.hasPredicate,
-        targetNode: identityStatement.predicateNode,
-      },
-      // Statement -> Object relationship
-      {
-        sourceNode: identityStatement.statementNode,
-        edge: identityStatement.edges.hasObject,
-        targetNode: identityStatement.objectNode,
-      },
-    ];
-  };
-
-  const [generatedTriplets, setGeneratedTriplets] =
-    useState<RawTriplet[]>(getInitialTriplets);
-
-  const handleAnswer = async (answer: OnboardingAnswer) => {
-    // Update answers array
-    const newAnswers = [...answers];
-    const existingIndex = newAnswers.findIndex(
-      (a) => a.questionId === answer.questionId,
-    );
-
-    if (existingIndex >= 0) {
-      newAnswers[existingIndex] = answer;
-    } else {
-      newAnswers.push(answer);
-    }
-
-    setAnswers(newAnswers);
-
-    // Generate reified statements with episode hierarchy for visualization (client-side preview)
-    try {
-      const userName = user.displayName || user.email;
-      // Create episode and statements using the reified knowledge graph structure
-      const { statements } = createPreviewStatements(userName, newAnswers);
-      // Convert episode-statement hierarchy to triplet format for visualization
-      const episodeTriplets = convertEpisodeToTriplets(statements);
-      // Update with identity + episode-based statements
-      setGeneratedTriplets([...getInitialTriplets(), ...episodeTriplets]);
-    } catch (error) {
-      console.error("Error generating preview statements:", error);
-    }
-  };
-
-  const handleNext = () => {
-    if (currentQuestion < ONBOARDING_QUESTIONS.length - 1) {
-      setCurrentQuestion(currentQuestion + 1);
-    } else {
-      setLoading(true);
-
-      // Submit all answers
-      submitAnswers();
-    }
-  };
-
-  const handlePrevious = () => {
-    if (currentQuestion > 0) {
-      setCurrentQuestion(currentQuestion - 1);
-    }
-  };
-
-  const submitAnswers = async () => {
-    try {
-      const formData = new FormData();
-      formData.append("answers", JSON.stringify(answers));
-
-      submit(formData, {
-        method: "POST",
-      });
-    } catch (e) {}
-  };
-
-  // Convert episode and statements structure to triplets for visualization
-  const convertEpisodeToTriplets = (statements: any[]): any[] => {
-    const triplets: any[] = [];
-
-    // Add the episode node itself
-    // Episode will be connected to statements via HAS_PROVENANCE edges
-
-    for (const statement of statements) {
-      // Statement -> Subject relationship
-      triplets.push({
-        sourceNode: statement.statementNode,
-        edge: statement.edges.hasSubject,
-        targetNode: statement.subjectNode,
-      });
-
-      // Statement -> Predicate relationship
-      triplets.push({
-        sourceNode: statement.statementNode,
-        edge: statement.edges.hasPredicate,
-        targetNode: statement.predicateNode,
-      });
-
-      // Statement -> Object relationship
-      triplets.push({
-        sourceNode: statement.statementNode,
-        edge: statement.edges.hasObject,
-        targetNode: statement.objectNode,
-      });
-    }
-
-    return triplets;
-  };
-
-  // These helper functions are no longer needed as they're moved to onboarding-utils
-  // Keeping them for potential backward compatibility
-
-  const currentQuestionData = ONBOARDING_QUESTIONS[currentQuestion];
-  const currentAnswer = answers.find(
-    (a) => a.questionId === currentQuestionData?.id,
+  const navigate = useNavigate();
+  const [step, setStep] = useState<"analysis" | "chat" | "complete">(
+    "analysis",
   );
+  const [summary, setSummary] = useState("");
+  const [sessionId] = useState(() => crypto.randomUUID());
+  const [isCompleting, setIsCompleting] = useState(false);
+
+  const handleAnalysisComplete = (generatedSummary: string) => {
+    setSummary(generatedSummary);
+    // Transition to chat after a brief delay
+    setTimeout(() => {
+      setStep("chat");
+    }, 200);
+  };
+
+  const handleChatComplete = async () => {
+    setIsCompleting(true);
+
+    // Submit to complete onboarding
+    const formData = new FormData();
+
+    formData.append("summary", summary);
+
+    try {
+      const response = await fetch("/onboarding", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        navigate("/home/episodes");
+      } else {
+        setIsCompleting(false);
+      }
+    } catch (e) {
+      console.error("Error completing onboarding:", e);
+      setIsCompleting(false);
+    }
+  };
+
+  const handleSkip = async () => {
+    setIsCompleting(true);
+
+    // Skip onboarding - mark as complete without summary
+    const formData = new FormData();
+    formData.append("summary", "");
+
+    try {
+      const response = await fetch("/onboarding", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        navigate("/home/episodes");
+      } else {
+        setIsCompleting(false);
+      }
+    } catch (e) {
+      console.error("Error skipping onboarding:", e);
+      setIsCompleting(false);
+    }
+  };
 
   return (
-    <div className="grid h-[100vh] w-[100vw] grid-cols-1 overflow-hidden xl:grid-cols-3">
-      <div className="bg-grayAlpha-100 relative col-span-2 hidden xl:block">
-        <GraphVisualizationClient
-          triplets={generatedTriplets || []}
-          clusters={[]}
-          selectedClusterId={undefined}
-          onClusterSelect={() => {}}
-          className="h-full w-full"
-          singleClusterView
-          forOnboarding
-        />
+    <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 md:px-10">
+        <div className="flex items-center gap-2 py-4">
+          <div className="flex size-8 items-center justify-center rounded-md">
+            <Logo size={60} />
+          </div>
+          <span className="font-medium">C.O.R.E.</span>
+        </div>
+
+        {step === "chat" && (
+          <div>
+            <Button
+              variant="secondary"
+              onClick={handleChatComplete}
+              disabled={isCompleting}
+              isLoading={isCompleting}
+            >
+              Go to dashboard
+            </Button>
+          </div>
+        )}
       </div>
-      <div className="col-span-1 flex h-full flex-col gap-4 overflow-y-auto p-6 md:p-10">
-        <div className="flex justify-center gap-2 md:justify-start">
-          <a href="#" className="flex items-center gap-2 font-medium">
-            <div className="flex size-8 items-center justify-center rounded-md">
-              <Logo size={60} />
+
+      {/* Main Content */}
+      <div className="flex flex-1 items-center justify-center overflow-y-auto">
+        {!hasGmail ? (
+          <div className="flex max-w-lg flex-col gap-6 p-6">
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold">i'm sol.</h2>
+              <div className="text-muted-foreground space-y-2 text-base">
+                <p>
+                  connect gmail and i'll learn about you - who you work with,
+                  what you're building, what matters.
+                </p>
+                <p>
+                  takes a minute. makes everything better. or skip and i'll
+                  learn as we go.
+                </p>
+              </div>
             </div>
-            C.O.R.E.
-          </a>
-        </div>
-        <div className="flex flex-1 items-center justify-center">
-          {currentQuestionData && (
-            <OnboardingQuestionComponent
-              question={currentQuestionData}
-              answer={currentAnswer?.value}
-              onAnswer={handleAnswer}
-              onNext={handleNext}
-              onPrevious={handlePrevious}
-              loading={loading}
-              isFirst={currentQuestion === 0}
-              isLast={currentQuestion === ONBOARDING_QUESTIONS.length - 1}
-              currentStep={currentQuestion + 1}
-              totalSteps={ONBOARDING_QUESTIONS.length}
-            />
-          )}
-        </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                size="lg"
+                variant="ghost"
+                onClick={handleSkip}
+                disabled={isCompleting}
+              >
+                Skip
+              </Button>
+              {gmailOAuthUrl && (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => {
+                    if (gmailOAuthUrl.redirectURL) {
+                      window.location.href = gmailOAuthUrl.redirectURL;
+                    }
+                  }}
+                >
+                  Connect Gmail
+                </Button>
+              )}
+            </div>
+          </div>
+        ) : (
+          <>
+            {step === "analysis" && (
+              <OnboardingAgentLoader
+                sessionId={sessionId}
+                onComplete={handleAnalysisComplete}
+                className="w-full"
+              />
+            )}
+
+            {step === "chat" && (
+              <div className="flex h-full w-full flex-col">
+                <div className="flex-1 overflow-hidden">
+                  <OnboardingChat
+                    conversation={conversation}
+                    onboardingSummary={summary}
+                    onComplete={handleChatComplete}
+                  />
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
     </div>
   );

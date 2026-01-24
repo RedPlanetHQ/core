@@ -63,47 +63,40 @@ export class IntegrationLoader {
   }
 
   /**
-   * Get integration accounts that have MCP configuration
+   * Get integration account by ID
    */
-  static async getMcpEnabledIntegrationAccounts(
-    userId: string,
-    workspaceId: string,
-    integrationSlugs?: string[],
-  ): Promise<IntegrationAccountWithDefinition[]> {
-    const accounts = await this.getConnectedIntegrationAccounts(
-      userId,
-      workspaceId,
-      integrationSlugs,
-    );
-
-    // Filter for accounts with MCP configuration
-    return accounts.filter((account) => {
-      const spec = account.integrationDefinition.spec;
-      return spec && spec.mcp && spec.mcp.type;
+  static async getIntegrationAccountById(
+    accountId: string,
+  ): Promise<IntegrationAccountWithDefinition> {
+    const account = await prisma.integrationAccount.findUnique({
+      where: { id: accountId },
+      include: {
+        integrationDefinition: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            spec: true,
+            config: true,
+          },
+        },
+      },
     });
+
+    if (!account || !account.isActive) {
+      throw new Error(`Integration account '${accountId}' not found or not active.`);
+    }
+
+    return account;
   }
 
   /**
-   * Get tools from a specific integration
+   * Get tools from a specific integration account
    */
-  static async getIntegrationTools(
-    userId: string,
-    workspaceId: string,
-    integrationSlug: string,
-  ) {
-    const accounts = await this.getMcpEnabledIntegrationAccounts(
-      userId,
-      workspaceId,
-      [integrationSlug],
-    );
+  static async getIntegrationTools(accountId: string) {
+    const account = await this.getIntegrationAccountById(accountId);
 
-    if (accounts.length === 0) {
-      throw new Error(
-        `Integration '${integrationSlug}' not found or not connected.`,
-      );
-    }
-
-    const account = accounts[0];
+    const integrationSlug = account.integrationDefinition.slug;
     const executablePath = `./integrations/${integrationSlug}/main`;
 
     // Call the get-tools command
@@ -127,37 +120,23 @@ export class IntegrationLoader {
   }
 
   /**
-   * Call a tool on a specific integration
+   * Call a tool on a specific integration account
    */
   static async callIntegrationTool(
-    userId: string,
-    workspaceId: string,
+    accountId: string,
     toolName: string,
     args: any,
   ): Promise<any> {
-    // Parse tool name to extract integration slug
+    const account = await this.getIntegrationAccountById(accountId);
+
+    // Parse tool name to extract original tool name (remove slug prefix)
     const parts = toolName.split("_");
     if (parts.length < 2) {
       throw new Error("Invalid tool name format");
     }
 
-    const integrationSlug = parts[0];
+    const integrationSlug = account.integrationDefinition.slug;
     const originalToolName = parts.slice(1).join("_");
-
-    // Get the integration account
-    const accounts = await this.getMcpEnabledIntegrationAccounts(
-      userId,
-      workspaceId,
-      [integrationSlug],
-    );
-
-    if (accounts.length === 0) {
-      throw new Error(
-        `Integration ${integrationSlug} not found or not connected`,
-      );
-    }
-
-    const account = accounts[0];
     const executablePath = `./integrations/${integrationSlug}/main`;
 
     // Call the call-tool command

@@ -110,7 +110,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <DocumentList labels={labels} />
+          {/* <DocumentList labels={labels} /> */}
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">

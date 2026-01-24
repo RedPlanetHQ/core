@@ -151,8 +151,6 @@ export async function getTools() {
     'eu'
   );
 
-  console.log(token);
-
   return [
     {
       name: 'zoho_send_email',

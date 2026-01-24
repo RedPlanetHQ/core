@@ -8,6 +8,7 @@ import {
   tool,
   jsonSchema,
   type Tool,
+  type ModelMessage,
 } from "ai";
 import { z } from "zod";
 
@@ -18,14 +19,19 @@ import {
 } from "~/services/conversation.server";
 
 import { getModel } from "~/lib/model.server";
-import { UserTypeEnum } from "@core/types";
-import { AGENT_SYSTEM_PROMPT, SOL_CAPABILITIES } from "~/lib/prompt.server";
+import { EpisodeType, UserTypeEnum } from "@core/types";
+import {
+  AGENT_SYSTEM_PROMPT,
+  SOL_CAPABILITIES,
+  SOL_ONBOARDING_CAPABILITIES,
+} from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 
 import { prisma } from "~/db.server";
+import { addToQueue } from "~/lib/ingest.server";
 
 const ChatRequestSchema = z.object({
   message: z
@@ -46,6 +52,8 @@ const ChatRequestSchema = z.object({
     .optional(),
   needsApproval: z.boolean().optional(),
   id: z.string(),
+  isOnboarding: z.boolean().optional(),
+  onboardingSummary: z.string().optional(),
 });
 
 const { loader, action } = createHybridActionApiRoute(
@@ -140,7 +148,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Get user's connected integrations
     const connectedIntegrations =
-      await IntegrationLoader.getMcpEnabledIntegrationAccounts(
+      await IntegrationLoader.getConnectedIntegrationAccounts(
         authentication.userId,
         workspace?.id ?? "",
       );
@@ -148,7 +156,7 @@ const { loader, action } = createHybridActionApiRoute(
     const integrationsList = connectedIntegrations
       .map(
         (int, index) =>
-          `${index + 1}. **${int.integrationDefinition.name}** (${int.integrationDefinition.slug})`,
+          `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`,
       )
       .join("\n");
 
@@ -195,17 +203,25 @@ const { loader, action } = createHybridActionApiRoute(
 
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
-    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n${SOL_CAPABILITIES}`;
+    // Use onboarding-specific capabilities if onboarding summary is available
+    const capabilities =
+      body.isOnboarding && body.onboardingSummary
+        ? SOL_ONBOARDING_CAPABILITIES
+        : SOL_CAPABILITIES;
+
+    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n${capabilities}`;
 
     // Add connected integrations context
     const integrationsContext = `
     <connected_integrations>
-    You have ${connectedIntegrations.length} connected integrations:
+    You have ${connectedIntegrations.length} connected integration accounts:
     ${integrationsList}
 
-    To use these integrations, follow the 3-step workflow:
-    1. get_integration_actions (to discover available actions)
-    2. execute_integration_action (to execute the action)
+    To use these integrations, follow the 2-step workflow:
+    1. get_integration_actions (provide accountId and query to discover available actions)
+    2. execute_integration_action (provide accountId and action name to execute)
+
+    IMPORTANT: Always use the Account ID when calling get_integration_actions and execute_integration_action.
     </connected_integrations>`;
 
     systemPrompt = `${systemPrompt}${integrationsContext}`;
@@ -227,6 +243,18 @@ const { loader, action } = createHybridActionApiRoute(
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
+    // If this is an onboarding conversation, add the summary and modify behavior
+    if (body.isOnboarding && body.onboardingSummary) {
+      const onboardingContext = `
+      <onboarding_context>
+      What I learned about this person:
+
+      ${body.onboardingSummary}
+      </onboarding_context>`;
+
+      systemPrompt = `${systemPrompt}${onboardingContext}`;
+    }
+
     // if (personaContent) {
     //   systemPrompt = `${systemPrompt}
 
@@ -237,9 +265,16 @@ const { loader, action } = createHybridActionApiRoute(
     //   </user_persona>`;
     // }
 
-    const modelMessages = await convertToModelMessages(validatedMessages, {
-      tools,
-    });
+    // If onboarding and no messages yet, generate first message from agent
+    let modelMessages: ModelMessage[];
+    if (body.isOnboarding && conversationHistory.length === 0) {
+      // Start with agent greeting - no user message yet
+      modelMessages = [];
+    } else {
+      modelMessages = await convertToModelMessages(validatedMessages, {
+        tools,
+      });
+    }
 
     const result = streamText({
       model: getModel() as LanguageModel,
@@ -270,6 +305,26 @@ const { loader, action } = createHybridActionApiRoute(
             body.id,
             UserTypeEnum.Agent,
           );
+
+          // Extract text from message parts and add to queue for ingestion
+          const textParts = lastMessage?.parts
+            ?.filter((part: any) => part.type === "text" && part.text)
+            .map((part: any) => part.text);
+
+          if (textParts && textParts.length > 0) {
+            const messageText = textParts.join("\n");
+
+            await addToQueue(
+              {
+                episodeBody: messageText,
+                source: "core",
+                referenceTime: new Date().toISOString(),
+                type: EpisodeType.CONVERSATION,
+                sessionId: body.id,
+              },
+              authentication.userId,
+            );
+          }
         }
       },
       // async consumeSseStream({ stream }) {
