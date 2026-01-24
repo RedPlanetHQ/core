@@ -143,7 +143,7 @@ export const getOnboardingConversation = async (
   let conversation = await prisma.conversation.findFirst({
     where: {
       userId,
-      source: "onboarding",
+      source: "onboarding-1",
     },
     include: {
       ConversationHistory: {

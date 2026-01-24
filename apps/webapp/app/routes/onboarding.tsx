@@ -1,5 +1,4 @@
-import { z } from "zod";
-import { useLoaderData, useNavigate } from "@remix-run/react";
+import { useNavigate } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -18,11 +17,11 @@ import { EpisodeType } from "@core/types";
 import { Button } from "~/components/ui";
 import { getOnboardingConversation } from "~/services/conversation.server";
 import { useTypedLoaderData } from "remix-typedjson";
-
-const schema = z.object({
-  conversationId: z.string(),
-  summary: z.string(),
-});
+import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
+import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
+import { getRedirectURL } from "~/services/oauth/oauth.server";
+import { getWorkspaceByUser } from "~/models/workspace.server";
+import { episodesPath } from "~/utils/pathBuilder";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -31,11 +30,39 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user.workspaceId as string,
   );
 
-  // if (user.onboardingComplete) {
-  //   return redirect(episodesPath());
-  // }
+  // Check if Gmail is connected
+  const gmailAccount = await getIntegrationAccountBySlugAndUser(
+    "gmail",
+    user.id,
+  );
 
-  return { user, conversation };
+  // Get Gmail integration definition
+  const gmailIntegration = await getIntegrationDefinitionWithSlug("gmail");
+
+  // Get OAuth redirect URL only if Gmail is not connected
+  let gmailOAuthUrl = null;
+  if (!gmailAccount && gmailIntegration) {
+    const workspace = await getWorkspaceByUser(user.id);
+    gmailOAuthUrl = await getRedirectURL(
+      {
+        integrationDefinitionId: gmailIntegration.id,
+        redirectURL: `${new URL(request.url).origin}/onboarding`,
+      },
+      user.id,
+      workspace?.id,
+    );
+  }
+
+  if (user.onboardingComplete) {
+    return redirect(episodesPath());
+  }
+
+  return {
+    user,
+    conversation,
+    hasGmail: !!gmailAccount,
+    gmailOAuthUrl,
+  };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -73,7 +100,9 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Onboarding() {
-  const { conversation } = useTypedLoaderData<typeof loader>();
+  const { conversation, hasGmail, gmailOAuthUrl } = useTypedLoaderData<
+    typeof loader
+  >() as any;
 
   const navigate = useNavigate();
   const [step, setStep] = useState<"analysis" | "chat" | "complete">(
@@ -116,6 +145,30 @@ export default function Onboarding() {
     }
   };
 
+  const handleSkip = async () => {
+    setIsCompleting(true);
+
+    // Skip onboarding - mark as complete without summary
+    const formData = new FormData();
+    formData.append("summary", "");
+
+    try {
+      const response = await fetch("/onboarding", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        navigate("/home/episodes");
+      } else {
+        setIsCompleting(false);
+      }
+    } catch (e) {
+      console.error("Error skipping onboarding:", e);
+      setIsCompleting(false);
+    }
+  };
+
   return (
     <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">
       {/* Header */}
@@ -135,7 +188,7 @@ export default function Onboarding() {
               disabled={isCompleting}
               isLoading={isCompleting}
             >
-              "Go to dashboard"
+              Go to dashboard
             </Button>
           </div>
         )}
@@ -143,24 +196,67 @@ export default function Onboarding() {
 
       {/* Main Content */}
       <div className="flex flex-1 items-center justify-center overflow-y-auto">
-        {step === "analysis" && (
-          <OnboardingAgentLoader
-            sessionId={sessionId}
-            onComplete={handleAnalysisComplete}
-            className="w-full"
-          />
-        )}
-
-        {step === "chat" && (
-          <div className="flex h-full w-full flex-col">
-            <div className="flex-1 overflow-hidden">
-              <OnboardingChat
-                conversation={conversation}
-                onboardingSummary={summary}
-                onComplete={handleChatComplete}
-              />
+        {!hasGmail ? (
+          <div className="flex max-w-lg flex-col gap-6 p-6">
+            <div className="space-y-3">
+              <h2 className="text-xl font-semibold">i'm sol.</h2>
+              <div className="text-muted-foreground space-y-2 text-base">
+                <p>
+                  connect gmail and i'll learn about you - who you work with,
+                  what you're building, what matters.
+                </p>
+                <p>
+                  takes a minute. makes everything better. or skip and i'll
+                  learn as we go.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end gap-3">
+              <Button
+                size="lg"
+                variant="ghost"
+                onClick={handleSkip}
+                disabled={isCompleting}
+              >
+                Skip
+              </Button>
+              {gmailOAuthUrl && (
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  onClick={() => {
+                    if (gmailOAuthUrl.redirectURL) {
+                      window.location.href = gmailOAuthUrl.redirectURL;
+                    }
+                  }}
+                >
+                  Connect Gmail
+                </Button>
+              )}
             </div>
           </div>
+        ) : (
+          <>
+            {step === "analysis" && (
+              <OnboardingAgentLoader
+                sessionId={sessionId}
+                onComplete={handleAnalysisComplete}
+                className="w-full"
+              />
+            )}
+
+            {step === "chat" && (
+              <div className="flex h-full w-full flex-col">
+                <div className="flex-1 overflow-hidden">
+                  <OnboardingChat
+                    conversation={conversation}
+                    onboardingSummary={summary}
+                    onComplete={handleChatComplete}
+                  />
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>

@@ -182,14 +182,14 @@ export const memoryTools = [
   {
     name: "get_integration_actions",
     description:
-      "Get ONLY the most relevant action names for a specific integration based on user's intent. USE THIS TOOL: Before execute_integration_action to discover which actions can fulfill the user's request. The LLM intelligently filters available actions to return ONLY the most relevant ones (typically 1-3 actions), preventing context bloat. For example: query='get latest issues' returns ['get_issues'], NOT ['get_issues', 'get_issue', 'get_comments']. HOW TO USE: Provide integrationSlug (from get_integrations) and a clear query describing what you want to accomplish. Returns: Array of 1-3 relevant action names (strings only, not full schemas). Use these action names with execute_integration_action.",
+      "Get ONLY the most relevant action names for a specific integration account based on user's intent. USE THIS TOOL: Before execute_integration_action to discover which actions can fulfill the user's request. The LLM intelligently filters available actions to return ONLY the most relevant ones (typically 1-3 actions), preventing context bloat. For example: query='get latest issues' returns ['get_issues'], NOT ['get_issues', 'get_issue', 'get_comments']. HOW TO USE: Provide accountId (from get_integrations) and a clear query describing what you want to accomplish. Returns: Array of 1-3 relevant action names (strings only, not full schemas). Use these action names with execute_integration_action.",
     inputSchema: {
       type: "object",
       properties: {
-        integrationSlug: {
+        accountId: {
           type: "string",
           description:
-            "Slug from get_integrations. Examples: 'github', 'linear', 'slack'",
+            "Account ID from get_integrations. This identifies the specific integration account to use.",
         },
         query: {
           type: "string",
@@ -197,7 +197,7 @@ export const memoryTools = [
             "Clear description of what you want to accomplish. Examples: 'get the latest issues', 'create a new pull request', 'send a message to #general'. Be specific - the LLM uses this to filter down to 1-3 most relevant actions.",
         },
       },
-      required: ["integrationSlug", "query"],
+      required: ["accountId", "query"],
     },
     annotations: {
       readOnlyHint: true,
@@ -208,14 +208,14 @@ export const memoryTools = [
   {
     name: "execute_integration_action",
     description:
-      "Execute an action on an integration (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set integrationSlug (like 'github'), 2) Set action name (like 'get_pr'), 3) Set parameters object with required parameters from the action's inputSchema. Returns: Result of the action execution.",
+      "Execute an action on an integration account (fetch GitHub PR, create Linear issue, send Slack message, etc.). USE THIS TOOL: After using get_integration_actions to see available actions. HOW TO USE: 1) Set accountId (from get_integrations) to specify which account to use, 2) Set action name (like 'get_pr'), 3) Set parameters object with required parameters from the action's inputSchema. Returns: Result of the action execution.",
     inputSchema: {
       type: "object",
       properties: {
-        integrationSlug: {
+        accountId: {
           type: "string",
           description:
-            "Slug from get_integrations. Examples: 'github', 'linear', 'slack'",
+            "Account ID from get_integrations. This identifies the specific integration account to use.",
         },
         action: {
           type: "string",
@@ -228,7 +228,7 @@ export const memoryTools = [
             "Parameters for the action. Check the action's inputSchema from get_integration_actions to see what's required.",
         },
       },
-      required: ["integrationSlug", "action"],
+      required: ["accountId", "action"],
     },
     annotations: {
       readOnlyHint: false,

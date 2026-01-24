@@ -1,7 +1,7 @@
 import { TeamIcon } from "../ui/team-icon";
 import { type Label } from "@prisma/client";
 import { Button } from "../ui";
-import { useNavigate, useNavigation } from "@remix-run/react";
+import { useNavigate } from "@remix-run/react";
 import { Plus } from "lucide-react";
 
 interface DocumentListProps {
