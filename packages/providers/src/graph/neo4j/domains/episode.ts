@@ -81,7 +81,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result[0].get("uuid");
     },
 
-    async getEpisode(uuid: string, withEmbedding: boolean, userId?: string, workspaceId?: string): Promise<EpisodicNode | null> {
+    async getEpisode(
+      uuid: string,
+      withEmbedding: boolean,
+      userId?: string,
+      workspaceId?: string
+    ): Promise<EpisodicNode | null> {
       const filters: string[] = ["uuid: $uuid"];
       if (userId) filters.push("userId: $userId");
       const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
@@ -102,7 +107,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return parseEpisodicNode(result[0].get("episode"));
     },
 
-    async getEpisodes(uuids: string[], userId: string, withEmbedding: boolean, workspaceId?: string): Promise<EpisodicNode[]> {
+    async getEpisodes(
+      uuids: string[],
+      userId: string,
+      withEmbedding: boolean,
+      workspaceId?: string
+    ): Promise<EpisodicNode[]> {
       const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
         UNWIND $uuids AS uuid
@@ -120,7 +130,13 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
-    async getEpisodesByUser(userId: string, orderBy?: string, limit?: number, descending?: boolean, workspaceId?: string): Promise<EpisodicNode[]> {
+    async getEpisodesByUser(
+      userId: string,
+      orderBy?: string,
+      limit?: number,
+      descending?: boolean,
+      workspaceId?: string
+    ): Promise<EpisodicNode[]> {
       const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
         MATCH (e:Episode {userId: $userId${wsFilter}})
@@ -136,15 +152,19 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
-    async getEpisodeCountByUser(userId: string, createdAfter?: Date, workspaceId?: string): Promise<number> {
+    async getEpisodeCountByUser(
+      userId: string,
+      createdAfter?: Date,
+      workspaceId?: string
+    ): Promise<number> {
       const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
-      const query = createdAfter ?
-        `
+      const query = createdAfter
+        ? `
         MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE e.createdAt > $createdAfter
         RETURN count(e) as episodeCount
-      `:
-        `
+      `
+        : `
         MATCH (e:Episode {userId: $userId${wsFilter}})
         RETURN count(e) as episodeCount
       `;
@@ -300,7 +320,11 @@ export function createEpisodeMethods(core: Neo4jCore) {
           entityUuids as deletedEntityUuids
       `;
 
-      const result = await core.runQuery(query, { uuid, userId, ...(workspaceId && { workspaceId }) });
+      const result = await core.runQuery(query, {
+        uuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       if (result.length === 0) {
         return {
@@ -342,7 +366,8 @@ export function createEpisodeMethods(core: Neo4jCore) {
         additionalFilters.push(`ANY(labelId IN $labelIds WHERE labelId IN episode.labelIds)`);
       }
 
-      const extraWhere = additionalFilters.length > 0 ? `AND ${additionalFilters.join(" AND ")}` : "";
+      const extraWhere =
+        additionalFilters.length > 0 ? `AND ${additionalFilters.join(" AND ")}` : "";
 
       const query = `
       MATCH (episode:Episode{userId: $userId${wsFilter}})
@@ -512,7 +537,11 @@ export function createEpisodeMethods(core: Neo4jCore) {
       };
     },
 
-    async getAllSessionChunks(sessionId: string, userId: string, workspaceId?: string): Promise<EpisodicNode[]> {
+    async getAllSessionChunks(
+      sessionId: string,
+      userId: string,
+      workspaceId?: string
+    ): Promise<EpisodicNode[]> {
       return this.getEpisodesBySession(sessionId, userId, workspaceId);
     },
 
@@ -901,7 +930,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       });
     },
 
-    async episodeEntityMatchCount(episodeIds: string[], entityIds: string[], userId: string, workspaceId?: string): Promise<Map<string, number>> {
+    async episodeEntityMatchCount(
+      episodeIds: string[],
+      entityIds: string[],
+      userId: string,
+      workspaceId?: string
+    ): Promise<Map<string, number>> {
       const wsFilterEp = workspaceId ? ", workspaceId: $workspaceId" : "";
       const wsFilterEn = workspaceId ? ", workspaceId: $workspaceId" : "";
       const cypher = `
@@ -957,6 +991,6 @@ export function createEpisodeMethods(core: Neo4jCore) {
         validAt: record.get("validAt"),
         invalidAt: record.get("invalidAt"),
       }));
-    }
+    },
   };
 }
