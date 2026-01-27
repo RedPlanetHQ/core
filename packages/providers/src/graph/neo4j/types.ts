@@ -65,6 +65,8 @@ export const EPISODIC_NODE_PROPERTIES = `{
 export const STATEMENT_NODE_PROPERTIES = `{
   uuid: s.uuid,
   fact: s.fact,
+  aspect: s.aspect,
+  attributes: s.attributes,
   createdAt: s.createdAt,
   userId: s.userId,
   validAt: s.validAt,
@@ -77,6 +79,8 @@ export const STATEMENT_NODE_PROPERTIES = `{
 export const ENTITY_NODE_PROPERTIES = `{
   uuid: ent.uuid,
   name: ent.name,
+  type: ent.type,
+  attributes: ent.attributes,
   createdAt: ent.createdAt,
   userId: ent.userId
 }`;

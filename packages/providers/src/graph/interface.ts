@@ -327,6 +327,8 @@ export interface IGraphProvider {
     userId: string
   ): Promise<Map<string, number>>;
 
+  getEpisodesInvalidFacts(episodeUuids: string[], userId: string): Promise<{ episodeUuid: string; statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]>;
+
   // ===== STATEMENTS =====
 
   /**
@@ -625,4 +627,63 @@ export interface IGraphProvider {
   }): Promise<EpisodicNode[]>;
 
   getClusteredGraphData(userId: string, limit?: number): Promise<RawTriplet[]>;
+
+  // ===== SEARCH V2 METHODS =====
+
+  /**
+   * Get episodes with statements filtered by labels, aspects, and temporal constraints
+   * Used by handleAspectQuery in search-v2
+   */
+  getEpisodesForAspect(params: {
+    userId: string;
+    labelIds: string[];
+    aspects: string[];
+    temporalStart?: Date;
+    temporalEnd?: Date;
+    maxEpisodes: number;
+  }): Promise<EpisodicNode[]>;
+
+  /**
+   * Get statements connected to specific entities (for entity lookup)
+   * Used by handleEntityLookup in search-v2
+   */
+  getEpisodesForEntities(params: {
+    entityUuids: string[];
+    userId: string;
+    maxEpisodes: number;
+  }): Promise<EpisodicNode[]>;
+
+  /**
+   * Get episodes within a time range with statement filtering
+   * Used by handleTemporal in search-v2
+   */
+  getEpisodesForTemporal(params: {
+    userId: string;
+    labelIds: string[];
+    aspects: string[];
+    startTime: Date;
+    endTime?: Date;
+    maxEpisodes: number;
+  }): Promise<EpisodicNode[]> ;
+
+  /**
+   * Find relationship statements between two entities
+   * Used by handleRelationship in search-v2
+   */
+  getStatementsConnectingEntities(params: {
+    userId: string;
+    entityHint1: string;
+    entityHint2: string;
+    maxStatements: number;
+  }): Promise<StatementNode[]>;
+
+  /**
+   * Get episodes filtered by labels (for exploratory queries)
+   * Used by handleExploratory in search-v2
+   */
+  getEpisodesForExploratory(params: {
+    userId: string;
+    labelIds: string[];
+    maxEpisodes: number;
+  }): Promise<EpisodicNode[]>;
 }
