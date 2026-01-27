@@ -289,8 +289,10 @@ export async function postAuthentication({
   clientId?: string;
   clientSecret?: string;
 }) {
+  let workspace;
+
   if (user.name && isNewUser && loginMethod === "GOOGLE") {
-    const workspace = await createWorkspace({
+    workspace = await createWorkspace({
       name: user.name,
       userId: user.id,
       integrations: [],
@@ -314,5 +316,23 @@ export async function postAuthentication({
         });
       }
     }
+  } else {
+    // Get existing workspace for returning users
+    const userWorkspace = await prisma.userWorkspace.findFirst({
+      where: {
+        userId: user.id,
+        isActive: true,
+      },
+      include: {
+        workspace: true,
+      },
+      orderBy: {
+        createdAt: 'asc', // Get the oldest (likely primary) workspace
+      },
+    });
+
+    workspace = userWorkspace?.workspace;
   }
+
+  return workspace ?? null;
 }

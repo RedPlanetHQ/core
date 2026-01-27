@@ -21,7 +21,7 @@ import { Input } from "~/components/ui/input";
 import { requireUser, requireUserId } from "~/services/session.server";
 import { redirectWithSuccessMessage } from "~/models/message.server";
 import { onboardingPath, rootPath } from "~/utils/pathBuilder";
-import { createWorkspace, getWorkspaceByUser } from "~/models/workspace.server";
+import { createWorkspace } from "~/models/workspace.server";
 import { typedjson } from "remix-typedjson";
 
 const schema = z.object({
@@ -62,7 +62,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
-  const workspace = await getWorkspaceByUser(user.id);
 
   if (user.confirmedBasicDetails) {
     return redirect(onboardingPath());
@@ -70,7 +69,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return typedjson({
     user,
-    workspace,
+    workspace: null,
   });
 };
 

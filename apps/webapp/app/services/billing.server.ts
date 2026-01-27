@@ -18,25 +18,31 @@ export type CreditOperation = "addEpisode" | "search" | "chatMessage";
 /**
  * Reset monthly credits for a workspace
  */
-export async function resetMonthlyCredits(workspaceId: string): Promise<void> {
+export async function resetMonthlyCredits(workspaceId: string, userId: string): Promise<void> {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
+     
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     throw new Error("Workspace, subscription, or user usage not found");
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const now = new Date();
   const nextMonth = new Date(now);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -114,30 +120,35 @@ export async function initializeSubscription(
 /**
  * Ensure workspace has billing records initialized
  */
-export async function ensureBillingInitialized(workspaceId: string) {
+export async function ensureBillingInitialized(workspaceId: string, userId: string) {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+
+  if (!user) {
     throw new Error("Workspace or user not found");
   }
 
   // Initialize subscription if missing
-  if (!workspace.Subscription) {
+  if (!workspace?.Subscription) {
     await initializeSubscription(workspaceId, "FREE");
   }
 
   // Initialize user usage if missing
-  if (!workspace.user.UserUsage) {
+  if (!user.UserUsage) {
     const subscription = await prisma.subscription.findUnique({
       where: { workspaceId },
     });
@@ -145,7 +156,7 @@ export async function ensureBillingInitialized(workspaceId: string) {
     if (subscription) {
       await prisma.userUsage.create({
         data: {
-          userId: workspace.user.id,
+          userId: user.id,
           availableCredits: subscription.monthlyCredits,
           usedCredits: 0,
           overageCredits: 0,
@@ -163,32 +174,38 @@ export async function ensureBillingInitialized(workspaceId: string) {
 /**
  * Get workspace usage summary
  */
-export async function getUsageSummary(workspaceId: string) {
+export async function getUsageSummary(workspaceId: string, userId: string) {
   if (!workspaceId) {
     return null;
   }
 
   // Ensure billing records exist for existing accounts
-  await ensureBillingInitialized(workspaceId);
+  await ensureBillingInitialized(workspaceId, userId);
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
+      
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     return null;
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const planConfig = getPlanConfig(subscription.planType);
 
   return {
@@ -231,6 +248,7 @@ export async function getUsageSummary(workspaceId: string) {
  */
 export async function hasCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<boolean> {
@@ -245,19 +263,24 @@ export async function hasCredits(
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+
+  if (!user?.UserUsage || !workspace?.Subscription) {
     return false;
   }
 
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   // const subscription = workspace.Subscription;
 
   // If has available credits, return true

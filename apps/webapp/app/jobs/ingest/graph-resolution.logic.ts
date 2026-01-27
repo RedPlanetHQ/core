@@ -301,7 +301,7 @@ export async function processGraphResolution(
       }
 
       // Deduct credits for episode creation
-      await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+      await deductCredits(payload.workspaceId, payload.userId, "addEpisode", statementsCount);
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
         error,

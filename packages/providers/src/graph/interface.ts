@@ -215,6 +215,7 @@ export interface IGraphProvider {
     episodeUuids: string[],
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 
@@ -222,6 +223,7 @@ export interface IGraphProvider {
     sessionId: string,
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 
