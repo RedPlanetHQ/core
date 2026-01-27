@@ -810,7 +810,24 @@ export function createEpisodeMethods(core: Neo4jCore) {
         matchCounts.set(episodeId, count);
       });
       return matchCounts;
-    }
+    },
 
+    async getEpisodesInvalidFacts(episodeUuids: string[], userId: string) {
+      const cypher = `
+        MATCH (e:Episode {userId: $userId})
+        WHERE e.uuid IN $episodeUuids
+        MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+        WHERE s.invalidAt IS NOT NULL
+        RETURN e.uuid as episodeUuid, s.uuid as statementUuid, s.fact as fact, s.validAt as validAt, s.invalidAt as invalidAt
+      `;
+      const records = await core.runQuery(cypher, { episodeUuids, userId });
+      return records.map((record) => ({
+        episodeUuid: record.get("episodeUuid"),
+        statementUuid: record.get("statementUuid"),
+        fact: record.get("fact"),
+        validAt: record.get("validAt"),
+        invalidAt: record.get("invalidAt"),
+      }));
+    }
   };
 }

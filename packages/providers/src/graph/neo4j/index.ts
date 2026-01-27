@@ -10,6 +10,7 @@ import { createStatementMethods } from "./domains/statement";
 import { createTripleMethods } from "./domains/triple";
 import { createCompactedSessionMethods } from "./domains/compactedSession";
 import { createSearchMethods } from "./domains/search";
+import { createSearchV2Methods } from "./domains/searchV2";
 import { createUserMethods } from "./domains/user";
 import type { IGraphProvider } from "../interface";
 import type { Neo4jConfig } from "./types";
@@ -52,6 +53,7 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
   getLatestVersionFirstEpisode!: IGraphProvider["getLatestVersionFirstEpisode"];
   updateEpisodeRecallCount!: IGraphProvider["updateEpisodeRecallCount"];
   episodeEntityMatchCount!: IGraphProvider["episodeEntityMatchCount"];
+  getEpisodesInvalidFacts!: IGraphProvider["getEpisodesInvalidFacts"];
 
   saveStatement!: IGraphProvider["saveStatement"];
   getStatement!: IGraphProvider["getStatement"];
@@ -92,6 +94,13 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
 
   getClusteredGraphData!: IGraphProvider["getClusteredGraphData"];
 
+  // Search V2 methods
+  getEpisodesForAspect!: IGraphProvider["getEpisodesForAspect"];
+  getEpisodesForTemporal!: IGraphProvider["getEpisodesForTemporal"];
+  getEpisodesForEntities!: IGraphProvider["getEpisodesForEntities"];
+  getStatementsConnectingEntities!: IGraphProvider["getStatementsConnectingEntities"];
+  getEpisodesForExploratory!: IGraphProvider["getEpisodesForExploratory"];
+
   constructor(config: Neo4jConfig) {
     super(config);
 
@@ -102,6 +111,7 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
     Object.assign(this, createTripleMethods(this));
     Object.assign(this, createCompactedSessionMethods(this));
     Object.assign(this, createSearchMethods(this));
+    Object.assign(this, createSearchV2Methods(this));
     Object.assign(this, createUserMethods(this));
   }
 }

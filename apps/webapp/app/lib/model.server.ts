@@ -30,6 +30,7 @@ export function getModelForTask(complexity: ModelComplexity = "high"): string {
   // If already using a cheap model, keep it
   const downgrades: Record<string, string> = {
     // OpenAI downgrades
+    "gpt-5.2-2025-12-11": "gpt-5-mini-2025-08-07",
     "gpt-5.1-2025-11-13": "gpt-5-mini-2025-08-07",
     "gpt-5-2025-08-07": "gpt-5-mini-2025-08-07",
     "gpt-4.1-2025-04-14": "gpt-4.1-mini-2025-04-14",

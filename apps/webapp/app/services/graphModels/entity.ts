@@ -58,7 +58,6 @@ export async function findSimilarEntities(params: {
     filter: { userId: params.userId, excludeIds: params.excludeUuids },
   });
 
-  console.log(vectorResults.map((r) => r.id).join(", "));
   if (vectorResults.length === 0) {
     return [];
   }

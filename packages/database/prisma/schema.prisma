@@ -876,4 +876,5 @@ enum WebhookDeliveryStatus {
 enum WorkspaceVersion {
   V1
   V2
+  V3
 }

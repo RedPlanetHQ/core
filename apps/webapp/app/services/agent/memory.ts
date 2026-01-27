@@ -5,8 +5,27 @@ import { handleMemorySearch } from "~/utils/mcp/memory-operations";
 import { logger } from "~/services/logger.service";
 import axios from "axios";
 import { SearchService } from "../search.server";
+import { searchV2 } from "../search-v2";
+import { prisma } from "~/db.server";
 
 const searchService = new SearchService();
+
+/**
+ * Check if search result has meaningful content
+ */
+function hasSearchResults(result: any): boolean {
+  if (!result) return false;
+
+  if (typeof result === "object" && "episodes" in result) {
+    return (
+      result.episodes.length > 0 ||
+      (result.entity !== null && result.entity !== undefined) ||
+      (result.statements && result.statements.length > 0)
+    );
+  }
+
+  return false;
+}
 
 /**
  * Memory Agent - Intelligent memory retrieval system
@@ -236,6 +255,9 @@ export function getRelativeTimestamp(
 
 /**
  * Simplified memory agent call that returns relevant episodes
+ * Uses parallel V1/V2 search strategy:
+ * - V2: Uses raw intent directly (V2 handles decomposition internally)
+ * - V1: Falls back to memoryAgent which decomposes into multiple queries
  * Useful for MCP integration
  */
 export async function searchMemoryWithAgent(
@@ -244,30 +266,121 @@ export async function searchMemoryWithAgent(
   source: string,
 ) {
   try {
-    const result = await memoryAgent({ intent, userId, source });
+    // Check workspace version to determine search strategy
+    const workspace = await prisma.workspace.findFirst({
+      where: { userId },
+      select: { version: true },
+    });
+    const isV3User = workspace?.version === "V3";
+
+    logger.info(
+      `[MemoryAgent] Starting search for intent: "${intent}" (workspace version: ${workspace?.version || "unknown"}, V1 fallback: ${!isV3User})`
+    );
+
+    // For V3 users: V2 only (no V1 fallback - all their data is V2-compatible)
+    // For V1/V2 users: parallel V1/V2 with V2-first, V1-fallback
+    const v1Promise = isV3User
+      ? null
+      : memoryAgent({ intent, userId, source });
+
+    const v2Promise = searchV2(intent, userId, {
+      structured: true,
+      limit: 20,
+      source,
+    });
+
+    // Wait for V2 first (it's faster)
+    const v2Result = await v2Promise.catch((err) => {
+      logger.warn(`[MemoryAgent] V2 search failed:`, err.message);
+      return null;
+    });
+
+    let episodes: any[] = [];
+    let invalidFacts: any[] = [];
+    let entity: any = null;
+    let facts: any[] = [];
+    let usedVersion: "v1" | "v2" = "v2";
+
+    if (hasSearchResults(v2Result)) {
+      logger.info(`[MemoryAgent] Using V2 results`);
+      // V2 result is structured, extract all fields
+      const v2Structured = v2Result as any;
+      episodes = v2Structured.episodes || [];
+      invalidFacts = v2Structured.invalidatedFacts || [];
+      entity = v2Structured.entity || null;
+      facts = v2Structured.facts || [];
+    } else if (!isV3User && v1Promise) {
+      // V2 empty and V1 fallback enabled - wait for V1 (already running in parallel)
+      logger.info(`[MemoryAgent] V2 empty, using V1 fallback`);
+      const v1Result = await v1Promise.catch((err) => {
+        logger.error(`[MemoryAgent] V1 also failed:`, err.message);
+        return { episodes: [], facts: [] };
+      });
+      episodes = v1Result.episodes || [];
+      invalidFacts = v1Result.facts || [];
+      usedVersion = "v1";
+    } else {
+      // V3 user with empty V2 results - no fallback
+      logger.info(`[MemoryAgent] V2 empty, no V1 fallback for V3 user`);
+    }
+
+    logger.info(
+      `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? 'yes' : 'no'} using ${usedVersion}`,
+    );
+
+    // Format entity information
+    let entityText = "";
+    if (entity) {
+      entityText = `## Entity Information\n**Name**: ${entity.name}\n**UUID**: ${entity.uuid}`;
+      if (entity.attributes && Object.keys(entity.attributes).length > 0) {
+        entityText += "\n**Attributes**:";
+        for (const [key, value] of Object.entries(entity.attributes)) {
+          entityText += `\n- ${key}: ${value}`;
+        }
+      }
+      entityText += "\n\n";
+    }
+
+    // Format facts
+    let factsText = "";
+    if (facts.length > 0) {
+      factsText = "## Facts\n" + facts
+        .map((fact: any) => {
+          const date = new Date(fact.validAt).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          });
+          const aspectTag = fact.aspect ? `[${fact.aspect}] ` : "";
+          return `- ${aspectTag}${fact.fact} _(${date})_`;
+        })
+        .join("\n") + "\n\n";
+    }
 
     // Format episodes as readable text
-    const episodeText = result.episodes
-      .map((episode, index) => {
+    const episodeText = episodes
+      .map((episode: any, index: number) => {
         return `### Episode ${index + 1}\n**UUID**: ${episode.uuid}\n**Created**: ${new Date(episode.createdAt).toLocaleString()}\n${episode.relevanceScore ? `**Relevance**: ${episode.relevanceScore}\n` : ""}\n${episode.content}`;
       })
       .join("\n\n");
 
-    const factsText = result.facts
-      .map((fact, index) => {
+    const invalidFactsText = invalidFacts
+      .map((fact: any, index: number) => {
         return `### Invalid facts ${index + 1}\n**UUID**: ${fact.factUuid}\n**InvalidAt**: ${new Date(fact.invalidAt).toLocaleString()}\n${fact.fact}`;
       })
       .join("\n\n");
 
-    const finalText = `${episodeText}\n\n${factsText}`;
+    const finalText = `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
+
+    const hasContent = episodeText || entityText || invalidFactsText || factsText;
 
     return {
       content: [
         {
           type: "text",
-          text: episodeText
+          text: hasContent
             ? finalText
-            : "No relevant episodes found for this intent in memory.",
+            : "No relevant memories found for this intent.",
         },
       ],
       isError: false,
