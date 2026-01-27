@@ -28,7 +28,7 @@ import {
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 import { prisma } from "~/db.server";
 import { addToQueue } from "~/lib/ingest.server";
@@ -68,7 +68,6 @@ const { loader, action } = createHybridActionApiRoute(
   async ({ body, authentication }) => {
     const isAssistantApproval = body.needsApproval;
 
-    const workspace = await getWorkspaceByUser(authentication.userId);
 
     const conversation = await getConversationAndHistory(
       body.id,
@@ -130,7 +129,7 @@ const { loader, action } = createHybridActionApiRoute(
             sessionId: body.id,
             ...params,
             userId: authentication.userId,
-            workspaceId: workspace?.id,
+            workspaceId: authentication.workspaceId,
           },
           authentication.userId,
           "core",
@@ -150,7 +149,7 @@ const { loader, action } = createHybridActionApiRoute(
     const connectedIntegrations =
       await IntegrationLoader.getConnectedIntegrationAccounts(
         authentication.userId,
-        workspace?.id ?? "",
+        authentication.workspaceId ?? "",
       );
 
     const integrationsList = connectedIntegrations
@@ -185,8 +184,8 @@ const { loader, action } = createHybridActionApiRoute(
     // Fetch user's persona to condition AI behavior
     const latestPersona = await prisma.ingestionQueue.findFirst({
       where: {
-        sessionId: `persona-${workspace?.id}`,
-        workspaceId: workspace?.id,
+        sessionId: `persona-${authentication.workspaceId}`,
+        workspaceId: authentication.workspaceId,
         status: "COMPLETED",
       },
       orderBy: {
@@ -323,6 +322,7 @@ const { loader, action } = createHybridActionApiRoute(
                 sessionId: body.id,
               },
               authentication.userId,
+              authentication.workspaceId || ""
             );
           }
         }

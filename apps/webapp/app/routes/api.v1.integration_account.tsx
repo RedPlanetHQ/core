@@ -5,7 +5,7 @@ import { IntegrationEventType } from "@core/types";
 import { runIntegrationTrigger } from "~/services/integration.server";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 import { scheduler } from "~/services/oauth/scheduler";
 
@@ -28,7 +28,7 @@ const { action, loader } = createHybridActionApiRoute(
   async ({ body, authentication }) => {
     const { integrationDefinitionId, apiKey } = body;
     const { userId } = authentication;
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
 
     try {
       // Get the integration definition
@@ -53,7 +53,7 @@ const { action, loader } = createHybridActionApiRoute(
           },
         },
         userId,
-        workspace?.id,
+        authentication.workspaceId,
       );
 
       if (!setupResult.account || !setupResult.account.id) {

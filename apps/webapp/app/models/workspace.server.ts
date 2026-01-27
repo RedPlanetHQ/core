@@ -72,10 +72,13 @@ export async function createWorkspace(
   return workspace;
 }
 
-export async function getWorkspaceByUser(userId: string) {
+
+
+
+export async function getWorkspaceById(id: string) {
   return await prisma.workspace.findFirst({
     where: {
-      userId,
+      id,
     },
   });
 }

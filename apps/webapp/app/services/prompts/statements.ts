@@ -1,5 +1,5 @@
 import { type Triple } from "@core/types";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 import { z } from "zod";
 
 /**

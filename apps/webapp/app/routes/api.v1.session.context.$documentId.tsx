@@ -2,7 +2,7 @@ import { json } from "@remix-run/node";
 import { z } from "zod";
 import { getPendingIngestionsForSession } from "~/services/ingestionLogs.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { getDocumentForSession } from "~/services/document.server";
 
 // Schema for space ID parameter
@@ -27,11 +27,9 @@ const loader = createHybridLoaderApiRoute(
     allowJWT: true,
   },
   async ({ params, authentication }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
-
     const document = await getDocumentForSession(
       params.documentId,
-      workspace?.id as string,
+      authentication.workspaceId as string,
     );
 
     const pendingIngestions = await getPendingIngestionsForSession(

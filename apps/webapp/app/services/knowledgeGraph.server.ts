@@ -27,14 +27,14 @@ import {
   makeStructuredModelCall,
 } from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
-import { EpisodeEmbedding, type PrismaClient } from "@prisma/client";
+import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
   batchStoreEntityEmbeddings,
   batchStoreStatementEmbeddings,
   getRecentEpisodes,
 } from "./vectorStorage.server";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;
@@ -179,6 +179,7 @@ export class KnowledgeGraphService {
         params.episodeBody,
         params.source,
         params.userId,
+        params.workspaceId,
         prisma,
         tokenMetrics,
         new Date(params.referenceTime),
@@ -491,6 +492,7 @@ export class KnowledgeGraphService {
     episodeBody: string,
     source: string,
     userId: string,
+    workspaceId: string,
     prisma: PrismaClient,
     tokenMetrics: {
       high: { input: number; output: number; total: number; cached: number };
@@ -514,6 +516,7 @@ export class KnowledgeGraphService {
     const ingestionRules = await this.getIngestionRulesForSource(
       source,
       userId,
+      workspaceId,
       prisma,
     );
 
@@ -660,18 +663,14 @@ export class KnowledgeGraphService {
   private async getIngestionRulesForSource(
     source: string,
     userId: string,
+    workspaceId: string,
     prisma: PrismaClient,
   ): Promise<string | null> {
     try {
       // Import prisma here to avoid circular dependencies
 
-      // Get the user's workspace
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { Workspace: true },
-      });
-
-      if (!user?.Workspace) {
+   
+      if (!workspaceId) {
         return null;
       }
 
@@ -680,7 +679,7 @@ export class KnowledgeGraphService {
           integrationDefinition: {
             slug: source,
           },
-          workspaceId: user.Workspace.id,
+          workspaceId,
           isActive: true,
           deleted: null,
         },
@@ -694,7 +693,7 @@ export class KnowledgeGraphService {
       const rules = await prisma.ingestionRule.findMany({
         where: {
           source: integrationAccount.id,
-          workspaceId: user.Workspace.id,
+          workspaceId,
           isActive: true,
           deleted: null,
         },

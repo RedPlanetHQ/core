@@ -64,6 +64,7 @@ export interface IVectorProvider {
     episodeUuids: string[],
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 
@@ -71,6 +72,7 @@ export interface IVectorProvider {
     sessionId: string,
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 

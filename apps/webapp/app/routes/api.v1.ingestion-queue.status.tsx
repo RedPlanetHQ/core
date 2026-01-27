@@ -1,26 +1,21 @@
 import { type LoaderFunctionArgs, json } from "@remix-run/node";
 import { prisma } from "~/db.server";
-import { requireUserId } from "~/services/session.server";
+import { requireUser, requireUserId } from "~/services/session.server";
 
 // Stale thresholds
 const PROCESSING_STALE_THRESHOLD_MS = 60 * 60 * 1000; // 1 hour for PROCESSING items
 const PENDING_STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours for PENDING items
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
+  const { workspaceId} = await requireUser(request);
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { Workspace: true },
-  });
-
-  if (!user?.Workspace) {
+  if (!workspaceId) {
     throw new Response("Workspace not found", { status: 404 });
   }
 
   const activeIngestionQueue = await prisma.ingestionQueue.findMany({
     where: {
-      workspaceId: user.Workspace.id,
+      workspaceId,
       status: {
         in: ["PENDING", "PROCESSING"],
       },
@@ -89,7 +84,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Fetch updated queue after marking stale items
   const updatedQueue = await prisma.ingestionQueue.findMany({
     where: {
-      workspaceId: user.Workspace.id,
+      workspaceId,
       status: {
         in: ["PENDING", "PROCESSING"],
       },

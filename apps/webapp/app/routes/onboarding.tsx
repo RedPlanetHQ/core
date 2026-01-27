@@ -5,7 +5,7 @@ import {
   type LoaderFunctionArgs,
   redirect,
 } from "@remix-run/node";
-import { requireUser, requireUserId } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import Logo from "~/components/logo/logo";
 import { useState } from "react";
@@ -20,7 +20,7 @@ import { useTypedLoaderData } from "remix-typedjson";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
 import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
 import { getRedirectURL } from "~/services/oauth/oauth.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { episodesPath } from "~/utils/pathBuilder";
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -42,14 +42,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get OAuth redirect URL only if Gmail is not connected
   let gmailOAuthUrl = null;
   if (!gmailAccount && gmailIntegration) {
-    const workspace = await getWorkspaceByUser(user.id);
     gmailOAuthUrl = await getRedirectURL(
       {
         integrationDefinitionId: gmailIntegration.id,
         redirectURL: `${new URL(request.url).origin}/onboarding`,
       },
       user.id,
-      workspace?.id,
+      user.workspaceId,
     );
   }
 
@@ -66,7 +65,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
+  const {id: userId, workspaceId} = await requireUser(request);
   const formData = await request.formData();
   const summary = formData.get("summary") as string;
 
@@ -90,6 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
           type: EpisodeType.CONVERSATION,
         },
         userId,
+        workspaceId as string
       );
     }
 

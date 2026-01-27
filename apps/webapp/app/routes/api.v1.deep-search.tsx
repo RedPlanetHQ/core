@@ -92,6 +92,7 @@ const { action, loader } = createActionApiRoute(
     const pat = await getOrCreatePersonalAccessToken({
       name: randomKeyName,
       userId: authentication.userId as string,
+      workspaceId: authentication.workspaceId as string
     });
 
     if (!pat?.token) {
@@ -136,7 +137,7 @@ const { action, loader } = createActionApiRoute(
               role: "system",
               content: getReActPrompt(body.metadata, body.intentOverride),
             },
-            ...convertToModelMessages(validatedMessages),
+            ...await convertToModelMessages(validatedMessages),
           ],
           tools,
           stopWhen: [stepCountIs(10)],
@@ -153,7 +154,7 @@ const { action, loader } = createActionApiRoute(
               role: "system",
               content: getReActPrompt(body.metadata, body.intentOverride),
             },
-            ...convertToModelMessages(validatedMessages),
+            ...await convertToModelMessages(validatedMessages),
           ],
           tools,
           stopWhen: [stepCountIs(10)],

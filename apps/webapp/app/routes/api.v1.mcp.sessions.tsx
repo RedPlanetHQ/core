@@ -2,7 +2,7 @@ import { z } from "zod";
 import { json } from "@remix-run/node";
 import { prisma } from "~/db.server";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 const SearchParamsSchema = z.object({
   page: z.string().optional().default("1"),
@@ -21,9 +21,9 @@ const loader = createHybridLoaderApiRoute(
     const page = parseInt(searchParams.page);
     const limit = parseInt(searchParams.limit);
     const skip = (page - 1) * limit;
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
     const where = {
-      workspaceId: workspace?.id,
+      workspaceId: authentication.userId,
       ...(searchParams.source && { source: searchParams.source }),
     };
 
@@ -38,13 +38,13 @@ const loader = createHybridLoaderApiRoute(
         prisma.mCPSession.count({ where }),
         prisma.mCPSession.groupBy({
           by: ["source"],
-          where: { workspaceId: workspace?.id },
+          where: { workspaceId: authentication.userId },
           _count: { source: true },
           orderBy: { _count: { source: "desc" } },
         }),
         // Get distinct active sources (where deleted is null)
         prisma.mCPSession.findMany({
-          where: { deleted: null, workspaceId: workspace?.id },
+          where: { deleted: null, workspaceId: authentication.userId },
           select: { source: true },
           distinct: ["source"],
         }),
