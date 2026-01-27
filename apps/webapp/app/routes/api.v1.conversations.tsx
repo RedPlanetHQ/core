@@ -1,5 +1,5 @@
 import { json } from "@remix-run/node";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import {
   getConversationsList,
   GetConversationsListSchema,
@@ -25,14 +25,14 @@ export const loader = async ({ request }: { request: Request }) => {
   }
   const searchParams = parseResult.data;
 
-  const workspace = await getWorkspaceByUser(user.id);
 
-  if (!workspace) {
+
+  if (!user.workspaceId) {
     return json({ error: "No workspace found" }, { status: 404 });
   }
 
   const result = await getConversationsList(
-    workspace.id,
+    user.workspaceId,
     user.id,
     searchParams || {},
   );

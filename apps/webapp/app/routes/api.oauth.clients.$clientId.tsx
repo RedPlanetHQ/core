@@ -18,20 +18,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
   }
 
   try {
-    // Get user's workspace
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { Workspace: true },
-    });
 
-    if (!userRecord?.Workspace) {
+    if (!user.workspaceId) {
       return json({ error: "No workspace found" }, { status: 404 });
     }
 
     const client = await prisma.oAuthClient.findFirst({
       where: {
         id: clientId,
-        workspaceId: userRecord.Workspace.id,
+        workspaceId: user.workspaceId,
       },
       select: {
         id: true,
@@ -78,13 +73,9 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
   }
 
   try {
-    // Get user's workspace
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { Workspace: true },
-    });
+  
 
-    if (!userRecord?.Workspace) {
+    if (!user?.workspaceId) {
       return json({ error: "No workspace found" }, { status: 404 });
     }
 
@@ -92,7 +83,7 @@ export const action = async ({ request, params }: ActionFunctionArgs) => {
     const existingClient = await prisma.oAuthClient.findFirst({
       where: {
         id: clientId,
-        workspaceId: userRecord.Workspace.id,
+        workspaceId: user.workspaceId,
       },
     });
 

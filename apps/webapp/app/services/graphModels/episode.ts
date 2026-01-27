@@ -193,8 +193,9 @@ export async function addLabelToEpisodes(
   labelId: string,
   episodeUuids: string[],
   userId: string,
+  workspaceId: string
 ): Promise<number> {
-  await graphProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId);
+  await graphProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, workspaceId);
   return episodeUuids.length; // Optimistic return
 }
 
@@ -202,12 +203,14 @@ export async function updateEpisodeLabels(
   sessionId: string,
   labelIds: string[],
   userId: string,
+  workspaceId: string,
 ): Promise<number> {
-  vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId);
+  vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId, workspaceId);
   return await graphProvider().addLabelsToEpisodesBySessionId(
     sessionId,
     labelIds,
     userId,
+    workspaceId,
     true,
   );
 }

@@ -8,10 +8,9 @@ import { IntegrationEventType } from "@core/types";
 import { runIntegrationTrigger } from "~/services/integration.server";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
-import { getWorkspaceByUser } from "~/models/workspace.server";
-import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
 import { scheduler } from "~/services/oauth/scheduler";
+import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
 // Schema for creating an integration account with API key
 const IntegrationAccountBodySchema = z.object({
@@ -27,14 +26,17 @@ const loader = createHybridLoaderApiRoute(
   {
     allowJWT: true,
     corsStrategy: "all",
-    findResource: async (_params, authentication) => {
-      return getWorkspaceByUser(authentication.userId);
-    },
+    findResource: async () => 1,
   },
-  async ({ authentication, resource: workspace }) => {
+  async ({ authentication }) => {
+
+    if (!authentication.workspaceId) {
+      throw new Error("User workspace not found");
+    }
+
     const accounts = await getConnectedIntegrationAccounts(
       authentication.userId,
-      workspace.id,
+      authentication?.workspaceId as string,
     );
 
     return json({ accounts });
@@ -57,7 +59,7 @@ const { action } = createHybridActionApiRoute(
   async ({ body, authentication }) => {
     const { integrationDefinitionId, apiKey } = body;
     const { userId } = authentication;
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
 
     try {
       // Get the integration definition
@@ -82,7 +84,7 @@ const { action } = createHybridActionApiRoute(
           },
         },
         userId,
-        workspace?.id,
+        authentication.workspaceId,
       );
 
       if (!setupResult.account || !setupResult.account.id) {

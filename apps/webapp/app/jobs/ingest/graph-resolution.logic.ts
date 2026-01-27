@@ -313,7 +313,12 @@ export async function processGraphResolution(
         );
       } else {
         // Fallback: no reservation found (legacy path), deduct full amount
-        await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+        await deductCredits(
+          payload.workspaceId,
+          payload.userId,
+          "addEpisode",
+          statementsCount,
+        );
       }
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {

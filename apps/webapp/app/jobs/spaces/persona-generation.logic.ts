@@ -4,6 +4,7 @@ import { type z } from "zod";
 import { prisma } from "~/trigger/utils/prisma";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
+import { type ModelMessage } from "ai";
 
 // Import aspect-based persona generation
 import { generateAspectBasedPersona } from "./aspect-persona-generation";

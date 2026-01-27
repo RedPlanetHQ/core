@@ -24,20 +24,16 @@ export const loader = createHybridLoaderApiRoute(
     }
 
     try {
-      // Get user's workspace
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        select: { Workspace: { select: { id: true } } },
-      });
+    
 
-      if (!user?.Workspace) {
+      if (!authentication.workspaceId) {
         return json({ error: "Workspace not found" }, { status: 404 });
       }
 
       // Fetch all ingestionQueue entries for this session
       const ingestionQueueEntries = await prisma.ingestionQueue.findMany({
         where: {
-          workspaceId: user.Workspace.id,
+          workspaceId: authentication.workspaceId,
           sessionId,
         },
         select: {

@@ -116,6 +116,7 @@ export async function processEpisodeIngestion(
         {
           ...episodeBody,
           userId: payload.userId,
+          workspaceId: payload.workspaceId,
           userName, // Pass user name for user-centric extraction
           queueId: payload.queueId,
         },
@@ -156,9 +157,10 @@ export async function processEpisodeIngestion(
     // Determine status: COMPLETED for success or nothing-to-remember, FAILED otherwise
     const isNothingToRemember =
       !episodeDetails.episodeUuid && episodeDetails.statementsCreated === 0;
-    const currentStatus: IngestionStatus = episodeDetails.episodeUuid || isNothingToRemember
-      ? IngestionStatus.COMPLETED
-      : IngestionStatus.FAILED;
+    const currentStatus: IngestionStatus =
+      episodeDetails.episodeUuid || isNothingToRemember
+        ? IngestionStatus.COMPLETED
+        : IngestionStatus.FAILED;
 
     // Refund reserved credits if nothing was processed (nothing to remember)
     if (isNothingToRemember) {

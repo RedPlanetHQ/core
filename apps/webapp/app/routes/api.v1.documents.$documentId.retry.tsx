@@ -4,7 +4,7 @@ import { IngestionStatus } from "@core/database";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { addToQueue } from "~/lib/ingest.server";
 import { getDocument } from "~/services/document.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { prisma } from "~/db.server";
 
 // Schema for log ID parameter
@@ -23,11 +23,21 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ params, authentication }) => {
+    if (!authentication.workspaceId) {
+      return json(
+        {
+          error: "No workspace found",
+          code: "not_found",
+        },
+        { status: 500 },
+      );
+    }
+
     try {
-      const workspace = await getWorkspaceByUser(authentication.userId);
+      
       const document = await getDocument(
         params.documentId,
-        workspace?.id as string,
+        authentication.workspaceId,
       );
 
       if (!document) {
@@ -67,6 +77,7 @@ const { action } = createHybridActionApiRoute(
       await addToQueue(
         originalData,
         authentication.userId,
+        authentication.workspaceId,
         latestIngestionLog.activityId || undefined,
         latestIngestionLog.id, // Pass the existing queue ID for upsert
       );

@@ -53,6 +53,7 @@ export async function handleMemoryIngest(args: any) {
     // Check if workspace has sufficient credits before processing
     const hasSufficientCredits = await hasCredits(
       args.workspaceId as string,
+      args.userId as string,
       "addEpisode",
     );
 
@@ -81,6 +82,7 @@ export async function handleMemoryIngest(args: any) {
         sessionId: args.sessionId,
       },
       args.userId,
+      args.workspaceId,
     );
     return {
       content: [
