@@ -17,12 +17,14 @@
 	],
 	"dependencies": {
 		"@mishieck/ink-titled-box": "^0.3.0",
+		"@modelcontextprotocol/sdk": "^1.25.3",
 		"@redplanethq/sdk": "workspace:*",
 		"dotenv": "^17.2.3",
 		"ink": "^4.1.0",
 		"pastel": "^2.0.0",
 		"react": "^18.2.0",
-		"zod": "^3.21.4"
+		"zod": "^3.21.4",
+		"zod-to-json-schema": "^3.25.1"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^3.0.1",

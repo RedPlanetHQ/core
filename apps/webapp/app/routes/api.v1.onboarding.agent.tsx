@@ -206,7 +206,7 @@ const { loader, action } = createHybridActionApiRoute(
           const result = await callMemoryTool(
             "execute_integration_action",
             {
-              accountId: gmailAccount?.accountId,
+              accountId: gmailAccount?.id,
               action: "search_emails",
               parameters: {
                 query: `after:${startDate.toISOString().split("T")[0]} before:${endDate.toISOString().split("T")[0]} -category:promotions -category:forums`,
@@ -265,7 +265,7 @@ const { loader, action } = createHybridActionApiRoute(
           const result = await callMemoryTool(
             "execute_integration_action",
             {
-              accountId: gmailAccount?.accountId,
+              accountId: gmailAccount?.id,
               action: "search_emails",
               parameters: {
                 query: `after:${sixMonthsAgo.toISOString().split("T")[0]} in:sent`,
