@@ -147,4 +147,3 @@ volumes:
   neo4j_data:
   shared:
   ollama_data:
-  bert_packages:

@@ -6,11 +6,6 @@ import { prisma } from "~/trigger/utils/prisma";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
 import { hasCredits } from "~/trigger/utils/utils";
 
-import {
-  shouldTriggerTopicAnalysis,
-  updateLastTopicAnalysisTime,
-} from "~/services/bertTopicAnalysis.server";
-
 export const IngestBodyRequest = z.object({
   episodeBody: z.string(),
   originalEpisodeBody: z.string().optional(), // Full content (for semantic_diff where episodeBody is diff only)
@@ -72,12 +67,6 @@ export async function processEpisodeIngestion(
     sessionId: string;
     source: string;
     workspaceId: string;
-  }) => Promise<any>,
-  enqueueBertTopicAnalysis?: (params: {
-    userId: string;
-    workspaceId: string;
-    minTopicSize?: number;
-    nrTopics?: number;
   }) => Promise<any>,
   enqueuePersonaGeneration?: (params: {
     userId: string;
@@ -267,44 +256,6 @@ export async function processEpisodeIngestion(
           queueId: payload.queueId,
         },
       );
-    }
-
-    // Auto-trigger BERT topic analysis if threshold met (20+ new episodes)
-    try {
-      if (
-        currentStatus === IngestionStatus.COMPLETED &&
-        enqueueBertTopicAnalysis
-      ) {
-        const shouldTrigger = await shouldTriggerTopicAnalysis(
-          payload.userId,
-          payload.workspaceId,
-        );
-
-        if (shouldTrigger) {
-          logger.info(
-            `Triggering BERT topic analysis after reaching 20+ new episodes`,
-            {
-              userId: payload.userId,
-              workspaceId: payload.workspaceId,
-            },
-          );
-
-          await enqueueBertTopicAnalysis({
-            userId: payload.userId,
-            workspaceId: payload.workspaceId,
-            minTopicSize: 10,
-          });
-
-          // Update the last analysis timestamp
-          await updateLastTopicAnalysisTime(payload.workspaceId);
-        }
-      }
-    } catch (topicAnalysisError) {
-      // Don't fail the ingestion if topic analysis fails
-      logger.warn(`Failed to trigger topic analysis after ingestion:`, {
-        error: topicAnalysisError,
-        userId: payload.userId,
-      });
     }
 
     // Trigger persona generation after successful episode creation

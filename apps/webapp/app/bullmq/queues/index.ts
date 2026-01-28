@@ -94,28 +94,6 @@ export const sessionCompactionQueue = new Queue("session-compaction-queue", {
 });
 
 /**
- * BERT topic analysis queue
- * Handles CPU-intensive topic modeling on user episodes
- */
-export const bertTopicQueue = new Queue("bert-topic-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3, // Retry up to 3 times (allows for package installation on first run)
-    backoff: {
-      type: "exponential",
-      delay: 30000, // 30s initial delay (packages may be installing in background)
-    },
-    removeOnComplete: {
-      age: 7200, // Keep completed jobs for 2 hours
-      count: 100,
-    },
-    removeOnFail: {
-      age: 172800, // Keep failed jobs for 48 hours (for debugging)
-    },
-  },
-});
-
-/**
  * Label assignment queue
  * Uses LLM to assign appropriate labels to ingested episodes
  */

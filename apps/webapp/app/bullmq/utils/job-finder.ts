@@ -17,7 +17,6 @@ async function getAllQueues() {
   const {
     ingestQueue,
     preprocessQueue,
-    bertTopicQueue,
     labelAssignmentQueue,
     titleGenerationQueue,
     personaGenerationQueue,
@@ -28,7 +27,6 @@ async function getAllQueues() {
   return [
     ingestQueue,
     preprocessQueue,
-    bertTopicQueue,
     labelAssignmentQueue,
     titleGenerationQueue,
     personaGenerationQueue,

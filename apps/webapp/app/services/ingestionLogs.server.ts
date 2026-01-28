@@ -89,7 +89,6 @@ export const deleteLog = async (logId: string, userId: string) => {
       "graph-resolution",
       "title-generation",
       "label-assignment",
-      "bert-topic-analysis",
       "persona-generation",
     ];
 

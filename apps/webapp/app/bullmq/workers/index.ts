@@ -20,10 +20,6 @@ import {
   type SessionCompactionPayload,
 } from "~/jobs/session/session-compaction.logic";
 import {
-  processTopicAnalysis,
-  type TopicAnalysisPayload,
-} from "~/jobs/bert/topic-analysis.logic";
-import {
   processLabelAssignment,
   type LabelAssignmentPayload,
 } from "~/jobs/labels/label-assignment.logic";
@@ -37,7 +33,6 @@ import {
   enqueueLabelAssignment,
   enqueueTitleGeneration,
   enqueueSessionCompaction,
-  enqueueBertTopicAnalysis,
   enqueuePersonaGeneration,
   enqueueGraphResolution,
 } from "~/lib/queue-adapter.server";
@@ -105,7 +100,6 @@ export const ingestWorker = new Worker(
       enqueueLabelAssignment,
       enqueueTitleGeneration,
       enqueueSessionCompaction,
-      enqueueBertTopicAnalysis,
       enqueuePersonaGeneration,
       enqueueGraphResolution,
     );
@@ -143,22 +137,6 @@ export const sessionCompactionWorker = new Worker(
   {
     connection: getRedisConnection(),
     concurrency: 3, // Process up to 3 compactions in parallel
-  },
-);
-
-/**
- * BERT topic analysis worker
- * Handles CPU-intensive topic modeling
- */
-export const bertTopicWorker = new Worker(
-  "bert-topic-queue",
-  async (job) => {
-    const payload = job.data as TopicAnalysisPayload;
-    return await processTopicAnalysis(payload);
-  },
-  {
-    connection: getRedisConnection(),
-    concurrency: 2, // Process up to 2 analyses in parallel (CPU-intensive)
   },
 );
 
@@ -260,7 +238,6 @@ export async function closeAllWorkers(): Promise<void> {
     ingestWorker.close(),
     conversationTitleWorker.close(),
     sessionCompactionWorker.close(),
-    bertTopicWorker.close(),
     labelAssignmentWorker.close(),
     titleGenerationWorker.close(),
     personaGenerationWorker.close(),

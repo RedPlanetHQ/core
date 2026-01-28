@@ -15,7 +15,6 @@ import {
   conversationTitleWorker,
   sessionCompactionWorker,
   closeAllWorkers,
-  bertTopicWorker,
   labelAssignmentWorker,
   titleGenerationWorker,
   integrationRunWorker,
@@ -24,7 +23,6 @@ import {
   ingestQueue,
   conversationTitleQueue,
   sessionCompactionQueue,
-  bertTopicQueue,
   labelAssignmentQueue,
   titleGenerationQueue,
   preprocessQueue,
@@ -62,7 +60,6 @@ export async function initWorkers(): Promise<void> {
     "session-compaction",
   );
 
-  setupWorkerLogging(bertTopicWorker, bertTopicQueue, "bert-topic");
   setupWorkerLogging(
     labelAssignmentWorker,
     labelAssignmentQueue,
@@ -98,11 +95,7 @@ export async function initWorkers(): Promise<void> {
         queue: sessionCompactionQueue,
         name: "session-compaction",
       },
-      {
-        worker: bertTopicWorker,
-        queue: bertTopicQueue,
-        name: "bert-topic",
-      },
+
       {
         worker: labelAssignmentWorker,
         queue: labelAssignmentQueue,
@@ -135,7 +128,6 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
   );
-  logger.log(`✓ BERT topic worker: ${bertTopicWorker.name} (concurrency: 2)`);
   logger.log(
     `✓ Label assignment worker: ${labelAssignmentWorker.name} (concurrency: 5)`,
   );

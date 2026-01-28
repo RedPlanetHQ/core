@@ -43,8 +43,6 @@ export const ingestTask = task({
       async (params) => {
         await triggerSessionCompaction(params);
       },
-      // Callback for BERT topic analysis
-      async (params) => {},
       // Callback for persona generation
       async (params) => {
         await personaGenerationTask.trigger(params, {
