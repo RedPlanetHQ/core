@@ -2,7 +2,7 @@ import { json } from "@remix-run/node";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
 import { LabelService } from "~/services/label.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 // This route handles the OAuth redirect URL generation, similar to the NestJS controller
 const loader = createHybridLoaderApiRoute(
@@ -13,10 +13,10 @@ const loader = createHybridLoaderApiRoute(
   },
   async ({ authentication }) => {
     const labelService = new LabelService();
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
 
     const labels = await labelService.getWorkspaceLabels(
-      workspace?.id as string,
+      authentication.workspaceId as string,
     );
 
     return json(labels);

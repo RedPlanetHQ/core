@@ -16,6 +16,7 @@ const tokenGenerator = customAlphabet(
 type CreatePersonalAccessTokenOptions = {
   name: string;
   userId: string;
+  workspaceId: string;
 };
 
 export const GetPersonalAccessTokenRequestSchema = z.object({
@@ -119,6 +120,7 @@ export async function revokePersonalAccessToken(tokenId: string) {
 
 export type PersonalAccessTokenAuthenticationResult = {
   userId: string;
+  workspaceId?: string;
 };
 
 const EncryptedSecretValueSchema = z.object({
@@ -192,8 +194,21 @@ export async function authenticatePersonalAccessToken(
     return;
   }
 
+  let workspaceId: string | null = personalAccessToken.workspaceId;
+
+  if (!workspaceId) {
+    const workspace = await prisma.userWorkspace.findFirst({
+      where: {
+        userId: personalAccessToken.userId
+      }
+    })
+
+    workspaceId = workspace?.id ?? null
+  }
+
   return {
     userId: personalAccessToken.userId,
+    workspaceId: personalAccessToken.workspaceId ?? undefined,
   };
 }
 
@@ -222,6 +237,7 @@ export function createAuthorizationCode() {
 export async function createPersonalAccessTokenFromAuthorizationCode(
   authorizationCode: string,
   userId: string,
+  workspaceId: string,
   name?: string,
 ) {
   //only allow authorization codes that were created less than 10 mins ago
@@ -286,6 +302,7 @@ export async function createPersonalAccessTokenFromAuthorizationCode(
   const token = await createPersonalAccessToken({
     name: "cli",
     userId,
+    workspaceId,
   });
 
   await prisma.authorizationCode.update({
@@ -308,12 +325,14 @@ export async function createPersonalAccessTokenFromAuthorizationCode(
 export async function getOrCreatePersonalAccessToken({
   name,
   userId,
+  workspaceId
 }: CreatePersonalAccessTokenOptions) {
   // Try to find an existing, non-revoked token
   const existing = await prisma.personalAccessToken.findFirst({
     where: {
       name,
       userId,
+      workspaceId,
       revokedAt: null,
     },
   });
@@ -324,6 +343,7 @@ export async function getOrCreatePersonalAccessToken({
       id: existing.id,
       name: existing.name,
       userId: existing.userId,
+      workspaceId: existing.workspaceId,
       obfuscatedToken: existing.obfuscatedToken,
       // token is not returned
     };
@@ -337,6 +357,7 @@ export async function getOrCreatePersonalAccessToken({
     data: {
       name,
       userId,
+      workspaceId,
       encryptedToken,
       obfuscatedToken: obfuscateToken(token),
       hashedToken: hashToken(token),
@@ -364,6 +385,7 @@ export async function deletePersonalAccessToken(tokenId: string) {
 export async function createPersonalAccessToken({
   name,
   userId,
+  workspaceId
 }: CreatePersonalAccessTokenOptions) {
   const token = createToken();
   const encryptedToken = encryptToken(token);
@@ -372,6 +394,7 @@ export async function createPersonalAccessToken({
     data: {
       name,
       userId,
+      workspaceId,
       encryptedToken,
       obfuscatedToken: obfuscateToken(token),
       hashedToken: hashToken(token),
@@ -382,6 +405,7 @@ export async function createPersonalAccessToken({
     id: personalAccessToken.id,
     name,
     userId,
+    workspaceId,
     token,
     obfuscatedToken: personalAccessToken.obfuscatedToken,
   };

@@ -81,7 +81,7 @@ async function init() {
       return;
     }
 
-    await module.handleSessionRequest(req, res, authenticationResult.userId);
+    await module.handleSessionRequest(req, res, authenticationResult.workspaceId);
   });
 
   app.post("/api/v1/mcp", async (req, res) => {
@@ -166,7 +166,7 @@ async function init() {
       return;
     }
 
-    await module.handleSessionRequest(req, res, authenticationResult.userId);
+    await module.handleSessionRequest(req, res, authenticationResult.workspaceId);
   });
 
   app.options("/api/v1/mcp", (_, res) => {

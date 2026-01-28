@@ -595,7 +595,7 @@ export async function processTopicAnalysis(
               },
             };
 
-            await addToQueue(ingestDocumentData, userId);
+            await addToQueue(ingestDocumentData, userId, workspaceId);
 
             logger.info("[BERT Topic Analysis] Document ingested", {
               title: docSummary.title,

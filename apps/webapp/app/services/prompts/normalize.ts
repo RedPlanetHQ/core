@@ -1,4 +1,4 @@
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 export const normalizePrompt = (
   context: Record<string, any>,

@@ -97,6 +97,7 @@ export async function processEpisodeIngestion(
     // Check if workspace has sufficient credits before processing
     const hasSufficientCredits = await hasCredits(
       payload.workspaceId,
+      payload.userId,
       "addEpisode",
     );
 
@@ -155,6 +156,7 @@ export async function processEpisodeIngestion(
         {
           ...episodeBody,
           userId: payload.userId,
+          workspaceId: payload.workspaceId,
           userName, // Pass user name for user-centric extraction
           queueId: payload.queueId,
         },

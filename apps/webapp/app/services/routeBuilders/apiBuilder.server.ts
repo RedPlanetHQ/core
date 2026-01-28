@@ -16,7 +16,7 @@ import {
   checkAuthorization,
 } from "../authorization.server";
 import { logger } from "../logger.service";
-import { getUserId } from "../session.server";
+import { getUserSession } from "../session.server";
 
 import { safeJsonParse } from "~/utils/json";
 
@@ -641,6 +641,7 @@ export type HybridAuthenticationResult =
       ok: true;
       type: "COOKIE";
       userId: string;
+      workspaceId?: string;
     };
 
 export async function authenticateHybridRequest(
@@ -654,12 +655,13 @@ export async function authenticateHybridRequest(
   }
 
   // If API key fails, try cookie authentication
-  const userId = await getUserId(request);
-  if (userId) {
+  const userSession = await getUserSession(request);
+  if (userSession) {
     return {
       ok: true,
       type: "COOKIE",
-      userId,
+      userId: userSession.userId,
+      workspaceId: userSession.workspaceId,
     };
   }
 

@@ -12,18 +12,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireAuth(request);
 
   try {
-    // Get user's workspace
-    const userRecord = await prisma.user.findUnique({
-      where: { id: user.id },
-      include: { Workspace: true },
-    });
-
-    if (!userRecord?.Workspace) {
+  
+    if (!user?.workspaceId) {
       return json({ error: "No workspace found" }, { status: 404 });
     }
 
     const clients = await prisma.oAuthClient.findMany({
-      where: { workspaceId: userRecord.Workspace.id },
+      where: { workspaceId: user.workspaceId },
       select: {
         id: true,
         clientId: true,
@@ -120,13 +115,12 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       );
     }
 
-    // Get user's workspace
+    // Get user
     const userRecord = await prisma.user.findUnique({
       where: { id: user.id },
-      include: { Workspace: true },
     });
 
-    if (!userRecord?.Workspace) {
+    if (!user.workspaceId) {
       return json({ error: "No workspace found" }, { status: 404 });
     }
 
@@ -152,7 +146,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         requirePkce: requirePkce || false,
         logoUrl: logoUrl || null,
         homepageUrl: homepageUrl || null,
-        workspaceId: userRecord.Workspace.id,
+        workspaceId: user.workspaceId,
         createdById: user.id,
       },
       select: {

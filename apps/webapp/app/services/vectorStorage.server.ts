@@ -372,12 +372,12 @@ export async function batchDeleteEpisodeEmbeddings(
   }
 }
 
-export async function updateEpisodeLabels(episodeUuids: string[], labelId: string, userId: string, forceUpdate: boolean = false): Promise<number> {
-  return await vectorProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, forceUpdate);
+export async function updateEpisodeLabels(episodeUuids: string[], labelId: string, userId: string, workspaceId: string,forceUpdate: boolean = false): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, workspaceId, forceUpdate);
 }
 
-export async function updateEpisodeLabelsBySessionId(sessionId: string, labelId: string, userId: string, forceUpdate: boolean = false): Promise<number> {
-  return await vectorProvider().addLabelsToEpisodesBySessionId(sessionId, [labelId], userId, forceUpdate);
+export async function updateEpisodeLabelsBySessionId(sessionId: string, labelId: string, userId: string, workspaceId: string, forceUpdate: boolean = false): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodesBySessionId(sessionId, [labelId], userId, workspaceId, forceUpdate);
 }
 
 export async function getEpisodeByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {

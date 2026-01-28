@@ -5,15 +5,17 @@ import {
   type IntegrationDefinitionV2,
   type Prisma,
   UserType,
+  type UserUsage,
   type Workspace,
 } from "@prisma/client";
 
-import { type CoreMessage } from "ai";
+
 
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
 import { prisma } from "./prisma";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
+import { type ModelMessage } from "ai";
 
 // Token generation utilities
 const tokenValueLength = 40;
@@ -176,7 +178,7 @@ export const getConversationHistoryFormat = (
 export const getPreviousExecutionHistory = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   previousHistory: any[],
-): CoreMessage[] => {
+): ModelMessage[] => {
   return previousHistory.map((history) => ({
     role: history.userType === "User" ? "user" : "assistant",
     content: history.message,
@@ -385,28 +387,11 @@ export class InsufficientCreditsError extends Error {
  * Track usage analytics without enforcing limits (for self-hosted)
  */
 async function trackUsageAnalytics(
-  workspaceId: string,
+  userUsage: UserUsage,
   operation: CreditOperation,
   amount?: number,
 ): Promise<void> {
   const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace?.user?.UserUsage) {
-    return; // Silently fail for analytics
-  }
-
-  const userUsage = workspace.user.UserUsage;
 
   // Just track usage, don't enforce limits
   await prisma.userUsage.update({
@@ -431,46 +416,54 @@ async function trackUsageAnalytics(
  */
 export async function deductCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<void> {
+
+    // Get workspace with subscription and usage
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        Subscription: true,
+      },
+    });
+  
+    const user = await prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      include: {
+        UserUsage: true
+      }
+    })
+  
+    if (!workspace || !user) {
+      throw new Error("Workspace or user not found");
+    }
+  
+    const subscription = workspace.Subscription;
+    const userUsage = user.UserUsage;
+  
+    if (!subscription) {
+      throw new Error("No subscription found for workspace");
+    }
+  
+    if (!userUsage) {
+      throw new Error("No user usage record found");
+    }
+
+    
   // If billing is disabled (self-hosted), allow unlimited usage
   if (!isBillingEnabled()) {
     // Still track usage for analytics
-    await trackUsageAnalytics(workspaceId, operation, amount);
+    await trackUsageAnalytics(userUsage, operation, amount);
     return;
   }
 
   // Get the actual credit cost
   const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
 
-  // Get workspace with subscription and usage
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace || !workspace.user) {
-    throw new Error("Workspace or user not found");
-  }
-
-  const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
-
-  if (!subscription) {
-    throw new Error("No subscription found for workspace");
-  }
-
-  if (!userUsage) {
-    throw new Error("No user usage record found");
-  }
 
   // Check if user has available credits
   if (userUsage.availableCredits >= creditCost) {
@@ -554,6 +547,7 @@ export async function deductCredits(
  */
 export async function hasCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<boolean> {
@@ -568,19 +562,24 @@ export async function hasCredits(
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+
+  if (!user?.UserUsage || !workspace?.Subscription) {
     return false;
   }
 
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   // const subscription = workspace.Subscription;
 
   // If has available credits, return true
@@ -600,25 +599,30 @@ export async function hasCredits(
 /**
  * Reset monthly credits for a workspace
  */
-export async function resetMonthlyCredits(workspaceId: string): Promise<void> {
+export async function resetMonthlyCredits(workspaceId: string, userId: string): Promise<void> {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
+
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true
+    }
+  })
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     throw new Error("Workspace, subscription, or user usage not found");
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const now = new Date();
   const nextMonth = new Date(now);
   nextMonth.setMonth(nextMonth.getMonth() + 1);

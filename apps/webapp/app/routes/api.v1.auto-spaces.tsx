@@ -2,7 +2,7 @@ import { json } from "@remix-run/node";
 
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { enqueueBertTopicAnalysis } from "~/lib/queue-adapter.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 const { action, loader } = createHybridActionApiRoute(
   {
@@ -14,15 +14,15 @@ const { action, loader } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ authentication }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
 
-    if (!workspace) {
+
+    if (!authentication.workspaceId) {
       return json({ error: true });
     }
 
     const response = await enqueueBertTopicAnalysis({
       userId: authentication.userId,
-      workspaceId: workspace.id,
+      workspaceId: authentication.workspaceId,
     });
 
     return json(response);

@@ -2,7 +2,7 @@ import { streamText, tool, type LanguageModel, stepCountIs } from "ai";
 import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getModel } from "~/lib/model.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { callMemoryTool } from "~/utils/mcp/memory";
 
 /**
@@ -149,7 +149,7 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ authentication }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
 
     let currentIteration = 0;
     let totalEmailsFetched = 0;
@@ -206,7 +206,7 @@ const { loader, action } = createHybridActionApiRoute(
                 maxResults: 50,
               },
               userId: authentication.userId,
-              workspaceId: workspace?.id,
+              workspaceId: authentication.workspaceId,
             },
             authentication.userId,
             "core",
@@ -265,7 +265,7 @@ const { loader, action } = createHybridActionApiRoute(
                 maxResults: 50,
               },
               userId: authentication.userId,
-              workspaceId: workspace?.id,
+              workspaceId: authentication.workspaceId,
             },
             authentication.userId,
             "core",

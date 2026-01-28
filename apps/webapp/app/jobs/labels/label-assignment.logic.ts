@@ -12,7 +12,7 @@ import { prisma } from "~/trigger/utils/prisma";
 import { LabelService } from "~/services/label.server";
 import { updateEpisodeLabels } from "~/services/graphModels/episode";
 import { generateOklchColor } from "~/components/ui/color-utils";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 
 // Similarity threshold for matching labels (higher = stricter matching)
@@ -253,6 +253,7 @@ export async function processLabelAssignment(
         ingestionQueue.sessionId,
         allLabelIds,
         payload.userId,
+        payload.workspaceId
       );
 
       logger.info(`Updated ${updatedCount} Neo4j episodes with labels`, {

@@ -238,7 +238,7 @@ export const updateDocumentContent = async (
       delay: true,
     };
 
-    const newLog = await addToQueue(newLogData, userId);
+    const newLog = await addToQueue(newLogData, userId, workspaceId);
 
     return {
       success: true,

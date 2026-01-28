@@ -46,7 +46,7 @@ import {
   batchDeleteEntityEmbeddings,
   batchDeleteStatementEmbeddings,
 } from "~/services/vectorStorage.server";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -301,7 +301,7 @@ export async function processGraphResolution(
       }
 
       // Deduct credits for episode creation
-      await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+      await deductCredits(payload.workspaceId, payload.userId, "addEpisode", statementsCount);
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
         error,

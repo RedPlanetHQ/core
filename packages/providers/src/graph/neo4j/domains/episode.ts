@@ -335,6 +335,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       episodeUuids: string[],
       labelIds: string[],
       userId: string,
+      _workspaceId: string,
       forceUpdate: boolean = false
     ): Promise<number> {
       const query = `
@@ -355,6 +356,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       sessionId: string,
       labelIds: string[],
       userId: string,
+      _workspaceId: string,
       forceUpdate: boolean = false
     ): Promise<number> {
       const query = `
