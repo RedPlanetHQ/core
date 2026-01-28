@@ -6,7 +6,8 @@ import { SearchService } from "~/services/search.server";
 import { hasCredits } from "~/services/billing.server";
 import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
-import { getDocument, getUserDocuments } from "~/services/ingestionLogs.server";
+import { getUserDocuments } from "~/services/ingestionLogs.server";
+import { getDocument, getPersonaForUser } from "~/services/document.server";
 
 const searchService = new SearchService();
 const labelService = new LabelService();
@@ -16,24 +17,10 @@ const labelService = new LabelService();
  */
 export async function handleUserProfile(workspaceId: string) {
   try {
-    const latestPersona = await prisma.ingestionQueue.findFirst({
-      where: {
-        sessionId: `persona-${workspaceId}`,
-        workspaceId,
-        status: "COMPLETED",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      select: {
-        id: true,
-        data: true,
-      },
-    });
+    const personaId = await getPersonaForUser(workspaceId);
+    const personaDocument = await getDocument(personaId!, workspaceId);
 
-    const personaContent = latestPersona?.data
-      ? (latestPersona.data as any).episodeBody
-      : null;
+    const personaContent = personaDocument?.content ?? null;
 
     return {
       content: [
@@ -224,7 +211,7 @@ export async function handleGetDocument(args: any) {
     const documentDetails = {
       id: document.id,
       title: document.title,
-      content: (document.data as any).episodeBody,
+      content: document.content,
       source: document.source,
       createdAt: document.createdAt.toISOString(),
     };

@@ -113,9 +113,11 @@ export const deleteDocument = async (id: string, workspaceId: string) => {
 };
 
 export const getPersonaForUser = async (workspaceId: string) => {
-  const document = await prisma.document.findFirst({
+  // Try to get v2 persona first
+  const v2Document = await prisma.document.findFirst({
     where: {
       title: "Persona",
+      source: "persona-v2",
       workspaceId,
     },
     orderBy: {
@@ -123,7 +125,23 @@ export const getPersonaForUser = async (workspaceId: string) => {
     },
   });
 
-  return document?.id;
+  if (v2Document) {
+    return v2Document.id;
+  }
+
+  // Fall back to v1 persona if v2 doesn't exist
+  const v1Document = await prisma.document.findFirst({
+    where: {
+      title: "Persona",
+      source: "persona",
+      workspaceId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return v1Document?.id;
 };
 
 /**
@@ -137,7 +155,7 @@ export const savePersonaDocument = async (
   content: string,
   labelId?: string,
 ) => {
-  const sessionId = `persona-${workspaceId}`;
+  const sessionId = `persona-v2-${workspaceId}`;
 
   const document = await prisma.document.upsert({
     where: {
@@ -151,10 +169,11 @@ export const savePersonaDocument = async (
       title: "Persona",
       content,
       labelIds: labelId ? [labelId] : [],
-      source: "persona",
-      type: "persona",
+      source: "persona-v2",
+      type: "DOCUMENT",
       metadata: {
         generatedAt: new Date().toISOString(),
+        version: "v2",
       },
       editedBy: userId,
       workspaceId,
@@ -164,6 +183,7 @@ export const savePersonaDocument = async (
       updatedAt: new Date(),
       metadata: {
         generatedAt: new Date().toISOString(),
+        version: "v2",
       },
     },
   });
