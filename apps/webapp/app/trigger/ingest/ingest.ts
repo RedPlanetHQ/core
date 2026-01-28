@@ -7,7 +7,6 @@ import {
 import { triggerSessionCompaction } from "../session/session-compaction";
 import { labelAssignmentTask } from "../labels/label-assignment";
 import { titleGenerationTask } from "../titles/title-generation";
-import { bertTopicAnalysisTask } from "../bert/bert";
 import { personaGenerationTask } from "../spaces/persona-generation";
 import { graphResolutionTask } from "./graph-resolution";
 import { initializeProvider } from "../utils/provider";
@@ -45,14 +44,7 @@ export const ingestTask = task({
         await triggerSessionCompaction(params);
       },
       // Callback for BERT topic analysis
-      async (params) => {
-        await bertTopicAnalysisTask.trigger(params, {
-          queue: "bert-topic-queue",
-          concurrencyKey: payload.userId,
-          idempotencyKey: payload.userId,
-          idempotencyKeyTTL: "10m",
-        });
-      },
+      async (params) => {},
       // Callback for persona generation
       async (params) => {
         await personaGenerationTask.trigger(params, {

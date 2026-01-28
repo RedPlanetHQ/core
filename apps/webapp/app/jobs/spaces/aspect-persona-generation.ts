@@ -19,7 +19,7 @@ import {
 } from "~/services/user-context.server";
 import { StatementAspects, type StatementAspect, type StatementNode, type EpisodicNode } from "@core/types";
 import { ProviderFactory } from "@core/providers";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 // Minimum statements required to generate a section
 const MIN_STATEMENTS_PER_SECTION = 3;

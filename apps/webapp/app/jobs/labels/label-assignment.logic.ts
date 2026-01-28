@@ -12,12 +12,11 @@ import { prisma } from "~/trigger/utils/prisma";
 import { LabelService } from "~/services/label.server";
 import { updateEpisodeLabels } from "~/services/graphModels/episode";
 import { generateOklchColor } from "~/components/ui/color-utils";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
 
 // Similarity threshold for matching labels (higher = stricter matching)
 const LABEL_SIMILARITY_THRESHOLD = 0.85;
-
 
 /**
  * Schema for label extraction
@@ -345,7 +344,9 @@ export async function extractLabelsFromEpisode(
       if (similarLabels.length > 0) {
         // Found a semantically similar label - use it instead
         const matchedLabelId = similarLabels[0].id;
-        const matchedLabel = availableLabels.find((l) => l.id === matchedLabelId);
+        const matchedLabel = availableLabels.find(
+          (l) => l.id === matchedLabelId,
+        );
 
         if (matchedLabel) {
           extractedLabels.push({

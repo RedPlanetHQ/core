@@ -2,7 +2,7 @@
  * Prompts for extracting entity nodes from episodes
  */
 
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 import z from "zod";
 
 

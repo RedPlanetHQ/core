@@ -15,6 +15,9 @@ import type {
   GetDocumentsResponse,
   GetDocumentInput,
   GetDocumentResponse,
+  AuthorizationCodeResponse,
+  TokenExchangeInput,
+  TokenExchangeResponse,
 } from "./schemas";
 
 export interface CoreClientOptions {
@@ -59,6 +62,39 @@ export class CoreClient {
       headers: {
         "Content-Type": "application/json",
         Authorization: `Bearer ${this.token}`,
+      },
+      ...(options?.body ? { body: JSON.stringify(options.body) } : {}),
+    });
+
+    if (!response.ok) {
+      let errorMessage: string;
+      try {
+        const errorBody = await response.json();
+        errorMessage = errorBody.error || JSON.stringify(errorBody);
+      } catch {
+        errorMessage = await response.text();
+      }
+      throw new CoreClientError(errorMessage, response.status);
+    }
+
+    return response.json() as Promise<T>;
+  }
+
+  /**
+   * Send a request without an Authorization header.
+   * Used for public endpoints like authorization-code and token exchange.
+   */
+  private async requestPublic<T>(
+    method: "GET" | "POST",
+    path: string,
+    options?: { body?: unknown },
+  ): Promise<T> {
+    const url = `${this.baseUrl}${path}`;
+
+    const response = await fetch(url, {
+      method,
+      headers: {
+        "Content-Type": "application/json",
       },
       ...(options?.body ? { body: JSON.stringify(options.body) } : {}),
     });

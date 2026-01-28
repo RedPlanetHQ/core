@@ -1,5 +1,5 @@
 import { logger } from "~/services/logger.service";
-import { z } from "zod";
+import { type z } from "zod";
 
 import { prisma } from "~/trigger/utils/prisma";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
@@ -7,7 +7,7 @@ import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 
 // Import aspect-based persona generation
 import { generateAspectBasedPersona } from "./aspect-persona-generation";
-import { savePersonaDocument } from "~/services/document.server";
+import { savePersonaDocument } from "./utils";
 
 // Payload for BullMQ worker
 export interface PersonaGenerationPayload {
