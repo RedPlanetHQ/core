@@ -46,6 +46,40 @@ export const getIntegrationAccountForSlug = async (slug: string) => {
   });
 };
 
+export const getConnectedIntegrationAccounts = async (
+  userId: string,
+  workspaceId: string,
+) => {
+  return prisma.integrationAccount.findMany({
+    where: {
+      workspaceId,
+      integratedById: userId,
+      isActive: true,
+      deleted: null,
+    },
+    select: {
+      id: true,
+      accountId: true,
+      settings: true,
+      isActive: true,
+      createdAt: true,
+      updatedAt: true,
+      integrationDefinition: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          description: true,
+          icon: true,
+        },
+      },
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+};
+
 export const getIntegrationAccountBySlugAndUser = async (
   slug: string,
   userId: string,

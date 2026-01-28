@@ -77,12 +77,6 @@ COPY --from=builder --chown=node:node /core/apps/webapp/build ./apps/webapp/buil
 COPY --from=builder --chown=node:node /core/apps/webapp/public ./apps/webapp/public
 COPY --from=builder --chown=node:node /core/scripts ./scripts
 
-# Copy BERT scripts and install Python requirements
-COPY --chown=node:node apps/webapp/python/requirements.txt ./apps/webapp/python/requirements.txt
-RUN pip3 install --no-cache-dir -r ./apps/webapp/python/requirements.txt
-COPY --chown=node:node apps/webapp/python/main.py ./apps/webapp/python/main.py
-COPY --chown=node:node apps/webapp/python/persona_analytics.py ./apps/webapp/python/persona_analytics.py
-
 EXPOSE 3000
 
 USER node

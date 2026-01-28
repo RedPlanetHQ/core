@@ -1,9 +1,7 @@
 import { generateObject } from "ai";
 import { z } from "zod";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import { handleMemorySearch } from "~/utils/mcp/memory-operations";
 import { logger } from "~/services/logger.service";
-import axios from "axios";
 import { SearchService } from "../search.server";
 import { searchV2 } from "../search-v2";
 import { prisma } from "~/db.server";

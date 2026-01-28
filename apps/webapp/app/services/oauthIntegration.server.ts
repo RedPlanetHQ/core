@@ -138,14 +138,9 @@ export class OAuthIntegrationService {
     });
 
     return integrationAccounts.map((integrationAccount) => {
-      const integrationConfig =
-        integrationAccount.integrationConfiguration as any;
       return {
         id: integrationAccount.id,
         provider: integrationAccount.integrationDefinition.slug,
-        mcpEndpoint: integrationConfig.mcp
-          ? `${env.LOGIN_ORIGIN}/api/v1/mcp/${integrationAccount.integrationDefinition.slug}`
-          : undefined,
         connectedAt: integrationAccount.createdAt,
         name: integrationAccount.integrationDefinition.name,
         icon: integrationAccount.integrationDefinition.icon,
