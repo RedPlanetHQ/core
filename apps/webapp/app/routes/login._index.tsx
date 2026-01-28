@@ -85,7 +85,7 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
                   <h2 className="mb-1 text-base font-semibold">Privacy</h2>
                   <p className="text-muted-foreground text-sm leading-relaxed">
                     Your digital brain is private. No human (except you) will
-                    see any of your data unless you opt-in to sharing analytics.
+                    see any of your data.
                   </p>
                 </div>
               </div>

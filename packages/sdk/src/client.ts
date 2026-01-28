@@ -227,4 +227,47 @@ export class CoreClient {
       `/api/v1/documents/${params.documentId}`,
     );
   }
+
+  // -------------------------------------------------------------------------
+  // Auth – Device-style login flow (public endpoints, no token required)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Request a fresh authorization code.
+   * POST /api/v1/authorization-code  (unauthenticated)
+   *
+   * The returned `url` is the page the user must visit to authorize the CLI.
+   */
+  async getAuthorizationCode(): Promise<AuthorizationCodeResponse> {
+    return this.requestPublic<AuthorizationCodeResponse>(
+      "POST",
+      "/api/v1/authorization-code",
+    );
+  }
+
+  /**
+   * Exchange an authorization code for a personal access token.
+   * POST /api/v1/token  (unauthenticated)
+   *
+   * Returns `{ token: null }` while the user has not yet completed
+   * the browser authorization step.  Poll until `token` is non-null.
+   */
+  async exchangeToken(
+    params: TokenExchangeInput,
+  ): Promise<TokenExchangeResponse> {
+    return this.requestPublic<TokenExchangeResponse>(
+      "POST",
+      "/api/v1/token",
+      { body: params },
+    );
+  }
+
+  /**
+   * Verify that the current token is valid by calling /api/v1/me.
+   * Returns the user profile on success, or throws CoreClientError on failure.
+   * Useful as a health-check before launching other operations.
+   */
+  async checkAuth(): Promise<MeResponse> {
+    return this.me();
+  }
 }

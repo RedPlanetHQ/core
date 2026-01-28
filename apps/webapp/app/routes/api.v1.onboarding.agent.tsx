@@ -4,6 +4,7 @@ import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.
 import { getModel } from "~/lib/model.server";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 import { callMemoryTool } from "~/utils/mcp/memory";
+import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
 
 /**
  * System prompt for the onboarding email analysis agent
@@ -150,6 +151,12 @@ const { loader, action } = createHybridActionApiRoute(
   },
   async ({ authentication }) => {
     const workspace = await getWorkspaceByUser(authentication.userId);
+    // Check if Gmail is connected
+    const gmailAccount = await getIntegrationAccountBySlugAndUser(
+      "gmail",
+      authentication.userId,
+    );
+
 
     let currentIteration = 0;
     let totalEmailsFetched = 0;
@@ -199,7 +206,7 @@ const { loader, action } = createHybridActionApiRoute(
           const result = await callMemoryTool(
             "execute_integration_action",
             {
-              integrationSlug: "gmail",
+              accountId: "gmail",
               action: "search_emails",
               parameters: {
                 query: `after:${startDate.toISOString().split("T")[0]} before:${endDate.toISOString().split("T")[0]} -category:promotions -category:forums`,
@@ -258,7 +265,7 @@ const { loader, action } = createHybridActionApiRoute(
           const result = await callMemoryTool(
             "execute_integration_action",
             {
-              integrationSlug: "gmail",
+              accountId: gmailAccount?.accountId,
               action: "search_emails",
               parameters: {
                 query: `after:${sixMonthsAgo.toISOString().split("T")[0]} in:sent`,
