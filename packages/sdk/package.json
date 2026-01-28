@@ -29,7 +29,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "commander": "14.0.0"
+    "commander": "14.0.0",
+    "zod": "^3.21.4"
   },
   "devDependencies": {
     "@core/types": "workspace:*",

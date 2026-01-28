@@ -1,7 +1,6 @@
 import { defineConfig } from "@trigger.dev/sdk/v3";
 import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
-import { pythonExtension } from "@trigger.dev/python/extension";
 
 export default defineConfig({
   project: process.env.TRIGGER_PROJECT_ID as string,
@@ -24,9 +23,6 @@ export default defineConfig({
   dirs: ["./app/trigger"],
   build: {
     extensions: [
-      pythonExtension({
-        scripts: ["./python/*.py"],
-      }),
       syncEnvVars(() => ({
         // ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY as string,
         // API_BASE_URL: process.env.API_BASE_URL as string,
@@ -42,35 +38,6 @@ export default defineConfig({
       prismaExtension({
         schema: "prisma/schema.prisma",
       }),
-      pythonExtension({
-        requirements: [
-          "click>=8.1.0",
-          "python-dotenv>=1.0.0",
-          "psycopg2-binary>=2.9.0",
-          "numpy>=1.24.0",
-          "scipy>=1.11.0",
-          "pandas>=2.0.0",
-          "scikit-learn>=1.3.0",
-          "umap-learn>=0.5.4",
-          "hdbscan>=0.8.33",
-        ],
-        scripts: ["./python/*.py"],
-      }),
-      {
-        name: "install-packages",
-        onBuildStart: async (context) => {
-          context.addLayer({
-            id: "ffmpeg",
-            image: {
-              instructions: [
-                // Install ffmpeg after checksum validation
-                "RUN apt-get update && apt-get install -y gcc g++ build-essential python3-dev && rm -rf /var/lib/apt/lists",
-              ],
-            },
-          });
-          return;
-        },
-      },
     ],
   },
 });

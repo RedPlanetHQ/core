@@ -1,11 +1,15 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import {
+  createHybridLoaderApiRoute,
+  createHybridActionApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 import { IntegrationEventType } from "@core/types";
 import { runIntegrationTrigger } from "~/services/integration.server";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
 import { getWorkspaceByUser } from "~/models/workspace.server";
+import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
 import { scheduler } from "~/services/oauth/scheduler";
 
@@ -15,8 +19,33 @@ const IntegrationAccountBodySchema = z.object({
   apiKey: z.string(),
 });
 
-// Route for creating an integration account directly with an API key
-const { action, loader } = createHybridActionApiRoute(
+/**
+ * GET /api/v1/integration_account
+ * Returns all connected integration accounts for the user's workspace
+ */
+const loader = createHybridLoaderApiRoute(
+  {
+    allowJWT: true,
+    corsStrategy: "all",
+    findResource: async (_params, authentication) => {
+      return getWorkspaceByUser(authentication.userId);
+    },
+  },
+  async ({ authentication, resource: workspace }) => {
+    const accounts = await getConnectedIntegrationAccounts(
+      authentication.userId,
+      workspace.id,
+    );
+
+    return json({ accounts });
+  },
+);
+
+/**
+ * POST /api/v1/integration_account
+ * Creates an integration account with an API key
+ */
+const { action } = createHybridActionApiRoute(
   {
     body: IntegrationAccountBodySchema,
     allowJWT: true,
@@ -82,4 +111,4 @@ const { action, loader } = createHybridActionApiRoute(
   },
 );
 
-export { action, loader };
+export { loader, action };

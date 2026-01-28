@@ -69,13 +69,128 @@ export async function handleGetIntegrations(args: any) {
 }
 
 /**
- * Handler for get_integration_actions
- * Uses LLM to filter relevant actions based on user query
+ * Get integration actions for an account.
+ * - If query is provided, uses LLM to filter relevant actions.
+ * - If no query, returns all available tools.
+ */
+export async function getIntegrationActions(
+  accountId: string,
+  query?: string,
+): Promise<any[]> {
+  const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
+  const tools = JSON.parse(toolsJson);
+
+  if (!query) {
+    return tools;
+  }
+
+  const account = await IntegrationLoader.getIntegrationAccountById(accountId);
+  const integrationSlug = account.integrationDefinition.slug;
+
+  const userPrompt = buildIntegrationActionSelectionPrompt(
+    query,
+    integrationSlug,
+    tools,
+  );
+
+  let selectedActionNames: string[] = [];
+
+  await makeModelCall(
+    false,
+    [
+      { role: "system", content: INTEGRATION_ACTION_SELECTION_SYSTEM_PROMPT },
+      { role: "user", content: userPrompt },
+    ],
+    (text) => {
+      try {
+        const cleanedText = text.trim();
+        const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          selectedActionNames = JSON.parse(jsonMatch[0]);
+        } else {
+          selectedActionNames = JSON.parse(cleanedText);
+        }
+      } catch (parseError) {
+        logger.error(
+          `Error parsing LLM response for action selection: ${parseError}`,
+        );
+        selectedActionNames = tools.map((tool: any) => tool.name);
+      }
+    },
+    {
+      temperature: 0.3,
+      maxTokens: 500,
+    },
+    "low",
+  );
+
+  if (selectedActionNames.length > 0) {
+    return tools.filter((tool: { name: string }) =>
+      selectedActionNames.includes(tool.name),
+    );
+  }
+
+  return [];
+}
+
+/**
+ * Execute an action on an integration account.
+ * Logs the call result to the database.
+ */
+export async function executeIntegrationAction(
+  accountId: string,
+  action: string,
+  parameters: Record<string, any> = {},
+): Promise<any> {
+  const account = await IntegrationLoader.getIntegrationAccountById(accountId);
+  const integrationSlug = account.integrationDefinition.slug;
+  const toolName = `${integrationSlug}_${action}`;
+
+  let result: any;
+  try {
+    result = await IntegrationLoader.callIntegrationTool(
+      accountId,
+      toolName,
+      parameters,
+    );
+  } catch (error) {
+    await prisma.integrationCallLog
+      .create({
+        data: {
+          integrationAccountId: accountId,
+          toolName: action,
+          error: error instanceof Error ? error.message : String(error),
+        },
+      })
+      .catch((logError: any) => {
+        logger.error(`Failed to log integration call error: ${logError}`);
+      });
+    throw error;
+  }
+
+  await prisma.integrationCallLog
+    .create({
+      data: {
+        integrationAccountId: accountId,
+        toolName: action,
+        error: null,
+      },
+    })
+    .catch((logError: any) => {
+      logger.error(`Failed to log integration call: ${logError}`);
+    });
+
+  return result;
+}
+
+/**
+ * MCP handler for get_integration_actions
+ * Wraps getIntegrationActions with MCP { content, isError } response format
  */
 export async function handleGetIntegrationActions(args: any) {
-  try {
-    const { accountId, query } = args;
+  const { accountId, query } = args;
 
+  try {
     if (!accountId) {
       throw new Error("accountId is required");
     }
@@ -84,70 +199,14 @@ export async function handleGetIntegrationActions(args: any) {
       throw new Error("query is required");
     }
 
-    // Get all available tools for the integration account
-    const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
+    const actions = await getIntegrationActions(accountId, query);
 
-    // Parse the tools JSON to get action details
-    const tools = JSON.parse(toolsJson);
-
-    // Get account to get integration slug for the prompt
-    const account =
-      await IntegrationLoader.getIntegrationAccountById(accountId);
-    const integrationSlug = account.integrationDefinition.slug;
-
-    // Build the LLM prompt
-    const userPrompt = buildIntegrationActionSelectionPrompt(
-      query,
-      integrationSlug,
-      tools,
-    );
-
-    let selectedActionNames: string[] = [];
-
-    // Use LLM to filter relevant actions based on the query
-    await makeModelCall(
-      false,
-      [
-        { role: "system", content: INTEGRATION_ACTION_SELECTION_SYSTEM_PROMPT },
-        { role: "user", content: userPrompt },
-      ],
-      (text) => {
-        try {
-          // Parse the LLM response to extract action names
-          const cleanedText = text.trim();
-          // Try to find JSON array in the response
-          const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
-          if (jsonMatch) {
-            selectedActionNames = JSON.parse(jsonMatch[0]);
-          } else {
-            // Fallback: try parsing the entire text
-            selectedActionNames = JSON.parse(cleanedText);
-          }
-        } catch (parseError) {
-          logger.error(
-            `Error parsing LLM response for action selection: ${parseError}`,
-          );
-          // Fallback: return all action names if parsing fails
-          selectedActionNames = tools.map((tool: any) => tool.name);
-        }
-      },
-      {
-        temperature: 0.3,
-        maxTokens: 500,
-      },
-      "low", // Use low complexity model for this simple task
-    );
-
-    if (selectedActionNames.length > 0) {
-      const actionDetails = tools.filter((tool: { name: string }) =>
-        selectedActionNames.includes(tool.name),
-      );
-
+    if (actions.length > 0) {
       return {
         content: [
           {
             type: "text",
-            text: JSON.stringify(actionDetails),
+            text: JSON.stringify(actions),
           },
         ],
         isError: false,
@@ -174,7 +233,8 @@ export async function handleGetIntegrationActions(args: any) {
 }
 
 /**
- * Handler for execute_integration_action
+ * MCP handler for execute_integration_action
+ * Wraps executeIntegrationAction with MCP { content, isError } response format
  */
 export async function handleExecuteIntegrationAction(args: any) {
   const { accountId, action, parameters: actionArgs } = args;
@@ -188,49 +248,9 @@ export async function handleExecuteIntegrationAction(args: any) {
       throw new Error("action is required");
     }
 
-    // Get account to construct tool name
-    const account =
-      await IntegrationLoader.getIntegrationAccountById(accountId);
-    const integrationSlug = account.integrationDefinition.slug;
-    const toolName = `${integrationSlug}_${action}`;
-
-    const result = await IntegrationLoader.callIntegrationTool(
-      accountId,
-      toolName,
-      actionArgs || {},
-    );
-
-    // Log successful call
-    await prisma.integrationCallLog
-      .create({
-        data: {
-          integrationAccountId: accountId,
-          toolName: action,
-          error: null,
-        },
-      })
-      .catch((logError: any) => {
-        // Don't fail the request if logging fails
-        logger.error(`Failed to log integration call: ${logError}`);
-      });
-
-    return result;
+    return await executeIntegrationAction(accountId, action, actionArgs || {});
   } catch (error) {
     logger.error(`MCP execute integration action error: ${error}`);
-
-    // Log failed call
-    await prisma.integrationCallLog
-      .create({
-        data: {
-          integrationAccountId: accountId,
-          toolName: action,
-          error: error instanceof Error ? error.message : String(error),
-        },
-      })
-      .catch((logError: any) => {
-        // Don't fail the request if logging fails
-        logger.error(`Failed to log integration call error: ${logError}`);
-      });
 
     return {
       content: [
