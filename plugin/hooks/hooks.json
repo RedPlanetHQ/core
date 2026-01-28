@@ -1,0 +1,36 @@
+{
+  "description": "core system hooks",
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|clear|compact",
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You MUST call `core_brain__memory_about_user` right now. This is not optional — it retrieves the user's profile, preferences, and background. Do not proceed with any response until this tool has been called."
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You MUST call `core_brain__memory_search` multiple times before responding — once per distinct intent. Break the user's message into separate focused queries. Do NOT merge everything into one broad search. Each query must be a complete sentence, never keywords.\n\nExamples of how to break intents:\n\n- User says \"fix this auth bug, also update the dashboard\" →\n  1. \"Previous discussions about authentication bugs and login error handling\"\n  2. \"Past decisions and changes related to the dashboard component\"\n\n- User says \"add export feature like we discussed\" →\n  1. \"Past decisions on implementing export functionality and file formats\"\n  2. \"Earlier conversations about export feature design and requirements\"\n\n- User pastes an error and asks about preferences →\n  1. \"Similar errors encountered previously and how they were resolved\"\n  2. \"User's coding preferences, style choices, and project conventions\"\n\nCall each search separately. Do not respond until all searches are done."
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "prompt",
+            "prompt": "You MUST call `core_brain__memory_ingest` now. This is not optional. Store a summary covering: what the user asked, what you did or explained, any decisions made, and key technical details. Do not skip this step — it ensures continuity across sessions."
+          }
+        ]
+      }
+    ]
+  }
+}
