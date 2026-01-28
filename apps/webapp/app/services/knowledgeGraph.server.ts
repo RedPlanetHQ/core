@@ -27,14 +27,14 @@ import {
   makeStructuredModelCall,
 } from "~/lib/model.server";
 import { normalizePrompt, normalizeDocumentPrompt } from "./prompts";
-import { EpisodeEmbedding, type PrismaClient } from "@prisma/client";
+import { type EpisodeEmbedding, type PrismaClient } from "@prisma/client";
 import {
   storeEpisodeEmbedding,
   batchStoreEntityEmbeddings,
   batchStoreStatementEmbeddings,
   getRecentEpisodes,
 } from "./vectorStorage.server";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 // Default number of previous episodes to retrieve for context
 const DEFAULT_EPISODE_WINDOW = 5;

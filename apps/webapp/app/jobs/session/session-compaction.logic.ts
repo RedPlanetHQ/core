@@ -10,7 +10,7 @@ import { prisma } from "~/trigger/utils/prisma";
 import { type Document } from "@prisma/client";
 
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 export interface SessionCompactionPayload {
   userId: string;

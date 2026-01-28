@@ -10,7 +10,7 @@ import type {
   RecallInvalidatedFact,
 } from "./types";
 import { getMatchedLabelIds } from "./router";
-import { EntityNode, EpisodicNode, StatementAspect, StatementNode } from "@core/types";
+import { type EntityNode, type EpisodicNode, type StatementAspect, type StatementNode } from "@core/types";
 
 /** Episode with optional relevance score from reranking */
 type RankedEpisode = EpisodicNode & { relevanceScore?: number };

@@ -1,4 +1,4 @@
-import { StatementAspect, StatementAspects } from "@core/types";
+import { type StatementAspect, StatementAspects } from "@core/types";
 import { z } from "zod";
 
 /**

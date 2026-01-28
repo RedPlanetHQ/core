@@ -16,7 +16,7 @@ import {
   ASPECT_DEFINITIONS,
   QUERY_TYPE_DEFINITIONS,
 } from "./types";
-import { StatementAspect, StatementAspects } from "@core/types";
+import { type StatementAspect, StatementAspects } from "@core/types";
 import { prisma } from "~/db.server";
 
 /**

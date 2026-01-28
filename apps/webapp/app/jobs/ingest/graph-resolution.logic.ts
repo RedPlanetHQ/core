@@ -46,7 +46,7 @@ import {
   batchDeleteEntityEmbeddings,
   batchDeleteStatementEmbeddings,
 } from "~/services/vectorStorage.server";
-import { ModelMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;

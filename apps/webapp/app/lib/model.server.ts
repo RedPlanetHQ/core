@@ -1,5 +1,5 @@
-import { embed, generateText, generateObject, streamText, ModelMessage } from "ai";
-import { z } from "zod";
+import { embed, generateText, generateObject, streamText, type ModelMessage } from "ai";
+import { type z } from "zod";
 import {
   createOpenAI,
   openai,

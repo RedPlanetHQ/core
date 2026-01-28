@@ -1,30 +1,36 @@
-import { EPISODIC_NODE_PROPERTIES, EpisodicNode, STATEMENT_NODE_PROPERTIES, StatementNode } from "@core/types";
+import {
+  EPISODIC_NODE_PROPERTIES,
+  EpisodicNode,
+  STATEMENT_NODE_PROPERTIES,
+  StatementNode,
+} from "@core/types";
 import { Neo4jCore } from "../core";
 
 export function createSearchV2Methods(core: Neo4jCore) {
-    return {
-        // ===== SEARCH V2 METHODS =====
+  return {
+    // ===== SEARCH V2 METHODS =====
 
-        /**
-         * Get episodes with statements filtered by labels, aspects, and temporal constraints
-         * Used by handleAspectQuery in search-v2
-         */
-        async getEpisodesForAspect(params: {
-            userId: string;
-            labelIds: string[];
-            aspects: string[];
-            temporalStart?: Date;
-            temporalEnd?: Date;
-            maxEpisodes: number;
-        }): Promise<EpisodicNode[]> {
-            const query = `
+    /**
+     * Get episodes with statements filtered by labels, aspects, and temporal constraints
+     * Used by handleAspectQuery in search-v2
+     */
+    async getEpisodesForAspect(params: {
+      userId: string;
+      labelIds: string[];
+      aspects: string[];
+      temporalStart?: Date;
+      temporalEnd?: Date;
+      maxEpisodes: number;
+    }): Promise<EpisodicNode[]> {
+      const query = `
                 MATCH (e:Episode{userId: $userId})-[:HAS_PROVENANCE]->(s:Statement)
                 WHERE TRUE
                 ${params.labelIds.length > 0 ? "AND ANY(lid IN e.labelIds WHERE lid IN $labelIds)" : ""}
                 ${params.aspects.length > 0 ? "AND s.aspect IN $aspects" : ""}
                 AND (s.invalidAt IS NULL OR s.invalidAt > datetime())
-                ${params.temporalStart || params.temporalEnd
-                            ? `AND (
+                ${
+                  params.temporalStart || params.temporalEnd
+                    ? `AND (
                 (s.validAt >= datetime($startTime) ${params.temporalEnd ? "AND s.validAt <= datetime($endTime)" : ""})
                 OR
                 (s.aspect = 'Event' AND s.attributes IS NOT NULL
@@ -32,8 +38,8 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) >= datetime($startTime)
                 ${params.temporalEnd ? "AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) <= datetime($endTime)" : ""})
                 )`
-                            : ""
-                        }
+                    : ""
+                }
 
                 WITH DISTINCT e
                 ORDER BY e.validAt DESC
@@ -42,28 +48,28 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
             `;
 
-            const queryParams = {
-                userId: params.userId,
-                labelIds: params.labelIds,
-                aspects: params.aspects,
-                startTime: params.temporalStart?.toISOString() || null,
-                endTime: params.temporalEnd?.toISOString() || null,
-            };
+      const queryParams = {
+        userId: params.userId,
+        labelIds: params.labelIds,
+        aspects: params.aspects,
+        startTime: params.temporalStart?.toISOString() || null,
+        endTime: params.temporalEnd?.toISOString() || null,
+      };
 
-            const results = await core.runQuery(query, queryParams);
-            return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
-        },
+      const results = await core.runQuery(query, queryParams);
+      return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
+    },
 
-        /**
-         * Get episodes connected to specific entities (for entity lookup)
-         * Used by handleEntityLookup in search-v2
-         */
-        async getEpisodesForEntities(params: {
-            entityUuids: string[];
-            userId: string;
-            maxEpisodes: number;
-        }): Promise<EpisodicNode[]> {
-            const query = `
+    /**
+     * Get episodes connected to specific entities (for entity lookup)
+     * Used by handleEntityLookup in search-v2
+     */
+    async getEpisodesForEntities(params: {
+      entityUuids: string[];
+      userId: string;
+      maxEpisodes: number;
+    }): Promise<EpisodicNode[]> {
+      const query = `
                 UNWIND $entityUuids as entityUuid
                 MATCH (ent:Entity {uuid: entityUuid, userId: $userId})
 
@@ -83,30 +89,30 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 ORDER BY s.validAt DESC
                 LIMIT ${params.maxEpisodes}
 
-                RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
+                RETURN ${EPISODIC_NODE_PROPERTIES} as episode
             `;
 
-            const results = await core.runQuery(query, {
-                entityUuids: params.entityUuids,
-                userId: params.userId,
-            });
+      const results = await core.runQuery(query, {
+        entityUuids: params.entityUuids,
+        userId: params.userId,
+      });
 
-            return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
-        },
+      return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
+    },
 
-        /**
-         * Get episodes within a time range with statement filtering
-         * Used by handleTemporal in search-v2
-         */
-        async getEpisodesForTemporal(params: {
-            userId: string;
-            labelIds: string[];
-            aspects: string[];
-            startTime: Date;
-            endTime?: Date;
-            maxEpisodes: number;
-        }): Promise<EpisodicNode[]> {
-            const query = `
+    /**
+     * Get episodes within a time range with statement filtering
+     * Used by handleTemporal in search-v2
+     */
+    async getEpisodesForTemporal(params: {
+      userId: string;
+      labelIds: string[];
+      aspects: string[];
+      startTime: Date;
+      endTime?: Date;
+      maxEpisodes: number;
+    }): Promise<EpisodicNode[]> {
+      const query = `
                 MATCH (e:Episode {userId: $userId})-[:HAS_PROVENANCE]->(s:Statement)
                 WHERE (
                 (s.validAt >= datetime($startTime) ${params.endTime ? "AND s.validAt <= datetime($endTime)" : ""})
@@ -128,28 +134,28 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 RETURN ${EPISODIC_NODE_PROPERTIES} as episode
             `;
 
-            const results = await core.runQuery(query, {
-                userId: params.userId,
-                labelIds: params.labelIds,
-                aspects: params.aspects,
-                startTime: params.startTime.toISOString(),
-                endTime: params.endTime?.toISOString() || null,
-            });
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        labelIds: params.labelIds,
+        aspects: params.aspects,
+        startTime: params.startTime.toISOString(),
+        endTime: params.endTime?.toISOString() || null,
+      });
 
-            return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
-        },
+      return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
+    },
 
-        /**
-         * Find relationship statements between two entities
-         * Used by handleRelationship in search-v2
-         */
-        async getStatementsConnectingEntities(params: {
-            userId: string;
-            entityHint1: string;
-            entityHint2: string;
-            maxStatements: number;
-        }): Promise<StatementNode[]> {
-            const query = `
+    /**
+     * Find relationship statements between two entities
+     * Used by handleRelationship in search-v2
+     */
+    async getStatementsConnectingEntities(params: {
+      userId: string;
+      entityHint1: string;
+      entityHint2: string;
+      maxStatements: number;
+    }): Promise<StatementNode[]> {
+      const query = `
                 // Find entities matching first hint
                 MATCH (ent1:Entity {userId: $userId})
                 WHERE toLower(ent1.name) CONTAINS toLower($hint1)
@@ -180,25 +186,25 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 RETURN ${STATEMENT_NODE_PROPERTIES} as statement
             `;
 
-            const results = await core.runQuery(query, {
-                userId: params.userId,
-                hint1: params.entityHint1,
-                hint2: params.entityHint2,
-            });
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        hint1: params.entityHint1,
+        hint2: params.entityHint2,
+      });
 
-            return results.map((r) => r.get("statement")).filter((r: any) => r != null);
-        },
+      return results.map((r) => r.get("statement")).filter((r: any) => r != null);
+    },
 
-        /**
-         * Get episodes filtered by labels (for exploratory queries)
-         * Used by handleExploratory in search-v2
-         */
-        async getEpisodesForExploratory(params: {
-            userId: string;
-            labelIds: string[];
-            maxEpisodes: number;
-        }): Promise<EpisodicNode[]> {
-            const query = `
+    /**
+     * Get episodes filtered by labels (for exploratory queries)
+     * Used by handleExploratory in search-v2
+     */
+    async getEpisodesForExploratory(params: {
+      userId: string;
+      labelIds: string[];
+      maxEpisodes: number;
+    }): Promise<EpisodicNode[]> {
+      const query = `
                 MATCH (e:Episode {userId: $userId})
                 WHERE ANY(lid IN e.labelIds WHERE lid IN $labelIds)
                 AND e.content IS NOT NULL
@@ -211,13 +217,12 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 RETURN ${EPISODIC_NODE_PROPERTIES} as episode
             `;
 
-            const results = await core.runQuery(query, {
-                userId: params.userId,
-                labelIds: params.labelIds,
-            });
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        labelIds: params.labelIds,
+      });
 
-            return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
-        }
-
-    }
+      return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
+    },
+  };
 }

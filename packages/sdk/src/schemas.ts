@@ -184,3 +184,41 @@ export const GetDocumentResponseSchema = z.object({
 export type GetDocumentResponse = z.infer<
   typeof GetDocumentResponseSchema
 >;
+
+// ---------------------------------------------------------------------------
+// Auth – Authorization Code
+// ---------------------------------------------------------------------------
+
+export const AuthorizationCodeResponseSchema = z.object({
+  authorizationCode: z.string(),
+  url: z.string(),
+});
+
+export type AuthorizationCodeResponse = z.infer<
+  typeof AuthorizationCodeResponseSchema
+>;
+
+// ---------------------------------------------------------------------------
+// Auth – Token Exchange
+// ---------------------------------------------------------------------------
+
+export const TokenExchangeInputSchema = z.object({
+  authorizationCode: z.string(),
+});
+
+export type TokenExchangeInput = z.infer<
+  typeof TokenExchangeInputSchema
+>;
+
+export const TokenExchangeResponseSchema = z.object({
+  token: z
+    .object({
+      token: z.string(),
+      obfuscatedToken: z.string(),
+    })
+    .nullable(),
+});
+
+export type TokenExchangeResponse = z.infer<
+  typeof TokenExchangeResponseSchema
+>;
