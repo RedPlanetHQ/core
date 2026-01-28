@@ -21,38 +21,11 @@ interface LogTextCollapseProps {
 
 export function LogTextCollapse({
   text,
-
+  document,
   labels,
 }: LogTextCollapseProps) {
   const { logId } = useParams();
   const navigate = useNavigate();
-
-  const document = {
-    "id": "62c294ca-3ffe-487c-b979-f123adf8afba",
-    "createdAt": "2026-01-28T17:20:30.455Z",
-    "updatedAt": "2026-01-28T18:17:29.914Z",
-    "deleted": null,
-    "sessionId": "persona-v2-9f2bc133-c45b-4d35-b058-fda912ff12a5",
-    "title": "Persona",
-    "content": "# PERSONA\n\n> Generated: 2026-01-28\n> Sections: 1\n> Total statements: 6\n\n## BEHAVIORS\n\n- Fetches Gmail inbox and sent messages in batches\n- Analyzes sent email writing style regularly\n- Provides concise update insights from email and calendar\n- Summarizes findings as markdown profile\n- Uses connected Gmail and Calendar for core workflows\n[Confidence: HIGH]",
-    "labelIds": [
-      "cmkyaiyrz003amq1nynjmrqw3"
-    ],
-    "source": "persona-v2",
-    "metadata": {
-      "version": "v2",
-      "generatedAt": "2026-01-28T18:17:29.914Z"
-    },
-    "type": "DOCUMENT",
-    "version": 1,
-    "contentHash": null,
-    "chunkHashes": [],
-    "editedBy": "cmkyaiyqe0038mq1n2inov9tn",
-    "workspaceId": "9f2bc133-c45b-4d35-b058-fda912ff12a5",
-    "status": null,
-    "error": null,
-    "ingestionQueueCount": 0
-  }
 
   // Show collapse if text is long (by word count)
   const COLLAPSE_WORD_LIMIT = 30;
