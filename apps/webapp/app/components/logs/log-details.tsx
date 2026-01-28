@@ -169,7 +169,7 @@ export function LogDetails({ document, labels }: LogDetailsProps) {
         </div>
 
         {/* Error Details */}
-        {document.status !== "COMPLETED" && document.error && (
+        {document.status && document.status !== "COMPLETED" && document.error && (
           <div className="mb-6 px-4">
             <div className="bg-destructive/10 rounded-md p-3">
               <div className="flex items-start gap-2 text-red-600">

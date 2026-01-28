@@ -1,12 +1,32 @@
-import React, {useEffect, useState} from 'react';
-import {Text} from 'ink';
+import React, { useEffect, useState } from 'react';
+import { Text } from 'ink';
 import zod from 'zod';
-import {CoreClient} from '@redplanethq/sdk';
-import {getConfig, updateConfig} from '@/config/index';
+import { exec } from 'node:child_process';
+import { CoreClient } from '@redplanethq/sdk';
+import { getConfig, updateConfig } from '@/config/index';
 
 const BASE_URL = 'https://app.getcore.me';
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 300_000; // 5 minutes
+
+/**
+ * Open URL in the default browser
+ */
+function openBrowser(url: string): void {
+	const command =
+		process.platform === 'darwin'
+			? `open "${url}"`
+			: process.platform === 'win32'
+				? `start "" "${url}"`
+				: `xdg-open "${url}"`;
+
+	exec(command, (error) => {
+		if (error) {
+			// Silently fail - user can still copy the URL manually
+			console.error('Failed to open browser:', error.message);
+		}
+	});
+}
 
 export const options = zod.object({});
 
@@ -49,13 +69,14 @@ export default function Login(_props: Props) {
 
 			// Step 2: Request authorization code
 			setStatus('fetching-code');
-			const client = new CoreClient({baseUrl: BASE_URL, token: ''});
+			const client = new CoreClient({ baseUrl: BASE_URL, token: '' });
 			let authCode = '';
 			let verifyUrl = '';
 			try {
 				const res = await client.getAuthorizationCode();
 				authCode = res.authorizationCode!;
-				verifyUrl = res.url!;
+				const base64Token = Buffer.from(JSON.stringify({ token: authCode, source: 'core-cli', clientName: 'core-cli' }))
+				verifyUrl = `${BASE_URL}/agent/verify/${base64Token}?source=core-cli`;
 			} catch (err) {
 				if (!cancelled) {
 					setError(
@@ -69,6 +90,8 @@ export default function Login(_props: Props) {
 			if (!cancelled) {
 				setUrl(verifyUrl);
 				setStatus('polling');
+				// Automatically open the URL in browser
+				openBrowser(verifyUrl);
 			}
 
 			// Step 3: Poll for token
@@ -86,7 +109,7 @@ export default function Login(_props: Props) {
 				if (cancelled) break;
 
 				try {
-					const tokenRes = await client.exchangeToken({authorizationCode: authCode});
+					const tokenRes = await client.exchangeToken({ authorizationCode: authCode });
 					if (tokenRes.token) {
 						const pat = tokenRes.token.token!;
 						// Step 4: Persist token
@@ -128,8 +151,8 @@ export default function Login(_props: Props) {
 		case 'polling':
 			return (
 				<>
-					<Text color="yellow" bold>
-						Open this URL in your browser to authorize the CLI:
+					<Text color="green">
+						Opening browser to authorize... If it doesn't open automatically, visit:
 					</Text>
 					<Text color="cyan">{url}</Text>
 					<Text dimColor>Waiting for authorization...</Text>

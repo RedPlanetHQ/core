@@ -102,7 +102,7 @@ export default function Page() {
       <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
         <CardHeader className="flex flex-col items-center">
           <CardTitle className="w-full text-center text-xl">
-            Successfully authenticated
+            Authentication
           </CardTitle>
         </CardHeader>
         <CardContent>

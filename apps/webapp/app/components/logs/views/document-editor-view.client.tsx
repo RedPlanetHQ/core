@@ -47,6 +47,9 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
     }
   }, [fetcher.data, fetcher.state]);
 
+
+  const editable = document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
+
   return (
     <div className="flex w-full flex-col gap-4 p-4 pt-0">
       {/* Editor Section */}
@@ -65,7 +68,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
                 },
               }}
               initialContent={document?.content as any}
-              editable={document.latestIngestionLog.status != "PROCESSING"}
+              editable={editable}
               onCreate={({ editor }) => {
                 setEditor(editor);
               }}
