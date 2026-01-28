@@ -45,7 +45,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 ORDER BY e.validAt DESC
                 LIMIT ${params.maxEpisodes * 2}
 
-                RETURN ${EPISODIC_NODE_PROPERTIES} as episode,
+                RETURN ${EPISODIC_NODE_PROPERTIES} as episode
             `;
 
       const queryParams = {
