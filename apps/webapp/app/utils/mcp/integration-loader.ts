@@ -1,5 +1,8 @@
 import { prisma } from "~/db.server";
-import { execFileSync } from "child_process";
+import { execFile } from "child_process";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
 
 export interface IntegrationAccountWithDefinition {
   id: string;
@@ -99,24 +102,34 @@ export class IntegrationLoader {
     const integrationSlug = account.integrationDefinition.slug;
     const executablePath = `./integrations/${integrationSlug}/main`;
 
-    // Call the get-tools command
-    const output = execFileSync(
-      "node",
-      [
-        executablePath,
-        "get-tools",
-        "--config",
-        JSON.stringify(account.integrationConfiguration),
-        "--integration-definition",
-        JSON.stringify(account.integrationDefinition),
-      ],
-      {
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      },
-    );
+    try {
+      // Call the get-tools command with timeout
+      const { stdout } = await execFileAsync(
+        "node",
+        [
+          executablePath,
+          "get-tools",
+          "--config",
+          JSON.stringify(account.integrationConfiguration),
+          "--integration-definition",
+          JSON.stringify(account.integrationDefinition),
+        ],
+        {
+          encoding: "utf-8",
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+          timeout: 30000, // 30 second timeout
+        },
+      );
 
-    return output;
+      return stdout;
+    } catch (error: any) {
+      if (error.killed && error.signal === "SIGTERM") {
+        throw new Error(
+          `Integration get-tools timeout: ${integrationSlug} exceeded 30 seconds`,
+        );
+      }
+      throw error;
+    }
   }
 
   /**
@@ -139,31 +152,45 @@ export class IntegrationLoader {
     const originalToolName = parts.slice(1).join("_");
     const executablePath = `./integrations/${integrationSlug}/main`;
 
-    // Call the call-tool command
-    const output = execFileSync(
-      "node",
-      [
-        executablePath,
-        "call-tool",
-        "--config",
-        JSON.stringify(account.integrationConfiguration),
-        "--integration-definition",
-        JSON.stringify(account.integrationDefinition),
-        "--tool-name",
-        originalToolName,
-        "--tool-arguments",
-        JSON.stringify(args),
-      ],
-      {
-        encoding: "utf-8",
-        maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-      },
-    );
-
     try {
+      // Call the call-tool command with timeout
+      const { stdout } = await execFileAsync(
+        "node",
+        [
+          executablePath,
+          "call-tool",
+          "--config",
+          JSON.stringify(account.integrationConfiguration),
+          "--integration-definition",
+          JSON.stringify(account.integrationDefinition),
+          "--tool-name",
+          originalToolName,
+          "--tool-arguments",
+          JSON.stringify(args),
+        ],
+        {
+          encoding: "utf-8",
+          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+          timeout: 30000, // 30 second timeout
+        },
+      );
+
       // Parse the JSON output (expecting Message format)
-      return JSON.parse(output);
-    } catch (error) {
+      return JSON.parse(stdout);
+    } catch (error: any) {
+      if (error.killed && error.signal === "SIGTERM") {
+        return {
+          content: [
+            {
+              type: "text",
+              text: `Integration timeout: ${integrationSlug}.${originalToolName} exceeded 30 seconds`,
+            },
+          ],
+          isError: true,
+        };
+      }
+
+      // Handle JSON parse errors or other errors
       return {
         content: [
           {
