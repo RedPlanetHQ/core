@@ -4,6 +4,9 @@
   "private": true,
   "description": "Runtime dependencies for core bundled hooks",
   "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs"
+  },
   "dependencies": { },
   "engines": {
     "node": ">=18.0.0",

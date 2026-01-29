@@ -1,5 +1,5 @@
 {
-  "description": "core system hooks",
+  "description": "core brain system hooks",
   "hooks": {
     "SessionStart": [
       {
@@ -7,18 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/base.cjs\" session-start",
-            "timeout": 300
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/base.cjs\" on-prompt",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/cli.mjs\" session-start",
             "timeout": 300
           }
         ]
@@ -29,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/base.cjs\" stop",
+            "command": "node \"${CLAUDE_PLUGIN_ROOT}/scripts/cli.mjs\" stop",
             "timeout": 300
           }
         ]
