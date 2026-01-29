@@ -1,4 +1,4 @@
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useFetcher } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -8,14 +8,13 @@ import {
 import { requireUser, requireUserId } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import Logo from "~/components/logo/logo";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { OnboardingAgentLoader } from "~/components/onboarding/onboarding-agent-loader";
-import { OnboardingChat } from "~/components/onboarding/onboarding-chat";
+import { OnboardingStep2 } from "~/components/onboarding/onboarding-step-2";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
 
 import { Button } from "~/components/ui";
-import { getOnboardingConversation } from "~/services/conversation.server";
 import { useTypedLoaderData } from "remix-typedjson";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
 import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
@@ -25,10 +24,6 @@ import { episodesPath } from "~/utils/pathBuilder";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
-  const conversation = await getOnboardingConversation(
-    user.id,
-    user.workspaceId as string,
-  );
 
   // Check if Gmail is connected
   const gmailAccount = await getIntegrationAccountBySlugAndUser(
@@ -59,7 +54,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return {
     user,
-    conversation,
     hasGmail: !!gmailAccount,
     gmailOAuthUrl,
   };
@@ -93,81 +87,59 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    return redirect("/home/episodes");
+    // Redirect to integrations if summary exists (normal flow)
+    // or to episodes if skipped (no summary)
+    return redirect(summary ? "/home/integrations" : "/home/episodes");
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }
 }
 
 export default function Onboarding() {
-  const { conversation, hasGmail, gmailOAuthUrl } = useTypedLoaderData<
+  const { hasGmail, gmailOAuthUrl } = useTypedLoaderData<
     typeof loader
   >() as any;
 
   const navigate = useNavigate();
-  const [step, setStep] = useState<"analysis" | "chat" | "complete">(
+  const fetcher = useFetcher();
+  const [step, setStep] = useState<"analysis" | "step2" | "complete">(
     "analysis",
   );
   const [summary, setSummary] = useState("");
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [isCompleting, setIsCompleting] = useState(false);
+  const [redirectTo, setRedirectTo] = useState<string | null>(null);
 
   const handleAnalysisComplete = (generatedSummary: string) => {
     setSummary(generatedSummary);
-    // Transition to chat after a brief delay
+    // Transition to step 2 after a brief delay
     setTimeout(() => {
-      setStep("chat");
+      setStep("step2");
     }, 200);
   };
 
-  const handleChatComplete = async () => {
-    setIsCompleting(true);
-
-    // Submit to complete onboarding
-    const formData = new FormData();
-
-    formData.append("summary", summary);
-
-    try {
-      const response = await fetch("/onboarding", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        navigate("/home/episodes");
-      } else {
-        setIsCompleting(false);
-      }
-    } catch (e) {
-      console.error("Error completing onboarding:", e);
-      setIsCompleting(false);
-    }
+  const handleStep2Complete = () => {
+    setRedirectTo("/home/integrations");
+    fetcher.submit(
+      { summary },
+      { method: "POST", action: "/onboarding" }
+    );
   };
 
-  const handleSkip = async () => {
-    setIsCompleting(true);
-
-    // Skip onboarding - mark as complete without summary
-    const formData = new FormData();
-    formData.append("summary", "");
-
-    try {
-      const response = await fetch("/onboarding", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (response.ok) {
-        navigate("/home/episodes");
-      } else {
-        setIsCompleting(false);
-      }
-    } catch (e) {
-      console.error("Error skipping onboarding:", e);
-      setIsCompleting(false);
-    }
+  const handleSkip = () => {
+    setRedirectTo("/home/episodes");
+    fetcher.submit(
+      { summary: "" },
+      { method: "POST", action: "/onboarding" }
+    );
   };
+
+  // Handle navigation after successful submission
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data && redirectTo) {
+      navigate(redirectTo);
+      setRedirectTo(null);
+    }
+  }, [fetcher.state, fetcher.data, redirectTo, navigate]);
 
   return (
     <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">
@@ -179,19 +151,6 @@ export default function Onboarding() {
           </div>
           <span className="font-medium">C.O.R.E.</span>
         </div>
-
-        {step === "chat" && (
-          <div>
-            <Button
-              variant="secondary"
-              onClick={handleChatComplete}
-              disabled={isCompleting}
-              isLoading={isCompleting}
-            >
-              Go to dashboard
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Main Content */}
@@ -199,7 +158,7 @@ export default function Onboarding() {
         {!hasGmail ? (
           <div className="flex max-w-lg flex-col gap-6 p-6">
             <div className="space-y-3">
-              <h2 className="text-xl font-semibold">i'm sol.</h2>
+              <h2 className="text-xl font-semibold">i'm core.</h2>
               <div className="text-muted-foreground space-y-2 text-base">
                 <p>
                   connect gmail and i'll learn about you - who you work with,
@@ -216,7 +175,7 @@ export default function Onboarding() {
                 size="lg"
                 variant="ghost"
                 onClick={handleSkip}
-                disabled={isCompleting}
+                disabled={fetcher.state !== "idle"}
               >
                 Skip
               </Button>
@@ -245,16 +204,14 @@ export default function Onboarding() {
               />
             )}
 
-            {step === "chat" && (
-              <div className="flex h-full w-full flex-col">
-                <div className="flex-1 overflow-hidden">
-                  <OnboardingChat
-                    conversation={conversation}
-                    onboardingSummary={summary}
-                    onComplete={handleChatComplete}
-                  />
-                </div>
-              </div>
+            {step === "step2" && (
+
+              <OnboardingStep2
+                summary={summary}
+                onComplete={handleStep2Complete}
+                isCompleting={fetcher.state !== "idle"}
+              />
+
             )}
           </>
         )}

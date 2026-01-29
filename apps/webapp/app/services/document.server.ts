@@ -144,6 +144,38 @@ export const getPersonaForUser = async (workspaceId: string) => {
   return v1Document?.id;
 };
 
+export const getPersonaDocumentForUser = async (workspaceId: string) => {
+  // Try to get v2 persona first
+  const v2Document = await prisma.document.findFirst({
+    where: {
+      title: "Persona",
+      source: "persona-v2",
+      workspaceId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  if (v2Document) {
+    return v2Document.content;
+  }
+
+  // Fall back to v1 persona if v2 doesn't exist
+  const v1Document = await prisma.document.findFirst({
+    where: {
+      title: "Persona",
+      source: "persona",
+      workspaceId,
+    },
+    orderBy: {
+      createdAt: "desc",
+    },
+  });
+
+  return v1Document?.content;
+};
+
 export const updateDocumentContent = async (
   document: Document,
   content: string,

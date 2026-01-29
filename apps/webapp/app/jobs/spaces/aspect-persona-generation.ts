@@ -17,7 +17,11 @@ import {
   getUserContext,
   type UserContext,
 } from "~/services/user-context.server";
-import { StatementAspects, type StatementAspect, type StatementNode, type EpisodicNode } from "@core/types";
+import {
+  type StatementAspect,
+  type StatementNode,
+  type EpisodicNode,
+} from "@core/types";
 import { ProviderFactory } from "@core/providers";
 import { type ModelMessage } from "ai";
 
@@ -34,77 +38,93 @@ const SKIPPED_ASPECTS: StatementAspect[] = ["Event", "Relationship"];
 
 // Aspect to persona section mapping with filtering guidance
 // Each section answers a specific question an AI agent might have
-export const ASPECT_SECTION_MAP: Record<StatementAspect, {
-  title: string;
-  description: string;
-  agentQuestion: string;
-  filterGuidance: string;
-}> = {
+export const ASPECT_SECTION_MAP: Record<
+  StatementAspect,
+  {
+    title: string;
+    description: string;
+    agentQuestion: string;
+    filterGuidance: string;
+  }
+> = {
   Identity: {
     title: "IDENTITY",
-    description: "Who they are - name, role, contact info, location, physical stats",
+    description:
+      "Who they are - name, role, contact info, location, physical stats",
     agentQuestion: "Who am I talking to? How do I reach them?",
-    filterGuidance: "Include: name, profession, role, email, phone, location, timezone, physical stats (height, weight, body composition). Any agent might need these identifiers.",
+    filterGuidance:
+      "Include: name, profession, role, email, phone, location, timezone, physical stats (height, weight, body composition). Any agent might need these identifiers.",
   },
   Knowledge: {
     title: "EXPERTISE",
     description: "What they know - skills, technologies, domains, tools",
     agentQuestion: "What do they know? (So I calibrate complexity)",
-    filterGuidance: "Include: all technical skills, domain expertise, tools, platforms, frameworks they work with. Any agent might need to know their capability level.",
+    filterGuidance:
+      "Include: all technical skills, domain expertise, tools, platforms, frameworks they work with. Any agent might need to know their capability level.",
   },
   Belief: {
     title: "WORLDVIEW",
     description: "Core values, opinions, principles they hold",
     agentQuestion: "What do they believe? (So I align with their values)",
-    filterGuidance: "Include: core values, strong opinions, guiding principles, philosophies. These shape how agents should frame suggestions.",
+    filterGuidance:
+      "Include: core values, strong opinions, guiding principles, philosophies. These shape how agents should frame suggestions.",
   },
   Preference: {
     title: "PREFERENCES",
     description: "Communication style, formats, how they want things done",
     agentQuestion: "How do they want things? (Style, format, approach)",
-    filterGuidance: "Include: all communication preferences, formatting rules, style choices, tool preferences. Be specific - vague preferences are useless to agents.",
+    filterGuidance:
+      "Include: all communication preferences, formatting rules, style choices, tool preferences. Be specific - vague preferences are useless to agents.",
   },
   Action: {
     title: "BEHAVIORS",
     description: "Regular habits, workflows, routines - work and personal",
     agentQuestion: "What do they do regularly? (So I fit into their life)",
-    filterGuidance: "Include: recurring habits, established workflows, routines (work, health, personal). Exclude: one-time completed actions.",
+    filterGuidance:
+      "Include: recurring habits, established workflows, routines (work, health, personal). Exclude: one-time completed actions.",
   },
   Goal: {
     title: "GOALS",
     description: "What they're trying to achieve - work, health, personal",
     agentQuestion: "What are they trying to achieve? (So I align suggestions)",
-    filterGuidance: "Include: all ongoing objectives across work, health, personal life. Exclude: completed goals, past deliverables.",
+    filterGuidance:
+      "Include: all ongoing objectives across work, health, personal life. Exclude: completed goals, past deliverables.",
   },
   Directive: {
     title: "DIRECTIVES",
     description: "Standing rules - always do X, never do Y, notify when Z",
     agentQuestion: "What rules must I follow?",
-    filterGuidance: "Include: all standing instructions, hard constraints, automation rules. These are non-negotiable for agents.",
+    filterGuidance:
+      "Include: all standing instructions, hard constraints, automation rules. These are non-negotiable for agents.",
   },
   Decision: {
     title: "DECISIONS",
     description: "Choices already made - don't re-litigate these",
     agentQuestion: "What's already decided? (Don't suggest alternatives)",
-    filterGuidance: "Include: all active decisions (technology, architecture, strategy, lifestyle). Agents should not suggest alternatives to decided matters.",
+    filterGuidance:
+      "Include: all active decisions (technology, architecture, strategy, lifestyle). Agents should not suggest alternatives to decided matters.",
   },
   Event: {
     title: "TIMELINE",
     description: "Key events and milestones",
     agentQuestion: "What happened when?",
-    filterGuidance: "SKIP - Transient data. Agents should query the graph directly for date-specific information.",
+    filterGuidance:
+      "SKIP - Transient data. Agents should query the graph directly for date-specific information.",
   },
   Problem: {
     title: "CHALLENGES",
     description: "Current blockers, struggles, areas needing attention",
     agentQuestion: "What's blocking them? (Where can I help?)",
-    filterGuidance: "Include: all ongoing challenges, pain points, blockers. Exclude: resolved issues.",
+    filterGuidance:
+      "Include: all ongoing challenges, pain points, blockers. Exclude: resolved issues.",
   },
   Relationship: {
     title: "RELATIONSHIPS",
-    description: "Key people - names, roles, contact info, how to work with them",
+    description:
+      "Key people - names, roles, contact info, how to work with them",
     agentQuestion: "Who matters to them? (Context for names mentioned)",
-    filterGuidance: "Include: names, roles, relationships, contact info (email, phone), collaboration notes. Any agent might need to reference or contact these people.",
+    filterGuidance:
+      "Include: names, roles, relationships, contact info (email, phone), collaboration notes. Any agent might need to reference or contact these people.",
   },
 };
 
@@ -186,7 +206,10 @@ export async function getStatementsByAspectWithEpisodes(
       createdAt: new Date(s.createdAt),
       validAt: new Date(s.validAt),
       invalidAt: null,
-      attributes: typeof s.attributes === "string" ? JSON.parse(s.attributes) : s.attributes || {},
+      attributes:
+        typeof s.attributes === "string"
+          ? JSON.parse(s.attributes)
+          : s.attributes || {},
       userId,
       aspect: s.aspect,
     }));
@@ -222,9 +245,7 @@ function buildAspectSectionPrompt(
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
 
   // Format facts as structured list
-  const factsText = statements
-    .map((s, i) => `${i + 1}. ${s.fact}`)
-    .join("\n");
+  const factsText = statements.map((s, i) => `${i + 1}. ${s.fact}`).join("\n");
 
   // Format episodes for context (limit to avoid token overflow)
   const maxEpisodes = Math.min(episodes.length, 10);
@@ -273,14 +294,17 @@ ${sectionInfo.filterGuidance}
 
 ## Output Requirements
 
-${isPreferencesSection ? `
+${
+  isPreferencesSection
+    ? `
 **PREFERENCES can be detailed** - Style rules, communication preferences, and formatting requirements need specificity to be useful.
 
 - Include specific rules agents should follow (e.g., "lowercase month abbreviations: jan, feb, mar")
 - Group related preferences under sub-headers
 - Be precise - vague preferences are useless
 - Max 20 words per bullet point
-` : `
+`
+    : `
 **BE ULTRA-CONCISE** - This is not the Preferences section.
 
 - Maximum 10 words per bullet point
@@ -288,7 +312,8 @@ ${isPreferencesSection ? `
 - Merge related facts aggressively
 - No explanatory text - just the rule/fact
 - If you can say it in fewer words, do it
-`}
+`
+}
 
 ## What to Include vs Exclude
 
@@ -387,7 +412,8 @@ function buildMergePrompt(
   // Format summaries with recency labels
   const summariesText = chunkSummaries
     .map((summary, i) => {
-      const recencyLabel = i === 0 ? "MOST RECENT (highest priority)" : `Older chunk ${i + 1}`;
+      const recencyLabel =
+        i === 0 ? "MOST RECENT (highest priority)" : `Older chunk ${i + 1}`;
       return `### ${recencyLabel}\n${summary}`;
     })
     .join("\n\n");
@@ -413,17 +439,21 @@ ${summariesText}
 3. **Preserve important older info** - Older patterns are still valid unless contradicted
 4. **Be concise** - The final output should be shorter than the sum of chunks
 
-${isPreferencesSection ? `
+${
+  isPreferencesSection
+    ? `
 ## Output Format (PREFERENCES)
 - Detailed rules are OK (max 20 words per bullet)
 - Group related preferences under sub-headers
 - Be specific - vague preferences are useless
-` : `
+`
+    : `
 ## Output Format (NON-PREFERENCES)
 - Maximum 10 words per bullet point
 - Maximum 5-7 bullet points total
 - No sub-headers unless absolutely necessary
-`}
+`
+}
 
 End with [Confidence: HIGH|MEDIUM|LOW]
 
@@ -441,26 +471,32 @@ function chunkAspectData(aspectData: AspectData): ChunkData[] {
 
   // Sort by createdAt descending (most recent first)
   const sortedStatements = [...statements].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
   const sortedEpisodes = [...episodes].sort(
-    (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
   );
 
   // Calculate number of chunks needed
   const numChunks = Math.max(
     Math.ceil(sortedStatements.length / MAX_STATEMENTS_PER_CHUNK),
-    1
+    1,
   );
 
   const chunks: ChunkData[] = [];
 
   for (let i = 0; i < numChunks; i++) {
     const stmtStart = i * MAX_STATEMENTS_PER_CHUNK;
-    const stmtEnd = Math.min(stmtStart + MAX_STATEMENTS_PER_CHUNK, sortedStatements.length);
+    const stmtEnd = Math.min(
+      stmtStart + MAX_STATEMENTS_PER_CHUNK,
+      sortedStatements.length,
+    );
 
     const epStart = i * MAX_EPISODES_PER_CHUNK;
-    const epEnd = Math.min(epStart + MAX_EPISODES_PER_CHUNK, sortedEpisodes.length);
+    const epEnd = Math.min(
+      epStart + MAX_EPISODES_PER_CHUNK,
+      sortedEpisodes.length,
+    );
 
     chunks.push({
       statements: sortedStatements.slice(stmtStart, stmtEnd),
@@ -526,9 +562,10 @@ async function generateSectionWithChunking(
   for (const result of chunkBatch.results) {
     if (result.error || !result.response) continue;
 
-    const content = typeof result.response === "string"
-      ? result.response
-      : result.response.content || "";
+    const content =
+      typeof result.response === "string"
+        ? result.response
+        : result.response.content || "";
 
     if (!content.includes("NO_PATTERNS")) {
       chunkSummaries.push(content);
@@ -586,8 +623,8 @@ async function generateAspectSection(
   const { aspect, statements, episodes } = aspectData;
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
 
-  // Skip if insufficient data
-  if (statements.length < MIN_STATEMENTS_PER_SECTION) {
+  // Skip if insufficient data (except Identity - always include even with 1-2 statements)
+  if (aspect !== "Identity" && statements.length < MIN_STATEMENTS_PER_SECTION) {
     logger.info(`Skipping ${aspect} section - insufficient data`, {
       statementCount: statements.length,
       minRequired: MIN_STATEMENTS_PER_SECTION,
@@ -661,11 +698,17 @@ async function generateAllAspectSections(
   for (const [aspect, data] of aspectDataMap) {
     // Skip aspects that shouldn't be in persona (e.g., Event - transient data)
     if (SKIPPED_ASPECTS.includes(aspect)) {
-      logger.info(`Skipping ${aspect} - excluded from persona generation (transient data)`);
+      logger.info(
+        `Skipping ${aspect} - excluded from persona generation (transient data)`,
+      );
       continue;
     }
 
-    if (data.statements.length >= MIN_STATEMENTS_PER_SECTION) {
+    // Always include Identity even with 1-2 statements; others need MIN_STATEMENTS_PER_SECTION
+    if (
+      aspect === "Identity" ||
+      data.statements.length >= MIN_STATEMENTS_PER_SECTION
+    ) {
       aspectsToProcess.push(data);
 
       // Separate large sections that need chunking
@@ -675,7 +718,9 @@ async function generateAllAspectSections(
         smallAspects.push(data);
       }
     } else {
-      logger.info(`Skipping ${aspect} - only ${data.statements.length} statements`);
+      logger.info(
+        `Skipping ${aspect} - only ${data.statements.length} statements`,
+      );
     }
   }
 
@@ -688,7 +733,9 @@ async function generateAllAspectSections(
     total: aspectsToProcess.length,
     small: smallAspects.length,
     large: largeAspects.length,
-    largeAspects: largeAspects.map((a) => `${a.aspect}(${a.statements.length})`),
+    largeAspects: largeAspects.map(
+      (a) => `${a.aspect}(${a.statements.length})`,
+    ),
   });
 
   // Process large sections with chunking (sequentially to avoid too many parallel batches)
@@ -714,10 +761,10 @@ async function generateAllAspectSections(
     const sortedSmallAspects = smallAspects.map((aspectData) => ({
       ...aspectData,
       statements: [...aspectData.statements].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
       ),
       episodes: [...aspectData.episodes].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
       ),
     }));
 
@@ -730,9 +777,12 @@ async function generateAllAspectSections(
       };
     });
 
-    logger.info(`Generating ${batchRequests.length} small persona sections in batch`, {
-      aspects: sortedSmallAspects.map((a) => a.aspect),
-    });
+    logger.info(
+      `Generating ${batchRequests.length} small persona sections in batch`,
+      {
+        aspects: sortedSmallAspects.map((a) => a.aspect),
+      },
+    );
 
     const { batchId } = await createBatch({
       requests: batchRequests,
@@ -762,7 +812,9 @@ async function generateAllAspectSections(
             : result.response.content || "";
 
         if (content.includes("INSUFFICIENT_DATA")) {
-          logger.info(`${aspectData.aspect} section returned INSUFFICIENT_DATA`);
+          logger.info(
+            `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
+          );
           continue;
         }
 
@@ -876,7 +928,10 @@ export async function generateAspectBasedPersona(
     aspectCount: aspectDataMap.size,
     aspects: Array.from(aspectDataMap.keys()),
     statementCounts: Object.fromEntries(
-      Array.from(aspectDataMap.entries()).map(([k, v]) => [k, v.statements.length])
+      Array.from(aspectDataMap.entries()).map(([k, v]) => [
+        k,
+        v.statements.length,
+      ]),
     ),
   });
 

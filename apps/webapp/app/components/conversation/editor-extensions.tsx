@@ -22,7 +22,7 @@ const tiptapLink = TiptapLink.configure({
 
 const horizontalRule = HorizontalRule.configure({
   HTMLAttributes: {
-    class: cx("my-2 border-t border-muted-foreground"),
+    class: cx("my-2 border-t border-gray-300"),
   },
 });
 

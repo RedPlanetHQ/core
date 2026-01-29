@@ -23,15 +23,15 @@ import { EpisodeType, UserTypeEnum } from "@core/types";
 import {
   AGENT_SYSTEM_PROMPT,
   SOL_CAPABILITIES,
-  SOL_ONBOARDING_CAPABILITIES,
+
 } from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getWorkspaceByUser } from "~/models/workspace.server";
 
-import { prisma } from "~/db.server";
 import { addToQueue } from "~/lib/ingest.server";
+import { getPersonaDocumentForUser } from "~/services/document.server";
 
 const ChatRequestSchema = z.object({
   message: z
@@ -52,8 +52,6 @@ const ChatRequestSchema = z.object({
     .optional(),
   needsApproval: z.boolean().optional(),
   id: z.string(),
-  isOnboarding: z.boolean().optional(),
-  onboardingSummary: z.string().optional(),
 });
 
 const { loader, action } = createHybridActionApiRoute(
@@ -183,33 +181,17 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     // Fetch user's persona to condition AI behavior
-    const latestPersona = await prisma.ingestionQueue.findFirst({
-      where: {
-        sessionId: `persona-${workspace?.id}`,
-        workspaceId: workspace?.id,
-        status: "COMPLETED",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      select: {
-        id: true,
-        data: true,
-      },
-    });
-    const personaContent = latestPersona?.data
-      ? (latestPersona.data as any).episodeBody
-      : null;
+    const latestPersona = await getPersonaDocumentForUser(workspace?.id as string);
+    const personaContent = latestPersona
+      ? latestPersona
+      : "";
 
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
     // Use onboarding-specific capabilities if onboarding summary is available
-    const capabilities =
-      body.isOnboarding && body.onboardingSummary
-        ? SOL_ONBOARDING_CAPABILITIES
-        : SOL_CAPABILITIES;
+    const capabilities = SOL_CAPABILITIES;
 
-    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n${capabilities}`;
+    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n<about_user>${personaContent}</about_user>\n\n${capabilities}`;
 
     // Add connected integrations context
     const integrationsContext = `
@@ -243,31 +225,10 @@ const { loader, action } = createHybridActionApiRoute(
 
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
-    // If this is an onboarding conversation, add the summary and modify behavior
-    if (body.isOnboarding && body.onboardingSummary) {
-      const onboardingContext = `
-      <onboarding_context>
-      What I learned about this person:
-
-      ${body.onboardingSummary}
-      </onboarding_context>`;
-
-      systemPrompt = `${systemPrompt}${onboardingContext}`;
-    }
-
-    // if (personaContent) {
-    //   systemPrompt = `${systemPrompt}
-
-    //   <user_persona>
-    //   You are interacting with a user who has the following persona. Use this to understand their communication style, preferences, worldview, and behavior patterns. Adapt your responses to match their style and expectations.
-
-    //   ${personaContent}
-    //   </user_persona>`;
-    // }
 
     // If onboarding and no messages yet, generate first message from agent
     let modelMessages: ModelMessage[];
-    if (body.isOnboarding && conversationHistory.length === 0) {
+    if (conversationHistory.length === 0) {
       // Start with agent greeting - no user message yet
       modelMessages = [];
     } else {

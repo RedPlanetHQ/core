@@ -17,6 +17,7 @@
     "db:seed": "dotenv -- turbo run db:seed",
     "db:studio": "dotenv -- turbo run db:studio",
     "db:populate": "dotenv -- turbo run db:populate",
+    "db:reset": "dotenv -- turbo run db:reset",
     "generate": "dotenv -- turbo run generate",
     "trigger:dev": "dotenv -- turbo run trigger:dev",
     "trigger:deploy": "dotenv -- turbo run trigger:deploy"

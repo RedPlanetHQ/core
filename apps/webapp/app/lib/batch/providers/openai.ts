@@ -41,7 +41,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
     try {
       this.validateRequests(params.requests);
 
-      const model = getModelForTask(params.modelComplexity || 'high');
+      const model = getModelForTask(params.modelComplexity || "high");
       // Convert requests to OpenAI batch format
       const batchRequests = params.requests.map((request, index) => ({
         custom_id: request.customId,
@@ -87,7 +87,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
         // Write JSONL content to temporary file
         await fs.promises.writeFile(tempFilePath, jsonlContent, "utf-8");
 
-        console.log("JSONL content:", jsonlContent);
+        // console.log("JSONL content:", jsonlContent);
         // Upload file to OpenAI
         file = await this.openaiClient.files.create({
           file: fs.createReadStream(tempFilePath),
@@ -248,7 +248,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
           : undefined,
         results: results.length > 0 ? results : undefined,
       };
-      console.log("Batch job:", batchJob);
+      // console.log("Batch job:", batchJob);
       return batchJob;
     } catch (error) {
       logger.error("Failed to get OpenAI batch:", { error });
