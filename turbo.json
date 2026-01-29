@@ -30,6 +30,10 @@
     "db:studio": {
       "cache": false
     },
+    "db:reset": {
+      "interactive": true,
+      "cache": false
+    },
     "generate": {
       "dependsOn": [ "^generate" ]
     },

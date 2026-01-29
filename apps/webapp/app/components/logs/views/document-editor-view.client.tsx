@@ -9,7 +9,6 @@ import {
   extensionsForConversation,
   getPlaceholder,
 } from "~/components/conversation/editor-extensions";
-import { LoaderCircle } from "lucide-react";
 
 interface DocumentEditorViewProps {
   document: DocumentItem;
