@@ -6,6 +6,28 @@ import {
   buildIntegrationActionSelectionPrompt,
 } from "./prompts";
 import { prisma } from "~/db.server";
+import PQueue from "p-queue";
+
+// Integration execution queue with concurrency limit
+// Limits concurrent child processes to prevent server overload
+const integrationQueue = new PQueue({
+  concurrency: 50, // Max 50 concurrent integration calls
+  timeout: 35000, // 35 second total timeout (slightly more than execFile timeout)
+  throwOnTimeout: true,
+});
+
+// Log queue stats periodically for monitoring
+setInterval(() => {
+  const stats = {
+    size: integrationQueue.size, // Pending tasks
+    pending: integrationQueue.pending, // Running tasks
+  };
+  if (stats.size > 0 || stats.pending > 0) {
+    logger.log(
+      `Integration queue stats: ${stats.pending} running, ${stats.size} queued`,
+    );
+  }
+}, 10000); // Log every 10 seconds if there's activity
 
 /**
  * Handler for get_integrations
@@ -72,115 +94,125 @@ export async function handleGetIntegrations(args: any) {
  * Get integration actions for an account.
  * - If query is provided, uses LLM to filter relevant actions.
  * - If no query, returns all available tools.
+ * Queued with concurrency control to prevent server overload.
  */
 export async function getIntegrationActions(
   accountId: string,
   query?: string,
 ): Promise<any[]> {
-  const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
-  const tools = JSON.parse(toolsJson);
+  // Queue the get-tools call to limit concurrent child processes
+  return integrationQueue.add(async () => {
+    const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
+    const tools = JSON.parse(toolsJson);
 
-  if (!query) {
-    return tools;
-  }
+    if (!query) {
+      return tools;
+    }
 
-  const account = await IntegrationLoader.getIntegrationAccountById(accountId);
-  const integrationSlug = account.integrationDefinition.slug;
+    const account =
+      await IntegrationLoader.getIntegrationAccountById(accountId);
+    const integrationSlug = account.integrationDefinition.slug;
 
-  const userPrompt = buildIntegrationActionSelectionPrompt(
-    query,
-    integrationSlug,
-    tools,
-  );
-
-  let selectedActionNames: string[] = [];
-
-  await makeModelCall(
-    false,
-    [
-      { role: "system", content: INTEGRATION_ACTION_SELECTION_SYSTEM_PROMPT },
-      { role: "user", content: userPrompt },
-    ],
-    (text) => {
-      try {
-        const cleanedText = text.trim();
-        const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
-        if (jsonMatch) {
-          selectedActionNames = JSON.parse(jsonMatch[0]);
-        } else {
-          selectedActionNames = JSON.parse(cleanedText);
-        }
-      } catch (parseError) {
-        logger.error(
-          `Error parsing LLM response for action selection: ${parseError}`,
-        );
-        selectedActionNames = tools.map((tool: any) => tool.name);
-      }
-    },
-    {
-      temperature: 0.3,
-      maxTokens: 500,
-    },
-    "low",
-  );
-
-  if (selectedActionNames.length > 0) {
-    return tools.filter((tool: { name: string }) =>
-      selectedActionNames.includes(tool.name),
+    const userPrompt = buildIntegrationActionSelectionPrompt(
+      query,
+      integrationSlug,
+      tools,
     );
-  }
 
-  return [];
+    let selectedActionNames: string[] = [];
+
+    await makeModelCall(
+      false,
+      [
+        { role: "system", content: INTEGRATION_ACTION_SELECTION_SYSTEM_PROMPT },
+        { role: "user", content: userPrompt },
+      ],
+      (text) => {
+        try {
+          const cleanedText = text.trim();
+          const jsonMatch = cleanedText.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            selectedActionNames = JSON.parse(jsonMatch[0]);
+          } else {
+            selectedActionNames = JSON.parse(cleanedText);
+          }
+        } catch (parseError) {
+          logger.error(
+            `Error parsing LLM response for action selection: ${parseError}`,
+          );
+          selectedActionNames = tools.map((tool: any) => tool.name);
+        }
+      },
+      {
+        temperature: 0.3,
+        maxTokens: 500,
+      },
+      "low",
+    );
+
+    if (selectedActionNames.length > 0) {
+      return tools.filter((tool: { name: string }) =>
+        selectedActionNames.includes(tool.name),
+      );
+    }
+
+    return [];
+  });
 }
 
 /**
  * Execute an action on an integration account.
  * Logs the call result to the database.
+ * Queued with concurrency control to prevent server overload.
  */
 export async function executeIntegrationAction(
   accountId: string,
   action: string,
   parameters: Record<string, any> = {},
 ): Promise<any> {
-  const account = await IntegrationLoader.getIntegrationAccountById(accountId);
-  const integrationSlug = account.integrationDefinition.slug;
-  const toolName = `${integrationSlug}_${action}`;
+  // Queue the integration call to limit concurrent child processes
+  return integrationQueue.add(async () => {
+    const account =
+      await IntegrationLoader.getIntegrationAccountById(accountId);
+    const integrationSlug = account.integrationDefinition.slug;
+    const toolName = `${integrationSlug}_${action}`;
 
-  let result: any;
-  try {
-    result = await IntegrationLoader.callIntegrationTool(
-      accountId,
-      toolName,
-      parameters,
-    );
-  } catch (error) {
+    let result: any;
+    try {
+      result = await IntegrationLoader.callIntegrationTool(
+        accountId,
+        toolName,
+        parameters,
+      );
+    } catch (error) {
+      await prisma.integrationCallLog
+        .create({
+          data: {
+            integrationAccountId: accountId,
+            toolName: action,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        })
+        .catch((logError: any) => {
+          logger.error(`Failed to log integration call error: ${logError}`);
+        });
+      throw error;
+    }
+
     await prisma.integrationCallLog
       .create({
         data: {
           integrationAccountId: accountId,
           toolName: action,
-          error: error instanceof Error ? error.message : String(error),
+          error: null,
         },
       })
       .catch((logError: any) => {
-        logger.error(`Failed to log integration call error: ${logError}`);
+        logger.error(`Failed to log integration call: ${logError}`);
       });
-    throw error;
-  }
 
-  await prisma.integrationCallLog
-    .create({
-      data: {
-        integrationAccountId: accountId,
-        toolName: action,
-        error: null,
-      },
-    })
-    .catch((logError: any) => {
-      logger.error(`Failed to log integration call: ${logError}`);
-    });
-
-  return result;
+    return result;
+  });
 }
 
 /**

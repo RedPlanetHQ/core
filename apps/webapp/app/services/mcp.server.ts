@@ -25,6 +25,7 @@ const QueryParams = z.object({
   integrations: z.string().optional(), // comma-separated slugs
   no_integrations: z.boolean().optional(),
   spaceId: z.string().optional(), // space UUID to associate memories with
+  skip_tools: z.string().optional(), // comma-separated tool names to exclude
 });
 
 // Create MCP server with memory tools + dynamic integration tools
@@ -33,6 +34,7 @@ async function createMcpServer(
   sessionId: string,
   source: string,
   spaceId?: string,
+  skipTools?: string[],
 ) {
   const server = new Server(
     {
@@ -56,8 +58,15 @@ async function createMcpServer(
   server.setRequestHandler(ListToolsRequestSchema, async () => {
     // Only return memory tools (which now includes integration meta-tools)
     // Integration-specific tools are discovered via get_integration_actions
+    let tools = memoryTools;
+
+    // Filter out skipped tools if specified
+    if (skipTools && skipTools.length > 0) {
+      tools = tools.filter(tool => !skipTools.includes(tool.name));
+    }
+
     return {
-      tools: memoryTools,
+      tools,
     };
   });
 
@@ -260,6 +269,15 @@ async function createMcpServer(
               "UUID of a space to associate memories with. Enables space-scoped memory organization.",
             format: "uuid",
           },
+          skip_tools: {
+            type: "array",
+            description:
+              "List of tool names to exclude from the tools list (e.g., ['memory_ingest', 'get_integrations']). Useful for hiding specific tools from clients.",
+            items: {
+              type: "string",
+            },
+            default: [],
+          },
         },
       };
       return {
@@ -288,6 +306,7 @@ async function createTransport(
   userId: string,
   workspaceId: string,
   spaceId?: string,
+  skipTools?: string[],
 ): Promise<StreamableHTTPServerTransport> {
   const transport = new StreamableHTTPServerTransport({
     sessionIdGenerator: () => sessionId,
@@ -348,7 +367,7 @@ async function createTransport(
   }
 
   // Create and connect MCP server
-  const server = await createMcpServer(userId, sessionId, source, spaceId);
+  const server = await createMcpServer(userId, sessionId, source, spaceId, skipTools);
   await server.connect(transport);
 
   return transport;
@@ -369,6 +388,9 @@ export const handleMCPRequest = async (
 
   const noIntegrations = queryParams.no_integrations ?? false;
   const spaceId = queryParams.spaceId; // Extract spaceId from query params
+  const skipTools = queryParams.skip_tools
+    ? queryParams.skip_tools.split(",").map((s) => s.trim())
+    : [];
 
   const userId = authentication.userId;
   const workspace = await getWorkspaceByUser(userId);
@@ -405,6 +427,7 @@ export const handleMCPRequest = async (
             userId,
             workspaceId,
             spaceId,
+            skipTools,
           );
           logger.log(`Successfully recreated session ${sessionId}`);
         } else {
@@ -429,6 +452,7 @@ export const handleMCPRequest = async (
         userId,
         workspaceId,
         spaceId,
+        skipTools,
       );
     } else if (sessionId && !isInitializeRequest(body)) {
       // Session ID provided but session not active - return 404

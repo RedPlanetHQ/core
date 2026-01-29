@@ -123,6 +123,7 @@
     "novel": "^1.0.2",
     "ollama-ai-provider-v2": "1.5.1",
     "openai": "^5.12.2",
+    "p-queue": "^9.1.0",
     "posthog-js": "^1.116.6",
     "posthog-node": "^5.10.3",
     "react": "^18.2.0",

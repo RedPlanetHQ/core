@@ -75,7 +75,7 @@ export default function Login(_props: Props) {
 			try {
 				const res = await client.getAuthorizationCode();
 				authCode = res.authorizationCode!;
-				const base64Token = Buffer.from(JSON.stringify({ token: authCode, source: 'core-cli', clientName: 'core-cli' }))
+				const base64Token = Buffer.from(JSON.stringify({ authorizationCode: authCode, source: 'core-cli', clientName: 'core-cli' })).toString("base64");
 				verifyUrl = `${BASE_URL}/agent/verify/${base64Token}?source=core-cli`;
 			} catch (err) {
 				if (!cancelled) {
