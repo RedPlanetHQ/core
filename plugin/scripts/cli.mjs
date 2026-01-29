@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
-import { writeFileSync, appendFileSync, existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { execSync } from "child_process";
+import { writeFileSync, appendFileSync, existsSync, readFileSync } from "fs";
+import { join } from "path";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -10,7 +10,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 async function readJsonFromStdin() {
   return new Promise((resolve, reject) => {
     let input = "";
-    process.stdin.on("data", (chunk) => input += chunk);
+    process.stdin.on("data", (chunk) => (input += chunk));
     process.stdin.on("end", () => {
       try {
         resolve(input.trim() ? JSON.parse(input) : void 0);
@@ -30,7 +30,7 @@ function normalizeInput(raw) {
     toolName: r.tool_name,
     toolInput: r.tool_input,
     toolResponse: r.tool_response,
-    transcriptPath: r.transcript_path
+    transcriptPath: r.transcript_path,
   };
 }
 __name(normalizeInput, "normalizeInput");
@@ -54,9 +54,14 @@ function extractLastMessage(transcriptPath, role, stripSystemReminders = false) 
         if (typeof msgContent === "string") {
           text = msgContent;
         } else if (Array.isArray(msgContent)) {
-          text = msgContent.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+          text = msgContent
+            .filter((c) => c.type === "text")
+            .map((c) => c.text)
+            .join("\n");
         } else {
-          throw new Error(`Unknown message content format in transcript. Type: ${typeof msgContent}`);
+          throw new Error(
+            `Unknown message content format in transcript. Type: ${typeof msgContent}`
+          );
         }
         if (stripSystemReminders) {
           text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "");
@@ -155,16 +160,18 @@ var HOOK_TIMEOUTS = {
   WORKER_STARTUP_RETRIES: 300,
   PRE_RESTART_SETTLE_DELAY: 2e3,
   POWERSHELL_COMMAND: 1e4,
-  WINDOWS_MULTIPLIER: 1.5
+  WINDOWS_MULTIPLIER: 1.5,
 };
 var HOOK_EXIT_CODES = {
   SUCCESS: 0,
   FAILURE: 1,
   /** Blocking error - for SessionStart, shows stderr to user only */
-  BLOCKING_ERROR: 2
+  BLOCKING_ERROR: 2,
 };
 function getTimeout(baseTimeout) {
-  return process.platform === "win32" ? Math.round(baseTimeout * HOOK_TIMEOUTS.WINDOWS_MULTIPLIER) : baseTimeout;
+  return process.platform === "win32"
+    ? Math.round(baseTimeout * HOOK_TIMEOUTS.WINDOWS_MULTIPLIER)
+    : baseTimeout;
 }
 __name(getTimeout, "getTimeout");
 function stripAnsiCodes(str) {
@@ -184,11 +191,7 @@ async function getAuthToken() {
       meOutput = execSync("corebrain me", {
         encoding: "utf-8",
         timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-        stdio: [
-          "pipe",
-          "pipe",
-          "pipe"
-        ]
+        stdio: ["pipe", "pipe", "pipe"],
       }).trim();
     } catch (error) {
       meOutput = "";
@@ -199,7 +202,7 @@ async function getAuthToken() {
         execSync("corebrain login", {
           encoding: "utf-8",
           timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-          stdio: "inherit"
+          stdio: "inherit",
         });
       } catch (loginError) {
         console.error("Login failed. Please run 'corebrain login' manually.");
@@ -209,11 +212,7 @@ async function getAuthToken() {
     const tokenOutput = execSync("corebrain token", {
       encoding: "utf-8",
       timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-      stdio: [
-        "pipe",
-        "pipe",
-        "pipe"
-      ]
+      stdio: ["pipe", "pipe", "pipe"],
     });
     const token = extractToken(tokenOutput);
     if (!token) {
@@ -222,7 +221,9 @@ async function getAuthToken() {
     }
     return token;
   } catch (error) {
-    console.error(`Error getting auth token: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error getting auth token: ${error instanceof Error ? error.message : String(error)}`
+    );
     return null;
   }
 }
@@ -232,20 +233,20 @@ async function sessionStart() {
     const token = await getAuthToken();
     if (!token) {
       return {
-        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
     const response = await fetch("https://app.getcore.me/api/v1/me", {
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT))
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
     });
     if (!response.ok) {
       console.error(`API call failed with status: ${response.status}`);
       return {
-        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
     const data = await response.json();
@@ -253,11 +254,16 @@ async function sessionStart() {
     const claudeEnvFile = process.env.CLAUDE_ENV_FILE;
     if (claudeEnvFile) {
       try {
-        appendFileSync(claudeEnvFile, `export CORE_TOKEN="${token}"
-`);
+        appendFileSync(
+          claudeEnvFile,
+          `export CORE_TOKEN="${token}"
+`
+        );
         console.log(`Token exported to ${claudeEnvFile}`);
       } catch (envError) {
-        console.error(`Failed to write to CLAUDE_ENV_FILE: ${envError instanceof Error ? envError.message : String(envError)}`);
+        console.error(
+          `Failed to write to CLAUDE_ENV_FILE: ${envError instanceof Error ? envError.message : String(envError)}`
+        );
       }
     }
     const output = {
@@ -265,17 +271,19 @@ async function sessionStart() {
         hookEventName: "SessionStart",
         additionalContext: `<about_user>${persona}</about_user>
 
-<rules>${SEARCH_CONTEXT}</rules>`
-      }
+<rules>${SEARCH_CONTEXT}</rules>`,
+      },
     };
     return {
       exitCode: HOOK_EXIT_CODES.SUCCESS,
-      output
+      output,
     };
   } catch (error) {
-    console.error(`Error in session-start: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error in session-start: ${error instanceof Error ? error.message : String(error)}`
+    );
     return {
-      exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+      exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
     };
   }
 }
@@ -290,8 +298,8 @@ async function stop() {
         exitCode: HOOK_EXIT_CODES.FAILURE,
         output: {
           continue: true,
-          suppressOutput: true
-        }
+          suppressOutput: true,
+        },
       };
     }
     const lastUserMessage = extractLastMessage(input.transcriptPath, "user", true);
@@ -305,7 +313,9 @@ async function stop() {
       writeFileSync(sampleFilePath, transcriptContent, "utf-8");
       console.log(`Transcript saved to: ${sampleFilePath}`);
     } catch (writeError) {
-      console.error(`Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`);
+      console.error(
+        `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+      );
     }
     const token = await getAuthToken();
     if (!token) {
@@ -314,8 +324,8 @@ async function stop() {
         exitCode: HOOK_EXIT_CODES.SUCCESS,
         output: {
           continue: true,
-          suppressOutput: true
-        }
+          suppressOutput: true,
+        },
       };
     }
     try {
@@ -323,16 +333,16 @@ async function stop() {
         method: "POST",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json"
+          "Content-Type": "application/json",
         },
         body: JSON.stringify({
           episodeBody: transcriptContent,
-          referenceTime: (/* @__PURE__ */ new Date()).toISOString(),
+          referenceTime: /* @__PURE__ */ new Date().toISOString(),
           source: "claude-code",
           type: "CONVERSATION",
-          sessionId: input.sessionId
+          sessionId: input.sessionId,
         }),
-        signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT))
+        signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
       });
       if (!apiResponse.ok) {
         console.error(`API call to /api/v1/add failed with status: ${apiResponse.status}`);
@@ -340,15 +350,17 @@ async function stop() {
         console.log("Transcript successfully sent to CORE");
       }
     } catch (apiError) {
-      console.error(`Error calling /api/v1/add: ${apiError instanceof Error ? apiError.message : String(apiError)}`);
+      console.error(
+        `Error calling /api/v1/add: ${apiError instanceof Error ? apiError.message : String(apiError)}`
+      );
     }
     const output = {
       continue: true,
-      suppressOutput: true
+      suppressOutput: true,
     };
     return {
       exitCode: HOOK_EXIT_CODES.SUCCESS,
-      output
+      output,
     };
   } catch (error) {
     console.error(`Error in stop: ${error instanceof Error ? error.message : String(error)}`);
@@ -356,8 +368,8 @@ async function stop() {
       exitCode: HOOK_EXIT_CODES.FAILURE,
       output: {
         continue: true,
-        suppressOutput: true
-      }
+        suppressOutput: true,
+      },
     };
   }
 }

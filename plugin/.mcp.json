@@ -2,10 +2,7 @@
   "mcpServers": {
     "core_brain": {
       "type": "http",
-      "url": "https://mcp.getcore.me/api/v1/mcp?source=claude",
-      "headers": {
-        "Authorization": "Bearer ${CORE_TOKEN}"
-      }
+      "url": "https://mcp.getcore.me/api/v1/mcp?source=claude"
     }
   }
 }
