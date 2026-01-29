@@ -41,7 +41,6 @@ export function OnboardingAgentLoader({
     }
   }, [regenerate]);
 
-  console.log(messages)
 
   // Extract latest update and summary from messages
   useEffect(() => {
@@ -89,9 +88,9 @@ export function OnboardingAgentLoader({
         className,
       )}
     >
-      <div className="flex items-center space-x-2">
+      <div className="flex items-center gap-2 flex-col">
         <Loader2 className="size-5 animate-spin" />
-        <h2 className="text-lg">
+        <h2 className="text-lg max-w-[300px]">
           {status === "ready" && summary
             ? "learned some things about you"
             : latestUpdate || "learning about you..."}

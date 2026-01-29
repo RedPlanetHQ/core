@@ -137,7 +137,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
           );
           const outputText = await outputFile.text();
 
-          console.log("Output text:", outputText);
+          // console.log("Output text:", outputText);
           results = outputText
             .split("\n")
             .filter((line: string) => line.trim())
