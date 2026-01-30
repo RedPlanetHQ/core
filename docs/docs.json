@@ -24,9 +24,11 @@
           {
             "group": "Memory",
             "pages": [
+              "concepts/overview",
               "concepts/memory_graph",
+              "concepts/aspects",
+              "concepts/query_types",
               "concepts/entity_types",
-              "concepts/chat",
               "concepts/labels"
             ]
           },
