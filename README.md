@@ -33,7 +33,7 @@
     <img width="200px" alt="CORE logo" src="https://github.com/user-attachments/assets/bd4e5e79-05b8-4d40-9aff-f1cf9e5d70de" />
   </a>
 
-### CORE: Your Digital Brain - Memory + Actions for AI Tools 
+### CORE: Your Digital Brain - Memory Agent + Actions for AI Tools
 
 <p align="center">
     <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
@@ -58,13 +58,24 @@
 
 ---
 
-Your critical info is scattered across tools that don't talk to each other. Your AI conversation starts with "let me give you some context." Your experiences and learnings are still in your head and your head doesn't scale. 
+Your AI forgets. Every new chat starts with "let me give you some context." Your critical decisions, preferences, and insights are scattered across tools that don't talk to each other. Your head doesn't scale.
 
-**CORE remembers**. Not a database. Not a search box. A digital brain that learns what matters, connects what's related, and surfaces what you need.
+**CORE is your memory agent**. Not a database. Not a search box. A digital brain that replicates how human memory actually works—organizing episodes into topics, creating associations, and surfacing exactly what you need, when you need it.
 
 ## For Developers
 
-CORE gives your AI tools persistent memory and the ability to act in the apps you use.
+CORE is a memory agent that gives your AI tools persistent memory and the ability to act in the apps you use.
+
+**How it helps Claude Code:**
+
+- **Preferences** → Surfaces during code review (formatting, patterns, tools)
+- **Decisions** → Surfaces when encountering similar choices ("why we chose X over Y")
+- **Directives** → Always available (rules like "always run tests", "never skip reviews")
+- **Problems** → Surfaces when debugging (issues you've hit before)
+- **Goals** → Surfaces when planning (what you're working toward)
+- **Knowledge** → Surfaces when explaining (your expertise level)
+
+**Right information, right time**—not context dumping.
 
 - Context preserved across Claude Code, Cursor and other coding agents
 - Take actions in Linear, GitHub, Slack, Gmail, Google Sheets and other apps you use
@@ -77,13 +88,20 @@ CORE gives your AI tools persistent memory and the ability to act in the apps yo
 
 ### 1. Never repeat yourself, context flows automatically
 
-CORE becomes your persistent memory layer for coding agents. Ask any AI tool to pull relevant context.
+CORE becomes your persistent memory layer for coding agents. Ask any AI tool to pull relevant context—CORE's memory agent understands your intent and surfaces exactly what you need.
+
 ```txt
 Search core memory for architecture decisions on the payment service
 ```
+
+**What CORE does**: Classifies as Entity Query (payment service) + Aspect Query (decisions), filters by `aspect=Decision` and `entity=payment service`, returns decisions with their reasoning and timestamps.
+
 ```txt
-What my content guidelines from core to create the blog?
+What are my content guidelines from core to create the blog?
 ```
+
+**What CORE does**: Aspect Query for Preferences/Directives related to content, surfaces your rules and patterns for content creation.
+
 ![core_as_memory](https://github.com/user-attachments/assets/7ac5d3f3-ca36-428d-8e97-3412c398f74b)
 
 ---
@@ -96,7 +114,6 @@ Connect your apps once, take actions from anywhere.
 - Draft/Send/Read an email and store relevant info in CORE
 - Manage your calendar, update spreadsheet
 
-
 ![actions](https://github.com/user-attachments/assets/60295a77-bdfd-4d57-aff5-d77ecb41e72d)
 
 ---
@@ -104,12 +121,15 @@ Connect your apps once, take actions from anywhere.
 ### 3. Pick up where you left off claude code/cursor
 
 Switching back to a feature after a week? Get caught up instantly.
+
 ```txt
 What did we discuss about the checkout flow? Summarize from memory.
 ```
+
 ```txt
 Refer to past discussions and remind me where we left off on the API refactor
 ```
+
 ![claude-code-in-core](https://github.com/user-attachments/assets/0bd9566b-a8cc-49d9-a3cf-368658906c39)
 
 ---
@@ -118,11 +138,45 @@ Refer to past discussions and remind me where we left off on the API refactor
 
 1. **Temporal Context Graph**: CORE doesn't just store facts — it remembers the story. When things happened, how your thinking evolved, what led to each decision. Your preferences, goals, and past choices — all connected in a graph that understands sequence and context.
 
-2. **88.24% Recall Accuracy**: Tested on the LoCoMo benchmark. When you ask CORE something, it finds what's relevant. Not keyword matching, true semantic understanding with multi-hop reasoning.
+2. **Memory Agent, Not RAG**: Traditional RAG asks "what text chunks look similar?" CORE asks "what does the user want to know, and where in the organized knowledge does that live?"
+   - **11 Fact Aspects**: Every fact is classified (Preference, Decision, Directive, Problem, Goal, Knowledge, Identity, etc.) so core surfaces your coding style preferences during code review, or past architectural decisions when you're designing a new feature.
 
-3. **You Control It**: Your memory, your rules. Edit what's wrong. Delete what doesn't belong. Visualize how your knowledge connects. CORE is transparent, you see exactly what it knows.
+   - **5 Query Types**: CORE classifies your intent (Aspect Query, Entity Lookup, Temporal, Exploratory, Relationship) and routes to the exact search strategy. Looking for "my preferences"? It filters by aspect. "Tell me about Sarah"? Entity graph traversal. "What happened last week"? Temporal filter.
 
-4. **Open Source**: No black boxes. No vendor lock-in. Your digital brain belongs to you.
+   - **Intent-Driven Retrieval**: Classification first, search second. 3-4x faster than the old "search everything and rerank" approach (300-450ms vs 1200-2400ms).
+
+3. **88.24% Recall Accuracy**: Tested on the LoCoMo benchmark. When you ask CORE something, it finds what's relevant. Not keyword matching, true semantic understanding with multi-hop reasoning.
+
+4. **You Control It**: Your memory, your rules. Edit what's wrong. Delete what doesn't belong. Visualize how your knowledge connects. CORE is transparent, you see exactly what it knows.
+
+5. **Open Source**: No black boxes. No vendor lock-in. Your digital brain belongs to you.
+
+---
+
+## Memory Agent vs RAG: Why It Matters
+
+**Traditional RAG** treats memory as a search problem:
+
+- Embeds all your text
+- Searches for similarity
+- Returns chunks
+- No understanding of _what kind of information_ you need
+
+**CORE Memory Agent** treats memory as a knowledge problem:
+
+- **Classifies** every fact by type (Preference, Decision, Directive, etc.)
+- **Understands** your query intent (looking for preferences? past decisions? recent events?)
+- **Routes** to the exact search strategy (aspect filter, entity graph, temporal range)
+- **Surfaces** exactly what you need, not everything that might be relevant
+
+**Example:**
+
+You ask: "What are my coding preferences?"
+
+- **RAG**: Searches all your text for "coding" and "preferences", returns 50 chunks, hopes relevant ones are in there
+- **CORE**: Classifies as Aspect Query (Preference), filters statements by `aspect=Preference`, returns 5 precise facts: "Prefers TypeScript", "Uses pnpm", "Avoids class components", etc.
+
+**The Paradigm Shift**: CORE doesn't improve RAG. It replaces it with structured knowledge retrieval.
 
 ---
 
@@ -130,11 +184,11 @@ Refer to past discussions and remind me where we left off on the API refactor
 
 Choose your path:
 
-| | **CORE Cloud** | **Self-Host** |
-|---|---|---|
-| Setup time | 5 minutes | 15 minutes |
-| Best for | Try quickly, no infra | Full control, your servers |
-| Requirements | Just an account | Docker, 4GB RAM |
+|              | **CORE Cloud**        | **Self-Host**              |
+| ------------ | --------------------- | -------------------------- |
+| Setup time   | 5 minutes             | 15 minutes                 |
+| Best for     | Try quickly, no infra | Full control, your servers |
+| Requirements | Just an account       | Docker, 4GB RAM            |
 
 ### Cloud
 
@@ -173,7 +227,6 @@ Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start
 
 👉 [View complete self-hosting guide](https://docs.getcore.me/self-hosting/docker)
 
-
 > Note: We tried open-source models like Ollama or GPT OSS but facts generation were not good, we are still figuring out how to improve on that and then will also support OSS models.
 
 ## 🛠️ Installation
@@ -183,13 +236,41 @@ Once deployed, you can configure your AI providers (OpenAI, Anthropic) and start
 <details>
 <summary><b>Install in Claude Code CLI</b></summary>
 
-1. Run this command in your terminal to connect CORE with Claude Code:
+**Method 1: Plugin (Recommended) - ~2 minutes**
+
+1. Install the CORE CLI globally:
+
+```sh
+npm install -g @redplanethq/corebrain
+```
+
+2. Add the plugin marketplace and install the plugin:
+
+```sh
+# In Claude Code CLI, run:
+/plugin marketplace add redplanethq/core
+/plugin install core_brain
+```
+
+3. Restart Claude Code and authenticate:
+
+```sh
+# After restart, login with:
+/mcp
+# Select core_brain and authenticate via browser
+```
+
+**What this does**: The plugin automatically loads your personalized "persona" document (summary of your preferences, rules, decisions) at every session start, and enables memory search across all your conversations. No manual configuration needed.
+
+**Method 2: Manual MCP Setup (Advanced)**
+
+If you prefer manual setup or need customization:
 
 ```sh
 claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/api/v1/mcp?source=Claude-Code
 ```
 
-2. Type `/mcp` and open core-memory MCP for authentication
+Then type `/mcp` and open core-memory MCP for authentication.
 
 </details>
 
@@ -309,7 +390,6 @@ Add the following to your `~/.copilot/mcp-config.json` file:
 </details>
 
 ### IDEs
-
 
 <details>
 <summary><b>Install in VS Code</b></summary>
@@ -749,39 +829,60 @@ CORE Memory MCP provides the following tools that LLMs can use:
 
 ---
 
-## How it Works
+## How It Works: Your Digital Brain
 
-### Memory Ingestion
+CORE replicates how human memory works. Your brain doesn't store memories as flat text—it organizes episodes into topics, creates associations, and knows where things belong. CORE does the same.
 
-<img width="12885" height="3048" alt="memory-ingest-diagram" src="https://github.com/user-attachments/assets/c51679de-8260-4bee-bebf-aff32c6b8e13" />
+### Memory Ingestion: Building Your Knowledge Graph
 
 When you save context to CORE, it goes through four phases:
 
 1. **Normalization**: Links new info to recent context, breaks documents into coherent chunks while keeping cross-references
+
 2. **Extraction**: Identifies entities (people, tools, projects), creates statements with context and time, maps relationships
-3. **Resolution**: Detects contradictions, tracks how preferences evolve, preserves multiple perspectives with provenance
+
+3. **Classification**: Every fact is categorized into 1 of 11 aspects:
+   - **Identity**: "Manik works at Red Planet" (who you are)
+   - **Preference**: "Prefers concise code reviews" (how you want things)
+   - **Decision**: "Chose Neo4j for graph storage" (choices made)
+   - **Directive**: "Always run tests before PR" (rules to follow)
+   - **Knowledge**: "Expert in TypeScript" (what you know)
+   - **Problem**: "Blocked by API rate limits" (challenges faced)
+   - **Goal**: "Launch MVP by Q2" (what you're working toward)
+   - ...and 4 more (Belief, Action, Event, Relationship)
+
 4. **Graph Integration**: Connects entities, statements, and episodes into a temporal knowledge graph
 
-Example: "We wrote CORE in Next.js" becomes:
+**Example**: "We wrote CORE in Next.js" becomes:
 
-- Entities: `CORE`, `Next.js`
-- Statement: `CORE was developed using Next.js`
-- Relationship: `was developed using`
+- **Entities**: `CORE`, `Next.js`
+- **Statement**: `CORE was developed using Next.js` (aspect: Knowledge)
+- **Relationship**: `was developed using`
+- **When**: Timestamped and linked to the source episode
 
-![memory-ingest-eg](https://github.com/user-attachments/assets/1d0a8007-153a-4842-9586-f6f4de43e647)
+---
 
-### Memory Recall
+### Memory Recall: Intent-Driven Retrieval
 
-<img width="10610" height="3454" alt="memory-search-diagram" src="https://github.com/user-attachments/assets/3541893e-f7c9-42b9-8fad-6dabf138dbeb" />
+When you query CORE, the memory agent classifies your intent into 1 of 5 query types:
 
-When you query CORE:
+1. **Aspect Query** - "What are my preferences?" → Filters by fact aspect (Preference)
+2. **Entity Lookup** - "Tell me about Sarah" → Traverses entity graph
+3. **Temporal Query** - "What happened last week?" → Filters by time range
+4. **Exploratory** - "Catch me up" → Returns recent session summaries
+5. **Relationship Query** - "How do I know Sarah?" → Multi-hop graph traversal
 
-1. **Search**: Hybrid approach: keyword + semantic + graph traversal
-2. **Re-rank**: Surfaces most relevant and diverse results
-3. **Filter**: Applies time, reliability, and relationship strength filters
-4. **Output**: Returns facts AND the episodes they came from
+Then CORE:
 
-CORE doesn't just recall facts — it recalls them in context, with time and story, so agents respond the way you would remember.
+- **Routes to specific handler**: No wasted searches—goes straight to the right part of your knowledge graph
+- **Re-ranks**: Surfaces most relevant and diverse results
+- **Filters**: Applies time, reliability, and relationship strength filters
+- **Returns context**: Facts AND the episodes they came from
+
+**Traditional RAG**: Searches everything, reranks everything (1200-2400ms)
+**CORE Memory Agent**: Classifies intent, searches precisely (300-450ms, 3-4x faster)
+
+CORE doesn't just recall facts—it recalls them **in context**, with time and story, so AI agents respond the way you would remember.
 
 ---
 
@@ -792,11 +893,13 @@ Building AI agents? CORE gives you memory infrastructure + integrations infrastr
 ### What You Get
 
 **Memory Infrastructure**
+
 - Temporal knowledge graph with 88.24% LoCoMo accuracy
 - Hybrid search: semantic + keyword + graph traversal
 - Tracks context evolution and contradictions
 
 **Integrations Infrastructure**
+
 - Connect GitHub, Linear, Slack, Gmail once
 - Your agent gets MCP tools for all connected apps
 - No OAuth flows to build, no API maintenance
@@ -821,18 +924,16 @@ CORE memory achieves **88.24%** average accuracy in Locomo dataset across all re
 
 <img width="6048" height="3428" alt="benchmark" src="https://github.com/user-attachments/assets/2e5fdac5-02ed-4d00-9312-c21d09974e1f" />
 
-| Task Type | Description |
-|-----------|-------------|
-| Single-hop | Answers based on a single session |
-| Multi-hop | Synthesizing info from multiple sessions |
-| Open-domain | Integrating user info with external knowledge |
-| Temporal reasoning | Time-related cues and sequence understanding |
-
+| Task Type          | Description                                   |
+| ------------------ | --------------------------------------------- |
+| Single-hop         | Answers based on a single session             |
+| Multi-hop          | Synthesizing info from multiple sessions      |
+| Open-domain        | Integrating user info with external knowledge |
+| Temporal reasoning | Time-related cues and sequence understanding  |
 
 [View benchmark methodology and results →](https://github.com/RedPlanetHQ/core-benchmark)
 
 ---
-
 
 ## 🔒 Security
 
@@ -891,8 +992,3 @@ Have questions or feedback? We're here to help:
 <a href="https://github.com/RedPlanetHQ/core/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=RedPlanetHQ/core" />
 </a>
-
-
-
-
-

@@ -1,0 +1,50 @@
+---
+title: "Overview"
+description: "How CORE works as your memory agent"
+---
+
+## What Is CORE?
+
+CORE is a memory agent that replicates how human memory actually works. Your brain doesn't store memories as plain text—it organizes episodes into topics, creates associations, and knows where things belong. CORE does the same for your AI tools.
+
+## The Core Concepts
+
+### 1. [Memory Graph](/concepts/memory_graph)
+How your knowledge is structured: Episodes, Entities, Statements
+
+### 2. [Statement Aspects](/concepts/aspects)
+The 11 categories that classify every fact (Preference, Decision, Directive, etc.)
+
+### 3. [Query Types](/concepts/query_types)
+The 5 ways CORE understands what you're looking for (Aspect, Entity, Temporal, etc.)
+
+### 4. [Entity Types](/concepts/entity_types)
+How people, projects, technologies, and concepts are categorized
+
+### 5. [Labels](/concepts/labels)
+How episodes are automatically organized by topic
+
+## How It Works in 30 Seconds
+
+1. **You talk to Claude/Cursor/ChatGPT** → CORE captures the conversation
+2. **Facts are extracted** → "Manik prefers TypeScript" becomes a structured statement
+3. **Categorized by aspect** → This is a Preference (1 of 11 types)
+4. **Stored in knowledge graph** → Connected to entities (Manik, TypeScript)
+5. **Surfaced when needed** → Next time Claude writes code, your Preference statements are available
+
+## Memory Agent vs RAG
+
+**Traditional RAG**: "Search all text for similarity"
+**CORE**: "Understand what you're asking, search precisely"
+
+When you ask "What are my coding preferences?":
+- **RAG**: Searches everything, returns 50 chunks, hopes relevant ones are there
+- **CORE**: Classifies as Aspect Query, filters by `aspect=Preference`, returns 5 precise facts
+
+**Result**: 3-4x faster, infinitely more accurate.
+
+## Next Steps
+
+- [Understand the Memory Graph](/concepts/memory_graph)
+- [Learn about Statement Aspects](/concepts/aspects)
+- [See Query Types in action](/concepts/query_types)
