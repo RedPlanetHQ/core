@@ -77,3 +77,9 @@ export function getThemeColors(themePreset: ThemePreset): Colors {
 }
 
 export const defaultTheme: ThemePreset = 'main';
+
+export const themeContextValue = {
+	currentTheme: defaultTheme,
+	colors: getThemeColors(defaultTheme),
+	setCurrentTheme: () => {},
+};

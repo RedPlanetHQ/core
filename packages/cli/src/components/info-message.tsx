@@ -1,8 +1,8 @@
-import {TitledBox, titleStyles} from '@mishieck/ink-titled-box';
-import {Text, Box} from 'ink';
+import { TitledBox, titleStyles } from '@mishieck/ink-titled-box';
+import { Text, Box } from 'ink';
 
-import {useTheme} from '@/hooks/useTheme';
-import {useTerminalWidth} from '@/hooks/useTerminalWidth';
+import { useTheme } from '@/hooks/useTheme';
+import { useTerminalWidth } from '@/hooks/useTerminalWidth';
 
 export default function InfoMessage({
 	message,
@@ -14,7 +14,7 @@ export default function InfoMessage({
 	hideBox?: boolean;
 }) {
 	const boxWidth = useTerminalWidth();
-	const {colors} = useTheme();
+	const { colors } = useTheme();
 
 	return (
 		<>

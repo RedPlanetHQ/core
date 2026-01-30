@@ -64,6 +64,13 @@ export interface AppConfig  {
 	}[];
 }
 
+export interface GatewayConfig {
+	sessionName: string;
+	port: number;
+	pid?: number;
+	startedAt: number;
+}
+
 export interface UserPreferences {
 	lastProvider?: string;
 	lastModel?: string;
@@ -72,4 +79,5 @@ export interface UserPreferences {
 	};
 	lastUpdateCheck?: number;
 	selectedTheme?: ThemePreset;
+	gateway?: GatewayConfig;
 }
