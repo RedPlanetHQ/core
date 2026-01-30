@@ -263,7 +263,7 @@ export default function McpIntegrations() {
     <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
       <SettingSection
         title="MCP Integrations"
-        description="Use the Model Context Protocol to extend Poke's capabilities with external data and tools"
+        description="Use the Model Context Protocol to extend Core's capabilities with external data and tools"
       >
         <div className="flex flex-col gap-4">
           <div className="flex justify-end">

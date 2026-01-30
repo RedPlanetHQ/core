@@ -65,9 +65,8 @@ export interface AppConfig  {
 }
 
 export interface GatewayConfig {
-	sessionName: string;
 	port: number;
-	pid?: number;
+	pid: number;
 	startedAt: number;
 }
 

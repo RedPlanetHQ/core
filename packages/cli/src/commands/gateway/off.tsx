@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Text } from 'ink';
 import zod from 'zod';
 import { getPreferences, updatePreferences } from '@/config/preferences';
-import { sessionExists, killSession } from '@/utils/tmux';
+import { killProcessAndWait, isPidRunning } from '@/utils/process';
 import SuccessMessage from '@/components/success-message';
 import ErrorMessage from '@/components/error-message';
 import { ThemeContext } from '@/hooks/useTheme';
@@ -31,15 +31,15 @@ export default function GatewayOff(_props: Props) {
 			try {
 				// Check if gateway is running
 				const prefs = getPreferences();
-				if (!prefs.gateway) {
+				if (!prefs.gateway?.pid) {
 					if (!cancelled) {
 						setStatus('not-running');
 					}
 					return;
 				}
 
-				const exists = await sessionExists(prefs.gateway.sessionName);
-				if (!exists) {
+				const running = isPidRunning(prefs.gateway.pid);
+				if (!running) {
 					// Clean up stale config
 					const { gateway, ...rest } = prefs;
 					updatePreferences(rest);
@@ -51,7 +51,15 @@ export default function GatewayOff(_props: Props) {
 
 				// Stop the gateway
 				setStatus('stopping');
-				await killSession(prefs.gateway.sessionName);
+				const killed = await killProcessAndWait(prefs.gateway.pid);
+
+				if (!killed) {
+					if (!cancelled) {
+						setError(`Failed to kill process ${prefs.gateway.pid}. It may require manual cleanup.`);
+						setStatus('error');
+					}
+					return;
+				}
 
 				// Clean up config
 				const { gateway, ...rest } = prefs;

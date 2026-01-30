@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execSync } from "child_process";
-import { writeFileSync, appendFileSync, existsSync, readFileSync } from "fs";
+import { appendFileSync, existsSync, readFileSync } from "fs";
+import { writeFileSync } from "fs";
 import { join } from "path";
 
 var __defProp = Object.defineProperty;
@@ -34,7 +35,7 @@ function normalizeInput(raw) {
   };
 }
 __name(normalizeInput, "normalizeInput");
-function extractLastMessage(transcriptPath, role, stripSystemReminders = false) {
+function extractConversationPairs(transcriptPath, stripSystemReminders = false) {
   if (!transcriptPath || !existsSync(transcriptPath)) {
     throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
   }
@@ -43,40 +44,78 @@ function extractLastMessage(transcriptPath, role, stripSystemReminders = false) 
     throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
   }
   const lines = content.split("\n");
-  let foundMatchingRole = false;
-  for (let i = lines.length - 1; i >= 0; i--) {
-    const line = JSON.parse(lines[i]);
-    if (line.type === role) {
-      foundMatchingRole = true;
-      if (line.message?.content) {
-        let text = "";
-        const msgContent = line.message.content;
-        if (typeof msgContent === "string") {
-          text = msgContent;
-        } else if (Array.isArray(msgContent)) {
-          text = msgContent
-            .filter((c) => c.type === "text")
-            .map((c) => c.text)
-            .join("\n");
-        } else {
-          throw new Error(
-            `Unknown message content format in transcript. Type: ${typeof msgContent}`
-          );
-        }
-        if (stripSystemReminders) {
-          text = text.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "");
-          text = text.replace(/\n{3,}/g, "\n\n").trim();
-        }
-        return text;
+  const pairs = [];
+  let currentUserMessage = null;
+  let pars = [];
+
+  for (const line of lines) {
+    const parsed = JSON.parse(line);
+    pars.push(parsed);
+
+    if (parsed.type === "user") {
+      if (currentUserMessage !== null) {
+        pairs.push({
+          user: currentUserMessage,
+          assistant: "",
+        });
+      }
+      currentUserMessage = extractMessageContent(parsed);
+    } else if (parsed.type === "assistant") {
+      let assistantMessage = extractMessageContent(parsed);
+      if (stripSystemReminders) {
+        assistantMessage = assistantMessage.replace(
+          /<system-reminder>[\s\S]*?<\/system-reminder>/g,
+          ""
+        );
+        assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
+      }
+      if (assistantMessage && currentUserMessage) {
+        pairs.push({
+          user: currentUserMessage,
+          assistant: assistantMessage,
+        });
+        currentUserMessage = null;
       }
     }
   }
-  if (!foundMatchingRole) {
-    throw new Error(`No message found for role '${role}' in transcript: ${transcriptPath}`);
+
+  const sampleFilePath = join("/Users/harshithmullapudi/Documents/core/", "parsed.txt");
+
+  try {
+    appendFileSync(sampleFilePath, JSON.stringify(pars), "utf-8");
+    console.log(`Transcript saved to: ${sampleFilePath}`);
+  } catch (writeError) {
+    console.error(
+      `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
+    );
   }
-  return "";
+
+  if (currentUserMessage !== null) {
+    pairs.push({
+      user: currentUserMessage,
+      assistant: "",
+    });
+  }
+  return pairs;
 }
-__name(extractLastMessage, "extractLastMessage");
+__name(extractConversationPairs, "extractConversationPairs");
+function extractMessageContent(parsed) {
+  if (!parsed.message?.content) {
+    return "";
+  }
+  const msgContent = parsed.message.content;
+  if (typeof msgContent === "string") {
+    return msgContent;
+  } else if (Array.isArray(msgContent)) {
+    return msgContent
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+  } else {
+    throw new Error(`Unknown message content format. Type: ${typeof msgContent}`);
+  }
+}
+__name(extractMessageContent, "extractMessageContent");
 
 // src/constant.ts
 var SEARCH_CONTEXT = `
@@ -151,6 +190,78 @@ EXECUTE THIS TOOL FIRST:
 
 **AFTER FULLY RESPONDING TO THE USER, YOU MUST EXECUTE THIS TOOL:**
 `;
+
+// src/api-client.ts
+var API_BASE_URL = "https://app.getcore.me/api/v1";
+async function fetchLogs(sessionId, token) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/documents/${sessionId}`, {
+      method: "GET",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
+    });
+    if (!response.ok) {
+      console.error(`Failed to fetch logs: HTTP ${response.status}`);
+      return null;
+    }
+    const result = await response.json();
+    return result;
+  } catch (error) {
+    console.error(`Error fetching logs: ${error instanceof Error ? error.message : String(error)}`);
+    return null;
+  }
+}
+__name(fetchLogs, "fetchLogs");
+async function addEpisode(payload, token) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/add`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
+    });
+    if (!response.ok) {
+      console.error(`Failed to add episode: HTTP ${response.status}`);
+      return false;
+    }
+    return true;
+  } catch (error) {
+    console.error(
+      `Error adding episode: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return false;
+  }
+}
+__name(addEpisode, "addEpisode");
+async function fetchUserPersona(token) {
+  try {
+    const response = await fetch(`${API_BASE_URL}/me`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
+    });
+    if (!response.ok) {
+      console.error(`Failed to fetch user persona: HTTP ${response.status}`);
+      return null;
+    }
+    const data = await response.json();
+    return data.persona || "";
+  } catch (error) {
+    console.error(
+      `Error fetching user persona: ${error instanceof Error ? error.message : String(error)}`
+    );
+    return null;
+  }
+}
+__name(fetchUserPersona, "fetchUserPersona");
 
 // src/cli.ts
 var HOOK_TIMEOUTS = {
@@ -236,21 +347,13 @@ async function sessionStart() {
         exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
-    const response = await fetch("https://app.getcore.me/api/v1/me", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-    });
-    if (!response.ok) {
-      console.error(`API call failed with status: ${response.status}`);
+    const persona = await fetchUserPersona(token);
+    if (persona === null) {
+      console.error("Failed to fetch user persona");
       return {
         exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
-    const data = await response.json();
-    const persona = data.persona || "";
     const claudeEnvFile = process.env.CLAUDE_ENV_FILE;
     if (claudeEnvFile) {
       try {
@@ -302,12 +405,6 @@ async function stop() {
         },
       };
     }
-    const lastUserMessage = extractLastMessage(input.transcriptPath, "user", true);
-    const lastAssistantMessage = extractLastMessage(input.transcriptPath, "assistant", true);
-    const transcriptContent = `user:
-    ${lastUserMessage}
-    assistant:
-    ${lastAssistantMessage}`;
     const token = await getAuthToken();
     if (!token) {
       console.error("Failed to get authentication token for API call");
@@ -319,32 +416,62 @@ async function stop() {
         },
       };
     }
-    try {
-      const apiResponse = await fetch("https://app.getcore.me/api/v1/add", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+    const allPairs = extractConversationPairs(input.transcriptPath, true);
+    console.log(`Total conversation pairs extracted: ${allPairs.length}`);
+    const logsResponse = await fetchLogs(input.sessionId, token);
+    const totalIngested = logsResponse?.document?.ingestionQueueCount || 0;
+    console.log(`Already ingested: ${totalIngested}, Total pairs: ${allPairs.length}`);
+    const newPairs = allPairs.slice(totalIngested);
+    if (newPairs.length === 0) {
+      console.log("No new conversation pairs to ingest");
+      return {
+        exitCode: HOOK_EXIT_CODES.SUCCESS,
+        output: {
+          continue: true,
+          suppressOutput: true,
         },
-        body: JSON.stringify({
-          episodeBody: transcriptContent,
-          referenceTime: /* @__PURE__ */ new Date().toISOString(),
-          source: "claude-code",
-          type: "CONVERSATION",
-          sessionId: input.sessionId,
-        }),
-        signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-      });
-      if (!apiResponse.ok) {
-        console.error(`API call to /api/v1/add failed with status: ${apiResponse.status}`);
-      } else {
-        console.log("Transcript successfully sent to CORE");
-      }
-    } catch (apiError) {
+      };
+    }
+    // Save transcript to sample.txt in the current working directory
+    const sampleFilePath = join(input.cwd, "sample.txt");
+
+    try {
+      writeFileSync(sampleFilePath, `${JSON.stringify(allPairs)}\n\n${input.cwd}`, "utf-8");
+      console.log(`Transcript saved to: ${sampleFilePath}`);
+    } catch (writeError) {
       console.error(
-        `Error calling /api/v1/add: ${apiError instanceof Error ? apiError.message : String(apiError)}`
+        `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
       );
     }
+
+    console.log(`Ingesting ${newPairs.length} new conversation pair(s)`);
+    let successCount = 0;
+    for (const pair of newPairs) {
+      const transcriptContent = `user:
+${pair.user}
+${
+  pair.assistant
+    ? `assistant:
+${pair.assistant}`
+    : ""
+}`;
+      // const success = await addEpisode(
+      //   {
+      //     episodeBody: transcriptContent.trim(),
+      //     referenceTime: /* @__PURE__ */ new Date().toISOString(),
+      //     source: "claude-code",
+      //     type: "CONVERSATION",
+      //     sessionId: input.sessionId,
+      //   },
+      //   token
+      // );
+      // if (success) {
+      //   successCount++;
+      // }
+    }
+    console.log(
+      `Successfully ingested ${successCount}/${newPairs.length} new conversation pair(s)`
+    );
     const output = {
       continue: true,
       suppressOutput: true,

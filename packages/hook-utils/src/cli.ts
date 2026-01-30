@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
 import { execSync } from "child_process";
-import { writeFileSync, appendFileSync } from "fs";
-import { join } from "path";
+import { appendFileSync } from "fs";
 import { readJsonFromStdin, normalizeInput } from "./stdin";
-import { extractLastMessage } from "./transcript";
+import { extractConversationPairs } from "./transcript";
 import { SEARCH_CONTEXT } from "constant";
+import { fetchLogs, addEpisode, fetchUserPersona } from "./api-client";
 
 export const HOOK_TIMEOUTS = {
   DEFAULT: 300000, // Standard HTTP timeout (5 min for slow systems)
@@ -136,21 +136,12 @@ async function sessionStart(): Promise<{ exitCode: number; output?: SessionStart
     }
 
     // Make API call to get user persona
-    const response = await fetch("https://app.getcore.me/api/v1/me", {
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-      },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-    });
+    const persona = await fetchUserPersona(token);
 
-    if (!response.ok) {
-      console.error(`API call failed with status: ${response.status}`);
+    if (persona === null) {
+      console.error("Failed to fetch user persona");
       return { exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR };
     }
-
-    const data = (await response.json()) as { persona?: string };
-    const persona = data.persona || "";
 
     // Write token to CLAUDE_ENV_FILE if it exists
     const claudeEnvFile = process.env.CLAUDE_ENV_FILE;
@@ -195,15 +186,6 @@ async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
       };
     }
 
-    // Extract last messages from both user and assistant
-    const lastUserMessage = extractLastMessage(input.transcriptPath, "user", true);
-    const lastAssistantMessage = extractLastMessage(input.transcriptPath, "assistant", true);
-
-    const transcriptContent = `user:
-    ${lastUserMessage}
-    assistant:
-    ${lastAssistantMessage}`;
-
     // Get authentication token
     const token = await getAuthToken();
 
@@ -216,34 +198,56 @@ async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
       };
     }
 
-    // Make API call to /api/v1/add with transcript as episode body
-    try {
-      const apiResponse = await fetch("https://app.getcore.me/api/v1/add", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          episodeBody: transcriptContent,
+    // Extract all conversation pairs from transcript
+    const allPairs = extractConversationPairs(input.transcriptPath, true);
+    console.log(`Total conversation pairs extracted: ${allPairs.length}`);
+
+    // Fetch logs to determine how many pairs have already been ingested
+    const logsResponse = await fetchLogs(input.sessionId, token);
+    const totalIngested = logsResponse?.document?.ingestionQueueCount || 0;
+
+    console.log(`Already ingested: ${totalIngested}, Total pairs: ${allPairs.length}`);
+
+    // Determine which pairs are new (not yet ingested)
+    const newPairs = allPairs.slice(totalIngested);
+
+    if (newPairs.length === 0) {
+      console.log("No new conversation pairs to ingest");
+      return {
+        exitCode: HOOK_EXIT_CODES.SUCCESS,
+        output: { continue: true, suppressOutput: true },
+      };
+    }
+
+    console.log(`Ingesting ${newPairs.length} new conversation pair(s)`);
+
+    // Send each new pair to the API
+    let successCount = 0;
+    for (const pair of newPairs) {
+      const transcriptContent = `user:
+${pair.user}
+assistant:
+${pair.assistant}`;
+
+      const success = await addEpisode(
+        {
+          episodeBody: transcriptContent.trim(),
           referenceTime: new Date().toISOString(),
           source: "claude-code",
           type: "CONVERSATION",
           sessionId: input.sessionId,
-        }),
-        signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-      });
-
-      if (!apiResponse.ok) {
-        console.error(`API call to /api/v1/add failed with status: ${apiResponse.status}`);
-      } else {
-        console.log("Transcript successfully sent to CORE");
-      }
-    } catch (apiError) {
-      console.error(
-        `Error calling /api/v1/add: ${apiError instanceof Error ? apiError.message : String(apiError)}`
+        },
+        token
       );
+
+      if (success) {
+        successCount++;
+      }
     }
+
+    console.log(
+      `Successfully ingested ${successCount}/${newPairs.length} new conversation pair(s)`
+    );
 
     const output: StopOutput = {
       continue: true,

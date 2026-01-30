@@ -2,8 +2,7 @@ import { useEffect, useState } from 'react';
 import { Text } from 'ink';
 import zod from 'zod';
 import { getPreferences } from '@/config/preferences';
-import { sessionExists } from '@/utils/tmux';
-import { isPidRunning } from '@/utils/tmux';
+import { isPidRunning } from '@/utils/process';
 import InfoMessage from '@/components/info-message';
 import ErrorMessage from '@/components/error-message';
 import { ThemeContext } from '@/hooks/useTheme';
@@ -17,10 +16,8 @@ type Props = {
 
 interface GatewayStatus {
 	running: boolean;
-	sessionName?: string;
 	port?: number;
 	pid?: number;
-	pidRunning?: boolean;
 	startedAt?: number;
 	uptime?: string;
 }
@@ -51,7 +48,7 @@ export default function GatewayStatus(_props: Props) {
 			try {
 				const prefs = getPreferences();
 
-				if (!prefs.gateway) {
+				if (!prefs.gateway?.pid) {
 					if (!cancelled) {
 						setGatewayStatus({ running: false });
 						setStatus('ready');
@@ -59,18 +56,13 @@ export default function GatewayStatus(_props: Props) {
 					return;
 				}
 
-				const exists = await sessionExists(prefs.gateway.sessionName);
-				const pidRunning = prefs.gateway.pid
-					? isPidRunning(prefs.gateway.pid)
-					: false;
+				const running = isPidRunning(prefs.gateway.pid);
 
 				if (!cancelled) {
 					setGatewayStatus({
-						running: exists,
-						sessionName: prefs.gateway.sessionName,
+						running,
 						port: prefs.gateway.port,
 						pid: prefs.gateway.pid,
-						pidRunning,
 						startedAt: prefs.gateway.startedAt,
 						uptime: prefs.gateway.startedAt
 							? formatUptime(prefs.gateway.startedAt)
@@ -99,7 +91,7 @@ export default function GatewayStatus(_props: Props) {
 				<ErrorMessage message="Gateway is not running" hideTitle />
 			) : (
 				<InfoMessage
-					message={`Gateway Status: Running\n\nSession: ${gatewayStatus.sessionName}\nPort: ${gatewayStatus.port}\nPID: ${gatewayStatus.pid || 'unknown'}${gatewayStatus.pid ? ` (${gatewayStatus.pidRunning ? 'running' : 'not running'})` : ''}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI Base URL: http://localhost:${gatewayStatus.port}\n\nEndpoints:\n  POST   /sessions          Create new session\n  GET    /sessions          List all sessions\n  GET    /sessions/:id      Get session details\n  DELETE /sessions/:id      Kill session`}
+					message={`Gateway Status: Running\n\nPort: ${gatewayStatus.port}\nPID: ${gatewayStatus.pid}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI Base URL: http://localhost:${gatewayStatus.port}\n\nEndpoints:\n  POST   /sessions          Create new session\n  GET    /sessions          List all sessions\n  GET    /sessions/:id      Get session details\n  DELETE /sessions/:id      Kill session`}
 				/>
 			)}
 		</ThemeContext.Provider>
