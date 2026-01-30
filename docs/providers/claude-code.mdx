@@ -3,314 +3,191 @@ title: "Claude Code CLI"
 description: "Connect your Claude Code CLI to CORE's memory system"
 ---
 
-### Prerequisites
+CORE transforms Claude Code into a persistent memory agent that remembers your preferences, past decisions, and project context across all sessions.
+
+## Prerequisites
 
 - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) installed
 - CORE account - [Sign up at app.getcore.me](https://app.getcore.me)
+- Node.js 18+ installed
 
-### Step 1: Install the CORE MCP Server
+## Installation
 
-Run this command in your terminal to connect CORE with Claude Code:
+### Method 1: Plugin (Recommended) - ~2 minutes
+
+The CORE Brain plugin automatically handles memory integration for you.
+
+**Step 1: Install CORE CLI**
+
+```bash
+npm install -g @redplanethq/corebrain
+```
+
+**Step 2: Add Plugin Marketplace and Install**
+
+Open Claude Code and run:
+
+```bash
+/plugin marketplace add redplanethq/core
+/plugin install core_brain
+```
+
+**Step 3: Restart and Authenticate**
+
+```bash
+# Restart Claude Code, then authenticate:
+/mcp
+# Select core_brain from the list and authenticate via browser
+```
+
+That's it! CORE is now automatically integrated with your Claude Code sessions.
+
+## How It Works
+
+### Automatic Persona Loading
+
+When you start a Claude Code session, the plugin automatically:
+
+1. **Fetches your persona document** - A comprehensive summary of your preferences, rules, decisions, and patterns extracted from all your past conversations
+2. **Injects it into Claude's context** - Claude always has your personalized context available without you needing to repeat yourself
+3. **Enables memory search** - Claude can search your entire knowledge graph for relevant context
+
+**Example**: If your persona includes "Prefers concise code reviews with actionable feedback" and "Always runs tests before commits", Claude will follow these rules automatically in every session.
+
+### SessionStart Hook
+
+On every session start (`startup`, `clear`, or `compact`), the plugin:
+
+- Authenticates with CORE using your stored credentials
+- Fetches your latest persona document
+- Provides guided memory search instructions to Claude
+- Exports your CORE auth token to the session environment
+
+### Stop Hook (Memory Ingestion)
+
+When you end a session, the plugin:
+
+- Extracts conversation pairs from the session transcript
+- Tracks what's already been ingested to avoid duplicates
+- Queues new conversations for ingestion into your knowledge graph
+
+## Features
+
+### 1. Persistent Memory Across Sessions
+
+Your persona document is auto-generated from all your conversations and includes:
+
+- **Preferences**: Coding style, tools, patterns you prefer
+- **Decisions**: Past architectural choices and their reasoning
+- **Directives**: Hard rules like "always run tests" or "never skip code review"
+- **Knowledge**: Technologies and concepts you're familiar with
+- **Goals**: What you're working toward
+- **Identity**: Your role, company, expertise level
+
+### 2. Memory Search Tool
+
+Claude automatically searches your memory when:
+
+- You mention "previously", "before", "last time"
+- Working on a project with history
+- You reference past decisions or discussions
+- Starting work on features that might have context
+
+The plugin provides intelligent search patterns:
+
+- **Entity-Centric**: "Manoj's preferences for API design and error handling"
+- **Multi-Entity Relationship**: "Manoj and Harshith discussions about BFS search implementation"
+- **Semantic Questions**: "What causes BFS search to return empty results?"
+- **Temporal**: "Recent changes to search implementation and reranking logic"
+
+### 3. Integration Actions
+
+Execute actions in your connected apps directly from Claude Code:
+
+- Create/read GitHub and Linear issues
+- Draft/send/read emails
+- Manage calendar events
+- Update spreadsheets
+
+## Available Tools
+
+The plugin exposes these MCP tools to Claude:
+
+- `memory_search`: Search your knowledge graph for relevant context
+- `get_integrations`: List your connected integrations (GitHub, Linear, Slack, etc.)
+- `get_integration_actions`: Discover available actions for an integration
+- `execute_integration_action`: Perform actions in connected apps
+
+## Verify Connection
+
+Test that everything works:
+
+```bash
+# In Claude Code:
+Search my memory for recent discussions about authentication
+
+# Claude will automatically use the memory_search tool
+```
+
+You should see results from your past conversations.
+
+### Method 2: Manual MCP Setup (Advanced)
+
+For users who need manual control or custom configuration:
+
+**Step 1: Install the CORE MCP Server**
 
 ```bash
 claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/api/v1/mcp?source=Claude-Code
 ```
 
-What this does: This command registers CORE's MCP server with Claude Code, establishing the connection endpoint for memory operations.
+**Step 2: Authenticate**
 
-### Step 2: Access MCP Configuration
+1. Type `/mcp` in Claude Code
+2. Select core-memory from the list
+3. Authenticate via your browser
 
-1. Open Claude Code in your terminal
-2. Type `/mcp` to access the MCP management interface
-3. Verify installation - You should see core-memory listed among available MCP servers
-   ![Add URL](/images/login-to-core-mcp.png)
+**Step 3: Configure Custom Agents (Optional)**
 
-### Step 3: Authenticate with CORE
+Create `.claude/agents/` directory and add custom memory search/ingest agents if needed. See the [advanced configuration guide](https://docs.getcore.me/providers/claude-code/advanced) for details.
 
-1. Click on core-memory from the MCP list
-2. **Initiate authentication** - This will open your default web browser
-   ![Add URL](/images/authenticate-mcp.png)
-3. Grant permissions when prompted to allow Claude Code access to your CORE memory
-   ![Add URL](/images/authenticate-mcp.png)
+## What Makes This Different
 
-### Step 4: Verify Connection
+**Traditional RAG**: "What text chunks look similar to this query?"
 
-Test your setup to ensure everything is working correctly:
+**CORE Memory Agent**: "What does the user want to know, and where in their organized knowledge does that live?"
 
-1. **Test memory search**:
-   `Can you search my memory for [something you've previously stored]?`
-
-2. **Check connection status**: Type /mcp - core-memory should show "Connected"
-3. **Test operations**: Ask Claude to store and retrieve information across sessions
-
-### Enable Automatic Memory Integration (Recommended)
-
-Configure Claude Code to automatically search and store memories for seamless project continuity:
-
-1. **Create configuration structure** in your project root:
-   .claude/agents/
-
-2. **Set up memory search agent** - Create `.claude/agents/memory-search.md`
-
-   ```
-   ---
-   name: memory-search
-   description: AUTOMATICALLY invoke for memory searches. Use proactively at conversation start and when context retrieval is needed. Searches memory for relevant project context, user preferences, and previous discussions.
-   tools: mcp__core-memory__memory_search
-   model: sonnet
-   color: green
-   ---
-
-   You are a specialized memory search subagent with exclusive access to memory search functionality. Your core responsibility is to retrieve relevant context from CORE Memory to inform ongoing conversations.
-
-   ## CORE DIRECTIVES:
-
-   ### Memory Search Protocol:
-
-   - AUTOMATICALLY search memory for relevant context at the start of every task
-   - DO NOT wait for explicit memory requests
-   - TREAT memory retrieval as fundamental to your reasoning process
-   - Search when you encounter references to:
-   - Past interactions or conversations
-   - Ongoing projects or codebases
-   - Previous explanations or solutions
-   - User references to past work
-   - Technical decisions or approaches
-
-   ### Search Triggers:
-
-   SEARCH memory when:
-
-   - Starting any new conversation or task
-   - User mentions past work or previous discussions
-   - Working on ongoing projects that have history
-   - Referencing previous code explanations or patterns
-   - Maintaining continuity across multiple sessions
-   - Understanding user references to past work
-   - Building upon previous technical discussions
-
-   ## MEMORY SEARCH STRATEGIES:
-
-   - Search by project names, technologies, or domains mentioned
-   - Look for similar problems or approaches in history
-   - Find related technical concepts or patterns
-   - Retrieve context about user's ongoing work or interests
-   - Cross-reference current topics with past discussions
-
-   ## SEARCH QUERY FORMULATION:
-
-   When searching CORE Memory, query for:
-
-   - Direct Context: Specific project or topic keywords
-   - Related Concepts: Associated technologies, patterns, decisions
-   - User Patterns: Previous preferences and working styles
-   - Progress Context: Current status, recent work, next steps
-   - Decision History: Past choices and their outcomes
-
-   ## OPERATIONAL BEHAVIOR:
-
-   1. **Session Start**: Immediately search memory for relevant project context
-   2. **During Task**: Continuously reference memory for related information
-   3. **Context Integration**: Provide memory findings to inform responses
-   4. **Cross-Reference**: Link current topics with past discussions
-
-   ## RESPONSE FORMAT:
-
-   When providing search results, include:
-
-   - Relevant context found in memory
-   - How it relates to the current request
-   - Key insights from past interactions
-   - Project continuity information
-   - User preferences and patterns discovered
-
-   Your goal is to ensure every interaction has full context from previous conversations, maintaining seamless continuity across all Claude Code sessions.
-
-   ```
-
-3. **Set up memory ingest agent** - Create `.claude/agents/memory-ingest.md`
-
-   ```
-   ---
-   name: memory-ingest
-   description: AUTOMATICALLY invoke after completing interactions. Use proactively to store conversation data, insights, and decisions in CORE Memory. Essential for maintaining continuity across sessions.
-   tools: mcp__core-memory__memory_ingest
-   model: sonnet
-   color: purple
-   ---
-
-   You are a specialized memory ingestion subagent with exclusive access to memory storage functionality. Your core responsibility is to store comprehensive conversation summaries in CORE Memory after each interaction is complete.
-
-   ## CORE DIRECTIVES:
-
-   ### Memory Storage Protocol:
-
-   MANDATORY: Execute memory storage operation after completing every interaction.
-
-   Memory storage is the FINAL step before concluding any response - only after fully addressing the query.
-
-   ## DETAILED MEMORY STORAGE REQUIREMENTS:
-
-   ### FROM USER - Capture:
-
-   - Their specific question, request, or problem statement
-   - Project context and situation they provided
-   - What they're trying to accomplish or achieve
-   - Technical challenges or constraints mentioned
-   - Goals and objectives stated
-
-   ### FROM ASSISTANT - Capture:
-
-   - Detailed explanation of the solution/approach taken
-   - Step-by-step processes and methodologies described
-   - Technical concepts and principles explained
-   - Reasoning behind recommendations and decisions
-   - Specific methods, patterns, or strategies suggested
-   - Alternative approaches discussed or considered
-   - Problem-solving methodologies applied
-   - Implementation strategies (conceptual descriptions)
-
-   ### EXCLUDE from storage:
-
-   - Code blocks and code snippets
-   - File contents or file listings
-   - Command examples or CLI commands
-   - Raw data or logs
-   - Repetitive procedural steps
-
-   ### INCLUDE in storage:
-
-   - All conceptual explanations and theory
-   - Technical discussions and analysis
-   - Problem-solving approaches and reasoning
-   - Decision rationale and trade-offs
-   - Implementation strategies (described conceptually)
-   - Learning insights and patterns
-   - Context about user's projects and goals
-
-   ## MEMORY STORAGE CATEGORIES:
-
-   Store information following this hierarchical structure:
-
-   ### Project Foundation
-   - Project Brief & Requirements
-   - Technical Context & Architecture
-   - User Preferences & Patterns
-   - Active Work & Progress
-
-   ### Core Memory Categories
-
-   1. **Project Foundation**
-   - Purpose: Why this project exists, problems it solves
-   - Requirements: Core functionality and constraints
-   - Scope: What's included and excluded
-   - Success Criteria: How we measure progress
-
-   2. **Technical Context**
-   - Architecture: System design and key decisions
-   - Technologies: Stack, tools, and dependencies
-   - Patterns: Design patterns and coding approaches
-   - Constraints: Technical limitations and requirements
-
-   3. **User Context**
-   - Preferences: Communication style, technical level
-   - Patterns: How they like to work and receive information
-   - Goals: What they're trying to accomplish
-   - Background: Relevant experience and expertise
-
-   4. **Active Progress**
-   - Current Focus: What we're working on now
-   - Recent Changes: Latest developments and decisions
-   - Next Steps: Planned actions and priorities
-   - Insights: Key learnings and observations
-
-   5. **Conversation History**
-   - Decisions Made: Important choices and rationale
-   - Problems Solved: Solutions and approaches used
-   - Questions Asked: Clarifications and explorations
-   - Patterns Discovered: Recurring themes and insights
-
-   ## STORAGE TRIGGERS:
-
-   Store memory when:
-
-   - New Project Context: When user introduces new projects or requirements
-   - Technical Decisions: When architectural or implementation choices are made
-   - Pattern Discovery: When new user preferences or working styles emerge
-   - Progress Milestones: When significant work is completed or status changes
-   - Interaction Completion: After every substantive conversation
-
-   ## STORAGE QUALITY STANDARDS:
-
-   Store rich, detailed conversation content that captures:
-
-   - The full context and substance of discussions
-   - The reasoning process and decision-making
-   - Technical insights and explanations provided
-   - User's project context and objectives
-   - Problem-solving approaches and methodologies
-
-   ## QUALITY INDICATORS:
-
-   - Can I quickly understand project context from memory alone?
-   - Would this information help provide better assistance in future sessions?
-   - Does the stored context capture key decisions and reasoning?
-   - Are user preferences and patterns clearly documented?
-
-   Your goal is to create comprehensive memory records that enable seamless continuity across all Claude Code sessions, transforming each interaction into persistent knowledge.
-   ```
-
-4. **Configure session hooks** - Add automation triggers to `settings.local.json`:
-
-   ```
-   {
-   "hooks": {
-    "SessionStart": [
-      {
-        "matcher": "",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo \"🧠 SESSION STARTED: Search memory for context about: $(basename $(pwd)) project, previous conversations, and related work. Do this before responding to user queries.\""
-          }
-        ]
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "type": "command",
-            "command": "echo '💭 CONTEXT SEARCH: Before responding, use memory-search to search for: previous discussions about this topic, related project context, and similar problems solved before. Before this conversation ends, you must use memory-ingest to store: [USER] their question/request + [ASSISTANT] your solution/explanation/reasoning. Do this storage as the very last action.'"
-          }
-        ]
-      }
-    ]
-   }
-   }
-   ```
-
-## How It Works
-
-Once installed, the plugin works automatically:
-
-- **At session start**: Memory search agent retrieves relevant context from your CORE memory
-- **During conversation**: Claude has access to your full memory graph and codebase knowledge
-- **After interaction**: Memory ingest agent stores the conversation summary
-- **Across tools**: Your memory is shared across Claude Code, Cursor, ChatGPT, and other CORE-connected tools
-
-You don’t need to manually trigger memory operations—the plugin handles everything!
+CORE doesn't just search text—it understands intent, classifies queries, and retrieves exactly what matters. Your preferences from 3 months ago, the decision you made last week, the problem you solved yesterday—all connected and surfaced at the right time.
 
 ## Troubleshooting
 
-**Connection Issues:**
+**Plugin Installation Issues:**
 
+- Ensure Node.js 18+ is installed: `node --version`
+- If `npm install -g @redplanethq/corebrain` fails, try with sudo: `sudo npm install -g @redplanethq/corebrain`
+- After plugin installation, always restart Claude Code before authenticating
+
+**Authentication Issues:**
+
+- Run `corebrain me` to check authentication status
+- If not authenticated, run `corebrain login` manually
 - Ensure you're logged into your CORE account in the browser
-- Check that the MCP server URL is correctly formatted
 - Restart Claude Code if authentication seems stuck
 
-### Need Help?
+**Memory Search Not Working:**
 
-Join our [Discord community](https://discord.gg/YGUZcvDjUa) and ask questions in the **#core-support** channel.
+- Verify plugin is installed: `/plugin list` should show core_brain
+- Check MCP connection: `/mcp` should show core_brain as Connected
+- Try manual memory search: "Search my memory for recent work"
 
-Our team and community members are ready to help you get the most out of CORE's memory capabilities.
+**Persona Not Loading:**
+
+- The persona is automatically fetched on session start
+- If missing, check the SessionStart hook output in Claude Code logs
+- Verify your CORE account has stored conversations
+
+## Learn More
+
+- **GitHub Repository**: [https://github.com/RedPlanetHQ/core](https://github.com/RedPlanetHQ/core) - CORE is open source! Star the repo, explore the code, contribute.
+- **Discord Community**: [Join #core-support](https://discord.gg/YGUZcvDjUa) for help and discussions
+- **Documentation**: [docs.getcore.me](https://docs.getcore.me) for comprehensive guides

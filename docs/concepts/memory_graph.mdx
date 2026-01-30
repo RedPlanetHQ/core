@@ -30,3 +30,39 @@ This approach gives CORE unique advantages over simple note-taking or search sys
 - **Traceable Knowledge**: Every fact in your memory can be traced back to the original conversation where you mentioned it
 - **Smart Connections**: When you mention "TaskMaster," CORE finds not just that word, but all related people, timelines, and decisions connected to your project
 - **Evolving Understanding**: As you have more conversations, CORE builds richer connections between existing entities rather than creating isolated notes
+
+---
+
+### How Facts Are Organized: The 11 Aspects
+
+CORE doesn't just extract facts—it **categorizes** them. Every statement is classified into one of 11 aspects:
+
+- **Identity**: Who you are → "Manik works at Red Planet"
+- **Preference**: How you want things → "Prefers TypeScript over JavaScript"
+- **Decision**: Choices made → "Chose Prisma for ORM"
+- **Directive**: Hard rules → "Always run tests before PR"
+- **Knowledge**: What you know → "Expert in React"
+- **Problem**: Challenges faced → "Hit rate limits with GitHub API"
+- **Goal**: What you're working toward → "Launch MVP by Q2"
+- **And 4 more**: Belief, Action, Event, Relationship
+
+When Claude needs your coding preferences, CORE doesn't search everything—it filters by `aspect = Preference`. When debugging, it surfaces `aspect = Problem`. This is how CORE provides the right information at the right time.
+
+See [Statement Aspects](/concepts/aspects) for detailed examples of each aspect.
+
+---
+
+### How Recall Works: Intent-Driven Retrieval
+
+When you search your memory, CORE classifies your query into one of 5 types:
+
+1. **Aspect Query**: "What are my preferences?" → Filter by aspect
+2. **Entity Lookup**: "Tell me about Sarah" → Traverse entity graph
+3. **Temporal Query**: "What happened last week?" → Filter by time
+4. **Exploratory**: "Catch me up" → Recent summaries
+5. **Relationship Query**: "How do I know Sarah?" → Multi-hop traversal
+
+**Traditional RAG**: Same search for all queries (slow, imprecise)
+**CORE**: Different strategy per query type (fast, precise)
+
+See [Query Types](/concepts/query_types) for detailed examples and performance comparisons.

@@ -1,0 +1,156 @@
+---
+title: "Statement Aspects"
+description: "How CORE categorizes every fact for intelligent retrieval"
+---
+
+## What Are Aspects?
+
+Every fact in your CORE memory is automatically classified into one of 11 aspects. Think of aspects as filing cabinet drawers—when you need something specific, CORE knows exactly which drawer to open.
+
+## The 11 Aspects
+
+### 1. Identity
+**What it captures**: Who you are (slow-changing attributes)
+
+**Example predicates**: is, has, works at, lives in
+
+**Example statement**: "Manik works at Red Planet"
+
+**When it surfaces**: When Claude needs to understand your role, company, or background for context
+
+---
+
+### 2. Knowledge
+**What it captures**: What you know and understand
+
+**Example predicates**: expert in, knows, understands, familiar with
+
+**Example statement**: "Expert in TypeScript and React"
+
+**When it surfaces**: When Claude is explaining technical concepts or choosing complexity level
+
+---
+
+### 3. Belief
+**What it captures**: Why you think that way
+
+**Example predicates**: believes, values, thinks
+
+**Example statement**: "Values simplicity over complexity in code"
+
+**When it surfaces**: When Claude makes architectural decisions or design choices
+
+---
+
+### 4. Preference
+**What it captures**: How you want things done
+
+**Example predicates**: prefers, likes, avoids, dislikes
+
+**Example statement**: "Prefers pnpm over npm"
+
+**When it surfaces**: During code reviews, setup, or when choosing tools/patterns
+
+---
+
+### 5. Action
+**What it captures**: What you actually do (habitual behaviors)
+
+**Example predicates**: does, uses, practices
+
+**Example statement**: "Reviews PRs every morning before standup"
+
+**When it surfaces**: When suggesting workflows or understanding your routines
+
+---
+
+### 6. Goal
+**What it captures**: What you want to achieve
+
+**Example predicates**: wants, aims for, plans to
+
+**Example statement**: "Launch MVP by Q2 2026"
+
+**When it surfaces**: When planning features, prioritizing work, or suggesting next steps
+
+---
+
+### 7. Directive
+**What it captures**: Hard rules and automation triggers
+
+**Example predicates**: must, always, never, notify when
+
+**Example statement**: "Always run tests before creating a PR"
+
+**When it surfaces**: **Always**—directives are enforced rules that Claude must follow
+
+---
+
+### 8. Decision
+**What it captures**: Past choices and their reasoning
+
+**Example predicates**: decided, chose, selected
+
+**Example statement**: "Chose Neo4j for graph storage because of relationship traversal performance"
+
+**When it surfaces**: When encountering similar technical choices or explaining architecture
+
+---
+
+### 9. Event
+**What it captures**: Things that happened (with timestamps)
+
+**Example predicates**: attended, started, completed, happened on
+
+**Example statement**: "Started working on authentication refactor on Jan 15, 2026"
+
+**When it surfaces**: When you ask "what happened", "when did we", or need temporal context
+
+---
+
+### 10. Problem
+**What it captures**: Challenges, blockers, issues you've faced
+
+**Example predicates**: has problem, blocked by, struggles with
+
+**Example statement**: "Hit rate limits with GitHub API when syncing 50+ repos"
+
+**When it surfaces**: When debugging similar issues or planning around known constraints
+
+---
+
+### 11. Relationship
+**What it captures**: Connections between people, teams, projects
+
+**Example predicates**: works with, knows, reports to, collaborates with
+
+**Example statement**: "Works with Sarah on CORE project"
+
+**When it surfaces**: When understanding team dynamics or project collaborators
+
+---
+
+## Why Aspects Matter
+
+When you ask "What are my coding preferences?", CORE doesn't search through all your conversations. It:
+
+1. Classifies your query as an **Aspect Query** for `Preference`
+2. Filters statements where `aspect = Preference`
+3. Returns only preference facts: "Prefers TypeScript", "Uses pnpm", "Avoids class components"
+
+**Result**: 5 precise facts in 300ms, instead of 50 maybe-relevant chunks in 2000ms.
+
+## How They're Used Together
+
+Different aspects surface at different times:
+
+| What Claude Is Doing | Aspects Surfaced |
+|---------------------|------------------|
+| Writing code | Preference, Directive, Knowledge |
+| Code review | Preference, Directive |
+| Architectural decision | Decision, Belief, Problem |
+| Debugging | Problem, Knowledge, Decision |
+| Planning features | Goal, Decision, Directive |
+| Explaining concepts | Knowledge, Identity |
+
+This is how CORE provides **right information, right time**—not context dumping.
