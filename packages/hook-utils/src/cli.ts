@@ -203,17 +203,6 @@ async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
     ${lastUserMessage}
     assistant:
     ${lastAssistantMessage}`;
-    // Save transcript to sample.txt in the current working directory
-    const sampleFilePath = join(input.cwd, "sample.txt");
-
-    try {
-      writeFileSync(sampleFilePath, transcriptContent, "utf-8");
-      console.log(`Transcript saved to: ${sampleFilePath}`);
-    } catch (writeError) {
-      console.error(
-        `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-      );
-    }
 
     // Get authentication token
     const token = await getAuthToken();

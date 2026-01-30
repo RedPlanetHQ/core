@@ -308,15 +308,6 @@ async function stop() {
     ${lastUserMessage}
     assistant:
     ${lastAssistantMessage}`;
-    const sampleFilePath = join(input.cwd, "sample.txt");
-    try {
-      writeFileSync(sampleFilePath, transcriptContent, "utf-8");
-      console.log(`Transcript saved to: ${sampleFilePath}`);
-    } catch (writeError) {
-      console.error(
-        `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-      );
-    }
     const token = await getAuthToken();
     if (!token) {
       console.error("Failed to get authentication token for API call");
