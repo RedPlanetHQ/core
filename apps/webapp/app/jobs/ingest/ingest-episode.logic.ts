@@ -7,7 +7,7 @@ import { type AddEpisodeResult, EpisodeType } from "@core/types";
 import { hasCredits } from "~/trigger/utils/utils";
 
 export const IngestBodyRequest = z.object({
-  episodeBody: z.string(),
+  episodeBody: z.string().min(20),
   originalEpisodeBody: z.string().optional(), // Full content (for semantic_diff where episodeBody is diff only)
   referenceTime: z.string(),
   metadata: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),

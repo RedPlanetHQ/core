@@ -15,7 +15,7 @@ const { action, loader } = createHybridActionApiRoute(
   },
   async ({ body, authentication }) => {
     const response = await addToQueue(body, authentication.userId);
-    return json({ success: true, id: response.id });
+    return json({ success: true, id: response?.id });
   },
 );
 

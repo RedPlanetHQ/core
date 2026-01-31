@@ -46,11 +46,9 @@ function extractConversationPairs(transcriptPath, stripSystemReminders = false) 
   const lines = content.split("\n");
   const pairs = [];
   let currentUserMessage = null;
-  let pars = [];
 
   for (const line of lines) {
     const parsed = JSON.parse(line);
-    pars.push(parsed);
 
     if (parsed.type === "user") {
       if (currentUserMessage !== null || currentUserMessage !== "") {
@@ -85,6 +83,7 @@ function extractConversationPairs(transcriptPath, stripSystemReminders = false) 
       assistant: "",
     });
   }
+
   return pairs;
 }
 __name(extractConversationPairs, "extractConversationPairs");
