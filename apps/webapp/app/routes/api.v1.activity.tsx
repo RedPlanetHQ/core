@@ -58,6 +58,7 @@ const { action, loader } = createActionApiRoute(
         referenceTime: new Date().toISOString(),
         source: body.source,
         type: EpisodeTypeEnum.CONVERSATION,
+        sessionId: activity.id
       };
 
       const queueResponse = await addToQueue(
