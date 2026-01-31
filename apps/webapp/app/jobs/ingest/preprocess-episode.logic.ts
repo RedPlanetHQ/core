@@ -77,6 +77,19 @@ export async function processEpisodePreprocessing(
     const type = episodeBody.type || EpisodeType.CONVERSATION;
     const sessionId = episodeBody.sessionId as string;
 
+    if (!episodeBody.episodeBody) {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          status: "FAILED",
+        },
+      });
+
+      return {
+        success: true,
+      };
+    }
+
     const episodeChunker = new EpisodeChunker();
     const needsChunking = episodeChunker.needsChunking(
       episodeBody.episodeBody,
