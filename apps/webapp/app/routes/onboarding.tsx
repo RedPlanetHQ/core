@@ -151,6 +151,10 @@ export default function Onboarding() {
           </div>
           <span className="font-medium">C.O.R.E.</span>
         </div>
+
+        <div className="flex items-center">
+          <Button variant="secondary" onClick={handleSkip}> skip </Button>
+        </div>
       </div>
 
       {/* Main Content */}

@@ -53,13 +53,13 @@ function extractConversationPairs(transcriptPath, stripSystemReminders = false) 
     pars.push(parsed);
 
     if (parsed.type === "user") {
-      if (currentUserMessage !== null) {
+      if (currentUserMessage !== null || currentUserMessage !== "") {
         pairs.push({
           user: currentUserMessage,
           assistant: "",
         });
       }
-      currentUserMessage = extractMessageContent(parsed);
+      currentUserMessage = extractMessageContent(parsed) ? extractMessageContent(parsed) : null;
     } else if (parsed.type === "assistant") {
       let assistantMessage = extractMessageContent(parsed);
       if (stripSystemReminders) {
@@ -77,17 +77,6 @@ function extractConversationPairs(transcriptPath, stripSystemReminders = false) 
         currentUserMessage = null;
       }
     }
-  }
-
-  const sampleFilePath = join("/Users/harshithmullapudi/Documents/core/", "parsed.txt");
-
-  try {
-    appendFileSync(sampleFilePath, JSON.stringify(pars), "utf-8");
-    console.log(`Transcript saved to: ${sampleFilePath}`);
-  } catch (writeError) {
-    console.error(
-      `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-    );
   }
 
   if (currentUserMessage !== null) {
@@ -431,17 +420,6 @@ async function stop() {
           suppressOutput: true,
         },
       };
-    }
-    // Save transcript to sample.txt in the current working directory
-    const sampleFilePath = join(input.cwd, "sample.txt");
-
-    try {
-      writeFileSync(sampleFilePath, `${JSON.stringify(allPairs)}\n\n${input.cwd}`, "utf-8");
-      console.log(`Transcript saved to: ${sampleFilePath}`);
-    } catch (writeError) {
-      console.error(
-        `Failed to write sample.txt: ${writeError instanceof Error ? writeError.message : String(writeError)}`
-      );
     }
 
     console.log(`Ingesting ${newPairs.length} new conversation pair(s)`);
