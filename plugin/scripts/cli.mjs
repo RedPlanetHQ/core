@@ -455,19 +455,19 @@ ${
 ${pair.assistant}`
     : ""
 }`;
-      // const success = await addEpisode(
-      //   {
-      //     episodeBody: transcriptContent.trim(),
-      //     referenceTime: /* @__PURE__ */ new Date().toISOString(),
-      //     source: "claude-code",
-      //     type: "CONVERSATION",
-      //     sessionId: input.sessionId,
-      //   },
-      //   token
-      // );
-      // if (success) {
-      //   successCount++;
-      // }
+      const success = await addEpisode(
+        {
+          episodeBody: transcriptContent.trim(),
+          referenceTime: /* @__PURE__ */ new Date().toISOString(),
+          source: "claude-code",
+          type: "CONVERSATION",
+          sessionId: input.sessionId,
+        },
+        token
+      );
+      if (success) {
+        successCount++;
+      }
     }
     console.log(
       `Successfully ingested ${successCount}/${newPairs.length} new conversation pair(s)`
