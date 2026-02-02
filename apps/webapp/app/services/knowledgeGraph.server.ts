@@ -11,7 +11,10 @@ import {
 } from "@core/types";
 import { logger } from "./logger.service";
 import crypto from "crypto";
-import { extractCombined, CombinedExtractionSchema } from "./prompts/combined-extraction";
+import {
+  extractCombined,
+  CombinedExtractionSchema,
+} from "./prompts/combined-extraction";
 import {
   getEpisode,
   saveEpisode,
@@ -73,7 +76,9 @@ export class KnowledgeGraphService {
           throw new Error(`Episode ${params.episodeUuid} not found in graph`);
         }
         episode = existingEpisode;
-        logger.log(`Retrieved existing episode ${params.episodeUuid} from preprocessing`);
+        logger.log(
+          `Retrieved existing episode ${params.episodeUuid} from preprocessing`,
+        );
       } else {
         // Backwards compatibility: create and save episode if not from preprocessing
         episode = {
@@ -103,7 +108,7 @@ export class KnowledgeGraphService {
       }
 
       // Step 2: Context Retrieval - Get episodes for context
-      let previousEpisodes: EpisodeEmbedding[] = []
+      let previousEpisodes: EpisodeEmbedding[] = [];
       let sessionContext: string | undefined;
       let previousVersionContent: string | undefined;
 
@@ -113,7 +118,13 @@ export class KnowledgeGraphService {
         // 2. Previous version context via EMBEDDING SEARCH
 
         // Get current version session context (earlier chunks already ingested)
-        previousEpisodes = await getRecentEpisodes(params.userId, DEFAULT_EPISODE_WINDOW,params.sessionId, [episode.uuid], params.version );
+        previousEpisodes = await getRecentEpisodes(
+          params.userId,
+          DEFAULT_EPISODE_WINDOW,
+          params.sessionId,
+          [episode.uuid],
+          params.version,
+        );
 
         if (previousEpisodes.length > 0) {
           sessionContext = previousEpisodes
@@ -144,23 +155,34 @@ export class KnowledgeGraphService {
             version: previousVersion,
           });
 
-          console.log("relatedPreviousChunks: ", relatedPreviousChunks.length)
+          console.log("relatedPreviousChunks: ", relatedPreviousChunks.length);
 
           if (relatedPreviousChunks.length > 0) {
             // Concatenate related chunks as previous version context
             previousVersionContent = relatedPreviousChunks
-              .map((ep) => `[Chunk ${ep.chunkIndex}]\n${ep.originalContent || ep.content}`)
+              .map(
+                (ep) =>
+                  `[Chunk ${ep.chunkIndex}]\n${ep.originalContent || ep.content}`,
+              )
               .join("\n\n");
 
-            logger.info(`Embedding search found ${relatedPreviousChunks.length} related chunks from previous version`, {
-              previousVersion,
-              chunkIndices: relatedPreviousChunks.map(ep => ep.chunkIndex),
-            });
+            logger.info(
+              `Embedding search found ${relatedPreviousChunks.length} related chunks from previous version`,
+              {
+                previousVersion,
+                chunkIndices: relatedPreviousChunks.map((ep) => ep.chunkIndex),
+              },
+            );
           }
         }
       } else {
         // For conversations: get recent messages in same session
-        previousEpisodes = await getRecentEpisodes(params.userId, DEFAULT_EPISODE_WINDOW,params.sessionId, [episode.uuid]);
+        previousEpisodes = await getRecentEpisodes(
+          params.userId,
+          DEFAULT_EPISODE_WINDOW,
+          params.sessionId,
+          [episode.uuid],
+        );
 
         if (previousEpisodes.length > 0) {
           sessionContext = previousEpisodes
@@ -172,8 +194,8 @@ export class KnowledgeGraphService {
         }
       }
 
-      console.log("previousEpisodes: ", previousEpisodes)
-      console.log("previousVersionContent: ", previousVersionContent)
+      console.log("previousEpisodes: ", previousEpisodes);
+      console.log("previousVersionContent: ", previousVersionContent);
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
@@ -228,12 +250,13 @@ export class KnowledgeGraphService {
       );
 
       // Step 3 & 4: Combined Entity and Statement Extraction (single LLM call)
-      const extractedStatements = await this.extractCombinedEntitiesAndStatements(
-        episode,
-        previousEpisodes,
-        tokenMetrics,
-        params.userName,
-      );
+      const extractedStatements =
+        await this.extractCombinedEntitiesAndStatements(
+          episode,
+          previousEpisodes,
+          tokenMetrics,
+          params.userName,
+        );
       const extractedStatementsTime = Date.now();
       logger.log(
         `Combined extraction completed in ${extractedStatementsTime - episodeUpdatedTime} ms`,
@@ -377,9 +400,13 @@ export class KnowledgeGraphService {
       tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
     }
 
-    const { entities: extractedEntities, statements: extractedStatements } = response;
+    const { entities: extractedEntities, statements: extractedStatements } =
+      response;
 
-    console.log("Combined extraction - Statements:", extractedStatements.length);
+    console.log(
+      "Combined extraction - Statements:",
+      extractedStatements.length,
+    );
 
     // Convert extracted entities to EntityNode objects
     const entityMap = new Map<string, EntityNode>();
@@ -503,8 +530,8 @@ export class KnowledgeGraphService {
     userName?: string,
   ) {
     // Format entity types for prompt
-    const entityTypes = EntityTypes.filter(t => t !== "Predicate")
-      .map(t => `- ${t}`)
+    const entityTypes = EntityTypes.filter((t) => t !== "Predicate")
+      .map((t) => `- ${t}`)
       .join("\n");
 
     // Get related memories
