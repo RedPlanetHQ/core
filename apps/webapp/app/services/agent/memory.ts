@@ -251,17 +251,31 @@ export function getRelativeTimestamp(
   return timestamps[relativeTime].toISOString();
 }
 
+interface SearchMemoryOptions {
+  startTime?: Date;
+  endTime?: Date;
+  limit?: number;
+  labelIds?: string[];
+  structured?: boolean;
+  sortBy?: "relevance" | "recency";
+  fallbackThreshold?: number;
+  adaptiveFiltering?: boolean;
+}
+
 /**
  * Simplified memory agent call that returns relevant episodes
  * Uses parallel V1/V2 search strategy:
  * - V2: Uses raw intent directly (V2 handles decomposition internally)
  * - V1: Falls back to memoryAgent which decomposes into multiple queries
- * Useful for MCP integration
+ * Useful for MCP integration and API
+ *
+ * @param options.structured - If true, returns raw JSON data. If false (default), returns MCP-style text format.
  */
 export async function searchMemoryWithAgent(
   intent: string,
   userId: string,
   source: string,
+  options: SearchMemoryOptions = {},
 ) {
   try {
     // Check workspace version to determine search strategy
@@ -283,8 +297,13 @@ export async function searchMemoryWithAgent(
 
     const v2Promise = searchV2(intent, userId, {
       structured: true,
-      limit: 20,
+      limit: options.limit ?? 20,
       source,
+      startTime: options.startTime,
+      endTime: options.endTime,
+      labelIds: options.labelIds,
+      sortBy: options.sortBy,
+      fallbackThreshold: options.fallbackThreshold
     });
 
     // Wait for V2 first (it's faster)
@@ -325,6 +344,17 @@ export async function searchMemoryWithAgent(
     logger.info(
       `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? 'yes' : 'no'} using ${usedVersion}`,
     );
+
+    // If structured option is true, return raw JSON data for API use
+    if (options.structured) {
+      return {
+        episodes,
+        facts,
+        invalidatedFacts: invalidFacts,
+        entity,
+        version: usedVersion,
+      };
+    }
 
     // Format entity information
     let entityText = "";
@@ -384,6 +414,11 @@ export async function searchMemoryWithAgent(
       isError: false,
     };
   } catch (e: any) {
+    // For structured mode, throw the error to let API handle it
+    if (options.structured) {
+      throw e;
+    }
+    // For MCP text mode, return error in MCP format
     return {
       content: [
         {

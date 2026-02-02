@@ -3,6 +3,7 @@ import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.
 import { searchV2 } from "~/services/search-v2";
 import { json } from "@remix-run/node";
 import { trackFeatureUsage } from "~/services/telemetry.server";
+import { searchMemoryWithAgent } from "~/services/agent/memory";
 
 
 export const SearchBodyRequest = z.object({
@@ -33,25 +34,26 @@ const { action, loader } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const results = await searchV2(
-      body.query,
-      authentication.userId,
-      {
-        startTime: body.startTime ? new Date(body.startTime) : undefined,
-        endTime: body.endTime ? new Date(body.endTime) : undefined,
-        limit: body.limit,
-        labelIds: body.labelIds,
-        structured: body.structured,
-        sortBy: body.sortBy,
-        fallbackThreshold: body.scoreThreshold,
-        enableFallback: true,
-      },
-    )
+    const results = await searchMemoryWithAgent(body.query, authentication.userId, "api", {
+      startTime: body.startTime ? new Date(body.startTime) : undefined,
+      endTime: body.endTime ? new Date(body.endTime) : undefined,
+      limit: body.limit,
+      labelIds: body.labelIds,
+      structured: body.structured,
+      sortBy: body.sortBy,
+      fallbackThreshold: body.scoreThreshold,
+      adaptiveFiltering: body.adaptiveFiltering,
+    });
 
     // Track search
     trackFeatureUsage("search_performed", authentication.userId).catch(
       console.error,
     );
+
+    // When structured: false, extract text from MCP format
+    if (!body.structured && results.content) {
+      return json({ text: results.content[0]?.text ?? "" });
+    }
 
     return json(results);
   },
