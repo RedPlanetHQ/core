@@ -2,26 +2,15 @@ import { z } from "zod";
 import { json } from "@remix-run/node";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
-import { nanoid } from "nanoid";
-import {
-  deletePersonalAccessToken,
-  getOrCreatePersonalAccessToken,
-} from "~/services/personalAccessToken.server";
 
 import {
-  convertToModelMessages,
-  generateId,
   generateText,
   type LanguageModel,
-  stepCountIs,
   streamText,
-  tool,
-  validateUIMessages,
 } from "ai";
-import axios from "axios";
 import { logger } from "~/services/logger.service";
-import { getReActPrompt } from "~/lib/prompt.server";
 import { getModel } from "~/lib/model.server";
+import { searchMemoryWithAgent } from "~/services/agent/memory";
 
 const DeepSearchBodySchema = z.object({
   content: z.string().min(1, "Content is required"),
@@ -35,41 +24,6 @@ const DeepSearchBodySchema = z.object({
     })
     .optional(),
 });
-
-function createSearchMemoryTool(token: string) {
-  return tool({
-    description:
-      "Search the user's memory for relevant facts and episodes. Use this tool multiple times with different queries to gather comprehensive context.",
-    inputSchema: z.object({
-      query: z
-        .string()
-        .describe(
-          "Search query to find relevant information. Be specific: entity names, topics, concepts.",
-        ),
-    }),
-    execute: async ({ query }: { query: string }) => {
-      try {
-        const response = await axios.post(
-          `${process.env.API_BASE_URL || "https://app.getcore.me"}/api/v1/search`,
-          { query, structured: false },
-          {
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          },
-        );
-        return response.data;
-      } catch (error) {
-        logger.error(`SearchMemory tool error: ${error}`);
-        return {
-          facts: [],
-          episodes: [],
-          summary: "No results found",
-        };
-      }
-    },
-  } as any);
-}
 
 const { action, loader } = createActionApiRoute(
   {
@@ -87,46 +41,43 @@ const { action, loader } = createActionApiRoute(
       console.error,
     );
 
-    const randomKeyName = `deepSearch_${nanoid(10)}`;
 
-    const pat = await getOrCreatePersonalAccessToken({
-      name: randomKeyName,
-      userId: authentication.userId as string,
-    });
-
-    if (!pat?.token) {
-      return json({
-        success: false,
-        error: "Failed to create personal access token",
-      });
-    }
 
     try {
-      // Create search tool that agent will use
-      const searchTool = createSearchMemoryTool(pat.token);
-
-      const tools = {
-        searchMemory: searchTool,
-      };
-
-      // Build initial messages with ReAct prompt
-      const initialMessages = [
+      // First, search for relevant information
+      const results = await searchMemoryWithAgent(
+        body.content,
+        authentication.userId,
+        body.metadata?.source || "api",
         {
-          role: "user",
-          parts: [
-            {
-              type: "text",
-              text: `CONTENT TO ANALYZE:\n${body.content}\n\nPlease search my memory for relevant context and synthesize what you find.`,
-            },
-          ],
-          id: generateId(),
-        },
-      ];
+          limit: 10,
+        }
+      );
 
-      const validatedMessages = await validateUIMessages({
-        messages: initialMessages,
-        tools,
-      });
+      // Extract only episodes and invalidated facts
+      const episodes = results.episodes || [];
+      const invalidatedFacts = results.invalidatedFacts || [];
+
+      // Create a prompt with the search results
+      const systemPrompt = `You are a helpful assistant that summarizes and synthesizes information from the user's memory.
+
+CRITICAL RULES:
+1. ONLY use information provided within the <memory></memory> tags
+2. NEVER hallucinate or add information not present in the memory
+3. If the memory doesn't contain enough information to fully answer the question, acknowledge what's missing
+4. Be concise but preserve all important context and details
+${body.intentOverride ? `Intent: ${body.intentOverride}` : ""}`;
+
+      const userPrompt = `Answer the following question using ONLY the information provided in the memory below.
+
+QUESTION: ${body.content}
+
+<memory>
+${episodes.length > 0 ? `EPISODES:\n${episodes.map((e: any) => `- ${e.content || e.text || JSON.stringify(e)}`).join("\n")}\n` : ""}
+${invalidatedFacts.length > 0 ? `INVALIDATED FACTS (outdated information):\n${invalidatedFacts.map((f: any) => `- ${f.content || f.text || JSON.stringify(f)}`).join("\n")}\n` : ""}
+</memory>
+
+Provide a clear, helpful summary based ONLY on the memory above. Do not add any information not present in the memory.`;
 
       if (body.stream) {
         const result = streamText({
@@ -134,36 +85,36 @@ const { action, loader } = createActionApiRoute(
           messages: [
             {
               role: "system",
-              content: getReActPrompt(body.metadata, body.intentOverride),
+              content: systemPrompt,
             },
-            ...await convertToModelMessages(validatedMessages),
+            {
+              role: "user",
+              content: userPrompt,
+            },
           ],
-          tools,
-          stopWhen: [stepCountIs(10)],
         });
 
-        return result.toUIMessageStreamResponse({
-          originalMessages: validatedMessages,
-        });
+        return result.toUIMessageStreamResponse({});
       } else {
         const { text } = await generateText({
           model: getModel() as LanguageModel,
           messages: [
             {
               role: "system",
-              content: getReActPrompt(body.metadata, body.intentOverride),
+              content: systemPrompt,
             },
-            ...await convertToModelMessages(validatedMessages),
+            {
+              role: "user",
+              content: userPrompt,
+            },
           ],
-          tools,
-          stopWhen: [stepCountIs(10)],
         });
 
-        await deletePersonalAccessToken(pat?.id);
+
         return json({ text });
       }
     } catch (error: any) {
-      await deletePersonalAccessToken(pat?.id);
+
       logger.error(`Deep search error: ${error}`);
 
       return json({

@@ -8,7 +8,7 @@ import {
   type Workspace,
 } from "@prisma/client";
 
-import { type CoreMessage } from "ai";
+import { type ModelMessage } from "ai";
 
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
@@ -176,7 +176,7 @@ export const getConversationHistoryFormat = (
 export const getPreviousExecutionHistory = (
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   previousHistory: any[],
-): CoreMessage[] => {
+): ModelMessage[] => {
   return previousHistory.map((history) => ({
     role: history.userType === "User" ? "user" : "assistant",
     content: history.message,
