@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { searchV2 } from "~/services/search-v2";
 import { json } from "@remix-run/node";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 import { searchMemoryWithAgent } from "~/services/agent/memory";

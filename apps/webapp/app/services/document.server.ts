@@ -189,6 +189,7 @@ export const updateDocumentContent = async (
     where: {
       sessionId: document.sessionId,
       type: "DOCUMENT",
+      workspaceId,
     },
     orderBy: {
       createdAt: "desc",
@@ -203,6 +204,16 @@ export const updateDocumentContent = async (
       latestDocumentLog.status === "FAILED") &&
     latestDocumentLog.createdAt > fourMinutesAgo;
 
+  await prisma.document.update({
+    where: {
+      id,
+      workspaceId,
+    },
+    data: {
+      content,
+    },
+  });
+
   if (shouldUpdate && latestDocumentLog) {
     // Update existing document log
     const existingData = latestDocumentLog.data as any;
@@ -216,16 +227,6 @@ export const updateDocumentContent = async (
       data: { data: updatedData },
     });
 
-    await prisma.document.update({
-      where: {
-        id,
-        workspaceId,
-      },
-      data: {
-        content,
-      },
-    });
-
     return {
       success: true,
       message: "Document updated successfully",
@@ -237,6 +238,7 @@ export const updateDocumentContent = async (
     const newLogData = {
       type: "DOCUMENT",
       episodeBody: content,
+      title: document.title,
       sessionId: document?.sessionId as string,
       source: document.source ?? "core",
       referenceTime: new Date().toISOString(),
