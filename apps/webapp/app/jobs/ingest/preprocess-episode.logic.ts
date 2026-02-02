@@ -76,12 +76,25 @@ export async function processEpisodePreprocessing(
     const episodeBody = payload.body;
     const type = episodeBody.type || EpisodeType.CONVERSATION;
     const sessionId = episodeBody.sessionId as string;
+    let content = episodeBody.episodeBody;
+
+    if (type === EpisodeType.DOCUMENT) {
+      const document = await prisma.document.findUnique({
+        where: {
+          sessionId_workspaceId: {
+            sessionId,
+            workspaceId: payload.workspaceId,
+          },
+        },
+      });
+
+      if (document) {
+        content = document.content;
+      }
+    }
 
     const episodeChunker = new EpisodeChunker();
-    const needsChunking = episodeChunker.needsChunking(
-      episodeBody.episodeBody,
-      type,
-    );
+    const needsChunking = episodeChunker.needsChunking(content, type);
 
     let preprocessedChunks: z.infer<typeof IngestBodyRequest>[] = [];
     let preprocessingStrategy = "single_episode";
@@ -101,7 +114,7 @@ export async function processEpisodePreprocessing(
 
       // Use chunkEpisode which will internally call createSingleChunk with proper metadata
       chunked = await episodeChunker.chunkEpisode(
-        episodeBody.episodeBody,
+        content,
         type,
         sessionId,
         episodeBody.title || "Untitled",
@@ -115,7 +128,7 @@ export async function processEpisodePreprocessing(
       });
 
       chunked = await episodeChunker.chunkEpisode(
-        episodeBody.episodeBody,
+        content,
         type,
         sessionId,
         episodeBody.title || "Untitled",
