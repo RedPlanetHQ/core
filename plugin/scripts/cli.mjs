@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 import { execSync } from "child_process";
 import { appendFileSync, existsSync, readFileSync } from "fs";
-import { writeFileSync } from "fs";
-import { join } from "path";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -35,58 +33,6 @@ function normalizeInput(raw) {
   };
 }
 __name(normalizeInput, "normalizeInput");
-function extractConversationPairs(transcriptPath, stripSystemReminders = false) {
-  if (!transcriptPath || !existsSync(transcriptPath)) {
-    throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
-  }
-  const content = readFileSync(transcriptPath, "utf-8").trim();
-  if (!content) {
-    throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
-  }
-  const lines = content.split("\n");
-  const pairs = [];
-  let currentUserMessage = null;
-
-  for (const line of lines) {
-    const parsed = JSON.parse(line);
-
-    if (parsed.type === "user") {
-      if (currentUserMessage !== null || currentUserMessage !== "") {
-        pairs.push({
-          user: currentUserMessage,
-          assistant: "",
-        });
-      }
-      currentUserMessage = extractMessageContent(parsed) ? extractMessageContent(parsed) : null;
-    } else if (parsed.type === "assistant") {
-      let assistantMessage = extractMessageContent(parsed);
-      if (stripSystemReminders) {
-        assistantMessage = assistantMessage.replace(
-          /<system-reminder>[\s\S]*?<\/system-reminder>/g,
-          ""
-        );
-        assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
-      }
-      if (assistantMessage && currentUserMessage) {
-        pairs.push({
-          user: currentUserMessage,
-          assistant: assistantMessage,
-        });
-        currentUserMessage = null;
-      }
-    }
-  }
-
-  if (currentUserMessage !== null) {
-    pairs.push({
-      user: currentUserMessage,
-      assistant: "",
-    });
-  }
-
-  return pairs;
-}
-__name(extractConversationPairs, "extractConversationPairs");
 function extractMessageContent(parsed) {
   if (!parsed.message?.content) {
     return "";
@@ -104,6 +50,53 @@ function extractMessageContent(parsed) {
   }
 }
 __name(extractMessageContent, "extractMessageContent");
+function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemReminders = false) {
+  if (!transcriptPath || !existsSync(transcriptPath)) {
+    throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
+  }
+  const content = readFileSync(transcriptPath, "utf-8").trim();
+  if (!content) {
+    throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
+  }
+  const lines = content.split("\n");
+  const parsedLines = lines.map((line) => JSON.parse(line));
+  let lastAssistantIndex = -1;
+  for (let i = parsedLines.length - 1; i >= 0; i--) {
+    if (parsedLines[i].type === "assistant") {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+  if (lastAssistantIndex === -1) {
+    throw new Error("No assistant message found in transcript");
+  }
+  let assistantMessage = extractMessageContent(parsedLines[lastAssistantIndex]);
+  if (stripSystemReminders) {
+    assistantMessage = assistantMessage.replace(
+      /<system-reminder>[\s\S]*?<\/system-reminder>/g,
+      ""
+    );
+    assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
+  }
+  const userMessages = [];
+  let gotAtleastOne = false;
+
+  for (let i = lastAssistantIndex - 1; i >= 0; i--) {
+    const parsed = parsedLines[i];
+
+    if (parsed.type === "assistant" && gotAtleastOne && extractMessageContent(parsed)) {
+      break;
+    } else if (parsed.type === "user") {
+      userMessages.unshift(extractMessageContent(parsed));
+      gotAtleastOne = true;
+    }
+  }
+  return {
+    assistant: assistantMessage,
+    users: userMessages,
+  };
+}
+__name(extractLastAssistantWithPrecedingUsers, "extractLastAssistantWithPrecedingUsers");
 
 // src/constant.ts
 var SEARCH_CONTEXT = `
@@ -180,29 +173,7 @@ EXECUTE THIS TOOL FIRST:
 `;
 
 // src/api-client.ts
-var API_BASE_URL = "https://app.getcore.me/api/v1";
-async function fetchLogs(sessionId, token) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/documents/${sessionId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-    });
-    if (!response.ok) {
-      console.error(`Failed to fetch logs: HTTP ${response.status}`);
-      return null;
-    }
-    const result = await response.json();
-    return result;
-  } catch (error) {
-    console.error(`Error fetching logs: ${error instanceof Error ? error.message : String(error)}`);
-    return null;
-  }
-}
-__name(fetchLogs, "fetchLogs");
+var API_BASE_URL = "https://b4dc378156d8.ngrok-free.app";
 async function addEpisode(payload, token) {
   try {
     const response = await fetch(`${API_BASE_URL}/add`, {
@@ -404,51 +375,34 @@ async function stop() {
         },
       };
     }
-    const allPairs = extractConversationPairs(input.transcriptPath, true);
-    console.log(`Total conversation pairs extracted: ${allPairs.length}`);
-    const logsResponse = await fetchLogs(input.sessionId, token);
-    const totalIngested = logsResponse?.document?.ingestionQueueCount || 0;
-    console.log(`Already ingested: ${totalIngested}, Total pairs: ${allPairs.length}`);
-    const newPairs = allPairs.slice(totalIngested);
-    if (newPairs.length === 0) {
-      console.log("No new conversation pairs to ingest");
-      return {
-        exitCode: HOOK_EXIT_CODES.SUCCESS,
-        output: {
-          continue: true,
-          suppressOutput: true,
-        },
-      };
-    }
+    const { assistant, users } = extractLastAssistantWithPrecedingUsers(input.transcriptPath, true);
+    console.log(`Extracted last assistant message with ${users.length} preceding user message(s)`);
+    let transcriptContent = "";
+    for (const userMessage of users) {
+      transcriptContent += `<user>
+${userMessage}
+</user>
 
-    console.log(`Ingesting ${newPairs.length} new conversation pair(s)`);
-    let successCount = 0;
-    for (const pair of newPairs) {
-      const transcriptContent = `user:
-${pair.user}
-${
-  pair.assistant
-    ? `assistant:
-${pair.assistant}`
-    : ""
-}`;
-      const success = await addEpisode(
-        {
-          episodeBody: transcriptContent.trim(),
-          referenceTime: /* @__PURE__ */ new Date().toISOString(),
-          source: "claude-code",
-          type: "CONVERSATION",
-          sessionId: input.sessionId,
-        },
-        token
-      );
-      if (success) {
-        successCount++;
-      }
+`;
     }
-    console.log(
-      `Successfully ingested ${successCount}/${newPairs.length} new conversation pair(s)`
+    transcriptContent += `<assistant>
+${assistant}
+</assistant>`;
+    const success = await addEpisode(
+      {
+        episodeBody: transcriptContent.trim(),
+        referenceTime: /* @__PURE__ */ new Date().toISOString(),
+        source: "claude-code-plugin",
+        type: "CONVERSATION",
+        sessionId: input.sessionId,
+      },
+      token
     );
+    if (success) {
+      console.log("Successfully ingested conversation turn");
+    } else {
+      console.error("Failed to ingest conversation turn");
+    }
     const output = {
       continue: true,
       suppressOutput: true,

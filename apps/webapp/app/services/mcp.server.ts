@@ -62,7 +62,7 @@ async function createMcpServer(
 
     // Filter out skipped tools if specified
     if (skipTools && skipTools.length > 0) {
-      tools = tools.filter(tool => !skipTools.includes(tool.name));
+      tools = tools.filter((tool) => !skipTools.includes(tool.name));
     }
 
     return {
@@ -307,25 +307,11 @@ async function createTransport(
   workspaceId: string,
   spaceId?: string,
   skipTools?: string[],
+  noSession?: boolean,
 ): Promise<StreamableHTTPServerTransport> {
   const transport = new StreamableHTTPServerTransport({
-    sessionIdGenerator: () => sessionId,
+    sessionIdGenerator: noSession ? undefined : () => sessionId,
     onsessioninitialized: async (sessionId) => {
-      // Clean up old sessions (24+ hours) during new session initialization
-      try {
-        const [dbCleanupCount, memoryCleanupCount] = await Promise.all([
-          MCPSessionManager.cleanupOldSessions(workspaceId),
-          TransportManager.cleanupOldSessions(),
-        ]);
-        if (dbCleanupCount > 0 || memoryCleanupCount > 0) {
-          logger.log(
-            `Cleaned up ${dbCleanupCount} DB sessions and ${memoryCleanupCount} memory sessions`,
-          );
-        }
-      } catch (error) {
-        logger.error(`Error during session cleanup: ${error}`);
-      }
-
       // Store session in database
       await MCPSessionManager.upsertSession(
         sessionId,
@@ -367,7 +353,13 @@ async function createTransport(
   }
 
   // Create and connect MCP server
-  const server = await createMcpServer(userId, sessionId, source, spaceId, skipTools);
+  const server = await createMcpServer(
+    userId,
+    sessionId,
+    source,
+    spaceId,
+    skipTools,
+  );
   await server.connect(transport);
 
   return transport;
@@ -428,13 +420,15 @@ export const handleMCPRequest = async (
             workspaceId,
             spaceId,
             skipTools,
+            true,
           );
+
           logger.log(`Successfully recreated session ${sessionId}`);
         } else {
           // Session was in DB but couldn't be retrieved - return 404
           return res.status(404).json({
             error: "session_not_found",
-            error_description:
+            message:
               "Session not found in database. Please initialize a new session.",
           });
         }
@@ -456,17 +450,25 @@ export const handleMCPRequest = async (
       );
     } else if (sessionId && !isInitializeRequest(body)) {
       // Session ID provided but session not active - return 404
-      return res.status(404).json({
-        error: "session_not_found",
-        error_description:
-          "Session not found or expired. Please initialize a new session.",
-      });
+      currentSessionId = randomUUID();
+      transport = await createTransport(
+        currentSessionId,
+        source,
+        integrations,
+        noIntegrations,
+        userId,
+        workspaceId,
+        spaceId,
+        skipTools,
+        true,
+      );
+
+      logger.log(`Successfully recreated session ${sessionId}`);
     } else {
       // No session ID and not an initialize request - invalid
       return res.status(400).json({
         error: "invalid_request",
-        error_description:
-          "Missing session ID. Please send an initialize request first.",
+        message: "Missing session ID. Please send an initialize request first.",
       });
     }
 
@@ -490,7 +492,7 @@ export const handleSessionRequest = async (
     // No session ID provided - client should send initialize request instead
     res.status(400).json({
       error: "invalid_request",
-      error_description:
+      message:
         "Missing mcp-session-id header. Please send an initialize request to create a new session.",
     });
     return;
@@ -505,11 +507,7 @@ export const handleSessionRequest = async (
   if (!isActive) {
     // Session terminated, expired, or never existed
     // Return 404 to signal client to start a new session
-    res.status(404).json({
-      error: "session_not_found",
-      error_description:
-        "Session not found. The server may have restarted or the session expired. Please initialize a new session.",
-    });
+    res.status(405).json();
     return;
   }
 
@@ -523,11 +521,7 @@ export const handleSessionRequest = async (
     logger.log(
       `Session ${sessionId} found in DB but not in memory. Returning 404 to trigger new session initialization.`,
     );
-    res.status(404).json({
-      error: "session_not_in_memory",
-      error_description:
-        "Session exists in database but not in server memory. Server may have restarted. Please initialize a new session.",
-    });
+    res.status(405).json();
     return;
   }
 

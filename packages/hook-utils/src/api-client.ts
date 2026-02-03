@@ -22,50 +22,12 @@ export interface DocumentResponse {
 }
 
 /**
- * Fetch document/logs by session ID to get ingestion queue count
- * @param sessionId The session ID to fetch
- * @param token The authentication token
- * @returns Document response with ingestionQueueCount
- */
-export async function fetchLogs(
-  sessionId: string,
-  token: string
-): Promise<DocumentResponse | null> {
-  try {
-    const response = await fetch(`${API_BASE_URL}/documents/${sessionId}`, {
-      method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
-    });
-
-    if (!response.ok) {
-      console.error(`Failed to fetch logs: HTTP ${response.status}`);
-      return null;
-    }
-
-    const result = (await response.json()) as DocumentResponse;
-    return result;
-  } catch (error) {
-    console.error(
-      `Error fetching logs: ${error instanceof Error ? error.message : String(error)}`
-    );
-    return null;
-  }
-}
-
-/**
  * Add episode/conversation to CORE
  * @param payload Episode data to add
  * @param token Authentication token
  * @returns True if successful, false otherwise
  */
-export async function addEpisode(
-  payload: AddEpisodePayload,
-  token: string
-): Promise<boolean> {
+export async function addEpisode(payload: AddEpisodePayload, token: string): Promise<boolean> {
   try {
     const response = await fetch(`${API_BASE_URL}/add`, {
       method: "POST",

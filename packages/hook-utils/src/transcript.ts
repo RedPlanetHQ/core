@@ -6,74 +6,15 @@ export interface ConversationPair {
 }
 
 /**
- * Extract all user/assistant conversation pairs from transcript JSONL file
- * If a user message has no following assistant message, the assistant field will be empty
- * @param transcriptPath Path to transcript file
- * @param stripSystemReminders Whether to remove <system-reminder> tags from assistant messages
- * @returns Array of conversation pairs
- */
-export function extractConversationPairs(
-  transcriptPath: string,
-  stripSystemReminders: boolean = false
-): ConversationPair[] {
-  if (!transcriptPath || !existsSync(transcriptPath)) {
-    throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
-  }
-
-  const content = readFileSync(transcriptPath, "utf-8").trim();
-  if (!content) {
-    throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
-  }
-
-  const lines = content.split("\n");
-  const pairs: ConversationPair[] = [];
-  let currentUserMessage: string | null = null;
-
-  for (const line of lines) {
-    const parsed = JSON.parse(line);
-
-    if (parsed.type === "user") {
-      // If we have a previous user message without an assistant response, save it with empty assistant
-      if (currentUserMessage !== null) {
-        pairs.push({ user: currentUserMessage, assistant: "" });
-      }
-
-      // Extract the user message
-      currentUserMessage = extractMessageContent(parsed);
-    } else if (parsed.type === "assistant") {
-      // Extract the assistant message
-      let assistantMessage = extractMessageContent(parsed);
-
-      // Strip system reminders if requested
-      if (stripSystemReminders) {
-        assistantMessage = assistantMessage.replace(
-          /<system-reminder>[\s\S]*?<\/system-reminder>/g,
-          ""
-        );
-        assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
-      }
-
-      if (assistantMessage && currentUserMessage) {
-        pairs.push({ user: currentUserMessage, assistant: assistantMessage });
-        currentUserMessage = null;
-      }
-    }
-  }
-
-  // Handle trailing user message without assistant response
-  if (currentUserMessage !== null) {
-    pairs.push({ user: currentUserMessage, assistant: "" });
-  }
-
-  return pairs;
-}
-
-/**
  * Extract message content from a parsed JSONL line
  * @param parsed Parsed JSON object
  * @returns Extracted text content
  */
 function extractMessageContent(parsed: any): string {
+  if (!parsed.message?.id?.includes("msg_")) {
+    return "";
+  }
+
   if (!parsed.message?.content) {
     return "";
   }
@@ -155,4 +96,75 @@ export function extractLastMessage(
   }
 
   return "";
+}
+
+const DEFAULTS = ["[Request interrupted by user for tool use]"];
+
+/**
+ * Extract the last assistant message and all user messages that came before it
+ * (until hitting another assistant message or the start of transcript)
+ * @param transcriptPath Path to transcript file
+ * @param stripSystemReminders Whether to remove <system-reminder> tags from assistant messages
+ * @returns Object with assistant message and array of user messages (in chronological order)
+ */
+export function extractLastAssistantWithPrecedingUsers(
+  transcriptPath: string,
+  stripSystemReminders: boolean = false
+): { assistant: string; users: string[] } {
+  if (!transcriptPath || !existsSync(transcriptPath)) {
+    throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
+  }
+
+  const content = readFileSync(transcriptPath, "utf-8").trim();
+  if (!content) {
+    throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
+  }
+
+  const lines = content.split("\n");
+  const parsedLines = lines.map((line) => JSON.parse(line));
+
+  // Find the last assistant message
+  let lastAssistantIndex = -1;
+  for (let i = parsedLines.length - 1; i >= 0; i--) {
+    if (parsedLines[i].type === "assistant") {
+      lastAssistantIndex = i;
+      break;
+    }
+  }
+
+  if (lastAssistantIndex === -1) {
+    throw new Error("No assistant message found in transcript");
+  }
+
+  // Extract the assistant message
+  let assistantMessage = extractMessageContent(parsedLines[lastAssistantIndex]);
+  if (stripSystemReminders) {
+    assistantMessage = assistantMessage.replace(
+      /<system-reminder>[\s\S]*?<\/system-reminder>/g,
+      ""
+    );
+    assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // Go backwards from the last assistant message to collect all preceding user messages
+  const userMessages: string[] = [];
+  let gotAtleastOne = false;
+  for (let i = lastAssistantIndex - 1; i >= 0; i--) {
+    const parsed = parsedLines[i];
+    const content = extractMessageContent(parsed);
+
+    if (parsed.type === "assistant" && parsed.message && gotAtleastOne && content) {
+      // Stop when we hit another assistant message
+      break;
+    } else if (parsed.type === "user" && !DEFAULTS.includes(content)) {
+      // Collect user message (we'll reverse later to maintain chronological order)
+      userMessages.unshift(extractMessageContent(parsed));
+      gotAtleastOne = true;
+    }
+  }
+
+  return {
+    assistant: assistantMessage,
+    users: userMessages,
+  };
 }

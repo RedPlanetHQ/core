@@ -11,15 +11,26 @@ import { EntityTypes, StatementAspects } from "@core/types";
  * Schema for combined extraction output
  */
 export const CombinedEntitySchema = z.object({
-  name: z.string().describe("The entity name - clean, without articles or qualifiers"),
+  name: z
+    .string()
+    .describe("The entity name - clean, without articles or qualifiers"),
   type: z.enum(EntityTypes).describe("The entity type classification"),
-  attributes: z.record(z.string(), z.string()).optional().describe("Optional entity attributes like email, phone, location, etc."),
+  attributes: z
+    .record(z.string(), z.string())
+    .optional()
+    .describe("Optional entity attributes like email, phone, location, etc."),
 });
 
 export const CombinedStatementSchema = z.object({
-  source: z.string().describe("Subject entity name - MUST be from extracted entities"),
+  source: z
+    .string()
+    .describe("Subject entity name - MUST be from extracted entities"),
   predicate: z.string().describe("Relationship type"),
-  target: z.string().describe("Object entity name - MUST be from extracted entities OR a literal value"),
+  target: z
+    .string()
+    .describe(
+      "Object entity name - MUST be from extracted entities OR a literal value",
+    ),
   fact: z.string().describe("Natural language representation of the fact"),
   aspect: z.enum(StatementAspects).nullable().describe("Aspect classification"),
   event_date: z.string().nullable().describe("ISO date when the fact occurred"),
