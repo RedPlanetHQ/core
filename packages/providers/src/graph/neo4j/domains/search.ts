@@ -261,7 +261,7 @@ export function createSearchMethods(core: Neo4jCore) {
       return records.map((record) => ({
         episode: parseEpisodicNode(record.get("episode")),
         statements: (record.get("statements") || []).map((s: any) =>
-          parseStatementNode(s.properties)
+          parseStatementNode(s)
         ),
       }));
     },

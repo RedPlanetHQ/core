@@ -169,6 +169,7 @@ export async function executeIntegrationAction(
   accountId: string,
   action: string,
   parameters: Record<string, any> = {},
+  source?: string,
 ): Promise<any> {
   // Queue the integration call to limit concurrent child processes
   return integrationQueue.add(async () => {
@@ -190,6 +191,7 @@ export async function executeIntegrationAction(
           data: {
             integrationAccountId: accountId,
             toolName: action,
+            source: source || null,
             error: error instanceof Error ? error.message : String(error),
           },
         })
@@ -204,6 +206,7 @@ export async function executeIntegrationAction(
         data: {
           integrationAccountId: accountId,
           toolName: action,
+          source: source || null,
           error: null,
         },
       })
@@ -269,7 +272,7 @@ export async function handleGetIntegrationActions(args: any) {
  * Wraps executeIntegrationAction with MCP { content, isError } response format
  */
 export async function handleExecuteIntegrationAction(args: any) {
-  const { accountId, action, parameters: actionArgs } = args;
+  const { accountId, action, parameters: actionArgs, source } = args;
 
   try {
     if (!accountId) {
@@ -280,7 +283,7 @@ export async function handleExecuteIntegrationAction(args: any) {
       throw new Error("action is required");
     }
 
-    return await executeIntegrationAction(accountId, action, actionArgs || {});
+    return await executeIntegrationAction(accountId, action, actionArgs || {}, source);
   } catch (error) {
     logger.error(`MCP execute integration action error: ${error}`);
 

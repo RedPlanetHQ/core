@@ -18,6 +18,7 @@ import { routeIntent, shouldProceedWithSearch } from "./router";
 import { routeToHandler } from "./handlers";
 import { formatRecallAsMarkdown, formatForV1Compatibility } from "./formatter";
 import { prisma } from "~/db.server";
+import { applyTokenBudget, DEFAULT_TOKEN_BUDGET } from "~/services/search/tokenBudget";
 
 /**
  * Log recall event to database for analytics
@@ -147,6 +148,26 @@ export async function searchV2(
 
   let result: RecallResult;
   result = await routeToHandler(ctx);
+
+  // Apply token budget to episodes (drop least relevant from tail until under budget)
+  const tokenBudget = options.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+  if (result.episodes.length > 0) {
+    const { episodes: budgetedEpisodes, droppedCount, totalTokens } = applyTokenBudget(
+      result.episodes,
+      tokenBudget
+    );
+    result = {
+      ...result,
+      episodes: budgetedEpisodes,
+    };
+
+    if (droppedCount > 0) {
+      logger.info(
+        `[SearchV2] Token budget applied: dropped ${droppedCount} episodes, ` +
+          `${budgetedEpisodes.length} remaining (${totalTokens}/${tokenBudget} tokens)`
+      );
+    }
+  }
 
   const responseTimeMs = Date.now() - startTime;
 

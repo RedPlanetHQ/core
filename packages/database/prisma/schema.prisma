@@ -579,6 +579,9 @@ model IntegrationCallLog {
   // Tool/action information
   toolName String // The tool that was called (e.g., "gmail_send_email")
 
+  // Source tracking
+  source String? // Source of the call (e.g., "Claude-Code", "Cursor", "mcp", "api")
+
   // Error tracking
   error String? // Error message if the call failed
 }

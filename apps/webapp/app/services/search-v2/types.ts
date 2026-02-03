@@ -229,6 +229,10 @@ export interface SearchV2Options {
   maxStatements?: number;
   maxEpisodes?: number;
 
+  // Token budget for recall output (default: 10000)
+  // Drops least relevant episodes from tail until total tokens <= budget
+  tokenBudget?: number;
+
   // Temporal filters (can be set directly or extracted by router)
   validAt?: Date;
   startTime?: Date;

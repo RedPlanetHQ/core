@@ -1,47 +1,96 @@
 import { type ActionFunctionArgs } from "@remix-run/server-runtime";
-import { requireUserId, requireWorkpace } from "~/services/session.server";
-
 import { redirect, json } from "@remix-run/node";
 import { prisma } from "~/db.server";
+import { logger } from "~/services/logger.service";
+import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
+import { apiCors } from "~/utils/apiCors";
+
+export async function loader({ request }: ActionFunctionArgs) {
+  if (request.method === "OPTIONS") {
+    return apiCors(request, json({}));
+  }
+  return new Response(null, { status: 405 });
+}
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-  const workspace = await requireWorkpace(request);
+  const authResult = await authenticateHybridRequest(request, { allowJWT: true });
+
+  if (!authResult) {
+    return apiCors(request, json({ error: "Authentication required" }, { status: 401 }));
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: authResult.userId },
+    include: { Workspace: true },
+  });
+
+  if (!user?.Workspace) {
+    return apiCors(request, json({ error: "User workspace not found" }, { status: 400 }));
+  }
 
   if (request.method === "POST") {
-    const formData = await request.formData();
-    const url = formData.get("url") as string;
-    const secret = formData.get("secret") as string;
+    let url: string;
+    let secret: string | null = null;
+    let eventTypes: string[] = ["activity.created"];
+
+    const contentType = request.headers.get("content-type") || "";
+
+    if (contentType.includes("application/json")) {
+      const body = await request.json();
+      url = body.url;
+      secret = body.secret || null;
+      eventTypes = body.eventTypes || eventTypes;
+    } else {
+      const formData = await request.formData();
+      url = formData.get("url") as string;
+      secret = (formData.get("secret") as string) || null;
+    }
 
     if (!url) {
-      return json({ error: "Missing required fields" }, { status: 400 });
+      return apiCors(request, json({ error: "Missing required fields" }, { status: 400 }));
     }
 
     try {
-      // Validate URL format
       new URL(url);
-    } catch (error) {
-      return json({ error: "Invalid URL format" }, { status: 400 });
+    } catch {
+      return apiCors(request, json({ error: "Invalid URL format" }, { status: 400 }));
     }
 
     try {
-      await prisma.webhookConfiguration.create({
+      const webhook = await prisma.webhookConfiguration.create({
         data: {
           url,
-          secret: secret || null,
-          eventTypes: ["activity.created"], // Default to activity events
-          workspaceId: workspace.id,
-          userId,
+          secret,
+          eventTypes,
+          workspaceId: user.Workspace.id,
+          userId: authResult.userId,
           isActive: true,
         },
       });
 
-      return redirect("/settings/webhooks");
+      // For form submissions from webapp, redirect
+      if (!contentType.includes("application/json")) {
+        return redirect("/settings/webhooks");
+      }
+
+      return apiCors(
+        request,
+        json({
+          success: true,
+          webhook: {
+            id: webhook.id,
+            url: webhook.url,
+            eventTypes: webhook.eventTypes,
+            isActive: webhook.isActive,
+            createdAt: webhook.createdAt,
+          },
+        }),
+      );
     } catch (error) {
-      console.error("Error creating webhook:", error);
-      return json({ error: "Failed to create webhook" }, { status: 500 });
+      logger.error("Error creating webhook:", { error });
+      return apiCors(request, json({ error: "Failed to create webhook" }, { status: 500 }));
     }
   }
 
-  return json({ error: "Method not allowed" }, { status: 405 });
+  return apiCors(request, json({ error: "Method not allowed" }, { status: 405 }));
 }
