@@ -365,6 +365,36 @@ async function createTransport(
   return transport;
 }
 
+export const recreateProtocolMessages = async (
+  transport: StreamableHTTPServerTransport,
+) => {
+  await transport.send({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "initialize",
+    params: {
+      protocolVersion: "2025-06-18",
+      capabilities: {
+        roots: {
+          listChanged: true,
+        },
+        sampling: {},
+        elicitation: {},
+      },
+      clientInfo: {
+        name: "Core cli",
+        title: "Core",
+        version: "1.0.0",
+      },
+    },
+  });
+
+  await transport.send({
+    jsonrpc: "2.0",
+    method: "notifications/initialized",
+  });
+};
+
 export const handleMCPRequest = async (
   request: Request,
   res: Response,
