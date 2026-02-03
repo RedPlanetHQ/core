@@ -18,6 +18,7 @@ import {
   type EpisodeGraphResult,
 } from "./search/utils";
 import { applyEpisodeReranking } from "./search/rerank";
+import { applyTokenBudget, DEFAULT_TOKEN_BUDGET } from "./search/tokenBudget";
 import { getEmbedding } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { encode } from "gpt-tokenizer/encoding/o200k_base";
@@ -87,6 +88,7 @@ export class SearchService {
       qualityThreshold: options.qualityThreshold || 0.3,
       maxEpisodesForLLM: options.maxEpisodesForLLM || 20,
       sortBy: options.sortBy || "relevance",
+      tokenBudget: options.tokenBudget ?? DEFAULT_TOKEN_BUDGET,
     };
     // Enhance query with LLM to transform keyword soup into semantic query
 
@@ -322,10 +324,24 @@ export class SearchService {
     );
 
     // Replace session episodes with compacts automatically (preserve rerank scores)
-    const unifiedEpisodes = await this.replaceWithCompacts(
+    const compactedEpisodes = await this.replaceWithCompacts(
       sortedEpisodes,
       userId,
     );
+
+    // Apply token budget to episodes (drop least relevant from tail until under budget)
+    const tokenBudget = opts.tokenBudget ?? DEFAULT_TOKEN_BUDGET;
+    const { episodes: unifiedEpisodes, droppedCount } = applyTokenBudget(
+      compactedEpisodes,
+      tokenBudget
+    );
+
+    if (droppedCount > 0) {
+      logger.info(
+        `Token budget applied: dropped ${droppedCount} episodes, ` +
+          `${unifiedEpisodes.length} remaining`
+      );
+    }
 
     // Only include invalidated facts (valid facts are already in episode content)
     // Filter for statements that have a valid invalidAt date (not null, undefined, or empty string)
