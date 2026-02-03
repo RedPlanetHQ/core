@@ -3,9 +3,9 @@
 import { execSync } from "child_process";
 import { appendFileSync } from "fs";
 import { readJsonFromStdin, normalizeInput } from "./stdin";
-import { extractConversationPairs } from "./transcript";
+import { extractLastAssistantWithPrecedingUsers } from "./transcript";
 import { SEARCH_CONTEXT } from "constant";
-import { fetchLogs, addEpisode, fetchUserPersona } from "./api-client";
+import { addEpisode, fetchUserPersona } from "./api-client";
 
 export const HOOK_TIMEOUTS = {
   DEFAULT: 300000, // Standard HTTP timeout (5 min for slow systems)
@@ -198,56 +198,35 @@ async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
       };
     }
 
-    // Extract all conversation pairs from transcript
-    const allPairs = extractConversationPairs(input.transcriptPath, true);
-    console.log(`Total conversation pairs extracted: ${allPairs.length}`);
+    // Extract the last assistant message and all preceding user messages
+    const { assistant, users } = extractLastAssistantWithPrecedingUsers(input.transcriptPath, true);
 
-    // Fetch logs to determine how many pairs have already been ingested
-    const logsResponse = await fetchLogs(input.sessionId, token);
-    const totalIngested = logsResponse?.document?.ingestionQueueCount || 0;
+    console.log(`Extracted last assistant message with ${users.length} preceding user message(s)`);
 
-    console.log(`Already ingested: ${totalIngested}, Total pairs: ${allPairs.length}`);
-
-    // Determine which pairs are new (not yet ingested)
-    const newPairs = allPairs.slice(totalIngested);
-
-    if (newPairs.length === 0) {
-      console.log("No new conversation pairs to ingest");
-      return {
-        exitCode: HOOK_EXIT_CODES.SUCCESS,
-        output: { continue: true, suppressOutput: true },
-      };
+    // Build the transcript content with all user messages followed by the assistant message
+    let transcriptContent = "";
+    for (const userMessage of users) {
+      transcriptContent += `<user>\n${userMessage}\n</user>\n\n`;
     }
+    transcriptContent += `<assistant>\n${assistant}\n</assistant>`;
 
-    console.log(`Ingesting ${newPairs.length} new conversation pair(s)`);
-
-    // Send each new pair to the API
-    let successCount = 0;
-    for (const pair of newPairs) {
-      const transcriptContent = `user:
-${pair.user}
-assistant:
-${pair.assistant}`;
-
-      const success = await addEpisode(
-        {
-          episodeBody: transcriptContent.trim(),
-          referenceTime: new Date().toISOString(),
-          source: "claude-code",
-          type: "CONVERSATION",
-          sessionId: input.sessionId,
-        },
-        token
-      );
-
-      if (success) {
-        successCount++;
-      }
-    }
-
-    console.log(
-      `Successfully ingested ${successCount}/${newPairs.length} new conversation pair(s)`
+    // Send to the API
+    const success = await addEpisode(
+      {
+        episodeBody: transcriptContent.trim(),
+        referenceTime: new Date().toISOString(),
+        source: "claude-code-plugin",
+        type: "CONVERSATION",
+        sessionId: input.sessionId,
+      },
+      token
     );
+
+    if (success) {
+      console.log("Successfully ingested conversation turn");
+    } else {
+      console.error("Failed to ingest conversation turn");
+    }
 
     const output: StopOutput = {
       continue: true,

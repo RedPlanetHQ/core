@@ -79,7 +79,7 @@ export const loader = createHybridLoaderApiRoute(
         })
         .filter((ep) => ep !== null);
 
-      return json({ episodes });
+      return json({ episodes, count: episodes.length });
     } catch (error: any) {
       console.error("Error fetching session episodes:", error);
       return json({ error: error.message }, { status: 500 });
