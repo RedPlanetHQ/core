@@ -19,12 +19,16 @@ function extractMessageContent(parsed) {
     throw new Error(`Unknown message content format. Type: ${typeof msgContent}`);
   }
 }
+
+var DEFAULTS = ["[Request interrupted by user for tool use]"];
+
 __name(extractMessageContent, "extractMessageContent");
-function extractLastAssistantWithPrecedingUsers(_transcriptPath, stripSystemReminders = false) {
+function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemReminders = false) {
+  // const transcriptPath =
+  // "/Users/harshithmullapudi/.claude/projects/-Users-harshithmullapudi-Documents-core/48ab3b13-0743-40c7-8733-1c42049343ba.jsonl";
   if (!transcriptPath || !existsSync(transcriptPath)) {
     throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
   }
-
   const content = readFileSync(transcriptPath, "utf-8").trim();
   if (!content) {
     throw new Error(`Transcript file exists but is empty: ${transcriptPath}`);
@@ -33,7 +37,8 @@ function extractLastAssistantWithPrecedingUsers(_transcriptPath, stripSystemRemi
   const parsedLines = lines.map((line) => JSON.parse(line));
   let lastAssistantIndex = -1;
   for (let i = parsedLines.length - 1; i >= 0; i--) {
-    if (parsedLines[i].type === "assistant") {
+    let assistantMessage2 = extractMessageContent(parsedLines[i]);
+    if (parsedLines[i].type === "assistant" && assistantMessage2) {
       lastAssistantIndex = i;
       break;
     }
@@ -51,14 +56,27 @@ function extractLastAssistantWithPrecedingUsers(_transcriptPath, stripSystemRemi
   }
   const userMessages = [];
   let gotAtleastOne = false;
-
   for (let i = lastAssistantIndex - 1; i >= 0; i--) {
     const parsed = parsedLines[i];
 
-    if (parsed.type === "assistant" && gotAtleastOne && extractMessageContent(parsed)) {
+    const content2 = extractMessageContent(parsed);
+    if (parsed.type === "assistant" && gotAtleastOne && content2) {
       break;
-    } else if (parsed.type === "user" && extractMessageContent(parsed)) {
-      userMessages.unshift(extractMessageContent(parsed));
+    } else if (
+      parsed.type === "user" &&
+      parsed.message &&
+      !DEFAULTS.includes(content2) &&
+      content2
+    ) {
+      let strippedcontent = content2.replace(
+        /<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g,
+        ""
+      );
+      strippedcontent = content2.replace(
+        /<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g,
+        ""
+      );
+      userMessages.unshift(strippedcontent);
       gotAtleastOne = true;
     }
   }

@@ -65,7 +65,7 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
   const parsedLines = lines.map((line) => JSON.parse(line));
   let lastAssistantIndex = -1;
   for (let i = parsedLines.length - 1; i >= 0; i--) {
-    let assistantMessage2 = extractMessageContent(parsedLines[lastAssistantIndex]);
+    let assistantMessage2 = extractMessageContent(parsedLines[i]);
     if (parsedLines[i].type === "assistant" && assistantMessage2) {
       lastAssistantIndex = i;
       break;
@@ -86,8 +86,10 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
     const content2 = extractMessageContent(parsed);
     if (parsed.type === "assistant" && parsed.message && gotAtleastOne && content2) {
       break;
-    } else if (parsed.type === "user" && !DEFAULTS.includes(content2) && content2) {
-      userMessages.unshift(content2);
+    } else if (parsed.type === "user" && parsed.message && !DEFAULTS.includes(content2) && content2) {
+      let strippedcontent = content2.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
+      strippedcontent = content2.replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, "");
+      userMessages.unshift(strippedcontent);
       gotAtleastOne = true;
     }
   }
