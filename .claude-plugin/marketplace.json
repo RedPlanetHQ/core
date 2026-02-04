@@ -10,7 +10,7 @@
   "plugins": [
     {
       "name": "core_brain",
-      "version": "0.6.0",
+      "version": "0.7.0",
       "source": "./plugin",
       "description": "your digital brain to claude"
     }
