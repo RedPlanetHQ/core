@@ -161,6 +161,13 @@ const ReadEmailSchema = z.object({
   messageId: z.string().describe('ID of the email message to retrieve'),
 });
 
+const ReadEmailThreadSchema = z.object({
+  threadId: z.string().optional().describe('Thread ID to retrieve all messages from'),
+  messageId: z.string().optional().describe('Message ID to get its thread. Either threadId or messageId is required.'),
+}).refine(data => data.threadId || data.messageId, {
+  message: 'Either threadId or messageId must be provided',
+});
+
 const SearchEmailsSchema = z.object({
   query: z
     .string()
@@ -381,6 +388,12 @@ export async function getTools() {
       name: 'read_email',
       description: 'Retrieves the content of a specific email',
       inputSchema: zodToJsonSchema(ReadEmailSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'read_email_thread',
+      description: 'Retrieves all messages in an email thread/conversation in readable format',
+      inputSchema: zodToJsonSchema(ReadEmailThreadSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
@@ -746,6 +759,93 @@ export async function callTool(
         };
       }
 
+      case 'read_email_thread': {
+        const validatedArgs = ReadEmailThreadSchema.parse(args);
+
+        // Get threadId from either direct threadId or by fetching the message first
+        let threadId = validatedArgs.threadId;
+
+        if (!threadId && validatedArgs.messageId) {
+          const messageResponse = await gmail.users.messages.get({
+            userId: 'me',
+            id: validatedArgs.messageId,
+            format: 'minimal',
+          });
+          threadId = messageResponse.data.threadId || '';
+        }
+
+        if (!threadId) {
+          throw new Error('Could not determine thread ID');
+        }
+
+        // Get the full thread
+        const threadResponse = await gmail.users.threads.get({
+          userId: 'me',
+          id: threadId,
+          format: 'full',
+        });
+
+        const messages = threadResponse.data.messages || [];
+
+        // Format each message in the thread
+        const formattedMessages = messages.map((msg, index) => {
+          const headers = msg.payload?.headers || [];
+          const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
+          const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
+          const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
+          const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
+
+          // Extract email content
+          const { text, html } = extractEmailContent((msg.payload as GmailMessagePart) || {});
+          let body = text || html || '';
+
+          const contentTypeNote = !text && html
+            ? '[Note: This email is HTML-formatted. Plain text version not available.]\n\n'
+            : '';
+
+          // Get attachments for this message
+          const attachments: EmailAttachment[] = [];
+          const processAttachmentParts = (part: GmailMessagePart) => {
+            if (part.body && part.body.attachmentId) {
+              const filename = part.filename || `attachment-${part.body.attachmentId}`;
+              attachments.push({
+                id: part.body.attachmentId,
+                filename: filename,
+                mimeType: part.mimeType || 'application/octet-stream',
+                size: part.body.size || 0,
+              });
+            }
+            if (part.parts) {
+              part.parts.forEach(subpart => processAttachmentParts(subpart));
+            }
+          };
+
+          if (msg.payload) {
+            processAttachmentParts(msg.payload as GmailMessagePart);
+          }
+
+          const attachmentInfo = attachments.length > 0
+            ? `\n\nAttachments (${attachments.length}):\n` +
+              attachments
+                .map(a => `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)} KB, ID: ${a.id})`)
+                .join('\n')
+            : '';
+
+          return `${'='.repeat(80)}\nMessage ${index + 1} of ${messages.length}\nMessage ID: ${msg.id}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n${'='.repeat(80)}\n\n${contentTypeNote}${body}${attachmentInfo}`;
+        });
+
+        const threadSummary = `Thread ID: ${threadId}\nTotal Messages: ${messages.length}\n\n`;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: threadSummary + formattedMessages.join('\n\n'),
+            },
+          ],
+        };
+      }
+
       case 'search_emails': {
         const validatedArgs = SearchEmailsSchema.parse(args);
         const response = await gmail.users.messages.list({
@@ -764,8 +864,10 @@ export async function callTool(
               metadataHeaders: ['Subject', 'From', 'Date'],
             });
             const headers = detail.data.payload?.headers || [];
+            const threadId = detail.data.threadId || '';
             return {
               id: msg.id,
+              threadId,
               subject: headers.find(h => h.name === 'Subject')?.value || '',
               from: headers.find(h => h.name === 'From')?.value || '',
               date: headers.find(h => h.name === 'Date')?.value || '',
@@ -778,7 +880,7 @@ export async function callTool(
             {
               type: 'text',
               text: results
-                .map(r => `ID: ${r.id}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`)
+                .map(r => `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`)
                 .join('\n'),
             },
           ],

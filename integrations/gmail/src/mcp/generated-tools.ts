@@ -89,45 +89,6 @@ const DeleteThreadsSchema = z.object({
   id: z.string().describe('ID of the Thread to delete.'),
 });
 
-const GetThreadsSchema = z.object({
-  id: z.string().describe('The ID of the thread to retrieve.'),
-  format: z
-    .enum(['full', 'metadata', 'minimal'])
-    .optional()
-    .describe('The format to return the messages in.'),
-  metadataHeaders: z
-    .array(z.string())
-    .optional()
-    .describe('When given and format is METADATA, only include headers specified.'),
-});
-
-const ListThreadsSchema = z.object({
-  maxResults: z
-    .number()
-    .optional()
-    .describe(
-      'Maximum number of threads to return. This field defaults to 100. The maximum allowed value for this field is 500.'
-    ),
-  pageToken: z
-    .string()
-    .optional()
-    .describe('Page token to retrieve a specific page of results in the list.'),
-  q: z
-    .string()
-    .optional()
-    .describe(
-      'Only return threads matching the specified query. Supports the same query format as the Gmail search box. For example, `"from:someuser@example.com rfc822msgid: is:unread"`. Parameter cannot be used when accessing the api using the gmail.metadata scope.'
-    ),
-  labelIds: z
-    .array(z.string())
-    .optional()
-    .describe('Only return threads with labels that match all of the specified label IDs.'),
-  includeSpamTrash: z
-    .boolean()
-    .optional()
-    .describe('Include threads from `SPAM` and `TRASH` in the results.'),
-});
-
 const ModifyThreadsSchema = z.object({
   id: z.string().describe('The ID of the thread to modify.'),
   addLabelIds: z
@@ -199,16 +160,6 @@ export const generatedTools = [
     description:
       'Immediately and permanently deletes the specified thread. Any messages that belong to the thread are also deleted. This operation cannot be undone. Prefer `threads.trash` instead.',
     inputSchema: zodToJsonSchema(DeleteThreadsSchema),
-  },
-  {
-    name: 'get_thread',
-    description: 'Gets the specified thread.',
-    inputSchema: zodToJsonSchema(GetThreadsSchema),
-  },
-  {
-    name: 'list_thread',
-    description: "Lists the threads in the user's mailbox.",
-    inputSchema: zodToJsonSchema(ListThreadsSchema),
   },
   {
     name: 'modify_thread',
@@ -402,52 +353,6 @@ export async function handleGeneratedTool(
         userId: 'me',
         id: validatedArgs.id,
       });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response.data, null, 2),
-          },
-        ],
-      };
-    }
-
-    case 'get_thread': {
-      const validatedArgs = GetThreadsSchema.parse(args);
-      const response = await gmail.users.threads.get(
-        {
-          id: validatedArgs.id,
-          format: validatedArgs.format,
-          metadataHeaders: validatedArgs.metadataHeaders,
-          userId: 'me',
-        },
-        {}
-      );
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: JSON.stringify(response.data, null, 2),
-          },
-        ],
-      };
-    }
-
-    case 'list_thread': {
-      const validatedArgs = ListThreadsSchema.parse(args);
-      const response = await gmail.users.threads.list(
-        {
-          userId: 'me',
-          maxResults: validatedArgs.maxResults,
-          pageToken: validatedArgs.pageToken,
-          q: validatedArgs.q,
-          labelIds: validatedArgs.labelIds,
-          includeSpamTrash: validatedArgs.includeSpamTrash,
-        },
-        {}
-      );
 
       return {
         content: [

@@ -378,6 +378,113 @@ const SearchIssuesSchema = z.object({
   page: z.number().optional().default(1).describe('Page number'),
 });
 
+const SearchRepositoriesSchema = z.object({
+  query: z.string().describe('Repository search query. Examples: "machine learning in:name stars:>1000 language:python", "topic:react", "user:facebook". Supports advanced search syntax for precise filtering.'),
+  sort: z.enum(['stars', 'forks', 'help-wanted-issues', 'updated']).optional().describe('Sort repositories by field, defaults to best match'),
+  order: z.enum(['asc', 'desc']).optional().default('desc').describe('Sort order'),
+  per_page: z.number().optional().default(30).describe('Results per page (min 1, max 100)'),
+  page: z.number().optional().default(1).describe('Page number (min 1)'),
+  minimal_output: z.boolean().optional().default(true).describe('Return minimal repository information (default: true). When false, returns full GitHub API repository objects.'),
+});
+
+// Branch Schemas
+const ListBranchesSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  protected: z.boolean().optional().describe('Filter by protected branches'),
+  per_page: z.number().optional().default(30).describe('Results per page (min 1, max 100)'),
+  page: z.number().optional().default(1).describe('Page number (min 1)'),
+});
+
+const CreateBranchSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  branch: z.string().describe('Name for new branch'),
+  from_branch: z.string().optional().describe('Source branch (defaults to repo default)'),
+});
+
+// Commit Schemas
+const ListCommitsSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  sha: z.string().optional().describe('Commit SHA, branch or tag name to list commits of. If not provided, uses the default branch of the repository. If a commit SHA is provided, will list commits up to that SHA.'),
+  path: z.string().optional().describe('Only commits containing this file path will be returned'),
+  author: z.string().optional().describe('Author username or email address to filter commits by'),
+  since: z.string().optional().describe('Only commits after this date (ISO 8601)'),
+  until: z.string().optional().describe('Only commits before this date (ISO 8601)'),
+  per_page: z.number().optional().default(30).describe('Results per page (min 1, max 100)'),
+  page: z.number().optional().default(1).describe('Page number (min 1)'),
+});
+
+const GetCommitSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  sha: z.string().describe('Commit SHA, branch name, or tag name'),
+  include_diff: z.boolean().optional().default(true).describe('Whether to include file diffs and stats in the response. Default is true.'),
+  per_page: z.number().optional().describe('Results per page for pagination (min 1, max 100)'),
+  page: z.number().optional().describe('Page number for pagination (min 1)'),
+});
+
+// Tag Schemas
+const ListTagsSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  per_page: z.number().optional().default(30).describe('Results per page (min 1, max 100)'),
+  page: z.number().optional().default(1).describe('Page number (min 1)'),
+});
+
+const GetTagSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  tag: z.string().describe('Tag name'),
+});
+
+// Release Schemas
+const ListReleasesSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  per_page: z.number().optional().default(30).describe('Results per page (min 1, max 100)'),
+  page: z.number().optional().default(1).describe('Page number (min 1)'),
+});
+
+const GetLatestReleaseSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+});
+
+const GetReleaseByTagSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  tag: z.string().describe("Tag name (e.g., 'v1.0.0')"),
+});
+
+// Repository Management Schemas
+const CreateRepositorySchema = z.object({
+  name: z.string().describe('Repository name'),
+  description: z.string().optional().describe('Repository description'),
+  private: z.boolean().optional().describe('Whether repo should be private'),
+  autoInit: z.boolean().optional().describe('Initialize with README'),
+  organization: z.string().optional().describe('Organization to create the repository in (omit to create in your personal account)'),
+});
+
+const ForkRepositorySchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  organization: z.string().optional().describe('Organization to fork to'),
+});
+
+// Batch File Operations Schema
+const PushFilesSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  branch: z.string().describe('Branch to push to'),
+  message: z.string().describe('Commit message'),
+  files: z.array(z.object({
+    path: z.string().describe('File path'),
+    content: z.string().describe('File content'),
+  })).describe('Array of file objects to push, each object with path (string) and content (string)'),
+});
+
 // ============================================================================
 // TOOL EXPORT FUNCTION
 // ============================================================================
@@ -646,6 +753,96 @@ export async function getTools() {
       description: 'Search for issues and pull requests',
       inputSchema: zodToJsonSchema(SearchIssuesSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_search_repositories',
+      description: 'Search repositories',
+      inputSchema: zodToJsonSchema(SearchRepositoriesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+
+    // Branch Tools
+    {
+      name: 'github_list_branches',
+      description: 'List branches',
+      inputSchema: zodToJsonSchema(ListBranchesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_create_branch',
+      description: 'Create branch',
+      inputSchema: zodToJsonSchema(CreateBranchSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+
+    // Commit Tools
+    {
+      name: 'github_list_commits',
+      description: 'List commits',
+      inputSchema: zodToJsonSchema(ListCommitsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_get_commit',
+      description: 'Get commit details',
+      inputSchema: zodToJsonSchema(GetCommitSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+
+    // Tag Tools
+    {
+      name: 'github_list_tags',
+      description: 'List tags',
+      inputSchema: zodToJsonSchema(ListTagsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_get_tag',
+      description: 'Get tag details',
+      inputSchema: zodToJsonSchema(GetTagSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+
+    // Release Tools
+    {
+      name: 'github_list_releases',
+      description: 'List releases',
+      inputSchema: zodToJsonSchema(ListReleasesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_get_latest_release',
+      description: 'Get latest release',
+      inputSchema: zodToJsonSchema(GetLatestReleaseSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'github_get_release_by_tag',
+      description: 'Get a release by tag name',
+      inputSchema: zodToJsonSchema(GetReleaseByTagSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+
+    // Repository Management Tools
+    {
+      name: 'github_create_repository',
+      description: 'Create repository',
+      inputSchema: zodToJsonSchema(CreateRepositorySchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    {
+      name: 'github_fork_repository',
+      description: 'Fork repository',
+      inputSchema: zodToJsonSchema(ForkRepositorySchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+
+    // Batch File Operations Tool
+    {
+      name: 'github_push_files',
+      description: 'Push files to repository',
+      inputSchema: zodToJsonSchema(PushFilesSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
   ];
 
@@ -1260,6 +1457,304 @@ export async function callTool(
             {
               type: 'text',
               text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_search_repositories': {
+        const { query, sort, order, per_page, page, minimal_output } = SearchRepositoriesSchema.parse(args);
+        const response = await githubClient.get('/search/repositories', {
+          params: { q: query, sort, order, per_page, page },
+        });
+
+        if (minimal_output) {
+          const minimalData = response.data.items.map((repo: any) => ({
+            name: repo.name,
+            full_name: repo.full_name,
+            owner: repo.owner.login,
+            description: repo.description,
+            url: repo.html_url,
+            stars: repo.stargazers_count,
+            forks: repo.forks_count,
+            language: repo.language,
+            created_at: repo.created_at,
+            updated_at: repo.updated_at,
+          }));
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ total_count: response.data.total_count, items: minimalData }, null, 2),
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Branch Handlers
+      case 'github_list_branches': {
+        const { owner, repo, protected: protectedOnly, per_page, page } = ListBranchesSchema.parse(args);
+        const params: any = { per_page, page };
+        if (protectedOnly !== undefined) params.protected = protectedOnly;
+
+        const response = await githubClient.get(`/repos/${owner}/${repo}/branches`, { params });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_create_branch': {
+        const { owner, repo, branch, from_branch } = CreateBranchSchema.parse(args);
+
+        // Get the SHA of the source branch (or default branch)
+        let sha: string;
+        if (from_branch) {
+          const refResponse = await githubClient.get(`/repos/${owner}/${repo}/git/ref/heads/${from_branch}`);
+          sha = refResponse.data.object.sha;
+        } else {
+          const repoResponse = await githubClient.get(`/repos/${owner}/${repo}`);
+          const defaultBranch = repoResponse.data.default_branch;
+          const refResponse = await githubClient.get(`/repos/${owner}/${repo}/git/ref/heads/${defaultBranch}`);
+          sha = refResponse.data.object.sha;
+        }
+
+        // Create the new branch
+        const response = await githubClient.post(`/repos/${owner}/${repo}/git/refs`, {
+          ref: `refs/heads/${branch}`,
+          sha: sha,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Branch '${branch}' created successfully\nRef: ${response.data.ref}\nSHA: ${response.data.object.sha}`,
+            },
+          ],
+        };
+      }
+
+      // Commit Handlers
+      case 'github_list_commits': {
+        const { owner, repo, ...params } = ListCommitsSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/commits`, { params });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_get_commit': {
+        const { owner, repo, sha, include_diff, per_page, page } = GetCommitSchema.parse(args);
+        const params: any = {};
+        if (per_page !== undefined) params.per_page = per_page;
+        if (page !== undefined) params.page = page;
+
+        const response = await githubClient.get(`/repos/${owner}/${repo}/commits/${sha}`, { params });
+
+        if (!include_diff) {
+          // Remove diff data if requested
+          const { files, ...dataWithoutFiles } = response.data;
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(dataWithoutFiles, null, 2),
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Tag Handlers
+      case 'github_list_tags': {
+        const { owner, repo, per_page, page } = ListTagsSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/tags`, {
+          params: { per_page, page },
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_get_tag': {
+        const { owner, repo, tag } = GetTagSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/git/refs/tags/${tag}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Release Handlers
+      case 'github_list_releases': {
+        const { owner, repo, per_page, page } = ListReleasesSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/releases`, {
+          params: { per_page, page },
+        });
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_get_latest_release': {
+        const { owner, repo } = GetLatestReleaseSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/releases/latest`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      case 'github_get_release_by_tag': {
+        const { owner, repo, tag } = GetReleaseByTagSchema.parse(args);
+        const response = await githubClient.get(`/repos/${owner}/${repo}/releases/tags/${tag}`);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: JSON.stringify(response.data, null, 2),
+            },
+          ],
+        };
+      }
+
+      // Repository Management Handlers
+      case 'github_create_repository': {
+        const { organization, ...body } = CreateRepositorySchema.parse(args);
+
+        let response;
+        if (organization) {
+          // Create in organization
+          response = await githubClient.post(`/orgs/${organization}/repos`, body);
+        } else {
+          // Create in user account
+          response = await githubClient.post('/user/repos', body);
+        }
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Repository created successfully\nName: ${response.data.full_name}\nURL: ${response.data.html_url}`,
+            },
+          ],
+        };
+      }
+
+      case 'github_fork_repository': {
+        const { owner, repo, organization } = ForkRepositorySchema.parse(args);
+        const body: any = {};
+        if (organization) body.organization = organization;
+
+        const response = await githubClient.post(`/repos/${owner}/${repo}/forks`, body);
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Repository forked successfully\nForked to: ${response.data.full_name}\nURL: ${response.data.html_url}`,
+            },
+          ],
+        };
+      }
+
+      // Batch File Operations Handler
+      case 'github_push_files': {
+        const { owner, repo, branch, message, files } = PushFilesSchema.parse(args);
+
+        // Get the current commit SHA of the branch
+        const refResponse = await githubClient.get(`/repos/${owner}/${repo}/git/ref/heads/${branch}`);
+        const latestCommitSha = refResponse.data.object.sha;
+
+        // Get the tree SHA of the latest commit
+        const commitResponse = await githubClient.get(`/repos/${owner}/${repo}/git/commits/${latestCommitSha}`);
+        const baseTreeSha = commitResponse.data.tree.sha;
+
+        // Create blobs for each file
+        const treeItems = await Promise.all(
+          files.map(async (file) => {
+            const blobResponse = await githubClient.post(`/repos/${owner}/${repo}/git/blobs`, {
+              content: file.content,
+              encoding: 'utf-8',
+            });
+            return {
+              path: file.path,
+              mode: '100644',
+              type: 'blob',
+              sha: blobResponse.data.sha,
+            };
+          })
+        );
+
+        // Create a new tree
+        const treeResponse = await githubClient.post(`/repos/${owner}/${repo}/git/trees`, {
+          base_tree: baseTreeSha,
+          tree: treeItems,
+        });
+
+        // Create a new commit
+        const newCommitResponse = await githubClient.post(`/repos/${owner}/${repo}/git/commits`, {
+          message: message,
+          tree: treeResponse.data.sha,
+          parents: [latestCommitSha],
+        });
+
+        // Update the branch reference
+        await githubClient.patch(`/repos/${owner}/${repo}/git/refs/heads/${branch}`, {
+          sha: newCommitResponse.data.sha,
+        });
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Successfully pushed ${files.length} file(s) to ${branch}\nCommit SHA: ${newCommitResponse.data.sha}\nMessage: ${message}`,
             },
           ],
         };
