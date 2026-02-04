@@ -34,6 +34,9 @@ function normalizeInput(raw) {
 }
 __name(normalizeInput, "normalizeInput");
 function extractMessageContent(parsed) {
+  if (!parsed.message?.id?.includes("msg_")) {
+    return "";
+  }
   if (!parsed.message?.content) {
     return "";
   }
@@ -50,6 +53,7 @@ function extractMessageContent(parsed) {
   }
 }
 __name(extractMessageContent, "extractMessageContent");
+var DEFAULTS = ["[Request interrupted by user for tool use]"];
 function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemReminders = false) {
   if (!transcriptPath || !existsSync(transcriptPath)) {
     throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
@@ -80,14 +84,13 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
   }
   const userMessages = [];
   let gotAtleastOne = false;
-
   for (let i = lastAssistantIndex - 1; i >= 0; i--) {
     const parsed = parsedLines[i];
-
-    if (parsed.type === "assistant" && gotAtleastOne && extractMessageContent(parsed)) {
+    const content2 = extractMessageContent(parsed);
+    if (parsed.type === "assistant" && parsed.message && gotAtleastOne && content2) {
       break;
-    } else if (parsed.type === "user") {
-      userMessages.unshift(extractMessageContent(parsed));
+    } else if (parsed.type === "user" && !DEFAULTS.includes(content2) && content2) {
+      userMessages.unshift(content2);
       gotAtleastOne = true;
     }
   }
@@ -125,8 +128,8 @@ EXECUTE THIS TOOL FIRST:
 **How to search effectively:**
 
 - Write complete semantic queries, NOT keyword fragments
-- Good: \`"Manoj's preferences for API design and error handling"\`
-- Bad: \`"manoj api preferences"\`
+- Good: \`"User's preferences for API design and error handling"\`
+- Bad: \`"user api preferences"\`
 - Ask: "What context am I missing that would help?"
 - Consider: "What has the user told me before that I should remember?"
 
@@ -134,16 +137,16 @@ EXECUTE THIS TOOL FIRST:
 
 **Entity-Centric Queries** (Best for graph search):
 
-- \u2705 GOOD: \`"Manoj's preferences for product positioning and messaging"\`
+- \u2705 GOOD: \`"User's preferences for product positioning and messaging"\`
 - \u2705 GOOD: \`"CORE project authentication implementation decisions"\`
-- \u274C BAD: \`"manoj product positioning"\`
+- \u274C BAD: \`"user product positioning"\`
 - Format: \`[Person/Project] + [relationship/attribute] + [context]\`
 
 **Multi-Entity Relationship Queries** (Excellent for episode graph):
 
-- \u2705 GOOD: \`"Manoj and Harshith discussions about BFS search implementation"\`
+- \u2705 GOOD: \`"User and Harshith discussions about BFS search implementation"\`
 - \u2705 GOOD: \`"relationship between entity extraction and recall quality in CORE"\`
-- \u274C BAD: \`"manoj harshith bfs"\`
+- \u274C BAD: \`"user harshith bfs"\`
 - Format: \`[Entity1] + [relationship type] + [Entity2] + [context]\`
 
 **Semantic Question Queries** (Good for vector search):

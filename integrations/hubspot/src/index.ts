@@ -1,13 +1,13 @@
-import { handleSchedule } from './schedule';
 import { integrationCreate } from './account-create';
-
+import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
+  Message,
 } from '@redplanethq/sdk';
-import { callTool, getTools } from './mcp';
+import { getTools, callTool } from './mcp';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -18,13 +18,9 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return await handleSchedule(eventPayload.config, eventPayload.state);
 
     case IntegrationEventType.GET_TOOLS: {
-      try {
-        const tools = await getTools();
+      const tools = await getTools();
 
-        return tools;
-      } catch (e: any) {
-        return { message: `Error ${e.message}` };
-      }
+      return tools;
     }
 
     case IntegrationEventType.CALL_TOOL: {
@@ -37,7 +33,14 @@ export async function run(eventPayload: IntegrationEventPayload) {
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 
-      const result = await callTool(name, args, config);
+      const result = await callTool(
+        name,
+        args,
+        integrationDefinition.config.clientId,
+        integrationDefinition.config.clientSecret,
+        config?.redirect_uri,
+        config
+      );
 
       return result;
     }
@@ -48,9 +51,9 @@ export async function run(eventPayload: IntegrationEventPayload) {
 }
 
 // CLI implementation that extends the base class
-class GitHubCLI extends IntegrationCLI {
+class HubSpotCLI extends IntegrationCLI {
   constructor() {
-    super('github', '1.0.0');
+    super('hubspot', '1.0.0');
   }
 
   protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
@@ -59,31 +62,39 @@ class GitHubCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'GitHub extension',
-      key: 'github',
+      name: 'HubSpot extension',
+      key: 'hubspot',
       description:
-        'Plan, track, and manage your agile and software development projects in GitHub. Customize your workflow, collaborate, and release great software.',
-      icon: 'github',
-      schedule: {
-        frequency: '*/5 * * * *',
-      },
+        'Connect your workspace to HubSpot. Manage contacts, companies, deals, tickets, and track CRM activities',
+      icon: 'hubspot',
       mcp: {
         type: 'cli',
       },
+      schedule: {
+        frequency: '*/30 * * * *',
+      },
       auth: {
         OAuth2: {
-          token_url: 'https://github.com/login/oauth/access_token',
-          authorization_url: 'https://github.com/login/oauth/authorize',
+          token_url: 'https://api.hubapi.com/oauth/v1/token',
+          authorization_url: 'https://app.hubspot.com/oauth/authorize',
           scopes: [
-            'user',
-            'public_repo',
-            'repo',
-            'notifications',
-            'gist',
-            'read:org',
-            'repo_hooks',
+            'crm.objects.contacts.read',
+            'crm.objects.contacts.write',
+            'crm.objects.companies.read',
+            'crm.objects.companies.write',
+            'crm.objects.deals.read',
+            'crm.objects.deals.write',
+            'tickets',
+            'crm.schemas.contacts.read',
+            'crm.schemas.companies.read',
+            'crm.schemas.deals.read',
           ],
-          scope_separator: ',',
+          scope_identifier: 'scope',
+          scope_separator: ' ',
+          token_params: {
+            grant_type: 'authorization_code',
+          },
+          authorization_params: {},
         },
       },
     };
@@ -93,8 +104,8 @@ class GitHubCLI extends IntegrationCLI {
 // Define a main function and invoke it directly.
 // This works after bundling to JS and running with `node index.js`.
 function main() {
-  const githubCLI = new GitHubCLI();
-  githubCLI.parse();
+  const hubspotCLI = new HubSpotCLI();
+  hubspotCLI.parse();
 }
 
 main();

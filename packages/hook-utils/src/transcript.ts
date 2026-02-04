@@ -156,9 +156,9 @@ export function extractLastAssistantWithPrecedingUsers(
     if (parsed.type === "assistant" && parsed.message && gotAtleastOne && content) {
       // Stop when we hit another assistant message
       break;
-    } else if (parsed.type === "user" && !DEFAULTS.includes(content)) {
+    } else if (parsed.type === "user" && !DEFAULTS.includes(content) && content) {
       // Collect user message (we'll reverse later to maintain chronological order)
-      userMessages.unshift(extractMessageContent(parsed));
+      userMessages.unshift(content);
       gotAtleastOne = true;
     }
   }

@@ -172,6 +172,33 @@ async function sessionStart(): Promise<{ exitCode: number; output?: SessionStart
   }
 }
 
+// async function userPrompt(): Promise<{ exitCode: number; output: StopOutput }> {
+//   try {
+//     const rawInput = await readJsonFromStdin();
+//     const input = normalizeInput(rawInput);
+//     if (!input.prompt) {
+//       throw new Error("Userprompt requires prompt");
+//     }
+
+//     // Get authentication token
+//     const token = await getAuthToken();
+
+//     if (!token) {
+//       console.error("Failed to get authentication token for API call");
+//       // Continue anyway, don't block
+//       return {
+//         exitCode: HOOK_EXIT_CODES.SUCCESS,
+//         output: { continue: true, suppressOutput: true },
+//       };
+//     }
+//   } catch (e) {
+//     return {
+//       exitCode: HOOK_EXIT_CODES.FAILURE,
+//       output: { continue: true, suppressOutput: true },
+//     };
+//   }
+// }
+
 async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
   try {
     // Read and normalize stdin input
