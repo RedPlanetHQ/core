@@ -22,10 +22,10 @@ function extractMessageContent(parsed) {
 
 var DEFAULTS = ["[Request interrupted by user for tool use]"];
 
-__name(extractMessageContent, "extractMessageContent");
-function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemReminders = false) {
+function extractLastAssistantWithPrecedingUsers(_transcriptPath, stripSystemReminders = false) {
   // const transcriptPath =
-  // "/Users/harshithmullapudi/.claude/projects/-Users-harshithmullapudi-Documents-core/48ab3b13-0743-40c7-8733-1c42049343ba.jsonl";
+  //   "/Users/harshithmullapudi/.claude/projects/-Users-harshithmullapudi-Documents-core/48ab3b13-0743-40c7-8733-1c42049343ba.jsonl";
+
   if (!transcriptPath || !existsSync(transcriptPath)) {
     throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
   }
@@ -58,7 +58,6 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
   let gotAtleastOne = false;
   for (let i = lastAssistantIndex - 1; i >= 0; i--) {
     const parsed = parsedLines[i];
-
     const content2 = extractMessageContent(parsed);
     if (parsed.type === "assistant" && gotAtleastOne && content2) {
       break;
@@ -73,7 +72,7 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
         ""
       );
       strippedcontent = content2.replace(
-        /<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g,
+        /<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g,
         ""
       );
       userMessages.unshift(strippedcontent);
@@ -87,4 +86,21 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
 }
 __name(extractLastAssistantWithPrecedingUsers, "extractLastAssistantWithPrecedingUsers");
 
-console.log(extractLastAssistantWithPrecedingUsers());
+// Extract the last assistant message and all preceding user messages
+const { assistant, users } = extractLastAssistantWithPrecedingUsers();
+
+console.log(`Extracted last assistant message with ${users.length} preceding user message(s)`);
+
+// Build the transcript content with all user messages followed by the assistant message
+let transcriptContent = "";
+for (const userMessage of users) {
+  if (userMessage.trim()) {
+    transcriptContent += `<user>\n${userMessage}\n</user>\n`;
+  }
+}
+
+if (assistant.trim()) {
+  transcriptContent += `<assistant>\n${assistant}\n</assistant>`;
+}
+
+console.log(transcriptContent.trim());

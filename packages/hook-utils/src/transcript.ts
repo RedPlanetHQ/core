@@ -11,7 +11,7 @@ export interface ConversationPair {
  * @returns Extracted text content
  */
 function extractMessageContent(parsed: any): string {
-  if (!parsed.message?.id?.includes("msg_")) {
+  if (parsed.type === "assistant" && !parsed.message?.id?.includes("msg_")) {
     return "";
   }
 
