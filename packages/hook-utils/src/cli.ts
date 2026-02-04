@@ -233,26 +233,33 @@ async function stop(): Promise<{ exitCode: number; output: StopOutput }> {
     // Build the transcript content with all user messages followed by the assistant message
     let transcriptContent = "";
     for (const userMessage of users) {
-      transcriptContent += `<user>\n${userMessage}\n</user>\n\n`;
+      if (userMessage.trim()) {
+        transcriptContent += `<user>\n${userMessage}\n</user>\n\n`;
+      }
     }
-    transcriptContent += `<assistant>\n${assistant}\n</assistant>`;
 
-    // Send to the API
-    const success = await addEpisode(
-      {
-        episodeBody: transcriptContent.trim(),
-        referenceTime: new Date().toISOString(),
-        source: "claude-code-plugin",
-        type: "CONVERSATION",
-        sessionId: input.sessionId,
-      },
-      token
-    );
+    if (assistant.trim()) {
+      transcriptContent += `<assistant>\n${assistant}\n</assistant>`;
+    }
 
-    if (success) {
-      console.log("Successfully ingested conversation turn");
-    } else {
-      console.error("Failed to ingest conversation turn");
+    if (transcriptContent) {
+      // Send to the API
+      const success = await addEpisode(
+        {
+          episodeBody: transcriptContent.trim(),
+          referenceTime: new Date().toISOString(),
+          source: "claude-code-plugin",
+          type: "CONVERSATION",
+          sessionId: input.sessionId,
+        },
+        token
+      );
+
+      if (success) {
+        console.log("Successfully ingested conversation turn");
+      } else {
+        console.error("Failed to ingest conversation turn");
+      }
     }
 
     const output: StopOutput = {

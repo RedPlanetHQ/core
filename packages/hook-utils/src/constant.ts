@@ -24,7 +24,7 @@ EXECUTE THIS TOOL FIRST:
 **How to search effectively:**
 
 - Write complete semantic queries, NOT keyword fragments
-- Good: \`"Manoj's preferences for API design and error handling"\`
+- Good: \`"User's preferences for API design and error handling"\`
 - Bad: \`"manoj api preferences"\`
 - Ask: "What context am I missing that would help?"
 - Consider: "What has the user told me before that I should remember?"
@@ -33,14 +33,14 @@ EXECUTE THIS TOOL FIRST:
 
 **Entity-Centric Queries** (Best for graph search):
 
-- ✅ GOOD: \`"Manoj's preferences for product positioning and messaging"\`
+- ✅ GOOD: \`"User's preferences for product positioning and messaging"\`
 - ✅ GOOD: \`"CORE project authentication implementation decisions"\`
 - ❌ BAD: \`"manoj product positioning"\`
 - Format: \`[Person/Project] + [relationship/attribute] + [context]\`
 
 **Multi-Entity Relationship Queries** (Excellent for episode graph):
 
-- ✅ GOOD: \`"Manoj and Harshith discussions about BFS search implementation"\`
+- ✅ GOOD: \`"User and Harshith discussions about BFS search implementation"\`
 - ✅ GOOD: \`"relationship between entity extraction and recall quality in CORE"\`
 - ❌ BAD: \`"manoj harshith bfs"\`
 - Format: \`[Entity1] + [relationship type] + [Entity2] + [context]\`

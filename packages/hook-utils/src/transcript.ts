@@ -126,7 +126,9 @@ export function extractLastAssistantWithPrecedingUsers(
   // Find the last assistant message
   let lastAssistantIndex = -1;
   for (let i = parsedLines.length - 1; i >= 0; i--) {
-    if (parsedLines[i].type === "assistant") {
+    let assistantMessage = extractMessageContent(parsedLines[lastAssistantIndex]);
+
+    if (parsedLines[i].type === "assistant" && assistantMessage) {
       lastAssistantIndex = i;
       break;
     }
