@@ -34,7 +34,7 @@ function normalizeInput(raw) {
 }
 __name(normalizeInput, "normalizeInput");
 function extractMessageContent(parsed) {
-  if (!parsed.message?.id?.includes("msg_")) {
+  if (parsed.type === "assistant" && !parsed.message?.id?.includes("msg_")) {
     return "";
   }
   if (!parsed.message?.content) {
