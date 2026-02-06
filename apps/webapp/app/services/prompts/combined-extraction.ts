@@ -106,11 +106,12 @@ export const extractCombined = (
 </core_principles>
 
 <extraction_logic>
-For each piece of information, ask these 3 questions:
+For each piece of information, ask these 4 questions:
 
-1. WHO/WHAT is this about? → That's your SUBJECT
-2. WHAT is being said about it? → That's your PREDICATE + OBJECT
-3. Is this USER-SPECIFIC? → If no, SKIP
+1. WHO SAID this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Consider skipping.
+2. WHO/WHAT is this about? → That's your SUBJECT
+3. WHAT is being said about it? → That's your PREDICATE + OBJECT
+4. Is this USER-SPECIFIC? → If no, SKIP
 </extraction_logic>
 
 <subject_selection>
@@ -272,23 +273,171 @@ IMPORTANT: User's identity → statements (for history tracking)
 </entity_attributes>
 
 <aspects>
-Aspect is OPTIONAL - only use when it clearly fits. 11 categories:
+Aspect is OPTIONAL - only use when it clearly fits. Default to null when uncertain.
 
-| Aspect | What it captures | Examples | Predicates |
-|--------|------------------|----------|------------|
-| Identity | Who the USER is (slow-changing) | "Manoj is software engineer at Red Planet", "Manoj lives in Bangalore" | is, has, works at, lives in |
-| Knowledge | What they know (expertise) | "Expert in React", "Understands OAuth 2.0" | expert in, knows, understands, skilled in |
-| Belief | Why they think that way | "Values simplicity", "Thinks microservices add overhead" | believes, values, thinks |
-| Preference | How they want things | "Prefers dark mode", "Likes concise communication" | prefers, likes, avoids, dislikes |
-| Action | What they do (behaviors) | "Uses TypeScript in CORE", "Reviews PRs every morning" | does, uses, practices, reviews |
-| Goal | What they want to achieve | "Launch MVP by Q2", "Learn Rust this year" | wants, aims for, plans to, targets |
-| Directive | Rules and automation | "Always run tests before PR", "Notify when email from X" | must, always, never, notify when, remind to |
-| Decision | Choices made | "Decided to use PostgreSQL", "Chose Remix over Next.js" | decided, chose, selected |
-| Event | Occurrences with time | "Attended React Conf last week", "Started diet on Monday" | attended, started, completed, occurred |
-| Problem | Blockers, challenges | "Blocked by API rate limits", "Struggling with memory leaks" | has problem, blocked by, struggles with |
-| Relationship | People connections | "Works with Sarah", "Reports to Mike" | works with, knows, managed by, reports to |
+CLASSIFICATION DECISION FRAMEWORK:
+Before assigning an aspect, ask these questions in order:
+1. WHO said this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Skip or use null.
+2. Is this about who the user IS? → Identity
+3. Is this a connection to another person? → Relationship (capture role, company, context)
+4. Is the user telling the agent how to behave? → Directive
+5. Did the user explicitly choose between alternatives? → Decision
+6. Is the user expressing an opinion or value? → Belief
+7. Is the user describing how they want things done? → Preference
+8. Is this a repeated behavior/habit? → Action
+9. Is this something the user wants to achieve? → Goal
+10. Did something happen at a specific time? → Event
+11. Is this a blocker, challenge, or struggle? → Problem
+12. Is this about what the user knows/is skilled in? → Knowledge
 
-DEFAULT to null for technical facts, code changes, project updates that don't fit above.
+<aspect_identity>
+IDENTITY: Who the user IS (slow-changing personal facts)
+Agent question: "Who am I talking to? How do I reach them?"
+
+IDENTIFY BY: Statements about the user's name, role, profession, company, location, physical stats, dietary identity, health metrics, affiliations, credentials.
+
+THINK: "Would this answer change rarely (months/years)?" If yes → Identity.
+
+COMMON MISCLASSIFICATIONS:
+- Health metrics (weight, body fat, cholesterol) → Identity, NOT Event
+- Dietary identity ("vegetarian", "vegan") → Identity, NOT Preference
+- Professional role ("CTO at Acme") → Identity, NOT Relationship
+</aspect_identity>
+
+<aspect_knowledge>
+KNOWLEDGE: What the user knows (expertise, skills)
+Agent question: "What do they know? So I calibrate complexity."
+
+IDENTIFY BY: Skills, technologies mastered, domains of expertise, certifications, tools they're proficient in.
+
+THINK: "Does this describe the user's capability or expertise level?" If yes → Knowledge.
+</aspect_knowledge>
+
+<aspect_belief>
+BELIEF: Why the user thinks the way they do (values, opinions, principles)
+Agent question: "What do they believe? So I align with their values."
+
+IDENTIFY BY: Opinions expressed about how things should work, values stated, principles articulated, reasoning about why one approach is better than another.
+
+THINK: "Is the user expressing a value judgment or opinion about how things should be?" If yes → Belief.
+
+COMMON MISCLASSIFICATIONS:
+- "Transparency builds more credibility than polished marketing" → Belief, NOT Preference
+- "Developer communities have a high BS detector" → Belief, NOT Knowledge
+- "AI memory should be tool-agnostic" → Belief, NOT Goal
+</aspect_belief>
+
+<aspect_preference>
+PREFERENCE: How the user wants things done (style, format, approach)
+Agent question: "How do they want things? Style, format, approach."
+
+IDENTIFY BY: Explicit likes/dislikes about how work is done, communication style, formatting choices, tool preferences, workflow style.
+
+THINK: "Is the user describing HOW they want something done (style/format), not WHAT they believe?" If yes → Preference.
+
+COMMON MISCLASSIFICATIONS:
+- "Prefers Proper Case for emails" → Preference (style choice)
+- "Transparency is more credible" → Belief, NOT Preference (value judgment)
+</aspect_preference>
+
+<aspect_action>
+ACTION: What the user does regularly (habits, behaviors, routines)
+Agent question: "What do they do regularly? So I fit into their life."
+
+IDENTIFY BY: Recurring behaviors, established workflows, daily/weekly habits, regular practices.
+
+THINK: "Does the user do this REPEATEDLY as a pattern?" If yes → Action. If it happened once → Event.
+
+COMMON MISCLASSIFICATIONS:
+- "Logs water intake via WhatsApp daily" → Action (recurring habit)
+- "Logged water intake today" → Event (one-time occurrence)
+- "Discussed backfilling old chat history" → Event, NOT Action
+</aspect_action>
+
+<aspect_goal>
+GOAL: What the user wants to achieve (confirmed by user)
+Agent question: "What are they trying to achieve? So I align suggestions."
+
+IDENTIFY BY: User explicitly stating what they want to accomplish, targets they've set, outcomes they're working toward.
+
+THINK: "Did the USER explicitly state they want to achieve this?" If yes → Goal. If the assistant recommended it and user didn't confirm → NOT a Goal.
+
+CRITICAL: Assistant recommendations that the user has NOT confirmed are NOT Goals.
+- "The assistant suggested leading with cross-tool portability" → NOT a user Goal, skip it
+- "User wants to lose weight" (user said this) → Goal
+</aspect_goal>
+
+<aspect_directive>
+DIRECTIVE: Instructions for how the agent should behave (standing rules)
+Agent question: "What rules must I follow?"
+
+IDENTIFY BY: User telling the agent what to always/never do, handling rules, automation triggers, content rules, notification preferences, things to ignore or surface.
+
+THINK: "Is the user giving the agent a standing instruction about how to behave going forward?" If yes → Directive.
+
+COMMON MISCLASSIFICATIONS:
+- "Don't use Commenda, treat their emails as spam" → Directive (agent behavior rule), NOT Decision
+- "Always use Proper Case for emails" → Directive (standing rule), NOT Preference
+- "Notify me at 3PM for water check" → Directive (automation trigger)
+- "Bug issue titles must start with [bug]:" → Directive (formatting rule)
+
+KEY DISTINCTION FROM DECISION: A Directive tells the agent what to DO going forward. A Decision records a choice the user MADE between alternatives.
+</aspect_directive>
+
+<aspect_decision>
+DECISION: Explicit choices the user made between alternatives
+Agent question: "What's already decided? Don't suggest alternatives."
+
+IDENTIFY BY: User explicitly chose option A over option B, selected a specific approach after considering alternatives, made a strategic/architectural/lifestyle choice.
+
+THINK: "Did the user actively CHOOSE between alternatives?" If yes → Decision. If they're just telling the agent how to behave → Directive.
+
+COMMON MISCLASSIFICATIONS:
+- "Chose PostgreSQL over MySQL" → Decision (chose between alternatives)
+- "Don't show me Commenda emails" → Directive, NOT Decision (agent instruction)
+- Assistant recommended something user didn't confirm → NOT a Decision
+</aspect_decision>
+
+<aspect_event>
+EVENT: Specific occurrences with timestamps
+Agent question: "What happened when?"
+
+IDENTIFY BY: Something that happened at a specific time - meetings, calls, completions, milestones, one-time actions.
+
+THINK: "Did this happen at a specific point in time?" If yes → Event. If it's a recurring behavior → Action.
+
+NOTE: Always include event_date for Event aspect.
+</aspect_event>
+
+<aspect_problem>
+PROBLEM: Blockers, challenges, struggles (technical, behavioral, systemic)
+Agent question: "What's blocking them? Where can I help?"
+
+IDENTIFY BY: Technical issues, recurring bugs, behavioral struggles, systemic blockers, operational challenges, health hurdles.
+
+THINK: "Is this something that's blocking progress or causing ongoing difficulty?" If yes → Problem.
+
+CAPTURE DEPTH: Don't just capture surface symptoms. Look for patterns:
+- "Google Sheets connection returns 502 errors" → Problem (technical)
+- "Struggles with converting health knowledge into daily action" → Problem (behavioral)
+- "Context compaction causes memory loss" → Problem (systemic)
+</aspect_problem>
+
+<aspect_relationship>
+RELATIONSHIP: Connections between the user and other people
+Agent question: "Who matters to them? Context for names mentioned."
+
+IDENTIFY BY: When a person is mentioned, capture WHO they are, their ROLE, their COMPANY/ORG, and HOW the user relates to them.
+
+THINK: "Is a person being mentioned with context about who they are or how the user knows them?" If yes → Relationship.
+
+ALWAYS CAPTURE: When extracting a Relationship, ensure the person entity has attributes (role, company, email if available) AND the relationship statement describes the connection type.
+
+COMMON MISCLASSIFICATIONS:
+- "Had a call with Kabir from CrazeHQ" → Extract Relationship (Kabir, CrazeHQ co-founder, customer) + Event (the call)
+- "Works with Sarah on CORE" → Relationship, NOT Action
+- "Commenda is a former vendor, designated as spam" → Relationship (vendor status) + Directive (spam handling)
+</aspect_relationship>
 </aspects>
 
 <event_date>
@@ -309,11 +458,32 @@ SKIP these - they add no value:
 
 • Textbook facts: "Compound movements build muscle", "Protein preserves lean mass"
 • Generic relationships: "Strength Training uses Progressive Overload", "Recovery uses Sleep"
-• Assistant recommendations (unless user adopted them)
+• Unconfirmed assistant recommendations: If normalized text says "the assistant suggested/offered/provided X" and user did NOT confirm → SKIP
+• Assistant analysis/reasoning: "The assistant explained why X works" → SKIP (not a user fact)
 • Session process: "sent invite", "created", "updated" - extract the RESULT (scheduled meeting, new value), not the action
 • Boilerplate: standard auth requirements, error handling, HTTP status codes, CSS classes, UI text strings
 • Redundant facts: same info for multiple participants - "A <> B meeting" = ONE fact with user as subject, NOT facts for both A and B
 </skip_rules>
+
+<speaker_attribution>
+CRITICAL: The normalized episode distinguishes between user and assistant statements.
+
+DETECTION PATTERNS:
+- "The assistant suggested/offered/provided/reported/stated X" → Assistant's content
+- "User decided/instructed/stated/confirmed/asked X" → User's content
+- "[UserName] asked/wants/prefers/decided/instructed X" → User's content
+
+RULES:
+1. Assistant suggestions NOT confirmed by user → SKIP (don't extract as user fact)
+2. Assistant-provided information → Extract as topic-level facts with null aspect, NOT as user Goals/Decisions/Beliefs
+3. User confirmed assistant suggestion → Extract as user Decision
+4. "The assistant offered X; user did not confirm" → SKIP entirely
+
+EXAMPLES:
+- "The assistant suggested leading with cross-tool portability" → SKIP (not a user Goal)
+- "The assistant provided search results showing context anxiety" → Extract as topic fact (null aspect), NOT "User believes context anxiety is #1 issue"
+- "User decided to use PostgreSQL after assistant recommendation" → Decision (user confirmed)
+</speaker_attribution>
 
 <negative_patterns>
 CAPTURE EXPLICIT NEGATIONS:
@@ -474,10 +644,11 @@ Extract facts about ${context.userName} and their projects/work.
 ${context.episodeContent}
 </episode>
 
-Extract entities and statements using the 3-question logic:
-1. Who/what is this about? → Subject
-2. What is being said? → Predicate + Object
-3. Is this user-specific? → If no, skip`;
+Extract entities and statements using the 4-question logic:
+1. Who SAID this? → If assistant said it and user didn't confirm, skip
+2. Who/what is this about? → Subject
+3. What is being said? → Predicate + Object
+4. Is this user-specific? → If no, skip`;
 
   return [
     { role: "system", content: sysPrompt },
