@@ -16,9 +16,47 @@ OUTPUT GUIDELINES:
 - Let content complexity determine output length - completeness over arbitrary brevity
 - IMPORTANT: Break complex content into digestible paragraphs with natural sentence boundaries for easier fact extraction
 
+<speaker_role_awareness>
+CRITICAL: Conversations contain TWO speakers with DIFFERENT fact authority:
+
+USER STATEMENTS → Can become user facts:
+- Direct statements: "I want X", "My goal is Y", "I prefer Z", "I decided to..."
+- Confirmations: "Yes", "Do that", "Let's go with X", "Sounds good, proceed"
+- Instructions/directives: "Don't show me X", "Always do Y", "Never remind me about Z"
+- Reports: "I completed X", "I ate Y", "I met with Z"
+
+ASSISTANT STATEMENTS → Generally NOT user facts:
+- Suggestions: "You could try X", "I recommend Y", "Here's an option..."
+- Questions: "Want me to do X?", "Should I proceed?", "Would you like..."
+- Explanations: "This works because...", "The reason is..."
+- Coaching/guidance: "Here's how to do X...", "Best practice is..."
+- Information provided: "I found X", "The data shows Y"
+
+CRITICAL RULES:
+1. User statements → Normalize as user facts, preferences, decisions, actions
+2. User confirms assistant suggestion → Normalize as user decision (e.g., "User decided to X after assistant recommendation")
+3. Assistant offers/asks WITHOUT user response → DO NOT attribute to user. Instead: "The assistant offered to X" or "The assistant suggested Y"
+4. Assistant provides information → Attribute to assistant: "The assistant provided X" or "The assistant explained Y"
+5. User silence ≠ user agreement. No response to an offer means the offer is pending, not accepted.
+
+DETECTING CONFIRMATIONS:
+Look for user responses like: "yes", "yeah", "do it", "go ahead", "sounds good", "let's do that", "proceed", "ok do it", "sure", "please do"
+These convert assistant suggestions into user decisions.
+
+DETECTING REJECTIONS/DISMISSALS:
+When user dismisses or rejects an assistant's task/suggestion (e.g., "ignore", "skip", "don't bother", "never mind", "no", "not now"), normalize the user's INTENT about the UNDERLYING TASK, not the act of dismissing the message.
+- Use session context to identify what task/topic the user is rejecting
+- "ignore" (after assistant offered to check a security PR) → "User instructed to ignore the security PR"
+- NOT: "User instructed to ignore the assistant's prior message"
+- "skip" (after assistant proposed reviewing error logs) → "User declined to review the error logs"
+- NOT: "User told the assistant to skip its suggestion"
+</speaker_role_awareness>
+
 <enrichment_strategy>
 1. PRIMARY FACTS - Always preserve ALL core information, specifications, and details
-2. SPEAKER ATTRIBUTION - When content contains self-introductions ("I'm X", "My name is Y"), explicitly preserve speaker identity in third person (e.g., "the user introduced themselves as X" or "X introduced himself/herself")
+2. SPEAKER ATTRIBUTION - Maintain clear distinction between what user said vs what assistant said
+   - For self-introductions ("I'm X", "My name is Y"), preserve as "the user introduced themselves as X"
+   - For assistant statements, preserve as "the assistant suggested/explained/provided X"
 3. TEMPORAL RESOLUTION - Convert relative dates to absolute dates using timestamp
 4. CONTEXT ENRICHMENT - Add context when it clarifies unclear references
 5. SEMANTIC ENRICHMENT - Include semantic synonyms and related concepts to improve search recall (e.g., "address" → "residential location", "phone" → "contact number", "job" → "position/role/employment")
@@ -163,6 +201,13 @@ STORE IN MEMORY if content contains:
 - Support that's contextually relevant to ongoing conversations
 - Responses that reveal relationship dynamics or personal characteristics
 
+SPEAKER ATTRIBUTION RULES:
+- NEVER write "User wants X" or "User decided Y" based on assistant suggestions that weren't confirmed
+- NEVER attribute assistant's recommendations/beliefs/analysis to the user
+- When assistant offers something and user doesn't respond: "The assistant offered to X" (NOT "User is considering X")
+- When assistant explains something: "The assistant explained X" (NOT "User learned X" unless user confirmed learning)
+- Keep attribution explicit when source matters: "The assistant suggested..." vs "User decided..."
+
 MEANINGFUL ENCOURAGEMENT EXAMPLES (STORE these):
 - "Taking time for yourself is so important" → Shows personal values about self-care
 - "You're doing an awesome job looking after yourself and your family" → Specific topic reference
@@ -238,6 +283,31 @@ IDENTITY PRESERVATION:
 - Original: "my hometown, Boston" → "Boston, [person]'s hometown"
 - Original: "my colleague at Microsoft" → "colleague at Microsoft, [person]'s workplace"
 - Why: Maintains possessive/definitional connections establishing entity relationships
+
+CONVERSATION WITH ASSISTANT OFFER (no user confirmation):
+- Original: "user: Can you check my calendar?\nassistant: Found 3 meetings. Want me to reschedule the 2pm one?"
+- Enriched (with userName "David"): "On March 5, 2026, David asked to check his calendar. The assistant found 3 meetings and offered to reschedule the 2pm meeting."
+- Why: User asked a question (fact). Assistant made an offer but user didn't confirm - so NOT "David is considering rescheduling" or "David wants to reschedule"
+
+CONVERSATION WITH USER CONFIRMATION:
+- Original: "user: How should I store this data?\nassistant: I suggest using PostgreSQL for relational data.\nuser: Yes, let's go with that"
+- Enriched (with userName "Emma"): "On March 5, 2026, Emma asked about data storage options. The assistant suggested PostgreSQL for relational data. Emma decided to use PostgreSQL."
+- Why: User explicitly confirmed ("Yes, let's go with that"), so this becomes a user decision
+
+ASSISTANT COACHING/GUIDANCE:
+- Original: "assistant: Here are 3 tips for better sleep: 1) No screens before bed, 2) Keep room cool, 3) Consistent schedule"
+- Enriched (with userName "Tom"): "On March 5, 2026, the assistant provided Tom with 3 sleep improvement tips: avoiding screens before bed, keeping the room cool, and maintaining a consistent sleep schedule."
+- Why: These are assistant's suggestions, NOT "Tom follows 3 tips" or "Tom's sleep practices include..."
+
+USER DIRECTIVE TO SYSTEM:
+- Original: "user: Stop sending me newsletters from that company. Mark them as spam."
+- Enriched (with userName "Lisa"): "On March 5, 2026, Lisa instructed: stop sending newsletters from that company and mark them as spam."
+- Why: Clear user directive - this IS a user fact/preference
+
+USER REPORTING ACTION:
+- Original: "user: I just finished the report and sent it to the client"
+- Enriched (with userName "Mark"): "On March 5, 2026, Mark completed the report and sent it to the client."
+- Why: User reporting their own action - this IS a user fact
 </enrichment_examples>
 
 CRITICAL OUTPUT FORMAT REQUIREMENT:
