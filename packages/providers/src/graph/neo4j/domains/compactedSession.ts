@@ -23,6 +23,7 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
           cs.createdAt = $createdAt,
           cs.confidence = $confidence,
           cs.userId = $userId,
+          cs.workspaceId = $workspaceId,
           cs.source = $source,
           cs.compressionRatio = $compressionRatio,
           cs.metadata = $metadata
@@ -50,6 +51,7 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
         updatedAt: compact.updatedAt?.toISOString() || null,
         confidence: compact.confidence,
         userId: compact.userId,
+        workspaceId: compact.workspaceId || null,
         source: compact.source,
         compressionRatio: compact.compressionRatio,
         metadata: JSON.stringify(compact.metadata || {}),
@@ -61,14 +63,21 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
 
     async getCompactedSession(
       uuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<CompactedSessionNode | null> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {uuid: $uuid, userId: $userId})
+        MATCH (cs:CompactedSession {uuid: $uuid, userId: $userId${wsFilter}})
         RETURN cs
       `;
 
-      const result = await core.runQuery(query, { uuid, userId });
+      const result = await core.runQuery(query, {
+        uuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       if (result.length === 0) return null;
 
       const compact = result[0].get("cs").properties;
@@ -77,45 +86,70 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
 
     async getCompactedSessionBySessionId(
       sessionId: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<CompactedSessionNode | null> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {sessionId: $sessionId, userId: $userId})
+        MATCH (cs:CompactedSession {sessionId: $sessionId, userId: $userId${wsFilter}})
         RETURN ${COMPACTED_SESSION_NODE_PROPERTIES} as compact
         ORDER BY cs.endTime DESC
         LIMIT 1
       `;
 
-      const result = await core.runQuery(query, { sessionId, userId });
+      const result = await core.runQuery(query, {
+        sessionId,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       if (result.length === 0) return null;
 
       const compact = result[0].get("compact");
       return parseCompactedSessionNode(compact);
     },
 
-    async deleteCompactedSession(uuid: string, userId: string): Promise<void> {
+    async deleteCompactedSession(
+      uuid: string,
+      userId: string,
+      workspaceId?: string
+    ): Promise<void> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {uuid: $uuid, userId: $userId})
+        MATCH (cs:CompactedSession {uuid: $uuid, userId: $userId${wsFilter}})
         DETACH DELETE cs
       `;
 
-      await core.runQuery(query, { uuid, userId });
+      await core.runQuery(query, {
+        uuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
     },
 
-    async getCompactionStats(userId: string): Promise<{
+    async getCompactionStats(
+      userId: string,
+      workspaceId?: string
+    ): Promise<{
       totalSessions: number;
       totalEpisodes: number;
       averageCompressionRatio: number;
     }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {userId: $userId})
+        MATCH (cs:CompactedSession {userId: $userId${wsFilter}})
         RETURN
           count(cs) as totalCompacts,
           sum(cs.episodeCount) as totalEpisodes,
           avg(cs.compressionRatio) as avgCompressionRatio
       `;
 
-      const result = await core.runQuery(query, { userId });
+      const result = await core.runQuery(query, {
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       if (result.length === 0) {
         return {
           totalSessions: 0,
@@ -135,30 +169,45 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
     async linkEpisodesToCompact(
       compactUuid: string,
       episodeUuids: string[],
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<void> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId})
+        MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId${wsFilter}})
         UNWIND $episodeUuids as episodeUuid
-        MATCH (e:Episode {uuid: episodeUuid, userId: $userId})
+        MATCH (e:Episode {uuid: episodeUuid, userId: $userId${wsFilter}})
         MERGE (cs)-[:COMPACTS {createdAt: datetime()}]->(e)
         MERGE (e)-[:COMPACTED_INTO {createdAt: datetime()}]->(cs)
       `;
 
-      await core.runQuery(query, { compactUuid, episodeUuids, userId });
+      await core.runQuery(query, {
+        compactUuid,
+        episodeUuids,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
     },
 
     async getEpisodesForCompact(
       compactUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<EpisodicNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId})-[:COMPACTS]->(e:Episode)
+        MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId${wsFilter}})-[:COMPACTS]->(e:Episode)
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.createdAt ASC
       `;
 
-      const result = await core.runQuery(query, { compactUuid, userId });
+      const result = await core.runQuery(query, {
+        compactUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
@@ -166,9 +215,12 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
       sessionId: string,
       userId: string,
       afterTime?: Date,
+      workspaceId?: string,
     ): Promise<EpisodicNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const query = `
-        MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
+        MATCH (e:Episode {sessionId: $sessionId, userId: $userId${wsFilter}})
         ${afterTime ? "WHERE e.createdAt > $afterTime" : ""}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.createdAt ASC
@@ -178,6 +230,7 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
         sessionId,
         userId,
         afterTime: afterTime?.toISOString(),
+        ...(workspaceId && { workspaceId }),
       });
 
       return result.map((record) => parseEpisodicNode(record.get("episode")));

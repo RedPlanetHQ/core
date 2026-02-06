@@ -33,8 +33,9 @@ export async function saveEntity(entity: EntityNode): Promise<string> {
 export async function getEntity(
   uuid: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<EntityNode | null> {
-  return graphProvider().getEntity(uuid, userId);
+  return graphProvider().getEntity(uuid, userId, workspaceId ?? "");
 }
 
 // Find semantically similar entities
@@ -44,6 +45,7 @@ export async function findSimilarEntities(params: {
   threshold: number;
   userId: string;
   excludeUuids?: string[];
+  workspaceId?: string;
 }): Promise<EntityNode[]> {
   if (params.queryEmbedding.length === 0) {
     return [];
@@ -67,6 +69,7 @@ export async function findSimilarEntities(params: {
   const entities = await graphProvider().getEntities(
     entityUuids,
     params.userId,
+    params.workspaceId ?? "",
   );
 
   return entities;
@@ -76,16 +79,24 @@ export async function findSimilarEntities(params: {
 export async function findExactPredicateMatches(params: {
   predicateName: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<EntityNode[]> {
-  return graphProvider().findExactPredicateMatches(params);
+  return graphProvider().findExactPredicateMatches({
+    ...params,
+    workspaceId: params.workspaceId ?? "",
+  });
 }
 
 // Find exact match for any entity by name (case-insensitive)
 export async function findExactEntityMatch(params: {
   entityName: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<EntityNode | null> {
-  return graphProvider().findExactEntityMatch(params);
+  return graphProvider().findExactEntityMatch({
+    ...params,
+    workspaceId: params.workspaceId ?? "",
+  });
 }
 
 /**
@@ -95,8 +106,9 @@ export async function findExactEntityMatch(params: {
  */
 export async function deduplicateEntitiesByName(
   userId: string,
+  workspaceId?: string,
 ): Promise<{ count: number; deletedUuids: string[] }> {
-  const result = await graphProvider().deduplicateEntitiesByName(userId);
+  const result = await graphProvider().deduplicateEntitiesByName(userId, workspaceId ?? "");
 
   if (result.count > 0) {
     logger.info(`Deduplicated ${result.count} entities for user ${userId}`);
@@ -114,8 +126,9 @@ export async function mergeEntities(
   sourceUuid: string,
   targetUuid: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<void> {
-  await graphProvider().mergeEntities(sourceUuid, targetUuid, userId);
+  await graphProvider().mergeEntities(sourceUuid, targetUuid, userId, workspaceId ?? "");
 }
 
 /**
@@ -124,6 +137,7 @@ export async function mergeEntities(
  */
 export async function deleteOrphanedEntities(
   userId: string,
+  workspaceId?: string,
 ): Promise<{ count: number; deletedUuids: string[] }> {
-  return graphProvider().deleteOrphanedEntities(userId);
+  return graphProvider().deleteOrphanedEntities(userId, workspaceId ?? "");
 }

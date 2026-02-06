@@ -9,6 +9,7 @@ export interface DocumentNode {
   metadata: Record<string, any>;
   source: string;
   userId: string;
+  workspaceId?: string;
   createdAt: Date;
   validAt: Date;
   totalChunks: number;
@@ -36,6 +37,7 @@ export interface EpisodicNode {
   validAt: Date;
   labelIds: string[];
   userId: string;
+  workspaceId?: string;
 
   // Grouping and chunking
   sessionId: string; // Required - groups chunks together (replaces documentId)
@@ -71,6 +73,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   metadata: e.metadata,
   createdAt: e.createdAt,
   userId: e.userId,
+  workspaceId: e.workspaceId,
   sessionId: e.sessionId,
   queueId: e.queueId,
   labelIds: e.labelIds,
@@ -90,6 +93,7 @@ export const STATEMENT_NODE_PROPERTIES = `{
   fact: s.fact,
   createdAt: s.createdAt,
   userId: s.userId,
+  workspaceId: s.workspaceId,
   validAt: s.validAt,
   invalidAt: s.invalidAt,
   invalidatedBy: s.invalidatedBy,
@@ -105,6 +109,7 @@ export const ENTITY_NODE_PROPERTIES = `{
   type: ent.type,
   createdAt: ent.createdAt,
   userId: ent.userId,
+  workspaceId: ent.workspaceId,
   attributes: ent.attributes
 }`;
 
@@ -119,6 +124,7 @@ export const COMPACTED_SESSION_NODE_PROPERTIES = `{
   updatedAt: cs.updatedAt,
   confidence: cs.confidence,
   userId: cs.userId,
+  workspaceId: cs.workspaceId,
   source: cs.source,
   compressionRatio: cs.compressionRatio,
   metadata: cs.metadata
@@ -157,6 +163,7 @@ export interface EntityNode {
   attributes?: Record<string, any>;
   createdAt: Date;
   userId: string;
+  workspaceId?: string;
 }
 
 /**
@@ -206,6 +213,7 @@ export interface StatementNode {
   invalidatedBy?: string; // UUID of the episode that invalidated this statement
   attributes: Record<string, any>;
   userId: string;
+  workspaceId?: string;
   labelIds?: string[];
   aspect?: StatementAspect | null; // Classification of the statement type
   recallCount?: { low: number; high: number };
@@ -245,6 +253,7 @@ export type AddEpisodeParams = {
   metadata?: Record<string, any>;
   source: string;
   userId: string;
+  workspaceId?: string;
   userName?: string; // User's display name for user-centric extraction
   labelIds?: string[];
   sessionId: string;
@@ -301,6 +310,7 @@ export interface CompactedSessionNode {
   updatedAt?: Date;
   confidence: number;
   userId: string;
+  workspaceId?: string;
   source: string;
   compressionRatio?: number;
   metadata?: Record<string, any>;
@@ -315,6 +325,7 @@ export interface SpaceNode {
   name: string;
   description: string;
   userId: string;
+  workspaceId?: string;
   createdAt: Date;
   updatedAt: Date;
   isActive: boolean;

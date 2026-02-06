@@ -83,6 +83,7 @@ export async function processSessionCompaction(
       existingCompact?.updatedAt
         ? new Date(existingCompact.updatedAt)
         : undefined,
+      workspaceId,
     );
 
     // Check if we have enough episodes
@@ -567,15 +568,17 @@ function parseCompactionResponse(
 export async function shouldTriggerCompaction(
   sessionId: string,
   userId: string,
+  workspaceId: string,
 ): Promise<boolean> {
   const existingCompact = await getCompactedSessionBySessionId(
     sessionId,
     userId,
+    workspaceId,
   );
 
   if (!existingCompact) {
     // Check if we have enough episodes for initial compaction
-    const episodes = await getSessionEpisodes(sessionId, userId);
+    const episodes = await getSessionEpisodes(sessionId, userId, undefined, workspaceId);
     return episodes.length >= CONFIG.minEpisodesForCompaction;
   }
 
@@ -584,6 +587,7 @@ export async function shouldTriggerCompaction(
     sessionId,
     userId,
     new Date(existingCompact.endTime),
+    workspaceId,
   );
   return newEpisodes.length >= CONFIG.compactionThreshold;
 }
