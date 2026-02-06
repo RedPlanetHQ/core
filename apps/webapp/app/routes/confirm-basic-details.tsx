@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { useActionData } from "@remix-run/react";
+import { useActionData, useNavigation } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -7,7 +7,7 @@ import {
   redirect,
 } from "@remix-run/node";
 import { useForm } from "@conform-to/react";
-import { getFieldsetConstraint, parse } from "@conform-to/zod";
+import { getZodConstraint, parseWithZod } from "@conform-to/zod";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
 import {
   Card,
@@ -35,10 +35,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
 
   const formData = await request.formData();
-  const submission = parse(formData, { schema });
+  const submission = parseWithZod(formData, { schema });
 
-  if (!submission.value || submission.intent !== "submit") {
-    return json(submission);
+  if (submission.status !== 'success') {
+    return json(submission.reply());
   }
 
   const { workspaceName } = submission.value;
@@ -75,16 +75,17 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
 export default function ConfirmBasicDetails() {
   const lastSubmission = useActionData<typeof action>();
+  const navigation = useNavigation();
 
   const [form, fields] = useForm({
-    lastSubmission: lastSubmission as any,
-    constraint: getFieldsetConstraint(schema),
+    lastResult: navigation.state === 'idle' ? (lastSubmission as any) : null,
+    constraint: getZodConstraint(schema),
     onValidate({ formData }) {
-      return parse(formData, { schema });
+      return parseWithZod(formData, { schema });
     },
-    defaultValue: {
-      integrations: [],
-    },
+    // Validate the form on blur event triggered
+    shouldValidate: 'onBlur',
+    shouldRevalidate: 'onInput',
   });
 
   return (
@@ -99,7 +100,7 @@ export default function ConfirmBasicDetails() {
         </CardHeader>
 
         <CardContent className="pt-2 text-base">
-          <form method="post" {...form.props}>
+          <form method="post" id={form.id} onSubmit={form.onSubmit} noValidate>
             <div className="space-y-4">
               <div>
                 <label
@@ -115,9 +116,9 @@ export default function ConfirmBasicDetails() {
                   name={fields.workspaceName.name}
                   className="mt-1 block w-full text-base"
                 />
-                {fields.workspaceName.error && (
+                {fields.workspaceName.errors && (
                   <div className="text-sm text-red-500">
-                    {fields.workspaceName.error}
+                    {fields.workspaceName.errors}
                   </div>
                 )}
               </div>

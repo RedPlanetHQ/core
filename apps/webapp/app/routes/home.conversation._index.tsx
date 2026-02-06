@@ -3,7 +3,7 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
 import { useTypedLoaderData } from "remix-typedjson";
-import { parse } from "@conform-to/zod";
+import { parseWithZod } from "@conform-to/zod";
 import { redirect, json } from "@remix-run/node";
 import {
   requireUser,
@@ -36,10 +36,10 @@ export async function action({ request }: ActionFunctionArgs) {
   const workspace = await requireWorkpace(request);
   const formData = await request.formData();
 
-  const submission = parse(formData, { schema: CreateConversationSchema });
+  const submission = parseWithZod(formData, { schema: CreateConversationSchema });
 
-  if (!submission.value || submission.intent !== "submit") {
-    return json(submission);
+  if (submission.status !== 'success') {
+    return json(submission.reply());
   }
 
   const conversation = await createConversation(workspace?.id, userId, {
