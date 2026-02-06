@@ -3,21 +3,24 @@ import { RawTriplet } from "../types";
 
 export function createUserMethods(core: Neo4jCore) {
   return {
-    async deleteUser(userId: string): Promise<void> {
+    async deleteUser(userId: string, workspaceId?: string): Promise<void> {
+      const wsFilter = workspaceId ? " AND n.workspaceId = $workspaceId" : "";
       const query = `
         MATCH (n {userId: $userId})
+        WHERE true ${wsFilter}
         DETACH DELETE n
       `;
 
-      await core.runQuery(query, { userId });
+      await core.runQuery(query, { userId, ...(workspaceId && { workspaceId }) });
     },
 
     /**
      * Get graph data with episode-episode connections based on shared statements
      */
-    async getClusteredGraphData(userId: string, limit?: number): Promise<RawTriplet[]> {
+    async getClusteredGraphData(userId: string, limit?: number, workspaceId?: string): Promise<RawTriplet[]> {
       try {
-        const query = `MATCH (e1:Episode {userId: $userId})-[:HAS_PROVENANCE]->(stmt:Statement)<-[:HAS_PROVENANCE]-(e2:Episode {userId: $userId})
+        const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+        const query = `MATCH (e1:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(stmt:Statement)<-[:HAS_PROVENANCE]-(e2:Episode {userId: $userId${wsFilter}})
          WHERE e1.uuid < e2.uuid
 
          WITH DISTINCT e1, e2, stmt
@@ -43,7 +46,7 @@ export function createUserMethods(core: Neo4jCore) {
            totalSharedStatements,
            [s IN sharedStatements | s.fact] as statementFacts`
 
-        const result = await core.runQuery(query, { userId })
+        const result = await core.runQuery(query, { userId, ...(workspaceId && { workspaceId }) })
 
         if (core.logger) {
           core.logger.info(`Fetched ${result.length} episode pairs`);
@@ -124,4 +127,3 @@ export function createUserMethods(core: Neo4jCore) {
 
   };
 }
-

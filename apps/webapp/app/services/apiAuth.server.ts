@@ -15,6 +15,7 @@ export type ApiAuthenticationResultSuccess = {
   apiKey: string;
   type: "PRIVATE" | "OAUTH2";
   userId: string;
+  workspaceId?: string;
   scopes?: string[];
   oneTimeUse?: boolean;
   oauth2?: {
@@ -67,6 +68,7 @@ export async function authenticateApiKeyWithFailure(
         apiKey,
         type: "OAUTH2",
         userId: accessToken.user.id,
+        workspaceId: accessToken.workspaceId,
         scopes: accessToken.scope ? accessToken.scope.split(" ") : undefined,
         oauth2: {
           clientId: accessToken.client.clientId,
@@ -102,6 +104,7 @@ export async function authenticateApiKeyWithFailure(
         ok: true,
         ...result,
         userId: user.userId,
+        workspaceId: user.workspaceId,
       };
     }
   }

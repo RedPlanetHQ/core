@@ -4,7 +4,6 @@ import { requireUserId } from "~/services/session.server";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { triggerIntegrationWebhook } from "~/trigger/webhooks/integration-webhook-delivery";
-import { scheduler } from "~/trigger/integrations/scheduler";
 import { schedules } from "@trigger.dev/sdk";
 
 export async function action({ request }: ActionFunctionArgs) {

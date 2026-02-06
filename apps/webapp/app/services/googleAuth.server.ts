@@ -48,7 +48,7 @@ export function addGoogleStrategy(
           authenticationExtraParams: {},
         });
 
-        await postAuthentication({
+        const workspace = await postAuthentication({
           user,
           isNewUser,
           loginMethod: "GOOGLE",
@@ -66,6 +66,7 @@ export function addGoogleStrategy(
 
         return {
           userId: user.id,
+          workspaceId: workspace?.id,
         };
       } catch (error) {
         console.error(error);

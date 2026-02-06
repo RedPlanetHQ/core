@@ -16,6 +16,7 @@ export function createTripleMethods(core: Neo4jCore & any) {
       object: EntityNode;
       episodeUuid: string;
       userId: string;
+      workspaceId?: string;
     }): Promise<string> {
       // First save the statement
       const statementUuid = await core.saveStatement(triple.statement);
@@ -25,13 +26,14 @@ export function createTripleMethods(core: Neo4jCore & any) {
       const predicateUuid = await core.saveEntity(triple.predicate);
       const objectUuid = await core.saveEntity(triple.object);
 
+      const wsFilter = triple.workspaceId ? ", workspaceId: $workspaceId" : "";
       // Then create relationships
       const relationshipsQuery = `
-        MATCH (statement:Statement {uuid: $statementUuid, userId: $userId})
-        MATCH (subject:Entity {uuid: $subjectUuid, userId: $userId})
-        MATCH (predicate:Entity {uuid: $predicateUuid, userId: $userId})
-        MATCH (object:Entity {uuid: $objectUuid, userId: $userId})
-        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
+        MATCH (statement:Statement {uuid: $statementUuid, userId: $userId${wsFilter}})
+        MATCH (subject:Entity {uuid: $subjectUuid, userId: $userId${wsFilter}})
+        MATCH (predicate:Entity {uuid: $predicateUuid, userId: $userId${wsFilter}})
+        MATCH (object:Entity {uuid: $objectUuid, userId: $userId${wsFilter}})
+        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
 
         MERGE (episode)-[prov:HAS_PROVENANCE]->(statement)
           ON CREATE SET prov.createdAt = $createdAt, prov.userId = $userId
@@ -54,6 +56,7 @@ export function createTripleMethods(core: Neo4jCore & any) {
         episodeUuid: triple.episodeUuid,
         createdAt: now,
         userId: triple.userId,
+        ...(triple.workspaceId && { workspaceId: triple.workspaceId }),
       });
 
       return statementUuid;
@@ -61,10 +64,12 @@ export function createTripleMethods(core: Neo4jCore & any) {
 
     async getTriplesForEpisode(
       episodeUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<Triple[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})-[:HAS_PROVENANCE]->(statement:Statement)
+        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(statement:Statement)
         MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
         MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
         MATCH (object:Entity)<-[:HAS_OBJECT]-(statement)
@@ -75,7 +80,7 @@ export function createTripleMethods(core: Neo4jCore & any) {
                ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
       `;
 
-      const result = await core.runQuery(query, { episodeUuid, userId });
+      const result = await core.runQuery(query, { episodeUuid, userId, ...(workspaceId && { workspaceId }) });
 
       return result.map((record: any) => ({
         statement: parseStatementNode(record.get("statement")),
@@ -88,13 +93,15 @@ export function createTripleMethods(core: Neo4jCore & any) {
 
     async getTriplesForStatementsBatch(
       statementUuids: string[],
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<Map<string, Triple>> {
       if (statementUuids.length === 0) {
         return new Map();
       }
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (statement:Statement {userId: $userId})
+        MATCH (statement:Statement {userId: $userId${wsFilter}})
         WHERE statement.uuid IN $statementUuids
         MATCH (subject:Entity)<-[:HAS_SUBJECT]-(statement)
         MATCH (predicate:Entity)<-[:HAS_PREDICATE]-(statement)
@@ -107,7 +114,7 @@ export function createTripleMethods(core: Neo4jCore & any) {
                ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
       `;
 
-      const result = await core.runQuery(query, { statementUuids, userId });
+      const result = await core.runQuery(query, { statementUuids, userId, ...(workspaceId && { workspaceId }) });
 
       const triplesMap = new Map<string, Triple>();
       result.forEach((record: any) => {

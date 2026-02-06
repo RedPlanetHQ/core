@@ -604,6 +604,7 @@ export class PgVectorProvider implements IVectorProvider {
     episodeUuids: string[],
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate: boolean = false
   ): Promise<number> {
     if (episodeUuids.length === 0 || labelIds.length === 0) {
@@ -617,6 +618,7 @@ export class PgVectorProvider implements IVectorProvider {
           where: {
             id: { in: episodeUuids },
             userId,
+            workspaceId,
           },
           data: {
             labelIds: labelIds,
@@ -664,6 +666,7 @@ export class PgVectorProvider implements IVectorProvider {
     sessionId: string,
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate: boolean = false
   ): Promise<number> {
     if (!sessionId || labelIds.length === 0) {
@@ -677,6 +680,7 @@ export class PgVectorProvider implements IVectorProvider {
           where: {
             sessionId,
             userId,
+            workspaceId
           },
           data: {
             labelIds: labelIds,

@@ -29,26 +29,14 @@ const { action, loader } = createActionApiRoute(
     try {
       logger.log("Creating activity", { body, userId: authentication.userId });
 
-      const user = await prisma.user.findUnique({
-        where: {
-          id: authentication.userId,
-        },
-        include: {
-          Workspace: true,
-        },
-      });
-
-      if (!user) {
-        throw new Error("User not found");
-      }
-
+   
       // Create the activity record
       const activity = await prisma.activity.create({
         data: {
           text: body.text,
           sourceURL: body.sourceURL,
           integrationAccountId: body.integrationAccountId,
-          workspaceId: user.Workspace?.id || "",
+          workspaceId: authentication.workspaceId || "",
         },
       });
 
@@ -64,6 +52,7 @@ const { action, loader } = createActionApiRoute(
       const queueResponse = await addToQueue(
         ingestData,
         authentication.userId,
+        authentication.workspaceId,
         activity.id,
       );
 
@@ -73,9 +62,9 @@ const { action, loader } = createActionApiRoute(
       });
 
       // Trigger webhook delivery for the new activity
-      if (user.Workspace?.id) {
+      if (authentication.workspaceId) {
         try {
-          await triggerWebhookDelivery(activity.id, user.Workspace.id);
+          await triggerWebhookDelivery(activity.id, authentication.workspaceId);
           logger.log("Webhook delivery triggered for activity", {
             activityId: activity.id,
           });

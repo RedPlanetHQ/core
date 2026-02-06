@@ -41,13 +41,12 @@ const { action, loader } = createActionApiRoute(
       console.error,
     );
 
-
-
     try {
       // First, search for relevant information
       const results = await searchMemoryWithAgent(
         body.content,
         authentication.userId,
+        authentication.workspaceId!,
         body.metadata?.source || "api",
         {
           limit: 10,

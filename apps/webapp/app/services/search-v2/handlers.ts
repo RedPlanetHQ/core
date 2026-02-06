@@ -153,6 +153,7 @@ export async function handleAspectQuery(ctx: HandlerContext): Promise<EpisodicNo
   // Find episodes that have statements matching the aspects
   const episodes = await graphProvider.getEpisodesForAspect({
     userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
     labelIds,
     aspects,
     temporalStart,
@@ -233,7 +234,7 @@ export async function handleEntityLookup(
 
     // Fetch full entity data for vector matches
     const entityUuids = vectorResults.map((r) => r.id);
-    const entityNodes = await graphProvider.getEntities(entityUuids, ctx.userId);
+    const entityNodes = await graphProvider.getEntities(entityUuids, ctx.userId, ctx.workspaceId);
 
     allEntities.push(...entityNodes.filter((e) => e && e.uuid && e.name));
   }
@@ -317,6 +318,7 @@ export async function handleEntityLookup(
   const episodes = await graphProvider.getEpisodesForEntities({
     entityUuids,
     userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
     maxEpisodes,
   });
 
@@ -352,6 +354,7 @@ export async function handleTemporal(
   // Get episodes within time range using graph provider method
   const episodes = await graphProvider.getEpisodesForTemporal({
     userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
     labelIds,
     aspects: ctx.routerOutput.aspects,
     startTime: effectiveStart,
@@ -402,6 +405,7 @@ export async function handleExploratory(
   // Get episodes filtered by labels using graph provider method
   const episodes = await graphProvider.getEpisodesForExploratory({
     userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
     labelIds,
     maxEpisodes,
   });
@@ -448,6 +452,7 @@ export async function handleRelationship(
   // Find statements that connect the hinted entities
   const statements = await graphProvider.getStatementsConnectingEntities({
     userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
     entityHint1: entityHints[0],
     entityHint2: entityHints[1],
     maxStatements: limit,
@@ -697,7 +702,7 @@ async function extractInvalidatedFacts(
   );
 
   // Get all statements for these episodes
-  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId);
+  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId, ctx.workspaceId);
 
   // Filter for invalidated statements only
   const invalidatedFacts = invalidFacts.map((stmt) => ({

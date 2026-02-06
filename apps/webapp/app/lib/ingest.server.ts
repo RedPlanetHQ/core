@@ -12,30 +12,19 @@ import { trackFeatureUsage } from "~/services/telemetry.server";
 export const addToQueue = async (
   rawBody: z.infer<typeof IngestBodyRequest>,
   userId: string,
+  workspaceId: string,
   activityId?: string,
   ingestionQueueId?: string,
 ) => {
   const body = { ...rawBody, source: rawBody.source.toLowerCase() };
   const sessionId = body.sessionId || crypto.randomUUID();
 
-  const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-    },
-    include: {
-      Workspace: true,
-    },
-  });
-
-  if (!user?.Workspace?.id) {
-    throw new Error(
-      "Workspace ID is required to create an ingestion queue entry.",
-    );
-  }
+ 
 
   // Check if workspace has sufficient credits before processing
   const hasSufficientCredits = await hasCredits(
-    user.Workspace?.id as string,
+    workspaceId,
+    userId,
     "addEpisode",
   );
 
@@ -52,7 +41,7 @@ export const addToQueue = async (
         id: {
           in: body.labelIds,
         },
-        workspaceId: user.Workspace.id,
+        workspaceId: workspaceId,
       },
       select: {
         id: true,
@@ -69,7 +58,7 @@ export const addToQueue = async (
     const lastEpisode = await prisma.ingestionQueue.findFirst({
       where: {
         sessionId,
-        workspaceId: user.Workspace?.id,
+        workspaceId: workspaceId,
       },
       orderBy: {
         createdAt: "desc",
@@ -102,7 +91,7 @@ export const addToQueue = async (
       source: body.source,
       status: IngestionStatus.PENDING,
       priority: 1,
-      workspaceId: user.Workspace.id,
+      workspaceId: workspaceId,
       activityId,
       sessionId,
       labels,
@@ -118,7 +107,7 @@ export const addToQueue = async (
         sessionId,
       },
       userId,
-      workspaceId: user.Workspace.id,
+      workspaceId: workspaceId,
       queueId: queuePersist.id,
     },
     rawBody.delay,

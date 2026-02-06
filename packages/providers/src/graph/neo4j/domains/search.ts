@@ -13,6 +13,7 @@ import { EPISODIC_NODE_PROPERTIES, STATEMENT_NODE_PROPERTIES } from "../types";
 export interface BM25SearchParams {
   query: string;
   userId: string;
+  workspaceId?: string;
   validAt: Date;
   startTime?: Date;
   includeInvalidated: boolean;
@@ -30,6 +31,7 @@ export interface BM25SearchResult {
 export interface GetEpisodesForStatementsParams {
   statementUuids: string[];
   userId: string;
+  workspaceId?: string;
   validAt: Date;
   startTime?: Date;
   includeInvalidated: boolean;
@@ -44,6 +46,7 @@ export interface GetEpisodesForStatementsResult {
 export interface GetEpisodesByIdsWithStatementsParams {
   episodeUuids: string[];
   userId: string;
+  workspaceId?: string;
   validAt: Date;
   startTime?: Date;
   includeInvalidated: boolean;
@@ -58,6 +61,7 @@ export interface GetEpisodesByIdsWithStatementsResult {
 export interface BfsTraversalParams {
   entityIds: string[];
   userId: string;
+  workspaceId?: string;
   validAt: Date;
   startTime?: Date;
   includeInvalidated: boolean;
@@ -72,6 +76,7 @@ export interface BfsTraversalResult {
 export interface BfsFetchStatementsParams {
   statementUuids: string[];
   userId: string;
+  workspaceId?: string;
 }
 
 export interface BfsFetchStatementsResult {
@@ -82,6 +87,7 @@ export interface BfsFetchStatementsResult {
 export interface BfsNextLevelParams {
   statementUuids: string[];
   userId: string;
+  workspaceId?: string;
 }
 
 export interface BfsNextLevelResult {
@@ -91,6 +97,7 @@ export interface BfsNextLevelResult {
 export interface EpisodeGraphSearchParams {
   queryEntityIds: string[];
   userId: string;
+  workspaceId?: string;
   validAt: Date;
   startTime?: Date;
   includeInvalidated: boolean;
@@ -109,6 +116,7 @@ export interface EpisodeGraphSearchResult {
 export interface FetchEpisodesByIdsParams {
   episodeIds: string[];
   userId: string;
+  workspaceId?: string;
   labelIds: string[];
 }
 
@@ -127,6 +135,8 @@ export function createSearchMethods(core: Neo4jCore) {
      * @returns Array of episodes with scores and matched statements
      */
     async performBM25Search(params: BM25SearchParams): Promise<BM25SearchResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Build timeframe condition
       let timeframeCondition = `
         AND s.validAt <= $validAt
@@ -152,6 +162,7 @@ export function createSearchMethods(core: Neo4jCore) {
         CALL db.index.fulltext.queryNodes("statement_fact_index", $query)
         YIELD node AS s, score
         WHERE s.userId = $userId
+          ${params.workspaceId ? "AND s.workspaceId = $workspaceId" : ""}
           AND score >= 0.5
           ${timeframeCondition}
         WITH s, score
@@ -159,7 +170,7 @@ export function createSearchMethods(core: Neo4jCore) {
         LIMIT ${params.statementLimit}
 
         // Find episodes containing these statements
-        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
+        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId${wsFilter}})
         ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
 
         // Aggregate scores per episode
@@ -180,6 +191,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const cypherParams = {
         query: params.query,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
@@ -213,6 +225,8 @@ export function createSearchMethods(core: Neo4jCore) {
     async getEpisodesForStatements(
       params: GetEpisodesForStatementsParams
     ): Promise<GetEpisodesForStatementsResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Build timeframe condition
       let timeframeCondition = `
         AND s.validAt <= $validAt
@@ -235,12 +249,12 @@ export function createSearchMethods(core: Neo4jCore) {
 
       const cypher = `
         // Use IN for efficient index lookup of statements
-        MATCH (s:Statement {userId: $userId})
+        MATCH (s:Statement {userId: $userId${wsFilter}})
         WHERE s.uuid IN $statementUuids
           ${timeframeCondition}
 
         // Find episodes containing these statements
-        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId})
+        MATCH (s)<-[:HAS_PROVENANCE]-(e:Episode {userId: $userId${wsFilter}})
         ${episodeLabelCondition ? "WHERE " + episodeLabelCondition.replace("AND ", "") : ""}
 
         // Group by episode with distinct statements
@@ -250,6 +264,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
       const cypherParams = {
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         statementUuids: params.statementUuids,
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
@@ -276,6 +291,8 @@ export function createSearchMethods(core: Neo4jCore) {
     async getEpisodesByIdsWithStatements(
       params: GetEpisodesByIdsWithStatementsParams
     ): Promise<GetEpisodesByIdsWithStatementsResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Build episode label filter condition
       let episodeLabelCondition = "";
       if (params.labelIds.length > 0) {
@@ -295,12 +312,12 @@ export function createSearchMethods(core: Neo4jCore) {
       }
 
       const cypher = `
-        MATCH (ep:Episode {userId: $userId})
+        MATCH (ep:Episode {userId: $userId${wsFilter}})
         WHERE ep.uuid IN $episodeUuids
           ${episodeTimeframeCondition} ${episodeLabelCondition}
 
         // Get statements from matching episodes
-        MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+        MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
         WHERE s.validAt <= $validAt
           ${params.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
 
@@ -312,6 +329,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
       const cypherParams = {
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         episodeUuids: params.episodeUuids,
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
@@ -336,6 +354,8 @@ export function createSearchMethods(core: Neo4jCore) {
      * @returns Array of statement UUIDs (scoring done separately by vector provider)
      */
     async bfsGetStatements(params: BfsTraversalParams): Promise<BfsTraversalResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       let timeframeCondition = `
         AND s.validAt <= $validAt
         ${params.includeInvalidated ? "" : "AND (s.invalidAt IS NULL OR s.invalidAt > $validAt)"}
@@ -348,7 +368,7 @@ export function createSearchMethods(core: Neo4jCore) {
       // Scoring will be done by vector provider using batchScore
       const cypher = `
         UNWIND $entityIds AS entityId
-        MATCH (e:Entity{userId: $userId, uuid: entityId})-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
+        MATCH (e:Entity{userId: $userId${wsFilter}, uuid: entityId})-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId${wsFilter}})
         WHERE true
           ${timeframeCondition}
         WITH DISTINCT s
@@ -360,6 +380,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const cypherParams = {
         entityIds: params.entityIds,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
       };
@@ -381,8 +402,10 @@ export function createSearchMethods(core: Neo4jCore) {
     async bfsFetchStatements(
       params: BfsFetchStatementsParams
     ): Promise<BfsFetchStatementsResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const cypher = `
-        MATCH (s:Statement{userId: $userId})
+        MATCH (s:Statement{userId: $userId${wsFilter}})
         WHERE s.uuid IN $uuids
         OPTIONAL MATCH (e:Episode)-[:HAS_PROVENANCE]->(s)
         WITH s, collect(e.uuid) as episodeIds
@@ -392,6 +415,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const records = await core.runQuery(cypher, {
         uuids: params.statementUuids,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       return records.map((r) => ({
@@ -407,8 +431,10 @@ export function createSearchMethods(core: Neo4jCore) {
      * @returns Array of entity IDs
      */
     async bfsGetNextLevel(params: BfsNextLevelParams): Promise<BfsNextLevelResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       const cypher = `
-        MATCH (s:Statement{userId: $userId})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(e:Entity{userId: $userId})
+        MATCH (s:Statement{userId: $userId${wsFilter}})-[rel:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]->(e:Entity{userId: $userId${wsFilter}})
         WHERE s.uuid IN $statementUuids
         RETURN DISTINCT e.uuid AS entityId
       `;
@@ -416,6 +442,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const records = await core.runQuery(cypher, {
         statementUuids: params.statementUuids,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       return records.map((r) => ({ entityId: r.get("entityId") }));
@@ -430,6 +457,8 @@ export function createSearchMethods(core: Neo4jCore) {
     async performEpisodeGraphSearch(
       params: EpisodeGraphSearchParams
     ): Promise<EpisodeGraphSearchResult[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Build timeframe condition
       let timeframeCondition = `
         AND s.validAt <= $validAt
@@ -451,7 +480,7 @@ export function createSearchMethods(core: Neo4jCore) {
 
       const cypher = `
         // Find statements connected to query entities (deduplicate early)
-        MATCH (queryEntity:Entity{userId: $userId})-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId})
+        MATCH (queryEntity:Entity{userId: $userId${wsFilter}})-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(s:Statement{userId: $userId${wsFilter}})
         WHERE queryEntity.uuid IN $queryEntityIds
           ${timeframeCondition}
         WITH DISTINCT s, queryEntity
@@ -461,7 +490,7 @@ export function createSearchMethods(core: Neo4jCore) {
         WHERE true ${episodeLabelCondition}
 
         // Get total statement count efficiently (count instead of collecting all)
-        OPTIONAL MATCH (ep)-[:HAS_PROVENANCE]->(allStmt:Statement{userId: $userId})
+        OPTIONAL MATCH (ep)-[:HAS_PROVENANCE]->(allStmt:Statement{userId: $userId${wsFilter}})
         WHERE allStmt.validAt <= $validAt
           ${params.includeInvalidated ? "" : "AND (allStmt.invalidAt IS NULL OR allStmt.invalidAt > $validAt)"}
 
@@ -497,6 +526,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const cypherParams = {
         queryEntityIds: params.queryEntityIds,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         validAt: params.validAt.toISOString(),
         ...(params.startTime && { startTime: params.startTime.toISOString() }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
@@ -527,6 +557,8 @@ export function createSearchMethods(core: Neo4jCore) {
      * @returns Array of episodes
      */
     async fetchEpisodesByIds(params: FetchEpisodesByIdsParams): Promise<EpisodicNode[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Build episode label filter condition
       let episodeLabelCondition = "";
       if (params.labelIds.length > 0) {
@@ -538,7 +570,7 @@ export function createSearchMethods(core: Neo4jCore) {
       }
 
       const cypher = `
-        MATCH (e:Episode{userId: $userId})
+        MATCH (e:Episode{userId: $userId${wsFilter}})
         WHERE e.uuid IN $episodeIds
           ${episodeLabelCondition}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
@@ -547,6 +579,7 @@ export function createSearchMethods(core: Neo4jCore) {
       const records = await core.runQuery(cypher, {
         episodeIds: params.episodeIds,
         userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
         ...(params.labelIds.length > 0 && { labelIds: params.labelIds }),
       });
 

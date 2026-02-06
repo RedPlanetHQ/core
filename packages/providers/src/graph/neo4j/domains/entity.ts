@@ -19,12 +19,13 @@ export function createEntityMethods(core: Neo4jCore) {
             n.attributes = $attributes,
             n.nameEmbedding = $nameEmbedding,
             n.createdAt = $createdAt,
-            n.userId = $userId
+            n.userId = $userId,
+            n.workspaceId = $workspaceId
           ON MATCH SET
             n.name = $name,
             n.type = $type,
             n.attributes = $attributes,
-            n.nameEmbedding = $nameEmbedding 
+            n.nameEmbedding = $nameEmbedding
           RETURN n.uuid as uuid
         `;
 
@@ -36,32 +37,35 @@ export function createEntityMethods(core: Neo4jCore) {
         nameEmbedding: entity.nameEmbedding || [],
         createdAt: entity.createdAt.toISOString(),
         userId: entity.userId,
+        workspaceId: entity.workspaceId || null,
       };
 
       const result = await core.runQuery(query, params);
       return result[0].get("uuid");
     },
 
-    async getEntity(uuid: string, userId: string): Promise<EntityNode | null> {
+    async getEntity(uuid: string, userId: string, workspaceId?: string): Promise<EntityNode | null> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (ent:Entity {uuid: $uuid, userId: $userId})
+        MATCH (ent:Entity {uuid: $uuid, userId: $userId${wsFilter}})
         RETURN ${ENTITY_NODE_PROPERTIES} as entity
       `;
 
-      const result = await core.runQuery(query, { uuid, userId });
+      const result = await core.runQuery(query, { uuid, userId, ...(workspaceId && { workspaceId }) });
       if (result.length === 0) return null;
 
       return parseEntityNode(result[0].get("entity"));
     },
 
-    async getEntities(uuids: string[], userId: string): Promise<EntityNode[]> {
+    async getEntities(uuids: string[], userId: string, workspaceId?: string): Promise<EntityNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
         UNWIND $uuids as uuid
-        MATCH (ent:Entity {uuid: uuid, userId: $userId})
+        MATCH (ent:Entity {uuid: uuid, userId: $userId${wsFilter}})
         RETURN ${ENTITY_NODE_PROPERTIES} as entity
       `;
 
-      const result = await core.runQuery(query, { uuids, userId });
+      const result = await core.runQuery(query, { uuids, userId, ...(workspaceId && { workspaceId }) });
       return result.map((record) => parseEntityNode(record.get("entity")));
     },
 
@@ -70,14 +74,16 @@ export function createEntityMethods(core: Neo4jCore) {
       threshold: number;
       limit: number;
       userId: string;
+      workspaceId?: string;
     }): Promise<Array<{ entity: EntityNode; score: number }>> {
       if (params.queryEmbedding.length === 0) {
         return [];
       }
 
       const limit = params.limit || 5;
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-      MATCH (ent:Entity{userId: $userId})
+      MATCH (ent:Entity{userId: $userId${wsFilter}})
       WHERE ent.nameEmbedding IS NOT NULL and size(ent.nameEmbedding) > 0
       WITH ent, gds.similarity.cosine(ent.nameEmbedding, $queryEmbedding) AS score
       WHERE score >= $threshold
@@ -99,12 +105,14 @@ export function createEntityMethods(core: Neo4jCore) {
     async findExactPredicateMatches(params: {
       predicateName: string;
       userId: string;
+      workspaceId?: string;
     }): Promise<EntityNode[]> {
+      const wsFilter = params.workspaceId ? " AND ent.workspaceId = $workspaceId" : "";
       const query = `
         MATCH (ent:Entity {userId: $userId})
         WHERE ent.type = 'Predicate'
           AND toLower(ent.name) = toLower($predicateName)
-          AND ent.userId = $userId
+          ${wsFilter}
         RETURN ${ENTITY_NODE_PROPERTIES} as entity
       `;
 
@@ -115,11 +123,13 @@ export function createEntityMethods(core: Neo4jCore) {
     async findExactEntityMatch(params: {
       entityName: string;
       userId: string;
+      workspaceId?: string;
     }): Promise<EntityNode | null> {
+      const wsFilter = params.workspaceId ? " AND ent.workspaceId = $workspaceId" : "";
       const query = `
         MATCH (ent:Entity {userId: $userId})
         WHERE toLower(ent.name) = toLower($entityName)
-          AND ent.userId = $userId
+          ${wsFilter}
         RETURN ${ENTITY_NODE_PROPERTIES} as entity
       `;
 
@@ -131,12 +141,14 @@ export function createEntityMethods(core: Neo4jCore) {
     async mergeEntities(
       sourceUuid: string,
       targetUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<void> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       await core.runQuery(
         `
-        OPTIONAL MATCH (source:Entity {uuid: $sourceUuid, userId: $userId})
-        MATCH (target:Entity {uuid: $targetUuid, userId: $userId})
+        OPTIONAL MATCH (source:Entity {uuid: $sourceUuid, userId: $userId${wsFilter}})
+        MATCH (target:Entity {uuid: $targetUuid, userId: $userId${wsFilter}})
 
         // Only proceed if source exists (skip if already merged)
         WITH source, target
@@ -170,7 +182,7 @@ export function createEntityMethods(core: Neo4jCore) {
         FOREACH (s IN subjectStatements | MERGE (s)-[:HAS_SUBJECT]->(target))
 
         // Update HAS_PREDICATE relationships
-        WITH source, target
+        With source, target
         OPTIONAL MATCH (s2:Statement{userId: $userId})-[r2:HAS_PREDICATE]->(source)
         WITH source, target, collect(s2) AS predicateStatements, collect(r2) AS predicateRels
         FOREACH (r IN predicateRels | DELETE r)
@@ -187,13 +199,14 @@ export function createEntityMethods(core: Neo4jCore) {
         WITH source
         DETACH DELETE source
       `,
-        { sourceUuid, targetUuid, userId }
+        { sourceUuid, targetUuid, userId, ...(workspaceId && { workspaceId }) }
       );
     },
 
-    async deduplicateEntitiesByName(userId: string): Promise<{ count: number; deletedUuids: string[] }> {
+    async deduplicateEntitiesByName(userId: string, workspaceId?: string): Promise<{ count: number; deletedUuids: string[] }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Entity {userId: $userId})
+        MATCH (e:Entity {userId: $userId${wsFilter}})
         WITH toLower(e.name) AS normalizedName, collect(e) AS entities, count(e) AS cnt
         WHERE cnt > 1
 
@@ -231,7 +244,7 @@ export function createEntityMethods(core: Neo4jCore) {
         )
         DELETE r1
 
-        WITH sourceUuid, target, source
+        With sourceUuid, target, source
 
         // Move HAS_PREDICATE relationships
         OPTIONAL MATCH (s2:Statement {userId: $userId})-[r2:HAS_PREDICATE]->(source)
@@ -240,7 +253,7 @@ export function createEntityMethods(core: Neo4jCore) {
         )
         DELETE r2
 
-        WITH sourceUuid, target, source
+        With sourceUuid, target, source
 
         // Move HAS_OBJECT relationships
         OPTIONAL MATCH (s3:Statement {userId: $userId})-[r3:HAS_OBJECT]->(source)
@@ -250,13 +263,13 @@ export function createEntityMethods(core: Neo4jCore) {
         DELETE r3
 
         // Delete the duplicate entity
-        WITH sourceUuid, source
+        With sourceUuid, source
         DETACH DELETE source
 
         RETURN collect(sourceUuid) AS deletedUuids
       `;
 
-      const result = await core.runQuery(query, { userId });
+      const result = await core.runQuery(query, { userId, ...(workspaceId && { workspaceId }) });
       const deletedUuids = result[0]?.get("deletedUuids") || [];
       const count = deletedUuids.length;
 
@@ -267,28 +280,30 @@ export function createEntityMethods(core: Neo4jCore) {
       return { count, deletedUuids };
     },
 
-    async deleteOrphanedEntities(userId: string): Promise<{ count: number; deletedUuids: string[] }> {
+    async deleteOrphanedEntities(userId: string, workspaceId?: string): Promise<{ count: number; deletedUuids: string[] }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const result = await core.runQuery(
         `
-        MATCH (e:Entity {userId: $userId})
+        MATCH (e:Entity {userId: $userId${wsFilter}})
         WHERE NOT (e)<-[:HAS_SUBJECT]-()
           AND NOT (e)<-[:HAS_PREDICATE]-()
           AND NOT (e)<-[:HAS_OBJECT]-()
         WITH e.uuid AS orphanUuid
-        MATCH (orphan:Entity {uuid: orphanUuid, userId: $userId})
+        MATCH (orphan:Entity {uuid: orphanUuid, userId: $userId${wsFilter}})
         DETACH DELETE orphan
         RETURN collect(orphanUuid) AS deletedUuids
       `,
-        { userId }
+        { userId, ...(workspaceId && { workspaceId }) }
       );
 
       const deletedUuids = result[0]?.get("deletedUuids") || [];
       return { count: deletedUuids.length, deletedUuids };
     },
 
-    async getOnboardingEntities(userId: string): Promise<{ predicate: string; object: string }[]> {
+    async getOnboardingEntities(userId: string, workspaceId?: string): Promise<{ predicate: string; object: string }[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (user:Entity {userId: $userId})
+        MATCH (user:Entity {userId: $userId${wsFilter}})
         MATCH (s:Statement)-[:HAS_SUBJECT]->(user)
         WHERE s.fact CONTAINS 'onboarding' OR EXISTS((s)-[:SOURCED_FROM]->(:Episode {source: 'onboarding'}))
         MATCH (s)-[:HAS_PREDICATE]->(p:Entity)
@@ -296,7 +311,7 @@ export function createEntityMethods(core: Neo4jCore) {
         RETURN p.name as predicate, o.name as object
       `;
 
-      const result = await core.runQuery(query, { userId });
+      const result = await core.runQuery(query, { userId, ...(workspaceId && { workspaceId }) });
 
       return result.map((record) => ({ predicate: record.get("predicate") as string, object: record.get("object") as string }));
     },

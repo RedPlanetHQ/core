@@ -1,7 +1,7 @@
 import { json } from "@remix-run/node";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { readConversation } from "~/services/conversation.server";
 import { z } from "zod";
 
@@ -19,9 +19,7 @@ const { action, loader } = createActionApiRoute(
     corsStrategy: "all",
   },
   async ({ authentication, params }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
-
-    if (!workspace) {
+    if (!authentication.workspaceId) {
       throw new Error("No workspace found");
     }
 

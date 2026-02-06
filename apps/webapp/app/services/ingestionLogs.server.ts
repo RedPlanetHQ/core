@@ -7,51 +7,6 @@ import { type QueueProvider } from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
 import { cancelJobById } from "~/bullmq/utils/job-finder";
 
-export async function getIngestionLogs(
-  userId: string,
-  page: number = 1,
-  limit: number = 10,
-) {
-  const user = await prisma.user.findUnique({
-    where: {
-      id: userId,
-    },
-    include: {
-      Workspace: true,
-    },
-  });
-
-  const skip = (page - 1) * limit;
-
-  const [ingestionLogs, total] = await Promise.all([
-    prisma.ingestionQueue.findMany({
-      where: {
-        workspaceId: user?.Workspace?.id,
-      },
-      skip,
-      take: limit,
-      orderBy: {
-        createdAt: "desc",
-      },
-    }),
-    prisma.ingestionQueue.count({
-      where: {
-        workspaceId: user?.Workspace?.id,
-      },
-    }),
-  ]);
-
-  return {
-    ingestionLogs,
-    pagination: {
-      total,
-      pages: Math.ceil(total / limit),
-      currentPage: page,
-      limit,
-    },
-  };
-}
-
 export const getIngestionQueue = async (id: string) => {
   return await prisma.ingestionQueue.findUnique({
     where: {
@@ -69,7 +24,7 @@ export const deleteIngestionQueue = async (id: string) => {
 };
 
 // Delete a single log with its episode and related nodes
-export const deleteLog = async (logId: string, userId: string) => {
+export const deleteLog = async (logId: string, userId: string, workspaceId?: string) => {
   const ingestionQueue = await getIngestionQueue(logId);
 
   if (!ingestionQueue) {
@@ -151,6 +106,7 @@ export const deleteLog = async (logId: string, userId: string) => {
       const result = await deleteEpisodeWithRelatedNodes({
         episodeUuid: episode.id,
         userId,
+        workspaceId,
       });
 
       if (result.episodesDeleted === 0) {

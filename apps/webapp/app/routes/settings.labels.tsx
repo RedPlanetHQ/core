@@ -12,38 +12,29 @@ import {
 import { useLoaderData, useRevalidator } from "@remix-run/react";
 
 import { LabelService } from "~/services/label.server";
-import { prisma } from "~/db.server";
-import { requireUserId } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
+  const {workspaceId} = await requireUser(request);
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { Workspace: true },
-  });
 
-  if (!user?.Workspace) {
+  if (!workspaceId) {
     throw new Error("Workspace not found");
   }
 
   const labelService = new LabelService();
-  const labels = await labelService.getWorkspaceLabels(user.Workspace.id);
+  const labels = await labelService.getWorkspaceLabels(workspaceId);
 
   return json({ labels });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
+  const {workspaceId} = await requireUser(request);
   const formData = await request.formData();
   const intent = formData.get("intent");
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { Workspace: true },
-  });
 
-  if (!user?.Workspace) {
+  if (!workspaceId) {
     throw json({ error: "Workspace not found" }, { status: 404 });
   }
 
@@ -63,7 +54,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const label = await labelService.createLabel({
           name,
           description,
-          workspaceId: user.Workspace.id,
+          workspaceId,
           color,
         });
 
@@ -85,7 +76,7 @@ export async function action({ request }: ActionFunctionArgs) {
         const label = await labelService.updateLabel(
           labelId,
           { name, description },
-          user.Workspace.id,
+          workspaceId,
         );
 
         return json({ success: true, label });

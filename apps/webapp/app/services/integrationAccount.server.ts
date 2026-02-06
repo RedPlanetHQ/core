@@ -83,6 +83,7 @@ export const getConnectedIntegrationAccounts = async (
 export const getIntegrationAccountBySlugAndUser = async (
   slug: string,
   userId: string,
+  workspaceId: string,
 ) => {
   return await prisma.integrationAccount.findFirst({
     where: {
@@ -91,6 +92,7 @@ export const getIntegrationAccountBySlugAndUser = async (
       },
       integratedById: userId,
       isActive: true,
+      workspaceId,
     },
     include: {
       integrationDefinition: true,

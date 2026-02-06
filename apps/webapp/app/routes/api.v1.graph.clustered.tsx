@@ -1,7 +1,6 @@
 import { json } from "@remix-run/node";
 import { logger } from "~/services/logger.service";
 import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
 import { LabelService } from "~/services/label.server";
 import { ProviderFactory } from "@core/providers";
 
@@ -13,14 +12,14 @@ const loader = createHybridLoaderApiRoute(
   },
   async ({ authentication }) => {
     try {
-      const workspace = await getWorkspaceByUser(authentication.userId);
+
       const labelService = new LabelService();
       const graphProvider = ProviderFactory.getGraphProvider();
 
       // Get clustered graph data and cluster metadata in parallel
       const [graphData, clusters] = await Promise.all([
-        graphProvider.getClusteredGraphData(authentication.userId),
-        labelService.getWorkspaceLabels(workspace?.id as string),
+        graphProvider.getClusteredGraphData(authentication.userId, undefined, authentication.workspaceId),
+        labelService.getWorkspaceLabels(authentication.workspaceId as string),
       ]);
 
       return json({

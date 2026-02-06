@@ -35,6 +35,7 @@ function hasSearchResults(result: any): boolean {
 interface MemoryAgentParams {
   intent: string;
   userId: string;
+  workspaceId: string;
   source: string;
 }
 
@@ -116,6 +117,7 @@ Output: ["recent discussions and work on authentication"]
 export async function memoryAgent({
   intent,
   userId,
+  workspaceId,
   source,
 }: MemoryAgentParams): Promise<{
   episodes: any[];
@@ -160,6 +162,7 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
         const result = (await searchService.search(
           query,
           userId,
+          workspaceId,
           {
             structured: true,
             limit: 20, // Get top 10 per query
@@ -274,13 +277,14 @@ interface SearchMemoryOptions {
 export async function searchMemoryWithAgent(
   intent: string,
   userId: string,
+  workspaceId: string,
   source: string,
   options: SearchMemoryOptions = {},
 ) {
   try {
     // Check workspace version to determine search strategy
     const workspace = await prisma.workspace.findFirst({
-      where: { userId },
+      where: { id: workspaceId },
       select: { version: true },
     });
     const isV3User = workspace?.version === "V3";
@@ -293,7 +297,7 @@ export async function searchMemoryWithAgent(
     // For V1/V2 users: parallel V1/V2 with V2-first, V1-fallback
     const v1Promise = isV3User
       ? null
-      : memoryAgent({ intent, userId, source });
+      : memoryAgent({ intent, userId, workspaceId, source });
 
     const v2Promise = searchV2(intent, userId, {
       structured: true,

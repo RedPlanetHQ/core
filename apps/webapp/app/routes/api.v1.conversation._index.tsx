@@ -28,7 +28,7 @@ import {
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 
 import { addToQueue } from "~/lib/ingest.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
@@ -66,7 +66,6 @@ const { loader, action } = createHybridActionApiRoute(
   async ({ body, authentication }) => {
     const isAssistantApproval = body.needsApproval;
 
-    const workspace = await getWorkspaceByUser(authentication.userId);
 
     const conversation = await getConversationAndHistory(
       body.id,
@@ -128,7 +127,7 @@ const { loader, action } = createHybridActionApiRoute(
             sessionId: body.id,
             ...params,
             userId: authentication.userId,
-            workspaceId: workspace?.id,
+            workspaceId: authentication.workspaceId,
           },
           authentication.userId,
           "core",
@@ -148,7 +147,7 @@ const { loader, action } = createHybridActionApiRoute(
     const connectedIntegrations =
       await IntegrationLoader.getConnectedIntegrationAccounts(
         authentication.userId,
-        workspace?.id ?? "",
+        authentication.workspaceId ?? "",
       );
 
     const integrationsList = connectedIntegrations
@@ -181,7 +180,7 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     // Fetch user's persona to condition AI behavior
-    const latestPersona = await getPersonaDocumentForUser(workspace?.id as string);
+    const latestPersona = await getPersonaDocumentForUser(authentication.workspaceId as string);
     const personaContent = latestPersona
       ? latestPersona
       : "";
@@ -284,6 +283,7 @@ const { loader, action } = createHybridActionApiRoute(
                 sessionId: body.id,
               },
               authentication.userId,
+              authentication.workspaceId || ""
             );
           }
         }

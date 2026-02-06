@@ -48,6 +48,7 @@ export const EPISODIC_NODE_PROPERTIES = `{
   source: e.source,
   createdAt: e.createdAt,
   userId: e.userId,
+  workspaceId: e.workspaceId,
   sessionId: e.sessionId,
   queueId: e.queueId,
   labelIds: e.labelIds,
@@ -69,6 +70,7 @@ export const STATEMENT_NODE_PROPERTIES = `{
   attributes: s.attributes,
   createdAt: s.createdAt,
   userId: s.userId,
+  workspaceId: s.workspaceId,
   validAt: s.validAt,
   invalidAt: s.invalidAt,
   invalidatedBy: s.invalidatedBy,
@@ -82,7 +84,8 @@ export const ENTITY_NODE_PROPERTIES = `{
   type: ent.type,
   attributes: ent.attributes,
   createdAt: ent.createdAt,
-  userId: ent.userId
+  userId: ent.userId,
+  workspaceId: ent.workspaceId
 }`;
 
 export const COMPACTED_SESSION_NODE_PROPERTIES = `{
@@ -96,6 +99,7 @@ export const COMPACTED_SESSION_NODE_PROPERTIES = `{
   updatedAt: cs.updatedAt,
   confidence: cs.confidence,
   userId: cs.userId,
+  workspaceId: cs.workspaceId,
   source: cs.source,
   compressionRatio: cs.compressionRatio,
   metadata: cs.metadata
