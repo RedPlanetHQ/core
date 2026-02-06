@@ -46,6 +46,7 @@ const { action, loader } = createActionApiRoute(
       const results = await searchMemoryWithAgent(
         body.content,
         authentication.userId,
+        authentication.workspaceId!,
         body.metadata?.source || "api",
         {
           limit: 10,

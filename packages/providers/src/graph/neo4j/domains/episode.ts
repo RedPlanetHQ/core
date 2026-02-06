@@ -22,6 +22,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
           e.createdAt = $createdAt,
           e.validAt = $validAt,
           e.userId = $userId,
+          e.workspaceId = $workspaceId,
           e.labelIds = $labelIds,
           e.sessionId = $sessionId,
           e.queueId = $queueId,
@@ -39,6 +40,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
           e.metadata = $metadata,
           e.source = $source,
           e.validAt = $validAt,
+          e.workspaceId = $workspaceId,
           e.labelIds = $labelIds,
           e.sessionId = $sessionId,
           e.queueId = $queueId,
@@ -59,6 +61,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         source: episode.source,
         metadata: JSON.stringify(episode.metadata || {}),
         userId: episode.userId || null,
+        workspaceId: episode.workspaceId || null,
         labelIds: episode.labelIds || [],
         createdAt: episode.createdAt.toISOString(),
         validAt: episode.validAt.toISOString(),
@@ -78,56 +81,79 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result[0].get("uuid");
     },
 
-    async getEpisode(uuid: string, withEmbedding: boolean): Promise<EpisodicNode | null> {
+    async getEpisode(uuid: string, withEmbedding: boolean, userId?: string, workspaceId?: string): Promise<EpisodicNode | null> {
+      const filters: string[] = ["uuid: $uuid"];
+      if (userId) filters.push("userId: $userId");
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const matchFilter = `{${filters.join(", ")}${wsFilter}}`;
+
       const query = `
-        MATCH (e:Episode {uuid: $uuid})
+        MATCH (e:Episode ${matchFilter})
         RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
       `;
 
-      const result = await core.runQuery(query, { uuid });
+      const result = await core.runQuery(query, {
+        uuid,
+        ...(userId && { userId }),
+        ...(workspaceId && { workspaceId }),
+      });
       if (result.length === 0) return null;
 
       return parseEpisodicNode(result[0].get("episode"));
     },
 
-    async getEpisodes(uuids: string[], userId: string, withEmbedding: boolean): Promise<EpisodicNode[]> {
+    async getEpisodes(uuids: string[], userId: string, withEmbedding: boolean, workspaceId?: string): Promise<EpisodicNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
         UNWIND $uuids AS uuid
-        MATCH (e:Episode {userId: $userId, uuid: uuid})
+        MATCH (e:Episode {userId: $userId${wsFilter}, uuid: uuid})
         RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
       `;
 
-      const result = await core.runQuery(query, { uuids, userId });
+      const result = await core.runQuery(query, {
+        uuids,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       if (result.length === 0) return [];
 
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
-    async getEpisodesByUser(userId: string, orderBy?: string, limit?: number, descending?: boolean): Promise<EpisodicNode[]> {
+    async getEpisodesByUser(userId: string, orderBy?: string, limit?: number, descending?: boolean, workspaceId?: string): Promise<EpisodicNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.${orderBy || "createdAt"} ${descending ? "DESC" : "ASC"}
         LIMIT ${limit || 10}
       `;
 
-      const result = await core.runQuery(query, { userId });
+      const result = await core.runQuery(query, {
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
-    async getEpisodeCountByUser(userId: string, createdAfter?: Date): Promise<number> {
+    async getEpisodeCountByUser(userId: string, createdAfter?: Date, workspaceId?: string): Promise<number> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = createdAfter ?
         `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE e.createdAt > $createdAfter
         RETURN count(e) as episodeCount
       `:
         `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         RETURN count(e) as episodeCount
       `;
 
-      const result = await core.runQuery(query, { userId, createdAfter });
+      const result = await core.runQuery(query, {
+        userId,
+        createdAfter,
+        ...(workspaceId && { workspaceId }),
+      });
       return result[0].get("episodeCount").toNumber();
     },
 
@@ -137,7 +163,9 @@ export function createEpisodeMethods(core: Neo4jCore) {
       labelIds?: string[];
       sessionId?: string;
       source?: string;
+      workspaceId?: string;
     }): Promise<EpisodicNode[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       let filters = [];
       if (params.source) filters.push(`e.source = $source`);
       if (params.sessionId) filters.push(`e.sessionId = $sessionId`);
@@ -148,7 +176,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const whereClause = filters.length > 0 ? `AND ${filters.join(" AND ")}` : "";
 
       const query = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE true ${whereClause}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.validAt DESC
@@ -160,6 +188,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         source: params.source || null,
         sessionId: params.sessionId || null,
         labelIds: params.labelIds || [],
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       return result.map((record) => parseEpisodicNode(record.get("episode")));
@@ -167,21 +196,28 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
     async getEpisodesBySession(
       sessionId: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<EpisodicNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {userId: $userId, sessionId: $sessionId})
+        MATCH (e:Episode {userId: $userId, sessionId: $sessionId${wsFilter}})
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.chunkIndex ASC
       `;
 
-      const result = await core.runQuery(query, { userId, sessionId });
+      const result = await core.runQuery(query, {
+        userId,
+        sessionId,
+        ...(workspaceId && { workspaceId }),
+      });
       return result.map((record) => parseEpisodicNode(record.get("episode")));
     },
 
     async deleteEpisodeWithRelatedNodes(
       uuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<{
       episodesDeleted: number;
       statementsDeleted: number;
@@ -190,10 +226,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       deletedStatementUuids: string[];
       deletedEntityUuids: string[];
     }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // Check if episode exists
       const episodeCheck = await core.runQuery(
-        `MATCH (e:Episode {uuid: $uuid, userId: $userId}) RETURN e.uuid as uuid`,
-        { uuid, userId }
+        `MATCH (e:Episode {uuid: $uuid, userId: $userId${wsFilter}}) RETURN e.uuid as uuid`,
+        { uuid, userId, ...(workspaceId && { workspaceId }) }
       );
 
       if (!episodeCheck || episodeCheck.length === 0) {
@@ -208,7 +246,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       }
 
       const query = `
-        MATCH (episode:Episode {uuid: $uuid, userId: $userId})
+        MATCH (episode:Episode {uuid: $uuid, userId: $userId${wsFilter}})
 
         // Get all related data first
         OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
@@ -262,7 +300,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
           entityUuids as deletedEntityUuids
       `;
 
-      const result = await core.runQuery(query, { uuid, userId });
+      const result = await core.runQuery(query, { uuid, userId, ...(workspaceId && { workspaceId }) });
 
       if (result.length === 0) {
         return {
@@ -293,7 +331,9 @@ export function createEpisodeMethods(core: Neo4jCore) {
       userId: string;
       labelIds?: string[];
       spaceIds?: string[];
+      workspaceId?: string;
     }): Promise<Array<{ episode: EpisodicNode; score: number }>> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       let additionalFilters = [];
       if (params.spaceIds && params.spaceIds.length > 0) {
         additionalFilters.push(`ANY(spaceId IN $spaceIds WHERE spaceId IN episode.spaceIds)`);
@@ -305,7 +345,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const extraWhere = additionalFilters.length > 0 ? `AND ${additionalFilters.join(" AND ")}` : "";
 
       const query = `
-      MATCH (episode:Episode{userId: $userId})
+      MATCH (episode:Episode{userId: $userId${wsFilter}})
       WHERE episode.contentEmbedding IS NOT NULL and size(episode.contentEmbedding) > 0 ${extraWhere}
       WITH episode, gds.similarity.cosine(episode.contentEmbedding, $queryEmbedding) AS score
       WHERE score >= $threshold
@@ -319,6 +359,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         userId: params.userId,
         spaceIds: params.spaceIds || [],
         labelIds: params.labelIds || [],
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       if (!result || result.length === 0) {
@@ -335,11 +376,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       episodeUuids: string[],
       labelIds: string[],
       userId: string,
-      _workspaceId: string,
+      workspaceId: string,
       forceUpdate: boolean = false
     ): Promise<number> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE e.uuid IN $episodeUuids
         SET e.labelIds = CASE
           WHEN e.labelIds IS NULL or $forceUpdate THEN $labelIds
@@ -348,7 +390,13 @@ export function createEpisodeMethods(core: Neo4jCore) {
         RETURN count(e) as updatedEpisodes
       `;
 
-      const result = await core.runQuery(query, { episodeUuids, labelIds, userId, forceUpdate });
+      const result = await core.runQuery(query, {
+        episodeUuids,
+        labelIds,
+        userId,
+        forceUpdate,
+        ...(workspaceId && { workspaceId }),
+      });
       return result[0].get("updatedEpisodes").toNumber();
     },
 
@@ -356,11 +404,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       sessionId: string,
       labelIds: string[],
       userId: string,
-      _workspaceId: string,
+      workspaceId: string,
       forceUpdate: boolean = false
     ): Promise<number> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {userId: $userId, sessionId: $sessionId})
+        MATCH (e:Episode {userId: $userId, sessionId: $sessionId${wsFilter}})
         SET e.labelIds = CASE
           WHEN e.labelIds IS NULL or $forceUpdate THEN $labelIds
           ELSE e.labelIds + [labelId IN $labelIds WHERE NOT labelId IN e.labelIds]
@@ -368,22 +417,35 @@ export function createEpisodeMethods(core: Neo4jCore) {
         RETURN count(e) as updatedEpisodes
       `;
 
-      const result = await core.runQuery(query, { sessionId, labelIds, userId, forceUpdate });
+      const result = await core.runQuery(query, {
+        sessionId,
+        labelIds,
+        userId,
+        forceUpdate,
+        ...(workspaceId && { workspaceId }),
+      });
       return result[0].get("updatedEpisodes").toNumber();
     },
 
     async getEpisodeWithAdjacentChunks(
       episodeUuid: string,
       userId: string,
-      contextWindow: number = 1
+      contextWindow: number = 1,
+      workspaceId?: string
     ): Promise<AdjacentChunks> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+
       // First get the matched episode to find its sessionId and chunkIndex
       const matchedQuery = `
-        MATCH (matched:Episode {uuid: $episodeUuid, userId: $userId})
+        MATCH (matched:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
         RETURN ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "matched.")} as episode
       `;
 
-      const matchedResult = await core.runQuery(matchedQuery, { episodeUuid, userId });
+      const matchedResult = await core.runQuery(matchedQuery, {
+        episodeUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       if (matchedResult.length === 0) {
         throw new Error(`Episode not found: ${episodeUuid}`);
@@ -412,7 +474,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const adjacentQuery = `
         MATCH (e:Episode {
           userId: $userId,
-          sessionId: $sessionId
+          sessionId: $sessionId${wsFilter}
         })
         WHERE e.chunkIndex >= $minIndex
           AND e.chunkIndex <= $maxIndex
@@ -427,6 +489,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         minIndex,
         maxIndex,
         matchedChunkIndex: matchedChunk.chunkIndex,
+        ...(workspaceId && { workspaceId }),
       });
 
       const adjacentChunks = adjacentResult.map((record) =>
@@ -449,22 +512,28 @@ export function createEpisodeMethods(core: Neo4jCore) {
       };
     },
 
-    async getAllSessionChunks(sessionId: string, userId: string): Promise<EpisodicNode[]> {
-      return this.getEpisodesBySession(sessionId, userId);
+    async getAllSessionChunks(sessionId: string, userId: string, workspaceId?: string): Promise<EpisodicNode[]> {
+      return this.getEpisodesBySession(sessionId, userId, workspaceId);
     },
 
     async getSessionMetadata(
       sessionId: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<EpisodicNode | null> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
+        MATCH (e:Episode {sessionId: $sessionId, userId: $userId${wsFilter}})
         WHERE e.chunkIndex = 0
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         LIMIT 1
       `;
 
-      const result = await core.runQuery(query, { sessionId, userId });
+      const result = await core.runQuery(query, {
+        sessionId,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       if (result.length === 0) {
         return null;
@@ -475,15 +544,17 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
     async deleteSession(
       sessionId: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<{
       deleted: boolean;
       episodesDeleted: number;
       statementsDeleted: number;
       entitiesDeleted: number;
     }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
+        MATCH (e:Episode {sessionId: $sessionId, userId: $userId${wsFilter}})
 
         // Get all related data first
         OPTIONAL MATCH (e)-[:HAS_PROVENANCE]->(s:Statement)
@@ -504,7 +575,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         FOREACH (stmt IN statements | DETACH DELETE stmt)
 
         // Delete orphaned entities only
-        WITH e, statements, [entity IN orphanedEntities WHERE entity IS NOT NULL] as validOrphanedEntities
+        With e, statements, [entity IN orphanedEntities WHERE entity IS NOT NULL] as validOrphanedEntities
         FOREACH (entity IN validOrphanedEntities | DETACH DELETE entity)
 
         // Delete episodes
@@ -519,7 +590,11 @@ export function createEpisodeMethods(core: Neo4jCore) {
       `;
 
       try {
-        const result = await core.runQuery(query, { sessionId, userId });
+        const result = await core.runQuery(query, {
+          sessionId,
+          userId,
+          ...(workspaceId && { workspaceId }),
+        });
 
         if (result.length === 0) {
           return {
@@ -554,17 +629,20 @@ export function createEpisodeMethods(core: Neo4jCore) {
      * @param params.userId - The user ID
      * @param params.type - Optional filter by episode type (CONVERSATION or DOCUMENT)
      * @param params.limit - Optional limit on number of sessions (default: 50)
+     * @param params.workspaceId - Optional workspace ID for filtering
      * @returns Array of episode nodes (one per session)
      */
     async getUserSessions(params: {
       userId: string;
       type?: string;
       limit?: number;
+      workspaceId?: string;
     }): Promise<EpisodicNode[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       const limit = params.limit || 50;
       const typeFilter = params.type ? "AND e.type = $type" : "";
       const query = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE e.chunkIndex = 0 ${typeFilter}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.createdAt DESC
@@ -574,6 +652,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const result = await core.runQuery(query, {
         userId: params.userId,
         type: params.type,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       return result.map((record) => parseEpisodicNode(record.get("episode")));
@@ -586,13 +665,16 @@ export function createEpisodeMethods(core: Neo4jCore) {
      * @param params.userId - The user ID
      * @param params.startTime - Optional start time for filtering
      * @param params.endTime - Optional end time for filtering
+     * @param params.workspaceId - Optional workspace ID for filtering
      * @returns Array of episode nodes within the time range
      */
     async getEpisodesByUserId(params: {
       userId: string;
       startTime?: Date;
       endTime?: Date;
+      workspaceId?: string;
     }): Promise<EpisodicNode[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
       const conditions: string[] = [];
 
       if (params.startTime) {
@@ -604,7 +686,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
       const query = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         ${whereClause}
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.createdAt ASC
@@ -614,6 +696,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         userId: params.userId,
         startTime: params.startTime?.toISOString(),
         endTime: params.endTime?.toISOString(),
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
       });
 
       return result.map((record) => parseEpisodicNode(record.get("episode")));
@@ -628,20 +711,28 @@ export function createEpisodeMethods(core: Neo4jCore) {
      * @param episodeUuid - The episode UUID
      * @param statementUuid - The statement UUID to link to
      * @param userId - The user ID
+     * @param workspaceId - Optional workspace ID for filtering
      */
     async linkEpisodeToStatement(
       episodeUuid: string,
       statementUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<void> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
-        MATCH (statement:Statement {uuid: $statementUuid, userId: $userId})
+        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
+        MATCH (statement:Statement {uuid: $statementUuid, userId: $userId${wsFilter}})
         MERGE (episode)-[r:HAS_PROVENANCE]->(statement)
         ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId
       `;
 
-      await core.runQuery(query, { episodeUuid, statementUuid, userId });
+      await core.runQuery(query, {
+        episodeUuid,
+        statementUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
     },
 
     /**
@@ -653,16 +744,19 @@ export function createEpisodeMethods(core: Neo4jCore) {
      * @param sourceStatementUuid - The source statement UUID
      * @param targetStatementUuid - The target statement UUID
      * @param userId - The user ID
+     * @param workspaceId - Optional workspace ID for filtering
      * @returns Number of episode relationships moved
      */
     async moveProvenanceToStatement(
       sourceStatementUuid: string,
       targetStatementUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<number> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (source:Statement {uuid: $sourceStatementUuid, userId: $userId})
-        MATCH (target:Statement {uuid: $targetStatementUuid, userId: $userId})
+        MATCH (source:Statement {uuid: $sourceStatementUuid, userId: $userId${wsFilter}})
+        MATCH (target:Statement {uuid: $targetStatementUuid, userId: $userId${wsFilter}})
 
         // Find all episodes linked to source
         OPTIONAL MATCH (episode:Episode)-[r:HAS_PROVENANCE]->(source)
@@ -682,6 +776,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         sourceStatementUuid,
         targetStatementUuid,
         userId,
+        ...(workspaceId && { workspaceId }),
       });
 
       const count = result[0]?.get("movedCount");
@@ -690,16 +785,22 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
     async getStatementsInvalidatedByEpisode(
       episodeUuid: string,
-      userId: string
+      userId: string,
+      workspaceId?: string
     ): Promise<StatementNode[]> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId})
+        MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
         OPTIONAL MATCH (episode)-[:HAS_PROVENANCE]->(s:Statement)
         WHERE s.invalidatedBy IS NOT NULL
         RETURN ${STATEMENT_NODE_PROPERTIES} as statement
       `;
 
-      const result = await core.runQuery(query, { episodeUuid, userId });
+      const result = await core.runQuery(query, {
+        episodeUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       return result.map((record) => parseStatementNode(record.get("statement")));
     },
@@ -707,18 +808,20 @@ export function createEpisodeMethods(core: Neo4jCore) {
     async invalidateStatementsFromPreviousVersion(
       sessionId: string,
       userId: string,
+      workspaceId: string | undefined,
       previousVersion: number,
       invalidatedBy: string,
       invalidatedAt?: Date,
       changedChunkIndices?: number[]
     ): Promise<{ statementUuids: string[]; invalidatedCount: number }> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const chunkFilter =
         changedChunkIndices && changedChunkIndices.length > 0
           ? `AND e.chunkIndex IN $changedChunkIndices`
           : "";
 
       const query = `
-        MATCH (e:Episode {sessionId: $sessionId, userId: $userId, version: $previousVersion})-[:HAS_PROVENANCE]->(s:Statement)
+        MATCH (e:Episode {sessionId: $sessionId, userId: $userId${wsFilter}, version: $previousVersion})-[:HAS_PROVENANCE]->(s:Statement)
         WHERE s.invalidAt IS NULL ${chunkFilter}
         SET s.invalidAt = $invalidatedAt,
             s.invalidatedBy = $invalidatedBy
@@ -732,6 +835,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         previousVersion,
         invalidatedBy,
         invalidatedAt: invalidatedAt ? invalidatedAt.toISOString() : new Date().toISOString(),
+        ...(workspaceId && { workspaceId }),
       };
 
       if (changedChunkIndices && changedChunkIndices.length > 0) {
@@ -756,16 +860,22 @@ export function createEpisodeMethods(core: Neo4jCore) {
     async getLatestVersionFirstEpisode(
       sessionId: string,
       userId: string,
+      workspaceId?: string
     ): Promise<EpisodicNode | null> {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const query = `
-        MATCH (e:Episode {sessionId: $sessionId, userId: $userId})
+        MATCH (e:Episode {sessionId: $sessionId, userId: $userId${wsFilter}})
         WHERE e.chunkIndex = 0
         RETURN ${EPISODIC_NODE_PROPERTIES} as episode
         ORDER BY e.version DESC
         LIMIT 1
       `;
 
-      const result = await core.runQuery(query, { sessionId, userId });
+      const result = await core.runQuery(query, {
+        sessionId,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       if (result.length === 0) {
         return null;
@@ -777,23 +887,30 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return episodeNode;
     },
 
-    async updateEpisodeRecallCount(userId: string, episodeUuids: string[]) {
+    async updateEpisodeRecallCount(userId: string, episodeUuids: string[], workspaceId?: string) {
+      const wsCondition = workspaceId ? " AND e.workspaceId = $workspaceId" : "";
       const cypher = `
         MATCH (e:Episode)
-        WHERE e.uuid IN $episodeUuids and e.userId = $userId
+        WHERE e.uuid IN $episodeUuids and e.userId = $userId${wsCondition}
         SET e.recallCount = coalesce(e.recallCount, 0) + 1
       `;
-      await core.runQuery(cypher, { episodeUuids, userId });
+      await core.runQuery(cypher, {
+        episodeUuids,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
     },
 
-    async episodeEntityMatchCount(episodeIds: string[], entityIds: string[], userId: string): Promise<Map<string, number>> {
+    async episodeEntityMatchCount(episodeIds: string[], entityIds: string[], userId: string, workspaceId?: string): Promise<Map<string, number>> {
+      const wsFilterEp = workspaceId ? ", workspaceId: $workspaceId" : "";
+      const wsFilterEn = workspaceId ? ", workspaceId: $workspaceId" : "";
       const cypher = `
       // Use UNWIND for better query planning with large episode sets
       UNWIND $episodeIds AS episodeId
-      MATCH (ep:Episode {userId: $userId, uuid: episodeId})
+      MATCH (ep:Episode {userId: $userId${wsFilterEp}, uuid: episodeId})
 
       // Find statements with matching query entities (early filter on entityIds)
-      OPTIONAL MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement)-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(entity:Entity {userId: $userId})
+      OPTIONAL MATCH (ep)-[:HAS_PROVENANCE]->(s:Statement)-[:HAS_SUBJECT|HAS_OBJECT|HAS_PREDICATE]-(entity:Entity {userId: $userId${wsFilterEn}})
       WHERE entity.uuid IN $entityIds
 
       // Count distinct matching entities (OPTIONAL MATCH handles episodes with 0 matches)
@@ -801,7 +918,12 @@ export function createEpisodeMethods(core: Neo4jCore) {
       WHERE entityMatchCount > 0
       RETURN episodeId, entityMatchCount
     `;
-      const records = await core.runQuery(cypher, { episodeIds, entityIds, userId });
+      const records = await core.runQuery(cypher, {
+        episodeIds,
+        entityIds,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       const matchCounts = new Map<string, number>();
       records.forEach((record) => {
         const episodeId = record.get("episodeId");
@@ -814,15 +936,20 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return matchCounts;
     },
 
-    async getEpisodesInvalidFacts(episodeUuids: string[], userId: string) {
+    async getEpisodesInvalidFacts(episodeUuids: string[], userId: string, workspaceId?: string) {
+      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
       const cypher = `
-        MATCH (e:Episode {userId: $userId})
+        MATCH (e:Episode {userId: $userId${wsFilter}})
         WHERE e.uuid IN $episodeUuids
-        MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+        MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
         WHERE s.invalidAt IS NOT NULL
         RETURN e.uuid as episodeUuid, s.uuid as statementUuid, s.fact as fact, s.validAt as validAt, s.invalidAt as invalidAt
       `;
-      const records = await core.runQuery(cypher, { episodeUuids, userId });
+      const records = await core.runQuery(cypher, {
+        episodeUuids,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
       return records.map((record) => ({
         episodeUuid: record.get("episodeUuid"),
         statementUuid: record.get("statementUuid"),

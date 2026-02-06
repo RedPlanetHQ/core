@@ -29,7 +29,7 @@ const graphProvider = new Proxy({} as ReturnType<typeof ProviderFactory.getGraph
  * 2. Inferred from episodes
  * 3. Generic (no context)
  */
-export async function getUserContext(userId: string): Promise<UserContext> {
+export async function getUserContext(userId: string, workspaceId?: string): Promise<UserContext> {
   // Fetch user identity from database
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -42,7 +42,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
   };
 
   // Try onboarding statements first
-  const onboardingContext = await getOnboardingContext(userId);
+  const onboardingContext = await getOnboardingContext(userId, workspaceId);
   if (
     onboardingContext.role ||
     onboardingContext.goal ||
@@ -52,7 +52,7 @@ export async function getUserContext(userId: string): Promise<UserContext> {
   }
 
   // Fallback: infer from episodes
-  const inferredContext = await inferContextFromEpisodes(userId);
+  const inferredContext = await inferContextFromEpisodes(userId, workspaceId);
   if (inferredContext.role || inferredContext.tools?.length) {
     return { ...identity, ...inferredContext, source: "inferred" };
   }
@@ -65,13 +65,13 @@ export async function getUserContext(userId: string): Promise<UserContext> {
  * Query Neo4j for onboarding statements
  * Looks for IS_A (role), WANTS_TO (goal), USES (tools) predicates
  */
-async function getOnboardingContext(userId: string): Promise<{
+async function getOnboardingContext(userId: string, workspaceId?: string): Promise<{
   role?: string;
   goal?: string;
   tools?: string[];
 }> {
   try {
-    const result = await graphProvider.getOnboardingEntities(userId);
+    const result = await graphProvider.getOnboardingEntities(userId, workspaceId ?? "");
 
     let role: string | undefined;
     let goal: string | undefined;
@@ -111,12 +111,12 @@ async function getOnboardingContext(userId: string): Promise<{
  * Infer user context from episode patterns
  * Uses pattern matching to detect likely role and tools
  */
-async function inferContextFromEpisodes(userId: string): Promise<{
+async function inferContextFromEpisodes(userId: string, workspaceId?: string): Promise<{
   role?: string;
   tools?: string[];
 }> {
   try {
-    const episodes = await graphProvider.getEpisodesByUser(userId, "createdAt", 100, true);
+    const episodes = await graphProvider.getEpisodesByUser(userId, "createdAt", 100, true, workspaceId);
 
     // Combine all episode content for pattern analysis
     const allContent = episodes

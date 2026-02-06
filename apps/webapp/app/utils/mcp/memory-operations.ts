@@ -121,6 +121,7 @@ export async function handleMemorySearch(args: any) {
     const results = await searchService.search(
       args.query,
       args.userId,
+      args.workspaceId,
       {
         startTime: args.startTime ? new Date(args.startTime) : undefined,
         endTime: args.endTime ? new Date(args.endTime) : undefined,

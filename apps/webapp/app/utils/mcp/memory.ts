@@ -250,7 +250,7 @@ export async function callMemoryTool(
       case "memory_ingest":
         return await handleMemoryIngest({ ...args, userId, source });
       case "memory_search":
-        return await searchMemoryWithAgent(args.intent, userId, source);
+        return await searchMemoryWithAgent(args.intent, userId, args.workspaceId, source);
       case "get_labels":
         return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
