@@ -1,7 +1,6 @@
 import {
   convertToModelMessages,
-  streamText,
-  validateUIMessages,
+  generateText,
   type LanguageModel,
   generateId,
   stepCountIs,
@@ -103,18 +102,16 @@ const { loader, action } = createHybridActionApiRoute(
     const message = body.message?.parts[0].text;
     const id = body.message?.id;
 
+    const userMessageId = id ?? generateId();
+
     const finalMessages = [
       ...messages,
       {
         parts: [{ text: message, type: "text" }],
         role: "user",
-        id: id ?? generateId(),
+        id: userMessageId,
       },
     ];
-
-    const validatedMessages = await validateUIMessages({
-      messages: finalMessages,
-    });
 
     const user = await getUserById(authentication.userId);
     // Fetch user's persona to condition AI behavior
@@ -171,18 +168,14 @@ const { loader, action } = createHybridActionApiRoute(
     systemPrompt = `${systemPrompt}${dateTimeContext}`;
 
 
-    // If onboarding and no messages yet, generate first message from agent
-    let modelMessages: ModelMessage[];
-    if (conversationHistory.length === 0) {
-      // Start with agent greeting - no user message yet
-      modelMessages = [];
-    } else {
-      modelMessages = await convertToModelMessages(validatedMessages, {
-        tools,
-      });
-    }
+    // Convert to model messages
+    const modelMessages: ModelMessage[] = await convertToModelMessages(finalMessages, {
+      tools,
+      ignoreIncompleteToolCalls: true,
+    });
 
-    const result = streamText({
+    // Generate response using generateText (non-streaming)
+    const result = await generateText({
       model: getModel() as LanguageModel,
       messages: [
         {
@@ -196,52 +189,41 @@ const { loader, action } = createHybridActionApiRoute(
       temperature: 0.5,
     });
 
-    result.consumeStream(); // no await
+    // Create assistant message
+    const assistantMessageId = crypto.randomUUID();
+    const assistantMessage = {
+      id: assistantMessageId,
+      role: "assistant",
+      parts: [{ type: "text", text: result.text }],
+    };
 
-    return result.toUIMessageStreamResponse({
-      generateMessageId: () => crypto.randomUUID(),
-      originalMessages: validatedMessages,
-      onFinish: async ({ messages }) => {
-        const lastMessage = messages.pop();
+    // Save assistant message to history
+    await upsertConversationHistory(
+      assistantMessageId,
+      assistantMessage.parts,
+      body.id,
+      UserTypeEnum.Agent,
+    );
 
-        if (lastMessage) {
-          await upsertConversationHistory(
-            lastMessage?.id ?? crypto.randomUUID(),
-            lastMessage?.parts,
-            body.id,
-            UserTypeEnum.Agent,
-          );
+    // Add to ingestion queue
+    if (result.text) {
+      await addToQueue(
+        {
+          episodeBody: `<user>${message}</user><assistant>${result.text}</assistant>`,
+          source: "core",
+          referenceTime: new Date().toISOString(),
+          type: EpisodeType.CONVERSATION,
+          sessionId: body.id,
+        },
+        authentication.userId,
+        authentication.workspaceId || ""
+      );
+    }
 
-          // Extract text from message parts and add to queue for ingestion
-          const textParts = lastMessage?.parts
-            ?.filter((part: any) => part.type === "text" && part.text)
-            .map((part: any) => part.text);
-
-          if (textParts && textParts.length > 0) {
-            const messageText = textParts.join("\n");
-
-            await addToQueue(
-              {
-                episodeBody: `<user>${message}</user><assistant>${messageText}</assistant>`,
-                source: "core",
-                referenceTime: new Date().toISOString(),
-                type: EpisodeType.CONVERSATION,
-                sessionId: body.id,
-              },
-              authentication.userId,
-              authentication.workspaceId || ""
-            );
-          }
-        }
-      },
-      // async consumeSseStream({ stream }) {
-      //   // Create a resumable stream from the SSE stream
-      //   const streamContext = createResumableStreamContext({ waitUntil: null });
-      //   await streamContext.createNewResumableStream(
-      //     conversation.conversationHistoryId,
-      //     () => stream,
-      //   );
-      // },
+    // Return simple JSON response
+    return Response.json({
+      message: assistantMessage,
+      conversationId: body.id,
     });
   },
 );
