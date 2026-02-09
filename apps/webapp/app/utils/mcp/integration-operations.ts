@@ -7,6 +7,7 @@ import {
 } from "./prompts";
 import { prisma } from "~/db.server";
 import PQueue from "p-queue";
+import { getUserById } from "~/models/user.server";
 
 // Integration execution queue with concurrency limit
 // Limits concurrent child processes to prevent server overload
@@ -170,8 +171,13 @@ export async function executeIntegrationAction(
   accountId: string,
   action: string,
   parameters: Record<string, any> = {},
+  userId: string,
   source?: string,
 ): Promise<any> {
+  const user = await getUserById(userId);
+  const metadata = user?.metadata as Record<string, unknown> | null;
+  const timezone = (metadata?.timezone as string) ?? "UTC";
+
   // Queue the integration call to limit concurrent child processes
   return integrationQueue.add(async () => {
     const account =
@@ -185,6 +191,7 @@ export async function executeIntegrationAction(
         accountId,
         toolName,
         parameters,
+        timezone,
       );
     } catch (error) {
       await prisma.integrationCallLog
@@ -273,7 +280,7 @@ export async function handleGetIntegrationActions(args: any) {
  * Wraps executeIntegrationAction with MCP { content, isError } response format
  */
 export async function handleExecuteIntegrationAction(args: any) {
-  const { accountId, action, parameters: actionArgs, source } = args;
+  const { accountId, action, parameters: actionArgs, source, userId } = args;
 
   try {
     if (!accountId) {
@@ -288,6 +295,7 @@ export async function handleExecuteIntegrationAction(args: any) {
       accountId,
       action,
       actionArgs || {},
+      userId,
       source,
     );
   } catch (error) {

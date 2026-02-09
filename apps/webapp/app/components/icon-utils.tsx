@@ -21,6 +21,7 @@ import { GoogleDocs } from "./icons/google-docs";
 import { CalCom } from "./icons/cal_com";
 import { Notion } from "./icons/notion";
 import { Zoho } from "./icons/zoho";
+import { Hubspot } from "./icons/hubspot";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -52,6 +53,7 @@ export const ICON_MAPPING = {
   cal_com: CalCom,
   notion: Notion,
   zoho: Zoho,
+  hubspot: Hubspot,
 
   // Default icon
   integration: LayoutGrid,
