@@ -1,12 +1,11 @@
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
+import path from 'path';
+import fs from 'fs';
+
 import { google } from 'googleapis';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { OAuth2Client } from 'google-auth-library';
-import fs from 'fs';
-import path from 'path';
+
 import { createEmailMessage, createEmailWithNodemailer } from './util';
 import {
   createLabel,
@@ -56,6 +55,77 @@ interface EmailContent {
 
 // OAuth2 configuration
 let oauth2Client: OAuth2Client;
+
+/**
+ * Helper function to convert date string to seconds since epoch using timezone
+ * @param dateStr - Date string in YYYY/MM/DD or ISO format
+ * @param timezone - IANA timezone string (e.g., 'America/Los_Angeles', 'Asia/Kolkata')
+ * @returns Seconds since epoch
+ */
+function dateToSecondsInTimezone(dateStr: string, timezone?: string): number {
+  // Parse YYYY/MM/DD format
+  const dateMatch = dateStr.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+  let year: string, month: string, day: string;
+
+  if (dateMatch) {
+    [, year, month, day] = dateMatch;
+  } else {
+    // Try parsing as regular date
+    const date = new Date(dateStr);
+    if (isNaN(date.getTime())) {
+      // Invalid date, return current time
+      return Math.floor(Date.now() / 1000);
+    }
+    year = date.getFullYear().toString();
+    month = (date.getMonth() + 1).toString().padStart(2, '0');
+    day = date.getDate().toString().padStart(2, '0');
+  }
+
+  if (timezone) {
+    // Create date string at midnight in ISO format
+    const isoDateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00`;
+
+    // Parse as if it's in the target timezone by using toLocaleString
+    const date = new Date(isoDateStr);
+    const utcDate = new Date(
+      date.toLocaleString('en-US', { timeZone: 'UTC' })
+    );
+    const tzDate = new Date(
+      date.toLocaleString('en-US', { timeZone: timezone })
+    );
+
+    // Calculate offset and adjust
+    const offset = utcDate.getTime() - tzDate.getTime();
+    const adjustedDate = new Date(date.getTime() + offset);
+
+    return Math.floor(adjustedDate.getTime() / 1000);
+  }
+
+  // If no timezone, just convert to seconds at midnight UTC
+  const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}T00:00:00Z`);
+  return Math.floor(date.getTime() / 1000);
+}
+
+/**
+ * Convert Gmail query dates to user's timezone
+ * Extracts date operators (after:, before:, newer:, older:) and converts them to Unix timestamps
+ * @param query - Gmail search query
+ * @param timezone - IANA timezone string
+ * @returns Query with dates converted to Unix timestamps
+ */
+function convertQueryDatesToTimezone(query: string, timezone?: string): string {
+  if (!timezone) {
+    return query;
+  }
+
+  // Match date operators: after:, before:, newer:, older:, newer_than:, older_than:
+  const dateOperatorRegex = /(after|before|newer|older|newer_than|older_than):(\d{4}\/\d{1,2}\/\d{1,2})/gi;
+
+  return query.replace(dateOperatorRegex, (match, operator, dateStr) => {
+    const timestamp = dateToSecondsInTimezone(dateStr, timezone);
+    return `${operator}:${timestamp}`;
+  });
+}
 
 /**
  * Recursively extract email body content from MIME message parts
@@ -161,18 +231,23 @@ const ReadEmailSchema = z.object({
   messageId: z.string().describe('ID of the email message to retrieve'),
 });
 
-const ReadEmailThreadSchema = z.object({
-  threadId: z.string().optional().describe('Thread ID to retrieve all messages from'),
-  messageId: z.string().optional().describe('Message ID to get its thread. Either threadId or messageId is required.'),
-}).refine(data => data.threadId || data.messageId, {
-  message: 'Either threadId or messageId must be provided',
-});
+const ReadEmailThreadSchema = z
+  .object({
+    threadId: z.string().optional().describe('Thread ID to retrieve all messages from'),
+    messageId: z
+      .string()
+      .optional()
+      .describe('Message ID to get its thread. Either threadId or messageId is required.'),
+  })
+  .refine(data => data.threadId || data.messageId, {
+    message: 'Either threadId or messageId must be provided',
+  });
 
 const SearchEmailsSchema = z.object({
   query: z
     .string()
     .describe(
-      "Gmail search query (e.g., 'from:example@gmail.com'). All dates used in the search query are interpreted as midnight on that date in the PST timezone. To specify accurate dates for other timezones pass the value in seconds instead."
+      "Gmail search query (e.g., 'from:example@gmail.com', 'after:2024/01/15', 'before:2024/12/31'). Use standard date format (YYYY/MM/DD) for date operators. Dates will be automatically converted to your timezone."
     ),
   maxResults: z.number().optional().describe('Maximum number of results to return'),
 });
@@ -504,18 +579,23 @@ export async function getTools() {
  */
 export async function callTool(
   name: string,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   args: Record<string, any>,
   client_id: string,
   client_secret: string,
   callback: string,
   credentials: Record<string, string>
 ) {
-  await loadCredentials(client_id, client_secret, callback, credentials);
+  // Extract timezone from credentials before passing to OAuth
+  const { timezone, ...oauthCredentials } = credentials;
+
+  await loadCredentials(client_id, client_secret, callback, oauthCredentials);
 
   // Initialize Gmail API
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });
 
   // Helper function to handle email actions
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async function handleEmailAction(action: 'send' | 'draft', validatedArgs: any) {
     let message: string;
 
@@ -705,7 +785,7 @@ export async function callTool(
 
         // Use plain text content if available, otherwise use HTML content
         // (optionally, you could implement HTML-to-text conversion here)
-        let body = text || html || '';
+        const body = text || html || '';
 
         // If we only have HTML content, add a note for the user
         const contentTypeNote =
@@ -797,11 +877,12 @@ export async function callTool(
 
           // Extract email content
           const { text, html } = extractEmailContent((msg.payload as GmailMessagePart) || {});
-          let body = text || html || '';
+          const body = text || html || '';
 
-          const contentTypeNote = !text && html
-            ? '[Note: This email is HTML-formatted. Plain text version not available.]\n\n'
-            : '';
+          const contentTypeNote =
+            !text && html
+              ? '[Note: This email is HTML-formatted. Plain text version not available.]\n\n'
+              : '';
 
           // Get attachments for this message
           const attachments: EmailAttachment[] = [];
@@ -824,12 +905,16 @@ export async function callTool(
             processAttachmentParts(msg.payload as GmailMessagePart);
           }
 
-          const attachmentInfo = attachments.length > 0
-            ? `\n\nAttachments (${attachments.length}):\n` +
-              attachments
-                .map(a => `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)} KB, ID: ${a.id})`)
-                .join('\n')
-            : '';
+          const attachmentInfo =
+            attachments.length > 0
+              ? `\n\nAttachments (${attachments.length}):\n` +
+                attachments
+                  .map(
+                    a =>
+                      `- ${a.filename} (${a.mimeType}, ${Math.round(a.size / 1024)} KB, ID: ${a.id})`
+                  )
+                  .join('\n')
+              : '';
 
           return `${'='.repeat(80)}\nMessage ${index + 1} of ${messages.length}\nMessage ID: ${msg.id}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n${'='.repeat(80)}\n\n${contentTypeNote}${body}${attachmentInfo}`;
         });
@@ -848,9 +933,13 @@ export async function callTool(
 
       case 'search_emails': {
         const validatedArgs = SearchEmailsSchema.parse(args);
+
+        // Convert dates in query to user's timezone
+        const convertedQuery = convertQueryDatesToTimezone(validatedArgs.query, timezone);
+
         const response = await gmail.users.messages.list({
           userId: 'me',
-          q: validatedArgs.query,
+          q: convertedQuery,
           maxResults: validatedArgs.maxResults || 10,
         });
 
@@ -880,7 +969,10 @@ export async function callTool(
             {
               type: 'text',
               text: results
-                .map(r => `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`)
+                .map(
+                  r =>
+                    `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`
+                )
                 .join('\n'),
             },
           ],

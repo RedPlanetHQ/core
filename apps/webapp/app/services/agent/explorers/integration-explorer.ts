@@ -141,6 +141,7 @@ export async function runIntegrationExplorer(
   mode: IntegrationMode = "read",
   timezone: string = "UTC",
   source: string,
+  userId: string,
   abortSignal?: AbortSignal,
 ): Promise<IntegrationExplorerResult> {
   const startTime = Date.now();
@@ -211,6 +212,7 @@ export async function runIntegrationExplorer(
             action,
             parameters: parsedParams,
             source,
+            userId,
           });
           return JSON.stringify(result);
         } catch (error: any) {
