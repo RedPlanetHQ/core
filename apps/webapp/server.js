@@ -53,7 +53,7 @@ async function init() {
             });
             return;
         }
-        await module.handleSessionRequest(req, res, authenticationResult.workspaceId);
+        await module.handleSessionRequest(req, res, authenticationResult.workspaceId, authenticationResult.userId);
     });
     app.post("/api/v1/mcp", async (req, res) => {
         // Enable CORS for all domains
