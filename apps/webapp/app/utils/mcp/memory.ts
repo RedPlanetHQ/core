@@ -189,7 +189,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
         },
         query: {
           type: "string",
@@ -215,7 +215,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
         },
         action: {
           type: "string",
