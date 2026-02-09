@@ -48,7 +48,8 @@ export async function handleGetIntegrations(args: any) {
     const simplifiedIntegrations = integrations.map((account) => ({
       slug: account.integrationDefinition.slug,
       name: account.integrationDefinition.name,
-      accountId: account.id,
+      id: account.id,
+      accountId: account.accountId,
     }));
 
     // Format as readable text
@@ -60,6 +61,7 @@ export async function handleGetIntegrations(args: any) {
             .map(
               (integration, index) =>
                 `${index + 1}. ${integration.name}\n` +
+                `   ID: ${integration.id}\n` +
                 `   Account ID: ${integration.accountId}\n` +
                 `   Slug: ${integration.slug}`,
             )
