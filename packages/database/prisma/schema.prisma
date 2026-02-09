@@ -865,7 +865,7 @@ model Workspace {
   slug String  @unique
   icon String?
 
-  version  WorkspaceVersion @default(V1)
+  version  WorkspaceVersion @default(V3)
   metadata Json             @default("{}")
 
   // deprecated but keep until we move them 
