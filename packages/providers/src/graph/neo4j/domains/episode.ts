@@ -724,14 +724,14 @@ export function createEpisodeMethods(core: Neo4jCore) {
         MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
         MATCH (statement:Statement {uuid: $statementUuid, userId: $userId${wsFilter}})
         MERGE (episode)-[r:HAS_PROVENANCE]->(statement)
-        ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId
+        ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId, r.workspaceId = $workspaceId
       `;
 
       await core.runQuery(query, {
         episodeUuid,
         statementUuid,
         userId,
-        ...(workspaceId && { workspaceId }),
+        workspaceId: workspaceId || null,
       });
     },
 
@@ -767,7 +767,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
         // Create new relationships to target (MERGE to avoid duplicates)
         FOREACH (ep IN episodes | MERGE (ep)-[newR:HAS_PROVENANCE]->(target)
-          ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = datetime(), newR.userId = $userId)
+          ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = datetime(), newR.userId = $userId, newR.workspaceId = $workspaceId)
 
         RETURN size(episodes) AS movedCount
       `;
@@ -776,7 +776,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         sourceStatementUuid,
         targetStatementUuid,
         userId,
-        ...(workspaceId && { workspaceId }),
+        workspaceId: workspaceId || null,
       });
 
       const count = result[0]?.get("movedCount");
