@@ -56,21 +56,12 @@ export async function findUserByToken(
   if (!workspaceId) {
     const workspace = await prisma.userWorkspace.findFirst({
       where: {
-<<<<<<< HEAD
         userId: personalAccessToken.userId,
       },
     });
 
     // Not possible to create a pat without workspace
     workspaceId = workspace?.workspaceId || "";
-=======
-        userId: personalAccessToken.userId
-      }
-    })
-
-    // Not possible to create a pat without workspace
-     workspaceId = workspace?.id || ""
->>>>>>> a5c6f01 (feat: ability to create multiple workspaces for a user)
   }
 
   return {
