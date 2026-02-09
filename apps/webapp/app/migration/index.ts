@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
 
 const MIGRATION_KEY = "userWorkspaceMigrationCompleted";
@@ -104,6 +105,17 @@ export const migration = async () => {
   console.log(
     `Migration complete! Created ${createdCount} UserWorkspace records and updated metadata.`,
   );
+
+  // Build user-workspace mapping from all workspaces
+  const userWorkspaceMap = allWorkspaces
+    .filter((w) => w.userId)
+    .map((w) => ({
+      userId: w.userId!,
+      workspaceId: w.id,
+    }));
+
+  // Populate workspaceId in embedding tables
+  await populateEmbeddingWorkspaceIds(userWorkspaceMap);
 };
 
 async function updateWorkspaceMetadata(workspaceIds: string[]) {
@@ -117,4 +129,55 @@ async function updateWorkspaceMetadata(workspaceIds: string[]) {
   `;
 
   console.log(`Updated metadata for ${workspaceIds.length} workspaces.`);
+}
+
+async function populateEmbeddingWorkspaceIds(
+  userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
+) {
+  if (userWorkspaceMap.length === 0) {
+    console.log("No user-workspace mappings found.");
+    return;
+  }
+
+  console.log("Populating workspaceId in embedding tables...");
+  console.log(`Found ${userWorkspaceMap.length} user-workspace mappings`);
+
+  // Create efficient SQL CASE statement for bulk update
+  const userIds = userWorkspaceMap.map((uw) => uw.userId);
+
+  // Build a CASE statement for efficient bulk update
+  const caseStatements = userWorkspaceMap
+    .map((uw) => `WHEN "userId" = '${uw.userId}' THEN '${uw.workspaceId}'`)
+    .join(" ");
+
+  await prisma.$transaction(async (tx) => {
+    // Update EpisodeEmbedding
+    const episodeResult = await tx.$executeRaw`
+      UPDATE "episode_embeddings"
+      SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
+      WHERE "userId" = ANY(${userIds}::text[])
+        AND "workspaceId" IS NULL
+    `;
+    console.log(`Updated ${episodeResult} EpisodeEmbedding records`);
+
+    // Update StatementEmbedding
+    const statementResult = await tx.$executeRaw`
+      UPDATE "statement_embeddings"
+      SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
+      WHERE "userId" = ANY(${userIds}::text[])
+        AND "workspaceId" IS NULL
+    `;
+    console.log(`Updated ${statementResult} StatementEmbedding records`);
+
+    // Update EntityEmbedding
+    const entityResult = await tx.$executeRaw`
+      UPDATE "entity_embeddings"
+      SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
+      WHERE "userId" = ANY(${userIds}::text[])
+        AND "workspaceId" IS NULL
+    `;
+    console.log(`Updated ${entityResult} EntityEmbedding records`);
+  });
+
+  console.log("Embedding workspaceId population complete!");
 }
