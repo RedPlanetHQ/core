@@ -4,6 +4,11 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "../utils/prisma";
 import { type IngestBodyRequest, ingestTask } from "./ingest";
+import {
+  estimateCreditsFromTokens,
+  reserveCredits,
+} from "~/services/billing.server";
+import { countTokens } from "~/services/search/tokenBudget";
 
 export const RetryNoCreditBodyRequest = z.object({
   workspaceId: z.string(),
@@ -57,13 +62,34 @@ export const retryNoCreditsTask = task({
         try {
           const queueData = item.data as z.infer<typeof IngestBodyRequest>;
 
-          // Reset status to PENDING and clear error
+          // Reserve credits before retrying
+          const inputTokens = countTokens(queueData.episodeBody);
+          const estimatedCredits = estimateCreditsFromTokens(inputTokens);
+          const reserved = await reserveCredits(
+            payload.workspaceId,
+            estimatedCredits,
+          );
+
+          if (reserved === 0) {
+            logger.log(
+              `Still insufficient credits for episode ${item.id}, skipping`,
+            );
+            results.failed++;
+            results.errors.push({
+              queueId: item.id,
+              error: "Still insufficient credits",
+            });
+            continue;
+          }
+
+          // Reset status to PENDING and store reserved credits
           await prisma.ingestionQueue.update({
             where: { id: item.id },
             data: {
               status: IngestionStatus.PENDING,
               error: null,
               retryCount: item.retryCount + 1,
+              output: { reservedCredits: reserved },
             },
           });
 

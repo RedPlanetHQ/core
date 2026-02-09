@@ -40,6 +40,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
+import { reconcileCredits } from "~/services/billing.server";
 import {
   batchGetEntityEmbeddings,
   batchGetStatementEmbeddings,
@@ -274,6 +275,7 @@ export async function processGraphResolution(
         finalOutput = {
           episodes: [payload.episodeDetails],
           statementsCreated: statementsCount,
+          reservedCredits: currentOutput?.reservedCredits,
           resolutionTokenUsage: {
             low: tokenMetrics.low,
           },
@@ -300,8 +302,19 @@ export async function processGraphResolution(
         // Don't throw - the graph resolution work is still valid
       }
 
-      // Deduct credits for episode creation
-      await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+      // Reconcile credits: reserved upfront vs actual statements created
+      const reservedCredits = currentOutput?.reservedCredits || 0;
+      if (reservedCredits > 0) {
+        await reconcileCredits(
+          payload.workspaceId,
+          "addEpisode",
+          reservedCredits,
+          statementsCount,
+        );
+      } else {
+        // Fallback: no reservation found (legacy path), deduct full amount
+        await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+      }
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
         error,
