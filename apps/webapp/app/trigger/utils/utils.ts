@@ -1,19 +1,13 @@
 import {
-  type Activity,
   type Conversation,
   type ConversationHistory,
-  type IntegrationDefinitionV2,
-  type Prisma,
-  UserType,
   type UserUsage,
-  type Workspace,
 } from "@prisma/client";
 
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
 import { prisma } from "./prisma";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
-import { type ModelMessage } from "ai";
 
 // Token generation utilities
 const tokenValueLength = 40;
@@ -145,82 +139,6 @@ export interface RunChatPayload {
   isContinuation?: boolean;
 }
 
-export const createConversationHistoryForAgent = async (
-  conversationId: string,
-) => {
-  return await prisma.conversationHistory.create({
-    data: {
-      conversationId,
-      message: "Generating...",
-      userType: "Agent",
-      thoughts: {},
-    },
-  });
-};
-
-export const getConversationHistoryFormat = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  previousHistory: any[],
-): string => {
-  if (previousHistory) {
-    const historyText = previousHistory
-      .map((history) => `${history.userType}: \n ${history.message}`)
-      .join("\n------------\n");
-
-    return historyText;
-  }
-
-  return "";
-};
-
-export const getPreviousExecutionHistory = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  previousHistory: any[],
-): ModelMessage[] => {
-  return previousHistory.map((history) => ({
-    role: history.userType === "User" ? "user" : "assistant",
-    content: history.message,
-  }));
-};
-
-export const getIntegrationDefinitionsForAgents = (agents: string[]) => {
-  return prisma.integrationDefinitionV2.findMany({
-    where: {
-      slug: {
-        in: agents,
-      },
-    },
-  });
-};
-
-export const getIntegrationConfigForIntegrationDefinition = (
-  integrationDefinitionId: string,
-) => {
-  return prisma.integrationAccount.findFirst({
-    where: {
-      integrationDefinitionId,
-    },
-  });
-};
-
-export const updateConversationHistoryMessage = async (
-  userMessage: string,
-  conversationHistoryId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  thoughts?: Record<string, any>,
-) => {
-  await prisma.conversationHistory.update({
-    where: {
-      id: conversationHistoryId,
-    },
-    data: {
-      message: userMessage,
-      thoughts,
-      userType: UserType.Agent,
-    },
-  });
-};
-
 export const getActivityDetails = async (activityId: string) => {
   if (!activityId) {
     return {};
@@ -273,20 +191,6 @@ export function flattenObject(obj: Record<string, any>, prefix = ""): string[] {
   }, []);
 }
 
-export const updateConversationStatus = async (
-  status: string,
-  conversationId: string,
-) => {
-  const data: Prisma.ConversationUpdateInput = { status, unread: true };
-
-  return await prisma.conversation.update({
-    where: {
-      id: conversationId,
-    },
-    data,
-  });
-};
-
 export const getActivity = async (activityId: string) => {
   return await prisma.activity.findUnique({
     where: {
@@ -316,51 +220,6 @@ export const updateActivity = async (
     },
   });
 };
-
-export const createConversation = async (
-  activity: Activity,
-  workspace: Workspace,
-  integrationDefinition: IntegrationDefinitionV2,
-  automationContext: { automations?: string[]; executionPlan: string },
-) => {
-  const conversation = await prisma.conversation.create({
-    data: {
-      workspaceId: activity.workspaceId,
-      userId: workspace.userId as string,
-      title: activity.text.substring(0, 100),
-      ConversationHistory: {
-        create: {
-          userId: workspace.userId,
-          message: `Activity from ${integrationDefinition.name} \n Content: ${activity.text}`,
-          userType: UserType.User,
-          activityId: activity.id,
-          thoughts: { ...automationContext },
-        },
-      },
-    },
-    include: {
-      ConversationHistory: true,
-    },
-  });
-
-  return conversation;
-};
-
-export async function getContinuationAgentConversationHistory(
-  conversationId: string,
-): Promise<ConversationHistory | null> {
-  return await prisma.conversationHistory.findFirst({
-    where: {
-      conversationId,
-      userType: "Agent",
-      deleted: null,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 1,
-  });
-}
 
 export async function deletePersonalAccessToken(tokenId: string) {
   return await prisma.personalAccessToken.delete({

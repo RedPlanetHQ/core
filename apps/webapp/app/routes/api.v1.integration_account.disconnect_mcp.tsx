@@ -1,5 +1,5 @@
 import { json, type ActionFunctionArgs } from "@remix-run/node";
-import { requireUserId } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
@@ -11,13 +11,21 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   try {
-    const userId = await requireUserId(request);
+    const { id: userId, workspaceId } = await requireUser(request);
     const body = await request.json();
     const { integrationAccountId } = body;
 
     if (!integrationAccountId) {
       return json(
         { error: "Integration account ID is required" },
+        { status: 400 },
+      );
+    }
+
+
+    if (!workspaceId) {
+      return json(
+        { error: "Workspace is required" },
         { status: 400 },
       );
     }
@@ -57,6 +65,7 @@ export async function action({ request }: ActionFunctionArgs) {
       integrationAccountId,
       userId,
       "mcp.disconnected",
+      workspaceId
     );
 
     logger.info("MCP configuration disconnected", {

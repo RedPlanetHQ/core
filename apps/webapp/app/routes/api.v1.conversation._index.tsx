@@ -5,9 +5,6 @@ import {
   type LanguageModel,
   generateId,
   stepCountIs,
-  tool,
-  jsonSchema,
-  type Tool,
   type ModelMessage,
 } from "ai";
 import { z } from "zod";
@@ -20,18 +17,15 @@ import {
 
 import { getModel } from "~/lib/model.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
-import {
-  AGENT_SYSTEM_PROMPT,
-  SOL_CAPABILITIES,
-
-} from "~/lib/prompt.server";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
-import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 
 
 import { addToQueue } from "~/lib/ingest.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
+import { getCorePrompt } from "~/services/agent/prompts";
+import { getUserById } from "~/models/user.server";
+import { createTools } from "~/services/agent/core-agent";
 
 const ChatRequestSchema = z.object({
   message: z
@@ -41,17 +35,8 @@ const ChatRequestSchema = z.object({
       role: z.string(),
     })
     .optional(),
-  messages: z
-    .array(
-      z.object({
-        id: z.string().optional(),
-        parts: z.array(z.any()),
-        role: z.string(),
-      }),
-    )
-    .optional(),
-  needsApproval: z.boolean().optional(),
   id: z.string(),
+  source: z.string().default("core"),
 });
 
 const { loader, action } = createHybridActionApiRoute(
@@ -64,9 +49,6 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const isAssistantApproval = body.needsApproval;
-
-
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -74,7 +56,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const conversationHistory = conversation?.ConversationHistory ?? [];
 
-    if (conversationHistory.length === 1 && !isAssistantApproval) {
+    if (conversationHistory.length === 1) {
       const message = body.message?.parts[0].text;
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
@@ -83,7 +65,7 @@ const { loader, action } = createHybridActionApiRoute(
       });
     }
 
-    if (conversationHistory.length > 1 && !isAssistantApproval) {
+    if (conversationHistory.length > 1) {
       const message = body.message?.parts[0].text;
       const messageParts = body.message?.parts;
 
@@ -104,45 +86,6 @@ const { loader, action } = createHybridActionApiRoute(
       };
     });
 
-    const tools: Record<string, Tool> = {};
-
-    memoryTools.forEach((mt) => {
-      if (
-        [
-          "memory_ingest",
-          "memory_about_user",
-          "initialize_conversation_session",
-          "get_integrations",
-        ].includes(mt.name)
-      ) {
-        return;
-      }
-
-      // Check if any tool calls have destructiveHint: true
-      const hasDestructiveTools = mt.annotations?.destructiveHint === true;
-      const executeFn = async (params: any) => {
-        return await callMemoryTool(
-          mt.name,
-          {
-            sessionId: body.id,
-            ...params,
-            userId: authentication.userId,
-            workspaceId: authentication.workspaceId,
-          },
-          authentication.userId,
-          "core",
-        );
-      };
-
-      tools[mt.name] = tool({
-        name: mt.name,
-        inputSchema: jsonSchema(mt.inputSchema as any),
-        description: mt.description,
-        needsApproval: hasDestructiveTools,
-        execute: executeFn,
-      } as any);
-    });
-
     // Get user's connected integrations
     const connectedIntegrations =
       await IntegrationLoader.getConnectedIntegrationAccounts(
@@ -157,40 +100,43 @@ const { loader, action } = createHybridActionApiRoute(
       )
       .join("\n");
 
-    let finalMessages = messages;
+    const message = body.message?.parts[0].text;
+    const id = body.message?.id;
 
-    if (!isAssistantApproval) {
-      const message = body.message?.parts[0].text;
-      const id = body.message?.id;
-
-      finalMessages = [
-        ...messages,
-        {
-          parts: [{ text: message, type: "text" }],
-          role: "user",
-          id: id ?? generateId(),
-        },
-      ];
-    } else {
-      finalMessages = body.messages as any;
-    }
+    const finalMessages = [
+      ...messages,
+      {
+        parts: [{ text: message, type: "text" }],
+        role: "user",
+        id: id ?? generateId(),
+      },
+    ];
 
     const validatedMessages = await validateUIMessages({
       messages: finalMessages,
     });
 
+    const user = await getUserById(authentication.userId);
     // Fetch user's persona to condition AI behavior
     const latestPersona = await getPersonaDocumentForUser(authentication.workspaceId as string);
     const personaContent = latestPersona
       ? latestPersona
       : "";
 
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const timezone = metadata?.timezone as string ?? "UTC"
+    const tools = createTools(authentication.userId, authentication.workspaceId as string, timezone, body.source);
+
+
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
     // Use onboarding-specific capabilities if onboarding summary is available
-    const capabilities = SOL_CAPABILITIES;
+    let systemPrompt = getCorePrompt('web', {
+      name: user?.displayName ?? user?.name ?? user?.email ?? "",
+      email: user?.email ?? "",
+      timezone,
+    }, personaContent);
 
-    let systemPrompt = `${AGENT_SYSTEM_PROMPT}\n\n<about_user>${personaContent}</about_user>\n\n${capabilities}`;
 
     // Add connected integrations context
     const integrationsContext = `
