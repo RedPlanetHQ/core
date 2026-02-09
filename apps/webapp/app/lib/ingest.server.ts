@@ -3,14 +3,12 @@ import { IngestionStatus } from "@core/database";
 import { EpisodeType } from "@core/types";
 import { type z } from "zod";
 import { prisma } from "~/db.server";
-import {
-  estimateCreditsFromTokens,
-  reserveCredits,
-} from "~/services/billing.server";
+
 import { countTokens } from "~/services/search/tokenBudget";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
+import { estimateCreditsFromTokens, reserveCredits } from "~/jobs/credit_utils";
 
 // Used in the server
 export const addToQueue = async (
@@ -95,7 +93,7 @@ export const addToQueue = async (
   });
 
   // Attempt to reserve credits
-  const reserved = await reserveCredits(workspaceId, estimatedCredits);
+  const reserved = await reserveCredits(workspaceId, userId, estimatedCredits);
 
   if (reserved === 0) {
     // Mark as NO_CREDITS so it can be retried after purchase

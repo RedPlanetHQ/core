@@ -40,7 +40,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
-import { reconcileCredits } from "~/services/billing.server";
+
 import {
   batchGetEntityEmbeddings,
   batchGetStatementEmbeddings,
@@ -48,6 +48,7 @@ import {
   batchDeleteStatementEmbeddings,
 } from "~/services/vectorStorage.server";
 import { type ModelMessage } from "ai";
+import { reconcileCredits } from "../credit_utils";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -79,7 +80,12 @@ export async function processGraphResolution(
     );
 
     // Get episode data for context
-    const episode = await getEpisode(payload.episodeUuid, false, payload.userId, payload.workspaceId);
+    const episode = await getEpisode(
+      payload.episodeUuid,
+      false,
+      payload.userId,
+      payload.workspaceId,
+    );
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
     }
@@ -162,7 +168,12 @@ export async function processGraphResolution(
 
     // Step 3: Apply entity merges - update references and delete duplicates
     for (const merge of entityMerges) {
-      await mergeEntities(merge.sourceUuid, merge.targetUuid, payload.userId, payload.workspaceId);
+      await mergeEntities(
+        merge.sourceUuid,
+        merge.targetUuid,
+        payload.userId,
+        payload.workspaceId,
+      );
     }
 
     logger.info(`Merged ${entityMerges.length} duplicate entities`);
@@ -198,7 +209,11 @@ export async function processGraphResolution(
       const duplicateStatementUuids = duplicateStatements.map(
         (dup) => dup.newStatementUuid,
       );
-      await deleteStatements(duplicateStatementUuids, payload.userId, payload.workspaceId);
+      await deleteStatements(
+        duplicateStatementUuids,
+        payload.userId,
+        payload.workspaceId,
+      );
       logger.info(
         `Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`,
       );
@@ -314,6 +329,7 @@ export async function processGraphResolution(
       if (reservedCredits > 0) {
         await reconcileCredits(
           payload.workspaceId,
+          payload.userId,
           "addEpisode",
           reservedCredits,
           statementsCount,

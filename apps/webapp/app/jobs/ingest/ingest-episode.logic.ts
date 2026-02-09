@@ -4,7 +4,7 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
-import { refundCredits } from "~/services/billing.server";
+import { refundCredits } from "../credit_utils";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string().min(20),
@@ -171,7 +171,11 @@ export async function processEpisodeIngestion(
         });
         const reservedCredits = (queue?.output as any)?.reservedCredits;
         if (reservedCredits && reservedCredits > 0) {
-          await refundCredits(payload.workspaceId, reservedCredits);
+          await refundCredits(
+            payload.workspaceId,
+            payload.userId,
+            reservedCredits,
+          );
           logger.info(
             `Refunded ${reservedCredits} reserved credits — nothing to remember for ${payload.queueId}`,
           );
@@ -291,7 +295,11 @@ export async function processEpisodeIngestion(
       });
       const reservedCredits = (queue?.output as any)?.reservedCredits;
       if (reservedCredits && reservedCredits > 0) {
-        await refundCredits(payload.workspaceId, reservedCredits);
+        await refundCredits(
+          payload.workspaceId,
+          payload.userId,
+          reservedCredits,
+        );
         logger.info(
           `Refunded ${reservedCredits} reserved credits for failed ingestion ${payload.queueId}`,
         );
