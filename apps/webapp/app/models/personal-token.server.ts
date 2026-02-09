@@ -56,12 +56,12 @@ export async function findUserByToken(
   if (!workspaceId) {
     const workspace = await prisma.userWorkspace.findFirst({
       where: {
-        userId: personalAccessToken.userId
-      }
-    })
+        userId: personalAccessToken.userId,
+      },
+    });
 
     // Not possible to create a pat without workspace
-     workspaceId = workspace?.id || ""
+    workspaceId = workspace?.workspaceId || "";
   }
 
   return {

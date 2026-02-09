@@ -136,6 +136,7 @@ async function init() {
           queryParams,
         );
       } catch (error) {
+        console.log(error);
         res.status(400).json({ error: "Invalid JSON" });
       }
     });
