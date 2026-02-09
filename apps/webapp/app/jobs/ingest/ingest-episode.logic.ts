@@ -4,7 +4,7 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
-import { hasCredits } from "~/trigger/utils/utils";
+import { refundCredits } from "~/services/billing.server";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string().min(20),
@@ -83,35 +83,7 @@ export async function processEpisodeIngestion(
   try {
     logger.log(`Processing job for user ${payload.userId}`);
 
-    // Check if workspace has sufficient credits before processing
-    const hasSufficientCredits = await hasCredits(
-      payload.workspaceId,
-      "addEpisode",
-    );
-
-    if (!hasSufficientCredits) {
-      logger.warn(`Insufficient credits for workspace ${payload.workspaceId}`);
-
-      try {
-        await prisma.ingestionQueue.update({
-          where: { id: payload.queueId },
-          data: {
-            status: IngestionStatus.NO_CREDITS,
-            error:
-              "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
-          },
-        });
-      } catch (error) {
-        logger.warn(
-          `Could not update ingestion queue ${payload.queueId} - may have been deleted`,
-        );
-      }
-
-      return {
-        success: false,
-        error: "Insufficient credits",
-      };
-    }
+    // Credits are reserved upfront in addToQueue — no check needed here
 
     try {
       await prisma.ingestionQueue.update({
@@ -181,10 +153,33 @@ export async function processEpisodeIngestion(
       }
     }
 
-    // Simple output - preprocessing already handled chunking logic
-    const currentStatus: IngestionStatus = episodeDetails.episodeUuid
+    // Determine status: COMPLETED for success or nothing-to-remember, FAILED otherwise
+    const isNothingToRemember =
+      !episodeDetails.episodeUuid && episodeDetails.statementsCreated === 0;
+    const currentStatus: IngestionStatus = episodeDetails.episodeUuid || isNothingToRemember
       ? IngestionStatus.COMPLETED
       : IngestionStatus.FAILED;
+
+    // Refund reserved credits if nothing was processed (nothing to remember)
+    if (isNothingToRemember) {
+      try {
+        const queue = await prisma.ingestionQueue.findUnique({
+          where: { id: payload.queueId },
+          select: { output: true },
+        });
+        const reservedCredits = (queue?.output as any)?.reservedCredits;
+        if (reservedCredits && reservedCredits > 0) {
+          await refundCredits(payload.workspaceId, reservedCredits);
+          logger.info(
+            `Refunded ${reservedCredits} reserved credits — nothing to remember for ${payload.queueId}`,
+          );
+        }
+      } catch (refundError) {
+        logger.warn(`Failed to refund credits for ${payload.queueId}:`, {
+          error: refundError,
+        });
+      }
+    }
 
     try {
       await prisma.ingestionQueue.update({
@@ -286,6 +281,25 @@ export async function processEpisodeIngestion(
 
     return { success: true, episodeDetails };
   } catch (err: any) {
+    // Refund reserved credits on failure
+    try {
+      const queue = await prisma.ingestionQueue.findUnique({
+        where: { id: payload.queueId },
+        select: { output: true },
+      });
+      const reservedCredits = (queue?.output as any)?.reservedCredits;
+      if (reservedCredits && reservedCredits > 0) {
+        await refundCredits(payload.workspaceId, reservedCredits);
+        logger.info(
+          `Refunded ${reservedCredits} reserved credits for failed ingestion ${payload.queueId}`,
+        );
+      }
+    } catch (refundError) {
+      logger.warn(`Failed to refund credits for ${payload.queueId}:`, {
+        error: refundError,
+      });
+    }
+
     try {
       await prisma.ingestionQueue.update({
         where: { id: payload.queueId },

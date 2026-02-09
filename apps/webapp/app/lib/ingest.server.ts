@@ -3,7 +3,11 @@ import { IngestionStatus } from "@core/database";
 import { EpisodeType } from "@core/types";
 import { type z } from "zod";
 import { prisma } from "~/db.server";
-import { hasCredits } from "~/services/billing.server";
+import {
+  estimateCreditsFromTokens,
+  reserveCredits,
+} from "~/services/billing.server";
+import { countTokens } from "~/services/search/tokenBudget";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
@@ -31,16 +35,6 @@ export const addToQueue = async (
     throw new Error(
       "Workspace ID is required to create an ingestion queue entry.",
     );
-  }
-
-  // Check if workspace has sufficient credits before processing
-  const hasSufficientCredits = await hasCredits(
-    user.Workspace?.id as string,
-    "addEpisode",
-  );
-
-  if (!hasSufficientCredits) {
-    throw new Error("no credits");
   }
 
   // Filter out invalid labels if labelIds are provided
@@ -85,7 +79,11 @@ export const addToQueue = async (
     }
   }
 
-  // Upsert: update existing or create new ingestion queue entry
+  // Estimate credits from input tokens and reserve upfront
+  const inputTokens = countTokens(body.episodeBody);
+  const estimatedCredits = estimateCreditsFromTokens(inputTokens);
+
+  // Create queue record first so we can track NO_CREDITS status for retry
   const queuePersist = await prisma.ingestionQueue.upsert({
     where: {
       id: ingestionQueueId || "non-existent-id", // Use provided ID or dummy ID to force create
@@ -107,6 +105,33 @@ export const addToQueue = async (
       sessionId,
       labels,
       title,
+    },
+  });
+
+  // Attempt to reserve credits
+  const reserved = await reserveCredits(
+    user.Workspace.id,
+    estimatedCredits,
+  );
+
+  if (reserved === 0) {
+    // Mark as NO_CREDITS so it can be retried after purchase
+    await prisma.ingestionQueue.update({
+      where: { id: queuePersist.id },
+      data: {
+        status: IngestionStatus.NO_CREDITS,
+        error:
+          "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
+      },
+    });
+    throw new Error("no credits");
+  }
+
+  // Store reserved amount for reconciliation later
+  await prisma.ingestionQueue.update({
+    where: { id: queuePersist.id },
+    data: {
+      output: { reservedCredits: reserved },
     },
   });
 
