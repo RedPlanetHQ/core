@@ -42,7 +42,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return json(submission.reply());
   }
 
-  const conversation = await createConversation(workspace?.id, userId, {
+  const conversation = await createConversation(workspace?.id as string, userId, {
     message: submission.value.message,
     title: submission.value.title ?? "Untitled",
     parts: [{ text: submission.value.message, type: "text" }],

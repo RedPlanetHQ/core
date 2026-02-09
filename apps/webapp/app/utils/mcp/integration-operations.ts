@@ -13,7 +13,6 @@ import PQueue from "p-queue";
 const integrationQueue = new PQueue({
   concurrency: 50, // Max 50 concurrent integration calls
   timeout: 35000, // 35 second total timeout (slightly more than execFile timeout)
-  throwOnTimeout: true,
 });
 
 // Log queue stats periodically for monitoring
@@ -283,7 +282,12 @@ export async function handleExecuteIntegrationAction(args: any) {
       throw new Error("action is required");
     }
 
-    return await executeIntegrationAction(accountId, action, actionArgs || {}, source);
+    return await executeIntegrationAction(
+      accountId,
+      action,
+      actionArgs || {},
+      source,
+    );
   } catch (error) {
     logger.error(`MCP execute integration action error: ${error}`);
 

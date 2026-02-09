@@ -134,8 +134,12 @@ const EnvironmentSchema = z
 
     // Provider configuration
     GRAPH_PROVIDER: z.enum(["neo4j", "falkordb", "helix"]).default("neo4j"),
-    VECTOR_PROVIDER: z.enum(["pgvector", "turbopuffer", "qdrant"]).default("pgvector"),
+    VECTOR_PROVIDER: z
+      .enum(["pgvector", "turbopuffer", "qdrant"])
+      .default("pgvector"),
     MODEL_PROVIDER: z.enum(["vercel-ai"]).default("vercel-ai"),
+
+    EXA_API_KEY: z.string().optional(),
   })
   .refine(
     (data) => {
