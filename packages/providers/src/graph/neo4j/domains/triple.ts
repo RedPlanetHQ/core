@@ -36,13 +36,13 @@ export function createTripleMethods(core: Neo4jCore & any) {
         MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
 
         MERGE (episode)-[prov:HAS_PROVENANCE]->(statement)
-          ON CREATE SET prov.createdAt = $createdAt, prov.userId = $userId
+          ON CREATE SET prov.createdAt = $createdAt, prov.userId = $userId, prov.workspaceId = $workspaceId
         MERGE (statement)-[subj:HAS_SUBJECT]->(subject)
-          ON CREATE SET subj.createdAt = $createdAt, subj.userId = $userId
+          ON CREATE SET subj.createdAt = $createdAt, subj.userId = $userId, subj.workspaceId = $workspaceId
         MERGE (statement)-[pred:HAS_PREDICATE]->(predicate)
-          ON CREATE SET pred.createdAt = $createdAt, pred.userId = $userId
+          ON CREATE SET pred.createdAt = $createdAt, pred.userId = $userId, pred.workspaceId = $workspaceId
         MERGE (statement)-[obj:HAS_OBJECT]->(object)
-          ON CREATE SET obj.createdAt = $createdAt, obj.userId = $userId
+          ON CREATE SET obj.createdAt = $createdAt, obj.userId = $userId, obj.workspaceId = $workspaceId
 
         RETURN statement.uuid as uuid
       `;
@@ -56,7 +56,7 @@ export function createTripleMethods(core: Neo4jCore & any) {
         episodeUuid: triple.episodeUuid,
         createdAt: now,
         userId: triple.userId,
-        ...(triple.workspaceId && { workspaceId: triple.workspaceId }),
+        workspaceId: triple.workspaceId || null,
       });
 
       return statementUuid;

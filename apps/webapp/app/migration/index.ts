@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "~/db.server";
+import { ProviderFactory } from "@core/providers";
 
 const MIGRATION_KEY = "userWorkspaceMigrationCompleted";
 
@@ -116,6 +117,9 @@ export const migration = async () => {
 
   // Populate workspaceId in embedding tables
   await populateEmbeddingWorkspaceIds(userWorkspaceMap);
+
+  // Populate workspaceId in graph nodes
+  await populateGraphWorkspaceIds(userWorkspaceMap);
 };
 
 async function updateWorkspaceMetadata(workspaceIds: string[]) {
@@ -180,4 +184,147 @@ async function populateEmbeddingWorkspaceIds(
   });
 
   console.log("Embedding workspaceId population complete!");
+}
+
+async function populateGraphWorkspaceIds(
+  userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
+) {
+  if (userWorkspaceMap.length === 0) {
+    console.log("No user-workspace mappings found for graph migration.");
+    return;
+  }
+
+  console.log("Populating workspaceId in Neo4j graph nodes...");
+  console.log(`Found ${userWorkspaceMap.length} user-workspace mappings`);
+
+  try {
+    const graphProvider = ProviderFactory.getGraphProvider() as any;
+
+    let totalUpdated = 0;
+
+    // Process in batches to avoid overwhelming Neo4j
+    const batchSize = 100;
+    for (let i = 0; i < userWorkspaceMap.length; i += batchSize) {
+      const batch = userWorkspaceMap.slice(i, i + batchSize);
+
+      for (const { userId, workspaceId } of batch) {
+        // Update Episode nodes
+        const episodeQuery = `
+          MATCH (e:Episode {userId: $userId})
+          WHERE e.workspaceId IS NULL
+          SET e.workspaceId = $workspaceId
+          RETURN count(e) as count
+        `;
+        const episodeResult = await graphProvider.runQuery(episodeQuery, {
+          userId,
+          workspaceId,
+        });
+        const episodeCount = episodeResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update Statement nodes
+        const statementQuery = `
+          MATCH (s:Statement {userId: $userId})
+          WHERE s.workspaceId IS NULL
+          SET s.workspaceId = $workspaceId
+          RETURN count(s) as count
+        `;
+        const statementResult = await graphProvider.runQuery(statementQuery, {
+          userId,
+          workspaceId,
+        });
+        const statementCount =
+          statementResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update Entity nodes
+        const entityQuery = `
+          MATCH (e:Entity {userId: $userId})
+          WHERE e.workspaceId IS NULL
+          SET e.workspaceId = $workspaceId
+          RETURN count(e) as count
+        `;
+        const entityResult = await graphProvider.runQuery(entityQuery, {
+          userId,
+          workspaceId,
+        });
+        const entityCount = entityResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update HAS_PROVENANCE relationships
+        const provenanceQuery = `
+          MATCH ()-[r:HAS_PROVENANCE {userId: $userId}]->()
+          WHERE r.workspaceId IS NULL
+          SET r.workspaceId = $workspaceId
+          RETURN count(r) as count
+        `;
+        const provenanceResult = await graphProvider.runQuery(provenanceQuery, {
+          userId,
+          workspaceId,
+        });
+        const provenanceCount =
+          provenanceResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update HAS_SUBJECT relationships
+        const subjectQuery = `
+          MATCH ()-[r:HAS_SUBJECT {userId: $userId}]->()
+          WHERE r.workspaceId IS NULL
+          SET r.workspaceId = $workspaceId
+          RETURN count(r) as count
+        `;
+        const subjectResult = await graphProvider.runQuery(subjectQuery, {
+          userId,
+          workspaceId,
+        });
+        const subjectCount = subjectResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update HAS_PREDICATE relationships
+        const predicateQuery = `
+          MATCH ()-[r:HAS_PREDICATE {userId: $userId}]->()
+          WHERE r.workspaceId IS NULL
+          SET r.workspaceId = $workspaceId
+          RETURN count(r) as count
+        `;
+        const predicateResult = await graphProvider.runQuery(predicateQuery, {
+          userId,
+          workspaceId,
+        });
+        const predicateCount =
+          predicateResult[0]?.get("count")?.toNumber() || 0;
+
+        // Update HAS_OBJECT relationships
+        const objectQuery = `
+          MATCH ()-[r:HAS_OBJECT {userId: $userId}]->()
+          WHERE r.workspaceId IS NULL
+          SET r.workspaceId = $workspaceId
+          RETURN count(r) as count
+        `;
+        const objectResult = await graphProvider.runQuery(objectQuery, {
+          userId,
+          workspaceId,
+        });
+        const objectCount = objectResult[0]?.get("count")?.toNumber() || 0;
+
+        const nodeCount = episodeCount + statementCount + entityCount;
+        const relationshipCount =
+          provenanceCount + subjectCount + predicateCount + objectCount;
+        const userTotal = nodeCount + relationshipCount;
+        totalUpdated += userTotal;
+
+        if (userTotal > 0) {
+          console.log(
+            `User ${userId}: ${nodeCount} nodes (${episodeCount} episodes, ${statementCount} statements, ${entityCount} entities), ${relationshipCount} relationships`,
+          );
+        }
+      }
+
+      console.log(
+        `Progress: ${Math.min(i + batchSize, userWorkspaceMap.length)}/${userWorkspaceMap.length} users processed`,
+      );
+    }
+
+    console.log(
+      `Graph workspaceId population complete! Updated ${totalUpdated} total nodes.`,
+    );
+  } catch (error) {
+    console.error("Error populating graph workspaceIds:", error);
+    throw error;
+  }
 }
