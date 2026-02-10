@@ -335,9 +335,13 @@ async function createTransport(
 
   // Setup cleanup on close
   transport.onclose = async () => {
-    clearInterval(keepAlive);
-    await MCPSessionManager.deleteSession(sessionId);
-    await TransportManager.cleanupSession(sessionId);
+    try {
+      clearInterval(keepAlive);
+      await MCPSessionManager.deleteSession(sessionId);
+      await TransportManager.cleanupSession(sessionId);
+    } catch (e) {
+      console.log(e);
+    }
   };
 
   // Load integration transports

@@ -16,6 +16,11 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   const workspace = await requireWorkpace(request);
   const labelService = new LabelService();
+
+  if (!workspace) {
+    return { labels: [] }
+  }
+
   const labels = await labelService.getWorkspaceLabels(workspace.id);
 
   //you have to confirm basic details before you can do anything
