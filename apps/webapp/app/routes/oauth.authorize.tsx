@@ -183,7 +183,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         state: params.state,
         codeChallenge: params.code_challenge,
         codeChallengeMethod: params.code_challenge_method,
-        workspaceId: workspace.id,
+        workspaceId: workspace?.id,
       });
       // Redirect back to client with authorization code
       const redirectUrl = new URL(params.redirect_uri);

@@ -25,7 +25,7 @@ import {
   type ToastMessage,
 } from "./models/message.server";
 import { env } from "./env.server";
-import { getUser } from "./services/session.server";
+import { getUser, getWorkspaceId } from "./services/session.server";
 import { usePostHog } from "./hooks/usePostHog";
 import {
   AppContainer,
@@ -53,7 +53,9 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const posthogProjectKey = env.POSTHOG_PROJECT_KEY;
   const telemetryEnabled = env.TELEMETRY_ENABLED;
   const user = await getUser(request);
-  const usageSummary = await getUsageSummary(user?.Workspace?.id as string);
+  const workspaceId = await getWorkspaceId(request, user?.id as string) as string;
+
+  const usageSummary = await getUsageSummary(workspaceId, user?.id as string);
 
   return typedjson(
     {
@@ -84,7 +86,7 @@ export const meta: MetaFunction = ({ data }) => {
       name: "robots",
       content:
         typeof window === "undefined" ||
-        window.location.hostname !== "core.mysigma.ai"
+          window.location.hostname !== "core.mysigma.ai"
           ? "noindex, nofollow"
           : "index, follow",
     },

@@ -25,12 +25,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return apiCors(request, json({ error: "Webhook ID is required" }, { status: 400 }));
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: authResult.userId },
-    include: { Workspace: true },
-  });
 
-  if (!user?.Workspace) {
+  if (!authResult.workspaceId) {
     return apiCors(request, json({ error: "User workspace not found" }, { status: 400 }));
   }
 
@@ -38,7 +34,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const webhook = await prisma.webhookConfiguration.findFirst({
     where: {
       id: webhookId,
-      workspaceId: user.Workspace.id,
+      workspaceId: authResult.workspaceId,
     },
   });
 

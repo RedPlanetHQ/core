@@ -37,7 +37,10 @@ export async function reserveCredits(
     },
   });
 
-  if (!userWorkspace?.user?.UserUsage || !userWorkspace.workspace.Subscription) {
+  if (
+    !userWorkspace?.user?.UserUsage ||
+    !userWorkspace.workspace.Subscription
+  ) {
     return 0;
   }
 
@@ -155,7 +158,10 @@ export async function reconcileCredits(
     },
   });
 
-  if (!userWorkspace?.user?.UserUsage || !userWorkspace.workspace.Subscription) {
+  if (
+    !userWorkspace?.user?.UserUsage ||
+    !userWorkspace.workspace.Subscription
+  ) {
     return;
   }
 

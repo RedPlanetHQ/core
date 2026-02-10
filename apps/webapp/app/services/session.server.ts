@@ -46,7 +46,11 @@ export async function getUserSession(
   if (!user?.userId) return undefined;
 
   // Get workspaceId from cookie or fallback to first workspace
-  const workspaceId = await getWorkspaceId(request, user.userId, user.workspaceId);
+  const workspaceId = await getWorkspaceId(
+    request,
+    user.userId,
+    user.workspaceId,
+  );
 
   return {
     userId: user.userId,
@@ -139,7 +143,7 @@ export async function getWorkspaceId(
       isActive: true,
     },
     orderBy: {
-      createdAt: 'asc',
+      createdAt: "asc",
     },
     select: {
       workspaceId: true,

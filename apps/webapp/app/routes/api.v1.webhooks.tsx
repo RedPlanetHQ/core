@@ -19,12 +19,7 @@ export async function action({ request }: ActionFunctionArgs) {
     return apiCors(request, json({ error: "Authentication required" }, { status: 401 }));
   }
 
-  const user = await prisma.user.findUnique({
-    where: { id: authResult.userId },
-    include: { Workspace: true },
-  });
-
-  if (!user?.Workspace) {
+  if (!authResult.workspaceId) {
     return apiCors(request, json({ error: "User workspace not found" }, { status: 400 }));
   }
 
@@ -62,7 +57,7 @@ export async function action({ request }: ActionFunctionArgs) {
           url,
           secret,
           eventTypes,
-          workspaceId: user.Workspace.id,
+          workspaceId: authResult.workspaceId,
           userId: authResult.userId,
           isActive: true,
         },
