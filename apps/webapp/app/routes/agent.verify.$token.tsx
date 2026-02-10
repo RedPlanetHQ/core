@@ -1,5 +1,4 @@
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { CheckCircleIcon } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
@@ -11,7 +10,7 @@ import { setPhoneNumber } from "~/models/user.server";
 import { logger } from "~/services/logger.service";
 
 import { createPersonalAccessTokenFromAuthorizationCode } from "~/services/personalAccessToken.server";
-import { requireUserId } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 
 const ParamsSchema = z.object({
   token: z.string(),
@@ -23,7 +22,7 @@ const SearchParamsSchema = z.object({
 });
 
 export const loader = async ({ request, params }: LoaderFunctionArgs) => {
-  const userId = await requireUserId(request);
+  const { id: userId, workspaceId } = await requireUser(request);
 
   const parsedParams = ParamsSchema.safeParse(params);
 
@@ -56,6 +55,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
     await createPersonalAccessTokenFromAuthorizationCode(
       codeDetails.authorizationCode,
       userId,
+      workspaceId as string,
       "whatsapp",
     );
 

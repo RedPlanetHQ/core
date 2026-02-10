@@ -199,11 +199,11 @@ export async function authenticatePersonalAccessToken(
   if (!workspaceId) {
     const workspace = await prisma.userWorkspace.findFirst({
       where: {
-        userId: personalAccessToken.userId
-      }
-    })
+        userId: personalAccessToken.userId,
+      },
+    });
 
-    workspaceId = workspace?.id ?? null
+    workspaceId = workspace?.id ?? null;
   }
 
   return {
@@ -325,7 +325,7 @@ export async function createPersonalAccessTokenFromAuthorizationCode(
 export async function getOrCreatePersonalAccessToken({
   name,
   userId,
-  workspaceId
+  workspaceId,
 }: CreatePersonalAccessTokenOptions) {
   // Try to find an existing, non-revoked token
   const existing = await prisma.personalAccessToken.findFirst({
@@ -385,7 +385,7 @@ export async function deletePersonalAccessToken(tokenId: string) {
 export async function createPersonalAccessToken({
   name,
   userId,
-  workspaceId
+  workspaceId,
 }: CreatePersonalAccessTokenOptions) {
   const token = createToken();
   const encryptedToken = encryptToken(token);

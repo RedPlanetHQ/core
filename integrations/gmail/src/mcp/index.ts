@@ -87,12 +87,8 @@ function dateToSecondsInTimezone(dateStr: string, timezone?: string): number {
 
     // Parse as if it's in the target timezone by using toLocaleString
     const date = new Date(isoDateStr);
-    const utcDate = new Date(
-      date.toLocaleString('en-US', { timeZone: 'UTC' })
-    );
-    const tzDate = new Date(
-      date.toLocaleString('en-US', { timeZone: timezone })
-    );
+    const utcDate = new Date(date.toLocaleString('en-US', { timeZone: 'UTC' }));
+    const tzDate = new Date(date.toLocaleString('en-US', { timeZone: timezone }));
 
     // Calculate offset and adjust
     const offset = utcDate.getTime() - tzDate.getTime();
@@ -119,7 +115,8 @@ function convertQueryDatesToTimezone(query: string, timezone?: string): string {
   }
 
   // Match date operators: after:, before:, newer:, older:, newer_than:, older_than:
-  const dateOperatorRegex = /(after|before|newer|older|newer_than|older_than):(\d{4}\/\d{1,2}\/\d{1,2})/gi;
+  const dateOperatorRegex =
+    /(after|before|newer|older|newer_than|older_than):(\d{4}\/\d{1,2}\/\d{1,2})/gi;
 
   return query.replace(dateOperatorRegex, (match, operator, dateStr) => {
     const timestamp = dateToSecondsInTimezone(dateStr, timezone);
@@ -775,8 +772,13 @@ export async function callTool(
         const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
         const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
         const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
+        const cc = headers.find(h => h.name?.toLowerCase() === 'cc')?.value || '';
+        const bcc = headers.find(h => h.name?.toLowerCase() === 'bcc')?.value || '';
+        const replyTo = headers.find(h => h.name?.toLowerCase() === 'reply-to')?.value || '';
+        const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
         const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
         const threadId = response.data.threadId || '';
+        const labelIds = response.data.labelIds || [];
 
         // Extract email content using the recursive function
         const { text, html } = extractEmailContent(
@@ -829,11 +831,27 @@ export async function callTool(
                 .join('\n')
             : '';
 
+        // Build header info with optional fields
+        const headerInfo = [
+          `Thread ID: ${threadId}`,
+          `Message ID: ${messageId}`,
+          `Subject: ${subject}`,
+          `From: ${from}`,
+          `To: ${to}`,
+          cc ? `Cc: ${cc}` : null,
+          bcc ? `Bcc: ${bcc}` : null,
+          replyTo && replyTo !== from ? `Reply-To: ${replyTo}` : null,
+          `Date: ${date}`,
+          labelIds.length > 0 ? `Labels: ${labelIds.join(', ')}` : null,
+        ]
+          .filter(Boolean)
+          .join('\n');
+
         return {
           content: [
             {
               type: 'text',
-              text: `Thread ID: ${threadId}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n\n${contentTypeNote}${body}${attachmentInfo}`,
+              text: `${headerInfo}\n\n${contentTypeNote}${body}${attachmentInfo}`,
             },
           ],
         };
@@ -873,7 +891,12 @@ export async function callTool(
           const subject = headers.find(h => h.name?.toLowerCase() === 'subject')?.value || '';
           const from = headers.find(h => h.name?.toLowerCase() === 'from')?.value || '';
           const to = headers.find(h => h.name?.toLowerCase() === 'to')?.value || '';
+          const cc = headers.find(h => h.name?.toLowerCase() === 'cc')?.value || '';
+          const bcc = headers.find(h => h.name?.toLowerCase() === 'bcc')?.value || '';
+          const replyTo = headers.find(h => h.name?.toLowerCase() === 'reply-to')?.value || '';
+          const messageId = headers.find(h => h.name?.toLowerCase() === 'message-id')?.value || '';
           const date = headers.find(h => h.name?.toLowerCase() === 'date')?.value || '';
+          const labelIds = msg.labelIds || [];
 
           // Extract email content
           const { text, html } = extractEmailContent((msg.payload as GmailMessagePart) || {});
@@ -916,7 +939,23 @@ export async function callTool(
                   .join('\n')
               : '';
 
-          return `${'='.repeat(80)}\nMessage ${index + 1} of ${messages.length}\nMessage ID: ${msg.id}\nSubject: ${subject}\nFrom: ${from}\nTo: ${to}\nDate: ${date}\n${'='.repeat(80)}\n\n${contentTypeNote}${body}${attachmentInfo}`;
+          // Build header info with optional fields
+          const headerLines = [
+            `Message ID: ${msg.id}`,
+            messageId ? `Email Message-ID: ${messageId}` : null,
+            `Subject: ${subject}`,
+            `From: ${from}`,
+            `To: ${to}`,
+            cc ? `Cc: ${cc}` : null,
+            bcc ? `Bcc: ${bcc}` : null,
+            replyTo && replyTo !== from ? `Reply-To: ${replyTo}` : null,
+            `Date: ${date}`,
+            labelIds.length > 0 ? `Labels: ${labelIds.join(', ')}` : null,
+          ]
+            .filter(Boolean)
+            .join('\n');
+
+          return `${'='.repeat(80)}\nMessage ${index + 1} of ${messages.length}\n${headerLines}\n${'='.repeat(80)}\n\n${contentTypeNote}${body}${attachmentInfo}`;
         });
 
         const threadSummary = `Thread ID: ${threadId}\nTotal Messages: ${messages.length}\n\n`;
@@ -944,22 +983,31 @@ export async function callTool(
         });
 
         const messages = response.data.messages || [];
+
         const results = await Promise.all(
           messages.map(async msg => {
             const detail = await gmail.users.messages.get({
               userId: 'me',
               id: msg.id!,
               format: 'metadata',
-              metadataHeaders: ['Subject', 'From', 'Date'],
+              metadataHeaders: ['Subject', 'From', 'To', 'Cc', 'Date', 'Reply-To'],
             });
             const headers = detail.data.payload?.headers || [];
             const threadId = detail.data.threadId || '';
+            const snippet = detail.data.snippet || '';
+            const labelIds = detail.data.labelIds || [];
+
             return {
               id: msg.id,
               threadId,
               subject: headers.find(h => h.name === 'Subject')?.value || '',
               from: headers.find(h => h.name === 'From')?.value || '',
+              to: headers.find(h => h.name === 'To')?.value || '',
+              cc: headers.find(h => h.name === 'Cc')?.value || '',
+              replyTo: headers.find(h => h.name === 'Reply-To')?.value || '',
               date: headers.find(h => h.name === 'Date')?.value || '',
+              snippet,
+              labels: labelIds.join(', '),
             };
           })
         );
@@ -971,7 +1019,7 @@ export async function callTool(
               text: results
                 .map(
                   r =>
-                    `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nDate: ${r.date}\n`
+                    `ID: ${r.id}\nThread ID: ${r.threadId}\nSubject: ${r.subject}\nFrom: ${r.from}\nTo: ${r.to}${r.cc ? `\nCc: ${r.cc}` : ''}${r.replyTo ? `\nReply-To: ${r.replyTo}` : ''}\nDate: ${r.date}\nLabels: ${r.labels}\nSnippet: ${r.snippet}\n`
                 )
                 .join('\n'),
             },
