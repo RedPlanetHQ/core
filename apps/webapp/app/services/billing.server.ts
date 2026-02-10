@@ -125,6 +125,10 @@ export async function ensureBillingInitialized(
   workspaceId: string,
   userId: string,
 ) {
+  if (!userId || !workspaceId) {
+    return null;
+  }
+
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
