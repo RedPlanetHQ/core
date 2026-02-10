@@ -18,6 +18,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
 
+  if (!workspace) {
+    return {
+      integrationDefinitions: [],
+      integrationAccounts: [],
+      userId
+    };
+  }
+
   const [integrationDefinitions, integrationAccounts] = await Promise.all([
     getIntegrationDefinitions(workspace.id),
     getIntegrationAccounts(userId as string),

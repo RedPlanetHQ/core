@@ -4,7 +4,7 @@ import {
   type ActionFunctionArgs,
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
-import { requireUser, requireWorkpace } from "~/services/session.server";
+import { requireUser } from "~/services/session.server";
 import { getUsageSummary } from "~/services/billing.server";
 import {
   createCheckoutSession,
@@ -40,14 +40,14 @@ import { SettingSection } from "~/components/setting-section";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
-  const workspace = await requireWorkpace(request);
+
 
   // Get usage summary
-  const usageSummary = await getUsageSummary(workspace.id);
+  const usageSummary = await getUsageSummary(user.workspaceId as string, user.id);
 
   // Get billing history
   const subscription = await prisma.subscription.findUnique({
-    where: { workspaceId: workspace.id },
+    where: { workspaceId: user.workspaceId },
     include: {
       BillingHistory: {
         orderBy: { createdAt: "desc" },
@@ -60,23 +60,23 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   return json({
     user,
-    workspace,
+    workspace: user.workspaceId,
     usageSummary: usageSummary as any,
     billingHistory: subscription?.BillingHistory || [],
     billingEnabled,
     subscription: subscription
       ? {
-          status: subscription.status,
-          planType: subscription.planType,
-          currentPeriodEnd: subscription.currentPeriodEnd,
-        }
+        status: subscription.status,
+        planType: subscription.planType,
+        currentPeriodEnd: subscription.currentPeriodEnd,
+      }
       : null,
   });
 };
 
 export const action = async ({ request }: ActionFunctionArgs) => {
   const user = await requireUser(request);
-  const workspace = await requireWorkpace(request);
+
   const formData = await request.formData();
   const intent = formData.get("intent");
 
@@ -85,7 +85,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const origin = new URL(request.url).origin;
 
     const checkoutUrl = await createCheckoutSession({
-      workspaceId: workspace.id,
+      workspaceId: user.workspaceId as string,
       planType,
       email: user.email,
       successUrl: `${origin}/settings/billing?success=true`,
@@ -99,7 +99,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const origin = new URL(request.url).origin;
 
     const portalUrl = await createBillingPortalSession({
-      workspaceId: workspace.id,
+      workspaceId: user.workspaceId as string,
       returnUrl: `${origin}/settings/billing`,
     });
 
@@ -111,7 +111,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
     // Downgrade subscription - keeps credits until period end, then switches to new plan
     await downgradeSubscription({
-      workspaceId: workspace.id,
+      workspaceId: user.workspaceId as string,
       newPlanType: targetPlan,
     });
 

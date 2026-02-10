@@ -178,7 +178,7 @@ export async function ensureBillingInitialized(
  * Get workspace usage summary
  */
 export async function getUsageSummary(workspaceId: string, userId: string) {
-  if (!workspaceId) {
+  if (!workspaceId || !userId) {
     return null;
   }
 

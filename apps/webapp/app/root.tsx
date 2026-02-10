@@ -54,7 +54,6 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const telemetryEnabled = env.TELEMETRY_ENABLED;
   const user = await getUser(request);
   const workspaceId = await getWorkspaceId(request, user?.id as string) as string;
-
   const usageSummary = await getUsageSummary(workspaceId, user?.id as string);
 
   return typedjson(

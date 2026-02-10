@@ -139,9 +139,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const user = await getUser(request);
   const workspace = await requireWorkpace(request);
 
-  if (!user) {
+  if (!user || !workspace) {
     return redirect("/login");
   }
+
 
   const formData = await request.formData();
   const action = formData.get("action");

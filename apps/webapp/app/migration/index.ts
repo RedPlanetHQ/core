@@ -20,6 +20,93 @@ export const migration = async () => {
     },
   });
 
+  const workspacesNeedingMigration = allWorkspaces.filter((workspace) => {
+    const metadata = workspace.metadata as Record<string, any>;
+    return !metadata || metadata[MIGRATION_KEY] !== true;
+  });
+
+  if (workspacesNeedingMigration.length === 0) {
+    console.log("No workspaces need UserWorkspace migration.");
+    return;
+  }
+
+  console.log(
+    `Found ${workspacesNeedingMigration.length} workspaces that need UserWorkspace records`,
+  );
+
+  // Filter out workspaces that already have UserWorkspace records
+  const workspaceIds = workspacesNeedingMigration.map((w) => w.id);
+  const existingUserWorkspaces = await prisma.userWorkspace.findMany({
+    where: {
+      workspaceId: {
+        in: workspaceIds,
+      },
+    },
+    select: {
+      workspaceId: true,
+      userId: true,
+    },
+  });
+
+  const existingMap = new Set(
+    existingUserWorkspaces.map((uw) => `${uw.workspaceId}:${uw.userId}`),
+  );
+
+  const workspacesToMigrate = workspacesNeedingMigration.filter(
+    (w) => !existingMap.has(`${w.id}:${w.userId}`),
+  );
+
+  if (workspacesToMigrate.length === 0) {
+    console.log(
+      "All workspaces already have UserWorkspace records. Updating metadata...",
+    );
+    await updateWorkspaceMetadata(workspaceIds);
+    return;
+  }
+
+  console.log(
+    `Creating UserWorkspace records for ${workspacesToMigrate.length} workspaces...`,
+  );
+
+  // Create UserWorkspace records in batches using transaction
+  const batchSize = 100;
+  let createdCount = 0;
+
+  for (let i = 0; i < workspacesToMigrate.length; i += batchSize) {
+    const batch = workspacesToMigrate.slice(i, i + batchSize);
+    const batchWorkspaceIds = batch.map((w) => w.id);
+
+    await prisma.$transaction(async (tx) => {
+      // Create UserWorkspace records
+      await tx.userWorkspace.createMany({
+        data: batch.map((workspace) => ({
+          userId: workspace.userId!,
+          workspaceId: workspace.id,
+          role: "OWNER",
+          acceptedAt: new Date(),
+          isActive: true,
+        })),
+        skipDuplicates: true,
+      });
+
+      // Update workspace metadata using efficient JSON merge
+      await tx.$executeRaw`
+        UPDATE "Workspace"
+        SET metadata = metadata || ${JSON.stringify({ [MIGRATION_KEY]: true })}::jsonb
+        WHERE id = ANY(${batchWorkspaceIds}::text[])
+      `;
+    });
+
+    createdCount += batch.length;
+    console.log(
+      `Progress: ${createdCount}/${workspacesToMigrate.length} workspaces migrated`,
+    );
+  }
+
+  console.log(
+    `Migration complete! Created ${createdCount} UserWorkspace records and updated metadata.`,
+  );
+
   // Build user-workspace mapping from all workspaces
   const userWorkspaceMap = allWorkspaces
     .filter((w) => w.userId)
@@ -34,6 +121,19 @@ export const migration = async () => {
   // Populate workspaceId in graph nodes
   await populateGraphWorkspaceIds(userWorkspaceMap);
 };
+
+async function updateWorkspaceMetadata(workspaceIds: string[]) {
+  if (workspaceIds.length === 0) return;
+
+  // Use raw SQL with PostgreSQL's JSON merge operator for efficient bulk update
+  await prisma.$executeRaw`
+    UPDATE "Workspace"
+    SET metadata = metadata || ${JSON.stringify({ [MIGRATION_KEY]: true })}::jsonb
+    WHERE id = ANY(${workspaceIds}::text[])
+  `;
+
+  console.log(`Updated metadata for ${workspaceIds.length} workspaces.`);
+}
 
 async function populateEmbeddingWorkspaceIds(
   userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
@@ -61,34 +161,26 @@ async function populateEmbeddingWorkspaceIds(
       .map((uw) => `WHEN "userId" = '${uw.userId}' THEN '${uw.workspaceId}'`)
       .join(" ");
 
-    await prisma.$transaction(async (tx) => {
-      // Update EpisodeEmbedding
-      const episodeResult = await tx.$executeRaw`
-        UPDATE "episode_embeddings"
-        SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
-        WHERE "userId" = ANY(${userIds}::text[])
-          AND "workspaceId" IS NULL
-      `;
-      totalEpisodes += Number(episodeResult);
+    // Format userIds as a SQL array literal
+    const userIdArray = `ARRAY[${userIds.map((id) => `'${id}'`).join(",")}]::text[]`;
 
-      // Update StatementEmbedding
-      const statementResult = await tx.$executeRaw`
-        UPDATE "statement_embeddings"
-        SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
-        WHERE "userId" = ANY(${userIds}::text[])
-          AND "workspaceId" IS NULL
-      `;
-      totalStatements += Number(statementResult);
+    // Update EpisodeEmbedding
+    const episodeResult = await prisma.$executeRawUnsafe(
+      `UPDATE "episode_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
+    );
+    totalEpisodes += Number(episodeResult);
 
-      // Update EntityEmbedding
-      const entityResult = await tx.$executeRaw`
-        UPDATE "entity_embeddings"
-        SET "workspaceId" = CASE ${Prisma.raw(caseStatements)} END
-        WHERE "userId" = ANY(${userIds}::text[])
-          AND "workspaceId" IS NULL
-      `;
-      totalEntities += Number(entityResult);
-    });
+    // Update StatementEmbedding
+    const statementResult = await prisma.$executeRawUnsafe(
+      `UPDATE "statement_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
+    );
+    totalStatements += Number(statementResult);
+
+    // Update EntityEmbedding
+    const entityResult = await prisma.$executeRawUnsafe(
+      `UPDATE "entity_embeddings" SET "workspaceId" = CASE ${caseStatements} END WHERE "userId" = ANY(${userIdArray}) AND "workspaceId" IS NULL`,
+    );
+    totalEntities += Number(entityResult);
 
     console.log(
       `Progress: ${Math.min(i + batchSize, userWorkspaceMap.length)}/${userWorkspaceMap.length} users processed`,

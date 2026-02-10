@@ -31,7 +31,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { slug } = params;
 
   const [integrationDefinitions, integrationAccounts] = await Promise.all([
-    getIntegrationDefinitions(workspace.id),
+    getIntegrationDefinitions(workspace?.id),
     getIntegrationAccounts(userId),
   ]);
 
@@ -55,7 +55,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   if (activeAccounts.length > 0) {
     ingestionRule = await getIngestionRuleBySource(
       activeAccounts[0].id,
-      workspace.id,
+      workspace?.id as string,
     );
   }
 
@@ -72,6 +72,10 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
   const { slug } = params;
+
+  if (!workspace) {
+    return;
+  }
 
   const formData = await request.formData();
   const ingestionRuleText = formData.get("ingestionRule") as string;

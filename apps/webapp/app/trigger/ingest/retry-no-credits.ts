@@ -4,14 +4,13 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "../utils/prisma";
 import { type IngestBodyRequest, ingestTask } from "./ingest";
-import {
-  estimateCreditsFromTokens,
-  reserveCredits,
-} from "~/services/billing.server";
+
 import { countTokens } from "~/services/search/tokenBudget";
+import { estimateCreditsFromTokens, reserveCredits } from "~/jobs/credit_utils";
 
 export const RetryNoCreditBodyRequest = z.object({
   workspaceId: z.string(),
+  userId: z.string(),
 });
 
 // Register the Trigger.dev task to retry NO_CREDITS episodes
@@ -67,6 +66,7 @@ export const retryNoCreditsTask = task({
           const estimatedCredits = estimateCreditsFromTokens(inputTokens);
           const reserved = await reserveCredits(
             payload.workspaceId,
+            payload.userId,
             estimatedCredits,
           );
 
