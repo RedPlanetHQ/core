@@ -33,20 +33,16 @@ export const loader = createHybridLoaderApiRoute(
     const label = searchParams.label;
     const cursor = searchParams.cursor; // Cursor is a createdAt timestamp
 
-    // Get user and workspace in one query
-    const user = await prisma.user.findUnique({
-      where: { id: authentication.userId },
-      select: { Workspace: { select: { id: true } } },
-    });
 
-    if (!user?.Workspace) {
+
+    if (!authentication.workspaceId) {
       throw new Response("Workspace not found", { status: 404 });
     }
 
     // Get all unique sources from integration accounts
     const integrationAccounts = await prisma.integrationAccount.findMany({
       where: {
-        workspaceId: user.Workspace.id,
+        workspaceId: authentication.workspaceId,
       },
       select: {
         integrationDefinition: {
@@ -63,7 +59,7 @@ export const loader = createHybridLoaderApiRoute(
     const uniqueDataSources = await prisma.$queryRaw<Array<{ source: string }>>`
       SELECT DISTINCT source
       FROM "Document"
-      WHERE "workspaceId" = ${user.Workspace.id}
+      WHERE "workspaceId" = ${authentication.workspaceId}
       AND source IS NOT NULL
     `;
 
@@ -94,7 +90,7 @@ export const loader = createHybridLoaderApiRoute(
 
     // Build where clause for filtering
     const whereClause: any = {
-      workspaceId: user.Workspace.id,
+      workspaceId: authentication.workspaceId,
     };
 
     if (sessionId) {
@@ -168,7 +164,7 @@ export const loader = createHybridLoaderApiRoute(
           prisma.ingestionQueue.findMany({
             where: {
               sessionId: { in: documentIds },
-              workspaceId: user.Workspace.id,
+              workspaceId: authentication.workspaceId,
             },
             select: {
               id: true,
@@ -188,7 +184,7 @@ export const loader = createHybridLoaderApiRoute(
             by: ["sessionId"],
             where: {
               sessionId: { in: documentIds },
-              workspaceId: user.Workspace.id,
+              workspaceId: authentication.workspaceId,
             },
             _count: {
               id: true,

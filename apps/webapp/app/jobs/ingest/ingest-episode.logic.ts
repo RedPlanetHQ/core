@@ -4,7 +4,7 @@ import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
-import { refundCredits } from "~/services/billing.server";
+import { refundCredits } from "../credit_utils";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string().min(20),
@@ -116,6 +116,7 @@ export async function processEpisodeIngestion(
         {
           ...episodeBody,
           userId: payload.userId,
+          workspaceId: payload.workspaceId,
           userName, // Pass user name for user-centric extraction
           queueId: payload.queueId,
         },
@@ -156,9 +157,10 @@ export async function processEpisodeIngestion(
     // Determine status: COMPLETED for success or nothing-to-remember, FAILED otherwise
     const isNothingToRemember =
       !episodeDetails.episodeUuid && episodeDetails.statementsCreated === 0;
-    const currentStatus: IngestionStatus = episodeDetails.episodeUuid || isNothingToRemember
-      ? IngestionStatus.COMPLETED
-      : IngestionStatus.FAILED;
+    const currentStatus: IngestionStatus =
+      episodeDetails.episodeUuid || isNothingToRemember
+        ? IngestionStatus.COMPLETED
+        : IngestionStatus.FAILED;
 
     // Refund reserved credits if nothing was processed (nothing to remember)
     if (isNothingToRemember) {
@@ -169,7 +171,11 @@ export async function processEpisodeIngestion(
         });
         const reservedCredits = (queue?.output as any)?.reservedCredits;
         if (reservedCredits && reservedCredits > 0) {
-          await refundCredits(payload.workspaceId, reservedCredits);
+          await refundCredits(
+            payload.workspaceId,
+            payload.userId,
+            reservedCredits,
+          );
           logger.info(
             `Refunded ${reservedCredits} reserved credits — nothing to remember for ${payload.queueId}`,
           );
@@ -289,7 +295,11 @@ export async function processEpisodeIngestion(
       });
       const reservedCredits = (queue?.output as any)?.reservedCredits;
       if (reservedCredits && reservedCredits > 0) {
-        await refundCredits(payload.workspaceId, reservedCredits);
+        await refundCredits(
+          payload.workspaceId,
+          payload.userId,
+          reservedCredits,
+        );
         logger.info(
           `Refunded ${reservedCredits} reserved credits for failed ingestion ${payload.queueId}`,
         );

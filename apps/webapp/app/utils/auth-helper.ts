@@ -20,6 +20,7 @@ export type AuthenticatedUser = {
     clientId: string;
     scope: string | null;
   };
+  workspaceId?: string;
 };
 
 /**
@@ -50,6 +51,7 @@ export async function requireAuth(request: Request): Promise<AuthenticatedUser> 
           confirmedBasicDetails: user.confirmedBasicDetails,
           onboardingComplete: user.onboardingComplete,
           authMethod: 'pat',
+          workspaceId: patAuth.workspaceId
         };
       }
     }
@@ -73,6 +75,8 @@ export async function requireAuth(request: Request): Promise<AuthenticatedUser> 
           clientId: accessToken.client.clientId,
           scope: accessToken.scope,
         },
+        workspaceId: accessToken.workspaceId
+
       };
     } catch (error) {
       // OAuth2 token validation failed, continue to session auth

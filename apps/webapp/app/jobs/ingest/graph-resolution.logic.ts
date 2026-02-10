@@ -40,7 +40,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
-import { reconcileCredits } from "~/services/billing.server";
+
 import {
   batchGetEntityEmbeddings,
   batchGetStatementEmbeddings,
@@ -48,6 +48,7 @@ import {
   batchDeleteStatementEmbeddings,
 } from "~/services/vectorStorage.server";
 import { type ModelMessage } from "ai";
+import { reconcileCredits } from "../credit_utils";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -79,14 +80,19 @@ export async function processGraphResolution(
     );
 
     // Get episode data for context
-    const episode = await getEpisode(payload.episodeUuid);
+    const episode = await getEpisode(
+      payload.episodeUuid,
+      false,
+      payload.userId,
+      payload.workspaceId,
+    );
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
     }
 
     // Step 0: Deduplicate entities with same name before resolution
     const { count: deduplicatedCount, deletedUuids: deduplicatedEntityUuids } =
-      await deduplicateEntitiesByName(payload.userId);
+      await deduplicateEntitiesByName(payload.userId, payload.workspaceId);
     if (deduplicatedCount > 0) {
       logger.info(
         `Pre-resolution: deduplicated ${deduplicatedCount} entities for user ${payload.userId}`,
@@ -103,6 +109,7 @@ export async function processGraphResolution(
     const triples = await getTriplesForEpisode(
       payload.episodeUuid,
       payload.userId,
+      payload.workspaceId,
     );
 
     if (triples.length === 0) {
@@ -121,6 +128,7 @@ export async function processGraphResolution(
         episode.sessionId,
         payload.userId,
         5,
+        payload.workspaceId,
       );
     }
 
@@ -137,6 +145,7 @@ export async function processGraphResolution(
         episode,
         previousEpisodes,
         tokenMetrics,
+        payload.workspaceId,
       );
 
     logger.info(
@@ -150,6 +159,7 @@ export async function processGraphResolution(
         episode,
         previousEpisodes,
         tokenMetrics,
+        payload.workspaceId,
       );
 
     logger.info(
@@ -158,7 +168,12 @@ export async function processGraphResolution(
 
     // Step 3: Apply entity merges - update references and delete duplicates
     for (const merge of entityMerges) {
-      await mergeEntities(merge.sourceUuid, merge.targetUuid, payload.userId);
+      await mergeEntities(
+        merge.sourceUuid,
+        merge.targetUuid,
+        payload.userId,
+        payload.workspaceId,
+      );
     }
 
     logger.info(`Merged ${entityMerges.length} duplicate entities`);
@@ -184,6 +199,7 @@ export async function processGraphResolution(
           dup.newStatementUuid,
           dup.existingStatementUuid,
           payload.userId,
+          payload.workspaceId,
         );
         totalMoved += moved;
       }
@@ -193,7 +209,11 @@ export async function processGraphResolution(
       const duplicateStatementUuids = duplicateStatements.map(
         (dup) => dup.newStatementUuid,
       );
-      await deleteStatements(duplicateStatementUuids, payload.userId);
+      await deleteStatements(
+        duplicateStatementUuids,
+        payload.userId,
+        payload.workspaceId,
+      );
       logger.info(
         `Processed ${duplicateStatements.length} duplicate statements, moved ${totalMoved} provenance relationships`,
       );
@@ -211,12 +231,13 @@ export async function processGraphResolution(
         statementIds: invalidatedStatements,
         invalidatedBy: payload.episodeUuid,
         userId: payload.userId,
+        workspaceId: payload.workspaceId,
       });
     }
 
     // Step 6: Clean up orphaned entities (entities with no relationships)
     const { count: orphanedCount, deletedUuids: orphanedEntityUuids } =
-      await deleteOrphanedEntities(payload.userId);
+      await deleteOrphanedEntities(payload.userId, payload.workspaceId);
     if (orphanedCount > 0) {
       logger.info(`Deleted ${orphanedCount} orphaned entities`);
 
@@ -245,6 +266,7 @@ export async function processGraphResolution(
         ? await getEpisodeStatements({
             episodeUuid: finalOutput.episodeUuid,
             userId: payload.userId,
+            workspaceId: payload.workspaceId,
           })
         : [];
       const statementsCount = episodeStatements.length;
@@ -307,13 +329,19 @@ export async function processGraphResolution(
       if (reservedCredits > 0) {
         await reconcileCredits(
           payload.workspaceId,
+          payload.userId,
           "addEpisode",
           reservedCredits,
           statementsCount,
         );
       } else {
         // Fallback: no reservation found (legacy path), deduct full amount
-        await deductCredits(payload.workspaceId, "addEpisode", statementsCount);
+        await deductCredits(
+          payload.workspaceId,
+          payload.userId,
+          "addEpisode",
+          statementsCount,
+        );
       }
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
@@ -352,6 +380,7 @@ async function resolveExtractedNodesWithMerges(
     high: { input: number; output: number; total: number; cached: number };
     low: { input: number; output: number; total: number; cached: number };
   },
+  workspaceId: string,
 ): Promise<{
   resolvedTriples: Triple[];
   entityMerges: Array<{ sourceUuid: string; targetUuid: string }>;
@@ -403,6 +432,7 @@ async function resolveExtractedNodesWithMerges(
         limit: 5,
         threshold: 0.7,
         userId: episode.userId,
+        workspaceId: workspaceId,
         excludeUuids: currentEntityIds,
       });
       return {
@@ -550,6 +580,7 @@ async function resolveStatementsWithDuplicates(
     high: { input: number; output: number; total: number; cached: number };
     low: { input: number; output: number; total: number; cached: number };
   },
+  workspaceId: string,
 ): Promise<{
   resolvedStatements: Triple[];
   invalidatedStatements: string[];
@@ -600,11 +631,13 @@ async function resolveStatementsWithDuplicates(
     findContradictoryStatementsBatch({
       pairs: contradictoryPairs,
       userId: episode.userId,
+      workspaceId: workspaceId,
       excludeStatementIds: currentStatementIds,
     }),
     findStatementsWithSameSubjectObjectBatch({
       pairs: subjectObjectPairs,
       userId: episode.userId,
+      workspaceId: workspaceId,
       excludeStatementIds: currentStatementIds,
     }),
     Promise.all(
@@ -612,6 +645,7 @@ async function resolveStatementsWithDuplicates(
         const statements = await getEpisodeStatements({
           episodeUuid: ep.uuid,
           userId: ep.userId,
+          workspaceId: workspaceId,
         });
         return statements;
       }),
@@ -681,6 +715,7 @@ async function resolveStatementsWithDuplicates(
         threshold: 0.7,
         excludeIds,
         userId: triple.provenance.userId,
+        workspaceId: workspaceId,
       });
     }),
   );
@@ -736,6 +771,7 @@ async function resolveStatementsWithDuplicates(
   const allExistingTripleData: Array<StatementNode> = await getStatements({
     statementUuids: Array.from(allStatementIdsToFetch),
     userId,
+    workspaceId,
   });
 
   // Build LLM context

@@ -23,19 +23,14 @@ export const loader = createHybridLoaderApiRoute(
     const query = searchParams.query;
     const skip = (page - 1) * limit;
 
-    // Get user and workspace in one query
-    const user = await prisma.user.findUnique({
-      where: { id: authentication.userId },
-      select: { Workspace: { select: { id: true } } },
-    });
 
-    if (!user?.Workspace) {
+    if (!authentication.userId) {
       throw new Response("Workspace not found", { status: 404 });
     }
 
     // Build where clause for filtering
     const whereClause: any = {
-      workspaceId: user.Workspace.id,
+      workspaceId: authentication.workspaceId,
       deleted: null,
     };
 

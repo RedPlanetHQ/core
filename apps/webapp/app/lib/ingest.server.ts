@@ -3,39 +3,23 @@ import { IngestionStatus } from "@core/database";
 import { EpisodeType } from "@core/types";
 import { type z } from "zod";
 import { prisma } from "~/db.server";
-import {
-  estimateCreditsFromTokens,
-  reserveCredits,
-} from "~/services/billing.server";
+
 import { countTokens } from "~/services/search/tokenBudget";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
+import { estimateCreditsFromTokens, reserveCredits } from "~/jobs/credit_utils";
 
 // Used in the server
 export const addToQueue = async (
   rawBody: z.infer<typeof IngestBodyRequest>,
   userId: string,
+  workspaceId: string,
   activityId?: string,
   ingestionQueueId?: string,
 ) => {
   const body = { ...rawBody, source: rawBody.source.toLowerCase() };
   const sessionId = body.sessionId || crypto.randomUUID();
-
-  const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-    },
-    include: {
-      Workspace: true,
-    },
-  });
-
-  if (!user?.Workspace?.id) {
-    throw new Error(
-      "Workspace ID is required to create an ingestion queue entry.",
-    );
-  }
 
   // Filter out invalid labels if labelIds are provided
   let validatedLabelIds: string[] = [];
@@ -46,7 +30,7 @@ export const addToQueue = async (
         id: {
           in: body.labelIds,
         },
-        workspaceId: user.Workspace.id,
+        workspaceId: workspaceId,
       },
       select: {
         id: true,
@@ -63,7 +47,7 @@ export const addToQueue = async (
     const lastEpisode = await prisma.ingestionQueue.findFirst({
       where: {
         sessionId,
-        workspaceId: user.Workspace?.id,
+        workspaceId: workspaceId,
       },
       orderBy: {
         createdAt: "desc",
@@ -100,7 +84,7 @@ export const addToQueue = async (
       source: body.source,
       status: IngestionStatus.PENDING,
       priority: 1,
-      workspaceId: user.Workspace.id,
+      workspaceId: workspaceId,
       activityId,
       sessionId,
       labels,
@@ -109,10 +93,7 @@ export const addToQueue = async (
   });
 
   // Attempt to reserve credits
-  const reserved = await reserveCredits(
-    user.Workspace.id,
-    estimatedCredits,
-  );
+  const reserved = await reserveCredits(workspaceId, userId, estimatedCredits);
 
   if (reserved === 0) {
     // Mark as NO_CREDITS so it can be retried after purchase
@@ -143,7 +124,7 @@ export const addToQueue = async (
         sessionId,
       },
       userId,
-      workspaceId: user.Workspace.id,
+      workspaceId: workspaceId,
       queueId: queuePersist.id,
     },
     rawBody.delay,

@@ -7,6 +7,7 @@ import { env } from "~/env.server";
 
 export type PersonalAccessTokenAuthenticationResult = {
   userId: string;
+  workspaceId: string;
 };
 
 const EncryptedSecretValueSchema = z.object({
@@ -50,8 +51,22 @@ export async function findUserByToken(
     return null;
   }
 
+  let workspaceId = personalAccessToken.workspaceId;
+
+  if (!workspaceId) {
+    const workspace = await prisma.userWorkspace.findFirst({
+      where: {
+        userId: personalAccessToken.userId,
+      },
+    });
+
+    // Not possible to create a pat without workspace
+    workspaceId = workspace?.workspaceId || "";
+  }
+
   return {
     userId: personalAccessToken.userId,
+    workspaceId,
   };
 }
 

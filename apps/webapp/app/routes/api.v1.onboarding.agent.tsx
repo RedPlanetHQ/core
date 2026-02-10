@@ -2,7 +2,7 @@ import { streamText, tool, type LanguageModel, stepCountIs } from "ai";
 import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getModel } from "~/lib/model.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import { callMemoryTool } from "~/utils/mcp/memory";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
 
@@ -139,11 +139,11 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ authentication }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
     // Check if Gmail is connected
     const gmailAccount = await getIntegrationAccountBySlugAndUser(
       "gmail",
       authentication.userId,
+      authentication?.workspaceId as string,
     );
 
 
@@ -202,7 +202,7 @@ const { loader, action } = createHybridActionApiRoute(
                 maxResults: 50,
               },
               userId: authentication.userId,
-              workspaceId: workspace?.id,
+              workspaceId: authentication.workspaceId,
             },
             authentication.userId,
             "core",
@@ -261,7 +261,7 @@ const { loader, action } = createHybridActionApiRoute(
                 maxResults: 50,
               },
               userId: authentication.userId,
-              workspaceId: workspace?.id,
+              workspaceId: authentication.workspaceId,
             },
             authentication.userId,
             "core",

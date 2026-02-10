@@ -45,6 +45,7 @@ export class SearchService {
   public async search(
     query: string,
     userId: string,
+    workspaceId: string,
     options: SearchOptions = {},
     source?: string,
   ): Promise<
@@ -98,7 +99,7 @@ export class SearchService {
 
     // Note: We still need to extract entities from graph for Episode Graph search
     // The LLM entities are just strings, we need EntityNode objects from the graph
-    const entities = await extractEntitiesFromQuery(query, userId, []);
+    const entities = await extractEntitiesFromQuery(query, userId, workspaceId, []);
     logger.info(
       `Extracted entities ${entities.map((e: EntityNode) => e.name).join(", ")}`,
     );
@@ -122,22 +123,22 @@ export class SearchService {
       episodeGraphResults,
       episodeVectorResults,
     ] = await Promise.all([
-      performBM25Search(query, userId, opts).then((r) => {
+      performBM25Search(query, userId, workspaceId, opts).then((r) => {
         searchTimings.bm25 = Date.now() - searchStartTime;
         logger.info(`BM25 search completed in ${searchTimings.bm25}ms`);
         return r;
       }),
-      performVectorSearch(queryVector, userId, opts).then((r) => {
+      performVectorSearch(queryVector, userId, workspaceId, opts).then((r) => {
         searchTimings.vector = Date.now() - searchStartTime;
         logger.info(`Vector search completed in ${searchTimings.vector}ms`);
         return r;
       }),
-      performBfsSearch(query, queryVector, userId, entities, opts).then((r) => {
+      performBfsSearch(query, queryVector, userId, workspaceId, entities, opts).then((r) => {
         searchTimings.bfs = Date.now() - searchStartTime;
         logger.info(`BFS search completed in ${searchTimings.bfs}ms`);
         return r;
       }),
-      performEpisodeGraphSearch(entities, queryVector, userId, opts).then(
+      performEpisodeGraphSearch(entities, queryVector, userId, workspaceId, opts).then(
         (r) => {
           searchTimings.episodeGraph = Date.now() - searchStartTime;
           logger.info(
@@ -146,7 +147,7 @@ export class SearchService {
           return r;
         },
       ),
-      performEpisodeVectorSearch(queryVector, userId, opts).then((r) => {
+      performEpisodeVectorSearch(queryVector, userId, workspaceId, opts).then((r) => {
         searchTimings.episodeVector = Date.now() - searchStartTime;
         logger.info(
           `Episode vector search completed in ${searchTimings.episodeVector}ms`,
@@ -182,6 +183,7 @@ export class SearchService {
       episodesWithProvenance,
       queryEntityIds,
       userId,
+      workspaceId,
     );
 
     // Assign entity match counts to episodes
@@ -378,6 +380,7 @@ export class SearchService {
 
     this.updateRecallCount(
       userId,
+      workspaceId,
       limitedEpisodes.map((ep) => ep.episode),
       filteredResults.map((item) => item.statement),
     );
@@ -478,6 +481,7 @@ export class SearchService {
 
   private async updateRecallCount(
     userId: string,
+    workspaceId: string,
     episodes: EpisodicNode[],
     statements: StatementNode[],
   ) {
@@ -485,8 +489,8 @@ export class SearchService {
     const statementIds = statements.map((statement) => statement.uuid);
 
     const graphProvider = ProviderFactory.getGraphProvider();
-    await graphProvider.updateEpisodeRecallCount(userId, episodeIds);
-    await graphProvider.updateStatementRecallCount(userId, statementIds);
+    await graphProvider.updateEpisodeRecallCount(userId, episodeIds, workspaceId);
+    await graphProvider.updateStatementRecallCount(userId, statementIds, workspaceId);
   }
 
   /**
@@ -897,6 +901,7 @@ export class SearchService {
     episodes: EpisodeWithProvenance[],
     queryEntityIds: string[],
     userId: string,
+    workspaceId: string,
   ): Promise<Map<string, number>> {
     if (queryEntityIds.length === 0 || episodes.length === 0) {
       return new Map();
@@ -909,6 +914,7 @@ export class SearchService {
       episodeIds,
       queryEntityIds,
       userId,
+      workspaceId,
     );
 
     // Calculate total matches (ensure all values are numbers)

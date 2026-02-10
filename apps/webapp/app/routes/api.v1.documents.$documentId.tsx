@@ -5,7 +5,7 @@ import {
   createHybridActionApiRoute,
   createHybridLoaderApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
-import { getWorkspaceByUser } from "~/models/workspace.server";
+
 import {
   deleteDocument,
   getDocument,
@@ -36,11 +36,11 @@ const loader = createHybridLoaderApiRoute(
     allowJWT: true,
   },
   async ({ params, authentication }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
+
 
     const document = await getDocument(
       params.documentId,
-      workspace?.id as string,
+      authentication.workspaceId as string,
     );
 
     return json({ document });
@@ -57,10 +57,9 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ params, authentication, request }) => {
-    const workspace = await getWorkspaceByUser(authentication.userId);
     const document = await getDocument(
       params.documentId,
-      workspace?.id as string,
+      authentication.workspaceId as string,
     );
 
     if (!document) {
@@ -106,7 +105,7 @@ const { action } = createHybridActionApiRoute(
         // Update the ingestion queue with new labels
         const updatedQueue = await updateDocument(
           params.documentId,
-          workspace?.id as string,
+          authentication.workspaceId as string,
           {
             labelIds: labels,
             title,
@@ -151,7 +150,7 @@ const { action } = createHybridActionApiRoute(
         document as Document,
         content,
         authentication.userId,
-        workspace?.id as string,
+        authentication.workspaceId as string,
       );
 
       return json(response);
@@ -166,7 +165,7 @@ const { action } = createHybridActionApiRoute(
           authentication.userId,
         );
 
-        await deleteDocument(document.id as string, workspace?.id as string);
+        await deleteDocument(document.id as string, authentication.workspaceId as string);
         return json({
           success: true,
           message: "Session deleted successfully",

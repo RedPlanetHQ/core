@@ -183,9 +183,6 @@ export async function findOrCreateGoogleUser({
 export async function getUserById(id: User["id"]) {
   const user = await prisma.user.findUnique({
     where: { id },
-    include: {
-      Workspace: true,
-    },
   });
 
   if (!user) {
