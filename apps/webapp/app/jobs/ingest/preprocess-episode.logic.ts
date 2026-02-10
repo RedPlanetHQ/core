@@ -41,8 +41,9 @@ async function getPreviousVersionEpisodes(
   sessionId: string,
   userId: string,
   previousVersion: number,
+  workspaceId?: string,
 ): Promise<EpisodeEmbedding[]> {
-  const allEpisodes = await getRecentEpisodes(userId, 200, sessionId);
+  const allEpisodes = await getRecentEpisodes(userId, 200, sessionId, undefined, undefined, workspaceId);
 
   // Filter to get only episodes from previous version
   return allEpisodes.filter((ep) => ep.version === previousVersion);
@@ -244,6 +245,7 @@ export async function processEpisodePreprocessing(
             sessionId,
             payload.userId,
             previousVersion,
+            payload.workspaceId,
           );
 
           if (previousVersionEpisodes.length > 0) {
