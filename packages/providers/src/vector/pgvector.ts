@@ -99,7 +99,6 @@ export class PgVectorProvider implements IVectorProvider {
     },
   ] as const;
 
-
   constructor(config: PgVectorConfig) {
     this.prisma = config.prisma;
     // Get dimension from environment variable (same as vector-indexes.server.ts)
@@ -411,16 +410,11 @@ export class PgVectorProvider implements IVectorProvider {
         ? Prisma.sql`AND id::text NOT IN (${Prisma.join(excludeIds.map((id) => Prisma.sql`${id}`))})`
         : Prisma.empty;
 
+    const sessionIdCondition = sessionId
+      ? Prisma.sql`AND "sessionId" = ${sessionId}`
+      : Prisma.empty;
 
-    const sessionIdCondition =
-      sessionId
-        ? Prisma.sql`AND "sessionId" = ${sessionId}`
-        : Prisma.empty;
-
-    const versionCondition =
-      version
-        ? Prisma.sql`AND "version" = ${version}`
-        : Prisma.empty;
+    const versionCondition = version ? Prisma.sql`AND "version" = ${version}` : Prisma.empty;
 
     // const startTime = Date.now();
 
@@ -680,7 +674,7 @@ export class PgVectorProvider implements IVectorProvider {
           where: {
             sessionId,
             userId,
-            workspaceId
+            workspaceId,
           },
           data: {
             labelIds: labelIds,
@@ -692,6 +686,7 @@ export class PgVectorProvider implements IVectorProvider {
         const episodes = await this.prisma.episodeEmbedding.findMany({
           where: {
             sessionId,
+            workspaceId,
             userId,
           },
           select: { id: true, labelIds: true },
@@ -720,7 +715,13 @@ export class PgVectorProvider implements IVectorProvider {
     return await this.prisma.episodeEmbedding.findMany({ where: { ingestionQueueId: queueId } });
   }
 
-  async getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]> {
+  async getRecentEpisodes(
+    userId: string,
+    limit: number,
+    sessionId?: string,
+    excludeIds?: string[],
+    version?: number
+  ): Promise<EpisodeEmbedding[]> {
     return await this.prisma.episodeEmbedding.findMany({
       where: {
         userId,
@@ -728,7 +729,7 @@ export class PgVectorProvider implements IVectorProvider {
         ...(excludeIds && excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         ...(version && { version }),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: limit,
     });
   }

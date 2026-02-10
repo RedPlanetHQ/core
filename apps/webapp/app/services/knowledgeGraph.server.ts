@@ -201,7 +201,7 @@ export class KnowledgeGraphService {
         params.episodeBody,
         params.source,
         params.userId,
-        params.workspaceId,
+        params.workspaceId as string,
         prisma,
         tokenMetrics,
         new Date(params.referenceTime),
@@ -696,7 +696,6 @@ export class KnowledgeGraphService {
     try {
       // Import prisma here to avoid circular dependencies
 
-   
       if (!workspaceId) {
         return null;
       }

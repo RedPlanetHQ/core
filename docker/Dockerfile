@@ -55,16 +55,6 @@ RUN pnpm run build --filter=webapp...
 
 # Runner
 FROM ${NODE_IMAGE} AS runner
-RUN apt-get update && apt-get install -y \
-    openssl \
-    netcat-openbsd \
-    ca-certificates \
-    python3 \
-    python3-pip \
-    python3-venv \
-    gcc \
-    g++ \
-    && rm -rf /var/lib/apt/lists/*
 WORKDIR /core
 RUN corepack enable
 ENV NODE_ENV production
