@@ -57,9 +57,6 @@ class TodoistCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
-      schedule: {
-        frequency: '*/15 * * * *',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://api.todoist.com/oauth/access_token',
