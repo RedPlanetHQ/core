@@ -78,7 +78,7 @@ export interface IVectorProvider {
 
   getEpisodesByQueueId(queueId: string): Promise<EpisodeEmbedding[]>;
 
-  getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]>;
+  getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number, workspaceId?: string): Promise<EpisodeEmbedding[]>;
 
   /**
    * Get provider name

@@ -83,7 +83,6 @@ async function init() {
                 await module.handleMCPRequest(req, res, parsedBody, authenticationResult, queryParams);
             }
             catch (error) {
-                console.log(error);
                 res.status(400).json({ error: "Invalid JSON" });
             }
         });

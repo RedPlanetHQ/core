@@ -87,7 +87,9 @@ export class IntegrationLoader {
     });
 
     if (!account || !account.isActive) {
-      throw new Error(`Integration account '${accountId}' not found or not active.`);
+      throw new Error(
+        `Integration account '${accountId}' not found or not active.`,
+      );
     }
 
     return account;
@@ -139,6 +141,7 @@ export class IntegrationLoader {
     accountId: string,
     toolName: string,
     args: any,
+    timezone: string,
   ): Promise<any> {
     const account = await this.getIntegrationAccountById(accountId);
 
@@ -160,7 +163,10 @@ export class IntegrationLoader {
           executablePath,
           "call-tool",
           "--config",
-          JSON.stringify(account.integrationConfiguration),
+          JSON.stringify({
+            ...account.integrationConfiguration,
+            timezone,
+          }),
           "--integration-definition",
           JSON.stringify(account.integrationDefinition),
           "--tool-name",

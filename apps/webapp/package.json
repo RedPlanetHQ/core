@@ -18,6 +18,7 @@
     "@ai-sdk/anthropic": "^3.0.9",
     "@ai-sdk/google": "^3.0.6",
     "@ai-sdk/openai": "^3.0.7",
+
     "@ai-sdk/react": "3.0.74",
     "@anthropic-ai/sdk": "^0.67.0",
     "@aws-sdk/client-s3": "3.879.0",
@@ -102,6 +103,8 @@
     "emails": "workspace:*",
     "eventsource": "^4.0.0",
     "execa": "^9.6.0",
+    "exa-js": "^1.10.2",
+
     "express": "^4.18.1",
     "fast-sort": "^3.4.0",
     "gpt-tokenizer": "^3.4.0",
@@ -185,11 +188,11 @@
     "postcss": "^8.4.38",
     "postcss-import": "^16.0.1",
     "postcss-loader": "^8.1.1",
-    "prettier": "^3.5.3",
-    "prettier-plugin-tailwindcss": "^0.6.11",
+    "prettier": "^3.8.1",
+    "prettier-plugin-tailwindcss": "^0.7.2",
     "tailwind-scrollbar": "^4.0.2",
-    "tailwindcss": "4.1.7",
-    "tsx": "4.20.6",
+    "tailwindcss": "4.1.18",
+    "tsx": "4.21.0",
     "typescript": "5.8.3",
     "vite": "^6.0.0",
     "vite-tsconfig-paths": "^4.2.1"

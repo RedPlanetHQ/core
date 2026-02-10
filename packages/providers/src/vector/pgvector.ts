@@ -715,16 +715,11 @@ export class PgVectorProvider implements IVectorProvider {
     return await this.prisma.episodeEmbedding.findMany({ where: { ingestionQueueId: queueId } });
   }
 
-  async getRecentEpisodes(
-    userId: string,
-    limit: number,
-    sessionId?: string,
-    excludeIds?: string[],
-    version?: number
-  ): Promise<EpisodeEmbedding[]> {
+  async getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number, workspaceId?: string): Promise<EpisodeEmbedding[]> {
     return await this.prisma.episodeEmbedding.findMany({
       where: {
         userId,
+        ...(workspaceId && { workspaceId }),
         ...(sessionId && { sessionId }),
         ...(excludeIds && excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         ...(version && { version }),

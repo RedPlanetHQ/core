@@ -290,7 +290,7 @@ export async function searchMemoryWithAgent(
     const isV3User = workspace?.version === "V3";
 
     logger.info(
-      `[MemoryAgent] Starting search for intent: "${intent}" (workspace version: ${workspace?.version || "unknown"}, V1 fallback: ${!isV3User})`
+      `[MemoryAgent] Starting search for intent: "${intent}" (workspace version: ${workspace?.version || "unknown"}, V1 fallback: ${!isV3User})`,
     );
 
     // For V3 users: V2 only (no V1 fallback - all their data is V2-compatible)
@@ -307,7 +307,7 @@ export async function searchMemoryWithAgent(
       endTime: options.endTime,
       labelIds: options.labelIds,
       sortBy: options.sortBy,
-      fallbackThreshold: options.fallbackThreshold
+      fallbackThreshold: options.fallbackThreshold,
     });
 
     // Wait for V2 first (it's faster)
@@ -346,7 +346,7 @@ export async function searchMemoryWithAgent(
     }
 
     logger.info(
-      `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? 'yes' : 'no'} using ${usedVersion}`,
+      `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? "yes" : "no"} using ${usedVersion}`,
     );
 
     // If structured option is true, return raw JSON data for API use
@@ -376,17 +376,20 @@ export async function searchMemoryWithAgent(
     // Format facts
     let factsText = "";
     if (facts.length > 0) {
-      factsText = "## Facts\n" + facts
-        .map((fact: any) => {
-          const date = new Date(fact.validAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          });
-          const aspectTag = fact.aspect ? `[${fact.aspect}] ` : "";
-          return `- ${aspectTag}${fact.fact} _(${date})_`;
-        })
-        .join("\n") + "\n\n";
+      factsText =
+        "## Facts\n" +
+        facts
+          .map((fact: any) => {
+            const date = new Date(fact.validAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const aspectTag = fact.aspect ? `[${fact.aspect}] ` : "";
+            return `- ${aspectTag}${fact.fact} _(${date})_`;
+          })
+          .join("\n") +
+        "\n\n";
     }
 
     // Format episodes as readable text
@@ -402,9 +405,11 @@ export async function searchMemoryWithAgent(
       })
       .join("\n\n");
 
-    const finalText = `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
+    const finalText =
+      `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
 
-    const hasContent = episodeText || entityText || invalidFactsText || factsText;
+    const hasContent =
+      episodeText || entityText || invalidFactsText || factsText;
 
     return {
       content: [

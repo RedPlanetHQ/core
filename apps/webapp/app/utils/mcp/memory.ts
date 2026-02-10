@@ -189,7 +189,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
         },
         query: {
           type: "string",
@@ -215,7 +215,7 @@ export const memoryTools = [
         accountId: {
           type: "string",
           description:
-            "Account ID from get_integrations. This identifies the specific integration account to use.",
+            "Account ID (UUID) from get_integrations. This identifies the specific integration account to use.",
         },
         action: {
           type: "string",
@@ -250,7 +250,15 @@ export async function callMemoryTool(
       case "memory_ingest":
         return await handleMemoryIngest({ ...args, userId, source });
       case "memory_search":
-        return await searchMemoryWithAgent(args.intent, userId, args.workspaceId, source);
+        return await searchMemoryWithAgent(
+          args.intent,
+          userId,
+          args.workspaceId,
+          source,
+          {
+            structured: false,
+          },
+        );
       case "get_labels":
         return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
@@ -266,7 +274,11 @@ export async function callMemoryTool(
       case "get_integration_actions":
         return await handleGetIntegrationActions({ ...args });
       case "execute_integration_action":
-        return await handleExecuteIntegrationAction({ ...args, source });
+        return await handleExecuteIntegrationAction({
+          ...args,
+          userId,
+          source,
+        });
       // case "memory_deep_search":
       //   return await handleMemoryDeepSearch({ ...args, userId, source });
       default:

@@ -1,4 +1,4 @@
-import { RiDiscordFill, RiGithubFill, RiMailFill } from "@remixicon/react";
+import { RiGithubFill, RiMailFill } from "@remixicon/react";
 import { LayoutGrid } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
@@ -21,11 +21,13 @@ import { GoogleDocs } from "./icons/google-docs";
 import { CalCom } from "./icons/cal_com";
 import { Notion } from "./icons/notion";
 import { Zoho } from "./icons/zoho";
+import { Hubspot } from "./icons/hubspot";
+import { Discord } from "./icons/discord";
+import { Todoist } from "./icons/todoist";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
   email: RiMailFill,
-  discord: RiDiscordFill,
   github: RiGithubFill,
 
   gmail: Gmail,
@@ -52,6 +54,9 @@ export const ICON_MAPPING = {
   cal_com: CalCom,
   notion: Notion,
   zoho: Zoho,
+  hubspot: Hubspot,
+  discord: Discord,
+  todoist: Todoist,
 
   // Default icon
   integration: LayoutGrid,

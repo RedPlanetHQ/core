@@ -472,8 +472,53 @@ export async function handleRelationship(
 
 
 /**
+ * Apply vector similarity reranking using batchScore
+ * Embeds the query, scores episodes by cosine similarity, sorts by score
+ */
+async function applyVectorReranking(
+  episodes: EpisodicNode[],
+  query: string,
+  maxEpisodes: number,
+  threshold: number,
+): Promise<RankedEpisode[]> {
+  const startTime = Date.now();
+  const queryEmbedding = await getEmbedding(query);
+
+  if (!queryEmbedding || queryEmbedding.length === 0) {
+    logger.warn("[Reranking:vector] Failed to get query embedding, returning original order");
+    return episodes.slice(0, maxEpisodes);
+  }
+
+  const vectorProvider = ProviderFactory.getVectorProvider();
+  const episodeUuids = episodes.map((ep) => ep.uuid);
+
+  const scores = await vectorProvider.batchScore({
+    vector: queryEmbedding,
+    ids: episodeUuids,
+    namespace: VECTOR_NAMESPACES.EPISODE,
+  });
+
+  // Attach scores and sort by similarity descending
+  const scored = episodes
+    .map((ep) => ({
+      ...ep,
+      relevanceScore: scores.get(ep.uuid) ?? 0,
+    }))
+    .filter((ep) => ep.relevanceScore >= threshold)
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, maxEpisodes);
+
+  logger.info(
+    `[Reranking:vector] ${episodes.length} → ${scored.length} episodes in ${Date.now() - startTime}ms ` +
+    `(threshold ${threshold}, top: ${scored[0]?.relevanceScore?.toFixed(3) ?? "N/A"})`
+  );
+
+  return scored;
+}
+
+/**
  * Apply episode reranking if enabled
- * Returns reranked episodes with relevance scores
+ * Uses Cohere when available, falls back to vector similarity
  */
 async function applyEpisodeReranking(
   episodes: EpisodicNode[],
@@ -489,38 +534,46 @@ async function applyEpisodeReranking(
     return episodes.slice(0, maxEpisodes);
   }
 
-  try {
-    // Format for applyCohereEpisodeReranking
-    const episodesForRerank = episodes.map((ep) => ({
-      episode: {
-        uuid: ep.uuid,
-        content: ep.content,
-        originalContent: ep.originalContent || ep.content,
-      },
-    }));
+  // Use Cohere if API key is configured
+  if (process.env.COHERE_API_KEY) {
+    try {
+      const episodesForRerank = episodes.map((ep) => ({
+        episode: {
+          uuid: ep.uuid,
+          content: ep.content,
+          originalContent: ep.originalContent || ep.content,
+        },
+      }));
 
-    const reranked = await applyCohereEpisodeReranking(query, episodesForRerank, {
-      limit: maxEpisodes,
-      model: "rerank-v3.5",
-    });
-
-    // Map back with relevance scores and filter low scores
-    const rerankedEpisodes = reranked
-      .filter((r: any) => r.cohereScore >= RELEVANCE_THRESHOLD)
-      .map((r: any) => {
-        const original = episodes.find((e) => e.uuid === r.episode.uuid)!;
-        return {
-          ...original,
-          relevanceScore: r.cohereScore,
-        };
+      const reranked = await applyCohereEpisodeReranking(query, episodesForRerank, {
+        limit: maxEpisodes,
+        model: "rerank-v3.5",
       });
 
-    logger.info(
-      `[Reranking] Reranked ${episodes.length} episodes to ${rerankedEpisodes.length} (threshold ${RELEVANCE_THRESHOLD})`
-    );
-    return rerankedEpisodes;
+      const rerankedEpisodes = reranked
+        .filter((r: any) => r.cohereScore >= RELEVANCE_THRESHOLD)
+        .map((r: any) => {
+          const original = episodes.find((e) => e.uuid === r.episode.uuid)!;
+          return {
+            ...original,
+            relevanceScore: r.cohereScore,
+          };
+        });
+
+      logger.info(
+        `[Reranking:cohere] ${episodes.length} → ${rerankedEpisodes.length} episodes (threshold ${RELEVANCE_THRESHOLD})`
+      );
+      return rerankedEpisodes;
+    } catch (error) {
+      logger.warn(`[Reranking:cohere] Failed, falling back to vector reranking: ${error}`);
+    }
+  }
+
+  // Fallback: vector similarity reranking
+  try {
+    return await applyVectorReranking(episodes, query, maxEpisodes, RELEVANCE_THRESHOLD);
   } catch (error) {
-    logger.warn(`[Reranking] Failed, using original order: ${error}`);
+    logger.warn(`[Reranking:vector] Failed, using original order: ${error}`);
     return episodes.slice(0, maxEpisodes);
   }
 }

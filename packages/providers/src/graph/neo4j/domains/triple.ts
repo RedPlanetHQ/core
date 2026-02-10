@@ -1,11 +1,11 @@
 import type { Triple, StatementNode, EntityNode } from "@core/types";
-import {
-  parseStatementNode,
-  parseEntityNode,
-  parseEpisodicNode,
-} from "../parsers";
+import { parseStatementNode, parseEntityNode, parseEpisodicNode } from "../parsers";
 import type { Neo4jCore } from "../core";
-import { ENTITY_NODE_PROPERTIES, EPISODIC_NODE_PROPERTIES, STATEMENT_NODE_PROPERTIES } from "../types";
+import {
+  ENTITY_NODE_PROPERTIES,
+  EPISODIC_NODE_PROPERTIES,
+  STATEMENT_NODE_PROPERTIES,
+} from "../types";
 
 export function createTripleMethods(core: Neo4jCore & any) {
   return {
@@ -80,7 +80,11 @@ export function createTripleMethods(core: Neo4jCore & any) {
                ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
       `;
 
-      const result = await core.runQuery(query, { episodeUuid, userId, ...(workspaceId && { workspaceId }) });
+      const result = await core.runQuery(query, {
+        episodeUuid,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       return result.map((record: any) => ({
         statement: parseStatementNode(record.get("statement")),
@@ -114,7 +118,11 @@ export function createTripleMethods(core: Neo4jCore & any) {
                ${EPISODIC_NODE_PROPERTIES.replace(/e\./g, "episode.")} as episode
       `;
 
-      const result = await core.runQuery(query, { statementUuids, userId, ...(workspaceId && { workspaceId }) });
+      const result = await core.runQuery(query, {
+        statementUuids,
+        userId,
+        ...(workspaceId && { workspaceId }),
+      });
 
       const triplesMap = new Map<string, Triple>();
       result.forEach((record: any) => {

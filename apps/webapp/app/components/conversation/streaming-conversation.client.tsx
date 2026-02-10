@@ -25,7 +25,7 @@ export const StreamingConversation = ({
     "Still thinking...",
     "Deep in thought...",
     "Processing at light speed...",
-    "Loading SOL...",
+    "Loading brain...",
     "Establishing Mars connection...",
     "Consulting the Martian archives...",
     "Calculating in Mars time...",

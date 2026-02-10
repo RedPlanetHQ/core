@@ -384,8 +384,8 @@ export async function getEpisodeByQueueId(queueId: string): Promise<EpisodeEmbed
   return await vectorProvider().getEpisodesByQueueId(queueId);
 }
 
-export async function getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]> {
-  return await vectorProvider().getRecentEpisodes(userId, limit, sessionId, excludeIds, version);
+export async function getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number, workspaceId?: string): Promise<EpisodeEmbedding[]> {
+  return await vectorProvider().getRecentEpisodes(userId, limit, sessionId, excludeIds, version, workspaceId);
 }
 
 // ==================== COMPACTED SESSION EMBEDDINGS ====================

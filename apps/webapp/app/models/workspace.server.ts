@@ -31,7 +31,11 @@ export async function createWorkspace(
       slug,
       name: input.name,
       version: "V3",
-      userId: input.userId,
+      UserWorkspace: {
+        create: {
+          userId: input.userId,
+        },
+      },
     },
   });
 
