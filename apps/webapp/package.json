@@ -153,7 +153,8 @@
     "zod": "3.25.76",
     "zod-error": "2.0.0",
     "zod-validation-error": "^5.0.0",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "ws": "8.19.0"
   },
   "devDependencies": {
     "@remix-run/dev": "2.17.4",
@@ -172,6 +173,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-virtualized": "^9.22.0",
     "@types/simple-oauth2": "^5.0.7",
+    "@types/ws": "^8.5.10",
     "@typescript-eslint/eslint-plugin": "^6.7.4",
     "@typescript-eslint/parser": "^6.7.4",
     "autoprefixer": "^10.4.19",

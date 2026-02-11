@@ -384,6 +384,44 @@ model MCPSession {
   deleted   DateTime?
 }
 
+model Gateway {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  name        String
+  description String?
+
+  // Supported tools - stored as JSON array of { name, description, inputSchema? }
+  tools Json @default("{}")
+
+  // Connection status
+  status         GatewayStatus @default(DISCONNECTED)
+  lastSeenAt     DateTime?
+  connectedAt    DateTime?
+  disconnectedAt DateTime?
+
+  // Client metadata
+  clientVersion String?
+  platform      String? // "darwin", "linux", "win32"
+  hostname      String?
+
+  // Relations
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, status])
+}
+
+enum GatewayStatus {
+  CONNECTED
+  DISCONNECTED
+}
+
 model OAuthAuthorizationCode {
   id String @id @default(cuid())
 
@@ -765,6 +803,7 @@ model User {
   EpisodeEmbedding          EpisodeEmbedding[]
   EntityEmbedding           EntityEmbedding[]
   CompactedSessionEmbedding CompactedSessionEmbedding[]
+  Gateway                   Gateway[]
 }
 
 model UserUsage {
@@ -895,6 +934,7 @@ model Workspace {
   statementEmbeddings     StatementEmbedding[]
   episodeEmbeddings       EpisodeEmbedding[]
   entityEmbeddings        EntityEmbedding[]
+  gateways                Gateway[]
 }
 
 enum PlanType {
