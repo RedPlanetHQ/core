@@ -4,7 +4,6 @@ import { addToQueue } from "~/lib/ingest.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "~/services/search.server";
 import { hasCredits } from "~/services/billing.server";
-import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
 import { getUserDocuments } from "~/services/ingestionLogs.server";
 import { getDocument, getPersonaForUser } from "~/services/document.server";
@@ -18,7 +17,20 @@ const labelService = new LabelService();
 export async function handleUserProfile(workspaceId: string) {
   try {
     const personaId = await getPersonaForUser(workspaceId);
-    const personaDocument = await getDocument(personaId!, workspaceId);
+
+    if (!personaId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No profile information available",
+          },
+        ],
+        isError: false,
+      };
+    }
+
+    const personaDocument = await getDocument(personaId, workspaceId);
 
     const personaContent = personaDocument?.content ?? null;
 
