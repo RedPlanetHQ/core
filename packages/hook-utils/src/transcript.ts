@@ -33,7 +33,7 @@ function extractMessageContent(parsed: any): string {
   }
 }
 
-const DEFAULTS = ["[Request interrupted by user for tool use]"];
+const DEFAULTS = ["[Request interrupted by user for tool use]", "[Request interrupted by user]"];
 
 /**
  * Extract the last assistant message and all user messages that came before it

@@ -12,17 +12,13 @@ export async function integrationCreate(
   let userName = null;
 
   try {
-    const userInfoResponse = await axios.get('https://api.todoist.com/sync/v9/sync', {
+    const userInfoResponse = await axios.get('https://api.todoist.com/api/v1/user', {
       headers: {
         Authorization: `Bearer ${oauthResponse.access_token}`,
       },
-      params: {
-        sync_token: '*',
-        resource_types: '["user"]',
-      },
     });
 
-    const userData = userInfoResponse.data.user;
+    const userData = userInfoResponse.data;
     userEmail = userData.email;
     userId = userData.id;
     userName = userData.full_name;
@@ -37,12 +33,14 @@ export async function integrationCreate(
     scope: oauthResponse.scope,
     userEmail: userEmail,
     userId: userId,
-    userName: userName,
     redirect_uri: oauthParams.redirect_uri || null,
   };
 
   const payload = {
-    settings: {},
+    settings: {
+      userName: userName,
+      userEmail: userEmail,
+    },
     accountId: integrationConfiguration.userEmail || integrationConfiguration.userId,
     config: integrationConfiguration,
   };

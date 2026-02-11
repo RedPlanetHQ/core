@@ -2,7 +2,14 @@ import { useEffect, useState } from 'react';
 import { Text } from 'ink';
 import zod from 'zod';
 import { getPreferences } from '@/config/preferences';
-import { isPidRunning } from '@/utils/process';
+import {
+	getServiceType,
+	getServiceName,
+	isServiceInstalled,
+	getServiceStatus,
+} from '@/utils/service-manager/index';
+import { getLaunchdServicePid } from '@/utils/service-manager/launchd';
+import { getSystemdServicePid } from '@/utils/service-manager/systemd';
 import InfoMessage from '@/components/info-message';
 import ErrorMessage from '@/components/error-message';
 import { ThemeContext } from '@/hooks/useTheme';
@@ -16,10 +23,12 @@ type Props = {
 
 interface GatewayStatus {
 	running: boolean;
+	installed: boolean;
 	port?: number;
 	pid?: number;
 	startedAt?: number;
 	uptime?: string;
+	serviceType?: 'launchd' | 'systemd';
 }
 
 function formatUptime(startedAt: number): string {
@@ -36,9 +45,10 @@ function formatUptime(startedAt: number): string {
 }
 
 export default function GatewayStatus(_props: Props) {
-	const [status, setStatus] = useState<'loading' | 'ready'>('loading');
+	const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
 	const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>({
 		running: false,
+		installed: false,
 	});
 
 	useEffect(() => {
@@ -46,33 +56,58 @@ export default function GatewayStatus(_props: Props) {
 
 		(async () => {
 			try {
-				const prefs = getPreferences();
+				const serviceType = getServiceType();
 
-				if (!prefs.gateway?.pid) {
+				if (serviceType === 'none') {
 					if (!cancelled) {
-						setGatewayStatus({ running: false });
+						setStatus('unsupported');
+					}
+					return;
+				}
+
+				const serviceName = getServiceName();
+				const installed = await isServiceInstalled(serviceName);
+
+				if (!installed) {
+					if (!cancelled) {
+						setGatewayStatus({ running: false, installed: false });
 						setStatus('ready');
 					}
 					return;
 				}
 
-				const running = isPidRunning(prefs.gateway.pid);
+				const serviceStatus = await getServiceStatus(serviceName);
+				const running = serviceStatus === 'running';
+
+				// Get PID
+				let pid: number | null = null;
+				if (running) {
+					if (serviceType === 'launchd') {
+						pid = getLaunchdServicePid(serviceName);
+					} else if (serviceType === 'systemd') {
+						pid = getSystemdServicePid(serviceName);
+					}
+				}
+
+				const prefs = getPreferences();
 
 				if (!cancelled) {
 					setGatewayStatus({
 						running,
-						port: prefs.gateway.port,
-						pid: prefs.gateway.pid,
-						startedAt: prefs.gateway.startedAt,
-						uptime: prefs.gateway.startedAt
+						installed: true,
+						port: prefs.gateway?.port,
+						pid: pid || undefined,
+						startedAt: prefs.gateway?.startedAt,
+						uptime: prefs.gateway?.startedAt
 							? formatUptime(prefs.gateway.startedAt)
 							: undefined,
+						serviceType: serviceType === 'launchd' ? 'launchd' : 'systemd',
 					});
 					setStatus('ready');
 				}
-			} catch (err) {
+			} catch {
 				if (!cancelled) {
-					setGatewayStatus({ running: false });
+					setGatewayStatus({ running: false, installed: false });
 					setStatus('ready');
 				}
 			}
@@ -83,15 +118,31 @@ export default function GatewayStatus(_props: Props) {
 		};
 	}, []);
 
+	const getServiceTypeLabel = () => {
+		if (gatewayStatus.serviceType === 'launchd') return 'launchd (macOS)';
+		if (gatewayStatus.serviceType === 'systemd') return 'systemd (Linux)';
+		return 'unknown';
+	};
+
 	return (
 		<ThemeContext.Provider value={themeContextValue}>
 			{status === 'loading' ? (
 				<Text dimColor>Checking gateway status...</Text>
+			) : status === 'unsupported' ? (
+				<ErrorMessage message="Service management not supported on this platform." />
+			) : !gatewayStatus.installed ? (
+				<ErrorMessage
+					message="Gateway not installed.\n\nStart with: corebrain gateway on"
+					hideTitle
+				/>
 			) : !gatewayStatus.running ? (
-				<ErrorMessage message="Gateway is not running" hideTitle />
+				<ErrorMessage
+					message="Gateway installed but stopped.\n\nStart with: corebrain gateway on"
+					hideTitle
+				/>
 			) : (
 				<InfoMessage
-					message={`Gateway Status: Running\n\nPort: ${gatewayStatus.port}\nPID: ${gatewayStatus.pid}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI Base URL: http://localhost:${gatewayStatus.port}\n\nEndpoints:\n  POST   /sessions          Create new session\n  GET    /sessions          List all sessions\n  GET    /sessions/:id      Get session details\n  DELETE /sessions/:id      Kill session`}
+					message={`Gateway: Running\n\nService: ${getServiceTypeLabel()}\nPort: ${gatewayStatus.port || 3456}\nPID: ${gatewayStatus.pid || 'unknown'}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI: http://localhost:${gatewayStatus.port || 3456}`}
 				/>
 			)}
 		</ThemeContext.Provider>
