@@ -64,10 +64,15 @@ export interface AppConfig  {
 	}[];
 }
 
+export type ServiceType = 'launchd' | 'systemd' | 'manual';
+
 export interface GatewayConfig {
 	port: number;
 	pid: number;
 	startedAt: number;
+	serviceInstalled?: boolean;
+	serviceType?: ServiceType;
+	serviceName?: string;
 }
 
 export interface UserPreferences {

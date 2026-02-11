@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import {
   getTasks,
   getTask,
@@ -31,7 +32,10 @@ const CreateTaskSchema = z.object({
   content: z.string().describe('Task content/title'),
   description: z.string().optional().describe('Task description'),
   project_id: z.string().optional().describe('Project ID to add the task to'),
-  due_string: z.string().optional().describe('Human-readable due date (e.g., "tomorrow", "next Monday")'),
+  due_string: z
+    .string()
+    .optional()
+    .describe('Human-readable due date (e.g., "tomorrow", "next Monday")'),
   due_date: z.string().optional().describe('Due date in YYYY-MM-DD format'),
   priority: z.number().min(1).max(4).optional().describe('Priority from 1 (normal) to 4 (urgent)'),
   labels: z.array(z.string()).optional().describe('Array of label names'),
@@ -43,7 +47,12 @@ const UpdateTaskSchema = z.object({
   description: z.string().optional().describe('New task description'),
   due_string: z.string().optional().describe('New human-readable due date'),
   due_date: z.string().optional().describe('New due date in YYYY-MM-DD format'),
-  priority: z.number().min(1).max(4).optional().describe('New priority from 1 (normal) to 4 (urgent)'),
+  priority: z
+    .number()
+    .min(1)
+    .max(4)
+    .optional()
+    .describe('New priority from 1 (normal) to 4 (urgent)'),
   labels: z.array(z.string()).optional().describe('New array of label names'),
 });
 
@@ -181,10 +190,13 @@ export async function callTool(
     switch (name) {
       case 'get_tasks': {
         const validatedArgs = GetTasksSchema.parse(args);
-        const tasks = await getTasks(config, validatedArgs.project_id ? { project_id: validatedArgs.project_id } : undefined);
+        const tasks = await getTasks(
+          config,
+          validatedArgs.project_id ? { project_id: validatedArgs.project_id } : undefined
+        );
 
         const tasksText = tasks
-          .map((task) => {
+          .map(task => {
             const priority = formatPriority(task.priority);
             const dueDate = formatDueDate(task.due);
             return `ID: ${task.id}\nContent: ${task.content}\nPriority: ${priority}\n${dueDate}\nURL: ${task.url}\n`;
@@ -195,7 +207,10 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: tasks.length > 0 ? `Found ${tasks.length} tasks:\n\n${tasksText}` : 'No tasks found.',
+              text:
+                tasks.length > 0
+                  ? `Found ${tasks.length} tasks:\n\n${tasksText}`
+                  : 'No tasks found.',
             },
           ],
         };
@@ -306,14 +321,20 @@ export async function callTool(
         const projects = await getProjects(config);
 
         const projectsText = projects
-          .map((project) => `ID: ${project.id}\nName: ${project.name}\nColor: ${project.color}\nFavorite: ${project.is_favorite}\nURL: ${project.url}\n`)
+          .map(
+            project =>
+              `ID: ${project.id}\nName: ${project.name}\nColor: ${project.color}\nFavorite: ${project.is_favorite}\nURL: ${project.url}\n`
+          )
           .join('\n');
 
         return {
           content: [
             {
               type: 'text',
-              text: projects.length > 0 ? `Found ${projects.length} projects:\n\n${projectsText}` : 'No projects found.',
+              text:
+                projects.length > 0
+                  ? `Found ${projects.length} projects:\n\n${projectsText}`
+                  : 'No projects found.',
             },
           ],
         };
