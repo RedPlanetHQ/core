@@ -195,8 +195,8 @@ export class KnowledgeGraphService {
         }
       }
 
-      console.log("previousEpisodes: ", previousEpisodes);
-      console.log("previousVersionContent: ", previousVersionContent);
+      // console.log("previousEpisodes: ", previousEpisodes);
+      // console.log("previousVersionContent: ", previousVersionContent);
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
@@ -239,6 +239,7 @@ export class KnowledgeGraphService {
         normalizedEpisodeBody,
         episodeEmbedding,
         params.userId,
+        params.workspaceId as string,
         params.queueId,
         params.labelIds || [],
         params.sessionId,
@@ -314,6 +315,7 @@ export class KnowledgeGraphService {
             embedding: factEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingStoreEndTime = Date.now();
         logger.log(
@@ -328,6 +330,7 @@ export class KnowledgeGraphService {
             embedding: entityEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingEntityStoreEndTime = Date.now();
         logger.log(

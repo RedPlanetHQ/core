@@ -34,7 +34,7 @@ export async function checkPersonaUpdateThreshold(
     const latestPersona = await prisma.ingestionQueue.findFirst({
       where: {
         sessionId: personaSessionId,
-        workspaceId: workspaceId,
+        workspaceId,
         status: "COMPLETED",
       },
       orderBy: {

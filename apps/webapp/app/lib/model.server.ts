@@ -1,4 +1,10 @@
-import { embed, generateText, generateObject, streamText, type ModelMessage } from "ai";
+import {
+  embed,
+  generateText,
+  generateObject,
+  streamText,
+  type ModelMessage,
+} from "ai";
 import { type z } from "zod";
 import {
   createOpenAI,
@@ -222,6 +228,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   if (model.includes("gpt")) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `structured-${complexity}`,
+      strictJsonSchema: false,
     };
 
     if (model.startsWith("gpt-5")) {
@@ -246,6 +253,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     model: modelInstance,
     schema,
     messages,
+
     ...generateObjectOptions,
   });
 
@@ -264,7 +272,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     );
   }
 
-  return { object, usage: tokenUsage };
+  return { object: object as any, usage: tokenUsage };
 }
 
 /**
