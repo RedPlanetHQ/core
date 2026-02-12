@@ -187,6 +187,7 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     createdAt: new Date(raw.createdAt),
     validAt: new Date(raw.validAt),
     userId: raw.userId,
+    workspaceId: raw.workspaceId || undefined,
     labelIds: raw.labelIds || [],
     sessionId: raw.sessionId || undefined,
     recallCount: raw.recallCount || undefined,

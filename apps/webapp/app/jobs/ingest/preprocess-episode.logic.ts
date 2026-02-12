@@ -411,6 +411,7 @@ export async function processEpisodePreprocessing(
           validAt: new Date(chunk.referenceTime),
           labelIds: chunk.labelIds || [],
           userId: payload.userId,
+          workspaceId: payload.workspaceId,
           sessionId: chunk.sessionId!,
           queueId: payload.queueId,
           type: chunk.type,

@@ -92,6 +92,7 @@ export class KnowledgeGraphService {
           validAt: new Date(params.referenceTime),
           labelIds: params.labelIds || [],
           userId: params.userId,
+          workspaceId: params.workspaceId,
           sessionId: params.sessionId,
           queueId: params.queueId,
           type: params.type,
@@ -420,6 +421,7 @@ export class KnowledgeGraphService {
         nameEmbedding: [],
         createdAt: new Date(),
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
       entityMap.set(entity.name.toLowerCase(), entityNode);
     }
@@ -437,6 +439,7 @@ export class KnowledgeGraphService {
           nameEmbedding: null as any,
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         });
       }
     }
@@ -456,6 +459,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.source.toLowerCase(), subjectNode);
       }
@@ -473,6 +477,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.target.toLowerCase(), objectNode);
       }
@@ -498,6 +503,7 @@ export class KnowledgeGraphService {
         attributes,
         aspect: stmt.aspect || null,
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
 
       return {

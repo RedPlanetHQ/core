@@ -18,7 +18,7 @@ export async function saveTriple(triple: Triple, workspaceId?: string): Promise<
     object: triple.object,
     episodeUuid: triple.provenance.uuid,
     userId: triple.provenance.userId,
-    workspaceId: workspaceId ?? "",
+    workspaceId: workspaceId ?? triple.provenance.workspaceId ?? "",
   });
 }
 
