@@ -40,8 +40,6 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
 
   const searchParams = SearchParamsSchema.safeParse(searchObject);
 
-  const source =
-    (searchParams.success ? searchParams.data.source : undefined) ?? "cli";
   const clientName =
     (searchParams.success ? searchParams.data.clientName : undefined) ??
     "unknown";
@@ -60,6 +58,12 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       );
 
     const invitation = await getInvitation(codeDetails.invitationId);
+
+    // Use invitation source if available, otherwise use search param or default to "cli"
+    const source =
+      invitation?.source ??
+      (searchParams.success ? searchParams.data.source : undefined) ??
+      "cli";
 
     // Link whatsapp number with user
     if (invitation && invitation.source === "whatsapp") {
@@ -80,11 +84,15 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       throw error;
     }
 
+    // For error cases, try to get source from search params or default to "cli"
+    const fallbackSource =
+      (searchParams.success ? searchParams.data.source : undefined) ?? "cli";
+
     if (error instanceof Error) {
       return typedjson({
         success: false as const,
         error: error.message,
-        source,
+        source: fallbackSource,
         clientName,
       });
     }
