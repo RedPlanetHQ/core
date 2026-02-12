@@ -598,6 +598,9 @@ importers:
       react:
         specifier: ^19.2.4
         version: 19.2.4
+      ws:
+        specifier: ^8.18.0
+        version: 8.19.0
       zod:
         specifier: ^4.3.6
         version: 4.3.6
@@ -614,6 +617,9 @@ importers:
       '@types/react':
         specifier: ^19.2.13
         version: 19.2.13
+      '@types/ws':
+        specifier: ^8.5.13
+        version: 8.18.1
       '@vdemedes/prettier-config':
         specifier: ^2.0.1
         version: 2.0.1

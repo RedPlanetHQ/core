@@ -27,13 +27,14 @@
 		"ink": "^6.6.0",
 		"pastel": "^4.0.0",
 		"react": "^19.2.4",
-		"zod": "^4.3.6",
-		"zod-to-json-schema": "^3.25.1"
+		"ws": "^8.18.0",
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^8.1.0",
 		"@types/node": "18",
 		"@types/react": "^19.2.13",
+		"@types/ws": "^8.5.13",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^6.4.1",
 		"chalk": "^5.2.0",

@@ -117,19 +117,19 @@ export async function processSessionCompaction(
     // Generate or update compaction
     const compactionResult = existingCompact
       ? await updateCompaction(
-        existingCompact,
-        episodes,
-        userId,
-        workspaceId,
-        source,
-      )
+          existingCompact,
+          episodes,
+          userId,
+          workspaceId,
+          source,
+        )
       : await createCompaction(
-        sessionId,
-        episodes,
-        userId,
-        workspaceId,
-        source,
-      );
+          sessionId,
+          episodes,
+          userId,
+          workspaceId,
+          source,
+        );
 
     if (compactionResult) {
       logger.info(`Session compaction completed`, {
@@ -578,7 +578,12 @@ export async function shouldTriggerCompaction(
 
   if (!existingCompact) {
     // Check if we have enough episodes for initial compaction
-    const episodes = await getSessionEpisodes(sessionId, userId, undefined, workspaceId);
+    const episodes = await getSessionEpisodes(
+      sessionId,
+      userId,
+      undefined,
+      workspaceId,
+    );
     return episodes.length >= CONFIG.minEpisodesForCompaction;
   }
 

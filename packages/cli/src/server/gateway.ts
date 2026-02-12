@@ -1,5 +1,11 @@
-import { createServer, IncomingMessage, ServerResponse } from 'node:http';
-import { createSession, killSession, getSessionContent, listSessions, sessionExists } from '@/utils/tmux';
+import {createServer, IncomingMessage, ServerResponse} from 'node:http';
+import {
+	createSession,
+	killSession,
+	getSessionContent,
+	listSessions,
+	sessionExists,
+} from '@/utils/tmux';
 
 interface SessionInfo {
 	id: string;
@@ -14,7 +20,9 @@ const sessions = new Map<string, SessionInfo>();
 function parseBody(req: IncomingMessage): Promise<any> {
 	return new Promise((resolve, reject) => {
 		let body = '';
-		req.on('data', chunk => { body += chunk.toString(); });
+		req.on('data', chunk => {
+			body += chunk.toString();
+		});
 		req.on('end', () => {
 			try {
 				resolve(body ? JSON.parse(body) : {});
@@ -27,12 +35,14 @@ function parseBody(req: IncomingMessage): Promise<any> {
 }
 
 function sendJSON(res: ServerResponse, statusCode: number, data: any) {
-	res.writeHead(statusCode, { 'Content-Type': 'application/json' });
+	res.writeHead(statusCode, {'Content-Type': 'application/json'});
 	res.end(JSON.stringify(data));
 }
 
 function generateSessionId(): string {
-	return `claude-code-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+	return `claude-code-${Date.now()}-${Math.random()
+		.toString(36)
+		.substring(2, 9)}`;
 }
 
 async function handleRequest(req: IncomingMessage, res: ServerResponse) {
@@ -54,7 +64,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 	try {
 		// Health check
 		if (pathname === '/health' && method === 'GET') {
-			sendJSON(res, 200, { status: 'ok', timestamp: Date.now() });
+			sendJSON(res, 200, {status: 'ok', timestamp: Date.now()});
 			return;
 		}
 
@@ -63,15 +73,15 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 			const tmuxSessions = await listSessions();
 			const activeSessions = Array.from(sessions.entries())
 				.filter(([id]) => tmuxSessions.includes(id))
-				.map(([id, info]) => ({ ...info }));
-			sendJSON(res, 200, { sessions: activeSessions });
+				.map(([id, info]) => ({...info}));
+			sendJSON(res, 200, {sessions: activeSessions});
 			return;
 		}
 
 		// Create session
 		if (pathname === '/sessions' && method === 'POST') {
 			const body = await parseBody(req);
-			const { workingDir = process.cwd(), command = 'claude' } = body;
+			const {workingDir = process.cwd(), command = 'claude'} = body;
 
 			const sessionId = generateSessionId();
 			const sessionInfo: SessionInfo = {
@@ -89,7 +99,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 
 			sendJSON(res, 201, {
 				success: true,
-				session: sessionInfo
+				session: sessionInfo,
 			});
 			return;
 		}
@@ -101,14 +111,14 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 			const info = sessions.get(sessionId);
 
 			if (!info) {
-				sendJSON(res, 404, { error: 'Session not found' });
+				sendJSON(res, 404, {error: 'Session not found'});
 				return;
 			}
 
 			const exists = await sessionExists(sessionId);
 			if (!exists) {
 				sessions.delete(sessionId);
-				sendJSON(res, 404, { error: 'Session no longer active' });
+				sendJSON(res, 404, {error: 'Session no longer active'});
 				return;
 			}
 
@@ -116,7 +126,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 			sendJSON(res, 200, {
 				session: info,
 				content,
-				active: true
+				active: true,
 			});
 			return;
 		}
@@ -127,7 +137,7 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 			const info = sessions.get(sessionId);
 
 			if (!info) {
-				sendJSON(res, 404, { error: 'Session not found' });
+				sendJSON(res, 404, {error: 'Session not found'});
 				return;
 			}
 
@@ -137,22 +147,24 @@ async function handleRequest(req: IncomingMessage, res: ServerResponse) {
 			}
 
 			sessions.delete(sessionId);
-			sendJSON(res, 200, { success: true, message: 'Session killed' });
+			sendJSON(res, 200, {success: true, message: 'Session killed'});
 			return;
 		}
 
 		// 404
-		sendJSON(res, 404, { error: 'Not found' });
+		sendJSON(res, 404, {error: 'Not found'});
 	} catch (error) {
 		console.error('Gateway error:', error);
 		sendJSON(res, 500, {
 			error: 'Internal server error',
-			message: error instanceof Error ? error.message : 'Unknown error'
+			message: error instanceof Error ? error.message : 'Unknown error',
 		});
 	}
 }
 
-export function startGatewayServer(port: number): Promise<{ server: any; port: number }> {
+export function startGatewayServer(
+	port: number,
+): Promise<{server: any; port: number}> {
 	return new Promise((resolve, reject) => {
 		const server = createServer(handleRequest);
 
@@ -160,7 +172,7 @@ export function startGatewayServer(port: number): Promise<{ server: any; port: n
 
 		server.listen(port, () => {
 			console.log(`Gateway server listening on port ${port}`);
-			resolve({ server, port });
+			resolve({server, port});
 		});
 	});
 }
