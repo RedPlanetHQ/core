@@ -81,49 +81,29 @@ export function createEpisodeMethods(core: Neo4jCore) {
       return result[0].get("uuid");
     },
 
-    async getEpisode(
-      uuid: string,
-      withEmbedding: boolean,
-      userId?: string,
-      workspaceId?: string
-    ): Promise<EpisodicNode | null> {
-      const filters: string[] = ["uuid: $uuid"];
-      if (userId) filters.push("userId: $userId");
-      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
-      const matchFilter = `{${filters.join(", ")}${wsFilter}}`;
-
+    async getEpisode(uuid: string, withEmbedding: boolean): Promise<EpisodicNode | null> {
       const query = `
-        MATCH (e:Episode ${matchFilter})
+        MATCH (e:Episode {uuid: $uuid})
         RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
       `;
 
       const result = await core.runQuery(query, {
         uuid,
-        ...(userId && { userId }),
-        ...(workspaceId && { workspaceId }),
       });
       if (result.length === 0) return null;
 
       return parseEpisodicNode(result[0].get("episode"));
     },
 
-    async getEpisodes(
-      uuids: string[],
-      userId: string,
-      withEmbedding: boolean,
-      workspaceId?: string
-    ): Promise<EpisodicNode[]> {
-      const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
+    async getEpisodes(uuids: string[], withEmbedding: boolean): Promise<EpisodicNode[]> {
       const query = `
         UNWIND $uuids AS uuid
-        MATCH (e:Episode {userId: $userId${wsFilter}, uuid: uuid})
+        MATCH (e:Episode {uuid: uuid})
         RETURN ${withEmbedding ? `${EPISODIC_NODE_PROPERTIES}, e.contentEmbedding as contentEmbedding` : EPISODIC_NODE_PROPERTIES} as episode
       `;
 
       const result = await core.runQuery(query, {
         uuids,
-        userId,
-        ...(workspaceId && { workspaceId }),
       });
       if (result.length === 0) return [];
 

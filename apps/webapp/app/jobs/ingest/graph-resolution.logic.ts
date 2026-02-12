@@ -80,12 +80,7 @@ export async function processGraphResolution(
     );
 
     // Get episode data for context
-    const episode = await getEpisode(
-      payload.episodeUuid,
-      false,
-      payload.userId,
-      payload.workspaceId,
-    );
+    const episode = await getEpisode(payload.episodeUuid, false);
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
     }

@@ -135,7 +135,7 @@ async function updateWorkspaceMetadata(workspaceIds: string[]) {
   console.log(`Updated metadata for ${workspaceIds.length} workspaces.`);
 }
 
-async function populateEmbeddingWorkspaceIds(
+export async function populateEmbeddingWorkspaceIds(
   userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
 ) {
   if (userWorkspaceMap.length === 0) {
@@ -193,7 +193,7 @@ async function populateEmbeddingWorkspaceIds(
   console.log("Embedding workspaceId population complete!");
 }
 
-async function populateGraphWorkspaceIds(
+export async function populateGraphWorkspaceIds(
   userWorkspaceMap: Array<{ userId: string; workspaceId: string }>,
 ) {
   if (userWorkspaceMap.length === 0) {

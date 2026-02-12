@@ -253,7 +253,6 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     model: modelInstance,
     schema,
     messages,
-
     ...generateObjectOptions,
   });
 
