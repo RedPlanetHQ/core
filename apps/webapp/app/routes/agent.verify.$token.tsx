@@ -113,7 +113,7 @@ export default function Page() {
               <div>
                 <div className="mb-2 flex items-center gap-1">
                   <CheckCircleIcon className="h-6 w-6 text-emerald-500" />{" "}
-                  Successfully authenticated
+                  Authentication Successful
                 </div>
                 <p>
                   {getInstructionsForSource(result.source, result.clientName)}
@@ -151,6 +151,11 @@ function getInstructionsForSource(source: string, clientName: string) {
     if (clientName) {
       return `Return to your ${prettyClientNames[clientName] ?? clientName} to continue.`;
     }
+  }
+
+  // For non-MCP sources like whatsapp, email, etc.
+  if (source && source !== "cli") {
+    return `Return to your ${source} to continue.`;
   }
 
   return `Return to your terminal to continue.`;
