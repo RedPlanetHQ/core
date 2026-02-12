@@ -75,6 +75,26 @@ export interface GatewayConfig {
 	serviceName?: string;
 }
 
+// CLI Backend configuration for coding agents
+export interface CliBackendConfig {
+	command: string;
+	args?: string[]; // Default args for new sessions
+	resumeArgs?: string[]; // Args for resuming sessions (use {sessionId} placeholder)
+	sessionArg?: string; // e.g., "--session"
+	sessionMode?: 'new' | 'existing' | 'always';
+	sessionIdFields?: string[]; // Fields in output containing session ID
+	allowedTools?: string[];
+	disallowedTools?: string[];
+	modelArg?: string;
+	systemPromptArg?: string;
+	workingDirArg?: string;
+}
+
+export interface CodingConfig {
+	// Configured CLI backends keyed by name
+	[agentName: string]: CliBackendConfig;
+}
+
 export interface UserPreferences {
 	lastProvider?: string;
 	lastModel?: string;
@@ -84,4 +104,5 @@ export interface UserPreferences {
 	lastUpdateCheck?: number;
 	selectedTheme?: ThemePreset;
 	gateway?: GatewayConfig;
+	coding?: CodingConfig;
 }

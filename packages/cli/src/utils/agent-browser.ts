@@ -1,12 +1,28 @@
 import {spawn, execSync} from 'node:child_process';
-import {existsSync, mkdirSync, rmSync, readdirSync} from 'node:fs';
+import {existsSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 
 // Constants
-const SESSION_NAME = 'core';
 const COREBRAIN_DIR = join(homedir(), '.corebrain');
 const BROWSER_PROFILES_DIR = join(COREBRAIN_DIR, 'browser-profiles');
+const SESSIONS_FILE = join(COREBRAIN_DIR, 'browser-sessions.json');
+const MAX_SESSIONS = 3;
+
+// Blocked commands that cannot be run via browser_command
+const BLOCKED_COMMANDS = [
+	'open',
+	'close',
+	'cookies',
+	'storage',
+	'network',
+	'trace',
+	'highlight',
+	'console',
+	'errors',
+	'state',
+	'download',
+];
 
 export interface CommandResult {
 	stdout: string;
@@ -14,9 +30,67 @@ export interface CommandResult {
 	code: number;
 }
 
-/**
- * Check if agent-browser is installed globally
- */
+export interface BrowserSession {
+	sessionName: string;
+	profile: string;
+	url: string;
+	startedAt: string;
+}
+
+// ============ Session Management ============
+
+function loadSessions(): BrowserSession[] {
+	try {
+		if (!existsSync(SESSIONS_FILE)) {
+			return [];
+		}
+		const data = readFileSync(SESSIONS_FILE, 'utf-8');
+		return JSON.parse(data);
+	} catch {
+		return [];
+	}
+}
+
+function saveSessions(sessions: BrowserSession[]): void {
+	if (!existsSync(COREBRAIN_DIR)) {
+		mkdirSync(COREBRAIN_DIR, {recursive: true});
+	}
+	writeFileSync(SESSIONS_FILE, JSON.stringify(sessions, null, 2));
+}
+
+export function getActiveSessions(): BrowserSession[] {
+	return loadSessions();
+}
+
+export function getSession(sessionName: string): BrowserSession | undefined {
+	const sessions = loadSessions();
+	return sessions.find(s => s.sessionName === sessionName);
+}
+
+function addSession(session: BrowserSession): void {
+	const sessions = loadSessions();
+	// Remove existing session with same name if any
+	const filtered = sessions.filter(s => s.sessionName !== session.sessionName);
+	filtered.push(session);
+	saveSessions(filtered);
+}
+
+function removeSession(sessionName: string): void {
+	const sessions = loadSessions();
+	const filtered = sessions.filter(s => s.sessionName !== sessionName);
+	saveSessions(filtered);
+}
+
+export function canCreateSession(): {allowed: boolean; count: number} {
+	const sessions = loadSessions();
+	return {
+		allowed: sessions.length < MAX_SESSIONS,
+		count: sessions.length,
+	};
+}
+
+// ============ Installation ============
+
 export async function isAgentBrowserInstalled(): Promise<boolean> {
 	try {
 		execSync('which agent-browser', {stdio: 'pipe'});
@@ -26,16 +100,10 @@ export async function isAgentBrowserInstalled(): Promise<boolean> {
 	}
 }
 
-/**
- * Install agent-browser globally via npm
- */
 export async function installAgentBrowser(): Promise<CommandResult> {
 	return runNpmCommand(['install', '-g', 'agent-browser']);
 }
 
-/**
- * Run an npm command
- */
 function runNpmCommand(args: string[]): Promise<CommandResult> {
 	return new Promise(resolve => {
 		const proc = spawn('npm', args, {
@@ -64,14 +132,14 @@ function runNpmCommand(args: string[]): Promise<CommandResult> {
 	});
 }
 
-/**
- * Run an agent-browser command with session
- */
-export async function runAgentBrowserCommand(
+// ============ Core Browser Command Runner ============
+
+async function runAgentBrowserCommand(
+	sessionName: string,
 	args: string[],
 ): Promise<CommandResult> {
 	return new Promise(resolve => {
-		const fullArgs = [...args, '--session', SESSION_NAME];
+		const fullArgs = [...args, '--session', sessionName];
 		const proc = spawn('agent-browser', fullArgs, {
 			stdio: ['pipe', 'pipe', 'pipe'],
 			shell: true,
@@ -98,31 +166,18 @@ export async function runAgentBrowserCommand(
 	});
 }
 
-/**
- * Get the session status
- */
-export async function getSessionStatus(): Promise<
-	'running' | 'stopped' | 'unknown'
-> {
-	const result = await runAgentBrowserCommand(['status']);
-
-	if (result.code !== 0) {
-		return 'unknown';
-	}
-
-	const output = result.stdout.toLowerCase();
-	if (output.includes('running') || output.includes('active')) {
-		return 'running';
-	}
-
-	return 'stopped';
-}
-
 // ============ Profile Management ============
 
-/**
- * Create a browser profile directory
- */
+function ensureProfileExists(profile: string): string {
+	const profilePath = join(BROWSER_PROFILES_DIR, profile);
+
+	if (!existsSync(profilePath)) {
+		mkdirSync(profilePath, {recursive: true});
+	}
+
+	return profilePath;
+}
+
 export function createProfile(name: string): {
 	success: boolean;
 	path: string;
@@ -150,9 +205,6 @@ export function createProfile(name: string): {
 	}
 }
 
-/**
- * Delete a browser profile directory
- */
 export function deleteProfile(name: string): {
 	success: boolean;
 	error?: string;
@@ -174,9 +226,6 @@ export function deleteProfile(name: string): {
 	}
 }
 
-/**
- * List all browser profiles
- */
 export function listProfiles(): string[] {
 	try {
 		if (!existsSync(BROWSER_PROFILES_DIR)) {
@@ -191,214 +240,149 @@ export function listProfiles(): string[] {
 	}
 }
 
-/**
- * Get the profiles directory path
- */
 export function getProfilesDir(): string {
 	return BROWSER_PROFILES_DIR;
 }
 
+// ============ Simplified Browser Tools ============
+
 /**
- * Get the session name used for browser sessions
+ * Open a browser session with URL
+ * Creates the corebrain profile if it doesn't exist
+ * Enforces max 3 concurrent sessions
  */
-export function getSessionName(): string {
-	return SESSION_NAME;
+export async function browserOpen(
+	sessionName: string,
+	url: string,
+	profile: string = 'corebrain',
+): Promise<CommandResult> {
+	// Check session limit
+	const {allowed, count} = canCreateSession();
+	const existingSession = getSession(sessionName);
+
+	// Allow if session already exists (re-opening) or under limit
+	if (!existingSession && !allowed) {
+		return {
+			stdout: '',
+			stderr: `Maximum ${MAX_SESSIONS} sessions allowed. Currently running: ${count}. Close a session first.`,
+			code: 1,
+		};
+	}
+
+	// Ensure profile directory exists
+	const profilePath = ensureProfileExists(profile);
+
+	const args = ['open', url, '--profile', profilePath];
+	const result = await runAgentBrowserCommand(sessionName, args);
+
+	if (result.code === 0) {
+		addSession({
+			sessionName,
+			profile,
+			url,
+			startedAt: new Date().toISOString(),
+		});
+	}
+
+	return result;
 }
 
-// ============ Core Actions ============
+/**
+ * Close a browser session
+ */
+export async function browserClose(sessionName: string): Promise<CommandResult> {
+	const result = await runAgentBrowserCommand(sessionName, ['close']);
 
-export async function browserOpen(
-	url: string,
-	options: {headed?: boolean; profile?: string} = {},
+	// Remove session regardless of result (it might already be closed)
+	removeSession(sessionName);
+
+	return result;
+}
+
+/**
+ * Check if a command is blocked
+ */
+export function isBlockedCommand(command: string): boolean {
+	const cmd = command.toLowerCase().trim();
+	return BLOCKED_COMMANDS.includes(cmd);
+}
+
+/**
+ * Execute a generic browser command
+ * Blocks: open, close, cookies, storage, network, trace, highlight, console, errors, state, download
+ */
+export async function browserCommand(
+	sessionName: string,
+	command: string,
+	args: string[] = [],
 ): Promise<CommandResult> {
-	const args = ['open', url];
-	if (options.headed) {
-		args.push('--headed');
+	// Check if command is blocked
+	if (isBlockedCommand(command)) {
+		return {
+			stdout: '',
+			stderr: `Command "${command}" is blocked. Blocked commands: ${BLOCKED_COMMANDS.join(', ')}`,
+			code: 1,
+		};
 	}
-	if (options.profile) {
-		const profilePath = join(BROWSER_PROFILES_DIR, options.profile);
-		if (existsSync(profilePath)) {
-			args.push('--profile', profilePath);
+
+	// Check if session exists
+	const session = getSession(sessionName);
+	if (!session) {
+		return {
+			stdout: '',
+			stderr: `Session "${sessionName}" not found. Use browser_open to create a session first.`,
+			code: 1,
+		};
+	}
+
+	return runAgentBrowserCommand(sessionName, [command, ...args]);
+}
+
+/**
+ * List all active browser sessions
+ */
+export function browserListSessions(): BrowserSession[] {
+	return getActiveSessions();
+}
+
+/**
+ * Get all available profiles
+ */
+export function browserGetProfiles(): string[] {
+	return listProfiles();
+}
+
+/**
+ * Close all active browser sessions
+ */
+export async function browserCloseAll(): Promise<void> {
+	const sessions = loadSessions();
+	for (const session of sessions) {
+		try {
+			await browserClose(session.sessionName);
+		} catch {
+			// Ignore errors when closing individual sessions
 		}
 	}
-	return runAgentBrowserCommand(args);
+	// Clear all sessions
+	saveSessions([]);
 }
 
-export async function browserClick(selector: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['click', selector]);
-}
+// ============ Session Status ============
 
-export async function browserDblclick(
-	selector: string,
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['dblclick', selector]);
-}
+export async function getSessionStatus(
+	sessionName: string,
+): Promise<'running' | 'stopped' | 'unknown'> {
+	const result = await runAgentBrowserCommand(sessionName, ['status']);
 
-export async function browserFill(
-	selector: string,
-	text: string,
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['fill', selector, text]);
-}
-
-export async function browserType(
-	selector: string,
-	text: string,
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['type', selector, text]);
-}
-
-export async function browserPress(key: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['press', key]);
-}
-
-export async function browserHover(selector: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['hover', selector]);
-}
-
-export async function browserSelect(
-	selector: string,
-	value: string,
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['select', selector, value]);
-}
-
-export async function browserCheck(selector: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['check', selector]);
-}
-
-export async function browserUncheck(selector: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['uncheck', selector]);
-}
-
-export async function browserScroll(
-	direction: string,
-	pixels?: number,
-): Promise<CommandResult> {
-	const args = ['scroll', direction];
-	if (pixels !== undefined) {
-		args.push(String(pixels));
+	if (result.code !== 0) {
+		return 'unknown';
 	}
-	return runAgentBrowserCommand(args);
-}
 
-export async function browserScreenshot(
-	path?: string,
-	full?: boolean,
-): Promise<CommandResult> {
-	const args = ['screenshot'];
-	if (path) {
-		args.push(path);
+	const output = result.stdout.toLowerCase();
+	if (output.includes('running') || output.includes('active')) {
+		return 'running';
 	}
-	if (full) {
-		args.push('--full');
-	}
-	return runAgentBrowserCommand(args);
-}
 
-export async function browserSnapshot(): Promise<CommandResult> {
-	return runAgentBrowserCommand(['snapshot']);
-}
-
-export async function browserEval(script: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['eval', script]);
-}
-
-export async function browserClose(): Promise<CommandResult> {
-	return runAgentBrowserCommand(['close']);
-}
-
-// ============ Category-based Commands ============
-
-/**
- * Get info: text, html, value, attr, title, url, count, box
- * Usage: get <subcommand> [selector] [extra]
- */
-export async function browserGet(
-	subcommand: string,
-	args: string[] = [],
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['get', subcommand, ...args]);
-}
-
-/**
- * Check state: visible, enabled, checked
- * Usage: is <subcommand> <selector>
- */
-export async function browserIs(
-	subcommand: string,
-	selector: string,
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['is', subcommand, selector]);
-}
-
-/**
- * Find elements: role, text, label, placeholder, testid, first, nth
- * Usage: find <locator> <value> <action> [actionValue]
- */
-export async function browserFind(args: string[]): Promise<CommandResult> {
-	return runAgentBrowserCommand(['find', ...args]);
-}
-
-/**
- * Wait: selector, time, or with flags (--text, --url, --load, --fn, --download)
- * Usage: wait <selector|ms> [options]
- */
-export async function browserWait(args: string[]): Promise<CommandResult> {
-	return runAgentBrowserCommand(['wait', ...args]);
-}
-
-/**
- * Mouse: move, down, up, wheel
- * Usage: mouse <subcommand> <args>
- */
-export async function browserMouse(
-	subcommand: string,
-	args: string[] = [],
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['mouse', subcommand, ...args]);
-}
-
-/**
- * Settings: viewport, device, geo, offline, headers, credentials, media
- * Usage: set <subcommand> <args>
- */
-export async function browserSet(
-	subcommand: string,
-	args: string[] = [],
-): Promise<CommandResult> {
-	return runAgentBrowserCommand(['set', subcommand, ...args]);
-}
-
-/**
- * Tabs: list, new, switch, close
- * Usage: tab [subcommand] [args]
- */
-export async function browserTab(args: string[] = []): Promise<CommandResult> {
-	return runAgentBrowserCommand(['tab', ...args]);
-}
-
-/**
- * Frames: switch to iframe or main
- * Usage: frame <selector|main>
- */
-export async function browserFrame(target: string): Promise<CommandResult> {
-	return runAgentBrowserCommand(['frame', target]);
-}
-
-/**
- * Navigation: back, forward, reload
- */
-export async function browserNav(
-	action: 'back' | 'forward' | 'reload',
-): Promise<CommandResult> {
-	return runAgentBrowserCommand([action]);
-}
-
-/**
- * Close: browser
- * Usage: close
- */
-export async function closeBrowser(): Promise<CommandResult> {
-	return runAgentBrowserCommand(['close']);
+	return 'stopped';
 }

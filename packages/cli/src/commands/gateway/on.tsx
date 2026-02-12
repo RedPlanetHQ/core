@@ -1,14 +1,25 @@
-import { useEffect, useState } from 'react';
-import { Text } from 'ink';
+import {useEffect, useState} from 'react';
+import {Text} from 'ink';
 import zod from 'zod';
-import { getConfig } from '@/config/index';
-import { getPreferences, updatePreferences } from '@/config/preferences';
+import {getConfig} from '@/config/index';
+import {getPreferences, updatePreferences} from '@/config/preferences';
 import SuccessMessage from '@/components/success-message';
 import ErrorMessage from '@/components/error-message';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
-import { hostname } from 'node:os';
-import { createGatewayClient, type GatewayClient } from '@/server/gateway-client';
+import {ThemeContext} from '@/hooks/useTheme';
+import {themeContextValue} from '@/config/themes';
+import {hostname} from 'node:os';
+import {homedir} from 'node:os';
+import {join, dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {
+	installService,
+	getServiceStatus,
+	startService,
+	getServiceName,
+	getServiceType,
+	getServicePid,
+} from '@/utils/service-manager';
+import type {ServiceConfig} from '@/utils/service-manager';
 
 export const options = zod.object({
 	name: zod.string().optional().describe('Gateway name'),
@@ -19,113 +30,143 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-export default function GatewayOn({ options }: Props) {
+// Get the path to the gateway-entry.js script
+function getGatewayEntryPath(): string {
+	// Get the directory of this file
+	const __filename = fileURLToPath(import.meta.url);
+	const __dirname = dirname(__filename);
+	// Navigate from dist/commands/gateway to dist/server/gateway-entry.js
+	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
+}
+
+export default function GatewayOn({options}: Props) {
 	const [status, setStatus] = useState<
 		| 'checking'
 		| 'not-authenticated'
-		| 'connecting'
-		| 'connected'
-		| 'ready'
+		| 'not-supported'
+		| 'installing'
+		| 'starting'
+		| 'started'
 		| 'error'
 	>('checking');
 	const [error, setError] = useState('');
-	const [gatewayId, setGatewayId] = useState<string | null>(null);
-	const [client, setClient] = useState<GatewayClient | null>(null);
+	const [exitCode, setExitCode] = useState<number | undefined>(undefined);
 
 	useEffect(() => {
 		let cancelled = false;
-		let gatewayClient: GatewayClient | null = null;
 
 		(async () => {
 			try {
+				// Check platform support
+				const serviceType = getServiceType();
+				if (serviceType === 'none') {
+					if (!cancelled) {
+						setStatus('not-supported');
+						setExitCode(1);
+					}
+					return;
+				}
+
 				// Check if authenticated
 				const config = getConfig();
 
 				if (!config.auth?.apiKey || !config.auth?.url) {
 					if (!cancelled) {
 						setStatus('not-authenticated');
+						setExitCode(1);
+					}
+					return;
+				}
+
+				const serviceName = getServiceName();
+
+				// Check if already running
+				const currentStatus = await getServiceStatus(serviceName);
+				if (currentStatus === 'running') {
+					if (!cancelled) {
+						setStatus('started');
+						setExitCode(0);
 					}
 					return;
 				}
 
 				// Get gateway name
 				const gatewayName = options.name || `${hostname()}-browser`;
-				const gatewayDescription = options.description || 'Browser automation gateway';
+				const gatewayDescription =
+					options.description || 'Browser automation gateway';
 
+				// Install/update the service
 				if (!cancelled) {
-					setStatus('connecting');
+					setStatus('installing');
 				}
 
-				// Create and connect gateway client
-				gatewayClient = createGatewayClient({
-					url: config.auth.url,
-					apiKey: config.auth.apiKey,
-					name: gatewayName,
-					description: gatewayDescription,
-					onConnect: () => {
-						if (!cancelled) {
-							setStatus('connected');
-						}
-					},
-					onReady: (id) => {
-						if (!cancelled) {
-							setGatewayId(id);
-							setStatus('ready');
+				const gatewayEntryPath = getGatewayEntryPath();
+				const logDir = join(homedir(), '.corebrain', 'logs');
 
-							// Update preferences
-							updatePreferences({
-								gateway: {
-									...getPreferences().gateway,
-									port: 0, // No HTTP port for WebSocket mode
-									pid: process.pid,
-									startedAt: Date.now(),
-								},
-							});
-						}
-					},
-					onDisconnect: () => {
-						if (!cancelled) {
-							setStatus('connecting');
-						}
-					},
-					onError: (err) => {
-						if (!cancelled) {
-							setError(err.message);
-							setStatus('error');
-						}
+				const serviceConfig: ServiceConfig = {
+					name: serviceName,
+					displayName: 'CoreBrain Gateway',
+					command: process.execPath, // Node.js path
+					args: [gatewayEntryPath, gatewayName, gatewayDescription],
+					port: 0, // Not applicable for WebSocket client
+					workingDirectory: homedir(),
+					logPath: join(logDir, 'gateway-stdout.log'),
+					errorLogPath: join(logDir, 'gateway-stderr.log'),
+				};
+
+				await installService(serviceConfig);
+
+				// Start the service
+				if (!cancelled) {
+					setStatus('starting');
+				}
+
+				await startService(serviceName);
+
+				// Wait a moment for the service to start and get the PID
+				await new Promise(resolve => setTimeout(resolve, 500));
+				const pid = getServicePid(serviceName);
+
+				// Update preferences with actual PID
+				updatePreferences({
+					gateway: {
+						...getPreferences().gateway,
+						port: 0,
+						pid: pid ?? 0,
+						startedAt: Date.now(),
+						serviceInstalled: true,
+						serviceType: serviceType,
+						serviceName: serviceName,
 					},
 				});
 
-				setClient(gatewayClient);
+				if (!cancelled) {
+					setStatus('started');
+					setExitCode(0);
+				}
 			} catch (err) {
 				if (!cancelled) {
 					setError(err instanceof Error ? err.message : 'Unknown error');
 					setStatus('error');
+					setExitCode(1);
 				}
 			}
 		})();
 
 		return () => {
 			cancelled = true;
-			if (gatewayClient) {
-				gatewayClient.disconnect();
-			}
 		};
 	}, [options.name, options.description]);
 
-	// Keep process running while connected
+	// Exit after showing result
 	useEffect(() => {
-		if (status === 'ready' || status === 'connected' || status === 'connecting') {
-			// Prevent process from exiting
-			const interval = setInterval(() => {
-				// Keep alive
-			}, 1000);
-
-			return () => {
-				clearInterval(interval);
-			};
+		if (exitCode !== undefined) {
+			const timer = setTimeout(() => {
+				process.exit(exitCode);
+			}, 100);
+			return () => clearTimeout(timer);
 		}
-	}, [status]);
+	}, [exitCode]);
 
 	return (
 		<ThemeContext.Provider value={themeContextValue}>
@@ -133,13 +174,15 @@ export default function GatewayOn({ options }: Props) {
 				<Text dimColor>Checking configuration...</Text>
 			) : status === 'not-authenticated' ? (
 				<ErrorMessage message="Not authenticated. Run `corebrain login` first." />
-			) : status === 'connecting' ? (
-				<Text dimColor>Connecting to gateway...</Text>
-			) : status === 'connected' ? (
-				<Text dimColor>Connected, registering tools...</Text>
-			) : status === 'ready' ? (
+			) : status === 'not-supported' ? (
+				<ErrorMessage message="Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported." />
+			) : status === 'installing' ? (
+				<Text dimColor>Installing gateway service...</Text>
+			) : status === 'starting' ? (
+				<Text dimColor>Starting gateway service...</Text>
+			) : status === 'started' ? (
 				<SuccessMessage
-					message={`Gateway connected\n\nGateway ID: ${gatewayId}\nTools: browser_open, browser_click, browser_fill, browser_type, browser_screenshot, browser_snapshot, browser_get_text, browser_get_url, browser_wait, browser_scroll, browser_hover, browser_close\n\nPress Ctrl+C to disconnect`}
+					message={`Gateway service started\n\nThe gateway is now running in the background.\nUse 'corebrain gateway status' to check status.\nUse 'corebrain gateway off' to stop.`}
 				/>
 			) : status === 'error' ? (
 				<ErrorMessage message={`Gateway error: ${error}`} />

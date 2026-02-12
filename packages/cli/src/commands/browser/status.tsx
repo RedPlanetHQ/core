@@ -4,7 +4,7 @@ import zod from 'zod';
 import { ThemeContext } from '@/hooks/useTheme';
 import { themeContextValue } from '@/config/themes';
 import ErrorMessage from '@/components/error-message';
-import { isAgentBrowserInstalled, getSessionStatus, listProfiles, getSessionName } from '@/utils/agent-browser';
+import { isAgentBrowserInstalled, browserListSessions, browserGetProfiles, type BrowserSession } from '@/utils/agent-browser';
 
 export const options = zod.object({});
 
@@ -14,7 +14,7 @@ type Props = {
 
 interface StatusInfo {
 	installed: boolean;
-	sessionStatus: 'running' | 'stopped' | 'unknown';
+	sessions: BrowserSession[];
 	profiles: string[];
 }
 
@@ -29,16 +29,11 @@ export default function BrowserStatus(_props: Props) {
 		(async () => {
 			try {
 				const installed = await isAgentBrowserInstalled();
-				let sessionStatus: 'running' | 'stopped' | 'unknown' = 'unknown';
-
-				if (installed) {
-					sessionStatus = await getSessionStatus();
-				}
-
-				const profiles = listProfiles();
+				const sessions = browserListSessions();
+				const profiles = browserGetProfiles();
 
 				if (!cancelled) {
-					setInfo({ installed, sessionStatus, profiles });
+					setInfo({ installed, sessions, profiles });
 					setStatus('ready');
 				}
 			} catch (err) {
@@ -74,8 +69,6 @@ export default function BrowserStatus(_props: Props) {
 		return null;
 	}
 
-	const sessionName = getSessionName();
-
 	return (
 		<ThemeContext.Provider value={themeContextValue}>
 			<Box flexDirection="column" gap={1}>
@@ -94,15 +87,25 @@ export default function BrowserStatus(_props: Props) {
 					</Box>
 
 					<Box>
-						<Text dimColor>Session ({sessionName}): </Text>
-						{info.sessionStatus === 'running' ? (
-							<Text color="green">running</Text>
-						) : info.sessionStatus === 'stopped' ? (
-							<Text color="yellow">stopped</Text>
+						<Text dimColor>Sessions ({info.sessions.length}/3): </Text>
+						{info.sessions.length > 0 ? (
+							<Text color="green">{info.sessions.length} active</Text>
 						) : (
-							<Text color="gray">unknown</Text>
+							<Text color="gray">none</Text>
 						)}
 					</Box>
+
+					{info.sessions.length > 0 && (
+						<Box flexDirection="column" marginLeft={2}>
+							{info.sessions.map((session, i) => (
+								<Box key={i}>
+									<Text dimColor>• </Text>
+									<Text color="cyan">{session.sessionName}</Text>
+									<Text dimColor> → {session.url} (profile: {session.profile})</Text>
+								</Box>
+							))}
+						</Box>
+					)}
 
 					<Box>
 						<Text dimColor>Profiles: </Text>

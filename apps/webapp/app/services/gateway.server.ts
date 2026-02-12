@@ -1,24 +1,20 @@
 import { prisma } from "~/db.server";
+import { authenticateApiKeyWithFailure } from "./apiAuth.server";
 
 // === Token verification ===
 
-export async function verifyGatewayToken(token: string | null) {
-  if (!token) return null;
+export async function verifyGatewayToken(token: string) {
+  const authentication = await authenticateApiKeyWithFailure(token, {});
 
-  const personalToken = await prisma.personalAccessToken.findFirst({
-    where: {
-      hashedToken: token,
-      revokedAt: null,
-    },
-    include: { user: true },
-  });
+  if (!authentication.ok) {
+    return false;
+  }
 
-  if (!personalToken || !personalToken.workspaceId) return null;
+  if (authentication.ok && authentication.userId) {
+    return authentication;
+  }
 
-  return {
-    userId: personalToken.userId,
-    workspaceId: personalToken.workspaceId,
-  };
+  return false;
 }
 
 // === Gateway CRUD operations ===

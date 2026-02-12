@@ -1,7 +1,15 @@
-import WebSocket from 'ws';
+import WebSocket, {type RawData} from 'ws';
 import {hostname} from 'node:os';
 import {browserTools, executeBrowserTool} from '@/server/tools/browser-tools';
-import {closeBrowser} from '@/utils/agent-browser';
+import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
+import {browserCloseAll} from '@/utils/agent-browser';
+import type {GatewayTool} from '@/server/tools/browser-tools';
+
+// Slot-based tool organization
+interface ToolSlots {
+	browser: GatewayTool[];
+	coding: GatewayTool[];
+}
 
 // Gateway client configuration
 interface GatewayClientConfig {
@@ -125,12 +133,12 @@ export class GatewayClient {
 			this.startPingInterval();
 		});
 
-		this.ws.on('message', async data => {
+		this.ws.on('message', async (data: RawData) => {
 			try {
 				const message = JSON.parse(data.toString()) as ServerMessage;
 				await this.handleMessage(message);
-			} catch (err) {
-				console.error('Failed to parse message:', err);
+			} catch (parseErr) {
+				console.error('Failed to parse message:', parseErr);
 			}
 		});
 
@@ -138,9 +146,9 @@ export class GatewayClient {
 			this.handleDisconnect();
 		});
 
-		this.ws.on('error', err => {
-			console.error('Gateway WebSocket error:', err);
-			this.config.onError?.(err);
+		this.ws.on('error', (wsErr: Error) => {
+			console.error('Gateway WebSocket error:', wsErr);
+			this.config.onError?.(wsErr);
 		});
 	}
 
@@ -150,10 +158,14 @@ export class GatewayClient {
 	private async handleMessage(message: ServerMessage): Promise<void> {
 		switch (message.type) {
 			case 'get_supported_tools':
-				// Send our supported tools
+				// Send our supported tools organized by slots
+				const toolSlots: ToolSlots = {
+					browser: browserTools,
+					coding: codingTools,
+				};
 				this.send({
 					type: 'supported_tools',
-					tools: browserTools,
+					tools: toolSlots,
 				});
 				break;
 
@@ -171,10 +183,16 @@ export class GatewayClient {
 				console.log(`Tool call: ${toolCall.tool} (${toolCall.id})`);
 
 				try {
-					const result = await executeBrowserTool(
-						toolCall.tool,
-						toolCall.params,
-					);
+					let result: {success: boolean; result?: unknown; error?: string};
+
+					// Route to appropriate executor based on tool prefix
+					if (toolCall.tool.startsWith('browser_')) {
+						result = await executeBrowserTool(toolCall.tool, toolCall.params);
+					} else if (toolCall.tool.startsWith('coding_')) {
+						result = await executeCodingTool(toolCall.tool, toolCall.params);
+					} else {
+						result = {success: false, error: `Unknown tool: ${toolCall.tool}`};
+					}
 
 					if (result.success) {
 						this.send({
@@ -224,11 +242,11 @@ export class GatewayClient {
 		console.log('Gateway WebSocket disconnected');
 		this.config.onDisconnect?.();
 
-		// Auto-close browser session on disconnect
+		// Auto-close all browser sessions on disconnect
 		if (wasReady) {
-			console.log('Closing browser session...');
+			console.log('Closing all browser sessions...');
 			try {
-				await closeBrowser();
+				await browserCloseAll();
 			} catch {
 				// Ignore errors when closing browser
 			}

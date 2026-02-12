@@ -7,9 +7,8 @@ import {
 	getServiceName,
 	isServiceInstalled,
 	getServiceStatus,
+	getServicePid,
 } from '@/utils/service-manager/index';
-import { getLaunchdServicePid } from '@/utils/service-manager/launchd';
-import { getSystemdServicePid } from '@/utils/service-manager/systemd';
 import InfoMessage from '@/components/info-message';
 import ErrorMessage from '@/components/error-message';
 import { ThemeContext } from '@/hooks/useTheme';
@@ -24,7 +23,6 @@ type Props = {
 interface GatewayStatus {
 	running: boolean;
 	installed: boolean;
-	port?: number;
 	pid?: number;
 	startedAt?: number;
 	uptime?: string;
@@ -79,23 +77,21 @@ export default function GatewayStatus(_props: Props) {
 				const serviceStatus = await getServiceStatus(serviceName);
 				const running = serviceStatus === 'running';
 
-				// Get PID
+				// Get PID from service manager, fallback to preferences
+				const prefs = getPreferences();
 				let pid: number | null = null;
 				if (running) {
-					if (serviceType === 'launchd') {
-						pid = getLaunchdServicePid(serviceName);
-					} else if (serviceType === 'systemd') {
-						pid = getSystemdServicePid(serviceName);
+					pid = getServicePid(serviceName);
+					// Fallback to stored PID in preferences
+					if (!pid && prefs.gateway?.pid) {
+						pid = prefs.gateway.pid;
 					}
 				}
-
-				const prefs = getPreferences();
 
 				if (!cancelled) {
 					setGatewayStatus({
 						running,
 						installed: true,
-						port: prefs.gateway?.port,
 						pid: pid || undefined,
 						startedAt: prefs.gateway?.startedAt,
 						uptime: prefs.gateway?.startedAt
@@ -142,7 +138,7 @@ export default function GatewayStatus(_props: Props) {
 				/>
 			) : (
 				<InfoMessage
-					message={`Gateway: Running\n\nService: ${getServiceTypeLabel()}\nPort: ${gatewayStatus.port || 3456}\nPID: ${gatewayStatus.pid || 'unknown'}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI: http://localhost:${gatewayStatus.port || 3456}`}
+					message={`Gateway: Running\n\nService: ${getServiceTypeLabel()}\nPID: ${gatewayStatus.pid || 'unknown'}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nLogs: ~/.corebrain/logs/gateway.log`}
 				/>
 			)}
 		</ThemeContext.Provider>

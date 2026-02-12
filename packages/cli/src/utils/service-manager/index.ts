@@ -6,6 +6,7 @@ import {
 	getLaunchdServiceStatus,
 	startLaunchdService,
 	stopLaunchdService,
+	getLaunchdServicePid,
 	LAUNCHD_SERVICE_NAME,
 } from './launchd';
 import {
@@ -15,6 +16,7 @@ import {
 	getSystemdServiceStatus,
 	startSystemdService,
 	stopSystemdService,
+	getSystemdServicePid,
 	SYSTEMD_SERVICE_NAME,
 } from './systemd';
 
@@ -170,5 +172,21 @@ export async function stopService(name: string): Promise<void> {
 			throw new Error(
 				'Service management is not supported on this platform.',
 			);
+	}
+}
+
+/**
+ * Get the PID of the running gateway service
+ */
+export function getServicePid(name: string): number | null {
+	const serviceType = getServiceType();
+
+	switch (serviceType) {
+		case 'launchd':
+			return getLaunchdServicePid(name);
+		case 'systemd':
+			return getSystemdServicePid(name);
+		case 'none':
+			return null;
 	}
 }
