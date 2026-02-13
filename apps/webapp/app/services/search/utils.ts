@@ -93,6 +93,7 @@ export async function performVectorSearch(
     const scoredStatements = await searchStatements({
       queryVector: query,
       userId,
+      workspaceId,
       labelIds: options.labelIds.length > 0 ? options.labelIds : undefined,
       threshold: 0.5,
       limit: 100,
@@ -167,6 +168,7 @@ export async function performEpisodeVectorSearch(
     const scoredEpisodes = await searchEpisodes({
       queryVector: queryEmbedding,
       userId,
+      workspaceId,
       labelIds: options.labelIds.length > 0 ? options.labelIds : undefined,
       threshold: 0.5,
       limit: 50,

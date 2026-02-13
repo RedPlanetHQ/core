@@ -10,7 +10,9 @@ export const IngestBodyRequest = z.object({
   episodeBody: z.string().min(20),
   originalEpisodeBody: z.string().optional(), // Full content (for semantic_diff where episodeBody is diff only)
   referenceTime: z.string(),
-  metadata: z.record(z.union([z.string(), z.number(), z.boolean()])).optional(),
+  metadata: z
+    .record(z.string(), z.union([z.string(), z.number(), z.boolean()]))
+    .optional(),
   source: z.string(),
   labelIds: z.array(z.string()).optional(),
   sessionId: z.string().optional(),

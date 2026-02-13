@@ -92,6 +92,7 @@ export class KnowledgeGraphService {
           validAt: new Date(params.referenceTime),
           labelIds: params.labelIds || [],
           userId: params.userId,
+          workspaceId: params.workspaceId,
           sessionId: params.sessionId,
           queueId: params.queueId,
           type: params.type,
@@ -194,8 +195,8 @@ export class KnowledgeGraphService {
         }
       }
 
-      console.log("previousEpisodes: ", previousEpisodes);
-      console.log("previousVersionContent: ", previousVersionContent);
+      // console.log("previousEpisodes: ", previousEpisodes);
+      // console.log("previousVersionContent: ", previousVersionContent);
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
@@ -238,6 +239,7 @@ export class KnowledgeGraphService {
         normalizedEpisodeBody,
         episodeEmbedding,
         params.userId,
+        params.workspaceId as string,
         params.queueId,
         params.labelIds || [],
         params.sessionId,
@@ -313,6 +315,7 @@ export class KnowledgeGraphService {
             embedding: factEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingStoreEndTime = Date.now();
         logger.log(
@@ -327,6 +330,7 @@ export class KnowledgeGraphService {
             embedding: entityEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingEntityStoreEndTime = Date.now();
         logger.log(
@@ -420,6 +424,7 @@ export class KnowledgeGraphService {
         nameEmbedding: [],
         createdAt: new Date(),
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
       entityMap.set(entity.name.toLowerCase(), entityNode);
     }
@@ -437,6 +442,7 @@ export class KnowledgeGraphService {
           nameEmbedding: null as any,
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         });
       }
     }
@@ -456,6 +462,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.source.toLowerCase(), subjectNode);
       }
@@ -473,6 +480,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.target.toLowerCase(), objectNode);
       }
@@ -498,6 +506,7 @@ export class KnowledgeGraphService {
         attributes,
         aspect: stmt.aspect || null,
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
 
       return {

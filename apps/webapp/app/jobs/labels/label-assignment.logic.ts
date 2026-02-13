@@ -252,7 +252,7 @@ export async function processLabelAssignment(
         ingestionQueue.sessionId,
         allLabelIds,
         payload.userId,
-        payload.workspaceId
+        payload.workspaceId,
       );
 
       logger.info(`Updated ${updatedCount} Neo4j episodes with labels`, {

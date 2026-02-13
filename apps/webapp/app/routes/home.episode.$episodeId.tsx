@@ -59,7 +59,7 @@ export default function InboxNotSelected() {
           }
         />
 
-        <ResizablePanelGroup direction="horizontal">
+        <ResizablePanelGroup orientation="horizontal">
           <ResizablePanel
             maxSize={75}
             defaultSize={75}

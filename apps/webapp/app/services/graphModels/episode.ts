@@ -27,10 +27,8 @@ export async function saveEpisode(episode: EpisodicNode): Promise<string> {
 export async function getEpisode(
   uuid: string,
   withEmbedding: boolean = false,
-  userId?: string,
-  workspaceId?: string,
 ): Promise<EpisodicNode | null> {
-  return graphProvider().getEpisode(uuid, withEmbedding, workspaceId);
+  return graphProvider().getEpisode(uuid, withEmbedding);
 }
 
 // Get all episodes for a session ordered by createdAt
@@ -39,7 +37,11 @@ export async function getEpisodesBySession(params: {
   userId: string;
   workspaceId?: string;
 }): Promise<EpisodicNode[]> {
-  return graphProvider().getEpisodesBySession(params.sessionId, params.userId, params.workspaceId);
+  return graphProvider().getEpisodesBySession(
+    params.sessionId,
+    params.userId,
+    params.workspaceId,
+  );
 }
 
 export async function searchEpisodesByEmbedding(params: {
@@ -81,7 +83,7 @@ export async function searchEpisodesByEmbedding(params: {
 
   // Step 2: Fetch full episode data from Neo4j
   const episodeUuids = vectorResults.map((r) => r.id);
-  return await graphProvider().getEpisodes(episodeUuids, params.userId, false, params.workspaceId);
+  return await graphProvider().getEpisodes(episodeUuids, false);
 }
 
 // Delete episode and its related nodes safely using single optimized Cypher
@@ -205,9 +207,14 @@ export async function addLabelToEpisodes(
   labelId: string,
   episodeUuids: string[],
   userId: string,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<number> {
-  await graphProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, workspaceId);
+  await graphProvider().addLabelsToEpisodes(
+    episodeUuids,
+    [labelId],
+    userId,
+    workspaceId,
+  );
   return episodeUuids.length; // Optimistic return
 }
 
@@ -217,7 +224,12 @@ export async function updateEpisodeLabels(
   userId: string,
   workspaceId: string,
 ): Promise<number> {
-  vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId, workspaceId);
+  vectorProvider().addLabelsToEpisodesBySessionId(
+    sessionId,
+    labelIds,
+    userId,
+    workspaceId,
+  );
   return await graphProvider().addLabelsToEpisodesBySessionId(
     sessionId,
     labelIds,
@@ -233,7 +245,11 @@ export async function getSessionEpisodes(
   limit?: number,
   workspaceId?: string,
 ): Promise<EpisodicNode[]> {
-  const episodes = await graphProvider().getAllSessionChunks(sessionId, userId, workspaceId);
+  const episodes = await graphProvider().getAllSessionChunks(
+    sessionId,
+    userId,
+    workspaceId,
+  );
 
   if (limit) {
     return episodes.slice(0, limit).reverse(); // DESC order

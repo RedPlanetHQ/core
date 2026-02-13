@@ -23,6 +23,7 @@ export function parseEntityNode(raw: any): EntityNode {
       : {},
     createdAt: new Date(raw.createdAt),
     userId: raw.userId,
+    workspaceId: raw.workspaceId || undefined,
   };
 }
 
@@ -38,6 +39,7 @@ export function parseEpisodicNode(raw: any): EpisodicNode {
     validAt: new Date(raw.validAt),
     labelIds: raw.labelIds || [],
     userId: raw.userId,
+    workspaceId: raw.workspaceId || undefined,
     sessionId: raw.sessionId,
     queueId: raw.queueId,
     type: raw.type,
@@ -62,6 +64,7 @@ export function parseStatementNode(raw: any): StatementNode {
     invalidatedBy: raw.invalidatedBy,
     attributes: raw.attributes ? JSON.parse(raw.attributes) : {},
     userId: raw.userId,
+    workspaceId: raw.workspaceId || undefined,
     labelIds: raw.labelIds || [],
     aspect: raw.aspect || null,
     recallCount: raw.recallCount,

@@ -19,31 +19,6 @@ import { type EpisodeEmbedding } from "@core/database";
  */
 const vectorProvider = () => ProviderFactory.getVectorProvider();
 
-// ==================== ENTITY EMBEDDINGS ====================
-
-/**
- * Store entity name embedding in vector provider
- */
-export async function storeEntityEmbedding(
-  entityUuid: string,
-  entityName: string,
-  embedding: number[],
-  userId: string,
-): Promise<void> {
-  try {
-    await vectorProvider().upsert({
-      id: entityUuid,
-      vector: embedding,
-      content: entityName,
-      namespace: VECTOR_NAMESPACES.ENTITY,
-      metadata: { userId, type: "entity" },
-    });
-  } catch (error) {
-    logger.error(`Failed to store entity embedding for ${entityUuid}:`, { error });
-    throw error;
-  }
-}
-
 /**
  * Batch store entity embeddings in vector provider (much faster than individual upserts)
  */
@@ -54,6 +29,7 @@ export async function batchStoreEntityEmbeddings(
     embedding: number[];
     userId: string;
   }>,
+  workspaceId: string,
 ): Promise<void> {
   if (entities.length === 0) return;
 
@@ -62,12 +38,15 @@ export async function batchStoreEntityEmbeddings(
       id: entity.uuid,
       vector: entity.embedding,
       content: entity.name,
-      metadata: { userId: entity.userId, type: "entity" },
+      metadata: { userId: entity.userId, type: "entity", workspaceId },
     }));
 
     await vectorProvider().batchUpsert(items, VECTOR_NAMESPACES.ENTITY);
   } catch (error) {
-    logger.error(`Failed to batch store ${entities.length} entity embeddings:`, { error });
+    logger.error(
+      `Failed to batch store ${entities.length} entity embeddings:`,
+      { error },
+    );
     throw error;
   }
 }
@@ -84,7 +63,9 @@ export async function getEntityEmbedding(
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to get entity embedding for ${entityUuid}:`, { error });
+    logger.error(`Failed to get entity embedding for ${entityUuid}:`, {
+      error,
+    });
     return null;
   }
 }
@@ -116,7 +97,9 @@ export async function deleteEntityEmbedding(entityUuid: string): Promise<void> {
       namespace: VECTOR_NAMESPACES.ENTITY,
     });
   } catch (error) {
-    logger.error(`Failed to delete entity embedding for ${entityUuid}:`, { error });
+    logger.error(`Failed to delete entity embedding for ${entityUuid}:`, {
+      error,
+    });
   }
 }
 
@@ -156,10 +139,9 @@ export async function storeStatementEmbedding(
       metadata: { userId, type: "statement" },
     });
   } catch (error) {
-    logger.error(
-      `Failed to store statement embedding for ${statementUuid}:`,
-      { error },
-    );
+    logger.error(`Failed to store statement embedding for ${statementUuid}:`, {
+      error,
+    });
     throw error;
   }
 }
@@ -174,6 +156,7 @@ export async function batchStoreStatementEmbeddings(
     embedding: number[];
     userId: string;
   }>,
+  workspaceId: string,
 ): Promise<void> {
   if (statements.length === 0) return;
 
@@ -182,12 +165,15 @@ export async function batchStoreStatementEmbeddings(
       id: statement.uuid,
       vector: statement.embedding,
       content: statement.fact,
-      metadata: { userId: statement.userId, type: "statement" },
+      metadata: { userId: statement.userId, type: "statement", workspaceId },
     }));
 
     await vectorProvider().batchUpsert(items, VECTOR_NAMESPACES.STATEMENT);
   } catch (error) {
-    logger.error(`Failed to batch store ${statements.length} statement embeddings:`, { error });
+    logger.error(
+      `Failed to batch store ${statements.length} statement embeddings:`,
+      { error },
+    );
     throw error;
   }
 }
@@ -204,10 +190,9 @@ export async function getStatementEmbedding(
       namespace: VECTOR_NAMESPACES.STATEMENT,
     });
   } catch (error) {
-    logger.error(
-      `Failed to get statement embedding for ${statementUuid}:`,
-      { error },
-    );
+    logger.error(`Failed to get statement embedding for ${statementUuid}:`, {
+      error,
+    });
     return null;
   }
 }
@@ -241,10 +226,9 @@ export async function deleteStatementEmbedding(
       namespace: VECTOR_NAMESPACES.STATEMENT,
     });
   } catch (error) {
-    logger.error(
-      `Failed to delete statement embedding for ${statementUuid}:`,
-      { error },
-    );
+    logger.error(`Failed to delete statement embedding for ${statementUuid}:`, {
+      error,
+    });
   }
 }
 
@@ -274,6 +258,7 @@ export async function storeEpisodeEmbedding(
   content: string,
   embedding: number[],
   userId: string,
+  workspaceId: string,
   queueId: string,
   labelIds: string[],
   sessionId?: string,
@@ -293,14 +278,14 @@ export async function storeEpisodeEmbedding(
         labelIds: labelIds,
         sessionId: sessionId,
         version: version,
-        chunkIndex
+        chunkIndex,
+        workspaceId,
       },
     });
   } catch (error) {
-    logger.error(
-      `Failed to store episode embedding for ${episodeUuid}:`,
-      { error },
-    );
+    logger.error(`Failed to store episode embedding for ${episodeUuid}:`, {
+      error,
+    });
     throw error;
   }
 }
@@ -317,7 +302,9 @@ export async function getEpisodeEmbedding(
       namespace: VECTOR_NAMESPACES.EPISODE,
     });
   } catch (error) {
-    logger.error(`Failed to get episode embedding for ${episodeUuid}:`, { error });
+    logger.error(`Failed to get episode embedding for ${episodeUuid}:`, {
+      error,
+    });
     return null;
   }
 }
@@ -342,17 +329,18 @@ export async function batchGetEpisodeEmbeddings(
 /**
  * Delete episode embedding from vector provider
  */
-export async function deleteEpisodeEmbedding(episodeUuid: string): Promise<void> {
+export async function deleteEpisodeEmbedding(
+  episodeUuid: string,
+): Promise<void> {
   try {
     await vectorProvider().delete({
       ids: [episodeUuid],
       namespace: VECTOR_NAMESPACES.EPISODE,
     });
   } catch (error) {
-    logger.error(
-      `Failed to delete episode embedding for ${episodeUuid}:`,
-      { error },
-    );
+    logger.error(`Failed to delete episode embedding for ${episodeUuid}:`, {
+      error,
+    });
   }
 }
 
@@ -372,120 +360,60 @@ export async function batchDeleteEpisodeEmbeddings(
   }
 }
 
-export async function updateEpisodeLabels(episodeUuids: string[], labelId: string, userId: string, workspaceId: string,forceUpdate: boolean = false): Promise<number> {
-  return await vectorProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId, workspaceId, forceUpdate);
+export async function updateEpisodeLabels(
+  episodeUuids: string[],
+  labelId: string,
+  userId: string,
+  workspaceId: string,
+  forceUpdate: boolean = false,
+): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodes(
+    episodeUuids,
+    [labelId],
+    userId,
+    workspaceId,
+    forceUpdate,
+  );
 }
 
-export async function updateEpisodeLabelsBySessionId(sessionId: string, labelId: string, userId: string, workspaceId: string, forceUpdate: boolean = false): Promise<number> {
-  return await vectorProvider().addLabelsToEpisodesBySessionId(sessionId, [labelId], userId, workspaceId, forceUpdate);
+export async function updateEpisodeLabelsBySessionId(
+  sessionId: string,
+  labelId: string,
+  userId: string,
+  workspaceId: string,
+  forceUpdate: boolean = false,
+): Promise<number> {
+  return await vectorProvider().addLabelsToEpisodesBySessionId(
+    sessionId,
+    [labelId],
+    userId,
+    workspaceId,
+    forceUpdate,
+  );
 }
 
-export async function getEpisodeByQueueId(queueId: string): Promise<EpisodeEmbedding[]> {
+export async function getEpisodeByQueueId(
+  queueId: string,
+): Promise<EpisodeEmbedding[]> {
   return await vectorProvider().getEpisodesByQueueId(queueId);
 }
 
-export async function getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number, workspaceId?: string): Promise<EpisodeEmbedding[]> {
-  return await vectorProvider().getRecentEpisodes(userId, limit, sessionId, excludeIds, version, workspaceId);
-}
-
-// ==================== COMPACTED SESSION EMBEDDINGS ====================
-
-/**
- * Store compacted session summary embedding in vector provider
- */
-export async function storeCompactedSessionEmbedding(
-  compactedSessionUuid: string,
-  summary: string,
-  embedding: number[],
+export async function getRecentEpisodes(
   userId: string,
-): Promise<void> {
-  try {
-    await vectorProvider().upsert({
-      id: compactedSessionUuid,
-      vector: embedding,
-      content: summary,
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-      metadata: { userId, type: "compacted_session" },
-    });
-  } catch (error) {
-    logger.error(
-      `Failed to store compacted session embedding for ${compactedSessionUuid}:`,
-      { error },
-    );
-    throw error;
-  }
-}
-
-/**
- * Get compacted session summary embedding from vector provider
- */
-export async function getCompactedSessionEmbedding(
-  compactedSessionUuid: string,
-): Promise<number[] | null> {
-  try {
-    return await vectorProvider().get({
-      id: compactedSessionUuid,
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-    });
-  } catch (error) {
-    logger.error(
-      `Failed to get compacted session embedding for ${compactedSessionUuid}:`,
-      { error },
-    );
-    return null;
-  }
-}
-
-/**
- * Batch get compacted session embeddings from vector provider
- */
-export async function batchGetCompactedSessionEmbeddings(
-  compactedSessionUuids: string[],
-): Promise<Map<string, number[]>> {
-  try {
-    return await vectorProvider().batchGet({
-      ids: compactedSessionUuids,
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-    });
-  } catch (error) {
-    logger.error(`Failed to batch get compacted session embeddings:`, { error });
-    return new Map();
-  }
-}
-
-/**
- * Delete compacted session embedding from vector provider
- */
-export async function deleteCompactedSessionEmbedding(
-  compactedSessionUuid: string,
-): Promise<void> {
-  try {
-    await vectorProvider().delete({
-      ids: [compactedSessionUuid],
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-    });
-  } catch (error) {
-    logger.error(
-      `Failed to delete compacted session embedding for ${compactedSessionUuid}:`,
-      { error },
-    );
-  }
-}
-
-/**
- * Batch delete compacted session embeddings from vector provider
- */
-export async function batchDeleteCompactedSessionEmbeddings(
-  compactedSessionUuids: string[],
-): Promise<void> {
-  try {
-    await vectorProvider().delete({
-      ids: compactedSessionUuids,
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-    });
-  } catch (error) {
-    logger.error(`Failed to batch delete compacted session embeddings:`, { error });
-  }
+  limit: number,
+  sessionId?: string,
+  excludeIds?: string[],
+  version?: number,
+  workspaceId?: string,
+): Promise<EpisodeEmbedding[]> {
+  return await vectorProvider().getRecentEpisodes(
+    userId,
+    limit,
+    sessionId,
+    excludeIds,
+    version,
+    workspaceId,
+  );
 }
 
 // ==================== SEARCH OPERATIONS ====================
@@ -496,6 +424,7 @@ export async function batchDeleteCompactedSessionEmbeddings(
 export async function searchStatements(params: {
   queryVector: number[];
   userId: string;
+  workspaceId: string;
   labelIds?: string[];
   threshold?: number;
   limit?: number;
@@ -511,6 +440,7 @@ export async function searchStatements(params: {
         userId: params.userId,
         labelIds: params.labelIds,
         excludeIds: params.excludeIds,
+        workspaceId: params.workspaceId,
       },
     });
 
@@ -527,6 +457,7 @@ export async function searchStatements(params: {
 export async function searchEpisodes(params: {
   queryVector: number[];
   userId: string;
+  workspaceId: string;
   labelIds?: string[];
   threshold?: number;
   limit?: number;
@@ -540,6 +471,7 @@ export async function searchEpisodes(params: {
       threshold: params.threshold || 0.2,
       filter: {
         userId: params.userId,
+        workspaceId: params.workspaceId,
         labelIds: params.labelIds,
         excludeIds: params.excludeIds,
       },
@@ -558,6 +490,7 @@ export async function searchEpisodes(params: {
 export async function searchEntities(params: {
   queryVector: number[];
   userId: string;
+  workspaceId: string;
   threshold?: number;
   limit?: number;
   excludeIds?: string[];
@@ -571,41 +504,13 @@ export async function searchEntities(params: {
       filter: {
         userId: params.userId,
         excludeIds: params.excludeIds,
+        workspaceId: params.workspaceId,
       },
     });
 
     return results.map((r) => ({ uuid: r.id, score: r.score }));
   } catch (error) {
     logger.error(`Failed to search entities:`, { error });
-    throw error;
-  }
-}
-
-/**
- * Search for similar compacted sessions by vector similarity
- */
-export async function searchCompactedSessions(params: {
-  queryVector: number[];
-  userId: string;
-  threshold?: number;
-  limit?: number;
-  excludeIds?: string[];
-}): Promise<Array<{ uuid: string; score: number }>> {
-  try {
-    const results = await vectorProvider().search({
-      vector: params.queryVector,
-      namespace: VECTOR_NAMESPACES.COMPACTED_SESSION,
-      limit: params.limit || 10,
-      threshold: params.threshold || 0.3,
-      filter: {
-        userId: params.userId,
-        excludeIds: params.excludeIds,
-      },
-    });
-
-    return results.map((r) => ({ uuid: r.id, score: r.score }));
-  } catch (error) {
-    logger.error(`Failed to search compacted sessions:`, { error });
     throw error;
   }
 }
@@ -630,6 +535,3 @@ export async function batchScoreStatements(params: {
     throw error;
   }
 }
-
-
-

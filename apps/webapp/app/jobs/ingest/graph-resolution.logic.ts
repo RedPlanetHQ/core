@@ -80,12 +80,7 @@ export async function processGraphResolution(
     );
 
     // Get episode data for context
-    const episode = await getEpisode(
-      payload.episodeUuid,
-      false,
-      payload.userId,
-      payload.workspaceId,
-    );
+    const episode = await getEpisode(payload.episodeUuid, false);
     if (!episode) {
       throw new Error(`Episode ${payload.episodeUuid} not found in graph`);
     }
@@ -258,6 +253,7 @@ export async function processGraphResolution(
       let finalOutput: any = payload.episodeDetails;
       let currentStatus: IngestionStatus = IngestionStatus.COMPLETED;
       const currentOutput = queue?.output as any;
+
       let episodeUuids: string[] = finalOutput?.episodeUuid
         ? [finalOutput.episodeUuid]
         : [];
@@ -269,9 +265,14 @@ export async function processGraphResolution(
             workspaceId: payload.workspaceId,
           })
         : [];
+
       const statementsCount = episodeStatements.length;
 
-      if (currentOutput && currentOutput.episodes.length > 0) {
+      if (
+        currentOutput &&
+        currentOutput.episodes &&
+        currentOutput.episodes.length > 0
+      ) {
         currentOutput.episodes.push(payload.episodeDetails);
         episodeUuids = currentOutput.episodes.map(
           (episode: any) => episode.episodeUuid,

@@ -33,11 +33,16 @@ export const ingestTask = task({
       payload,
       // Callback for label assignment
       async (params) => {
-        await labelAssignmentTask.trigger(params);
+        await labelAssignmentTask.trigger(params, {
+          queue: "label-assignment-queue",
+          tags: [payload.queueId],
+        });
       },
       // Callback for title generation
       async (params) => {
-        await titleGenerationTask.trigger(params);
+        await titleGenerationTask.trigger(params, {
+          tags: [payload.queueId],
+        });
       },
       // Callback for session compaction
       async (params) => {
