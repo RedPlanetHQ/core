@@ -71,14 +71,14 @@ export interface IGraphProvider {
   /**
    * Get entity by UUID
    */
-  getEntity(uuid: string, userId: string): Promise<EntityNode | null>;
+  getEntity(uuid: string, userId: string, workspaceId: string): Promise<EntityNode | null>;
 
   /**
    * Get multiple entities by UUIDs in a single query
    *
    * Bulk fetch optimization using UNWIND pattern.
    */
-  getEntities(uuids: string[], userId: string): Promise<EntityNode[]>;
+  getEntities(uuids: string[], userId: string, workspaceId: string): Promise<EntityNode[]>;
   /**
    * Find semantically similar entities using vector similarity
    * @param embedding Query embedding vector
@@ -91,6 +91,7 @@ export interface IGraphProvider {
     threshold: number;
     limit: number;
     userId: string;
+    workspaceId: string;
   }): Promise<Array<{ entity: EntityNode; score: number }>>;
 
   /**
@@ -99,36 +100,55 @@ export interface IGraphProvider {
   findExactPredicateMatches(params: {
     predicateName: string;
     userId: string;
+    workspaceId: string;
   }): Promise<EntityNode[]>;
 
   /**
    * Find exact entity match by name (case-insensitive)
    */
-  findExactEntityMatch(params: { entityName: string; userId: string }): Promise<EntityNode | null>;
+  findExactEntityMatch(params: {
+    entityName: string;
+    userId: string;
+    workspaceId: string;
+  }): Promise<EntityNode | null>;
 
   /**
    * Merge source entity into target entity
    * Updates all statement relationships and deletes source
    * Idempotent - safe to retry
    */
-  mergeEntities(sourceUuid: string, targetUuid: string, userId: string): Promise<void>;
+  mergeEntities(
+    sourceUuid: string,
+    targetUuid: string,
+    userId: string,
+    workspaceId: string
+  ): Promise<void>;
 
   /**
    * Deduplicate entities with same name for a user
    * @returns Object with count and array of merged (deleted) entity UUIDs
    */
-  deduplicateEntitiesByName(userId: string): Promise<{ count: number; deletedUuids: string[] }>;
+  deduplicateEntitiesByName(
+    userId: string,
+    workspaceId: string
+  ): Promise<{ count: number; deletedUuids: string[] }>;
 
   /**
    * Delete orphaned entities (entities with no relationships)
    * @returns Object with count and array of deleted entity UUIDs
    */
-  deleteOrphanedEntities(userId: string): Promise<{ count: number; deletedUuids: string[] }>;
+  deleteOrphanedEntities(
+    userId: string,
+    workspaceId: string
+  ): Promise<{ count: number; deletedUuids: string[] }>;
 
   /**
    * Get onboarding entities for a user
    */
-  getOnboardingEntities(userId: string): Promise<{ predicate: string; object: string }[]>;
+  getOnboardingEntities(
+    userId: string,
+    workspaceId: string
+  ): Promise<{ predicate: string; object: string }[]>;
 
   // ===== EPISODES =====
 
@@ -146,7 +166,7 @@ export interface IGraphProvider {
   /**
    * Get episodes by UUIDs
    */
-  getEpisodes(uuids: string[], userId: string, withEmbedding: boolean): Promise<EpisodicNode[]>;
+  getEpisodes(uuids: string[], withEmbedding: boolean): Promise<EpisodicNode[]>;
 
   /**
    * Get episodes by user
@@ -155,19 +175,21 @@ export interface IGraphProvider {
     userId: string,
     orderBy?: string,
     limit?: number,
-    descending?: boolean
+    descending?: boolean,
+    workspaceId?: string
   ): Promise<EpisodicNode[]>;
 
   /**
    * Get episode count by user
    */
-  getEpisodeCountByUser(userId: string, createdAfter?: Date): Promise<number>;
+  getEpisodeCountByUser(userId: string, createdAfter?: Date, workspaceId?: string): Promise<number>;
 
   /**
    * Get recent episodes for a user with optional filters
    */
   getRecentEpisodes(params: {
     userId: string;
+    workspaceId: string;
     limit: number;
     labelIds?: string[];
     sessionId?: string;
@@ -178,7 +200,11 @@ export interface IGraphProvider {
   /**
    * Get all episodes in a session ordered by chunkIndex
    */
-  getEpisodesBySession(sessionId: string, userId: string): Promise<EpisodicNode[]>;
+  getEpisodesBySession(
+    sessionId: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<EpisodicNode[]>;
 
   /**
    * Delete episode and related orphaned entities
@@ -186,7 +212,8 @@ export interface IGraphProvider {
    */
   deleteEpisodeWithRelatedNodes(
     uuid: string,
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<{
     episodesDeleted: number;
     statementsDeleted: number;
@@ -204,6 +231,7 @@ export interface IGraphProvider {
     threshold: number;
     limit: number;
     userId: string;
+    workspaceId: string;
     labelIds?: string[];
     spaceIds?: string[];
   }): Promise<Array<{ episode: EpisodicNode; score: number }>>;
@@ -215,6 +243,7 @@ export interface IGraphProvider {
     episodeUuids: string[],
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 
@@ -222,6 +251,7 @@ export interface IGraphProvider {
     sessionId: string,
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate?: boolean
   ): Promise<number>;
 
@@ -231,26 +261,36 @@ export interface IGraphProvider {
   getEpisodeWithAdjacentChunks(
     episodeUuid: string,
     userId: string,
-    contextWindow?: number
+    contextWindow?: number,
+    workspaceId?: string
   ): Promise<AdjacentChunks>;
 
   /**
    * Get all episodes in a session ordered by chunkIndex
    * Alias for getEpisodesBySession for consistency
    */
-  getAllSessionChunks(sessionId: string, userId: string): Promise<EpisodicNode[]>;
+  getAllSessionChunks(
+    sessionId: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<EpisodicNode[]>;
 
   /**
    * Get session metadata from first episode (chunkIndex=0)
    */
-  getSessionMetadata(sessionId: string, userId: string): Promise<EpisodicNode | null>;
+  getSessionMetadata(
+    sessionId: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<EpisodicNode | null>;
 
   /**
    * Delete all episodes in a session with cascading cleanup
    */
   deleteSession(
     sessionId: string,
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<{
     deleted: boolean;
     episodesDeleted: number;
@@ -264,6 +304,7 @@ export interface IGraphProvider {
    */
   getUserSessions(params: {
     userId: string;
+    workspaceId: string;
     type?: string;
     limit?: number;
   }): Promise<EpisodicNode[]>;
@@ -273,6 +314,7 @@ export interface IGraphProvider {
    */
   getEpisodesByUserId(params: {
     userId: string;
+    workspaceId: string;
     startTime?: Date;
     endTime?: Date;
   }): Promise<EpisodicNode[]>;
@@ -280,7 +322,12 @@ export interface IGraphProvider {
   /**
    * Link an episode to an existing statement (for duplicate handling)
    */
-  linkEpisodeToStatement(episodeUuid: string, statementUuid: string, userId: string): Promise<void>;
+  linkEpisodeToStatement(
+    episodeUuid: string,
+    statementUuid: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<void>;
 
   /**
    * Move all provenance relationships from source statement to target statement
@@ -290,13 +337,18 @@ export interface IGraphProvider {
   moveProvenanceToStatement(
     sourceStatementUuid: string,
     targetStatementUuid: string,
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<number>;
 
   /**
    * Get statements invalidated by an episode
    */
-  getStatementsInvalidatedByEpisode(episodeUuid: string, userId: string): Promise<StatementNode[]>;
+  getStatementsInvalidatedByEpisode(
+    episodeUuid: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<StatementNode[]>;
 
   /**
    * Invalidate statements from previous version
@@ -304,6 +356,7 @@ export interface IGraphProvider {
   invalidateStatementsFromPreviousVersion(
     sessionId: string,
     userId: string,
+    workspaceId: string,
     previousVersion: number,
     invalidatedBy: string,
     invalidatedAt?: Date,
@@ -314,20 +367,35 @@ export interface IGraphProvider {
    * Get the first episode (chunkIndex=0) of the latest version for a session
    * This episode stores version metadata
    */
-  getLatestVersionFirstEpisode(sessionId: string, userId: string): Promise<EpisodicNode | null>;
+  getLatestVersionFirstEpisode(
+    sessionId: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<EpisodicNode | null>;
 
   /**
    * Update recall count for episodes
    */
-  updateEpisodeRecallCount(userId: string, episodeUuids: string[]): Promise<void>;
+  updateEpisodeRecallCount(
+    userId: string,
+    episodeUuids: string[],
+    workspaceId?: string
+  ): Promise<void>;
 
   episodeEntityMatchCount(
     episodeIds: string[],
     entityIds: string[],
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<Map<string, number>>;
 
-  getEpisodesInvalidFacts(episodeUuids: string[], userId: string): Promise<{ episodeUuid: string; statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]>;
+  getEpisodesInvalidFacts(
+    episodeUuids: string[],
+    userId: string,
+    workspaceId?: string
+  ): Promise<
+    { episodeUuid: string; statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]
+  >;
 
   // ===== STATEMENTS =====
 
@@ -340,12 +408,12 @@ export interface IGraphProvider {
   /**
    * Get statement by UUID
    */
-  getStatement(uuid: string, userId: string): Promise<StatementNode | null>;
+  getStatement(uuid: string, userId: string, workspaceId?: string): Promise<StatementNode | null>;
 
   /**
    * Delete statements by UUIDs
    */
-  deleteStatements(uuids: string[], userId: string): Promise<void>;
+  deleteStatements(uuids: string[], userId: string, workspaceId?: string): Promise<void>;
 
   /**
    * Find semantically similar statements using vector similarity
@@ -355,6 +423,7 @@ export interface IGraphProvider {
     threshold: number;
     limit: number;
     userId: string;
+    workspaceId: string;
     spaceIds?: string[];
   }): Promise<Array<{ statement: StatementNode; score: number }>>;
 
@@ -365,6 +434,7 @@ export interface IGraphProvider {
     subjectName: string;
     predicateName: string;
     userId: string;
+    workspaceId: string;
   }): Promise<StatementNode[]>;
 
   /**
@@ -374,7 +444,8 @@ export interface IGraphProvider {
     uuid: string,
     invalidatedBy: string,
     invalidAt: Date,
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<void>;
 
   /**
@@ -383,7 +454,7 @@ export interface IGraphProvider {
    * @param userId - User ID for authorization
    * @returns Array of statement nodes
    */
-  getStatements(uuids: string[], userId: string): Promise<StatementNode[]>;
+  getStatements(uuids: string[], userId: string, workspaceId?: string): Promise<StatementNode[]>;
 
   /**
    * Find statements with same subject and object but different predicates
@@ -394,6 +465,7 @@ export interface IGraphProvider {
     objectId: string;
     excludePredicateId?: string;
     userId: string;
+    workspaceId: string;
   }): Promise<StatementNode[]>;
 
   /**
@@ -402,6 +474,7 @@ export interface IGraphProvider {
   findContradictoryStatementsBatch(params: {
     pairs: Array<{ subjectId: string; predicateId: string }>;
     userId: string;
+    workspaceId: string;
     excludeStatementIds?: string[];
   }): Promise<Map<string, StatementNode[]>>;
 
@@ -412,19 +485,28 @@ export interface IGraphProvider {
   findStatementsWithSameSubjectObjectBatch(params: {
     pairs: Array<{ subjectId: string; objectId: string; excludePredicateId?: string }>;
     userId: string;
+    workspaceId: string;
     excludeStatementIds?: string[];
   }): Promise<Map<string, StatementNode[]>>;
 
   /**
    * Update recall count for statements
    */
-  updateStatementRecallCount(userId: string, statementUuids: string[]): Promise<void>;
+  updateStatementRecallCount(
+    userId: string,
+    statementUuids: string[],
+    workspaceId?: string
+  ): Promise<void>;
 
   /**
    * Get EpisodeIds for statements
    * @param statementUuids
    */
-  getEpisodeIdsForStatements(statementUuids: string[]): Promise<Map<string, string>>;
+  getEpisodeIdsForStatements(
+    statementUuids: string[],
+    userId?: string,
+    workspaceId?: string
+  ): Promise<Map<string, string>>;
 
   // ===== TRIPLES =====
 
@@ -440,19 +522,25 @@ export interface IGraphProvider {
     object: EntityNode;
     episodeUuid: string;
     userId: string;
+    workspaceId: string;
   }): Promise<string>;
 
   /**
    * Get all triples for an episode
    */
-  getTriplesForEpisode(episodeUuid: string, userId: string): Promise<Triple[]>;
+  getTriplesForEpisode(
+    episodeUuid: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<Triple[]>;
 
   /**
    * Get triples for multiple statements (batch operation)
    */
   getTriplesForStatementsBatch(
     statementUuids: string[],
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<Map<string, Triple>>;
 
   // ===== COMPACTED SESSIONS =====
@@ -466,25 +554,33 @@ export interface IGraphProvider {
   /**
    * Get compacted session by UUID
    */
-  getCompactedSession(uuid: string, userId: string): Promise<CompactedSessionNode | null>;
+  getCompactedSession(
+    uuid: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<CompactedSessionNode | null>;
 
   /**
    * Get compacted session by session ID
    */
   getCompactedSessionBySessionId(
     sessionId: string,
-    userId: string
+    userId: string,
+    workspaceId?: string
   ): Promise<CompactedSessionNode | null>;
 
   /**
    * Delete compacted session
    */
-  deleteCompactedSession(uuid: string, userId: string): Promise<void>;
+  deleteCompactedSession(uuid: string, userId: string, workspaceId?: string): Promise<void>;
 
   /**
    * Get compaction statistics for a user
    */
-  getCompactionStats(userId: string): Promise<{
+  getCompactionStats(
+    userId: string,
+    workspaceId?: string
+  ): Promise<{
     totalSessions: number;
     totalEpisodes: number;
     averageCompressionRatio: number;
@@ -493,19 +589,33 @@ export interface IGraphProvider {
   /**
    * Link episodes to compacted session
    */
-  linkEpisodesToCompact(compactUuid: string, episodeUuids: string[], userId: string): Promise<void>;
+  linkEpisodesToCompact(
+    compactUuid: string,
+    episodeUuids: string[],
+    userId: string,
+    workspaceId?: string
+  ): Promise<void>;
 
   /**
    * Get episodes for a compacted session
    */
-  getEpisodesForCompact(compactUuid: string, userId: string): Promise<EpisodicNode[]>;
+  getEpisodesForCompact(
+    compactUuid: string,
+    userId: string,
+    workspaceId?: string
+  ): Promise<EpisodicNode[]>;
 
   /**
    * Get episodes for a session
    */
-  getSessionEpisodes(sessionId: string, userId: string, afterTime?: Date): Promise<EpisodicNode[]>;
+  getSessionEpisodes(
+    sessionId: string,
+    userId: string,
+    afterTime?: Date,
+    workspaceId?: string
+  ): Promise<EpisodicNode[]>;
 
-  deleteUser(userId: string): Promise<void>;
+  deleteUser(userId: string, workspaceId?: string): Promise<void>;
 
   // ===== SEARCH OPERATIONS =====
 
@@ -516,6 +626,7 @@ export interface IGraphProvider {
   getEpisodesForStatements(params: {
     statementUuids: string[];
     userId: string;
+    workspaceId: string;
     validAt: Date;
     startTime?: Date;
     includeInvalidated: boolean;
@@ -534,6 +645,7 @@ export interface IGraphProvider {
   getEpisodesByIdsWithStatements(params: {
     episodeUuids: string[];
     userId: string;
+    workspaceId: string;
     validAt: Date;
     startTime?: Date;
     includeInvalidated: boolean;
@@ -551,6 +663,7 @@ export interface IGraphProvider {
   performBM25Search(params: {
     query: string;
     userId: string;
+    workspaceId: string;
     validAt: Date;
     startTime?: Date;
     includeInvalidated: boolean;
@@ -572,6 +685,7 @@ export interface IGraphProvider {
   bfsGetStatements(params: {
     entityIds: string[];
     userId: string;
+    workspaceId: string;
     validAt: Date;
     startTime?: Date;
     includeInvalidated: boolean;
@@ -581,7 +695,11 @@ export interface IGraphProvider {
   /**
    * BFS traversal - fetch full statements with episode IDs
    */
-  bfsFetchStatements(params: { statementUuids: string[]; userId: string }): Promise<
+  bfsFetchStatements(params: {
+    statementUuids: string[];
+    userId: string;
+    workspaceId: string;
+  }): Promise<
     Array<{
       statement: StatementNode;
       episodeIds: string[];
@@ -594,6 +712,7 @@ export interface IGraphProvider {
   bfsGetNextLevel(params: {
     statementUuids: string[];
     userId: string;
+    workspaceId: string;
   }): Promise<Array<{ entityId: string }>>;
 
   /**
@@ -602,6 +721,7 @@ export interface IGraphProvider {
   performEpisodeGraphSearch(params: {
     queryEntityIds: string[];
     userId: string;
+    workspaceId: string;
     validAt: Date;
     startTime?: Date;
     includeInvalidated: boolean;
@@ -623,10 +743,15 @@ export interface IGraphProvider {
   fetchEpisodesByIds(params: {
     episodeIds: string[];
     userId: string;
+    workspaceId: string;
     labelIds: string[];
   }): Promise<EpisodicNode[]>;
 
-  getClusteredGraphData(userId: string, limit?: number): Promise<RawTriplet[]>;
+  getClusteredGraphData(
+    userId: string,
+    limit?: number,
+    workspaceId?: string
+  ): Promise<RawTriplet[]>;
 
   // ===== SEARCH V2 METHODS =====
 
@@ -636,6 +761,7 @@ export interface IGraphProvider {
    */
   getEpisodesForAspect(params: {
     userId: string;
+    workspaceId: string;
     labelIds: string[];
     aspects: string[];
     temporalStart?: Date;
@@ -650,6 +776,7 @@ export interface IGraphProvider {
   getEpisodesForEntities(params: {
     entityUuids: string[];
     userId: string;
+    workspaceId: string;
     maxEpisodes: number;
   }): Promise<EpisodicNode[]>;
 
@@ -659,12 +786,13 @@ export interface IGraphProvider {
    */
   getEpisodesForTemporal(params: {
     userId: string;
+    workspaceId: string;
     labelIds: string[];
     aspects: string[];
     startTime: Date;
     endTime?: Date;
     maxEpisodes: number;
-  }): Promise<EpisodicNode[]> ;
+  }): Promise<EpisodicNode[]>;
 
   /**
    * Find relationship statements between two entities
@@ -672,6 +800,7 @@ export interface IGraphProvider {
    */
   getStatementsConnectingEntities(params: {
     userId: string;
+    workspaceId: string;
     entityHint1: string;
     entityHint2: string;
     maxStatements: number;
@@ -683,6 +812,7 @@ export interface IGraphProvider {
    */
   getEpisodesForExploratory(params: {
     userId: string;
+    workspaceId: string;
     labelIds: string[];
     maxEpisodes: number;
   }): Promise<EpisodicNode[]>;

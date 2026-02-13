@@ -9,15 +9,16 @@ import { FileText, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { OnboardingModal } from "~/components/onboarding";
 import { LabelService } from "~/services/label.server";
-import { getUser } from "~/services/session.server";
+import { getUser, getWorkspaceId } from "~/services/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   const labelService = new LabelService();
+  const workspaceId = await getWorkspaceId(request, user?.id as string);
 
   try {
     const labels = await labelService.getWorkspaceLabels(
-      user?.Workspace?.id as string,
+      workspaceId as string,
     );
     return json({ labels });
   } catch (e) {
@@ -109,9 +110,9 @@ export default function LogsAll() {
                         </h3>
                         <p className="text-muted-foreground">
                           {selectedSource ||
-                          selectedStatus ||
-                          selectedType ||
-                          selectedLabel
+                            selectedStatus ||
+                            selectedType ||
+                            selectedLabel
                             ? "Try adjusting your filters to see more results."
                             : "No documents are available yet."}
                         </p>

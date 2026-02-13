@@ -1,8 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text } from 'ink';
 import zod from 'zod';
-import { getPreferences, updatePreferences } from '@/config/preferences';
-import { killProcessAndWait, isPidRunning } from '@/utils/process';
+import {
+	getServiceType,
+	getServiceName,
+	isServiceInstalled,
+	getServiceStatus,
+	stopService,
+} from '@/utils/service-manager/index';
 import SuccessMessage from '@/components/success-message';
 import ErrorMessage from '@/components/error-message';
 import { ThemeContext } from '@/hooks/useTheme';
@@ -20,6 +25,8 @@ export default function GatewayOff(_props: Props) {
 		| 'stopping'
 		| 'success'
 		| 'not-running'
+		| 'not-installed'
+		| 'unsupported'
 		| 'error'
 	>('checking');
 	const [error, setError] = useState('');
@@ -29,41 +36,49 @@ export default function GatewayOff(_props: Props) {
 
 		(async () => {
 			try {
-				// Check if gateway is running
-				const prefs = getPreferences();
-				if (!prefs.gateway?.pid) {
+				// Check platform support
+				const serviceType = getServiceType();
+
+				if (serviceType === 'none') {
+					if (!cancelled) {
+						setStatus('unsupported');
+					}
+					return;
+				}
+
+				const serviceName = getServiceName();
+				const installed = await isServiceInstalled(serviceName);
+
+				if (!installed) {
+					if (!cancelled) {
+						setStatus('not-installed');
+					}
+					return;
+				}
+
+				// Check if running
+				const serviceStatus = await getServiceStatus(serviceName);
+
+				if (serviceStatus !== 'running') {
 					if (!cancelled) {
 						setStatus('not-running');
 					}
 					return;
 				}
 
-				const running = isPidRunning(prefs.gateway.pid);
-				if (!running) {
-					// Clean up stale config
-					const { gateway, ...rest } = prefs;
-					updatePreferences(rest);
-					if (!cancelled) {
-						setStatus('not-running');
-					}
-					return;
+				// Stop the service
+				if (!cancelled) {
+					setStatus('stopping');
 				}
 
-				// Stop the gateway
-				setStatus('stopping');
-				const killed = await killProcessAndWait(prefs.gateway.pid);
+				await stopService(serviceName);
+				await new Promise((resolve) => setTimeout(resolve, 1000));
 
-				if (!killed) {
-					if (!cancelled) {
-						setError(`Failed to kill process ${prefs.gateway.pid}. It may require manual cleanup.`);
-						setStatus('error');
-					}
-					return;
+				// Verify stopped
+				const postStopStatus = await getServiceStatus(serviceName);
+				if (postStopStatus === 'running') {
+					throw new Error('Stop command sent but service is still running');
 				}
-
-				// Clean up config
-				const { gateway, ...rest } = prefs;
-				updatePreferences(rest);
 
 				if (!cancelled) {
 					setStatus('success');
@@ -86,11 +101,17 @@ export default function GatewayOff(_props: Props) {
 			{status === 'checking' ? (
 				<Text dimColor>Checking gateway status...</Text>
 			) : status === 'stopping' ? (
-				<Text dimColor>Stopping gateway server...</Text>
+				<Text dimColor>Stopping gateway...</Text>
+			) : status === 'unsupported' ? (
+				<ErrorMessage message="Service management not supported on this platform." />
+			) : status === 'not-installed' ? (
+				<ErrorMessage message="Gateway is not installed. Run: corebrain gateway on" hideTitle />
 			) : status === 'not-running' ? (
 				<ErrorMessage message="Gateway is not running" hideTitle />
 			) : status === 'success' ? (
-				<SuccessMessage message="Gateway server stopped successfully" />
+				<SuccessMessage
+					message="Gateway stopped.\n\nNote: Will auto-start on next login.\nTo remove completely: corebrain gateway uninstall"
+				/>
 			) : status === 'error' ? (
 				<ErrorMessage message={`Failed to stop gateway: ${error}`} />
 			) : null}

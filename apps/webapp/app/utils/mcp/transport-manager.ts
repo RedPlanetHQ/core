@@ -64,33 +64,6 @@ export class TransportManager {
       const session = this.transports.get(sessionId);
       if (!session) return;
 
-      // Close all integration transports
-      for (const [
-        accountId,
-        integrationTransport,
-      ] of session.integrationTransports) {
-        try {
-          await integrationTransport.transport.close();
-        } catch (error) {
-          console.error(
-            `Error closing integration transport ${accountId}:`,
-            error,
-          );
-        }
-      }
-
-      // Close main transport if exists
-      if (session.mainTransport) {
-        try {
-          session.mainTransport.close();
-        } catch (error) {
-          console.error(
-            `Error closing main transport for session ${sessionId}:`,
-            error,
-          );
-        }
-      }
-
       // Remove from map
       this.transports.delete(sessionId);
     } catch (e) {

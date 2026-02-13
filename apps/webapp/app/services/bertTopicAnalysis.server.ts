@@ -34,6 +34,7 @@ export async function shouldTriggerTopicAnalysis(
     const episodeCount = await prisma.episodeEmbedding.count({
       where: {
         userId,
+        workspaceId,
         ...(lastAnalysisAt && {
           createdAt: { gt: new Date(lastAnalysisAt) },
         }),

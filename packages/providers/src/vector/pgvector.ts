@@ -99,7 +99,6 @@ export class PgVectorProvider implements IVectorProvider {
     },
   ] as const;
 
-
   constructor(config: PgVectorConfig) {
     this.prisma = config.prisma;
     // Get dimension from environment variable (same as vector-indexes.server.ts)
@@ -244,6 +243,8 @@ export class PgVectorProvider implements IVectorProvider {
 
     // For all other namespaces, userId is required
     const userId = params.metadata?.userId;
+    const workspaceId = params.metadata?.workspaceId;
+
     if (!userId) {
       throw new Error("userId is required in metadata for upsert");
     }
@@ -257,8 +258,8 @@ export class PgVectorProvider implements IVectorProvider {
       const chunkIndex = params.metadata?.chunkIndex;
 
       await this.prisma.$executeRaw`
-        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "version", "chunkIndex", "createdAt", "updatedAt")
-        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, ${version}, ${chunkIndex}, NOW(), NOW())
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "ingestionQueueId", "labelIds", "sessionId", "version", "chunkIndex", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${ingestionQueueId}, ${labelIds}, ${sessionId}, ${version}, ${chunkIndex}, NOW(), NOW())
         ON CONFLICT (id) DO UPDATE
         SET vector = EXCLUDED.vector,
             ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
@@ -273,8 +274,8 @@ export class PgVectorProvider implements IVectorProvider {
     } else {
       // For other namespaces (statement, entity, compacted_session)
       await this.prisma.$executeRaw`
-        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
-        VALUES (${params.id}, ${userId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, NOW(), NOW())
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, NOW(), NOW())
         ON CONFLICT (id) DO UPDATE
         SET vector = EXCLUDED.vector,
             ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
@@ -299,6 +300,7 @@ export class PgVectorProvider implements IVectorProvider {
       async (tx) => {
         for (const item of items) {
           const userId = item.metadata?.userId;
+          const workspaceId = item.metadata?.workspaceId;
           if (!userId) {
             throw new Error(`userId is required in metadata for item ${item.id}`);
           }
@@ -307,10 +309,11 @@ export class PgVectorProvider implements IVectorProvider {
           const metadataString = JSON.stringify(item.metadata);
 
           await tx.$executeRaw`
-          INSERT INTO ${Prisma.raw(tableName)} (id, "userId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+          INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
           VALUES (
             ${item.id},
             ${userId},
+            ${workspaceId},
             ${vectorString}::vector,
             ${metadataString}::jsonb,
             ${item.content},
@@ -411,16 +414,15 @@ export class PgVectorProvider implements IVectorProvider {
         ? Prisma.sql`AND id::text NOT IN (${Prisma.join(excludeIds.map((id) => Prisma.sql`${id}`))})`
         : Prisma.empty;
 
+    const sessionIdCondition = sessionId
+      ? Prisma.sql`AND "sessionId" = ${sessionId}`
+      : Prisma.empty;
 
-    const sessionIdCondition =
-      sessionId
-        ? Prisma.sql`AND "sessionId" = ${sessionId}`
-        : Prisma.empty;
+    const workspaceIdCondition = workspaceId
+      ? Prisma.sql`AND "workspaceId" = ${workspaceId}`
+      : Prisma.empty;
 
-    const versionCondition =
-      version
-        ? Prisma.sql`AND "version" = ${version}`
-        : Prisma.empty;
+    const versionCondition = version ? Prisma.sql`AND "version" = ${version}` : Prisma.empty;
 
     // const startTime = Date.now();
 
@@ -443,6 +445,7 @@ export class PgVectorProvider implements IVectorProvider {
           ${excludeIdsCondition}
           ${sessionIdCondition}
           ${versionCondition}
+          ${workspaceIdCondition}
         ORDER BY ${vectorCast} <=> ${vectorLiteral}
         LIMIT ${expandedLimit}
       )
@@ -604,6 +607,7 @@ export class PgVectorProvider implements IVectorProvider {
     episodeUuids: string[],
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate: boolean = false
   ): Promise<number> {
     if (episodeUuids.length === 0 || labelIds.length === 0) {
@@ -617,6 +621,7 @@ export class PgVectorProvider implements IVectorProvider {
           where: {
             id: { in: episodeUuids },
             userId,
+            workspaceId,
           },
           data: {
             labelIds: labelIds,
@@ -664,6 +669,7 @@ export class PgVectorProvider implements IVectorProvider {
     sessionId: string,
     labelIds: string[],
     userId: string,
+    workspaceId: string,
     forceUpdate: boolean = false
   ): Promise<number> {
     if (!sessionId || labelIds.length === 0) {
@@ -677,6 +683,7 @@ export class PgVectorProvider implements IVectorProvider {
           where: {
             sessionId,
             userId,
+            workspaceId,
           },
           data: {
             labelIds: labelIds,
@@ -688,6 +695,7 @@ export class PgVectorProvider implements IVectorProvider {
         const episodes = await this.prisma.episodeEmbedding.findMany({
           where: {
             sessionId,
+            workspaceId,
             userId,
           },
           select: { id: true, labelIds: true },
@@ -716,15 +724,23 @@ export class PgVectorProvider implements IVectorProvider {
     return await this.prisma.episodeEmbedding.findMany({ where: { ingestionQueueId: queueId } });
   }
 
-  async getRecentEpisodes(userId: string, limit: number, sessionId?: string, excludeIds?: string[], version?: number): Promise<EpisodeEmbedding[]> {
+  async getRecentEpisodes(
+    userId: string,
+    limit: number,
+    sessionId?: string,
+    excludeIds?: string[],
+    version?: number,
+    workspaceId?: string
+  ): Promise<EpisodeEmbedding[]> {
     return await this.prisma.episodeEmbedding.findMany({
       where: {
         userId,
+        ...(workspaceId && { workspaceId }),
         ...(sessionId && { sessionId }),
         ...(excludeIds && excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         ...(version && { version }),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { createdAt: "desc" },
       take: limit,
     });
   }

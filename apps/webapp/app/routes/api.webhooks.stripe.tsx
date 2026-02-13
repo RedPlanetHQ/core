@@ -8,7 +8,7 @@
  * - Usage metering for overage billing
  */
 
-import { type ActionFunctionArgs , json } from "@remix-run/node";
+import { type ActionFunctionArgs, json } from "@remix-run/node";
 import Stripe from "stripe";
 import { prisma } from "~/db.server";
 import { BILLING_CONFIG, getPlanConfig } from "~/config/billing.server";
@@ -95,20 +95,37 @@ async function handleSubscriptionCreated(subscription: any) {
     // Reset user credits
     const workspace = await prisma.workspace.findUnique({
       where: { id: existingSubscription.workspaceId },
-      include: { user: { include: { UserUsage: true } } },
+      include: { UserWorkspace: true },
     });
 
-    if (workspace?.user?.UserUsage) {
-      await prisma.userUsage.update({
-        where: { id: workspace.user.UserUsage.id },
-        data: {
-          availableCredits: planConfig.monthlyCredits,
-          usedCredits: 0,
-          overageCredits: 0,
-          lastResetAt: new Date(),
-          nextResetAt: new Date(subscription.current_period_end * 1000),
+
+    if (workspace?.UserWorkspace) {
+      const usersInWorkspace = await prisma.user.findMany({
+        where: {
+          id: {
+            in: workspace.UserWorkspace.map((uw) => uw.userId)
+          }
         },
-      });
+        include: {
+          UserUsage: true
+        }
+      })
+
+
+      for await (const user of usersInWorkspace) {
+        if (user.UserUsage) {
+          await prisma.userUsage.update({
+            where: { id: user.UserUsage.id },
+            data: {
+              availableCredits: planConfig.monthlyCredits,
+              usedCredits: 0,
+              overageCredits: 0,
+              lastResetAt: new Date(),
+              nextResetAt: new Date(subscription.current_period_end * 1000),
+            },
+          });
+        }
+      }
     }
   }
 }
@@ -165,7 +182,7 @@ async function handleSubscriptionUpdated(subscription: any) {
           subscription.current_period_end * 1000,
         ),
         planType,
-        status: subscriptionStatus,
+        status: subscriptionStatus as any,
         monthlyCredits: planConfig.monthlyCredits,
         enableUsageBilling: planConfig.enableOverage,
         usagePricePerCredit: planConfig.enableOverage
@@ -178,22 +195,41 @@ async function handleSubscriptionUpdated(subscription: any) {
 
     // If plan changed, reset credits immediately
     if (existingSubscription.planType !== planType) {
+      // Reset user credits
       const workspace = await prisma.workspace.findUnique({
         where: { id: existingSubscription.workspaceId },
-        include: { user: { include: { UserUsage: true } } },
+        include: { UserWorkspace: true },
       });
 
-      if (workspace?.user?.UserUsage) {
-        await prisma.userUsage.update({
-          where: { id: workspace.user.UserUsage.id },
-          data: {
-            availableCredits: planConfig.monthlyCredits,
-            usedCredits: 0,
-            overageCredits: 0,
-            lastResetAt: new Date(),
-            nextResetAt: new Date(subscription.current_period_end * 1000),
+
+      if (workspace?.UserWorkspace) {
+        const usersInWorkspace = await prisma.user.findMany({
+          where: {
+            id: {
+              in: workspace.UserWorkspace.map((uw) => uw.userId)
+            }
           },
-        });
+          include: {
+            UserUsage: true
+          }
+        })
+
+        for await (const user of usersInWorkspace) {
+          if (user.UserUsage) {
+            await prisma.userUsage.update({
+              where: { id: user.UserUsage.id },
+              data: {
+                availableCredits: planConfig.monthlyCredits,
+                usedCredits: 0,
+                overageCredits: 0,
+                lastResetAt: new Date(),
+                nextResetAt: new Date(subscription.current_period_end * 1000),
+              },
+            });
+          }
+        }
+
+
       }
     }
   }
@@ -230,24 +266,41 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
       },
     });
 
-    // Reset to free tier credits
     const workspace = await prisma.workspace.findUnique({
       where: { id: existingSubscription.workspaceId },
-      include: { user: { include: { UserUsage: true } } },
+      include: { UserWorkspace: true },
     });
 
-    if (workspace?.user?.UserUsage) {
-      await prisma.userUsage.update({
-        where: { id: workspace.user.UserUsage.id },
-        data: {
-          availableCredits: freeConfig.monthlyCredits,
-          usedCredits: 0,
-          overageCredits: 0,
+    if (workspace?.UserWorkspace) {
+      const usersInWorkspace = await prisma.user.findMany({
+        where: {
+          id: {
+            in: workspace.UserWorkspace.map((uw) => uw.userId)
+          }
         },
-      });
+        include: {
+          UserUsage: true
+        }
+      })
+
+      for await (const user of usersInWorkspace) {
+        if (user.UserUsage) {
+          await prisma.userUsage.update({
+            where: { id: user.UserUsage.id },
+            data: {
+              availableCredits: freeConfig.monthlyCredits,
+              usedCredits: 0,
+              overageCredits: 0,
+            },
+          });
+        }
+      }
     }
   }
 }
+
+
+
 
 /**
  * Handle invoice.payment_succeeded event

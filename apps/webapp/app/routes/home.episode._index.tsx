@@ -1,7 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { PageHeader } from "~/components/common/page-header";
 import { LabelService } from "~/services/label.server";
-import { getUser } from "~/services/session.server";
+import { getUser, getWorkspaceId } from "~/services/session.server";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
 import { Editor } from "~/components/editor/editor.client";
@@ -10,10 +10,11 @@ import { useLoaderData, useParams } from "@remix-run/react";
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   const labelService = new LabelService();
+  const workspaceId = await getWorkspaceId(request, user?.id as string);
 
   try {
     const labels = await labelService.getWorkspaceLabels(
-      user?.Workspace?.id as string,
+      workspaceId as string,
     );
     return json({ labels });
   } catch (e) {

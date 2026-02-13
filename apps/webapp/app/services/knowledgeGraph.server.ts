@@ -92,6 +92,7 @@ export class KnowledgeGraphService {
           validAt: new Date(params.referenceTime),
           labelIds: params.labelIds || [],
           userId: params.userId,
+          workspaceId: params.workspaceId,
           sessionId: params.sessionId,
           queueId: params.queueId,
           type: params.type,
@@ -194,13 +195,14 @@ export class KnowledgeGraphService {
         }
       }
 
-      console.log("previousEpisodes: ", previousEpisodes);
-      console.log("previousVersionContent: ", previousVersionContent);
+      // console.log("previousEpisodes: ", previousEpisodes);
+      // console.log("previousVersionContent: ", previousVersionContent);
 
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
         params.source,
         params.userId,
+        params.workspaceId as string,
         prisma,
         tokenMetrics,
         new Date(params.referenceTime),
@@ -237,6 +239,7 @@ export class KnowledgeGraphService {
         normalizedEpisodeBody,
         episodeEmbedding,
         params.userId,
+        params.workspaceId as string,
         params.queueId,
         params.labelIds || [],
         params.sessionId,
@@ -312,6 +315,7 @@ export class KnowledgeGraphService {
             embedding: factEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingStoreEndTime = Date.now();
         logger.log(
@@ -326,6 +330,7 @@ export class KnowledgeGraphService {
             embedding: entityEmbeddings[index],
             userId: params.userId,
           })),
+          params.workspaceId as string,
         );
         const embeddingEntityStoreEndTime = Date.now();
         logger.log(
@@ -419,6 +424,7 @@ export class KnowledgeGraphService {
         nameEmbedding: [],
         createdAt: new Date(),
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
       entityMap.set(entity.name.toLowerCase(), entityNode);
     }
@@ -436,6 +442,7 @@ export class KnowledgeGraphService {
           nameEmbedding: null as any,
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         });
       }
     }
@@ -455,6 +462,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.source.toLowerCase(), subjectNode);
       }
@@ -472,6 +480,7 @@ export class KnowledgeGraphService {
           nameEmbedding: [],
           createdAt: new Date(),
           userId: episode.userId,
+          workspaceId: episode.workspaceId,
         };
         entityMap.set(stmt.target.toLowerCase(), objectNode);
       }
@@ -497,6 +506,7 @@ export class KnowledgeGraphService {
         attributes,
         aspect: stmt.aspect || null,
         userId: episode.userId,
+        workspaceId: episode.workspaceId,
       };
 
       return {
@@ -518,6 +528,7 @@ export class KnowledgeGraphService {
     episodeBody: string,
     source: string,
     userId: string,
+    workspaceId: string,
     prisma: PrismaClient,
     tokenMetrics: {
       high: { input: number; output: number; total: number; cached: number };
@@ -541,6 +552,7 @@ export class KnowledgeGraphService {
     const ingestionRules = await this.getIngestionRulesForSource(
       source,
       userId,
+      workspaceId,
       prisma,
     );
 
@@ -687,18 +699,13 @@ export class KnowledgeGraphService {
   private async getIngestionRulesForSource(
     source: string,
     userId: string,
+    workspaceId: string,
     prisma: PrismaClient,
   ): Promise<string | null> {
     try {
       // Import prisma here to avoid circular dependencies
 
-      // Get the user's workspace
-      const user = await prisma.user.findUnique({
-        where: { id: userId },
-        include: { Workspace: true },
-      });
-
-      if (!user?.Workspace) {
+      if (!workspaceId) {
         return null;
       }
 
@@ -707,7 +714,7 @@ export class KnowledgeGraphService {
           integrationDefinition: {
             slug: source,
           },
-          workspaceId: user.Workspace.id,
+          workspaceId,
           isActive: true,
           deleted: null,
         },
@@ -721,7 +728,7 @@ export class KnowledgeGraphService {
       const rules = await prisma.ingestionRule.findMany({
         where: {
           source: integrationAccount.id,
-          workspaceId: user.Workspace.id,
+          workspaceId,
           isActive: true,
           deleted: null,
         },

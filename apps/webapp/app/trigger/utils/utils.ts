@@ -1,14 +1,8 @@
 import {
-  type Activity,
   type Conversation,
   type ConversationHistory,
-  type IntegrationDefinitionV2,
-  type Prisma,
-  UserType,
-  type Workspace,
+  type UserUsage,
 } from "@prisma/client";
-
-import { type ModelMessage } from "ai";
 
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
@@ -145,82 +139,6 @@ export interface RunChatPayload {
   isContinuation?: boolean;
 }
 
-export const createConversationHistoryForAgent = async (
-  conversationId: string,
-) => {
-  return await prisma.conversationHistory.create({
-    data: {
-      conversationId,
-      message: "Generating...",
-      userType: "Agent",
-      thoughts: {},
-    },
-  });
-};
-
-export const getConversationHistoryFormat = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  previousHistory: any[],
-): string => {
-  if (previousHistory) {
-    const historyText = previousHistory
-      .map((history) => `${history.userType}: \n ${history.message}`)
-      .join("\n------------\n");
-
-    return historyText;
-  }
-
-  return "";
-};
-
-export const getPreviousExecutionHistory = (
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  previousHistory: any[],
-): ModelMessage[] => {
-  return previousHistory.map((history) => ({
-    role: history.userType === "User" ? "user" : "assistant",
-    content: history.message,
-  }));
-};
-
-export const getIntegrationDefinitionsForAgents = (agents: string[]) => {
-  return prisma.integrationDefinitionV2.findMany({
-    where: {
-      slug: {
-        in: agents,
-      },
-    },
-  });
-};
-
-export const getIntegrationConfigForIntegrationDefinition = (
-  integrationDefinitionId: string,
-) => {
-  return prisma.integrationAccount.findFirst({
-    where: {
-      integrationDefinitionId,
-    },
-  });
-};
-
-export const updateConversationHistoryMessage = async (
-  userMessage: string,
-  conversationHistoryId: string,
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  thoughts?: Record<string, any>,
-) => {
-  await prisma.conversationHistory.update({
-    where: {
-      id: conversationHistoryId,
-    },
-    data: {
-      message: userMessage,
-      thoughts,
-      userType: UserType.Agent,
-    },
-  });
-};
-
 export const getActivityDetails = async (activityId: string) => {
   if (!activityId) {
     return {};
@@ -273,20 +191,6 @@ export function flattenObject(obj: Record<string, any>, prefix = ""): string[] {
   }, []);
 }
 
-export const updateConversationStatus = async (
-  status: string,
-  conversationId: string,
-) => {
-  const data: Prisma.ConversationUpdateInput = { status, unread: true };
-
-  return await prisma.conversation.update({
-    where: {
-      id: conversationId,
-    },
-    data,
-  });
-};
-
 export const getActivity = async (activityId: string) => {
   return await prisma.activity.findUnique({
     where: {
@@ -317,51 +221,6 @@ export const updateActivity = async (
   });
 };
 
-export const createConversation = async (
-  activity: Activity,
-  workspace: Workspace,
-  integrationDefinition: IntegrationDefinitionV2,
-  automationContext: { automations?: string[]; executionPlan: string },
-) => {
-  const conversation = await prisma.conversation.create({
-    data: {
-      workspaceId: activity.workspaceId,
-      userId: workspace.userId as string,
-      title: activity.text.substring(0, 100),
-      ConversationHistory: {
-        create: {
-          userId: workspace.userId,
-          message: `Activity from ${integrationDefinition.name} \n Content: ${activity.text}`,
-          userType: UserType.User,
-          activityId: activity.id,
-          thoughts: { ...automationContext },
-        },
-      },
-    },
-    include: {
-      ConversationHistory: true,
-    },
-  });
-
-  return conversation;
-};
-
-export async function getContinuationAgentConversationHistory(
-  conversationId: string,
-): Promise<ConversationHistory | null> {
-  return await prisma.conversationHistory.findFirst({
-    where: {
-      conversationId,
-      userType: "Agent",
-      deleted: null,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: 1,
-  });
-}
-
 export async function deletePersonalAccessToken(tokenId: string) {
   return await prisma.personalAccessToken.delete({
     where: {
@@ -385,28 +244,11 @@ export class InsufficientCreditsError extends Error {
  * Track usage analytics without enforcing limits (for self-hosted)
  */
 async function trackUsageAnalytics(
-  workspaceId: string,
+  userUsage: UserUsage,
   operation: CreditOperation,
   amount?: number,
 ): Promise<void> {
   const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace?.user?.UserUsage) {
-    return; // Silently fail for analytics
-  }
-
-  const userUsage = workspace.user.UserUsage;
 
   // Just track usage, don't enforce limits
   await prisma.userUsage.update({
@@ -431,38 +273,33 @@ async function trackUsageAnalytics(
  */
 export async function deductCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<void> {
-  // If billing is disabled (self-hosted), allow unlimited usage
-  if (!isBillingEnabled()) {
-    // Still track usage for analytics
-    await trackUsageAnalytics(workspaceId, operation, amount);
-    return;
-  }
-
-  // Get the actual credit cost
-  const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
-
   // Get workspace with subscription and usage
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace || !workspace.user) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!workspace || !user) {
     throw new Error("Workspace or user not found");
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
 
   if (!subscription) {
     throw new Error("No subscription found for workspace");
@@ -471,6 +308,16 @@ export async function deductCredits(
   if (!userUsage) {
     throw new Error("No user usage record found");
   }
+
+  // If billing is disabled (self-hosted), allow unlimited usage
+  if (!isBillingEnabled()) {
+    // Still track usage for analytics
+    await trackUsageAnalytics(userUsage, operation, amount);
+    return;
+  }
+
+  // Get the actual credit cost
+  const creditCost = amount || BILLING_CONFIG.creditCosts[operation];
 
   // Check if user has available credits
   if (userUsage.availableCredits >= creditCost) {
@@ -554,6 +401,7 @@ export async function deductCredits(
  */
 export async function hasCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<boolean> {
@@ -568,19 +416,23 @@ export async function hasCredits(
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!user?.UserUsage || !workspace?.Subscription) {
     return false;
   }
 
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   // const subscription = workspace.Subscription;
 
   // If has available credits, return true
@@ -600,25 +452,32 @@ export async function hasCredits(
 /**
  * Reset monthly credits for a workspace
  */
-export async function resetMonthlyCredits(workspaceId: string): Promise<void> {
+export async function resetMonthlyCredits(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     throw new Error("Workspace, subscription, or user usage not found");
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const now = new Date();
   const nextMonth = new Date(now);
   nextMonth.setMonth(nextMonth.getMonth() + 1);

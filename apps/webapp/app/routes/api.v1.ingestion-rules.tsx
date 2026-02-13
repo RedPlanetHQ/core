@@ -31,12 +31,9 @@ const { action, loader } = createActionApiRoute(
   },
   async ({ body, authentication, request }) => {
     try {
-      const user = await prisma.user.findUnique({
-        where: { id: authentication.userId },
-        include: { Workspace: true },
-      });
+     
 
-      if (!user?.Workspace) {
+      if (!authentication.workspaceId) {
         throw new Error("User workspace not found");
       }
 
@@ -52,7 +49,7 @@ const { action, loader } = createActionApiRoute(
             text: createData.text,
             source: createData.source,
             isActive: createData.isActive,
-            workspaceId: user.Workspace.id,
+            workspaceId: authentication.workspaceId,
             userId: authentication.userId,
           },
         });
@@ -78,7 +75,7 @@ const { action, loader } = createActionApiRoute(
         const rule = await prisma.ingestionRule.update({
           where: {
             id: updateData.id,
-            workspaceId: user.Workspace.id, // Ensure user can only update their workspace rules
+            workspaceId: authentication.workspaceId, // Ensure user can only update their workspace rules
           },
           data: {
             ...(updateData.name !== undefined && { name: updateData.name }),
@@ -107,7 +104,7 @@ const { action, loader } = createActionApiRoute(
         const isActive = url.searchParams.get("isActive");
 
         const where: any = {
-          workspaceId: user.Workspace.id,
+          workspaceId: authentication.workspaceId,
           deleted: null,
         };
 

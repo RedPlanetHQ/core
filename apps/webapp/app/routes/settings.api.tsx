@@ -14,7 +14,7 @@ import {
 import { useFetcher } from "@remix-run/react";
 import { Input } from "~/components/ui/input";
 import { useState } from "react";
-import { parse } from "@conform-to/zod";
+import { parseWithZod } from "@conform-to/zod/v4";
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import {
@@ -22,7 +22,7 @@ import {
   getValidPersonalAccessTokens,
   revokePersonalAccessToken,
 } from "~/services/personalAccessToken.server";
-import { requireUserId } from "~/services/session.server";
+import { requireUser, requireUserId } from "~/services/session.server";
 import { useTypedLoaderData } from "remix-typedjson";
 import { APITable } from "~/components/api";
 import { SettingSection } from "~/components/setting-section";
@@ -36,17 +36,25 @@ export const APIKeyDeleteBodyRequest = z.object({
 });
 
 export async function action({ request }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
+  const { id: userId, workspaceId } = await requireUser(request);
+
+
 
   if (request.method === "DELETE") {
     const formData = await request.formData();
-    const submission = parse(formData, {
+    const submission = parseWithZod(formData, {
       schema: APIKeyDeleteBodyRequest,
     });
 
-    if (!submission.value || submission.intent !== "submit") {
-      return json(submission);
+
+    if (submission.status !== 'success') {
+      return json(submission.reply());
     }
+
+    if (!workspaceId) {
+      return json(submission.reply());
+    }
+
 
     const results = await revokePersonalAccessToken(submission.value.id);
 
@@ -55,13 +63,15 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const formData = await request.formData();
 
-  const submission = parse(formData, {
+  const submission = parseWithZod(formData, {
     schema: APIKeyBodyRequest,
   });
 
-  if (!submission.value || submission.intent !== "submit") {
-    return json(submission);
+
+  if (submission.status !== 'success') {
+    return json(submission.reply());
   }
+
 
   if (submission.value.name === "cli" || submission.value.name === "whatsapp") {
     return json(submission);
@@ -70,6 +80,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const results = await createPersonalAccessToken({
     name: submission.value.name,
     userId,
+    workspaceId: workspaceId as string
   });
   return json(results);
 }

@@ -192,7 +192,7 @@ export const GraphClusteringVisualization = forwardRef<
 
     return (
       <ResizablePanelGroup
-        direction="horizontal"
+        orientation="horizontal"
         className={cn("h-full", className)}
       >
         <ResizablePanel defaultSize={selectedSessionId ? 70 : 100}>

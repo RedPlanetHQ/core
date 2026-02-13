@@ -14,9 +14,12 @@ export const CombinedEntitySchema = z.object({
   name: z
     .string()
     .describe("The entity name - clean, without articles or qualifiers"),
-  type: z.enum(EntityTypes).describe("The entity type classification"),
+  type: z
+    .enum(EntityTypes)
+    .optional()
+    .describe("The entity type classification"),
   attributes: z
-    .record(z.string(), z.string())
+    .record(z.any(), z.any())
     .optional()
     .describe("Optional entity attributes like email, phone, location, etc."),
 });

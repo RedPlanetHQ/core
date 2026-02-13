@@ -70,9 +70,6 @@ class HubSpotCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
-      schedule: {
-        frequency: '*/30 * * * *',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://api.hubapi.com/oauth/v1/token',

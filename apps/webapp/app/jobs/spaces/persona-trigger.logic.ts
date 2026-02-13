@@ -34,7 +34,7 @@ export async function checkPersonaUpdateThreshold(
     const latestPersona = await prisma.ingestionQueue.findFirst({
       where: {
         sessionId: personaSessionId,
-        workspaceId: workspaceId,
+        workspaceId,
         status: "COMPLETED",
       },
       orderBy: {
@@ -90,6 +90,7 @@ export async function checkPersonaUpdateThreshold(
     const episodeCount = await prisma.episodeEmbedding.count({
       where: {
         userId,
+        workspaceId,
         ...(lastPersonaGenerationAt && {
           createdAt: { gt: new Date(lastPersonaGenerationAt) },
         }),

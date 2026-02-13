@@ -16,7 +16,6 @@ import { TransportManager } from "~/utils/mcp/transport-manager";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
 import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
-import { getWorkspaceByUser } from "~/models/workspace.server";
 import { ensureBillingInitialized } from "./billing.server";
 import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
 
@@ -31,6 +30,7 @@ const QueryParams = z.object({
 // Create MCP server with memory tools + dynamic integration tools
 async function createMcpServer(
   userId: string,
+  workspaceId: string,
   sessionId: string,
   source: string,
   spaceId?: string,
@@ -42,8 +42,8 @@ async function createMcpServer(
       version: "1.0.0",
       description:
         "CORE Memory - Intelligent knowledge graph that remembers conversations, documents, and context across all your tools",
-      homepage: "https://getcore.me",
-      icon: "https://getcore.me/logo.png",
+      websiteUrl: "https://getcore.me",
+      icons: [{ src: "https://getcore.me/logo.png" }],
     },
     {
       capabilities: {
@@ -84,13 +84,12 @@ async function createMcpServer(
       name === "get_labels"
     ) {
       // Get workspace for integration tools
-      const workspace = await getWorkspaceByUser(userId);
       return await callMemoryTool(
         name,
         {
           // Only use MCP sessionId if not provided in args
           sessionId: args?.sessionId ?? sessionId,
-          workspaceId: workspace?.id,
+          workspaceId,
           spaceId,
           ...args,
         },
@@ -199,10 +198,9 @@ async function createMcpServer(
     const { uri } = request.params;
 
     if (uri === "memory://user/profile") {
-      const workspace = await getWorkspaceByUser(userId);
       const profile = await callMemoryTool(
         "memory_about_user",
-        { sessionId, workspaceId: workspace?.id },
+        { sessionId, workspaceId },
         userId,
         source,
       );
@@ -218,10 +216,9 @@ async function createMcpServer(
     }
 
     if (uri === "memory://documents/all") {
-      const workspace = await getWorkspaceByUser(userId);
       const docs = await callMemoryTool(
         "memory_get_documents",
-        { sessionId, workspaceId: workspace?.id, limit: 50 },
+        { sessionId, workspaceId, limit: 50 },
         userId,
         source,
       );
@@ -338,9 +335,13 @@ async function createTransport(
 
   // Setup cleanup on close
   transport.onclose = async () => {
-    clearInterval(keepAlive);
-    await MCPSessionManager.deleteSession(sessionId);
-    await TransportManager.cleanupSession(sessionId);
+    try {
+      clearInterval(keepAlive);
+      await MCPSessionManager.deleteSession(sessionId);
+      await TransportManager.cleanupSession(sessionId);
+    } catch (e) {
+      console.log(e);
+    }
   };
 
   // Load integration transports
@@ -355,6 +356,7 @@ async function createTransport(
   // Create and connect MCP server
   const server = await createMcpServer(
     userId,
+    workspaceId,
     sessionId,
     source,
     spaceId,
@@ -415,10 +417,9 @@ export const handleMCPRequest = async (
     : [];
 
   const userId = authentication.userId;
-  const workspace = await getWorkspaceByUser(userId);
-  const workspaceId = workspace?.id as string;
+  const workspaceId = authentication.workspaceId;
 
-  await ensureBillingInitialized(workspaceId);
+  await ensureBillingInitialized(workspaceId, userId);
 
   try {
     let transport: StreamableHTTPServerTransport;
@@ -513,10 +514,10 @@ export const handleMCPRequest = async (
 export const handleSessionRequest = async (
   req: Request,
   res: Response,
+  workspaceId: string,
   userId: string,
 ) => {
   const sessionId = req.headers["mcp-session-id"] as string | undefined;
-  const workspace = await getWorkspaceByUser(userId);
 
   if (!sessionId) {
     // No session ID provided - client should send initialize request instead
@@ -531,7 +532,7 @@ export const handleSessionRequest = async (
   // Check if session is active in database
   const isActive = await MCPSessionManager.isSessionActive(
     sessionId,
-    workspace?.id as string,
+    workspaceId,
   );
 
   if (!isActive) {
@@ -541,7 +542,7 @@ export const handleSessionRequest = async (
     return;
   }
 
-  await ensureBillingInitialized(workspace?.id as string);
+  await ensureBillingInitialized(workspaceId, userId);
 
   const sessionData = TransportManager.getSessionInfo(sessionId);
 

@@ -31,7 +31,11 @@ export async function createWorkspace(
       slug,
       name: input.name,
       version: "V3",
-      userId: input.userId,
+      UserWorkspace: {
+        create: {
+          userId: input.userId,
+        },
+      },
     },
   });
 
@@ -42,7 +46,7 @@ export async function createWorkspace(
     },
   });
 
-  await ensureBillingInitialized(workspace.id);
+  await ensureBillingInitialized(workspace.id, input.userId);
 
   // Create persona document and label
   try {
@@ -72,10 +76,10 @@ export async function createWorkspace(
   return workspace;
 }
 
-export async function getWorkspaceByUser(userId: string) {
+export async function getWorkspaceById(id: string) {
   return await prisma.workspace.findFirst({
     where: {
-      userId,
+      id,
     },
   });
 }

@@ -9,15 +9,16 @@ import { Database, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { OnboardingModal } from "~/components/onboarding";
 import { LabelService } from "~/services/label.server";
-import { getUser } from "~/services/session.server";
+import { getUser, getWorkspaceId } from "~/services/session.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
+  const workspaceId = await getWorkspaceId(request, user?.id as string);
   const labelService = new LabelService();
 
   try {
     const labels = await labelService.getWorkspaceLabels(
-      user?.Workspace?.id as string,
+      workspaceId as string,
     );
     return json({ labels });
   } catch (e) {

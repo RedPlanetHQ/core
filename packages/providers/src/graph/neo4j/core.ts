@@ -168,6 +168,28 @@ export class Neo4jCore {
         "CREATE INDEX episode_session_user IF NOT EXISTS FOR (n:Episode) ON (n.sessionId, n.userId)"
       );
 
+      // workspaceId indexes for multi-tenant isolation
+      await this.runQuery(
+        "CREATE INDEX episode_workspace_id IF NOT EXISTS FOR (n:Episode) ON (n.workspaceId)"
+      );
+      await this.runQuery(
+        "CREATE INDEX statement_workspace_id IF NOT EXISTS FOR (n:Statement) ON (n.workspaceId)"
+      );
+      await this.runQuery(
+        "CREATE INDEX entity_workspace_id IF NOT EXISTS FOR (n:Entity) ON (n.workspaceId)"
+      );
+
+      // Composite indexes for userId + workspaceId (for efficient tenant scoping)
+      await this.runQuery(
+        "CREATE INDEX episode_user_workspace IF NOT EXISTS FOR (n:Episode) ON (n.userId, n.workspaceId)"
+      );
+      await this.runQuery(
+        "CREATE INDEX statement_user_workspace IF NOT EXISTS FOR (n:Statement) ON (n.userId, n.workspaceId)"
+      );
+      await this.runQuery(
+        "CREATE INDEX entity_user_workspace IF NOT EXISTS FOR (n:Entity) ON (n.userId, n.workspaceId)"
+      );
+
       // Create vector indexes for semantic search (if using Neo4j 5.0+)
       await this.runQuery(`
         CREATE VECTOR INDEX entity_embedding IF NOT EXISTS FOR (n:Entity) ON n.nameEmbedding
@@ -228,6 +250,31 @@ export class Neo4jCore {
         CREATE INDEX rel_has_predicate IF NOT EXISTS
         FOR ()-[r:HAS_PREDICATE]-()
         ON (r.userId)
+      `);
+
+      // Create workspaceId indexes for relationships
+      await this.runQuery(`
+        CREATE INDEX rel_has_provenance_workspace IF NOT EXISTS
+        FOR ()-[r:HAS_PROVENANCE]-()
+        ON (r.workspaceId)
+      `);
+
+      await this.runQuery(`
+        CREATE INDEX rel_has_subject_workspace IF NOT EXISTS
+        FOR ()-[r:HAS_SUBJECT]-()
+        ON (r.workspaceId)
+      `);
+
+      await this.runQuery(`
+        CREATE INDEX rel_has_object_workspace IF NOT EXISTS
+        FOR ()-[r:HAS_OBJECT]-()
+        ON (r.workspaceId)
+      `);
+
+      await this.runQuery(`
+        CREATE INDEX rel_has_predicate_workspace IF NOT EXISTS
+        FOR ()-[r:HAS_PREDICATE]-()
+        ON (r.workspaceId)
       `);
 
       if (this.logger) {

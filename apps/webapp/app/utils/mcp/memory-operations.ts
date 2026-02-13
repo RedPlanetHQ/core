@@ -4,7 +4,6 @@ import { addToQueue } from "~/lib/ingest.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "~/services/search.server";
 import { hasCredits } from "~/services/billing.server";
-import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
 import { getUserDocuments } from "~/services/ingestionLogs.server";
 import { getDocument, getPersonaForUser } from "~/services/document.server";
@@ -18,7 +17,20 @@ const labelService = new LabelService();
 export async function handleUserProfile(workspaceId: string) {
   try {
     const personaId = await getPersonaForUser(workspaceId);
-    const personaDocument = await getDocument(personaId!, workspaceId);
+
+    if (!personaId) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: "No profile information available",
+          },
+        ],
+        isError: false,
+      };
+    }
+
+    const personaDocument = await getDocument(personaId, workspaceId);
 
     const personaContent = personaDocument?.content ?? null;
 
@@ -53,6 +65,7 @@ export async function handleMemoryIngest(args: any) {
     // Check if workspace has sufficient credits before processing
     const hasSufficientCredits = await hasCredits(
       args.workspaceId as string,
+      args.userId as string,
       "addEpisode",
     );
 
@@ -81,6 +94,7 @@ export async function handleMemoryIngest(args: any) {
         sessionId: args.sessionId,
       },
       args.userId,
+      args.workspaceId,
     );
     return {
       content: [
@@ -119,6 +133,7 @@ export async function handleMemorySearch(args: any) {
     const results = await searchService.search(
       args.query,
       args.userId,
+      args.workspaceId,
       {
         startTime: args.startTime ? new Date(args.startTime) : undefined,
         endTime: args.endTime ? new Date(args.endTime) : undefined,

@@ -16,12 +16,12 @@ const loader = createHybridLoaderApiRoute(
     let personaLog;
 
     try {
-      const documentId = await getPersonaForUser(user?.Workspace?.id as string);
+      const documentId = await getPersonaForUser(authentication.workspaceId as string);
       personaLog = await getDocument(
         documentId as string,
-        user?.Workspace?.id as string,
+        authentication.workspaceId as string,
       );
-    } catch (e) {}
+    } catch (e) { }
 
     const metadata = user?.metadata as Record<string, unknown> | null;
 
@@ -29,7 +29,7 @@ const loader = createHybridLoaderApiRoute(
       id: authentication.userId,
       name: user?.name,
       persona: personaLog?.content,
-      workspaceId: user?.Workspace?.id,
+      workspaceId: authentication.workspaceId,
       phoneNumber: user?.phoneNumber,
       email: user?.email,
       timezone: metadata?.timezone ?? null,

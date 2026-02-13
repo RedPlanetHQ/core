@@ -182,7 +182,10 @@ model EntityEmbedding {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
   @@map("entity_embeddings")
 }
 
@@ -223,10 +226,13 @@ model EpisodeEmbedding {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([userId, labelIds])
-  @@index([userId, sessionId])
-  @@index([userId, sessionId, version])
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
+  @@index([userId, workspaceId, labelIds])
+  @@index([userId, workspaceId, sessionId])
+  @@index([userId, workspaceId, sessionId, version])
   @@map("episode_embeddings")
 }
 
@@ -342,7 +348,11 @@ model InvitationCode {
   source     String? // 'whatsapp' or 'email' for agent invites
   expiresAt  DateTime? // expiry for agent invites
 
-  users User[]
+  // Workspace invitation support
+  workspaceId String? // If set, this invitation is for a specific workspace
+  role        WorkspaceRole? // Role to assign when user accepts workspace invite
+
+  UserWorkspace UserWorkspace[]
 
   createdAt DateTime @default(now())
 }
@@ -567,6 +577,9 @@ model PersonalAccessToken {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
 
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String?
+
   revokedAt      DateTime?
   lastAccessedAt DateTime?
 
@@ -653,8 +666,11 @@ model StatementEmbedding {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@index([userId])
-  @@index([userId, labelIds])
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
+  @@index([userId, workspaceId, labelIds])
   @@map("statement_embeddings")
 }
 
@@ -729,9 +745,7 @@ model User {
   phoneNumber String? @unique
 
   personalAccessTokens PersonalAccessToken[]
-  InvitationCode       InvitationCode?        @relation(fields: [invitationCodeId], references: [id], onDelete: Cascade)
-  invitationCodeId     String?
-  Workspace            Workspace?
+  UserWorkspace        UserWorkspace[]
   IntegrationAccount   IntegrationAccount[]
   WebhookConfiguration WebhookConfiguration[]
   Conversation         Conversation[]
@@ -777,6 +791,37 @@ model UserUsage {
   userId String @unique
 }
 
+model UserWorkspace {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // User-Workspace relationship
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+
+  // Role and permissions
+  role WorkspaceRole @default(MEMBER)
+
+  // Invitation and acceptance tracking
+  invitedBy        String? // User ID who invited this user
+  invitationCode   InvitationCode? @relation(fields: [invitationCodeId], references: [id], onDelete: SetNull)
+  invitationCodeId String?
+  invitedAt        DateTime        @default(now())
+  acceptedAt       DateTime?
+  isActive         Boolean         @default(true)
+
+  // User preferences for this workspace
+  settings Json? @default("{}")
+
+  @@unique([userId, workspaceId])
+  @@index([userId])
+  @@index([workspaceId])
+  @@index([workspaceId, role])
+}
+
 model WebhookConfiguration {
   id          String     @id @default(cuid())
   url         String
@@ -820,13 +865,15 @@ model Workspace {
   slug String  @unique
   icon String?
 
-  version  WorkspaceVersion @default(V1)
+  version  WorkspaceVersion @default(V3)
   metadata Json             @default("{}")
+
+  // deprecated but keep until we move them 
+  userId String? @unique
 
   integrations String[]
 
-  userId                  String?                   @unique
-  user                    User?                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  UserWorkspace           UserWorkspace[]
   IngestionQueue          IngestionQueue[]
   IntegrationAccount      IntegrationAccount[]
   IntegrationDefinitionV2 IntegrationDefinitionV2[]
@@ -844,6 +891,10 @@ model Workspace {
   MCPSession              MCPSession[]
   Subscription            Subscription?
   documents               Document[]
+  personalAccessTokens    PersonalAccessToken[]
+  statementEmbeddings     StatementEmbedding[]
+  episodeEmbeddings       EpisodeEmbedding[]
+  entityEmbeddings        EntityEmbedding[]
 }
 
 enum PlanType {
@@ -889,4 +940,11 @@ enum WorkspaceVersion {
   V1
   V2
   V3
+}
+
+enum WorkspaceRole {
+  OWNER // Full control, can delete workspace, manage billing
+  ADMIN // Can manage users, settings, integrations
+  MEMBER // Can access and use workspace features
+  GUEST // Limited read-only access
 }

@@ -9,19 +9,21 @@ import { TooltipProvider } from "~/components/ui/tooltip";
 import { getDocument } from "~/services/document.server";
 
 import { LabelService } from "~/services/label.server";
-import { getUser } from "~/services/session.server";
+import { getUser, getWorkspaceId } from "~/services/session.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await getUser(request);
+  const workspaceId = await getWorkspaceId(request, user?.id as string);
+
   const documentId = params.episodeId;
   const labelService = new LabelService();
   try {
     const document = await getDocument(
       documentId as string,
-      user?.Workspace?.id as string,
+      workspaceId as string,
     );
     const labels = await labelService.getWorkspaceLabels(
-      user?.Workspace?.id as string,
+      workspaceId as string,
     );
     return json({ document, labels });
   } catch (e) {
@@ -57,7 +59,7 @@ export default function InboxNotSelected() {
           }
         />
 
-        <ResizablePanelGroup direction="horizontal">
+        <ResizablePanelGroup orientation="horizontal">
           <ResizablePanel
             maxSize={75}
             defaultSize={75}

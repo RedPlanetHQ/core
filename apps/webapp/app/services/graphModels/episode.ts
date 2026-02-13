@@ -35,8 +35,13 @@ export async function getEpisode(
 export async function getEpisodesBySession(params: {
   sessionId: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<EpisodicNode[]> {
-  return graphProvider().getEpisodesBySession(params.sessionId, params.userId);
+  return graphProvider().getEpisodesBySession(
+    params.sessionId,
+    params.userId,
+    params.workspaceId,
+  );
 }
 
 export async function searchEpisodesByEmbedding(params: {
@@ -47,6 +52,7 @@ export async function searchEpisodesByEmbedding(params: {
   sessionId?: string;
   version?: number;
   excludeIds?: string[];
+  workspaceId?: string;
 }) {
   // Step 1: Search vector provider for similar episode IDs
   const filter: VectorSearchFilter = { userId: params.userId };
@@ -77,13 +83,14 @@ export async function searchEpisodesByEmbedding(params: {
 
   // Step 2: Fetch full episode data from Neo4j
   const episodeUuids = vectorResults.map((r) => r.id);
-  return await graphProvider().getEpisodes(episodeUuids, params.userId, false);
+  return await graphProvider().getEpisodes(episodeUuids, false);
 }
 
 // Delete episode and its related nodes safely using single optimized Cypher
 export async function deleteEpisodeWithRelatedNodes(params: {
   episodeUuid: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<{
   deleted: boolean;
   episodesDeleted: number;
@@ -96,6 +103,7 @@ export async function deleteEpisodeWithRelatedNodes(params: {
   const result = await graphProvider().deleteEpisodeWithRelatedNodes(
     params.episodeUuid,
     params.userId,
+    params.workspaceId,
   );
 
   // Delete embeddings from vector database
@@ -123,11 +131,13 @@ export async function deleteEpisodeWithRelatedNodes(params: {
 export async function getEpisodeStatements(params: {
   episodeUuid: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   // Custom logic - get statements from triples
   const triples = await graphProvider().getTriplesForEpisode(
     params.episodeUuid,
     params.userId,
+    params.workspaceId,
   );
 
   return triples
@@ -141,10 +151,12 @@ export async function getEpisodeStatements(params: {
 export async function getStatementsInvalidatedByEpisode(params: {
   episodeUuid: string;
   userId: string;
+  workspaceId?: string;
 }) {
   return graphProvider().getStatementsInvalidatedByEpisode(
     params.episodeUuid,
     params.userId,
+    params.workspaceId,
   );
 }
 
@@ -152,9 +164,11 @@ export async function getEpisodesByUserId(params: {
   userId: string;
   startTime?: string;
   endTime?: string;
+  workspaceId?: string;
 }): Promise<EpisodicNode[]> {
   return graphProvider().getEpisodesByUserId({
     userId: params.userId,
+    workspaceId: params.workspaceId ?? "",
     startTime: params.startTime ? new Date(params.startTime) : undefined,
     endTime: params.endTime ? new Date(params.endTime) : undefined,
   });
@@ -193,8 +207,14 @@ export async function addLabelToEpisodes(
   labelId: string,
   episodeUuids: string[],
   userId: string,
+  workspaceId: string,
 ): Promise<number> {
-  await graphProvider().addLabelsToEpisodes(episodeUuids, [labelId], userId);
+  await graphProvider().addLabelsToEpisodes(
+    episodeUuids,
+    [labelId],
+    userId,
+    workspaceId,
+  );
   return episodeUuids.length; // Optimistic return
 }
 
@@ -202,12 +222,19 @@ export async function updateEpisodeLabels(
   sessionId: string,
   labelIds: string[],
   userId: string,
+  workspaceId: string,
 ): Promise<number> {
-  vectorProvider().addLabelsToEpisodesBySessionId(sessionId, labelIds, userId);
+  vectorProvider().addLabelsToEpisodesBySessionId(
+    sessionId,
+    labelIds,
+    userId,
+    workspaceId,
+  );
   return await graphProvider().addLabelsToEpisodesBySessionId(
     sessionId,
     labelIds,
     userId,
+    workspaceId,
     true,
   );
 }
@@ -216,8 +243,13 @@ export async function getSessionEpisodes(
   sessionId: string,
   userId: string,
   limit?: number,
+  workspaceId?: string,
 ): Promise<EpisodicNode[]> {
-  const episodes = await graphProvider().getAllSessionChunks(sessionId, userId);
+  const episodes = await graphProvider().getAllSessionChunks(
+    sessionId,
+    userId,
+    workspaceId,
+  );
 
   if (limit) {
     return episodes.slice(0, limit).reverse(); // DESC order
@@ -229,8 +261,9 @@ export async function getSessionEpisodes(
 export async function getTriplesForEpisode(
   episodeUuid: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<Triple[]> {
-  return graphProvider().getTriplesForEpisode(episodeUuid, userId);
+  return graphProvider().getTriplesForEpisode(episodeUuid, userId, workspaceId);
 }
 
 /**
@@ -240,11 +273,13 @@ export async function linkEpisodeToExistingStatement(
   episodeUuid: string,
   statementUuid: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<void> {
   return graphProvider().linkEpisodeToStatement(
     episodeUuid,
     statementUuid,
     userId,
+    workspaceId,
   );
 }
 
@@ -256,11 +291,13 @@ export async function moveAllProvenanceToStatement(
   sourceStatementUuid: string,
   targetStatementUuid: string,
   userId: string,
+  workspaceId?: string,
 ): Promise<number> {
   return graphProvider().moveProvenanceToStatement(
     sourceStatementUuid,
     targetStatementUuid,
     userId,
+    workspaceId,
   );
 }
 
@@ -275,9 +312,11 @@ export async function getUserSessions(
   userId: string,
   type?: string,
   limit: number = 50,
+  workspaceId?: string,
 ): Promise<EpisodicNode[]> {
   return graphProvider().getUserSessions({
     userId,
+    workspaceId: workspaceId ?? "",
     type,
     limit,
   });
@@ -294,7 +333,8 @@ export async function invalidateStatementsFromPreviousVersion(params: {
   previousVersion: number;
   invalidatedBy: string;
   invalidatedAt?: Date;
-  changedChunkIndices?: number[]; // Optional: only invalidate statements from specific chunks
+  changedChunkIndices?: number[];
+  workspaceId?: string;
 }): Promise<{
   invalidatedCount: number;
   statementUuids: string[];
@@ -304,6 +344,7 @@ export async function invalidateStatementsFromPreviousVersion(params: {
   return graphProvider().invalidateStatementsFromPreviousVersion(
     params.sessionId,
     params.userId,
+    params.workspaceId ?? "",
     params.previousVersion,
     params.invalidatedBy,
     invalidatedAt,

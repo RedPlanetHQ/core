@@ -35,6 +35,7 @@ function hasSearchResults(result: any): boolean {
 interface MemoryAgentParams {
   intent: string;
   userId: string;
+  workspaceId: string;
   source: string;
 }
 
@@ -116,6 +117,7 @@ Output: ["recent discussions and work on authentication"]
 export async function memoryAgent({
   intent,
   userId,
+  workspaceId,
   source,
 }: MemoryAgentParams): Promise<{
   episodes: any[];
@@ -146,6 +148,11 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
           .max(5)
           .describe("Array of search queries to execute"),
       }),
+      providerOptions: {
+        openai: {
+          strictJsonSchema: false,
+        },
+      },
     });
 
     const queries = queryObject.queries;
@@ -160,6 +167,7 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
         const result = (await searchService.search(
           query,
           userId,
+          workspaceId,
           {
             structured: true,
             limit: 20, // Get top 10 per query
@@ -274,26 +282,27 @@ interface SearchMemoryOptions {
 export async function searchMemoryWithAgent(
   intent: string,
   userId: string,
+  workspaceId: string,
   source: string,
   options: SearchMemoryOptions = {},
 ) {
   try {
     // Check workspace version to determine search strategy
     const workspace = await prisma.workspace.findFirst({
-      where: { userId },
+      where: { id: workspaceId },
       select: { version: true },
     });
     const isV3User = workspace?.version === "V3";
 
     logger.info(
-      `[MemoryAgent] Starting search for intent: "${intent}" (workspace version: ${workspace?.version || "unknown"}, V1 fallback: ${!isV3User})`
+      `[MemoryAgent] Starting search for intent: "${intent}" (workspace version: ${workspace?.version || "unknown"}, V1 fallback: ${!isV3User})`,
     );
 
     // For V3 users: V2 only (no V1 fallback - all their data is V2-compatible)
     // For V1/V2 users: parallel V1/V2 with V2-first, V1-fallback
     const v1Promise = isV3User
       ? null
-      : memoryAgent({ intent, userId, source });
+      : memoryAgent({ intent, userId, workspaceId, source });
 
     const v2Promise = searchV2(intent, userId, {
       structured: true,
@@ -303,7 +312,7 @@ export async function searchMemoryWithAgent(
       endTime: options.endTime,
       labelIds: options.labelIds,
       sortBy: options.sortBy,
-      fallbackThreshold: options.fallbackThreshold
+      fallbackThreshold: options.fallbackThreshold,
     });
 
     // Wait for V2 first (it's faster)
@@ -342,7 +351,7 @@ export async function searchMemoryWithAgent(
     }
 
     logger.info(
-      `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? 'yes' : 'no'} using ${usedVersion}`,
+      `[MemoryAgent] Returning ${episodes.length} episodes, ${facts.length} facts, entity: ${entity ? "yes" : "no"} using ${usedVersion}`,
     );
 
     // If structured option is true, return raw JSON data for API use
@@ -372,17 +381,20 @@ export async function searchMemoryWithAgent(
     // Format facts
     let factsText = "";
     if (facts.length > 0) {
-      factsText = "## Facts\n" + facts
-        .map((fact: any) => {
-          const date = new Date(fact.validAt).toLocaleDateString("en-US", {
-            month: "short",
-            day: "numeric",
-            year: "numeric",
-          });
-          const aspectTag = fact.aspect ? `[${fact.aspect}] ` : "";
-          return `- ${aspectTag}${fact.fact} _(${date})_`;
-        })
-        .join("\n") + "\n\n";
+      factsText =
+        "## Facts\n" +
+        facts
+          .map((fact: any) => {
+            const date = new Date(fact.validAt).toLocaleDateString("en-US", {
+              month: "short",
+              day: "numeric",
+              year: "numeric",
+            });
+            const aspectTag = fact.aspect ? `[${fact.aspect}] ` : "";
+            return `- ${aspectTag}${fact.fact} _(${date})_`;
+          })
+          .join("\n") +
+        "\n\n";
     }
 
     // Format episodes as readable text
@@ -398,9 +410,11 @@ export async function searchMemoryWithAgent(
       })
       .join("\n\n");
 
-    const finalText = `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
+    const finalText =
+      `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
 
-    const hasContent = episodeText || entityText || invalidFactsText || factsText;
+    const hasContent =
+      episodeText || entityText || invalidFactsText || factsText;
 
     return {
       content: [

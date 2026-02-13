@@ -10,19 +10,11 @@ import { LabelService } from "~/services/label.server";
 export const addToQueue = async (
   body: z.infer<typeof IngestBodyRequest>,
   userId: string,
+  workspaceId: string,
   activityId?: string,
   ingestionQueueId?: string,
 ) => {
-  const user = await prisma.user.findFirst({
-    where: {
-      id: userId,
-    },
-    include: {
-      Workspace: true,
-    },
-  });
-
-  if (!user?.Workspace?.id) {
+  if (!workspaceId) {
     throw new Error(
       "Workspace ID is required to create an ingestion queue entry.",
     );
@@ -30,7 +22,8 @@ export const addToQueue = async (
 
   // Check if workspace has sufficient credits before processing
   const hasSufficientCredits = await hasCredits(
-    user.Workspace?.id as string,
+    workspaceId,
+    userId,
     "addEpisode",
   );
 
@@ -60,7 +53,7 @@ export const addToQueue = async (
     const labelService = new LabelService();
     const hasAccess = await labelService.validateLabelAccess(
       body.labelIds,
-      user.Workspace.id,
+      workspaceId
     );
 
     if (!hasAccess) {
@@ -87,7 +80,7 @@ export const addToQueue = async (
       source: body.source,
       status: IngestionStatus.PENDING,
       priority: 1,
-      workspaceId: user.Workspace.id,
+      workspaceId: workspaceId,
       activityId,
       sessionId: body.sessionId,
       labels,
@@ -100,12 +93,12 @@ export const addToQueue = async (
     {
       body,
       userId,
-      workspaceId: user.Workspace.id,
+      workspaceId,
       queueId: queuePersist.id,
     },
     {
-      concurrencyKey: userId,
-      tags: [userId, queuePersist.id],
+      concurrencyKey: workspaceId,
+      tags: [workspaceId, userId, queuePersist.id],
     },
   );
 

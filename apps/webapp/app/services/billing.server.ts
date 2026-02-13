@@ -18,25 +18,32 @@ export type CreditOperation = "addEpisode" | "search" | "chatMessage";
 /**
  * Reset monthly credits for a workspace
  */
-export async function resetMonthlyCredits(workspaceId: string): Promise<void> {
+export async function resetMonthlyCredits(
+  workspaceId: string,
+  userId: string,
+): Promise<void> {
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     throw new Error("Workspace, subscription, or user usage not found");
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const now = new Date();
   const nextMonth = new Date(now);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
@@ -114,30 +121,41 @@ export async function initializeSubscription(
 /**
  * Ensure workspace has billing records initialized
  */
-export async function ensureBillingInitialized(workspaceId: string) {
+export async function ensureBillingInitialized(
+  workspaceId: string,
+  userId: string,
+) {
+  if (!userId || !workspaceId) {
+    return null;
+  }
+
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!user) {
     throw new Error("Workspace or user not found");
   }
 
   // Initialize subscription if missing
-  if (!workspace.Subscription) {
+  if (!workspace?.Subscription) {
     await initializeSubscription(workspaceId, "FREE");
   }
 
   // Initialize user usage if missing
-  if (!workspace.user.UserUsage) {
+  if (!user.UserUsage) {
     const subscription = await prisma.subscription.findUnique({
       where: { workspaceId },
     });
@@ -145,7 +163,7 @@ export async function ensureBillingInitialized(workspaceId: string) {
     if (subscription) {
       await prisma.userUsage.create({
         data: {
-          userId: workspace.user.id,
+          userId: user.id,
           availableCredits: subscription.monthlyCredits,
           usedCredits: 0,
           overageCredits: 0,
@@ -163,32 +181,36 @@ export async function ensureBillingInitialized(workspaceId: string) {
 /**
  * Get workspace usage summary
  */
-export async function getUsageSummary(workspaceId: string) {
-  if (!workspaceId) {
+export async function getUsageSummary(workspaceId: string, userId: string) {
+  if (!workspaceId || !userId) {
     return null;
   }
 
   // Ensure billing records exist for existing accounts
-  await ensureBillingInitialized(workspaceId);
+  await ensureBillingInitialized(workspaceId, userId);
 
   const workspace = await prisma.workspace.findUnique({
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.Subscription || !workspace.user?.UserUsage) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!workspace?.Subscription || !user?.UserUsage) {
     return null;
   }
 
   const subscription = workspace.Subscription;
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   const planConfig = getPlanConfig(subscription.planType);
 
   return {
@@ -227,175 +249,11 @@ export async function getUsageSummary(workspaceId: string) {
 }
 
 /**
- * Estimate credits needed based on input token count.
- * Ratio: 1000 tokens = 100 credits (i.e., 1 credit per 10 tokens)
- */
-export function estimateCreditsFromTokens(tokenCount: number): number {
-  return Math.max(1, Math.ceil(tokenCount / 10));
-}
-
-/**
- * Atomically reserve credits for an operation.
- * Decrements availableCredits upfront to prevent parallel over-spending.
- * Returns the number of credits reserved, or 0 if insufficient.
- */
-export async function reserveCredits(
-  workspaceId: string,
-  amount: number,
-): Promise<number> {
-  if (!isBillingEnabled()) {
-    return amount;
-  }
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
-    return 0;
-  }
-
-  const userUsage = workspace.user.UserUsage;
-
-  if (userUsage.availableCredits < amount) {
-    // Reserve whatever is available if subscription allows overage
-    if (workspace.Subscription.enableUsageBilling) {
-      // For overage-enabled plans, reserve the full amount
-      await prisma.userUsage.update({
-        where: {
-          id: userUsage.id,
-          availableCredits: userUsage.availableCredits, // optimistic lock
-        },
-        data: {
-          availableCredits: Math.max(0, userUsage.availableCredits - amount),
-        },
-      });
-      return amount;
-    }
-    return 0;
-  }
-
-  // Atomic decrement with optimistic lock
-  try {
-    await prisma.userUsage.update({
-      where: {
-        id: userUsage.id,
-        availableCredits: { gte: amount }, // only update if still has enough
-      },
-      data: {
-        availableCredits: { decrement: amount },
-      },
-    });
-    return amount;
-  } catch {
-    // Concurrent update — credits no longer available
-    return 0;
-  }
-}
-
-/**
- * Refund reserved credits back to the user (e.g., on failure)
- */
-export async function refundCredits(
-  workspaceId: string,
-  amount: number,
-): Promise<void> {
-  if (!isBillingEnabled() || amount <= 0) {
-    return;
-  }
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace?.user?.UserUsage) {
-    return;
-  }
-
-  await prisma.userUsage.update({
-    where: { id: workspace.user.UserUsage.id },
-    data: {
-      availableCredits: { increment: amount },
-    },
-  });
-}
-
-/**
- * Reconcile reserved credits with actual usage.
- * Adjusts availableCredits for any difference and tracks actual usage in usedCredits breakdown.
- */
-export async function reconcileCredits(
-  workspaceId: string,
-  operation: CreditOperation,
-  reservedAmount: number,
-  actualAmount: number,
-): Promise<void> {
-  if (!isBillingEnabled()) {
-    return;
-  }
-
-  const workspace = await prisma.workspace.findUnique({
-    where: { id: workspaceId },
-    include: {
-      Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
-    },
-  });
-
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
-    return;
-  }
-
-  const userUsage = workspace.user.UserUsage;
-  const difference = actualAmount - reservedAmount;
-
-  await prisma.userUsage.update({
-    where: { id: userUsage.id },
-    data: {
-      // If actual > reserved, decrement more; if actual < reserved, increment (refund)
-      availableCredits: difference > 0
-        ? { decrement: difference }
-        : difference < 0
-          ? { increment: Math.abs(difference) }
-          : undefined,
-      usedCredits: { increment: actualAmount },
-      ...(operation === "addEpisode" && {
-        episodeCreditsUsed: { increment: actualAmount },
-      }),
-      ...(operation === "search" && {
-        searchCreditsUsed: { increment: actualAmount },
-      }),
-      ...(operation === "chatMessage" && {
-        chatCreditsUsed: { increment: actualAmount },
-      }),
-    },
-  });
-}
-
-/**
  * Check if workspace has sufficient credits
  */
 export async function hasCredits(
   workspaceId: string,
+  userId: string,
   operation: CreditOperation,
   amount?: number,
 ): Promise<boolean> {
@@ -410,19 +268,23 @@ export async function hasCredits(
     where: { id: workspaceId },
     include: {
       Subscription: true,
-      user: {
-        include: {
-          UserUsage: true,
-        },
-      },
     },
   });
 
-  if (!workspace?.user?.UserUsage || !workspace.Subscription) {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+    include: {
+      UserUsage: true,
+    },
+  });
+
+  if (!user?.UserUsage || !workspace?.Subscription) {
     return false;
   }
 
-  const userUsage = workspace.user.UserUsage;
+  const userUsage = user.UserUsage;
   // const subscription = workspace.Subscription;
 
   // If has available credits, return true

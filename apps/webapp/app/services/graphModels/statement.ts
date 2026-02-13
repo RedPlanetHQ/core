@@ -9,7 +9,7 @@ const getGraphProvider = () => ProviderFactory.getGraphProvider();
 // Get the vector provider instance
 const getVectorProvider = () => ProviderFactory.getVectorProvider();
 
-export async function saveTriple(triple: Triple): Promise<string> {
+export async function saveTriple(triple: Triple, workspaceId?: string): Promise<string> {
   // Use the provider's saveTriple method
   return getGraphProvider().saveTriple({
     statement: triple.statement,
@@ -18,6 +18,7 @@ export async function saveTriple(triple: Triple): Promise<string> {
     object: triple.object,
     episodeUuid: triple.provenance.uuid,
     userId: triple.provenance.userId,
+    workspaceId: workspaceId ?? triple.provenance.workspaceId ?? "",
   });
 }
 
@@ -29,14 +30,16 @@ export async function findContradictoryStatements({
   subjectId,
   predicateId,
   userId,
+  workspaceId,
 }: {
   subjectId: string;
   predicateId: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   // Map subject/predicate IDs to names for provider method
-  const subject = await getGraphProvider().getEntity(subjectId, userId);
-  const predicate = await getGraphProvider().getEntity(predicateId, userId);
+  const subject = await getGraphProvider().getEntity(subjectId, userId, workspaceId ?? "");
+  const predicate = await getGraphProvider().getEntity(predicateId, userId, workspaceId ?? "");
 
   if (!subject || !predicate) {
     return [];
@@ -46,6 +49,7 @@ export async function findContradictoryStatements({
     subjectName: subject.name,
     predicateName: predicate.name,
     userId,
+    workspaceId: workspaceId ?? "",
   });
 
   return results.map(s => {
@@ -63,17 +67,20 @@ export async function findStatementsWithSameSubjectObject({
   objectId,
   excludePredicateId,
   userId,
+  workspaceId,
 }: {
   subjectId: string;
   objectId: string;
   excludePredicateId?: string;
   userId: string;
+  workspaceId?: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   const results = await getGraphProvider().findStatementsWithSameSubjectObject({
     subjectId,
     objectId,
     excludePredicateId,
     userId,
+    workspaceId: workspaceId ?? "",
   });
 
   // Remove factEmbedding from results
@@ -91,11 +98,13 @@ export async function findSimilarStatements({
   threshold = 0.85,
   excludeIds = [],
   userId,
+  workspaceId,
 }: {
   factEmbedding: number[];
   threshold?: number;
   excludeIds?: string[];
   userId: string;
+  workspaceId?: string;
 }): Promise<Omit<StatementNode, "factEmbedding">[]> {
   // Step 1: Search vector provider for similar statement IDs
   const vectorResults = await getVectorProvider().search({
@@ -114,6 +123,7 @@ export async function findSimilarStatements({
   const statements = await getGraphProvider().getStatements(
     vectorResults.map(r => r.id),
     userId,
+    workspaceId,
   );
 
   // Step 3: Remove factEmbedding from results
@@ -125,14 +135,16 @@ export async function findSimilarStatements({
 
 export async function getTripleForStatement({
   statementId,
+  workspaceId,
 }: {
   statementId: string;
+  workspaceId?: string;
 }): Promise<Triple | null> {
   // Get the statement first to get userId
   const graphProvider = getGraphProvider();
 
   // Use getTriplesForStatementsBatch with single statement
-  const triplesMap = await graphProvider.getTriplesForStatementsBatch([statementId], "");
+  const triplesMap = await graphProvider.getTriplesForStatementsBatch([statementId], "", workspaceId);
 
   if (triplesMap.size === 0) {
     return null;
@@ -146,17 +158,20 @@ export async function invalidateStatement({
   invalidAt,
   invalidatedBy,
   userId,
+  workspaceId,
 }: {
   statementId: string;
   invalidAt: string;
   invalidatedBy?: string;
   userId: string;
+  workspaceId?: string;
 }) {
   await getGraphProvider().invalidateStatement(
     statementId,
     invalidatedBy || "",
     new Date(invalidAt),
-    userId
+    userId,
+    workspaceId,
   );
 }
 
@@ -164,15 +179,17 @@ export async function invalidateStatements({
   statementIds,
   invalidatedBy,
   userId,
+  workspaceId,
 }: {
   statementIds: string[];
   invalidatedBy?: string;
   userId: string;
+  workspaceId?: string;
 }) {
   const invalidAt = new Date().toISOString();
   return statementIds.map(
     async (statementId) =>
-      await invalidateStatement({ statementId, invalidAt, invalidatedBy, userId }),
+      await invalidateStatement({ statementId, invalidAt, invalidatedBy, userId, workspaceId }),
   );
 }
 
@@ -181,6 +198,7 @@ export async function searchStatementsByEmbedding(params: {
   userId: string;
   limit?: number;
   minSimilarity?: number;
+  workspaceId?: string;
 }) {
   // Step 1: Search vector provider for similar episode IDs
   const vectorResults = await getVectorProvider().search({
@@ -196,7 +214,7 @@ export async function searchStatementsByEmbedding(params: {
   }
 
   const statementUuids = vectorResults.map(r => r.id);
-  return await getGraphProvider().getStatements(statementUuids, params.userId);
+  return await getGraphProvider().getStatements(statementUuids, params.userId, params.workspaceId);
 }
 
 export function parseStatementNode(node: Record<string, any>): StatementNode {
@@ -223,21 +241,25 @@ export function parseStatementNode(node: Record<string, any>): StatementNode {
 export async function getTripleForStatementsBatch({
   statementIds,
   userId,
+  workspaceId,
 }: {
   statementIds: string[];
   userId: string;
+  workspaceId?: string;
 }): Promise<Map<string, Triple>> {
-  return getGraphProvider().getTriplesForStatementsBatch(statementIds, userId);
+  return getGraphProvider().getTriplesForStatementsBatch(statementIds, userId, workspaceId);
 }
 
 export async function getStatements({
   statementUuids,
   userId,
+  workspaceId,
 }: {
   statementUuids: string[];
   userId: string;
+  workspaceId?: string;
 }) {
-  return getGraphProvider().getStatements(statementUuids, userId);
+  return getGraphProvider().getStatements(statementUuids, userId, workspaceId);
 }
 
 /**
@@ -247,10 +269,12 @@ export async function findContradictoryStatementsBatch({
   pairs,
   userId,
   excludeStatementIds = [],
+  workspaceId,
 }: {
   pairs: Array<{ subjectId: string; predicateId: string }>;
   userId: string;
   excludeStatementIds?: string[];
+  workspaceId?: string;
 }): Promise<Map<string, Omit<StatementNode, "factEmbedding">[]>> {
   if (pairs.length === 0) {
     return new Map();
@@ -260,6 +284,7 @@ export async function findContradictoryStatementsBatch({
     pairs,
     userId,
     excludeStatementIds,
+    workspaceId: workspaceId ?? "",
   });
 }
 
@@ -270,6 +295,7 @@ export async function findStatementsWithSameSubjectObjectBatch({
   pairs,
   userId,
   excludeStatementIds = [],
+  workspaceId,
 }: {
   pairs: Array<{
     subjectId: string;
@@ -278,6 +304,7 @@ export async function findStatementsWithSameSubjectObjectBatch({
   }>;
   userId: string;
   excludeStatementIds?: string[];
+  workspaceId?: string;
 }): Promise<Map<string, Omit<StatementNode, "factEmbedding">[]>> {
   if (pairs.length === 0) {
     return new Map();
@@ -287,6 +314,7 @@ export async function findStatementsWithSameSubjectObjectBatch({
     pairs,
     userId,
     excludeStatementIds,
+    workspaceId: workspaceId ?? "",
   });
 }
 
@@ -296,11 +324,12 @@ export async function findStatementsWithSameSubjectObjectBatch({
 export async function deleteStatements(
   statementUuids: string[],
   userId: string,
+  workspaceId?: string,
 ): Promise<void> {
-  await getGraphProvider().deleteStatements(statementUuids, userId);
+  await getGraphProvider().deleteStatements(statementUuids, userId, workspaceId);
 }
 
 
-export async function getEpisodeIdsForStatements(statementUuids: string[]): Promise<Map<string, string>> {
-  return getGraphProvider().getEpisodeIdsForStatements(statementUuids);
+export async function getEpisodeIdsForStatements(statementUuids: string[], userId?: string, workspaceId?: string): Promise<Map<string, string>> {
+  return getGraphProvider().getEpisodeIdsForStatements(statementUuids, userId, workspaceId);
 }

@@ -21,31 +21,31 @@
 		"dist"
 	],
 	"dependencies": {
-		"@mishieck/ink-titled-box": "^0.3.0",
+		"@mishieck/ink-titled-box": "^0.4.2",
 		"@redplanethq/sdk": "workspace:*",
 		"dotenv": "^17.2.3",
-		"ink": "^4.1.0",
-		"pastel": "^2.0.0",
-		"react": "^18.2.0",
-		"zod": "^3.21.4",
+		"ink": "^6.6.0",
+		"pastel": "^4.0.0",
+		"react": "^19.2.4",
+		"zod": "^4.3.6",
 		"zod-to-json-schema": "^3.25.1"
 	},
 	"devDependencies": {
-		"@sindresorhus/tsconfig": "^3.0.1",
+		"@sindresorhus/tsconfig": "^8.1.0",
 		"@types/node": "18",
-		"@types/react": "^18.0.32",
+		"@types/react": "^19.2.13",
 		"@vdemedes/prettier-config": "^2.0.1",
-		"ava": "^5.2.0",
+		"ava": "^6.4.1",
 		"chalk": "^5.2.0",
 		"eslint-config-xo-react": "^0.27.0",
 		"eslint-plugin-react": "^7.32.2",
 		"eslint-plugin-react-hooks": "^4.6.0",
-		"ink-testing-library": "^3.0.0",
+		"ink-testing-library": "^4.0.0",
 		"prettier": "^2.8.7",
 		"ts-node": "^10.9.1",
 		"tsc-alias": "^1.8.16",
 		"typescript": "^5.0.3",
-		"xo": "^0.54.2"
+		"xo": "^1.2.3"
 	},
 	"ava": {
 		"extensions": {

@@ -31,9 +31,8 @@ export async function enqueuePreprocessEpisode(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { preprocessTask } = await import(
-      "~/trigger/ingest/preprocess-episode"
-    );
+    const { preprocessTask } =
+      await import("~/trigger/ingest/preprocess-episode");
     const handler = await preprocessTask.trigger(payload, {
       queue: "preprocessing-queue",
       concurrencyKey: payload.userId,
@@ -91,9 +90,8 @@ export async function enqueueCreateConversationTitle(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { createConversationTitle } = await import(
-      "~/trigger/conversation/create-conversation-title"
-    );
+    const { createConversationTitle } =
+      await import("~/trigger/conversation/create-conversation-title");
     const handler = await createConversationTitle.trigger(payload);
     return { id: handler.id };
   } else {
@@ -120,9 +118,8 @@ export async function enqueueSessionCompaction(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { triggerSessionCompaction } = await import(
-      "~/trigger/session/session-compaction"
-    );
+    const { triggerSessionCompaction } =
+      await import("~/trigger/session/session-compaction");
     const handler = await triggerSessionCompaction(payload);
     return { id: handler.id };
   } else {
@@ -150,9 +147,8 @@ export async function enqueuePersonaGeneration(payload: {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { personaGenerationTask } = await import(
-      "~/trigger/spaces/persona-generation"
-    );
+    const { personaGenerationTask } =
+      await import("~/trigger/spaces/persona-generation");
     const handler = await personaGenerationTask.trigger(payload, {
       concurrencyKey: payload.userId,
     });
@@ -181,10 +177,10 @@ export async function enqueueLabelAssignment(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { labelAssignmentTask } = await import(
-      "~/trigger/labels/label-assignment"
-    );
+    const { labelAssignmentTask } =
+      await import("~/trigger/labels/label-assignment");
     const handler = await labelAssignmentTask.trigger(payload, {
+      queue: "label-assignment-queue",
       tags: [payload.userId, "label-assignment"],
     });
     return { id: handler.id };
@@ -209,9 +205,8 @@ export async function enqueueTitleGeneration(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { titleGenerationTask } = await import(
-      "~/trigger/titles/title-generation"
-    );
+    const { titleGenerationTask } =
+      await import("~/trigger/titles/title-generation");
     const handler = await titleGenerationTask.trigger(payload, {
       tags: [payload.userId, "title-generation"],
     });
@@ -237,9 +232,8 @@ export async function enqueueGraphResolution(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { graphResolutionTask } = await import(
-      "~/trigger/ingest/graph-resolution"
-    );
+    const { graphResolutionTask } =
+      await import("~/trigger/ingest/graph-resolution");
     const handler = await graphResolutionTask.trigger(payload, {
       concurrencyKey: payload.userId,
       queue: "graph-resolution-queue",
@@ -267,9 +261,8 @@ export async function enqueueIntegrationRun(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { integrationRun } = await import(
-      "~/trigger/integrations/integration-run"
-    );
+    const { integrationRun } =
+      await import("~/trigger/integrations/integration-run");
     const handler = await integrationRun.trigger(payload, {
       queue: "integration-run-queue",
       concurrencyKey: payload.userId,

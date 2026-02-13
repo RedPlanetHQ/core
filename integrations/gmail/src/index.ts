@@ -1,12 +1,12 @@
-import { integrationCreate } from './account-create';
-import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-  Message,
 } from '@redplanethq/sdk';
+
+import { integrationCreate } from './account-create';
+import { handleSchedule } from './schedule';
 import { getTools, callTool } from './mcp';
 
 export async function run(eventPayload: IntegrationEventPayload) {
@@ -30,6 +30,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
         return null;
       }
 
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 

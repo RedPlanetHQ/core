@@ -33,7 +33,7 @@ export interface TodoistProject {
  */
 export function getTodoistClient(config: TodoistConfig): AxiosInstance {
   return axios.create({
-    baseURL: 'https://api.todoist.com/rest/v2',
+    baseURL: 'https://api.todoist.com/api/v1',
     headers: {
       Authorization: `Bearer ${config.access_token}`,
       'Content-Type': 'application/json',
@@ -44,7 +44,10 @@ export function getTodoistClient(config: TodoistConfig): AxiosInstance {
 /**
  * Get all active tasks
  */
-export async function getTasks(config: TodoistConfig, filters?: { project_id?: string }): Promise<TodoistTask[]> {
+export async function getTasks(
+  config: TodoistConfig,
+  filters?: { project_id?: string }
+): Promise<TodoistTask[]> {
   const client = getTodoistClient(config);
   const response = await client.get('/tasks', { params: filters });
   return response.data;
@@ -138,7 +141,10 @@ export async function getProjects(config: TodoistConfig): Promise<TodoistProject
 /**
  * Get a specific project by ID
  */
-export async function getProject(config: TodoistConfig, projectId: string): Promise<TodoistProject> {
+export async function getProject(
+  config: TodoistConfig,
+  projectId: string
+): Promise<TodoistProject> {
   const client = getTodoistClient(config);
   const response = await client.get(`/projects/${projectId}`);
   return response.data;

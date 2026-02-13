@@ -19,14 +19,14 @@ const { action, loader } = createHybridActionApiRoute(
     try {
       const user = await getUserById(authentication.userId);
 
-      if (!user || !user.Workspace) {
+      if (!user || !authentication.workspaceId) {
         throw new Error("No user or workspace found");
       }
 
       // If billing is enabled, cancel any active subscriptions
       if (isBillingEnabled()) {
         const subscription = await prisma.subscription.findUnique({
-          where: { workspaceId: user?.Workspace?.id! },
+          where: { workspaceId: authentication.workspaceId },
         });
 
         if (subscription?.stripeSubscriptionId) {

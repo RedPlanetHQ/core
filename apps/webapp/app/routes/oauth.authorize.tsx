@@ -139,9 +139,10 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   const user = await getUser(request);
   const workspace = await requireWorkpace(request);
 
-  if (!user) {
+  if (!user || !workspace) {
     return redirect("/login");
   }
+
 
   const formData = await request.formData();
   const action = formData.get("action");
@@ -183,7 +184,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         state: params.state,
         codeChallenge: params.code_challenge,
         codeChallengeMethod: params.code_challenge_method,
-        workspaceId: workspace.id,
+        workspaceId: workspace?.id,
       });
       // Redirect back to client with authorization code
       const redirectUrl = new URL(params.redirect_uri);
