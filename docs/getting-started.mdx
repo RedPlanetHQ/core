@@ -3,29 +3,52 @@ title: "Quickstart"
 description: "Get started with CORE in 5 minutes"
 ---
 
-### Step 1: Create Your Account
+CORE is your digital brain - it remembers your context, works with your AI agents, and acts across your tools. Here's how to get started.
 
-1. Visit [app.getcore.me](https://app.getcore.me)
-2. Sign up with your email
+## Choose Your Deployment
 
-### Step 2: Add Your First Memory
+<CardGroup cols={3}>
+  <Card title="Cloud" icon="cloud" href="#cloud-setup">
+    Start in 2 minutes.
+  </Card>
 
-1. Open the CORE chat interface
-2. Tell CORE about yourself: "I'm a software engineer working on a React project called TaskMaster. I prefer TypeScript and use Tailwind for styling."
-3. Type `add to memory` to save this context
-   ![Add Memory](/images/add-memory.png)
+  <Card title="Self-Hosted" icon="server" href="/self-hosting/overview">
+    Deploy on your own infrastructure with full control.
+  </Card>
 
-### Step 3: See Your Memory Graph
+  <Card title="Local Development" icon="code" href="/guides/local-setup">
+    Run CORE locally for development and testing.
+  </Card>
+</CardGroup>
 
-1. Navigate to the Memory section
-2. Watch as CORE visualizes your information as connected nodes
-3. Notice how it links "React," "TaskMaster," and "TypeScript" together
+## Cloud Setup
 
-### Step 4: Connect Your AI Tools
+<Steps>
+  <Step title="Sign in to Dashboard">
+    Visit [app.getcore.me](https://app.getcore.me) and create your account.
+  </Step>
 
-To enable cross-platform context, you need to connect CORE to your AI tools:
+  <Step title="Connect Gmail and Calendar">
+    Grant CORE access to your Gmail (optional) and Google Calendar. CORE scans them to learn about you so your digital brain starts with real context from day one.
+  </Step>
 
-1. **Connect Claude**: [Claude MCP Setup Guide](/integrations/claude)
-2. **Connect Cursor**: [Cursor MCP Setup Guide](/integrations/cursor)
+  <Step title="Review Your Summary">
+    Head to the **Document** section in your dashboard. CORE generates a summary of what it learned you. This is the foundation of your digital brain.
+  </Step>
+</Steps>
 
-This step takes 2-3 minutes per tool but unlocks CORE's full power.
+## What Do You Want to Do?
+
+<CardGroup cols={3}>
+  <Card title="Build Your Jarvis" icon="robot" href="/quickstart/chief-of-staff">
+    Message CORE from WhatsApp - it takes action across your apps, browser, and machine.
+  </Card>
+
+  <Card title="Supercharge Your AI Agents" icon="bolt" href="/quickstart/supercharge-ai-agents">
+    Equip Claude Code and other agents with long-term memory and an extensible action layer
+  </Card>
+
+  <Card title="Turn AI Chats into Memory" icon="brain" href="/quickstart/capture-conversations">
+    Sync your ChatGPT and Gemini conversations into CORE - searchable, reusable, and available to every agent.
+  </Card>
+</CardGroup>

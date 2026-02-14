@@ -2,324 +2,180 @@
 title: Overview
 ---
 
-Core integrations allow you to connect external services to your knowledge graph, automatically sync activities, and expose MCP (Model Context Protocol) tools to AI agents. This guide will help you build your own integration.
+CORE integrations connect external services to provide activity sync and MCP tools for AI agents. This reference covers integration architecture and event types.
 
-## Overview
+## Integration Capabilities
 
-Core integrations serve three main purposes:
+1. **Activity Sync** - Capture events into knowledge graph
+2. **MCP Tools** - Expose service actions to AI agents (required)
 
-1. **Activity Sync** - Automatically capture relevant activities from external services into your knowledge graph
-2. **Real-time Updates** - Receive webhook events for instant synchronization
-3. **MCP Tools** - Expose service-specific tools to AI agents through the MCP Hub
+## File Structure
 
-## Integration Architecture
-
-Every Core integration consists of:
-
-- **spec.json** - Defines integration metadata, authentication, and MCP configuration
-- **index.ts** - Main entry point that handles different event types
-- **account-create.ts** - Handles OAuth flow completion and account setup
-- **Event handlers** - Process webhooks (webhook-based) or scheduled syncs (schedule-based)
+- **index.ts** - Event router (SETUP, SYNC/PROCESS, GET_TOOLS, CALL_TOOL)
+- **account-create.ts** - OAuth handler
+- **schedule.ts** OR **create-activity.ts + identify.ts** - Activity sync
+- **mcp/index.ts** - MCP tool definitions and implementations
 
 ## Integration Types
 
-Core supports two primary integration patterns:
+**Webhook-Based** - Real-time events (Slack, Discord)
+- Events: SETUP, IDENTIFY, PROCESS, GET_TOOLS, CALL_TOOL
+- Best for: Chat, real-time notifications
 
-### 1. Webhook-Based Integrations
+**Schedule-Based** - Periodic polling (GitHub, Linear)
+- Events: SETUP, SYNC, GET_TOOLS, CALL_TOOL
+- Best for: APIs without webhooks, batch processing
+- Frequency: 5-15 minute cron schedule
 
-**Best for:** Real-time events, chat platforms, collaboration tools
+## Spec Configuration
 
-Webhook-based integrations receive HTTP callbacks from the external service whenever events occur. This provides instant synchronization with minimal latency.
+Returned by `getSpec()` in your CLI class:
 
-**Example: Slack**
-- Receives webhook events for messages, reactions, mentions
-- Processes events in real-time as they happen
-- Uses `PROCESS` and `IDENTIFY` event types
-
-### 2. Schedule-Based Sync Integrations
-
-**Best for:** Services without webhooks, APIs with rate limits, batch processing
-
-Schedule-based integrations run on a cron schedule to poll the external API and fetch new activities. This is ideal for services that don't support webhooks or when you want to batch process data.
-
-**Example: GitHub**
-- Runs every 5-15 minutes (configurable)
-- Fetches notifications, PRs, issues, and comments
-- Maintains state to track last sync time
-- Uses `SYNC` event type
-
-## Integration Components
-
-### spec.json
-
-The specification file defines your integration's core configuration:
-
-```json
+```typescript
 {
-  "name": "Service Name",
-  "key": "service-key",
-  "description": "What your integration does",
-  "icon": "icon-name",
-
-  // For schedule-based integrations
-  "schedule": {
-    "frequency": "*/5 * * * *"  // Cron expression
-  },
-
-  // OAuth configuration
-  "auth": {
-    "OAuth2": {
-      "token_url": "https://api.service.com/oauth/token",
-      "authorization_url": "https://api.service.com/oauth/authorize",
-      "scopes": ["read", "write"],
-      "scope_separator": ","
+  name: 'Service Name',
+  key: 'service-key',
+  description: 'Integration description',
+  icon: 'icon-name',
+  schedule: { frequency: '*/5 * * * *' },  // For schedule-based
+  auth: {
+    OAuth2: {
+      token_url: 'https://api.service.com/oauth/token',
+      authorization_url: 'https://api.service.com/oauth/authorize',
+      scopes: ['read', 'write'],
+      scope_separator: ',',
     }
   },
-
-  // MCP Hub configuration
-  "mcp": {
-    "type": "http",  // or "stdio"
-    "url": "https://api.service.com/mcp/",
-    "headers": {
-      "Authorization": "Bearer ${config:access_token}"
-    }
-  }
+  mcp: { type: 'cli' }  // Always use 'cli' for custom tools
 }
 ```
 
-### index.ts
+## Event Types
 
-The main entry point routes events to appropriate handlers:
+**All integrations handle:**
 
 ```typescript
-import { IntegrationCLI, IntegrationEventPayload, IntegrationEventType } from '@redplanethq/sdk';
+case IntegrationEventType.SETUP:
+  return await integrationCreate(eventPayload.eventBody);
 
-export async function run(eventPayload: IntegrationEventPayload) {
-  switch (eventPayload.event) {
-    case IntegrationEventType.SETUP:
-      // Handle OAuth completion and account creation
-      return await integrationCreate(eventPayload.eventBody);
+case IntegrationEventType.GET_TOOLS:
+  return await getTools();
 
-    case IntegrationEventType.SYNC:
-      // For schedule-based integrations
-      return await handleSchedule(eventPayload.config, eventPayload.state);
-
-    case IntegrationEventType.PROCESS:
-      // For webhook-based integrations
-      return await createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
-
-    case IntegrationEventType.IDENTIFY:
-      // Extract user identifier from webhook event
-      return [{ type: 'identifier', data: eventPayload.eventBody.event.user }];
-
-    default:
-      return { message: `Unknown event type: ${eventPayload.event}` };
-  }
-}
-
-class YourIntegrationCLI extends IntegrationCLI {
-  constructor() {
-    super('your-service', '1.0.0');
-  }
-
-  protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
-    return await run(eventPayload);
-  }
-
-  protected async getSpec(): Promise<Spec> {
-    // Return spec.json content
-  }
-}
+case IntegrationEventType.CALL_TOOL:
+  const { name, arguments: args } = eventPayload.eventBody;
+  return await callTool(name, args, eventPayload.config.apiKey);
 ```
 
-### Event Types
-
-#### SETUP
-
-Called when a user completes OAuth authorization. Create the integration account and return configuration.
-
-**Returns:**
+**Schedule-based adds:**
 ```typescript
-[{
-  type: 'account',
-  data: {
-    accountId: 'user-123',
-    config: {
-      access_token: 'token',
-      refresh_token: 'refresh',
-      mcp: { tokens: { access_token: 'token' } }
-    },
-    settings: {
-      username: 'user',
-      schedule: { frequency: '*/15 * * * *' }
-    }
-  }
-}]
+case IntegrationEventType.SYNC:
+  return await handleSchedule(eventPayload.config, eventPayload.state);
 ```
 
-#### SYNC (Schedule-Based)
+**Webhook-based adds:**
+```typescript
+case IntegrationEventType.IDENTIFY:
+  return [{ type: 'identifier', data: eventPayload.eventBody.event.user }];
 
-Called on cron schedule. Fetch activities since last sync and return them.
+case IntegrationEventType.PROCESS:
+  return await createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
+```
 
-**Returns:**
+## Return Types
+
+**SETUP** - Account creation:
+```typescript
+[{ type: 'account', data: { accountId, config, settings } }]
+```
+
+**SYNC** - Activity list + state:
 ```typescript
 [
-  {
-    type: 'activity',
-    data: {
-      text: 'User created PR #123: Add new feature',
-      sourceURL: 'https://github.com/org/repo/pull/123'
-    }
-  },
-  {
-    type: 'state',
-    data: {
-      lastSyncTime: '2025-01-01T00:00:00Z',
-      // ... other state to persist
-    }
-  }
+  { type: 'activity', data: { text, sourceURL } },
+  { type: 'state', data: { lastSyncTime, ...otherState } }
 ]
 ```
 
-#### PROCESS (Webhook-Based)
-
-Called when webhook event is received. Process the event and return activities.
-
-**Returns:**
+**PROCESS** - Activity list:
 ```typescript
-[{
-  type: 'activity',
-  data: {
-    text: 'User mentioned you in #channel: Hello @user',
-    sourceURL: 'https://slack.com/archives/C123/p456'
-  }
-}]
+[{ type: 'activity', data: { text, sourceURL } }]
 ```
 
-#### IDENTIFY (Webhook-Based)
-
-Extract user identifier from webhook event for routing.
-
-**Returns:**
+**IDENTIFY** - User identifier:
 ```typescript
-[{
-  type: 'identifier',
-  data: 'user-id-from-event'
-}]
+[{ type: 'identifier', data: 'user-id' }]
 ```
 
-## MCP Hub Integration
+**GET_TOOLS** - Tool list:
+```typescript
+[{ name: 'create_issue', description: '...', inputSchema: {...} }]
+```
 
-The MCP Hub allows your integration to expose tools that AI agents can use. Configure this in spec.json:
+**CALL_TOOL** - Tool result:
+```typescript
+{ content: [{ type: 'text', text: 'Result message' }] }
+```
 
-### HTTP-based MCP
+## MCP Tools
 
-For services with existing MCP servers:
+All integrations must implement custom MCP tools using `type: 'cli'`:
 
-```json
-{
-  "mcp": {
-    "type": "http",
-    "url": "https://api.githubcopilot.com/mcp/",
-    "headers": {
-      "Authorization": "Bearer ${config:access_token}",
-      "Content-Type": "application/json"
-    }
+```typescript
+// src/mcp/index.ts
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+const CreateIssueSchema = z.object({
+  title: z.string().describe('Issue title'),
+  description: z.string().optional(),
+});
+
+export async function getTools() {
+  return [{
+    name: 'create_issue',
+    description: 'Create a new issue',
+    inputSchema: zodToJsonSchema(CreateIssueSchema),
+  }];
+}
+
+export async function callTool(name: string, args: any, apiKey: string) {
+  if (name === 'create_issue') {
+    const result = await yourApiCall(apiKey, args);
+    return { content: [{ type: 'text', text: `Created #${result.id}` }] };
   }
+  throw new Error(`Unknown tool: ${name}`);
 }
 ```
-
-### Stdio-based MCP
-
-For local command-line MCP servers:
-
-```json
-{
-  "mcp": {
-    "type": "stdio",
-    "url": "https://integrations.heysol.ai/slack/mcp/slack-mcp-server",
-    "args": [],
-    "env": {
-      "SLACK_MCP_XOXP_TOKEN": "${config:access_token}",
-      "SLACK_MCP_ADD_MESSAGE_TOOL": true
-    }
-  }
-}
-```
-
-The `${config:access_token}` placeholder will be replaced with the user's OAuth access token at runtime.
 
 ## Best Practices
 
-### Activity Messages
+**Activity Messages:**
+- Be descriptive with context
+- Always include sourceURL
+- Filter noise (only relevant events)
 
-1. **Be Descriptive** - Include who, what, where, and context
-2. **Include URLs** - Always provide sourceURL for deep linking
-3. **Use Consistent Format** - Follow patterns from existing integrations
-4. **Filter Noise** - Only sync relevant activities (e.g., mentions, assignments)
+**State Management:**
+- Save lastSyncTime after each sync
+- Default to 24 hours on first sync
+- Use pagination for large datasets
 
-### State Management
+**Error Handling:**
+- Return empty arrays on errors (don't throw)
+- Continue processing if one item fails
+- Validate tokens early
 
-For schedule-based integrations:
+**MCP Tools:**
+- Use clear descriptions
+- Validate all inputs
+- Return structured responses
+- Handle rate limiting
 
-1. **Track Sync Time** - Always save lastSyncTime in state
-2. **Default to 24 Hours** - On first sync, fetch last 24 hours of data
-3. **Use Pagination** - Handle large datasets with proper pagination
-4. **Error Handling** - Continue processing even if individual items fail
+## Reference Examples
 
-### Error Handling
-
-1. **Silent Failures** - Don't pollute stdout with errors (return empty arrays)
-2. **Graceful Degradation** - Continue processing other items if one fails
-3. **Validate Tokens** - Check for access_token presence early
-4. **Return Empty Arrays** - On fatal errors, return [] instead of throwing
-
-### OAuth Configuration
-
-1. **Request Minimal Scopes** - Only ask for permissions you need
-2. **Store Refresh Tokens** - Enable long-term access
-3. **Pass to MCP** - Include access_token in mcp config for tool usage
-
-## Testing Your Integration
-
-1. **Local Development** - Use the SDK CLI to test event handling
-2. **OAuth Flow** - Test complete authorization flow
-3. **Sync/Webhook** - Verify activities are created correctly
-4. **MCP Tools** - Test tool exposure and authentication
-5. **Error Cases** - Test with invalid tokens, network failures, etc.
-
-## Project Structure
-
-```
-integrations/your-service/
-├── spec.json                 # Integration specification
-├── package.json             # Dependencies
-├── tsconfig.json            # TypeScript config
-├── tsup.config.ts           # Build configuration
-├── src/
-│   ├── index.ts             # Main entry point
-│   ├── account-create.ts    # OAuth completion handler
-│   ├── schedule.ts          # (Schedule-based) Sync handler
-│   ├── create-activity.ts   # (Webhook-based) Event processor
-│   └── utils.ts             # Helper functions
-└── README.md                # Integration documentation
-```
-
-## Next Steps
-
-- [See Webhook-Based Integration Example (Slack)](/integrations/webhook-based-guide)
-- [See Schedule-Based Integration Example (GitHub)](/integrations/schedule-based-guide)
-- [Learn About MCP Hub](/integrations/mcp-hub-guide)
-- [View SDK Reference](https://github.com/redplanethq/sdk)
+- **Schedule-based**: [GitHub](/integrations/github), [Linear](/integrations/linear)
+- **Webhook-based**: [Slack](/integrations/slack), [Discord](/integrations/discord)
+- **Detailed guides**: [Schedule-Based Guide](/integrations/schedule-based-guide), [Webhook-Based Guide](/integrations/webhook-based-guide)
 
 ## Contributing
 
-We welcome community contributions! To submit your integration:
-
-1. Fork the Core repository
-2. Create your integration in `integrations/your-service/`
-3. Follow the patterns from GitHub/Slack examples
-4. Test thoroughly
-5. Submit a pull request
-
-Your integration will be reviewed and added to the Core integration marketplace!
+Want to build an integration? See our [step-by-step contributor guide](/opensource/building-integrations).

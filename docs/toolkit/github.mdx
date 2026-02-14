@@ -1,0 +1,467 @@
+---
+title: "GitHub"
+description: "Comprehensive repository management, issue tracking, and CI/CD automation for your GitHub workflows"
+---
+
+### Overview
+
+Integrate GitHub to manage repositories, issues, pull requests, and automate development workflows directly from CORE. Access 60+ tools for complete GitHub operations without leaving your workspace.
+
+### Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+### How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **GitHub** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to GitHub to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+### Scopes
+
+- `repo` - Repository access (read/write)
+- `repo:status` - Commit status access
+- `repo_deployment` - Deployment status access
+- `public_repo` - Public repository access
+- `repo:invite` - Repository invitations
+- `security_events` - Security events access
+- `write:repo_hook` - Repository webhooks
+- `read:repo_hook` - Read repository webhooks
+- `admin:org` - Organization administration
+- `write:org` - Organization membership
+- `read:org` - Read organization data
+- `admin:public_key` - Public key administration
+- `write:public_key` - Public key write access
+- `read:public_key` - Public key read access
+- `admin:org_hook` - Organization webhooks
+- `gist` - Gist access
+- `notifications` - Notifications access
+- `user` - User profile access
+- `read:user` - Read user profile
+- `user:email` - User email access
+- `user:follow` - Follow/unfollow users
+- `delete_repo` - Delete repositories
+- `write:discussion` - Discussions write access
+- `read:discussion` - Discussions read access
+- `write:packages` - Packages write access
+- `read:packages` - Packages read access
+- `delete:packages` - Delete packages
+- `admin:gpg_key` - GPG key administration
+- `write:gpg_key` - GPG key write access
+- `read:gpg_key` - GPG key read access
+- `workflow` - Workflow access
+
+### Available MCP Tools
+
+The GitHub integration provides 60+ tools for comprehensive repository management:
+
+
+<Tabs>
+  <Tab title="Repository Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_repo` | Get details of a specific repository |
+| `list_repos` | List repositories for the authenticated user |
+| `create_repository` | Create a new repository |
+| `fork_repository` | Fork an existing repository |
+| `search_repositories` | Search repositories across GitHub |
+</Tab>
+<Tab title="Issues">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_issues` | List issues in a repository with advanced filtering |
+| `get_issue` | Get details of a specific issue |
+| `create_issue` | Create a new issue |
+| `update_issue` | Update an existing issue |
+| `search_issues` | Search for issues and pull requests |
+| `list_issue_comments` | List comments on an issue |
+| `create_issue_comment` | Create a comment on an issue |
+| `update_issue_comment` | Update an existing issue comment |
+| `delete_issue_comment` | Delete an issue comment |
+</Tab>
+<Tab title="Pull Requests">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_pull_requests` | List pull requests in a repository |
+| `get_pull_request` | Get details of a specific pull request |
+| `create_pull_request` | Create a new pull request |
+| `update_pull_request` | Update an existing pull request |
+| `merge_pull_request` | Merge a pull request |
+| `list_pr_reviews` | List reviews on a pull request |
+| `create_pr_review` | Create a review on a pull request |
+| `list_pr_comments` | List review comments on a pull request |
+| `create_pr_comment` | Create a review comment on a pull request |
+</Tab>
+<Tab title="Files & Content">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_file_content` | Get the content of a file from a repository |
+| `create_or_update_file` | Create or update a file in a repository |
+| `delete_file` | Delete a file from a repository |
+| `push_files` | Push multiple files to repository |
+| `search_code` | Search for code across GitHub repositories |
+</Tab>
+<Tab title="Projects">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_projects` | List projects for a repository or organization |
+| `create_project` | Create a new project |
+| `update_project` | Update an existing project |
+| `delete_project` | Delete a project |
+</Tab>
+<Tab title="Milestones">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_milestones` | List milestones in a repository |
+| `get_milestone` | Get details of a specific milestone |
+| `create_milestone` | Create a new milestone |
+| `update_milestone` | Update an existing milestone |
+| `delete_milestone` | Delete a milestone |
+</Tab>
+<Tab title="Notifications">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_notifications` | List notifications for the authenticated user |
+| `mark_notification_read` | Mark a notification as read |
+| `mark_all_notifications_read` | Mark all notifications as read |
+</Tab>
+<Tab title="Labels">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_labels` | List labels in a repository |
+| `create_label` | Create a new label |
+| `update_label` | Update an existing label |
+| `delete_label` | Delete a label |
+</Tab>
+<Tab title="Branches & Commits">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_branches` | List branches in a repository |
+| `create_branch` | Create a new branch |
+| `list_commits` | List commits in a repository |
+| `get_commit` | Get commit details |
+</Tab>
+<Tab title="Tags & Releases">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_tags` | List tags in a repository |
+| `get_tag` | Get tag details |
+| `list_releases` | List releases in a repository |
+| `get_latest_release` | Get the latest release |
+| `get_release_by_tag` | Get a release by tag name |
+</Tab>
+<Tab title="GitHub Actions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_workflows` | List repository workflows |
+| `list_workflow_runs` | List workflow runs |
+| `get_workflow_run` | Get workflow run details |
+| `rerun_workflow` | Rerun a workflow |
+| `cancel_workflow_run` | Cancel a workflow run |
+| `trigger_workflow` | Trigger a workflow dispatch event |
+</Tab>
+<Tab title="Reactions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_issue_reactions` | List reactions on an issue |
+| `add_issue_reaction` | Add reaction to an issue |
+| `add_comment_reaction` | Add reaction to a comment |
+| `delete_reaction` | Delete a reaction |
+</Tab>
+<Tab title="Gists">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_gists` | List your gists |
+| `get_gist` | Get a gist |
+| `create_gist` | Create a gist |
+| `update_gist` | Update a gist |
+| `delete_gist` | Delete a gist |
+</Tab>
+</Tabs>
+
+### Triggers
+
+GitHub triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Issues">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_ISSUE_CREATED` | Triggered when a new issue is opened in the repository |
+| `GITHUB_ISSUE_UPDATED` | Triggered when an issue is edited or modified |
+| `GITHUB_ISSUE_CLOSED` | Triggered when an issue is closed |
+| `GITHUB_ISSUE_REOPENED` | Triggered when a closed issue is reopened |
+| `GITHUB_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
+| `GITHUB_ISSUE_LABELED` | Triggered when a label is added to an issue |
+</Tab>
+<Tab title="Pull Requests">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_PR_CREATED` | Triggered when a new pull request is opened |
+| `GITHUB_PR_UPDATED` | Triggered when a pull request is edited |
+| `GITHUB_PR_MERGED` | Triggered when a pull request is merged |
+| `GITHUB_PR_CLOSED` | Triggered when a pull request is closed without merging |
+| `GITHUB_PR_REVIEW_REQUESTED` | Triggered when a review is requested on a PR |
+| `GITHUB_PR_REVIEWED` | Triggered when a review is submitted on a PR |
+</Tab>
+<Tab title="Commits & Branches">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_PUSH` | Triggered when commits are pushed to a branch |
+| `GITHUB_BRANCH_CREATED` | Triggered when a new branch is created |
+| `GITHUB_BRANCH_DELETED` | Triggered when a branch is deleted |
+| `GITHUB_TAG_CREATED` | Triggered when a new tag is created |
+</Tab>
+<Tab title="Releases & Deployments">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_RELEASE_PUBLISHED` | Triggered when a release is published |
+| `GITHUB_RELEASE_CREATED` | Triggered when a release draft is created |
+| `GITHUB_DEPLOYMENT_CREATED` | Triggered when a deployment is created |
+| `GITHUB_DEPLOYMENT_STATUS_UPDATED` | Triggered when deployment status changes |
+</Tab>
+<Tab title="Actions & Workflows">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_WORKFLOW_RUN_COMPLETED` | Triggered when a workflow run completes |
+| `GITHUB_WORKFLOW_RUN_FAILED` | Triggered when a workflow run fails |
+| `GITHUB_CHECK_RUN_COMPLETED` | Triggered when a check run completes |
+</Tab>
+</Tabs>
+
+### Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform GitHub tasks, it uses MCP tools to execute your requests:
+
+
+<AccordionGroup>
+  <Accordion title="Automated Issue Management" icon="ticket">
+    **Scenario**: Automatically create and track GitHub issues from other tools
+
+    ```
+    "Create a GitHub issue in the 'core' repo titled 'Add user authentication'
+    with the description 'Need to implement OAuth2 authentication'
+    and assign it to @username with labels 'feature' and 'high-priority'"
+    ```
+
+    The agent will use `create_issue` to create the issue and can follow up with `create_issue_comment` to add additional context or use `update_issue` to modify details.
+  </Accordion>
+
+  <Accordion title="Pull Request Review Workflow" icon="code-pull-request">
+    **Scenario**: Review and merge pull requests directly from your IDE
+
+    ```
+    "Show me all open pull requests in the main repository,
+    then review PR #123 and merge it if tests are passing"
+    ```
+
+    The agent will:
+    1. Use `list_pull_requests` to fetch open PRs
+    2. Use `get_pull_request` to get PR details
+    3. Check `list_workflow_runs` for CI status
+    4. Use `merge_pull_request` to merge after verification
+  </Accordion>
+
+  <Accordion title="Code Search and Analysis" icon="magnifying-glass">
+    **Scenario**: Find specific code patterns across your repositories
+
+    ```
+    "Search for all files using the deprecated API endpoint
+    '/api/v1/auth' across all my repositories"
+    ```
+
+    The agent will use `search_code` to find matching files and can use `get_file_content` to read the actual implementations for analysis.
+  </Accordion>
+
+  <Accordion title="Release Management" icon="rocket">
+    **Scenario**: Automate release workflows
+
+    ```
+    "Create a new release branch 'release-v2.0' from main,
+    update the version in package.json to 2.0.0,
+    and create a pull request for the release"
+    ```
+
+    The agent will:
+    1. Use `create_branch` to create the release branch
+    2. Use `create_or_update_file` to update version files
+    3. Use `create_pull_request` to create the release PR
+    4. Use `create_issue` to track release tasks
+  </Accordion>
+
+  <Accordion title="Team Coordination" icon="users">
+    **Scenario**: Track team activity and respond to notifications
+
+    ```
+    "Show me all issues assigned to me that were updated in the last 24 hours,
+    and mark all my notifications as read"
+    ```
+
+    The agent will use `list_issues` with appropriate filters, `list_notifications` to keep you updated, and `mark_all_notifications_read` to clear your notifications.
+  </Accordion>
+
+  <Accordion title="CI/CD Pipeline Management" icon="gears">
+    **Scenario**: Monitor and control GitHub Actions workflows
+
+    ```
+    "Check the status of the latest workflow run on the main branch.
+    If it failed, rerun it"
+    ```
+
+    The agent will:
+    1. Use `list_workflow_runs` to get recent runs
+    2. Use `get_workflow_run` to check status details
+    3. Use `rerun_workflow` if the run failed
+  </Accordion>
+
+  <Accordion title="Repository Setup Automation" icon="folder-plus">
+    **Scenario**: Quickly set up new repositories with standard configurations
+
+    ```
+    "Create a new repository called 'my-new-project',
+    add a README, create labels for 'bug', 'feature', and 'documentation',
+    and set up a milestone for 'v1.0'"
+    ```
+
+    The agent will:
+    1. Use `create_repository` to create the repo
+    2. Use `create_or_update_file` to add the README
+    3. Use `create_label` for each label
+    4. Use `create_milestone` for the v1.0 milestone
+  </Accordion>
+
+  <Accordion title="Code Review Automation" icon="code">
+    **Scenario**: Automated code review and feedback
+
+    ```
+    "Review the latest PR in my repository, check for any TODO comments
+    in the changed files, and create review comments for each one"
+    ```
+
+    The agent will:
+    1. Use `list_pull_requests` to get the latest PR
+    2. Use `get_pull_request` to get changed files
+    3. Use `get_file_content` to read files
+    4. Use `create_pr_comment` to add review comments
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors GitHub 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Auto-Triage New Issues" icon="ticket">
+    **Trigger**: New issue created with specific labels
+
+    **Automated Action**: Assign to team member and add to project
+
+    ```
+    "When a new issue is created with the 'bug' label,
+    automatically assign it to @devops-team,
+    add it to the 'Current Sprint' project,
+    and notify me on WhatsApp"
+    ```
+
+    CORE monitors new issues and automatically routes them based on labels, keeping your team organized without manual triaging.
+  </Accordion>
+
+  <Accordion title="PR Review Notifications" icon="code-pull-request">
+    **Trigger**: Pull request review requested
+
+    **Automated Action**: Notify on preferred channel with context
+
+    ```
+    "When I'm requested to review a PR,
+    send me a Slack DM with the PR title, description, and changed files summary"
+    ```
+
+    Never miss review requests. CORE watches for review assignments and notifies you with full context on your preferred channel.
+  </Accordion>
+
+  <Accordion title="CI/CD Failure Alerts" icon="gears">
+    **Trigger**: Workflow run fails on main branch
+
+    **Automated Action**: Create issue and escalate
+
+    ```
+    "When a workflow fails on the main branch,
+    create a high-priority issue with the error logs,
+    assign it to the last committer,
+    and send an urgent notification to #engineering on Slack"
+    ```
+
+    Instantly respond to build failures. CORE creates issues, assigns responsibility, and escalates critical failures automatically.
+  </Accordion>
+
+  <Accordion title="Release Tracking" icon="rocket">
+    **Trigger**: New release published
+
+    **Automated Action**: Extract changelog and notify stakeholders
+
+    ```
+    "When a new release is published,
+    extract the changelog from the release notes,
+    save it to CORE memory with label 'releases',
+    and send a summary to #product-updates on Slack"
+    ```
+
+    Keep everyone informed on releases. CORE tracks release activity, stores release notes, and broadcasts updates across channels.
+  </Accordion>
+
+  <Accordion title="Auto-Close Stale PRs" icon="clock">
+    **Trigger**: PR updated after 30 days of inactivity
+
+    **Automated Action**: Add comment and close if inactive
+
+    ```
+    "When a PR hasn't been updated in 30 days,
+    add a comment asking if it's still relevant,
+    and if no response in 7 days, close it with a standard message"
+    ```
+
+    Maintain repository hygiene automatically. CORE monitors stale PRs and handles cleanup based on your rules.
+  </Accordion>
+
+  <Accordion title="Security Alert Response" icon="shield">
+    **Trigger**: Dependabot security alert created
+
+    **Automated Action**: Create issue and notify security team
+
+    ```
+    "When a security vulnerability is detected,
+    create a critical-priority issue in the 'security-fixes' project,
+    notify the security team on Slack,
+    and add it to CORE memory for tracking"
+    ```
+
+    Respond to security issues instantly. CORE escalates vulnerabilities, creates tracking issues, and notifies the right team members.
+  </Accordion>
+</AccordionGroup>
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

@@ -1,0 +1,304 @@
+---
+title: Building Integrations
+---
+
+# Building Integrations
+
+CORE is open-source and welcomes community contributions. You can build integrations for any service to extend CORE's capabilities.
+
+## What You Can Build
+
+**Project Management:**
+- Jira, ClickUp, Trello, Asana (similar to our Linear integration)
+- Task tools: create/update/search issues, manage projects
+
+**Analytics & Insights:**
+- GitLab Analytics, Bitbucket Analytics (similar to our GitHub Analytics)
+- Metric tools: get stats, generate reports, track KPIs
+
+**Communication:**
+- Microsoft Teams, Discord DMs (similar to our Slack integration)
+- Messaging tools: send messages, manage channels
+
+**Any service with an API** - if it has OAuth/API key auth, you can integrate it.
+
+## How Integrations Work
+
+Every CORE integration provides **two essential capabilities:**
+
+1. **Activity Sync** - Capture relevant events → knowledge graph
+   - Schedule-based: Poll API every 5-15 mins (GitHub, Linear)
+   - Webhook-based: Real-time events (Slack, Discord)
+
+2. **MCP Tools** - Enable AI agents to take actions
+   - Required for all integrations
+   - Examples: create_issue, send_message, search_code
+
+## Quick Start
+
+### Step 1: Choose Integration Type
+
+**Schedule-Based** (for APIs without webhooks):
+```
+Use when: Service has REST API, no webhooks
+Examples: GitHub, Linear, Todoist
+Structure: index.ts, account-create.ts, schedule.ts, mcp/
+```
+
+**Webhook-Based** (for real-time events):
+```
+Use when: Service provides webhook events
+Examples: Slack, Discord, Linear webhooks
+Structure: index.ts, account-create.ts, create-activity.ts, identify.ts, mcp/
+```
+
+### Step 2: Set Up Project Structure
+
+```bash
+# Fork and clone CORE repository
+git clone https://github.com/YOUR-USERNAME/core.git
+cd core/integrations
+
+# Create your integration directory
+mkdir your-service
+cd your-service
+
+# Copy structure from similar integration
+cp -r ../linear/* .  # For schedule-based
+# OR
+cp -r ../slack/* .   # For webhook-based
+
+# Install dependencies
+npm install
+```
+
+### Step 3: Implement OAuth (account-create.ts)
+
+```typescript
+// src/account-create.ts
+export async function integrationCreate(data: any) {
+  const { oauthResponse } = data;
+
+  // Get user info from service API
+  const user = await getUser(oauthResponse.access_token);
+
+  return [{
+    type: 'account',
+    data: {
+      accountId: user.id,
+      config: {
+        access_token: oauthResponse.access_token,
+        refresh_token: oauthResponse.refresh_token,
+      },
+      settings: {
+        username: user.username,
+        // Add service-specific settings
+      }
+    }
+  }];
+}
+```
+
+### Step 4: Implement Activity Sync
+
+**For Schedule-Based (schedule.ts):**
+```typescript
+export async function handleSchedule(config: any, state: any) {
+  const lastSync = state?.lastSyncTime || getDefault24HoursAgo();
+  const activities = [];
+
+  // Fetch new data since last sync
+  const items = await fetchItems(config.access_token, lastSync);
+
+  // Create activity messages
+  for (const item of items) {
+    activities.push({
+      type: 'activity',
+      data: {
+        text: `${item.user} created issue #${item.number}: ${item.title}`,
+        sourceURL: item.url
+      }
+    });
+  }
+
+  // Save state for next sync
+  activities.push({
+    type: 'state',
+    data: { lastSyncTime: new Date().toISOString() }
+  });
+
+  return activities;
+}
+```
+
+**For Webhook-Based (create-activity.ts + identify.ts):**
+```typescript
+// identify.ts - Extract user ID for routing
+export async function identify(integration: any, eventBody: any) {
+  return [{
+    type: 'identifier',
+    data: eventBody.event.user
+  }];
+}
+
+// create-activity.ts - Process webhook event
+export async function createActivityEvent(eventData: any, config: any) {
+  const event = eventData.event;
+
+  const text = `${event.user} mentioned you: ${event.message}`;
+  const url = await getPermalink(config.access_token, event.id);
+
+  return [{
+    type: 'activity',
+    data: { text, sourceURL: url }
+  }];
+}
+```
+
+### Step 5: Implement MCP Tools (Required)
+
+```typescript
+// src/mcp/index.ts
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
+// Define tool schemas
+const CreateIssueSchema = z.object({
+  title: z.string().describe('Issue title'),
+  description: z.string().optional().describe('Issue description'),
+  assignee: z.string().optional().describe('User to assign'),
+});
+
+const SearchIssuesSchema = z.object({
+  query: z.string().describe('Search query'),
+  status: z.string().optional().describe('Filter by status'),
+});
+
+// Export tools list
+export async function getTools() {
+  return [
+    {
+      name: 'create_issue',
+      description: 'Create a new issue in the project',
+      inputSchema: zodToJsonSchema(CreateIssueSchema),
+    },
+    {
+      name: 'search_issues',
+      description: 'Search for issues',
+      inputSchema: zodToJsonSchema(SearchIssuesSchema),
+    },
+  ];
+}
+
+// Implement tool execution
+export async function callTool(name: string, args: any, apiKey: string) {
+  switch (name) {
+    case 'create_issue':
+      const issue = await createIssue(apiKey, args);
+      return { content: [{ type: 'text', text: `Created issue #${issue.id}` }] };
+
+    case 'search_issues':
+      const results = await searchIssues(apiKey, args);
+      return { content: [{ type: 'text', text: JSON.stringify(results) }] };
+
+    default:
+      throw new Error(`Unknown tool: ${name}`);
+  }
+}
+```
+
+### Step 6: Wire Everything in index.ts
+
+```typescript
+// src/index.ts
+import { IntegrationCLI, IntegrationEventPayload, IntegrationEventType, Spec } from '@redplanethq/sdk';
+import { integrationCreate } from './account-create';
+import { handleSchedule } from './schedule'; // or createActivityEvent + identify
+import { getTools, callTool } from './mcp';
+
+export async function run(eventPayload: IntegrationEventPayload) {
+  switch (eventPayload.event) {
+    case IntegrationEventType.SETUP:
+      return await integrationCreate(eventPayload.eventBody);
+
+    case IntegrationEventType.SYNC:
+      return await handleSchedule(eventPayload.config, eventPayload.state);
+
+    case IntegrationEventType.GET_TOOLS:
+      return await getTools();
+
+    case IntegrationEventType.CALL_TOOL:
+      const { name, arguments: args } = eventPayload.eventBody;
+      return await callTool(name, args, eventPayload.config.apiKey);
+
+    default:
+      return { message: `Unknown event: ${eventPayload.event}` };
+  }
+}
+
+class YourServiceCLI extends IntegrationCLI {
+  constructor() {
+    super('your-service', '1.0.0');
+  }
+
+  protected async handleEvent(eventPayload: IntegrationEventPayload) {
+    return await run(eventPayload);
+  }
+
+  protected async getSpec(): Promise<Spec> {
+    return {
+      name: 'Your Service',
+      key: 'your-service',
+      description: 'Integration description',
+      icon: 'your-service',
+      schedule: { frequency: '*/5 * * * *' }, // For schedule-based
+      auth: {
+        OAuth2: {
+          token_url: 'https://api.service.com/oauth/token',
+          authorization_url: 'https://api.service.com/oauth/authorize',
+          scopes: ['read', 'write'],
+          scope_separator: ',',
+        },
+      },
+      mcp: { type: 'cli' },
+    };
+  }
+}
+
+function main() {
+  const cli = new YourServiceCLI();
+  cli.parse();
+}
+
+main();
+```
+
+## Testing Your Integration
+
+1. **Build**: `npm run build`
+2. **Test locally**: Follow [local setup guide](/guides/local-setup)
+3. **Test OAuth flow**: Connect your account
+4. **Test sync**: Verify activities appear in knowledge graph
+5. **Test MCP tools**: Use AI agent to call your tools
+
+## Submit Your Integration
+
+```bash
+git checkout -b add-your-service-integration
+git add integrations/your-service
+git commit -m "Add Your Service integration"
+git push origin add-your-service-integration
+```
+
+Open a PR with:
+- Description of what the integration does
+- List of MCP tools provided
+- Screenshots of it working
+
+## Reference Implementations
+
+- **Schedule-based**: [GitHub](/integrations/github), [Linear](/integrations/linear)
+- **Webhook-based**: [Slack](/integrations/slack), [Discord](/integrations/discord)
+- **Analytics**: [GitHub Analytics](/integrations/github-analytics)
+
+For detailed API reference, see [Integration Reference](/integrations/building-integrations).

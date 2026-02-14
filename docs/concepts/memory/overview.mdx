@@ -1,0 +1,100 @@
+---
+title: "Memory Overview"
+description: "How CORE's temporal knowledge graph stores and organizes your information"
+---
+
+## Your Digital Brain's Memory
+
+Memory is the foundation of CORE. It's a temporal knowledge graph that captures everything — conversations, decisions, preferences, relationships — and organizes it so the right context surfaces at the right time.
+
+Unlike simple note-taking or RAG systems that store text chunks, CORE's memory understands *what kind* of information it's storing, *who* it's about, and *when* it changed.
+
+---
+
+## How Memory is Structured
+
+Your memory is built from three building blocks:
+
+<CardGroup cols={3}>
+  <Card title="Episodes" icon="clock">
+    Raw conversations and interactions. Every chat, email, or synced app activity becomes an episode — the source of truth for everything CORE knows.
+  </Card>
+
+  <Card title="Entities" icon="users">
+    People, projects, companies, and concepts in your world. CORE automatically extracts and links them across conversations.
+  </Card>
+
+  <Card title="Statements" icon="quote-left">
+    Atomic facts extracted from episodes. "Alex works on TaskMaster" or "Manik prefers TypeScript" — each traceable back to its source.
+  </Card>
+</CardGroup>
+
+Every statement is classified into one of [11 aspects](/concepts/memory/aspects) (preference, decision, directive, etc.) so CORE can filter precisely — asking for your coding preferences doesn't surface your meeting schedule.
+
+---
+
+## How It Works in Practice
+
+**Scenario:** You're working on an authentication bug.
+
+<Steps>
+  <Step title="Morning: First Mention">
+    Sarah mentions the auth bug in Slack. CORE captures the conversation, links it to the authentication project, notes Sarah's involvement.
+  </Step>
+
+  <Step title="Afternoon: GitHub Discussion">
+    You discuss potential fixes in a PR review. CORE links the PR to the Slack discussion, connects technical approaches to team members.
+  </Step>
+
+  <Step title="Evening: Quick Check">
+    You ask CORE: "What's the status on the auth bug?" CORE searches memory, finds the Slack + GitHub context, and responds with a full summary — without you re-explaining anything.
+  </Step>
+
+  <Step title="Next Day: Take Action">
+    You say: "Create a Linear issue for the remaining work." CORE creates it with full context from yesterday's discussions, automatically linked to the right project and people.
+  </Step>
+</Steps>
+
+---
+
+## How CORE Learns About You
+
+When you first connect Gmail and Calendar, CORE scans your recent emails and events to build an initial understanding of your work. It extracts:
+
+- **Who you work with** — team members, collaborators, external contacts
+- **What you're working on** — projects, topics, recurring themes
+- **How you communicate** — patterns, preferences, tone
+
+This becomes your **persona document** — a living summary of your preferences, rules, and decisions that's automatically injected into your AI agents (Claude Code, Cursor, etc.) so they understand your context from session one.
+
+The more you use CORE, the richer this gets. Every conversation adds new facts, updates existing ones, and strengthens connections.
+
+---
+
+## Dive Deeper
+
+<CardGroup cols={3}>
+  <Card title="Memory Graph" icon="diagram-project" href="/concepts/memory/memory_graph">
+    How episodes, entities, and statements connect
+  </Card>
+
+  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
+    The 11 categories CORE uses to classify facts
+  </Card>
+
+  <Card title="Query Types" icon="search" href="/concepts/memory/query_types">
+    How CORE understands what you're looking for
+  </Card>
+
+  <Card title="How CORE Searches" icon="magnifying-glass" href="/concepts/memory/how-core-searches">
+    The search pipeline, ranking, and v2 improvements
+  </Card>
+
+  <Card title="How CORE Ingests" icon="inbox" href="/concepts/memory/how-core-ingests">
+    How information enters your knowledge graph
+  </Card>
+
+  <Card title="Labels" icon="bookmark" href="/concepts/memory/labels">
+    Organize memory with workspace-scoped labels
+  </Card>
+</CardGroup>

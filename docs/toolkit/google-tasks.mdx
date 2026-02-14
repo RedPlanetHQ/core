@@ -1,0 +1,252 @@
+---
+title: "Google Tasks"
+description: "Simple task lists integrated with Google Workspace"
+---
+
+### Overview
+
+Integrate Google Tasks to manage task lists, create and organize tasks, set due dates, and clear completed items directly from CORE. Access 12 tools for comprehensive task management including list creation, task hierarchies, filtering, and status tracking without leaving your workspace.
+
+### Setup Guide
+
+- `Authentication Type` : OAuth 2.0 (Google)
+
+### How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Google Tasks** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Google to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+### Scopes
+
+- `https://www.googleapis.com/auth/tasks` - Read and write access to task lists and tasks
+
+### Available MCP Tools
+
+The Google Tasks integration provides 12 tools for comprehensive task management:
+
+
+<Tabs>
+  <Tab title="Task List Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_task_lists` | Returns all of the authenticated user's task lists with pagination support |
+| `get_task_list` | Returns the authenticated user's specified task list with metadata |
+| `create_task_list` | Creates a new task list for the authenticated user |
+| `update_task_list` | Updates the authenticated user's specified task list |
+| `delete_task_list` | Deletes the authenticated user's specified task list |
+</Tab>
+<Tab title="Task Operations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_tasks` | Returns all tasks in the specified task list with advanced filtering options |
+| `get_task` | Returns the specified task with full details and metadata |
+| `create_task` | Creates a new task on the specified task list with support for subtasks |
+| `update_task` | Updates the specified task with new values |
+| `delete_task` | Deletes the specified task from the task list |
+</Tab>
+<Tab title="Task Organization">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `move_task` | Moves the specified task to another position in the task list or changes its parent |
+| `clear_completed_tasks` | Clears all completed tasks from the specified task list permanently |
+</Tab>
+</Tabs>
+
+### Triggers
+
+Google Tasks triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Tasks">
+
+| Event | Description |
+|-------|-------------|
+| `GOOGLE_TASKS_TASK_CREATED` | Triggered when a new task is created |
+| `GOOGLE_TASKS_TASK_UPDATED` | Triggered when a task is modified |
+| `GOOGLE_TASKS_TASK_COMPLETED` | Triggered when a task is marked as completed |
+| `GOOGLE_TASKS_TASK_DELETED` | Triggered when a task is deleted |
+| `GOOGLE_TASKS_TASK_MOVED` | Triggered when a task is moved to a different position or parent |
+</Tab>
+<Tab title="Task Lists">
+
+| Event | Description |
+|-------|-------------|
+| `GOOGLE_TASKS_LIST_CREATED` | Triggered when a new task list is created |
+| `GOOGLE_TASKS_LIST_UPDATED` | Triggered when a task list is modified |
+| `GOOGLE_TASKS_LIST_DELETED` | Triggered when a task list is deleted |
+</Tab>
+</Tabs>
+
+### Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Google Tasks tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Manage Task Lists" icon="list-check">
+    **Scenario**: Create and organize multiple task lists for different projects
+
+    ```
+    "Create a new task list called 'Q1 2026 Goals' and add three tasks
+    with due dates for next month"
+    ```
+
+    The agent will use `create_task_list` to create a new list, then `create_task` for each task with appropriate due dates.
+  </Accordion>
+
+  <Accordion title="Create Task Hierarchies" icon="sitemap">
+    **Scenario**: Build and maintain task hierarchies with parent-child relationships
+
+    ```
+    "Create a parent task 'Launch new feature' and add three subtasks
+    for design, development, and testing"
+    ```
+
+    The agent will:
+    1. Use `create_task` to create the parent task
+    2. Use `create_task` with the parent parameter for each subtask
+    3. Use `move_task` to reorganize if needed
+  </Accordion>
+
+  <Accordion title="Track and Filter Tasks" icon="filter">
+    **Scenario**: Keep tasks organized with flexible filtering
+
+    ```
+    "Show me all incomplete tasks due this week across all my task lists"
+    ```
+
+    The agent will use `list_task_lists` to get all lists, then `list_tasks` with filtering parameters (showCompleted, dueMin, dueMax) to find matching tasks.
+  </Accordion>
+
+  <Accordion title="Organize and Maintain Lists" icon="broom">
+    **Scenario**: Maintain clean task lists by managing completed items
+
+    ```
+    "Clear all completed tasks from my 'Personal' task list"
+    ```
+
+    The agent will use `clear_completed_tasks` to remove all completed items from the specified list in one operation.
+  </Accordion>
+
+  <Accordion title="Update Task Status" icon="check-circle">
+    **Scenario**: Modify task details and status as work progresses
+
+    ```
+    "Update the task 'Write documentation' to mark it as completed
+    and add a note about what was documented"
+    ```
+
+    The agent will use `update_task` to modify the task status, notes, and other details as needed.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors Google Tasks 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Cross-Platform Task Sync" icon="arrows-rotate">
+    **Trigger**: New task created in specific list
+
+    **Automated Action**: Sync to other task managers
+
+    ```
+    "When a task is created in my 'Work' task list,
+    create a matching task in Todoist with the same due date,
+    and if it has a due date within 3 days, add it to Linear as well"
+    ```
+
+    Keep task managers synchronized. CORE maintains consistency across all your productivity tools.
+  </Accordion>
+
+  <Accordion title="Completion Tracking" icon="chart-line">
+    **Trigger**: Task marked as completed
+
+    **Automated Action**: Log and analyze productivity
+
+    ```
+    "When I complete a task in Google Tasks,
+    save it to CORE memory with label 'completed-tasks',
+    track my daily completion rate,
+    and send me a weekly productivity summary every Sunday"
+    ```
+
+    Measure productivity automatically. CORE tracks completions and provides insights on your work patterns.
+  </Accordion>
+
+  <Accordion title="Deadline Reminders" icon="bell">
+    **Trigger**: Task due date approaching
+
+    **Automated Action**: Multi-channel reminders
+
+    ```
+    "When a task's due date is tomorrow,
+    send me an email reminder in the morning,
+    add it to my Google Calendar as an all-day event,
+    and send a WhatsApp notification 2 hours before end of day"
+    ```
+
+    Never miss deadlines. CORE sends timely reminders across multiple channels to keep you on track.
+  </Accordion>
+
+  <Accordion title="Email-to-Task Conversion" icon="envelope">
+    **Trigger**: Email received with specific label
+
+    **Automated Action**: Create task automatically
+
+    ```
+    "When an email is labeled 'To-Do' in Gmail,
+    create a task in Google Tasks with the email subject as title,
+    add the sender's name in the notes,
+    and set the due date to 3 days from now"
+    ```
+
+    Convert emails into actionable tasks. CORE bridges your inbox and task list automatically.
+  </Accordion>
+
+  <Accordion title="Recurring Task Management" icon="repeat">
+    **Trigger**: Task completed with specific title pattern
+
+    **Automated Action**: Create next instance
+
+    ```
+    "When I complete a task that starts with 'Weekly:',
+    automatically create a new task with the same title,
+    set the due date to 7 days from now,
+    and add it to the same task list"
+    ```
+
+    Automate recurring tasks. CORE manages task recurrence based on completion patterns.
+  </Accordion>
+
+  <Accordion title="Meeting Task Extraction" icon="calendar">
+    **Trigger**: Task created with meeting context
+
+    **Automated Action**: Link to calendar and prep
+
+    ```
+    "When a task mentions a meeting or has 'meeting' in the title,
+    search my calendar for the relevant meeting,
+    add the task notes to the calendar event description,
+    and send me a reminder 1 hour before the meeting"
+    ```
+
+    Connect tasks to meetings. CORE ensures action items are visible in calendar context.
+  </Accordion>
+</AccordionGroup>
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
+
+
+
+---

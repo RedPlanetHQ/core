@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "palm",
+  "theme": "mint",
   "name": "CORE Documentation",
   "colors": {
     "primary": "#c15e50",
@@ -11,25 +11,57 @@
   "navigation": {
     "tabs": [
       {
-        "tab": "Documentation",
+        "tab": "Welcome",
         "groups": [
           {
-            "group": "Get Started",
+            "group": "Home",
             "pages": [
-              "introduction",
+              "introduction"
+            ]
+          },
+          {
+            "group": "Getting Started",
+            "pages": [
               "getting-started",
-              "migrating-from-v1"
+              "quickstart/chief-of-staff",
+              "quickstart/supercharge-ai-agents",
+              "quickstart/capture-conversations"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Concepts",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "concepts/overview"
+            ]
+          },
+          {
+            "group": "Meta Agent",
+            "pages": [
+              "concepts/meta-agent"
             ]
           },
           {
             "group": "Memory",
             "pages": [
-              "concepts/overview",
-              "concepts/memory_graph",
-              "concepts/aspects",
-              "concepts/query_types",
-              "concepts/entity_types",
-              "concepts/labels"
+              "concepts/memory/overview",
+              "concepts/memory/memory_graph",
+              "concepts/memory/how-core-searches",
+              "concepts/memory/how-core-ingests",
+              "concepts/memory/aspects",
+              "concepts/memory/query_types",
+              "concepts/memory/entity_types",
+              "concepts/memory/labels"
+            ]
+          },
+          {
+            "group": "Toolkit",
+            "pages": [
+              "concepts/toolkit"
             ]
           },
           {
@@ -39,10 +71,31 @@
               "mcp/configuration",
               "mcp/authentication"
             ]
+          }
+        ]
+      },
+      {
+        "tab": "Connect",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "access-core/overview"
+            ]
           },
           {
-            "group": "Providers",
+            "group": "Talk to CORE",
             "pages": [
+              "access-core/channels/web-dashboard",
+              "access-core/channels/whatsapp",
+              "access-core/channels/email",
+              "access-core/channels/slack"
+            ]
+          },
+          {
+            "group": "Add CORE to Your AI Tools",
+            "pages": [
+              "providers/memory-rules",
               {
                 "group": "IDE",
                 "pages": [
@@ -101,14 +154,93 @@
                 ]
               }
             ]
+          }
+        ]
+      },
+      {
+        "tab": "Toolkit",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "toolkit/overview"
+            ]
           },
           {
-            "group": "Integrations",
+            "group": "Communication & Collaboration",
             "pages": [
-              "integrations/overview",
-              "integrations/user_rules",
-              "integrations/linear",
-              "integrations/github"
+              "toolkit/slack",
+              "toolkit/discord",
+              "toolkit/gmail",
+              "toolkit/zoho-mail"
+            ]
+          },
+          {
+            "group": "Project & Task Management",
+            "pages": [
+              "toolkit/linear",
+              "toolkit/todoist",
+              "toolkit/google-tasks"
+            ]
+          },
+          {
+            "group": "Development & Version Control",
+            "pages": [
+              "toolkit/github",
+              "toolkit/github-analytics"
+            ]
+          },
+          {
+            "group": "Calendar & Scheduling",
+            "pages": [
+              "toolkit/google-calendar",
+              "toolkit/cal-com"
+            ]
+          },
+          {
+            "group": "Knowledge & Documentation",
+            "pages": [
+              "toolkit/notion",
+              "toolkit/google-docs"
+            ]
+          },
+          {
+            "group": "Data & Spreadsheets",
+            "pages": [
+              "toolkit/google-sheets"
+            ]
+          },
+          {
+            "group": "CRM & Sales",
+            "pages": [
+              "toolkit/hubspot"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Open Source",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "guides/local-setup",
+              "migrating-from-v1"
+            ]
+          },
+          {
+            "group": "Contributing",
+            "pages": [
+              "opensource/contributing",
+              "opensource/building-integrations"
+            ]
+          },
+          {
+            "group": "Self Hosting",
+            "pages": [
+              "self-hosting/overview",
+              "self-hosting/docker",
+              "self-hosting/environment-variables"
             ]
           },
           {
@@ -119,19 +251,15 @@
               "integrations/webhook-based-guide",
               "integrations/mcp-hub-guide"
             ]
-          },
+          }
+        ]
+      },
+      {
+        "tab": "Changelog",
+        "groups": [
           {
-            "group": "Self hosting",
+            "group": "Product Updates",
             "pages": [
-              "self-hosting/overview",
-              "self-hosting/docker",
-              "self-hosting/environment-variables"
-            ]
-          },
-          {
-            "group": "Opensource",
-            "pages": [
-              "opensource/contributing",
               "opensource/changelog"
             ]
           }
@@ -139,7 +267,7 @@
       },
       {
         "tab": "API Reference",
-        "openapi": "openapi.json",
+        "openapi": "/openapi.json",
         "groups": [
           {
             "group": "User",
@@ -206,17 +334,26 @@
       {
         "label": "Discord",
         "href": "https://discord.gg/dVTC3BmgEq"
+      },
+      {
+        "label": "GitHub",
+        "href": "https://github.com/RedPlanetHQ/core"
       }
     ],
     "primary": {
-      "type": "github",
-      "href": "https://github.com/RedPlanetHQ/core"
+      "type": "button",
+      "label": "Dashboard",
+      "href": "https://app.getcore.me"
     }
   },
   "footer": {
     "socials": {
-      "twitter": "https://x.com/heysol_ai",
-      "linkedin": "https://www.linkedin.com/company/redplanethq"
+      "github": "https://github.com/RedPlanetHQ/core",
+      "twitter": "https://x.com/getcorememory",
+      "linkedin": "https://www.linkedin.com/company/getcore-memory",
+      "discord": "https://discord.gg/dVTC3BmgEq"
+
+
     }
   }
 }

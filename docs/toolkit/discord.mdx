@@ -1,0 +1,373 @@
+---
+title: "Discord"
+description: "Community management and server interactions for messaging, channels, and role management"
+---
+
+### Overview
+
+Integrate Discord to manage communities, servers, channels, messages, and members directly from CORE. Access 20+ tools for complete Discord operations including messaging, server management, role assignment, channel organization, and member coordination without leaving your workspace.
+
+### Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+### How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Discord** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Discord to authorize the application
+5. Grant the required permissions to your server
+6. You'll be redirected back to CORE once connected
+
+### Scopes
+
+- `messages/read` - Read message content from channels
+- `messages/write` - Send messages to channels
+- `channels/read` - List and view channel information
+- `channels/manage` - Create, update, and delete channels
+- `roles/manage` - Create, update, and delete roles
+- `members/manage` - View and manage guild members
+- `guilds/read` - Access guild/server information
+- `users/read` - View user information
+
+### Available MCP Tools
+
+The Discord integration provides 20+ tools for comprehensive server management:
+
+
+<Tabs>
+  <Tab title="Message Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `send_message` | Send a message to a Discord channel |
+| `get_message` | Retrieve a specific message by ID |
+| `get_channel_messages` | List messages from a channel with pagination |
+| `delete_message` | Delete a message |
+| `add_reaction` | Add an emoji reaction to a message |
+</Tab>
+<Tab title="Channel Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_channel` | Create a new channel (text, voice, category, or announcement) |
+| `get_channel` | Get details of a specific channel |
+| `update_channel` | Update channel name, topic, or position |
+| `delete_channel` | Delete a channel |
+| `list_guild_channels` | List all channels in a server |
+</Tab>
+<Tab title="Guild (Server) Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_guild` | Get server information and details |
+| `list_guilds` | List all servers the bot is in |
+| `get_guild_members` | List members in a server with pagination |
+| `get_guild_member` | Get details of a specific guild member |
+</Tab>
+<Tab title="Role Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_role` | Create a new role with custom permissions and color |
+| `update_role` | Update role name, permissions, or appearance |
+| `delete_role` | Delete a role |
+| `add_member_role` | Add a role to a guild member |
+| `remove_member_role` | Remove a role from a guild member |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_current_user` | Get information about the authenticated user |
+| `get_user` | Get details about a specific user |
+</Tab>
+</Tabs>
+
+### Triggers
+
+Discord triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Messages">
+
+| Event | Description |
+|-------|-------------|
+| `DISCORD_MESSAGE_CREATED` | Triggered when a new message is posted to any channel |
+| `DISCORD_MESSAGE_UPDATED` | Triggered when a message is edited |
+| `DISCORD_MESSAGE_DELETED` | Triggered when a message is deleted |
+| `DISCORD_REACTION_ADDED` | Triggered when a reaction is added to a message |
+| `DISCORD_REACTION_REMOVED` | Triggered when a reaction is removed from a message |
+</Tab>
+<Tab title="Channels">
+
+| Event | Description |
+|-------|-------------|
+| `DISCORD_CHANNEL_CREATED` | Triggered when a new channel is created |
+| `DISCORD_CHANNEL_UPDATED` | Triggered when a channel is modified |
+| `DISCORD_CHANNEL_DELETED` | Triggered when a channel is deleted |
+</Tab>
+<Tab title="Members">
+
+| Event | Description |
+|-------|-------------|
+| `DISCORD_MEMBER_JOINED` | Triggered when a new member joins the server |
+| `DISCORD_MEMBER_LEFT` | Triggered when a member leaves the server |
+| `DISCORD_MEMBER_UPDATED` | Triggered when member properties change (roles, nickname, etc.) |
+| `DISCORD_MEMBER_ROLE_ADDED` | Triggered when a role is added to a member |
+</Tab>
+</Tabs>
+
+### Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Discord tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Send Messages" icon="message">
+    **Scenario**: Post announcements and updates to specific channels
+
+    ```
+    "Send a message to the #announcements channel: 'New Discord integration is now live!
+    Head over to https://app.getcore.me to connect your server'"
+    ```
+
+    The agent will use `send_message` to deliver announcements with rich formatting and embeds to keep members informed.
+  </Accordion>
+
+  <Accordion title="Manage Servers" icon="discord">
+    **Scenario**: Organize server structure and configuration
+
+    ```
+    "Get information about our main server including member count,
+    then list all the channels we have organized"
+    ```
+
+    The agent will use `get_guild` and `list_guild_channels` to understand your server's structure and provide insights on organization.
+  </Accordion>
+
+  <Accordion title="Organize Channels" icon="hash">
+    **Scenario**: Create and manage channel structure
+
+    ```
+    "Create a new category channel called 'Project Channels',
+    then create a text channel called #project-planning inside it
+    and set the topic to 'Discuss and plan upcoming features'"
+    ```
+
+    The agent will:
+    1. Use `create_channel` to create the category
+    2. Use `create_channel` again to create the text channel
+    3. Use `update_channel` to set the topic
+  </Accordion>
+
+  <Accordion title="Role Management" icon="shield">
+    **Scenario**: Assign roles and manage permissions
+
+    ```
+    "Create a new role called 'Moderators' with a blue color,
+    then add that role to user 123456 so they can help manage the server"
+    ```
+
+    The agent will:
+    1. Use `create_role` to create the new role with custom color
+    2. Use `add_member_role` to assign it to the specified member
+  </Accordion>
+
+  <Accordion title="Community Moderation" icon="gavel">
+    **Scenario**: Moderate content and manage member activity
+
+    ```
+    "Get the last 50 messages from #general,
+    then delete any spam messages and add a warning reaction to problematic content"
+    ```
+
+    The agent will:
+    1. Use `get_channel_messages` to retrieve recent activity
+    2. Use `delete_message` to remove inappropriate content
+    3. Use `add_reaction` to flag messages with emoji indicators
+  </Accordion>
+
+  <Accordion title="Member Coordination" icon="users">
+    **Scenario**: Manage server members and their roles
+
+    ```
+    "List all members in the engineering server,
+    then show me who has the @Developer role"
+    ```
+
+    The agent will use `get_guild_members` to retrieve member information and help coordinate team organization.
+  </Accordion>
+
+  <Accordion title="Server Insights" icon="chart-line">
+    **Scenario**: Monitor server activity and structure
+
+    ```
+    "Tell me how many members are in our community server
+    and list all the roles we've created"
+    ```
+
+    The agent will use `get_guild` to get member count and other server metrics.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors Discord 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Community Onboarding" icon="user-plus">
+    **Trigger**: New member joins server
+
+    **Automated Action**: Send welcome message and assign roles
+
+    ```
+    "When someone joins our Discord server,
+    send them a DM with our community guidelines,
+    assign the @Newcomer role,
+    and post a welcome message in #introductions"
+    ```
+
+    Automate member onboarding. CORE welcomes new members and sets up their server access automatically.
+  </Accordion>
+
+  <Accordion title="Support Ticket Creation" icon="ticket">
+    **Trigger**: Message posted in support channel
+
+    **Automated Action**: Create tracking ticket
+
+    ```
+    "When a message is posted in #support,
+    create a Linear issue with the message content,
+    react to the message with a checkmark,
+    and notify the support team on Slack"
+    ```
+
+    Convert support requests into tickets instantly. CORE creates tracking issues and notifies the right team.
+  </Accordion>
+
+  <Accordion title="Content Moderation" icon="shield">
+    **Trigger**: Message contains banned words or spam
+
+    **Automated Action**: Flag and escalate
+
+    ```
+    "When a message contains inappropriate language,
+    delete it immediately,
+    send a warning DM to the user,
+    and notify moderators in #mod-alerts with context"
+    ```
+
+    Maintain community standards automatically. CORE filters content and escalates to human moderators when needed.
+  </Accordion>
+
+  <Accordion title="Announcement Broadcasting" icon="bullhorn">
+    **Trigger**: Message posted in announcements channel
+
+    **Automated Action**: Cross-post to other platforms
+
+    ```
+    "When an announcement is posted in #announcements,
+    extract the key points,
+    post a summary to our Slack workspace,
+    and send a notification to the team WhatsApp group"
+    ```
+
+    Broadcast announcements across platforms. CORE ensures important updates reach everyone regardless of their preferred channel.
+  </Accordion>
+
+  <Accordion title="Event Coordination" icon="calendar">
+    **Trigger**: Message mentions event or meeting
+
+    **Automated Action**: Create calendar entries
+
+    ```
+    "When a message in #events contains a date and time,
+    extract the event details,
+    create a Google Calendar event,
+    and send reminders to participants 1 hour before"
+    ```
+
+    Automate event scheduling. CORE parses event details from discussions and handles calendar management.
+  </Accordion>
+
+  <Accordion title="Engagement Tracking" icon="chart-simple">
+    **Trigger**: Message receives multiple reactions
+
+    **Automated Action**: Track popular content
+
+    ```
+    "When a message gets more than 10 reactions,
+    save it to CORE memory with label 'popular-content',
+    and compile a weekly digest of top messages for #community-highlights"
+    ```
+
+    Surface valuable content automatically. CORE identifies and preserves high-engagement discussions for later review.
+  </Accordion>
+</AccordionGroup>
+
+## Message Features
+
+### Rich Embeds
+
+Messages support rich embeds with titles, descriptions, colors, and fields for professional-looking announcements:
+
+```
+Send a formatted embed with:
+- Title: "New Feature Release"
+- Description: "Check out our latest update"
+- Color: #5865F2 (Discord Blurple)
+- Fields with inline content
+```
+
+### Text-to-Speech
+
+Messages can be sent with text-to-speech enabled for important announcements:
+
+```
+"Send an announcement about a server maintenance window using text-to-speech"
+```
+
+### Reactions
+
+Add emoji reactions to messages for quick acknowledgments, voting, or content flagging:
+
+```
+"Add a thumbsup reaction to the announcement,
+and add a warning emoji to the spam message"
+```
+
+## Channel Types
+
+Discord channels can be created as different types:
+
+- **Text Channels (0)**: Standard message channels for conversation
+- **Voice Channels (2)**: Audio communication channels
+- **Categories (4)**: Organize channels into groups
+- **Announcement Channels (5)**: Broadcast-only channels with cross-posting
+
+## Role Permissions
+
+Roles can be configured with granular Discord permissions:
+
+- **Message Permissions**: Send messages, delete messages, manage messages
+- **Channel Permissions**: Manage channels, create channels, view channels
+- **Role Permissions**: Manage roles, mention @everyone/@here
+- **Member Permissions**: Kick members, ban members, mute members
+- **Voice Permissions**: Connect to voice, speak, use voice activity
+
+Permissions are managed using Discord's bitwise permission system.
+
+## Limitations & Considerations
+
+- **Rate Limiting**: Discord API has rate limits; batching operations helps
+- **Bot Permissions**: The bot must have appropriate permissions in the server
+- **Message History**: Message retrieval is limited to channels the bot can access
+- **Member Data**: Only accessible within servers where the bot is present
+- **Token Refresh**: OAuth tokens are automatically refreshed when expired
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

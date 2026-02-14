@@ -1,0 +1,747 @@
+---
+title: "How CORE Ingests Memory"
+description: "Understanding how information enters and structures your knowledge graph"
+---
+
+## Overview
+
+Memory ingestion is the process of converting raw information into structured knowledge in your CORE graph. Unlike traditional databases that simply store text, CORE transforms every conversation, action, and event into a web of connected entities, facts, and relationships.
+
+Every piece of information that enters CORE goes through an intelligent pipeline that extracts entities, identifies relationships, classifies facts by aspect, and links everything into your growing knowledge graph.
+
+---
+
+## The Ingestion Pipeline
+
+When information enters CORE, here's the transformation it undergoes:
+
+<Steps>
+  <Step title="Raw Input Capture">
+    Information arrives from various sources:
+    - Conversations with the Meta Agent
+    - Integration activity (GitHub commits, Slack messages, Linear issues)
+    - Manual document uploads
+    - Scheduled syncs from connected apps
+  </Step>
+
+  <Step title="Episode Creation">
+    The raw content becomes an **Episode** - the atomic unit of memory:
+    - Original content preserved as source of truth
+    - Metadata captured (timestamp, source, channel)
+    - Labels applied based on context or rules
+    - Episode ID generated for traceability
+  </Step>
+
+  <Step title="Entity Extraction">
+    CORE identifies all entities mentioned:
+    - **People**: "Sarah", "the team", "my manager"
+    - **Projects**: "TaskMaster", "CORE Project", "authentication service"
+    - **Technologies**: "React", "TypeScript", "Stripe"
+    - **Concepts**: "error handling", "API design", "deployment"
+    - **Companies**: "Red Planet", "Acme Corp"
+
+    Entities are normalized and deduplicated (e.g., "Sarah", "sarah", "@sarah" → same entity)
+  </Step>
+
+  <Step title="Statement Extraction">
+    Facts are extracted as **Statements** - structured triples:
+    - **Subject**: Entity (e.g., "Manik")
+    - **Predicate**: Relationship (e.g., "prefers")
+    - **Object**: Entity or value (e.g., "TypeScript")
+
+    Each statement is classified into one of 11 aspects (Identity, Preference, Decision, etc.)
+  </Step>
+
+  <Step title="Relationship Mapping">
+    Statements create edges in the knowledge graph:
+    - Entity nodes connected by predicate edges
+    - Temporal information preserved (`validAt`, `occurredAt`)
+    - Source episode linked for traceability
+    - Aspect classification stored
+  </Step>
+
+  <Step title="Graph Integration">
+    New information integrates with existing knowledge:
+    - Duplicate facts deduplicated
+    - Contradictions handled (newer facts supersede older)
+    - Related entities automatically linked
+    - Label propagation (inherit labels from related episodes)
+  </Step>
+</Steps>
+
+---
+
+## Sources of Ingestion
+
+### 1. Conversational Ingestion
+
+Every conversation with the Meta Agent adds to your memory.
+
+**What gets captured**:
+- Questions you ask
+- Answers provided (with reasoning)
+- Preferences you mention
+- Decisions you make
+- Problems you encounter
+- Goals you set
+
+**Example**:
+```
+You: "I prefer using pnpm instead of npm for package management.
+It's faster and has better disk space handling."
+
+Ingested as:
+Episode:
+  - Full conversation text
+  - Timestamp: 2026-02-12 10:30 AM
+  - Channel: Web Dashboard
+
+Entities Extracted:
+  - "Manik" (Person)
+  - "pnpm" (Technology)
+  - "npm" (Technology)
+  - "package management" (Concept)
+
+Statements Created:
+  - (Manik, prefers, pnpm) [Aspect: Preference]
+  - (Manik, uses, pnpm) [Aspect: Action]
+  - (pnpm, is faster than, npm) [Aspect: Knowledge]
+  - (pnpm, has better, disk space handling) [Aspect: Knowledge]
+
+Graph Edges:
+  - Manik -[prefers]-> pnpm
+  - Manik -[avoids]-> npm
+  - pnpm -[is_alternative_to]-> npm
+```
+
+### 2. Integration-Based Ingestion
+
+Connected integrations automatically feed activity into your memory.
+
+<AccordionGroup>
+  <Accordion title="GitHub Integration" icon="github">
+    **Activities ingested**:
+    - Commits and push events
+    - Pull requests (opened, reviewed, merged)
+    - Issues (created, commented, closed)
+    - Code reviews and comments
+    - Release events
+
+    **What gets captured**:
+    ```
+    GitHub PR #234 opened: "Add JWT token rotation"
+
+    Ingested as:
+    Episode:
+      - PR title and description
+      - Author: Sarah
+      - Repository: core/backend
+      - Labels: [Project: CORE, authentication]
+
+    Entities:
+      - "Sarah" (Person)
+      - "JWT token rotation" (Feature)
+      - "core/backend" (Repository)
+      - "PR #234" (PullRequest)
+
+    Statements:
+      - (Sarah, created, PR #234) [Aspect: Event]
+      - (PR #234, adds, JWT token rotation) [Aspect: Action]
+      - (core/backend, has feature, JWT token rotation) [Aspect: Identity]
+
+    Links:
+      - Connected to previous conversations about authentication
+      - Linked to Linear issue ENG-142
+      - Related to entity: Authentication Service
+    ```
+
+    **User Rules**: Control what gets ingested
+    ```
+    Add all commits to core/* repositories
+    Ignore PRs with label "dependencies"
+    Only add issues assigned to me
+    ```
+  </Accordion>
+
+  <Accordion title="Linear Integration" icon="linear">
+    **Activities ingested**:
+    - Issues created and updated
+    - Comments and discussions
+    - Status changes (todo → in progress → done)
+    - Project assignments
+
+    **What gets captured**:
+    ```
+    Linear Issue ENG-142: "Fix JWT refresh token rotation"
+    Status: In Progress → Done
+    Assigned: Sarah
+
+    Ingested as:
+    Episode:
+      - Issue title and description
+      - Status change event
+      - Assignee: Sarah
+      - Labels: [Project: CORE, bug, authentication]
+
+    Entities:
+      - "ENG-142" (Issue)
+      - "Sarah" (Person)
+      - "JWT refresh token rotation" (Bug)
+
+    Statements:
+      - (Sarah, completed, ENG-142) [Aspect: Event]
+      - (ENG-142, fixed, JWT refresh token rotation) [Aspect: Action]
+      - (CORE Project, had bug, JWT refresh token rotation) [Aspect: Problem]
+
+    Links:
+      - Connected to GitHub PR #234
+      - Related to earlier decision about JWT implementation
+      - Linked to authentication architecture discussions
+    ```
+
+    **User Rules**: Filter ingestion
+    ```
+    Add issues in "Engineering" team
+    Ignore issues with label "backlog"
+    Add all comments on issues assigned to me
+    ```
+  </Accordion>
+
+  <Accordion title="Slack Integration" icon="slack">
+    **Activities ingested**:
+    - Messages in monitored channels
+    - Direct messages (opt-in)
+    - Thread conversations
+    - Reactions and emoji context
+
+    **What gets captured**:
+    ```
+    Slack #engineering: Sarah: "Deployed auth fix to production,
+    JWT rotation working as expected. ENG-142 is done."
+
+    Ingested as:
+    Episode:
+      - Message content
+      - Channel: #engineering
+      - Author: Sarah
+      - Timestamp: 2026-02-12 3:45 PM
+      - Labels: [Project: CORE, deployment]
+
+    Entities:
+      - "Sarah" (Person)
+      - "auth fix" (Deployment)
+      - "production" (Environment)
+      - "JWT rotation" (Feature)
+      - "ENG-142" (Issue)
+
+    Statements:
+      - (Sarah, deployed, auth fix) [Aspect: Event]
+      - (auth fix, went to, production) [Aspect: Event]
+      - (JWT rotation, is working, as expected) [Aspect: Knowledge]
+      - (ENG-142, status is, done) [Aspect: Event]
+
+    Links:
+      - Auto-linked to Linear ENG-142
+      - Connected to GitHub PR #234
+      - Related to authentication context
+    ```
+
+    **User Rules**: Control Slack ingestion
+    ```
+    Add messages from #engineering and #core-team
+    Ignore messages from #random and #watercooler
+    Only add threads where I'm mentioned
+    ```
+  </Accordion>
+
+  <Accordion title="Google Calendar Integration" icon="calendar">
+    **Activities ingested**:
+    - Scheduled meetings
+    - Event updates and cancellations
+    - Attendee information
+
+    **What gets captured**:
+    ```
+    Calendar Event: "API Design Review with Sarah and Tom"
+    Time: 2026-02-13 2:00 PM
+    Duration: 1 hour
+
+    Ingested as:
+    Episode:
+      - Event title and description
+      - Attendees: [Sarah, Tom, You]
+      - Labels: [Project: CORE, meeting]
+
+    Statements:
+      - (You, has meeting with, Sarah) [Aspect: Event]
+      - (You, has meeting with, Tom) [Aspect: Event]
+      - (Meeting, topic is, API Design) [Aspect: Identity]
+      - (API Design Review, scheduled for, Feb 13 2PM) [Aspect: Event]
+
+    Links:
+      - Related to CORE Project context
+      - Connected to recent API design discussions
+    ```
+  </Accordion>
+
+  <Accordion title="Gmail Integration" icon="envelope">
+    **Activities ingested**:
+    - Important emails (based on filters)
+    - Email threads with key people
+    - Attachments and links
+
+    **What gets captured**:
+    ```
+    Email from sarah@company.com
+    Subject: "Auth deployment rollback needed"
+
+    Ingested as:
+    Episode:
+      - Email subject and body
+      - Sender: Sarah
+      - Labels: [Project: CORE, urgent]
+
+    Statements:
+      - (Sarah, sent email about, auth deployment) [Aspect: Event]
+      - (Auth deployment, needs, rollback) [Aspect: Problem]
+      - (Rollback, priority is, urgent) [Aspect: Directive]
+    ```
+
+    **User Rules**: Filter email ingestion
+    ```
+    Add emails from team@company.com
+    Ignore newsletters and automated emails
+    Only add emails with subject containing "CORE" or "urgent"
+    ```
+  </Accordion>
+
+  <Accordion title="Notion Integration" icon="book">
+    **Activities ingested**:
+    - Page creation and updates
+    - Comments and discussions
+    - Database entries
+
+    **What gets captured**:
+    ```
+    Notion Page: "CORE Architecture Decision - Authentication"
+
+    Ingested as:
+    Episode:
+      - Page title and content
+      - Labels: [Project: CORE, documentation]
+
+    Statements:
+      - (CORE, has architecture document, Authentication) [Aspect: Knowledge]
+      - (Authentication, decision is, JWT with refresh tokens) [Aspect: Decision]
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Automatic vs Manual Ingestion
+
+### Automatic Ingestion
+
+**When it happens**:
+- Integration activities trigger real-time ingestion
+- Scheduled syncs pull recent updates (every 15 minutes)
+- Conversations automatically captured as episodes
+
+**Benefits**:
+- Zero effort - happens in the background
+- Real-time memory updates
+- Never miss important context
+
+**Control**:
+Use **User Rules** to define what gets auto-ingested:
+```
+User Rules Examples:
+- "Add all GitHub activity in core/* repos"
+- "Add Linear issues assigned to me or my team"
+- "Add Slack messages from #engineering where I'm mentioned"
+- "Ignore automated bot messages"
+```
+
+### Manual Ingestion
+
+**When to use it**:
+- Important conversations outside connected apps
+- Documents and files you want in memory
+- Meeting notes or brainstorming sessions
+- Quick facts or reminders
+
+**How to do it**:
+
+Via conversation:
+```
+You: "Remember this: I prefer using Fastify over Express for APIs
+because of better TypeScript support and performance."
+
+Meta Agent: ✓ Added to memory
+- Preference: Fastify over Express
+- Reasons: TypeScript support, performance
+- Context: API development
+```
+
+Via MCP tool:
+```typescript
+memory_ingest({
+  message: "TaskMaster project deployment: Use Railway for staging,
+  AWS for production. Staging deploys on every PR merge, production
+  requires manual approval.",
+  labelIds: ["project-taskmaster-uuid"]
+})
+```
+
+---
+
+## Ingestion Intelligence
+
+### Entity Resolution & Deduplication
+
+CORE intelligently normalizes entities:
+
+```
+Mentions in different episodes:
+- "sarah"
+- "Sarah"
+- "@sarah"
+- "Sarah Chen"
+- "sarah@company.com"
+
+→ Resolved to single entity: "Sarah Chen"
+  - Type: Person
+  - Email: sarah@company.com
+  - Works at: Company
+```
+
+### Contradiction Handling
+
+When new facts contradict old ones:
+
+```
+Episode 1 (Jan 5): "Manik prefers REST APIs"
+Episode 2 (Feb 10): "Manik prefers GraphQL for complex data requirements"
+
+Result:
+- Statement 1: validAt = Jan 5, superseded = true
+- Statement 2: validAt = Feb 10, current = true
+
+Search Result:
+"Currently prefers GraphQL (as of Feb 10), previously preferred REST"
+```
+
+### Relationship Inference
+
+CORE infers implicit relationships:
+
+```
+Explicit statements:
+- (Sarah, works on, CORE Project)
+- (CORE Project, has component, Authentication Service)
+- (Authentication Service, uses, JWT)
+
+Inferred:
+- (Sarah, works on, Authentication Service) [1 hop]
+- (Sarah, has knowledge of, JWT) [2 hops]
+```
+
+### Label Propagation
+
+Labels intelligently propagate across related content:
+
+```
+Episode 1: "Working on TaskMaster authentication"
+Labels: [Project: TaskMaster, authentication]
+
+Episode 2 (next day): "The JWT implementation is working well"
+Auto-labeled: [Project: TaskMaster, authentication]
+  ↑ Inherited from recent TaskMaster context
+```
+
+---
+
+## Integration Sync Schedule
+
+| Integration | Sync Type | Frequency | What Gets Ingested |
+|-------------|-----------|-----------|-------------------|
+| **GitHub** | Webhook + Sync | Real-time + 15 min | Commits, PRs, issues, reviews |
+| **Linear** | Webhook + Sync | Real-time + 15 min | Issues, comments, status changes |
+| **Slack** | Webhook | Real-time | Messages, threads (filtered by rules) |
+| **Google Calendar** | Sync | 15 minutes | Upcoming events, changes |
+| **Gmail** | Sync | 30 minutes | New emails (filtered by rules) |
+| **Notion** | Sync | 30 minutes | Page updates, new content |
+| **Todoist** | Sync | 15 minutes | Tasks, completions |
+| **Discord** | Webhook | Real-time | Messages (filtered by rules) |
+
+---
+
+## What Gets Stored
+
+### Episode Structure
+
+```typescript
+{
+  id: "episode-uuid",
+  content: "Full conversation or activity text",
+  source: "web" | "whatsapp" | "github" | "slack" | ...,
+  occurredAt: "2026-02-12T10:30:00Z",
+  labelIds: ["label-uuid-1", "label-uuid-2"],
+  entities: ["entity-uuid-1", "entity-uuid-2"],
+  isFavorite: false
+}
+```
+
+### Statement Structure
+
+```typescript
+{
+  id: "statement-uuid",
+  subject: "entity-uuid-1",        // e.g., "Manik"
+  predicate: "prefers",            // Relationship type
+  object: "entity-uuid-2",         // e.g., "TypeScript"
+  aspect: "Preference",            // One of 11 aspects
+  validAt: "2026-02-12T10:30:00Z", // When fact was recorded
+  sourceEpisode: "episode-uuid",   // Traceability
+  superseded: false,               // If contradicted by newer fact
+  confidence: 0.95                 // Extraction confidence
+}
+```
+
+### Entity Structure
+
+```typescript
+{
+  id: "entity-uuid",
+  name: "TypeScript",
+  type: "Technology",
+  aliases: ["TS", "typescript"],
+  importance: 0.85,                // Based on mention frequency
+  firstMentioned: "2025-11-01T00:00:00Z",
+  lastMentioned: "2026-02-12T10:30:00Z"
+}
+```
+
+---
+
+## User Rules for Control
+
+User Rules give you fine-grained control over ingestion:
+
+### Rule Syntax
+
+```
+[Action] [Integration] [Filters]
+
+Examples:
+- "Add all GitHub commits to core/* repos"
+- "Ignore Slack messages from #random"
+- "Add Linear issues assigned to me"
+- "Add Gmail emails from @company.com"
+```
+
+### Common Patterns
+
+**Project-scoped ingestion**:
+```
+Add GitHub activity in taskmaster/* repos
+Add Linear issues with label "TaskMaster"
+Add Slack messages in #taskmaster channel
+```
+
+**Personal focus**:
+```
+Add Linear issues assigned to me
+Add GitHub PRs where I'm reviewer
+Add Slack threads where I'm mentioned
+```
+
+**Noise reduction**:
+```
+Ignore automated bot messages
+Ignore Slack channels: #random, #watercooler
+Ignore GitHub repos: dependencies/*
+```
+
+### Rule Priority
+
+Rules are evaluated in order:
+1. Ignore rules (highest priority)
+2. Add rules
+3. Default behavior (if no rules match)
+
+---
+
+## Best Practices
+
+### Label Your Episodes
+
+Add labels during manual ingestion:
+```
+You: "Remember this for the TaskMaster project: we decided
+to use Stripe for payments because of their superior documentation
+and webhook reliability."
+
+Meta Agent: ✓ Added to memory
+Labels: [Project: TaskMaster, decision, payments]
+```
+
+Labels make search faster and more precise.
+
+### Be Specific in Conversations
+
+Better inputs create better memory:
+
+**Good**:
+```
+"For the TaskMaster authentication, I decided to use JWT with
+15-minute expiry and refresh token rotation because it balances
+security and user experience."
+```
+
+**Not ideal**:
+```
+"Using JWT for auth"
+```
+
+The first example captures the decision, reasoning, and context. The second is too brief to be useful later.
+
+### Review Important Ingestions
+
+Check the Memory Explorer after important decisions:
+1. Go to web dashboard
+2. Navigate to Memory section
+3. Verify entities and statements were extracted correctly
+4. Add labels or corrections if needed
+
+### Use Integration Filters
+
+Don't ingest everything - filter for signal:
+
+**Too much noise**:
+```
+Add all Slack messages from all channels
+Add all GitHub activity from all repos
+```
+
+**Better**:
+```
+Add Slack messages from #engineering, #core-team
+Add GitHub activity from core/* repos
+Ignore automated dependency updates
+```
+
+---
+
+## Ingestion Examples
+
+### Example 1: Project Kickoff
+
+**You**:
+```
+"Starting a new project called TaskMaster. It's a SaaS task management
+tool for small teams. Tech stack: Next.js, Prisma, PostgreSQL, Tailwind.
+I'll be working with Sarah on the frontend and Tom on the backend.
+Target launch: Q2 2026."
+```
+
+**What gets ingested**:
+```
+Episode:
+  - Full conversation
+  - Labels: [Project: TaskMaster, planning]
+
+Entities:
+  - "TaskMaster" (Project)
+  - "Sarah" (Person)
+  - "Tom" (Person)
+  - "Next.js", "Prisma", "PostgreSQL", "Tailwind" (Technologies)
+
+Statements:
+  - (TaskMaster, is a, SaaS task management tool) [Identity]
+  - (TaskMaster, uses, Next.js) [Knowledge]
+  - (TaskMaster, uses, Prisma) [Knowledge]
+  - (TaskMaster, uses, PostgreSQL) [Knowledge]
+  - (TaskMaster, uses, Tailwind) [Knowledge]
+  - (You, works with, Sarah) [Relationship]
+  - (You, works with, Tom) [Relationship]
+  - (Sarah, works on, TaskMaster frontend) [Relationship]
+  - (Tom, works on, TaskMaster backend) [Relationship]
+  - (TaskMaster, launch target, Q2 2026) [Goal]
+
+Links Created:
+  - Project context established
+  - Team relationships mapped
+  - Tech stack documented
+  - Timeline recorded
+```
+
+### Example 2: Integration Activity
+
+**GitHub Event**:
+```
+Sarah opened PR #234: "Add JWT authentication"
+Repository: taskmaster/backend
+Files changed: auth.ts, middleware.ts, types.ts
+Description: "Implements JWT token generation and validation
+with refresh token rotation. Related to Linear ENG-142."
+```
+
+**What gets ingested**:
+```
+Episode:
+  - PR title and description
+  - Files changed
+  - Labels: [Project: TaskMaster, GitHub, authentication]
+
+Entities:
+  - "Sarah" (Person)
+  - "PR #234" (PullRequest)
+  - "JWT authentication" (Feature)
+  - "taskmaster/backend" (Repository)
+  - "ENG-142" (Issue)
+
+Statements:
+  - (Sarah, created, PR #234) [Event]
+  - (PR #234, adds, JWT authentication) [Action]
+  - (JWT authentication, includes, refresh token rotation) [Knowledge]
+  - (PR #234, relates to, ENG-142) [Relationship]
+  - (taskmaster/backend, has feature, JWT authentication) [Identity]
+
+Links Created:
+  - Auto-linked to Linear ENG-142
+  - Connected to TaskMaster project context
+  - Linked to Sarah's work history
+  - Related to authentication architecture discussions
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="How CORE Searches" icon="magnifying-glass" href="/concepts/memory/how-core-searches">
+    Learn how CORE retrieves information from your memory
+  </Card>
+
+  <Card title="User Rules" icon="filter" href="/integrations/user_rules">
+    Control what gets ingested with fine-grained rules
+  </Card>
+
+  <Card title="Integrations" icon="plug" href="/integrations/overview">
+    Connect your tools for automatic memory ingestion
+  </Card>
+
+  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
+    Understand how facts are categorized during ingestion
+  </Card>
+
+  <Card title="Memory Graph" icon="sitemap" href="/concepts/memory/memory_graph">
+    Learn about the structure that stores your memory
+  </Card>
+
+  <Card title="Labels" icon="tag" href="/concepts/memory/labels">
+    Organize ingested content with labels
+  </Card>
+</CardGroup>

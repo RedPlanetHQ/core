@@ -1,50 +1,71 @@
 ---
-title: "Overview"
-description: "How CORE works as your memory agent"
+title: About CORE
+description: Understanding the three-layer architecture that powers your digital brain
 ---
 
-## What Is CORE?
+### What is CORE?
 
-CORE is a memory agent that replicates how human memory actually works. Your brain doesn't store memories as plain text—it organizes episodes into topics, creates associations, and knows where things belong. CORE does the same for your AI tools.
+CORE is your digital brain — a temporal knowledge graph that remembers everything you do, learn, and build across all AI tools. Unlike traditional AI assistants that forget between sessions, CORE creates persistent, portable memory you own and control.
 
-## The Core Concepts
+**Three layers:**
+- **Meta Agent**: Your personal AI that uses memory to reason and act
+- **Memory**: Temporal knowledge graph that captures facts, relationships, and evolving context
+- **Toolkit**: Actions across 15+ apps — connect once, use everywhere
 
-### 1. [Memory Graph](/concepts/memory_graph)
-How your knowledge is structured: Episodes, Entities, Statements
+When you talk to Claude, code in Cursor, or chat on WhatsApp, CORE remembers. That context becomes accessible to every AI tool you connect, eliminating repetition and building knowledge that compounds.
 
-### 2. [Statement Aspects](/concepts/aspects)
-The 11 categories that classify every fact (Preference, Decision, Directive, etc.)
+### Who is it for?
 
-### 3. [Query Types](/concepts/query_types)
-The 5 ways CORE understands what you're looking for (Aspect, Entity, Temporal, etc.)
+**Developers** who switch between AI coding tools and want persistent context across Claude Code, Cursor, Windsurf, and more.
 
-### 4. [Entity Types](/concepts/entity_types)
-How people, projects, technologies, and concepts are categorized
+**Teams** who need shared memory, decision provenance, and cross-tool knowledge continuity.
 
-### 5. [Labels](/concepts/labels)
-How episodes are automatically organized by topic
+**Anyone** tired of re-explaining preferences, repeating context, or losing insights when switching AI tools.
 
-## How It Works in 30 Seconds
+### How it works
 
-1. **You talk to Claude/Cursor/ChatGPT** → CORE captures the conversation
-2. **Facts are extracted** → "Manik prefers TypeScript" becomes a structured statement
-3. **Categorized by aspect** → This is a Preference (1 of 11 types)
-4. **Stored in knowledge graph** → Connected to entities (Manik, TypeScript)
-5. **Surfaced when needed** → Next time Claude writes code, your Preference statements are available
+1. **You interact** via WhatsApp, email, web dashboard, or any connected AI tool
+2. **CORE ingests** conversations, workflows, and app activity into a temporal knowledge graph
+3. **Meta Agent reasons** using that memory to understand context, make decisions, and coordinate actions
+4. **Toolkit executes** across GitHub, Linear, Gmail, Slack, Notion — whatever you've connected
+5. **Memory compounds** over time, making every interaction smarter than the last
 
-## Memory Agent vs RAG
+**Example:** You mention a bug in WhatsApp. CORE remembers it. Later in Cursor, you ask "what was that auth issue?" — CORE recalls the full context. You say "file a GitHub issue" — done. One memory graph. All your tools.
 
-**Traditional RAG**: "Search all text for similarity"
-**CORE**: "Understand what you're asking, search precisely"
+---
 
-When you ask "What are my coding preferences?":
-- **RAG**: Searches everything, returns 50 chunks, hopes relevant ones are there
-- **CORE**: Classifies as Aspect Query, filters by `aspect=Preference`, returns 5 precise facts
+### The Compounding Effect
 
-**Result**: 3-4x faster, infinitely more accurate.
+CORE gets better the more you use it.
 
-## Next Steps
+<Steps>
+  <Step title="Week 1">
+    You discuss a bug with your team. CORE captures the conversation, technical decisions, and who's working on it.
+  </Step>
 
-- [Understand the Memory Graph](/concepts/memory_graph)
-- [Learn about Statement Aspects](/concepts/aspects)
-- [See Query Types in action](/concepts/query_types)
+  <Step title="Week 4">
+    You ask about deployment status. CORE already knows the context, team members, and related GitHub PRs — no re-explaining needed.
+  </Step>
+
+  <Step title="Month 3">
+    You're debugging a similar issue. CORE surfaces the bug from 2 months ago with the solution that worked. New team members can ask CORE about your architecture and get full context.
+  </Step>
+</Steps>
+
+---
+
+### Dive Deeper
+
+<CardGroup cols={3}>
+  <Card title="Meta Agent" icon="brain" href="/concepts/meta-agent">
+    How CORE's AI orchestrates memory and actions across your tools
+  </Card>
+
+  <Card title="Memory" icon="database" href="/concepts/memory/overview">
+    How your knowledge graph stores episodes, entities, and facts
+  </Card>
+
+  <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
+    How CORE takes actions across your connected apps via MCP
+  </Card>
+</CardGroup>
