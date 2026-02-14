@@ -201,6 +201,7 @@ export async function runIntegrationExplorer(
           .string()
           .describe("Action parameters as JSON string based on inputSchema"),
       }),
+      needsApproval: true,
       execute: async ({ accountId, action, parameters }) => {
         try {
           const parsedParams = JSON.parse(parameters);

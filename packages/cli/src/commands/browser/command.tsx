@@ -1,10 +1,9 @@
-import { useEffect, useState } from 'react';
-import { Text, Box } from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
-import ErrorMessage from '@/components/error-message';
-import { isAgentBrowserInstalled, browserCommand, getSession, isBlockedCommand, type CommandResult } from '@/utils/agent-browser';
+import { isAgentBrowserInstalled, browserCommand, getSession, isBlockedCommand } from '@/utils/agent-browser';
 
 export const args = zod.tuple([
 	zod.string().describe('Session name'),
@@ -18,87 +17,59 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
+async function runBrowserCommand(sessionName: string, command: string, commandArgs: string[]): Promise<void> {
+	const spinner = p.spinner();
+	spinner.start('Checking agent-browser...');
+
+	const installed = await isAgentBrowserInstalled();
+
+	if (!installed) {
+		spinner.stop(chalk.red('Not installed'));
+		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
+		return;
+	}
+
+	// Check if command is blocked
+	if (isBlockedCommand(command)) {
+		spinner.stop(chalk.red('Command blocked'));
+		p.log.error(`Command "${command}" is blocked. Use \`corebrain browser open\` or \`corebrain browser close\` for open/close operations.`);
+		return;
+	}
+
+	// Check if session exists
+	const session = getSession(sessionName);
+	if (!session) {
+		spinner.stop(chalk.yellow('Session not found'));
+		p.log.error(`Session "${sessionName}" not found. Use \`corebrain browser open\` to create a session first.`);
+		return;
+	}
+
+	spinner.message(`Running: ${command} ${commandArgs.join(' ')} on session "${sessionName}"`);
+
+	const result = await browserCommand(sessionName, command, commandArgs);
+
+	spinner.stop(result.code === 0 ? chalk.green('Command completed') : chalk.yellow(`Exit code: ${result.code}`));
+
+	if (result.stdout) {
+		console.log(result.stdout);
+	}
+	if (result.stderr) {
+		console.error(chalk.red(result.stderr));
+	}
+}
+
 export default function BrowserCommand({ args: [sessionName, command, ...commandArgs] }: Props) {
-	const [status, setStatus] = useState<'checking' | 'running' | 'done' | 'not-installed' | 'not-found' | 'blocked' | 'error'>('checking');
-	const [result, setResult] = useState<CommandResult | null>(null);
-	const [error, setError] = useState('');
+	const { exit } = useApp();
 
 	useEffect(() => {
-		let cancelled = false;
+		runBrowserCommand(sessionName, command, commandArgs)
+			.catch((err) => {
+				p.log.error(err instanceof Error ? err.message : 'Unknown error');
+			})
+			.finally(() => {
+				setTimeout(() => exit(), 100);
+			});
+	}, [sessionName, command, commandArgs, exit]);
 
-		(async () => {
-			try {
-				const installed = await isAgentBrowserInstalled();
-
-				if (!installed) {
-					if (!cancelled) {
-						setStatus('not-installed');
-					}
-					return;
-				}
-
-				// Check if command is blocked
-				if (isBlockedCommand(command)) {
-					if (!cancelled) {
-						setError(`Command "${command}" is blocked. Use \`corebrain browser open\` or \`corebrain browser close\` for open/close operations.`);
-						setStatus('blocked');
-					}
-					return;
-				}
-
-				// Check if session exists
-				const session = getSession(sessionName);
-				if (!session) {
-					if (!cancelled) {
-						setStatus('not-found');
-					}
-					return;
-				}
-
-				if (!cancelled) {
-					setStatus('running');
-				}
-
-				const cmdResult = await browserCommand(sessionName, command, commandArgs);
-
-				if (!cancelled) {
-					setResult(cmdResult);
-					setStatus('done');
-				}
-			} catch (err) {
-				if (!cancelled) {
-					setError(err instanceof Error ? err.message : 'Unknown error');
-					setStatus('error');
-				}
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [sessionName, command, commandArgs]);
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{status === 'checking' ? (
-				<Text dimColor>Checking agent-browser...</Text>
-			) : status === 'not-installed' ? (
-				<ErrorMessage message="agent-browser is not installed. Run `corebrain browser install` first." />
-			) : status === 'not-found' ? (
-				<ErrorMessage message={`Session "${sessionName}" not found. Use \`corebrain browser open\` to create a session first.`} />
-			) : status === 'blocked' ? (
-				<ErrorMessage message={error} />
-			) : status === 'running' ? (
-				<Text dimColor>Running: {command} {commandArgs.join(' ')} on session "{sessionName}"</Text>
-			) : status === 'done' && result ? (
-				<Box flexDirection="column">
-					{result.stdout && <Text>{result.stdout}</Text>}
-					{result.stderr && <Text color="red">{result.stderr}</Text>}
-					{result.code !== 0 && <Text dimColor>Exit code: {result.code}</Text>}
-				</Box>
-			) : status === 'error' ? (
-				<ErrorMessage message={error} />
-			) : null}
-		</ThemeContext.Provider>
-	);
+	return null;
 }

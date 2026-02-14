@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Text } from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
 import zod from 'zod';
 import { getConfig } from '@/config/index';
 
@@ -9,38 +10,27 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
+async function runToken(): Promise<void> {
+	const config = getConfig();
+	const apiKey = config.auth?.apiKey;
+
+	if (!apiKey) {
+		p.log.error('Not authenticated. Please run the login command first.');
+		return;
+	}
+
+	// Just output the token directly for piping/scripting
+	console.log(apiKey);
+}
+
 export default function Token(_props: Props) {
-	const [status, setStatus] = useState<'loading' | 'found' | 'not-authenticated'>('loading');
-	const [token, setToken] = useState('');
+	const { exit } = useApp();
 
 	useEffect(() => {
-		const config = getConfig();
-		const apiKey = config.auth?.apiKey;
+		runToken().finally(() => {
+			setTimeout(() => exit(), 100);
+		});
+	}, [exit]);
 
-		if (!apiKey) {
-			setStatus('not-authenticated');
-			return;
-		}
-
-		setToken(apiKey);
-		setStatus('found');
-	}, []);
-
-	switch (status) {
-		case 'loading':
-			return <Text dimColor>Reading token...</Text>;
-
-		case 'not-authenticated':
-			return (
-				<Text color="red">
-					Not authenticated. Please run the login command first.
-				</Text>
-			);
-
-		case 'found':
-			return <Text>{token}</Text>;
-
-		default:
-			return null;
-	}
+	return null;
 }

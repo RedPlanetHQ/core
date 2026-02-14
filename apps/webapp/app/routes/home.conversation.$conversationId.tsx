@@ -7,6 +7,7 @@ import {
   ConversationItem,
   ConversationTextarea,
 } from "~/components/conversation";
+import { hasNeedsApprovalDeep } from "~/components/conversation/conversation-utils";
 import { useTypedLoaderData } from "remix-typedjson";
 import { ScrollAreaWithAutoScroll } from "~/components/use-auto-scroll";
 import { PageHeader } from "~/components/common/page-header";
@@ -89,14 +90,14 @@ export default function SingleConversation() {
     }
   }, []);
 
-  // Check if the last assistant message needs approval
+  // Check if the last assistant message needs approval (including nested sub-agents)
   const lastAssistantMessage = [...messages]
     .reverse()
     .find((msg) => msg.role === "assistant") as UIMessage | undefined;
 
-  const needsApproval = !!lastAssistantMessage?.parts.find(
-    (part: any) => part.state === "approval-requested",
-  );
+  const needsApproval = lastAssistantMessage?.parts
+    ? hasNeedsApprovalDeep(lastAssistantMessage.parts)
+    : false;
 
   if (typeof window === "undefined") {
     return null;

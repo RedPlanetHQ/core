@@ -1,8 +1,7 @@
-import { useState, useEffect } from 'react';
-import { Text, Box, useInput, useApp } from 'ink';
-import TextInput from 'ink-text-input';
-import SelectInput from 'ink-select-input';
-import Spinner from 'ink-spinner';
+import { useEffect, useState } from 'react';
+import { Text, useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
 import { randomUUID } from 'node:crypto';
 import { exec } from 'node:child_process';
@@ -24,76 +23,52 @@ import { getConfigPath } from '@/config/paths';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
-import SuccessMessage from '@/components/success-message';
-import ErrorMessage from '@/components/error-message';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
 import type { GatewayConfig, GatewaySlots } from '@/types/config';
 import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
 
 const execAsync = promisify(exec);
 
-export const options = zod.object({});
+export const options = zod.object({
+	// Direct set options (non-interactive)
+	name: zod.string().optional().describe('Gateway name'),
+	description: zod.string().optional().describe('Gateway description'),
+	coding: zod.boolean().optional().describe('Enable/disable coding tools'),
+	browser: zod.boolean().optional().describe('Enable/disable browser tools'),
+	exec: zod.boolean().optional().describe('Enable/disable exec tools'),
+	show: zod.boolean().optional().describe('Show current configuration'),
+});
 
 type Props = {
 	options: zod.infer<typeof options>;
 };
 
-type Step =
-	| 'checking'
-	| 'confirm-edit'
-	| 'uninstalling'
-	| 'input-name'
-	| 'input-description'
-	| 'coding-check'
-	| 'coding-ask'
-	| 'browser-check'
-	| 'browser-ask'
-	| 'browser-install-ask'
-	| 'browser-installing'
-	| 'exec-ask'
-	| 'exec-commands'
-	| 'saving'
-	| 'confirm-start'
-	| 'starting'
-	| 'started'
-	| 'done'
-	| 'cancelled'
-	| 'error';
-
 // Common exec command patterns
 const EXEC_COMMAND_OPTIONS = [
-	{ label: 'git status', value: 'Bash(git status)' },
-	{ label: 'git diff', value: 'Bash(git diff *)' },
-	{ label: 'git log', value: 'Bash(git log *)' },
-	{ label: 'git branch', value: 'Bash(git branch *)' },
-	{ label: 'git checkout', value: 'Bash(git checkout *)' },
-	{ label: 'git add', value: 'Bash(git add *)' },
-	{ label: 'git commit', value: 'Bash(git commit *)' },
-	{ label: 'git push', value: 'Bash(git push *)' },
-	{ label: 'git pull', value: 'Bash(git pull *)' },
-	{ label: 'git fetch', value: 'Bash(git fetch *)' },
-	{ label: 'git stash', value: 'Bash(git stash *)' },
-	{ label: 'npm run *', value: 'Bash(npm run *)' },
-	{ label: 'npm install', value: 'Bash(npm install *)' },
-	{ label: 'npm test', value: 'Bash(npm test *)' },
-	{ label: 'pnpm run *', value: 'Bash(pnpm run *)' },
-	{ label: 'pnpm install', value: 'Bash(pnpm install *)' },
-	{ label: 'yarn run *', value: 'Bash(yarn run *)' },
-	{ label: 'ls', value: 'Bash(ls *)' },
-	{ label: 'cat', value: 'Bash(cat *)' },
-	{ label: 'head/tail', value: 'Bash(head *)|Bash(tail *)' },
-	{ label: 'grep', value: 'Bash(grep *)' },
-	{ label: 'find', value: 'Bash(find *)' },
-	{ label: 'mkdir', value: 'Bash(mkdir *)' },
-	{ label: 'rm', value: 'Bash(rm *)' },
-	{ label: 'mv', value: 'Bash(mv *)' },
-	{ label: 'cp', value: 'Bash(cp *)' },
-	{ label: 'echo', value: 'Bash(echo *)' },
-	{ label: 'curl', value: 'Bash(curl *)' },
-	{ label: 'wget', value: 'Bash(wget *)' },
-	{ label: 'python', value: 'Bash(python *)' },
-	{ label: 'node', value: 'Bash(node *)' },
+	{ value: 'Bash(git status)', label: 'git status' },
+	{ value: 'Bash(git diff *)', label: 'git diff' },
+	{ value: 'Bash(git log *)', label: 'git log' },
+	{ value: 'Bash(git branch *)', label: 'git branch' },
+	{ value: 'Bash(git checkout *)', label: 'git checkout' },
+	{ value: 'Bash(git add *)', label: 'git add' },
+	{ value: 'Bash(git commit *)', label: 'git commit' },
+	{ value: 'Bash(git push *)', label: 'git push' },
+	{ value: 'Bash(git pull *)', label: 'git pull' },
+	{ value: 'Bash(git fetch *)', label: 'git fetch' },
+	{ value: 'Bash(npm run *)', label: 'npm run *' },
+	{ value: 'Bash(npm install *)', label: 'npm install' },
+	{ value: 'Bash(pnpm run *)', label: 'pnpm run *' },
+	{ value: 'Bash(pnpm install *)', label: 'pnpm install' },
+	{ value: 'Bash(ls *)', label: 'ls' },
+	{ value: 'Bash(cat *)', label: 'cat' },
+	{ value: 'Bash(grep *)', label: 'grep' },
+	{ value: 'Bash(find *)', label: 'find' },
+	{ value: 'Bash(mkdir *)', label: 'mkdir' },
+	{ value: 'Bash(rm *)', label: 'rm' },
+	{ value: 'Bash(mv *)', label: 'mv' },
+	{ value: 'Bash(cp *)', label: 'cp' },
+	{ value: 'Bash(curl *)', label: 'curl' },
+	{ value: 'Bash(python *)', label: 'python' },
+	{ value: 'Bash(node *)', label: 'node' },
 ];
 
 // Get the path to the gateway-entry.js script
@@ -127,646 +102,424 @@ async function isNpmAvailable(): Promise<boolean> {
 	}
 }
 
-// Multi-select component for exec commands
-function MultiSelect({
-	items,
-	onSubmit,
-}: {
-	items: { label: string; value: string }[];
-	onSubmit: (allowed: string[], denied: string[]) => void;
-}) {
-	const [cursor, setCursor] = useState(0);
-	const [allowed, setAllowed] = useState<Set<string>>(new Set());
-	const [denied, setDenied] = useState<Set<string>>(new Set());
-
-	useInput((input, key) => {
-		if (key.upArrow) {
-			setCursor((c) => Math.max(0, c - 1));
-		} else if (key.downArrow) {
-			setCursor((c) => Math.min(items.length - 1, c + 1));
-		} else if (input === ' ') {
-			// Toggle allow with space
-			const value = items[cursor]!.value;
-			setAllowed((prev) => {
-				const next = new Set(prev);
-				if (next.has(value)) {
-					next.delete(value);
-				} else {
-					next.add(value);
-					// Remove from denied if present
-					setDenied((d) => {
-						const nd = new Set(d);
-						nd.delete(value);
-						return nd;
-					});
-				}
-				return next;
-			});
-		} else if (input === 'd' || input === 'D') {
-			// Toggle deny with 'd'
-			const value = items[cursor]!.value;
-			setDenied((prev) => {
-				const next = new Set(prev);
-				if (next.has(value)) {
-					next.delete(value);
-				} else {
-					next.add(value);
-					// Remove from allowed if present
-					setAllowed((a) => {
-						const na = new Set(a);
-						na.delete(value);
-						return na;
-					});
-				}
-				return next;
-			});
-		} else if (key.return) {
-			// Expand compound values and submit
-			const expandedAllowed: string[] = [];
-			const expandedDenied: string[] = [];
-
-			for (const v of allowed) {
-				if (v.includes('|')) {
-					expandedAllowed.push(...v.split('|'));
-				} else {
-					expandedAllowed.push(v);
-				}
-			}
-
-			for (const v of denied) {
-				if (v.includes('|')) {
-					expandedDenied.push(...v.split('|'));
-				} else {
-					expandedDenied.push(v);
-				}
-			}
-
-			onSubmit(expandedAllowed, expandedDenied);
-		}
-	});
-
-	return (
-		<Box flexDirection="column">
-			<Text bold>Select commands to allow/deny:</Text>
-			<Text dimColor>
-				Space = Allow (green), D = Deny (red), Enter = Confirm
-			</Text>
-			<Text> </Text>
-			{items.map((item, i) => {
-				const isAllowed = allowed.has(item.value);
-				const isDenied = denied.has(item.value);
-				const isCursor = i === cursor;
-
-				return (
-					<Box key={item.value}>
-						<Text color={isCursor ? 'cyan' : undefined}>
-							{isCursor ? '❯ ' : '  '}
-						</Text>
-						<Text color={isAllowed ? 'green' : isDenied ? 'red' : undefined}>
-							{isAllowed ? '[✓] ' : isDenied ? '[✗] ' : '[ ] '}
-							{item.label}
-						</Text>
-					</Box>
-				);
-			})}
-		</Box>
-	);
+function formatConfig(config: GatewayConfig | undefined): string {
+	if (!config) {
+		return chalk.dim('(not configured)');
+	}
+	return [
+		`${chalk.bold('Name:')} ${config.name || chalk.dim('(not set)')}`,
+		`${chalk.bold('Description:')} ${config.description || chalk.dim('(none)')}`,
+		`${chalk.bold('Coding:')} ${config.slots?.coding?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+		`${chalk.bold('Browser:')} ${config.slots?.browser?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+		`${chalk.bold('Exec:')} ${config.slots?.exec?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+	].join('\n');
 }
 
-export default function GatewayConfigCommand(_props: Props) {
-	const { exit } = useApp();
-	const [step, setStep] = useState<Step>('checking');
-	const [error, setError] = useState('');
-	const [existingConfig, setExistingConfig] = useState<GatewayConfig | null>(null);
-	const [isEditing, setIsEditing] = useState(false);
+// Direct update (non-interactive)
+async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ success: boolean; error?: string }> {
+	const prefs = getPreferences();
+	const existingConfig = prefs.gateway;
 
-	// Form state
-	const [name, setName] = useState('');
-	const [description, setDescription] = useState('');
-	const [gatewayId, setGatewayId] = useState('');
+	// Show current config
+	if (opts.show) {
+		p.note(formatConfig(existingConfig), 'Gateway Configuration');
+		return { success: true };
+	}
 
-	// Slot states
-	const [claudePath, setClaudePath] = useState<string | null>(null);
-	const [codingEnabled, setCodingEnabled] = useState(false);
-	const [browserInstalled, setBrowserInstalled] = useState(false);
-	const [browserEnabled, setBrowserEnabled] = useState(false);
-	const [execEnabled, setExecEnabled] = useState(false);
-	const [execAllow, setExecAllow] = useState<string[]>([]);
-	const [execDeny, setExecDeny] = useState<string[]>([]);
+	if (!existingConfig?.id) {
+		p.log.error('Gateway not configured. Run `corebrain gateway config` without flags first.');
+		return { success: false, error: 'Not configured' };
+	}
 
-	// Check for existing config on mount
-	useEffect(() => {
-		const prefs = getPreferences();
-		const existing = prefs.gateway;
+	const newConfig: GatewayConfig = { ...existingConfig };
 
-		if (existing?.id && existing?.name) {
-			setExistingConfig(existing);
-			setName(existing.name || '');
-			setDescription(existing.description || '');
-			setGatewayId(existing.id);
-			// Load existing slot settings
-			if (existing.slots) {
-				setCodingEnabled(existing.slots.coding?.enabled || false);
-				setBrowserEnabled(existing.slots.browser?.enabled || false);
-				setExecEnabled(existing.slots.exec?.enabled || false);
-				setExecAllow(existing.slots.exec?.allow || []);
-				setExecDeny(existing.slots.exec?.deny || []);
+	if (opts.name !== undefined) {
+		newConfig.name = opts.name;
+	}
+	if (opts.description !== undefined) {
+		newConfig.description = opts.description;
+	}
+
+	// Update slots
+	const slots: GatewaySlots = { ...existingConfig.slots };
+	if (opts.coding !== undefined) {
+		slots.coding = { ...slots.coding, enabled: opts.coding };
+	}
+	if (opts.browser !== undefined) {
+		slots.browser = { ...slots.browser, enabled: opts.browser };
+	}
+	if (opts.exec !== undefined) {
+		slots.exec = { ...slots.exec, enabled: opts.exec };
+	}
+	newConfig.slots = slots;
+
+	updatePreferences({ gateway: newConfig });
+
+	p.log.success(chalk.green('Configuration updated'));
+	p.note(formatConfig(newConfig), 'Gateway Configuration');
+
+	return { success: true };
+}
+
+// Interactive wizard
+async function runInteractiveConfig() {
+	const prefs = getPreferences();
+	const existingConfig = prefs.gateway;
+
+	p.intro(chalk.bgCyan(chalk.black(' Gateway Configuration ')));
+
+	// Stop existing service if running
+	const stopSpinner = p.spinner();
+	stopSpinner.start('Checking existing gateway...');
+	try {
+		const serviceType = getServiceType();
+		if (serviceType !== 'none') {
+			const serviceName = getServiceName();
+			const installed = await isServiceInstalled(serviceName);
+			if (installed) {
+				const status = await getServiceStatus(serviceName);
+				if (status === 'running') {
+					stopSpinner.message('Stopping existing gateway...');
+					await stopService(serviceName);
+				}
+				await uninstallService(serviceName);
 			}
-			setStep('confirm-edit');
-		} else {
-			// New config - generate ID
-			setGatewayId(randomUUID());
-			setStep('input-name');
 		}
-	}, []);
+		stopSpinner.stop('Ready to configure');
+	} catch {
+		stopSpinner.stop('Ready to configure');
+	}
 
-	// Handle edit confirmation
-	const handleEditConfirm = async (item: { value: string }) => {
-		if (item.value === 'edit') {
-			setIsEditing(true);
-			// Check if service is running and uninstall
-			try {
-				const serviceType = getServiceType();
-				if (serviceType !== 'none') {
-					const serviceName = getServiceName();
-					const installed = await isServiceInstalled(serviceName);
+	// Step 1: Name
+	const name = await p.text({
+		message: 'Gateway name',
+		placeholder: 'my-macbook',
+		initialValue: existingConfig?.name || '',
+		validate: (value) => {
+			if (value && !value.trim()) return 'Name is required';
+		},
+	});
 
-					if (installed) {
-						setStep('uninstalling');
-						const status = await getServiceStatus(serviceName);
-						if (status === 'running') {
-							await stopService(serviceName);
-							await new Promise((resolve) => setTimeout(resolve, 500));
-						}
-						await uninstallService(serviceName);
-					}
-				}
-			} catch {
-				// Continue anyway
-			}
-			setStep('input-name');
-		} else if (item.value === 'view') {
-			setStep('done');
-		} else {
-			setStep('cancelled');
+	if (p.isCancel(name)) {
+		p.cancel('Configuration cancelled');
+		return { cancelled: true };
+	}
+
+	// Step 2: Description
+	const description = await p.text({
+		message: 'Description',
+		placeholder: 'Browser and coding on my MacBook',
+		initialValue: existingConfig?.description || '',
+	});
+
+	if (p.isCancel(description)) {
+		p.cancel('Configuration cancelled');
+		return { cancelled: true };
+	}
+
+	// Step 3: Coding slot
+	const codingSpinner = p.spinner();
+	codingSpinner.start('Checking for claude-code...');
+	const claudeResult = await isClaudeCodeInstalled();
+	codingSpinner.stop(claudeResult.installed
+		? chalk.green(`Found: ${claudeResult.path}`)
+		: chalk.yellow('claude-code not found')
+	);
+
+	let codingEnabled = false;
+	let claudePath: string | undefined;
+
+	if (claudeResult.installed) {
+		claudePath = claudeResult.path;
+		const enableCoding = await p.confirm({
+			message: 'Enable coding tools?',
+			initialValue: existingConfig?.slots?.coding?.enabled ?? true,
+		});
+
+		if (p.isCancel(enableCoding)) {
+			p.cancel('Configuration cancelled');
+			return { cancelled: true };
 		}
-	};
 
-	// Handle name submit
-	const handleNameSubmit = (value: string) => {
-		if (value.trim()) {
-			setName(value.trim());
-			setStep('input-description');
+		codingEnabled = enableCoding;
+	}
+
+	// Step 4: Browser slot
+	const browserSpinner = p.spinner();
+	browserSpinner.start('Checking for agent-browser...');
+	let browserInstalled = await isAgentBrowserInstalled();
+	browserSpinner.stop(browserInstalled
+		? chalk.green('agent-browser installed')
+		: chalk.yellow('agent-browser not found')
+	);
+
+	let browserEnabled = false;
+
+	if (!browserInstalled) {
+		const installBrowser = await p.confirm({
+			message: 'Install agent-browser? (npm install -g agent-browser)',
+			initialValue: false,
+		});
+
+		if (p.isCancel(installBrowser)) {
+			p.cancel('Configuration cancelled');
+			return { cancelled: true };
 		}
-	};
 
-	// Handle description submit
-	const handleDescriptionSubmit = (value: string) => {
-		setDescription(value.trim());
-		setStep('coding-check');
-	};
-
-	// Check for claude-code
-	useEffect(() => {
-		if (step === 'coding-check') {
-			(async () => {
-				const result = await isClaudeCodeInstalled();
-				if (result.installed) {
-					setClaudePath(result.path || null);
-					setStep('coding-ask');
-				} else {
-					// Skip coding, go to browser
-					setStep('browser-check');
-				}
-			})();
-		}
-	}, [step]);
-
-	// Handle coding enable
-	const handleCodingAsk = (item: { value: string }) => {
-		setCodingEnabled(item.value === 'yes');
-		setStep('browser-check');
-	};
-
-	// Check for browser
-	useEffect(() => {
-		if (step === 'browser-check') {
-			(async () => {
-				const installed = await isAgentBrowserInstalled();
-				setBrowserInstalled(installed);
-				if (installed) {
-					setStep('browser-ask');
-				} else {
-					setStep('browser-install-ask');
-				}
-			})();
-		}
-	}, [step]);
-
-	// Handle browser enable
-	const handleBrowserAsk = (item: { value: string }) => {
-		setBrowserEnabled(item.value === 'yes');
-		setStep('exec-ask');
-	};
-
-	// Handle browser install ask
-	const handleBrowserInstallAsk = async (item: { value: string }) => {
-		if (item.value === 'yes') {
-			// Check if npm is available
+		if (installBrowser) {
 			const npmAvailable = await isNpmAvailable();
 			if (!npmAvailable) {
-				setError('npm is not available. Please install Node.js/npm first.');
-				setStep('exec-ask'); // Skip browser, go to exec
-				return;
-			}
-			setStep('browser-installing');
-		} else {
-			// Don't install, go to exec
-			setStep('exec-ask');
-		}
-	};
-
-	// Install browser
-	useEffect(() => {
-		if (step === 'browser-installing') {
-			(async () => {
+				p.log.warning('npm not available, skipping browser installation');
+			} else {
+				const installSpinner = p.spinner();
+				installSpinner.start('Installing agent-browser...');
 				try {
 					const result = await installAgentBrowser();
 					if (result.code === 0) {
-						setBrowserInstalled(true);
-						setBrowserEnabled(true);
-						setStep('exec-ask');
+						installSpinner.stop(chalk.green('agent-browser installed'));
+						browserInstalled = true;
+						browserEnabled = true;
 					} else {
-						setError(`Failed to install agent-browser: ${result.stderr}`);
-						setStep('exec-ask');
+						installSpinner.stop(chalk.red('Installation failed'));
 					}
-				} catch (err) {
-					setError(err instanceof Error ? err.message : 'Failed to install');
-					setStep('exec-ask');
+				} catch {
+					installSpinner.stop(chalk.red('Installation failed'));
 				}
-			})();
-		}
-	}, [step]);
-
-	// Handle exec ask
-	const handleExecAsk = (item: { value: string }) => {
-		if (item.value === 'yes') {
-			setExecEnabled(true);
-			setStep('exec-commands');
-		} else {
-			setExecEnabled(false);
-			setStep('saving');
-		}
-	};
-
-	// Handle exec commands selection
-	const handleExecCommandsSubmit = (allowed: string[], denied: string[]) => {
-		setExecAllow(allowed);
-		setExecDeny(denied);
-		setStep('saving');
-	};
-
-	// Save config
-	useEffect(() => {
-		if (step === 'saving') {
-			try {
-				const prefs = getPreferences();
-				const slots: GatewaySlots = {
-					coding: { enabled: codingEnabled },
-					browser: { enabled: browserEnabled },
-					exec: {
-						enabled: execEnabled,
-						allow: execAllow.length > 0 ? execAllow : undefined,
-						deny: execDeny.length > 0 ? execDeny : undefined,
-					},
-				};
-
-				const newConfig: GatewayConfig = {
-					...prefs.gateway,
-					id: gatewayId,
-					name: name,
-					description: description,
-					port: prefs.gateway?.port || 0,
-					pid: prefs.gateway?.pid || 0,
-					startedAt: prefs.gateway?.startedAt || 0,
-					slots,
-				};
-
-				// Also save coding config if enabled
-				if (codingEnabled && claudePath) {
-					const codingConfig = prefs.coding || {};
-					if (!codingConfig['claude-code']) {
-						codingConfig['claude-code'] = {
-							command: claudePath,
-							args: ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
-							resumeArgs: ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--resume', '{sessionId}'],
-							sessionArg: '--session',
-							sessionMode: 'always',
-							sessionIdFields: ['session_id'],
-						};
-					}
-					updatePreferences({ gateway: newConfig, coding: codingConfig });
-				} else {
-					updatePreferences({ gateway: newConfig });
-				}
-
-				setStep('confirm-start');
-			} catch (err) {
-				setError(err instanceof Error ? err.message : 'Failed to save config');
-				setStep('error');
 			}
 		}
-	}, [step, gatewayId, name, description, codingEnabled, browserEnabled, execEnabled, execAllow, execDeny, claudePath]);
+	}
 
-	// Handle start confirmation
-	const handleStartConfirm = async (item: { value: string }) => {
-		if (item.value === 'yes') {
-			setStep('starting');
+	if (browserInstalled && !browserEnabled) {
+		const enableBrowser = await p.confirm({
+			message: 'Enable browser tools?',
+			initialValue: existingConfig?.slots?.browser?.enabled ?? true,
+		});
 
-			try {
-				const serviceType = getServiceType();
-				if (serviceType === 'none') {
-					setError('Service management not supported on this platform');
-					setStep('error');
-					return;
-				}
-
-				const serviceName = getServiceName();
-				const gatewayEntryPath = getGatewayEntryPath();
-				const logDir = join(getConfigPath(), 'logs');
-
-				const serviceConfig: ServiceConfig = {
-					name: serviceName,
-					displayName: 'CoreBrain Gateway',
-					command: process.execPath,
-					args: [gatewayEntryPath],
-					port: 0,
-					workingDirectory: homedir(),
-					logPath: join(logDir, 'gateway-stdout.log'),
-					errorLogPath: join(logDir, 'gateway-stderr.log'),
-				};
-
-				await installService(serviceConfig);
-				await startService(serviceName);
-
-				// Wait a moment and get PID
-				await new Promise((resolve) => setTimeout(resolve, 500));
-				const pid = getServicePid(serviceName);
-
-				// Update preferences with service info
-				const prefs = getPreferences();
-				updatePreferences({
-					gateway: {
-						...prefs.gateway,
-						pid: pid ?? 0,
-						startedAt: Date.now(),
-						serviceInstalled: true,
-						serviceType: serviceType,
-						serviceName: serviceName,
-					},
-				});
-
-				setStep('started');
-			} catch (err) {
-				setError(err instanceof Error ? err.message : 'Failed to start gateway');
-				setStep('error');
-			}
-		} else {
-			setStep('done');
+		if (p.isCancel(enableBrowser)) {
+			p.cancel('Configuration cancelled');
+			return { cancelled: true };
 		}
-	};
 
-	// Handle escape key
-	useInput((input, key) => {
-		if (key.escape) {
-			setStep('cancelled');
-		}
+		browserEnabled = enableBrowser;
+	}
+
+	// Step 5: Exec slot
+	const enableExec = await p.confirm({
+		message: 'Enable exec tools? (run shell commands)',
+		initialValue: existingConfig?.slots?.exec?.enabled ?? false,
 	});
 
-	// Exit on done/cancelled/error/started
+	if (p.isCancel(enableExec)) {
+		p.cancel('Configuration cancelled');
+		return { cancelled: true };
+	}
+
+	let execEnabled = enableExec;
+	let execAllow: string[] = [];
+	let execDeny: string[] = [];
+
+	if (execEnabled) {
+		const selectedCommands = await p.multiselect({
+			message: 'Select allowed commands',
+			options: EXEC_COMMAND_OPTIONS,
+			initialValues: existingConfig?.slots?.exec?.allow || [],
+			required: false,
+		});
+
+		if (p.isCancel(selectedCommands)) {
+			p.cancel('Configuration cancelled');
+			return { cancelled: true };
+		}
+
+		execAllow = selectedCommands as string[];
+
+		// Ask for denied commands from remaining
+		const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
+			opt => !execAllow.includes(opt.value)
+		);
+
+		if (remainingCommands.length > 0) {
+			const deniedCommands = await p.multiselect({
+				message: 'Select denied commands (optional)',
+				options: remainingCommands,
+				initialValues: existingConfig?.slots?.exec?.deny || [],
+				required: false,
+			});
+
+			if (!p.isCancel(deniedCommands)) {
+				execDeny = deniedCommands as string[];
+			}
+		}
+	}
+
+	// Save configuration
+	const saveSpinner = p.spinner();
+	saveSpinner.start('Saving configuration...');
+
+	const gatewayId = existingConfig?.id || randomUUID();
+	const slots: GatewaySlots = {
+		coding: { enabled: codingEnabled },
+		browser: { enabled: browserEnabled },
+		exec: {
+			enabled: execEnabled,
+			allow: execAllow.length > 0 ? execAllow : undefined,
+			deny: execDeny.length > 0 ? execDeny : undefined,
+		},
+	};
+
+	const newConfig: GatewayConfig = {
+		...prefs.gateway,
+		id: gatewayId,
+		name: name as string,
+		description: (description as string) || '',
+		port: prefs.gateway?.port || 0,
+		pid: prefs.gateway?.pid || 0,
+		startedAt: prefs.gateway?.startedAt || 0,
+		slots,
+	};
+
+	// Save coding config if enabled
+	if (codingEnabled && claudePath) {
+		const codingConfig = prefs.coding || {};
+		if (!codingConfig['claude-code']) {
+			codingConfig['claude-code'] = {
+				command: claudePath,
+				args: ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
+				resumeArgs: ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--resume', '{sessionId}'],
+				sessionArg: '--session',
+				sessionMode: 'always',
+				sessionIdFields: ['session_id'],
+			};
+		}
+		updatePreferences({ gateway: newConfig, coding: codingConfig });
+	} else {
+		updatePreferences({ gateway: newConfig });
+	}
+
+	saveSpinner.stop(chalk.green('Configuration saved'));
+
+	// Summary
+	p.note(formatConfig(newConfig), 'Configuration Summary');
+
+	// Ask to start
+	const shouldStart = await p.confirm({
+		message: 'Start gateway now?',
+		initialValue: true,
+	});
+
+	if (p.isCancel(shouldStart) || !shouldStart) {
+		p.outro(chalk.dim("Run 'corebrain gateway on' to start"));
+		return { success: true, started: false };
+	}
+
+	// Start gateway
+	const startSpinner = p.spinner();
+	startSpinner.start('Starting gateway...');
+
+	const serviceType = getServiceType();
+	if (serviceType === 'none') {
+		startSpinner.stop(chalk.red('Service management not supported'));
+		return { success: true, started: false, error: 'Service management not supported' };
+	}
+
+	const serviceName = getServiceName();
+	const gatewayEntryPath = getGatewayEntryPath();
+	const logDir = join(getConfigPath(), 'logs');
+
+	const serviceConfig: ServiceConfig = {
+		name: serviceName,
+		displayName: 'CoreBrain Gateway',
+		command: process.execPath,
+		args: [gatewayEntryPath],
+		port: 0,
+		workingDirectory: homedir(),
+		logPath: join(logDir, 'gateway-stdout.log'),
+		errorLogPath: join(logDir, 'gateway-stderr.log'),
+	};
+
+	await installService(serviceConfig);
+	await startService(serviceName);
+	await new Promise((resolve) => setTimeout(resolve, 500));
+
+	const pid = getServicePid(serviceName);
+	const currentPrefs = getPreferences();
+	updatePreferences({
+		gateway: {
+			...currentPrefs.gateway,
+			pid: pid ?? 0,
+			startedAt: Date.now(),
+			serviceInstalled: true,
+			serviceType,
+			serviceName,
+		},
+	});
+
+	startSpinner.stop(chalk.green('Gateway started'));
+	p.outro(chalk.green('Gateway is running!'));
+
+	return { success: true, started: true };
+}
+
+async function runConfig(opts: zod.infer<typeof options>) {
+	// Check if any direct options are provided
+	const hasDirectOptions =
+		opts.name !== undefined ||
+		opts.description !== undefined ||
+		opts.coding !== undefined ||
+		opts.browser !== undefined ||
+		opts.exec !== undefined ||
+		opts.show;
+
+	if (hasDirectOptions) {
+		return runDirectUpdate(opts);
+	}
+
+	return runInteractiveConfig();
+}
+
+export default function GatewayConfigCommand({ options: opts }: Props) {
+	const { exit } = useApp();
+	const [status, setStatus] = useState<'running' | 'done' | 'error'>('running');
+	const [error, setError] = useState('');
+
 	useEffect(() => {
-		if (step === 'cancelled' || step === 'done' || step === 'started' || step === 'error') {
+		let mounted = true;
+
+		runConfig(opts)
+			.then((result) => {
+				if (mounted) {
+					if (result.cancelled) {
+						setStatus('done');
+					} else if (result.success) {
+						setStatus('done');
+					} else {
+						setError(result.error || 'Unknown error');
+						setStatus('error');
+					}
+				}
+			})
+			.catch((err) => {
+				if (mounted) {
+					setError(err instanceof Error ? err.message : 'Unknown error');
+					setStatus('error');
+				}
+			});
+
+		return () => {
+			mounted = false;
+		};
+	}, [opts]);
+
+	useEffect(() => {
+		if (status === 'done' || status === 'error') {
 			const timer = setTimeout(() => exit(), 100);
 			return () => clearTimeout(timer);
 		}
-	}, [step, exit]);
+	}, [status, exit]);
 
-	const editOptions = [
-		{ label: 'Edit configuration', value: 'edit' },
-		{ label: 'View current configuration', value: 'view' },
-		{ label: 'Cancel', value: 'cancel' },
-	];
+	if (status === 'error') {
+		return <Text color="red">Error: {error}</Text>;
+	}
 
-	const yesNoOptions = [
-		{ label: 'Yes', value: 'yes' },
-		{ label: 'No', value: 'no' },
-	];
-
-	const startOptions = [
-		{ label: 'Yes, start the gateway', value: 'yes' },
-		{ label: 'No, I\'ll start it later', value: 'no' },
-	];
-
-	// Build summary of enabled slots
-	const getSlotsummary = () => {
-		const parts: string[] = [];
-		if (codingEnabled) parts.push('Coding (claude-code)');
-		if (browserEnabled) parts.push('Browser');
-		if (execEnabled) {
-			const allowCount = execAllow.length;
-			const denyCount = execDeny.length;
-			let execInfo = 'Exec';
-			if (allowCount > 0 || denyCount > 0) {
-				execInfo += ` (${allowCount} allowed, ${denyCount} denied)`;
-			}
-			parts.push(execInfo);
-		}
-		return parts.length > 0 ? parts.join(', ') : 'None';
-	};
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{step === 'checking' && <Text dimColor>Checking configuration...</Text>}
-
-			{step === 'confirm-edit' && existingConfig && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Existing Gateway Configuration</Text>
-					<Text> </Text>
-					<Text>ID: {existingConfig.id}</Text>
-					<Text>Name: {existingConfig.name}</Text>
-					<Text>Description: {existingConfig.description || '(none)'}</Text>
-					<Text>Slots: {getSlotsummary()}</Text>
-					<Text> </Text>
-					<Text>What would you like to do?</Text>
-					<SelectInput items={editOptions} onSelect={handleEditConfirm} />
-				</Box>
-			)}
-
-			{step === 'uninstalling' && (
-				<Text dimColor>Stopping and uninstalling existing gateway...</Text>
-			)}
-
-			{step === 'input-name' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Gateway Configuration</Text>
-					<Text> </Text>
-					<Box>
-						<Text>Gateway Name: </Text>
-						<TextInput
-							value={name}
-							onChange={setName}
-							onSubmit={handleNameSubmit}
-							placeholder="e.g., my-macbook-browser"
-						/>
-					</Box>
-					<Text dimColor>
-						{'\n'}Enter a unique name for this gateway (press Enter to confirm, Esc to cancel)
-					</Text>
-				</Box>
-			)}
-
-			{step === 'input-description' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Gateway Configuration</Text>
-					<Text> </Text>
-					<Text dimColor>Name: {name}</Text>
-					<Text> </Text>
-					<Box>
-						<Text>Description: </Text>
-						<TextInput
-							value={description}
-							onChange={setDescription}
-							onSubmit={handleDescriptionSubmit}
-							placeholder="e.g., Browser automation and coding on my MacBook"
-						/>
-					</Box>
-					<Text dimColor>
-						{'\n'}Describe the role of this gateway. The meta-agent will use this to decide when to use it.
-						{'\n'}(press Enter to confirm, Esc to cancel)
-					</Text>
-				</Box>
-			)}
-
-			{step === 'coding-check' && (
-				<Box>
-					<Text color="green"><Spinner type="dots" /></Text>
-					<Text> Checking for claude-code...</Text>
-				</Box>
-			)}
-
-			{step === 'coding-ask' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Coding Slot</Text>
-					<Text> </Text>
-					<Text color="green">✓ Found claude-code at: {claudePath}</Text>
-					<Text> </Text>
-					<Text>Enable coding tools? (start/resume/read sessions)</Text>
-					<SelectInput items={yesNoOptions} onSelect={handleCodingAsk} />
-				</Box>
-			)}
-
-			{step === 'browser-check' && (
-				<Box>
-					<Text color="green"><Spinner type="dots" /></Text>
-					<Text> Checking for agent-browser...</Text>
-				</Box>
-			)}
-
-			{step === 'browser-ask' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Browser Slot</Text>
-					<Text> </Text>
-					<Text color="green">✓ agent-browser is installed</Text>
-					<Text> </Text>
-					<Text>Enable browser tools? (open, click, fill, screenshot, etc.)</Text>
-					<SelectInput items={yesNoOptions} onSelect={handleBrowserAsk} />
-				</Box>
-			)}
-
-			{step === 'browser-install-ask' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Browser Slot</Text>
-					<Text> </Text>
-					<Text color="yellow">⚠ agent-browser is not installed</Text>
-					<Text> </Text>
-					<Text>Would you like to install it? (npm install -g agent-browser)</Text>
-					<SelectInput items={yesNoOptions} onSelect={handleBrowserInstallAsk} />
-				</Box>
-			)}
-
-			{step === 'browser-installing' && (
-				<Box>
-					<Text color="green"><Spinner type="dots" /></Text>
-					<Text> Installing agent-browser...</Text>
-				</Box>
-			)}
-
-			{step === 'exec-ask' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Exec Slot</Text>
-					<Text> </Text>
-					<Text>Enable exec tools? (run shell commands)</Text>
-					<SelectInput items={yesNoOptions} onSelect={handleExecAsk} />
-				</Box>
-			)}
-
-			{step === 'exec-commands' && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Exec Commands</Text>
-					<Text> </Text>
-					<MultiSelect items={EXEC_COMMAND_OPTIONS} onSubmit={handleExecCommandsSubmit} />
-				</Box>
-			)}
-
-			{step === 'saving' && <Text dimColor>Saving configuration...</Text>}
-
-			{step === 'starting' && <Text dimColor>Starting gateway service...</Text>}
-
-			{step === 'started' && (
-				<SuccessMessage
-					message={`Gateway started!\n\nID: ${gatewayId}\nName: ${name}\nSlots: ${getSlotsummary()}\n\nUse 'corebrain gateway status' to check status.\nUse 'corebrain gateway off' to stop.`}
-				/>
-			)}
-
-			{step === 'confirm-start' && (
-				<Box flexDirection="column">
-					<SuccessMessage
-						message={`Gateway configured!\n\nID: ${gatewayId}\nName: ${name}\nDescription: ${description || '(none)'}\nSlots: ${getSlotsummary()}`}
-					/>
-					<Text> </Text>
-					<Text>Would you like to start the gateway now?</Text>
-					<SelectInput items={startOptions} onSelect={handleStartConfirm} />
-				</Box>
-			)}
-
-			{step === 'done' && !isEditing && existingConfig && (
-				<Box flexDirection="column">
-					<Text bold color="cyan">Current Gateway Configuration</Text>
-					<Text> </Text>
-					<Text>ID: {existingConfig.id}</Text>
-					<Text>Name: {existingConfig.name}</Text>
-					<Text>Description: {existingConfig.description || '(none)'}</Text>
-					<Text>Slots: {getSlotsummary()}</Text>
-					<Text> </Text>
-					<Text dimColor>Run 'corebrain gateway on' to start the gateway</Text>
-				</Box>
-			)}
-
-			{step === 'done' && (isEditing || !existingConfig) && (
-				<Box flexDirection="column">
-					<SuccessMessage
-						message={`Gateway configured!\n\nID: ${gatewayId}\nName: ${name}\nDescription: ${description || '(none)'}\nSlots: ${getSlotsummary()}`}
-					/>
-					<Text> </Text>
-					<Text dimColor>Run 'corebrain gateway on' to start the gateway</Text>
-				</Box>
-			)}
-
-			{step === 'cancelled' && (
-				<Text dimColor>Configuration cancelled.</Text>
-			)}
-
-			{step === 'error' && <ErrorMessage message={error} />}
-		</ThemeContext.Provider>
-	);
+	return null;
 }

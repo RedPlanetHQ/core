@@ -5,7 +5,7 @@ import {
   tool,
   readUIMessageStream,
 } from "ai";
-import { z, type ZodTypeAny } from "zod";
+import { z } from "zod";
 
 import { logger } from "~/services/logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
@@ -33,7 +33,7 @@ interface JsonSchemaProperty {
 /**
  * Convert a JSON Schema property to a Zod schema
  */
-function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): ZodTypeAny {
+function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
   switch (prop.type) {
     case "string":
       return z.string().describe(prop.description || "");
@@ -58,13 +58,13 @@ function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): ZodTypeAny {
  */
 function gatewayToolToZodSchema(
   gatewayTool: GatewayTool,
-): z.ZodObject<Record<string, ZodTypeAny>> {
+): z.ZodObject<Record<string, any>> {
   const schema = gatewayTool.inputSchema;
   if (!schema || !schema.properties) {
     return z.object({});
   }
 
-  const shape: Record<string, ZodTypeAny> = {};
+  const shape: Record<string, any> = {};
   const required = schema.required || [];
 
   for (const [key, prop] of Object.entries(schema.properties)) {
@@ -263,9 +263,12 @@ export async function getGatewayAgents(
 function categorizeTools(toolNames: string[]): string {
   const categories: string[] = [];
 
-  if (toolNames.some((t) => t.startsWith("browser_"))) categories.push("browser automation");
-  if (toolNames.some((t) => t.startsWith("coding_"))) categories.push("coding agents");
-  if (toolNames.some((t) => t.startsWith("exec_"))) categories.push("shell commands");
+  if (toolNames.some((t) => t.startsWith("browser_")))
+    categories.push("browser automation");
+  if (toolNames.some((t) => t.startsWith("coding_")))
+    categories.push("coding agents");
+  if (toolNames.some((t) => t.startsWith("exec_")))
+    categories.push("shell commands");
 
   return categories.length > 0 ? categories.join(", ") : "custom tools";
 }

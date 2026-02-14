@@ -1,13 +1,10 @@
-import {useEffect, useState} from 'react';
-import {Text} from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
-import {getPreferences, updatePreferences} from '@/config/preferences';
-import SuccessMessage from '@/components/success-message';
-import ErrorMessage from '@/components/error-message';
-import InfoMessage from '@/components/info-message';
-import {ThemeContext} from '@/hooks/useTheme';
-import {themeContextValue} from '@/config/themes';
-import type {CliBackendConfig} from '@/types/config';
+import { getPreferences, updatePreferences } from '@/config/preferences';
+import type { CliBackendConfig } from '@/types/config';
 
 export const options = zod.object({
 	agent: zod.string().describe('Agent name (e.g., claude-code)'),
@@ -26,125 +23,108 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-export default function CodingAgentConfig({options: opts}: Props) {
-	const [status, setStatus] = useState<'loading' | 'updated' | 'show' | 'not-found' | 'error'>(
-		'loading',
-	);
-	const [config, setConfig] = useState<CliBackendConfig | null>(null);
-	const [error, setError] = useState('');
+function formatConfig(cfg: CliBackendConfig): string {
+	const lines = [
+		`${chalk.bold('command:')} ${cfg.command}`,
+		`${chalk.bold('args:')} ${cfg.args?.join(' ') || chalk.dim('(none)')}`,
+		`${chalk.bold('resumeArgs:')} ${cfg.resumeArgs?.join(' ') || chalk.dim('(none)')}`,
+		`${chalk.bold('sessionArg:')} ${cfg.sessionArg || chalk.dim('(not set)')}`,
+		`${chalk.bold('sessionMode:')} ${cfg.sessionMode || chalk.dim('(not set)')}`,
+		`${chalk.bold('allowedTools:')} ${cfg.allowedTools?.join(', ') || chalk.dim('(none)')}`,
+		`${chalk.bold('disallowedTools:')} ${cfg.disallowedTools?.join(', ') || chalk.dim('(none)')}`,
+		`${chalk.bold('modelArg:')} ${cfg.modelArg || chalk.dim('(not set)')}`,
+	];
+	return lines.join('\n');
+}
 
+async function runCodingConfig(opts: zod.infer<typeof options>): Promise<void> {
 	const agentName = opts.agent;
+	const prefs = getPreferences();
+	const coding = (prefs.coding || {}) as Record<string, CliBackendConfig>;
+	const existingConfig = coding[agentName];
+
+	// Check if any config options were provided
+	const hasConfigOptions =
+		opts.command !== undefined ||
+		opts.args !== undefined ||
+		opts.resumeArgs !== undefined ||
+		opts.sessionArg !== undefined ||
+		opts.sessionMode !== undefined ||
+		opts.allowedTools !== undefined ||
+		opts.disallowedTools !== undefined ||
+		opts.modelArg !== undefined;
+
+	// If just showing config (no options provided or --show)
+	if (opts.show || !hasConfigOptions) {
+		if (!existingConfig) {
+			p.log.warning(`Agent "${agentName}" not configured.`);
+			p.log.info(`Run 'corebrain coding setup' to auto-detect\nor configure with:\n  corebrain coding config --agent ${agentName} --command /path/to/cli`);
+			return;
+		}
+		p.note(formatConfig(existingConfig), `${agentName} Configuration`);
+		return;
+	}
+
+	// Build new config
+	const newConfig: CliBackendConfig = existingConfig || { command: agentName };
+
+	if (opts.command !== undefined) {
+		newConfig.command = opts.command;
+	}
+	if (opts.args !== undefined) {
+		newConfig.args = opts.args
+			.split(',')
+			.map((a) => a.trim())
+			.filter(Boolean);
+	}
+	if (opts.resumeArgs !== undefined) {
+		newConfig.resumeArgs = opts.resumeArgs
+			.split(',')
+			.map((a) => a.trim())
+			.filter(Boolean);
+	}
+	if (opts.sessionArg !== undefined) {
+		newConfig.sessionArg = opts.sessionArg;
+	}
+	if (opts.sessionMode !== undefined) {
+		newConfig.sessionMode = opts.sessionMode;
+	}
+	if (opts.allowedTools !== undefined) {
+		newConfig.allowedTools = opts.allowedTools
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
+	}
+	if (opts.disallowedTools !== undefined) {
+		newConfig.disallowedTools = opts.disallowedTools
+			.split(',')
+			.map((t) => t.trim())
+			.filter(Boolean);
+	}
+	if (opts.modelArg !== undefined) {
+		newConfig.modelArg = opts.modelArg;
+	}
+
+	// Save config
+	coding[agentName] = newConfig;
+	updatePreferences({ coding });
+
+	p.log.success(chalk.green(`Updated ${agentName} configuration`));
+	p.note(formatConfig(newConfig), 'New Configuration');
+}
+
+export default function CodingAgentConfig({ options: opts }: Props) {
+	const { exit } = useApp();
 
 	useEffect(() => {
-		try {
-			const prefs = getPreferences();
-			const coding = (prefs.coding || {}) as Record<string, CliBackendConfig>;
-			const existingConfig = coding[agentName];
+		runCodingConfig(opts)
+			.catch((err) => {
+				p.log.error(`Config error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			})
+			.finally(() => {
+				setTimeout(() => exit(), 100);
+			});
+	}, [opts, exit]);
 
-			// Check if any config options were provided
-			const hasConfigOptions =
-				opts.command !== undefined ||
-				opts.args !== undefined ||
-				opts.resumeArgs !== undefined ||
-				opts.sessionArg !== undefined ||
-				opts.sessionMode !== undefined ||
-				opts.allowedTools !== undefined ||
-				opts.disallowedTools !== undefined ||
-				opts.modelArg !== undefined;
-
-			// If just showing config (no options provided or --show)
-			if (opts.show || !hasConfigOptions) {
-				if (!existingConfig) {
-					setStatus('not-found');
-					return;
-				}
-				setConfig(existingConfig);
-				setStatus('show');
-				return;
-			}
-
-			// Build new config
-			const newConfig: CliBackendConfig = existingConfig || {command: agentName};
-
-			if (opts.command !== undefined) {
-				newConfig.command = opts.command;
-			}
-			if (opts.args !== undefined) {
-				newConfig.args = opts.args
-					.split(',')
-					.map((a) => a.trim())
-					.filter(Boolean);
-			}
-			if (opts.resumeArgs !== undefined) {
-				newConfig.resumeArgs = opts.resumeArgs
-					.split(',')
-					.map((a) => a.trim())
-					.filter(Boolean);
-			}
-			if (opts.sessionArg !== undefined) {
-				newConfig.sessionArg = opts.sessionArg;
-			}
-			if (opts.sessionMode !== undefined) {
-				newConfig.sessionMode = opts.sessionMode;
-			}
-			if (opts.allowedTools !== undefined) {
-				newConfig.allowedTools = opts.allowedTools
-					.split(',')
-					.map((t) => t.trim())
-					.filter(Boolean);
-			}
-			if (opts.disallowedTools !== undefined) {
-				newConfig.disallowedTools = opts.disallowedTools
-					.split(',')
-					.map((t) => t.trim())
-					.filter(Boolean);
-			}
-			if (opts.modelArg !== undefined) {
-				newConfig.modelArg = opts.modelArg;
-			}
-
-			// Save config
-			coding[agentName] = newConfig;
-			updatePreferences({coding});
-
-			setConfig(newConfig);
-			setStatus('updated');
-		} catch (err) {
-			setError(err instanceof Error ? err.message : 'Unknown error');
-			setStatus('error');
-		}
-	}, [agentName, opts]);
-
-	const formatConfig = (cfg: CliBackendConfig) => {
-		const lines = [
-			`command: ${cfg.command}`,
-			`args: ${cfg.args?.join(' ') || '(none)'}`,
-			`resumeArgs: ${cfg.resumeArgs?.join(' ') || '(none)'}`,
-			`sessionArg: ${cfg.sessionArg || '(not set)'}`,
-			`sessionMode: ${cfg.sessionMode || '(not set)'}`,
-			`allowedTools: ${cfg.allowedTools?.join(', ') || '(none)'}`,
-			`disallowedTools: ${cfg.disallowedTools?.join(', ') || '(none)'}`,
-			`modelArg: ${cfg.modelArg || '(not set)'}`,
-		];
-		return lines.join('\n');
-	};
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{status === 'loading' ? (
-				<Text dimColor>Loading configuration...</Text>
-			) : status === 'error' ? (
-				<ErrorMessage message={`Config error: ${error}`} />
-			) : status === 'not-found' ? (
-				<ErrorMessage
-					message={`Agent "${agentName}" not configured.\n\nRun 'corebrain coding setup' to auto-detect\nor configure with:\n  corebrain coding config --agent ${agentName} --command /path/to/cli`}
-					hideTitle
-				/>
-			) : status === 'show' && config ? (
-				<InfoMessage message={`${agentName} Configuration\n\n${formatConfig(config)}`} />
-			) : status === 'updated' && config ? (
-				<SuccessMessage message={`Updated ${agentName} configuration\n\n${formatConfig(config)}`} />
-			) : null}
-		</ThemeContext.Provider>
-	);
+	return null;
 }

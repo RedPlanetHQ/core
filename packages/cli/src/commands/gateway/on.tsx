@@ -1,12 +1,10 @@
-import { useEffect, useState } from 'react';
-import { Text } from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
 import { getConfig } from '@/config/index';
 import { getPreferences, updatePreferences } from '@/config/preferences';
-import SuccessMessage from '@/components/success-message';
-import ErrorMessage from '@/components/error-message';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
 import { getConfigPath } from '@/config/paths';
 import { homedir } from 'node:os';
 import { join, dirname } from 'node:path';
@@ -27,172 +25,117 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-// Get the path to the gateway-entry.js script
 function getGatewayEntryPath(): string {
-	// Get the directory of this file
 	const __filename = fileURLToPath(import.meta.url);
 	const __dirname = dirname(__filename);
-	// Navigate from dist/commands/gateway to dist/server/gateway-entry.js
 	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
 }
 
-export default function GatewayOn(_props: Props) {
-	const [status, setStatus] = useState<
-		| 'checking'
-		| 'not-authenticated'
-		| 'not-configured'
-		| 'not-supported'
-		| 'installing'
-		| 'starting'
-		| 'started'
-		| 'error'
-	>('checking');
-	const [error, setError] = useState('');
-	const [exitCode, setExitCode] = useState<number | undefined>(undefined);
+async function runGatewayOn(): Promise<void> {
+	const spinner = p.spinner();
 
-	useEffect(() => {
-		let cancelled = false;
+	// Check platform support
+	const serviceType = getServiceType();
+	if (serviceType === 'none') {
+		p.log.error('Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported.');
+		process.exitCode = 1;
+		return;
+	}
 
-		(async () => {
-			try {
-				// Check platform support
-				const serviceType = getServiceType();
-				if (serviceType === 'none') {
-					if (!cancelled) {
-						setStatus('not-supported');
-						setExitCode(1);
-					}
-					return;
-				}
+	// Check if authenticated
+	spinner.start('Checking configuration...');
+	const config = getConfig();
 
-				// Check if authenticated
-				const config = getConfig();
+	if (!config.auth?.apiKey || !config.auth?.url) {
+		spinner.stop(chalk.red('Not authenticated'));
+		p.log.error('Not authenticated. Run `corebrain login` first.');
+		process.exitCode = 1;
+		return;
+	}
 
+	// Check if gateway is configured
+	const prefs = getPreferences();
+	if (!prefs.gateway?.id || !prefs.gateway?.name) {
+		spinner.stop(chalk.red('Not configured'));
+		p.log.error('Gateway not configured. Run `corebrain gateway config` first.');
+		process.exitCode = 1;
+		return;
+	}
 
-				if (!config.auth?.apiKey || !config.auth?.url) {
-					if (!cancelled) {
-						setStatus('not-authenticated');
-						setExitCode(1);
-					}
-					return;
-				}
+	const serviceName = getServiceName();
 
-				// Check if gateway is configured
-				const prefs = getPreferences();
-				if (!prefs.gateway?.id || !prefs.gateway?.name) {
-					if (!cancelled) {
-						setStatus('not-configured');
-						setExitCode(1);
-					}
-					return;
-				}
+	// Check if already running
+	const currentStatus = await getServiceStatus(serviceName);
+	if (currentStatus === 'running') {
+		spinner.stop(chalk.green('Gateway is already running'));
+		return;
+	}
 
-				const serviceName = getServiceName();
+	// Install/update the service
+	spinner.message('Installing gateway service...');
 
-				// Check if already running
-				const currentStatus = await getServiceStatus(serviceName);
-				if (currentStatus === 'running') {
-					if (!cancelled) {
-						setStatus('started');
-						setExitCode(0);
-					}
-					return;
-				}
+	const gatewayEntryPath = getGatewayEntryPath();
+	const logDir = join(getConfigPath(), 'logs');
 
-				// Install/update the service
-				if (!cancelled) {
-					setStatus('installing');
-				}
+	const serviceConfig: ServiceConfig = {
+		name: serviceName,
+		displayName: 'CoreBrain Gateway',
+		command: process.execPath,
+		args: [gatewayEntryPath],
+		port: 0,
+		workingDirectory: homedir(),
+		logPath: join(logDir, 'gateway-stdout.log'),
+		errorLogPath: join(logDir, 'gateway-stderr.log'),
+	};
 
-				const gatewayEntryPath = getGatewayEntryPath();
-				const logDir = join(getConfigPath(), 'logs');
+	await installService(serviceConfig);
 
-				const serviceConfig: ServiceConfig = {
-					name: serviceName,
-					displayName: 'CoreBrain Gateway',
-					command: process.execPath, // Node.js path
-					args: [gatewayEntryPath], // No longer passing name/description as args
-					port: 0, // Not applicable for WebSocket client
-					workingDirectory: homedir(),
-					logPath: join(logDir, 'gateway-stdout.log'),
-					errorLogPath: join(logDir, 'gateway-stderr.log'),
-				};
+	// Start the service
+	spinner.message('Starting gateway service...');
+	await startService(serviceName);
 
-				await installService(serviceConfig);
+	// Wait a moment for the service to start and get the PID
+	await new Promise(resolve => setTimeout(resolve, 500));
+	const pid = getServicePid(serviceName);
 
-				// Start the service
-				if (!cancelled) {
-					setStatus('starting');
-				}
+	// Update preferences with actual PID
+	updatePreferences({
+		gateway: {
+			...getPreferences().gateway,
+			port: 0,
+			pid: pid ?? 0,
+			startedAt: Date.now(),
+			serviceInstalled: true,
+			serviceType: serviceType,
+			serviceName: serviceName,
+		},
+	});
 
-				await startService(serviceName);
+	spinner.stop(chalk.green('Gateway service started'));
 
-				// Wait a moment for the service to start and get the PID
-				await new Promise(resolve => setTimeout(resolve, 500));
-				const pid = getServicePid(serviceName);
-
-				// Update preferences with actual PID
-				updatePreferences({
-					gateway: {
-						...getPreferences().gateway,
-						port: 0,
-						pid: pid ?? 0,
-						startedAt: Date.now(),
-						serviceInstalled: true,
-						serviceType: serviceType,
-						serviceName: serviceName,
-					},
-				});
-
-				if (!cancelled) {
-					setStatus('started');
-					setExitCode(0);
-				}
-			} catch (err) {
-				if (!cancelled) {
-					setError(err instanceof Error ? err.message : 'Unknown error');
-					setStatus('error');
-					setExitCode(1);
-				}
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	// Exit after showing result
-	useEffect(() => {
-		if (exitCode !== undefined) {
-			const timer = setTimeout(() => {
-				process.exit(exitCode);
-			}, 100);
-			return () => clearTimeout(timer);
-		}
-	}, [exitCode]);
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{status === 'checking' ? (
-				<Text dimColor>Checking configuration...</Text>
-			) : status === 'not-authenticated' ? (
-				<ErrorMessage message="Not authenticated. Run `corebrain login` first." />
-			) : status === 'not-configured' ? (
-				<ErrorMessage message="Gateway not configured. Run `corebrain gateway config` first." />
-			) : status === 'not-supported' ? (
-				<ErrorMessage message="Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported." />
-			) : status === 'installing' ? (
-				<Text dimColor>Installing gateway service...</Text>
-			) : status === 'starting' ? (
-				<Text dimColor>Starting gateway service...</Text>
-			) : status === 'started' ? (
-				<SuccessMessage
-					message={`Gateway service started\n\nThe gateway is now running in the background.\nUse 'corebrain gateway status' to check status.\nUse 'corebrain gateway off' to stop.`}
-				/>
-			) : status === 'error' ? (
-				<ErrorMessage message={`Gateway error: ${error}`} />
-			) : null}
-		</ThemeContext.Provider>
+	p.note(
+		[
+			'The gateway is now running in the background.',
+			"Use 'corebrain gateway status' to check status.",
+			"Use 'corebrain gateway off' to stop.",
+		].join('\n'),
+		'Gateway Started'
 	);
+}
+
+export default function GatewayOn(_props: Props) {
+	const { exit } = useApp();
+
+	useEffect(() => {
+		runGatewayOn()
+			.catch((err) => {
+				p.log.error(`Gateway error: ${err instanceof Error ? err.message : 'Unknown error'}`);
+				process.exitCode = 1;
+			})
+			.finally(() => {
+				setTimeout(() => exit(), 100);
+			});
+	}, [exit]);
+
+	return null;
 }

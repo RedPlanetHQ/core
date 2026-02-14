@@ -34,7 +34,18 @@ const ChatRequestSchema = z.object({
       role: z.string(),
     })
     .optional(),
+  messages: z
+    .array(
+      z.object({
+        id: z.string().optional(),
+        parts: z.array(z.any()),
+        role: z.string(),
+      }),
+    )
+    .optional(),
   id: z.string(),
+  needsApproval: z.boolean().optional(),
+
   source: z.string().default("core"),
 });
 
@@ -52,10 +63,12 @@ const { loader, action } = createHybridActionApiRoute(
       body.id,
       authentication.userId,
     );
+    const isAssistantApproval = body.needsApproval;
 
     const conversationHistory = conversation?.ConversationHistory ?? [];
 
-    if (conversationHistory.length === 1) {
+    if (conversationHistory.length === 1 && !isAssistantApproval) {
+
       const message = body.message?.parts[0].text;
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
@@ -64,7 +77,8 @@ const { loader, action } = createHybridActionApiRoute(
       });
     }
 
-    if (conversationHistory.length > 1) {
+    if (conversationHistory.length > 1 && !isAssistantApproval) {
+
       const message = body.message?.parts[0].text;
       const messageParts = body.message?.parts;
 
@@ -100,18 +114,23 @@ const { loader, action } = createHybridActionApiRoute(
       .join("\n");
 
     const message = body.message?.parts[0].text;
-    const id = body.message?.id;
+    let finalMessages = messages;
 
-    const userMessageId = id ?? generateId();
-
-    const finalMessages = [
-      ...messages,
-      {
-        parts: [{ text: message, type: "text" }],
-        role: "user",
-        id: userMessageId,
-      },
-    ];
+    if (!isAssistantApproval) {
+      const message = body.message?.parts[0].text;
+      const id = body.message?.id;
+      const userMessageId = id ?? generateId();
+      finalMessages = [
+        ...messages,
+        {
+          parts: [{ text: message, type: "text" }],
+          role: "user",
+          id: userMessageId,
+        },
+      ];
+    } else {
+      finalMessages = body.messages as any;
+    }
 
     const user = await getUserById(authentication.userId);
     // Fetch user's persona to condition AI behavior
@@ -122,7 +141,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const metadata = user?.metadata as Record<string, unknown> | null;
     const timezone = metadata?.timezone as string ?? "UTC"
-    const tools = createTools(authentication.userId, authentication.workspaceId as string, timezone, body.source);
+    const tools = await createTools(authentication.userId, authentication.workspaceId as string, timezone, body.source);
 
 
     // Build system prompt with persona context if available

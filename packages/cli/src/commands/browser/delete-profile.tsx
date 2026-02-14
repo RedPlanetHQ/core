@@ -1,10 +1,8 @@
-import { useEffect, useState } from 'react';
-import { Text } from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
-import SuccessMessage from '@/components/success-message';
-import ErrorMessage from '@/components/error-message';
 import { deleteProfile } from '@/utils/agent-browser';
 
 export const args = zod.tuple([zod.string().describe('Profile name')]);
@@ -16,30 +14,32 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
+async function runDeleteProfile(name: string): Promise<void> {
+	const spinner = p.spinner();
+	spinner.start(`Deleting profile ${name}...`);
+
+	const result = deleteProfile(name);
+
+	if (result.success) {
+		spinner.stop(chalk.green(`Profile "${name}" deleted`));
+	} else {
+		spinner.stop(chalk.red('Failed to delete profile'));
+		p.log.error(result.error || 'Unknown error');
+	}
+}
+
 export default function BrowserDeleteProfile({ args: [name] }: Props) {
-	const [status, setStatus] = useState<'deleting' | 'success' | 'error'>('deleting');
-	const [error, setError] = useState('');
+	const { exit } = useApp();
 
 	useEffect(() => {
-		const result = deleteProfile(name);
+		runDeleteProfile(name)
+			.catch((err) => {
+				p.log.error(`Failed to delete profile: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			})
+			.finally(() => {
+				setTimeout(() => exit(), 100);
+			});
+	}, [name, exit]);
 
-		if (result.success) {
-			setStatus('success');
-		} else {
-			setError(result.error || 'Unknown error');
-			setStatus('error');
-		}
-	}, [name]);
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{status === 'deleting' ? (
-				<Text dimColor>Deleting profile {name}...</Text>
-			) : status === 'success' ? (
-				<SuccessMessage message={`Profile "${name}" deleted`} />
-			) : status === 'error' ? (
-				<ErrorMessage message={`Failed to delete profile: ${error}`} />
-			) : null}
-		</ThemeContext.Provider>
-	);
+	return null;
 }

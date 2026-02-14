@@ -19,19 +19,11 @@ import { titleCase } from "~/utils";
 import { Button } from "../ui";
 import { ChevronsUpDown, LoaderCircle, TriangleAlert } from "lucide-react";
 import { ApprovalComponent } from "./approval-component";
+import { findAllToolsDeep, findFirstPendingApprovalIndex, isToolDisabled } from "./conversation-utils";
 
 interface AIConversationItemProps {
   message: UIMessage;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
-}
-
-function getMessage(message: string) {
-  let finalMessage = message.replace("<final_response>", "");
-  finalMessage = finalMessage.replace("</final_response>", "");
-  finalMessage = finalMessage.replace("<question_response>", "");
-  finalMessage = finalMessage.replace("</question_response>", "");
-
-  return finalMessage;
 }
 
 const Tool = ({
@@ -152,12 +144,12 @@ const ConversationItemComponent = ({
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
     editable: false,
-    content: textPart ? getMessage(textPart.text) : "",
+    content: textPart ? textPart.text : "",
   });
 
   useEffect(() => {
     if (textPart) {
-      editor?.commands.setContent(getMessage(textPart.text));
+      editor?.commands.setContent(textPart.text);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [message]);
@@ -199,16 +191,14 @@ const ConversationItemComponent = ({
     });
   }
 
-  // Enhanced addToolApprovalResponse that auto-rejects subsequent tools
+  // Enhanced addToolApprovalResponse that auto-rejects subsequent tools (including nested)
   const handleToolApproval = (params: { id: string; approved: boolean }) => {
     addToolApprovalResponse(params);
 
     // If rejected, auto-reject all subsequent tools that need approval
     if (!params.approved) {
-      // Find all tools in the message
-      const allTools = message.parts.filter((part: any) =>
-        part.type.includes("tool-"),
-      );
+      // Find all tools in the message (including nested sub-agents)
+      const allTools = findAllToolsDeep(message.parts);
       const currentToolIndex = allTools.findIndex(
         (part: any) => part.approval?.id === params.id,
       );
@@ -247,13 +237,9 @@ const ConversationItemComponent = ({
     return null;
   };
 
-  // Find the first pending approval tool globally
-  const allTools = message.parts.filter((part: any) =>
-    part.type.includes("tool-"),
-  );
-  const firstPendingApprovalIndex = allTools.findIndex(
-    (part: any) => part.state === "approval-requested",
-  );
+  // Find the first pending approval tool globally (including nested sub-agents)
+  const allToolsFlat = findAllToolsDeep(message.parts);
+  const firstPendingApprovalIdx = findFirstPendingApprovalIndex(message.parts);
 
   return (
     <div
@@ -288,15 +274,11 @@ const ConversationItemComponent = ({
           return (
             <div key={`group-${groupIndex}`}>
               {visibleTools.map((part, index) => {
-                const globalToolIndex = allTools.indexOf(part);
-                const isDisabled =
-                  firstPendingApprovalIndex !== -1 &&
-                  globalToolIndex > firstPendingApprovalIndex &&
-                  (part as any).state === "approval-requested";
+                const disabled = isToolDisabled(part, allToolsFlat, firstPendingApprovalIdx);
 
                 return (
                   <div key={`tool-${groupIndex}-${index}`}>
-                    {getComponent(part, isDisabled)}
+                    {getComponent(part, disabled)}
                   </div>
                 );
               })}
