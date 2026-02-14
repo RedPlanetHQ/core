@@ -419,7 +419,9 @@ export class KnowledgeGraphService {
       const entityNode: EntityNode = {
         uuid: crypto.randomUUID(),
         name: entity.name,
-        type: entity.type,
+        type: (EntityTypes as readonly string[]).includes(entity.type as string)
+          ? (entity.type as EntityNode["type"])
+          : undefined,
         attributes: entity.attributes || {}, // Use extracted attributes or empty object
         nameEmbedding: [],
         createdAt: new Date(),
