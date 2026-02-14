@@ -128,12 +128,12 @@ export default function GatewayStatus(_props: Props) {
 				<ErrorMessage message="Service management not supported on this platform." />
 			) : !gatewayStatus.installed ? (
 				<ErrorMessage
-					message="Gateway not installed.\n\nStart with: corebrain gateway on"
+					message={`Gateway not installed.\n\nStart with: corebrain gateway on`}
 					hideTitle
 				/>
 			) : !gatewayStatus.running ? (
 				<ErrorMessage
-					message="Gateway installed but stopped.\n\nStart with: corebrain gateway on"
+					message={`Gateway installed but stopped.\n\nStart with: corebrain gateway on`}
 					hideTitle
 				/>
 			) : (

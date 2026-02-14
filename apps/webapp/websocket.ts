@@ -10,6 +10,7 @@ interface GatewayTool {
 
 interface GatewayInitMessage {
   type: "init";
+  gatewayId: string;
   name: string;
   description?: string;
   clientVersion?: string;
@@ -51,8 +52,49 @@ interface GatewayConnection {
   >;
 }
 
-// In-memory connection store
-const connections = new Map<string, GatewayConnection>();
+// Connection storage with workspace indexing for O(1) lookups
+const globalForConnections = globalThis as unknown as {
+  connections?: Map<string, GatewayConnection>;
+  workspaceIndex?: Map<string, Set<string>>; // workspaceId -> Set<gatewayId>
+};
+
+// Primary index: gatewayId -> connection
+export const connections =
+  globalForConnections.connections ??
+  (globalForConnections.connections = new Map());
+
+// Secondary index: workspaceId -> Set<gatewayId> for fast workspace lookups
+const workspaceIndex =
+  globalForConnections.workspaceIndex ??
+  (globalForConnections.workspaceIndex = new Map());
+
+/**
+ * Add gateway to workspace index
+ */
+function indexGatewayToWorkspace(workspaceId: string, gatewayId: string): void {
+  let gatewayIds = workspaceIndex.get(workspaceId);
+  if (!gatewayIds) {
+    gatewayIds = new Set();
+    workspaceIndex.set(workspaceId, gatewayIds);
+  }
+  gatewayIds.add(gatewayId);
+}
+
+/**
+ * Remove gateway from workspace index
+ */
+function removeGatewayFromWorkspace(
+  workspaceId: string,
+  gatewayId: string,
+): void {
+  const gatewayIds = workspaceIndex.get(workspaceId);
+  if (gatewayIds) {
+    gatewayIds.delete(gatewayId);
+    if (gatewayIds.size === 0) {
+      workspaceIndex.delete(workspaceId);
+    }
+  }
+}
 
 // Module reference for auth
 let moduleRef: any = null;
@@ -121,8 +163,6 @@ export function setupWebSocket(server: Server, module: any) {
       // Store temporarily by connection ID
       connections.set(connectionId, connection);
 
-      console.log(`Gateway connecting: ${connectionId}`);
-
       ws.on("message", async (data) => {
         try {
           const message: GatewayClientMessage = JSON.parse(data.toString());
@@ -147,8 +187,6 @@ export function setupWebSocket(server: Server, module: any) {
       });
     },
   );
-
-  console.log("WebSocket server initialized for /gateway/ws");
 }
 
 function send(ws: WebSocket, message: Record<string, unknown>): void {
@@ -175,6 +213,7 @@ async function handleMessage(
 
       // Upsert gateway in database
       const gateway = await moduleRef.upsertGateway({
+        id: message.gatewayId,
         workspaceId: connection.workspaceId,
         userId: connection.userId,
         name: message.name,
@@ -192,7 +231,8 @@ async function handleMessage(
       connections.delete(connectionId);
       connections.set(gateway.id, connection);
 
-      console.log(`Gateway initialized: ${message.name} (${gateway.id})`);
+      // Add to workspace index for O(1) workspace lookups
+      indexGatewayToWorkspace(connection.workspaceId, gateway.id);
 
       // Request supported tools
       send(connection.ws, { type: "get_supported_tools" });
@@ -258,16 +298,13 @@ async function handleDisconnect(
   }
   connection.pendingToolCalls.clear();
 
-  // Remove from connections
+  // Remove from connections and workspace index
   if (connection.gatewayId) {
     connections.delete(connection.gatewayId);
+    removeGatewayFromWorkspace(connection.workspaceId, connection.gatewayId);
     await moduleRef.disconnectGateway(connection.gatewayId);
-    console.log(
-      `Gateway disconnected: ${connection.name} (${connection.gatewayId})`,
-    );
   } else {
     connections.delete(connectionId);
-    console.log(`Gateway connection closed: ${connectionId}`);
   }
 }
 
@@ -279,12 +316,19 @@ export function getGatewayConnection(
   return connections.get(gatewayId);
 }
 
-export function getWorkspaceGateways(workspaceId: string): string[] {
-  return Array.from(connections.entries())
-    .filter(
-      ([, conn]) => conn.workspaceId === workspaceId && conn.state === "ready",
-    )
-    .map(([id]) => id);
+/**
+ * Get all ready gateways for a workspace - O(k) where k = gateways in workspace
+ * Instead of O(n) where n = all gateways across all workspaces
+ */
+export function getWorkspaceGateways(workspaceId: string) {
+  const gatewayIds = workspaceIndex.get(workspaceId);
+  if (!gatewayIds) return [];
+
+  // Filter to only ready connections
+  return Array.from(gatewayIds).filter((id) => {
+    const conn = connections.get(id);
+    return conn?.state === "ready";
+  });
 }
 
 export function isGatewayConnected(gatewayId: string): boolean {

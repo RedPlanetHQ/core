@@ -1,6 +1,5 @@
 import type {ThemePreset} from '@/types/ui';
 
-
 // AI provider configurations (OpenAI-compatible)
 export interface AIProviderConfig {
 	name: string;
@@ -38,7 +37,7 @@ export interface ProviderConfig {
 	[key: string]: unknown; // Allow additional provider-specific config
 }
 
-export interface AppConfig  {
+export interface AppConfig {
 	// Core authentication
 	auth?: {
 		url: string;
@@ -66,13 +65,32 @@ export interface AppConfig  {
 
 export type ServiceType = 'launchd' | 'systemd' | 'manual';
 
+// Gateway slot configuration
+export interface GatewaySlots {
+	browser?: {
+		enabled: boolean;
+	};
+	coding?: {
+		enabled: boolean;
+	};
+	exec?: {
+		enabled: boolean;
+		allow?: string[]; // Glob-like patterns: "Bash(npm run *)", "Bash(git commit *)"
+		deny?: string[]; // Glob-like patterns: "Bash(git push *)"
+	};
+}
+
 export interface GatewayConfig {
-	port: number;
+	id?: string; // Generated gateway ID
+	name?: string; // Gateway name
+	description?: string; // Gateway description/role for meta-agent selection
+	port?: number;
 	pid: number;
 	startedAt: number;
 	serviceInstalled?: boolean;
 	serviceType?: ServiceType;
 	serviceName?: string;
+	slots?: GatewaySlots; // Which tool slots are enabled
 }
 
 // CLI Backend configuration for coding agents
@@ -95,6 +113,12 @@ export interface CodingConfig {
 	[agentName: string]: CliBackendConfig;
 }
 
+export interface ExecConfig {
+	allow?: string[]; // Glob-like patterns: "Bash(npm run *)", "Bash(git commit *)"
+	deny?: string[]; // Glob-like patterns: "Bash(git push *)"
+	defaultDir?: string; // Default working directory
+}
+
 export interface UserPreferences {
 	lastProvider?: string;
 	lastModel?: string;
@@ -105,4 +129,5 @@ export interface UserPreferences {
 	selectedTheme?: ThemePreset;
 	gateway?: GatewayConfig;
 	coding?: CodingConfig;
+	exec?: ExecConfig;
 }

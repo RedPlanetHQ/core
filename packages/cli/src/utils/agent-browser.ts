@@ -1,10 +1,17 @@
 import {spawn, execSync} from 'node:child_process';
-import {existsSync, mkdirSync, rmSync, readdirSync, readFileSync, writeFileSync} from 'node:fs';
+import {
+	existsSync,
+	mkdirSync,
+	rmSync,
+	readdirSync,
+	readFileSync,
+	writeFileSync,
+} from 'node:fs';
 import {join} from 'node:path';
-import {homedir} from 'node:os';
+import {getConfigPath} from '@/config/paths';
 
-// Constants
-const COREBRAIN_DIR = join(homedir(), '.corebrain');
+// Constants - use unified config directory
+const COREBRAIN_DIR = getConfigPath();
 const BROWSER_PROFILES_DIR = join(COREBRAIN_DIR, 'browser-profiles');
 const SESSIONS_FILE = join(COREBRAIN_DIR, 'browser-sessions.json');
 const MAX_SESSIONS = 3;
@@ -140,10 +147,14 @@ async function runAgentBrowserCommand(
 ): Promise<CommandResult> {
 	return new Promise(resolve => {
 		const fullArgs = [...args, '--session', sessionName];
-		const proc = spawn('agent-browser', fullArgs, {
-			stdio: ['pipe', 'pipe', 'pipe'],
-			shell: true,
-		});
+		const proc = spawn(
+			'/Users/harshithmullapudi/.nvm/versions/node/v20.18.3/lib/node_modules/agent-browser/bin/agent-browser-darwin-arm64',
+			fullArgs,
+			{
+				cwd: COREBRAIN_DIR,
+				stdio: ['pipe', 'pipe', 'pipe'],
+			},
+		);
 
 		let stdout = '';
 		let stderr = '';
@@ -290,7 +301,9 @@ export async function browserOpen(
 /**
  * Close a browser session
  */
-export async function browserClose(sessionName: string): Promise<CommandResult> {
+export async function browserClose(
+	sessionName: string,
+): Promise<CommandResult> {
 	const result = await runAgentBrowserCommand(sessionName, ['close']);
 
 	// Remove session regardless of result (it might already be closed)
@@ -320,7 +333,9 @@ export async function browserCommand(
 	if (isBlockedCommand(command)) {
 		return {
 			stdout: '',
-			stderr: `Command "${command}" is blocked. Blocked commands: ${BLOCKED_COMMANDS.join(', ')}`,
+			stderr: `Command "${command}" is blocked. Blocked commands: ${BLOCKED_COMMANDS.join(
+				', ',
+			)}`,
 			code: 1,
 		};
 	}

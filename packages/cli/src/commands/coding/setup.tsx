@@ -25,6 +25,7 @@ interface AgentTemplate {
 }
 
 // Default configurations for known agents
+// Currently only supporting claude-code
 const agentTemplates: AgentTemplate[] = [
 	{
 		name: 'claude-code',
@@ -35,14 +36,6 @@ const agentTemplates: AgentTemplate[] = [
 			sessionArg: '--session',
 			sessionMode: 'always',
 			sessionIdFields: ['session_id'],
-		},
-	},
-	{
-		name: 'codex',
-		commands: ['codex'],
-		defaultConfig: {
-			args: [],
-			resumeArgs: [],
 		},
 	},
 ];
@@ -144,7 +137,7 @@ export default function CodingSetup(_props: Props) {
 				<ErrorMessage message={`Detection failed: ${error}`} />
 			) : availableCount === 0 ? (
 				<ErrorMessage
-					message="No coding agents found.\n\nInstall one of:\n- claude (Anthropic Claude CLI)\n- codex (OpenAI Codex CLI)"
+					message={`No coding agents found.\n\nInstall:\n- claude (Anthropic Claude Code CLI)`}
 					hideTitle
 				/>
 			) : (

@@ -2,7 +2,6 @@ import type {AppConfig, Colors} from '@/types/index';
 import {existsSync, readFileSync, mkdirSync, writeFileSync} from 'fs';
 import {join, dirname} from 'path';
 import {fileURLToPath} from 'url';
-import {homedir} from 'os';
 import {config as loadEnv} from 'dotenv';
 import {logError} from '@/utils/message-queue';
 import {getThemeColors, defaultTheme} from '@/config/themes';
@@ -25,36 +24,54 @@ if (existsSync(envPath)) {
 // Hold a map of what config files are where
 export const confDirMap: Record<string, string> = {};
 
+/**
+ * Get the config.json file path, creating it if it doesn't exist
+ */
+export function getConfigFilePath(): string {
+	const configDir = getConfigPath();
+	const configPath = join(configDir, 'config.json');
+
+	// Ensure directory exists
+	if (!existsSync(configDir)) {
+		mkdirSync(configDir, {recursive: true});
+	}
+
+	// Create config file if it doesn't exist
+	if (!existsSync(configPath)) {
+		writeFileSync(configPath, JSON.stringify({}, null, 2), 'utf-8');
+	}
+
+	confDirMap['config.json'] = configPath;
+	return configPath;
+}
+
 // Find the closest config file for the requested configuration file
+// Now simplified - always uses ~/.corebrain/config.json
 export function getClosestConfigFile(fileName: string): string {
 	try {
 		const configDir = getConfigPath();
 
-		// First, lets check for a working directory config
+		// First, check for a working directory config (for local overrides)
 		if (existsSync(join(process.cwd(), fileName))) {
 			confDirMap[fileName] = join(process.cwd(), fileName);
-
 			return join(process.cwd(), fileName);
 		}
 
-		// Next lets check the $HOME for a hidden file. This should only be for
-		// legacy support
-		if (existsSync(join(homedir(), `.${fileName}`))) {
-			confDirMap[fileName] = join(homedir(), `.${fileName}`);
+		// Use ~/.corebrain directory
+		const configPath = join(configDir, fileName);
 
-			return join(homedir(), `.${fileName}`);
+		// Ensure directory exists
+		if (!existsSync(configDir)) {
+			mkdirSync(configDir, {recursive: true});
 		}
-
-		// Last, lets look for an user level config.
 
 		// If the file doesn't exist, create it
-		if (!existsSync(join(configDir, fileName))) {
-			createDefaultConfFile(configDir, fileName);
+		if (!existsSync(configPath)) {
+			writeFileSync(configPath, JSON.stringify({}, null, 2), 'utf-8');
 		}
 
-		confDirMap[fileName] = join(configDir, fileName);
-
-		return join(configDir, fileName);
+		confDirMap[fileName] = configPath;
+		return configPath;
 	} catch (error) {
 		logError(`Failed to load ${fileName}: ${String(error)}`);
 	}
@@ -63,29 +80,9 @@ export function getClosestConfigFile(fileName: string): string {
 	return fileName;
 }
 
-function createDefaultConfFile(filePath: string, fileName: string): void {
-	try {
-		// If we cant find any, lets assume this is the first user run, create the
-		// correct file and direct the user to configure them correctly,
-		if (!existsSync(join(filePath, fileName))) {
-			// Maybe add a better sample config?
-			const sampleConfig = {};
-
-			mkdirSync(filePath, {recursive: true});
-			writeFileSync(
-				join(filePath, fileName),
-				JSON.stringify(sampleConfig, null, 2),
-				'utf-8',
-			);
-		}
-	} catch (error) {
-		logError(`Failed to write ${filePath}: ${String(error)}`);
-	}
-}
-
 // Function to load app configuration from config.json if it exists
 function loadAppConfig(): AppConfig {
-	const configJsonPath = getClosestConfigFile('config.json');
+	const configJsonPath = getConfigFilePath();
 
 	try {
 		const rawData = readFileSync(configJsonPath, 'utf-8');
@@ -116,12 +113,15 @@ export function getConfig(): AppConfig {
 
 // Function to update app configuration
 export function updateConfig(newConfig: Partial<AppConfig>): void {
-	const configJsonPath = getClosestConfigFile('config.json');
+	const configJsonPath = getConfigFilePath();
 
 	try {
 		// Read current config
 		const rawData = readFileSync(configJsonPath, 'utf-8');
-		const configData = JSON.parse(rawData) as {core?: AppConfig};
+		const configData = JSON.parse(rawData) as {
+			core?: AppConfig;
+			preferences?: unknown;
+		};
 
 		// Update config
 		if (!configData.core) {
@@ -129,7 +129,7 @@ export function updateConfig(newConfig: Partial<AppConfig>): void {
 		}
 		Object.assign(configData.core, newConfig);
 
-		// Write back to file
+		// Write back to file (preserving preferences)
 		writeFileSync(configJsonPath, JSON.stringify(configData, null, 2), 'utf-8');
 
 		// Reload config to update in-memory cache

@@ -110,7 +110,7 @@ export default function GatewayOff(_props: Props) {
 				<ErrorMessage message="Gateway is not running" hideTitle />
 			) : status === 'success' ? (
 				<SuccessMessage
-					message="Gateway stopped.\n\nNote: Will auto-start on next login.\nTo remove completely: corebrain gateway uninstall"
+					message={`Gateway stopped.\n\nNote: Will auto-start on next login.\nTo remove completely: corebrain gateway uninstall`}
 				/>
 			) : status === 'error' ? (
 				<ErrorMessage message={`Failed to stop gateway: ${error}`} />

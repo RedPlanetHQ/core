@@ -1,6 +1,6 @@
 {
 	"name": "@redplanethq/corebrain",
-	"version": "1.0.0",
+	"version": "2.1.0",
 	"type": "module",
 	"engines": {
 		"node": ">=16"
@@ -28,7 +28,9 @@
 		"pastel": "^4.0.0",
 		"react": "^19.2.4",
 		"ws": "^8.18.0",
-		"zod": "^4.3.6"
+		"zod": "^4.3.6",
+		"ink-select-input": "^6.2.0",
+		"ink-text-input": "^6.0.0"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^8.1.0",
@@ -46,7 +48,8 @@
 		"ts-node": "^10.9.1",
 		"tsc-alias": "^1.8.16",
 		"typescript": "^5.0.3",
-		"xo": "^1.2.3"
+		"xo": "^1.2.3",
+		"ink-spinner": "5.0.0"
 	},
 	"ava": {
 		"extensions": {

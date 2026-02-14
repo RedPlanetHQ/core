@@ -2,25 +2,32 @@ import WebSocket, {type RawData} from 'ws';
 import {hostname} from 'node:os';
 import {browserTools, executeBrowserTool} from '@/server/tools/browser-tools';
 import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
+import {execTools, executeExecTool} from '@/server/tools/exec-tools';
 import {browserCloseAll} from '@/utils/agent-browser';
+import {getPreferences} from '@/config/preferences';
 import type {GatewayTool} from '@/server/tools/browser-tools';
+import type {GatewaySlots} from '@/types/config';
 
 // Slot-based tool organization
 interface ToolSlots {
 	browser: GatewayTool[];
 	coding: GatewayTool[];
+	exec: GatewayTool[];
 }
 
 // Gateway client configuration
 interface GatewayClientConfig {
 	url: string;
 	apiKey: string;
+	gatewayId?: string; // Local gateway ID from config
 	name: string;
 	description?: string;
 	onConnect?: () => void;
 	onDisconnect?: () => void;
 	onReady?: (gatewayId: string) => void;
 	onError?: (error: Error) => void;
+	onMaxReconnectReached?: () => void; // Called when max reconnection attempts reached
+	logger?: (message: string) => void; // Optional logger function
 }
 
 // Message types from server
@@ -74,10 +81,45 @@ export class GatewayClient {
 	}
 
 	/**
+	 * Log a message using the provided logger or console
+	 */
+	private log(message: string): void {
+		if (this.config.logger) {
+			this.config.logger(message);
+		} else {
+			console.log(message);
+		}
+	}
+
+	/**
+	 * Get enabled tools based on gateway slots config
+	 */
+	private getEnabledTools(): GatewayTool[] {
+		const prefs = getPreferences();
+		const slots = prefs.gateway?.slots;
+		const tools: GatewayTool[] = [];
+
+		if (slots?.browser?.enabled) {
+			tools.push(...browserTools);
+		}
+
+		if (slots?.coding?.enabled) {
+			tools.push(...codingTools);
+		}
+
+		if (slots?.exec?.enabled) {
+			tools.push(...execTools);
+		}
+
+		return tools;
+	}
+
+	/**
 	 * Build the WebSocket URL from config
 	 */
 	private buildWsUrl(): string {
-		let baseUrl = this.config.url;
+		// let baseUrl = this.config.url;
+		let baseUrl = `http://localhost:3033`;
 
 		// Convert http(s) to ws(s)
 		if (baseUrl.startsWith('https://')) {
@@ -92,7 +134,7 @@ export class GatewayClient {
 		}
 
 		return `${baseUrl}/gateway/ws?token=${encodeURIComponent(
-			this.config.apiKey,
+			'rc_pat_is6m8b8meuz9b98kyoq5qjv75371cmzqgizbdese',
 		)}`;
 	}
 
@@ -108,20 +150,21 @@ export class GatewayClient {
 		this.state = 'connecting';
 
 		const wsUrl = this.buildWsUrl();
-		console.log(`Connecting to gateway: ${this.config.url}`);
+		this.log(`Connecting to gateway: ${this.config.url}`);
 
 		this.ws = new WebSocket(wsUrl);
 
 		this.ws.on('open', () => {
 			this.state = 'connected';
 			this.reconnectAttempts = 0;
-			console.log('Gateway WebSocket connected');
+			this.log('Gateway WebSocket connected');
 
 			this.config.onConnect?.();
 
 			// Send init message
 			this.send({
 				type: 'init',
+				gatewayId: this.config.gatewayId,
 				name: this.config.name,
 				description: this.config.description,
 				platform: process.platform,
@@ -138,7 +181,7 @@ export class GatewayClient {
 				const message = JSON.parse(data.toString()) as ServerMessage;
 				await this.handleMessage(message);
 			} catch (parseErr) {
-				console.error('Failed to parse message:', parseErr);
+				this.log(`ERROR: Failed to parse message: ${parseErr}`);
 			}
 		});
 
@@ -147,7 +190,7 @@ export class GatewayClient {
 		});
 
 		this.ws.on('error', (wsErr: Error) => {
-			console.error('Gateway WebSocket error:', wsErr);
+			this.log(`ERROR: Gateway WebSocket error: ${wsErr.message}`);
 			this.config.onError?.(wsErr);
 		});
 	}
@@ -157,50 +200,67 @@ export class GatewayClient {
 	 */
 	private async handleMessage(message: ServerMessage): Promise<void> {
 		switch (message.type) {
-			case 'get_supported_tools':
-				// Send our supported tools organized by slots
-				const toolSlots: ToolSlots = {
-					browser: browserTools,
-					coding: codingTools,
-				};
+			case 'get_supported_tools': {
+				const enabledTools = this.getEnabledTools();
+				this.log(`Sending ${enabledTools.length} enabled tools`);
 				this.send({
 					type: 'supported_tools',
-					tools: toolSlots,
+					tools: enabledTools,
 				});
 				break;
+			}
 
 			case 'ready': {
 				this.state = 'ready';
 				const readyMsg = message as unknown as ReadyMessage;
 				this.gatewayId = readyMsg.gatewayId;
-				console.log(`Gateway ready: ${this.gatewayId}`);
+				this.log(`Gateway ready: ${this.gatewayId}`);
 				this.config.onReady?.(this.gatewayId);
 				break;
 			}
 
 			case 'tool_call': {
 				const toolCall = message as unknown as ToolCallMessage;
-				console.log(`Tool call: ${toolCall.tool} (${toolCall.id})`);
+				this.log(`TOOL_CALL: ${toolCall.tool} (id: ${toolCall.id})`);
+				this.log(`TOOL_PARAMS: ${JSON.stringify(toolCall.params)}`);
 
 				try {
 					let result: {success: boolean; result?: unknown; error?: string};
+					const prefs = getPreferences();
+					const slots = prefs.gateway?.slots;
 
-					// Route to appropriate executor based on tool prefix
+					// Route to appropriate executor based on tool prefix (with slot check)
 					if (toolCall.tool.startsWith('browser_')) {
-						result = await executeBrowserTool(toolCall.tool, toolCall.params);
+						if (!slots?.browser?.enabled) {
+							result = {success: false, error: 'Browser slot is not enabled'};
+						} else {
+							result = await executeBrowserTool(toolCall.tool, toolCall.params);
+						}
 					} else if (toolCall.tool.startsWith('coding_')) {
-						result = await executeCodingTool(toolCall.tool, toolCall.params);
+						if (!slots?.coding?.enabled) {
+							result = {success: false, error: 'Coding slot is not enabled'};
+						} else {
+							result = await executeCodingTool(toolCall.tool, toolCall.params);
+						}
+					} else if (toolCall.tool.startsWith('exec_')) {
+						if (!slots?.exec?.enabled) {
+							result = {success: false, error: 'Exec slot is not enabled'};
+						} else {
+							result = await executeExecTool(toolCall.tool, toolCall.params);
+						}
 					} else {
 						result = {success: false, error: `Unknown tool: ${toolCall.tool}`};
 					}
 
 					if (result.success) {
+						this.log(`TOOL_RESULT: ${toolCall.tool} (id: ${toolCall.id}) - success`);
 						this.send({
 							type: 'tool_result',
 							id: toolCall.id,
 							result: result.result,
 						});
 					} else {
+						this.log(`TOOL_ERROR: ${toolCall.tool} (id: ${toolCall.id}) - ${result.error}`);
 						this.send({
 							type: 'tool_result',
 							id: toolCall.id,
@@ -208,10 +268,12 @@ export class GatewayClient {
 						});
 					}
 				} catch (err) {
+					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+					this.log(`TOOL_EXCEPTION: ${toolCall.tool} (id: ${toolCall.id}) - ${errorMessage}`);
 					this.send({
 						type: 'tool_result',
 						id: toolCall.id,
-						error: err instanceof Error ? err.message : 'Unknown error',
+						error: errorMessage,
 					});
 				}
 				break;
@@ -219,12 +281,12 @@ export class GatewayClient {
 
 			case 'error': {
 				const errorMsg = message as unknown as ErrorMessage;
-				console.error(`Gateway error: ${errorMsg.message} (${errorMsg.code})`);
+				this.log(`ERROR: Gateway error: ${errorMsg.message} (${errorMsg.code})`);
 				break;
 			}
 
 			default:
-				console.log(`Unknown message type: ${message.type}`);
+				this.log(`Unknown message type: ${message.type}`);
 		}
 	}
 
@@ -239,12 +301,12 @@ export class GatewayClient {
 
 		this.stopPingInterval();
 
-		console.log('Gateway WebSocket disconnected');
+		this.log('Gateway WebSocket disconnected');
 		this.config.onDisconnect?.();
 
 		// Auto-close all browser sessions on disconnect
 		if (wasReady) {
-			console.log('Closing all browser sessions...');
+			this.log('Closing all browser sessions...');
 			try {
 				await browserCloseAll();
 			} catch {
@@ -260,7 +322,7 @@ export class GatewayClient {
 			const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 30000);
 			this.reconnectAttempts++;
 
-			console.log(
+			this.log(
 				`Reconnecting in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})...`,
 			);
 
@@ -268,7 +330,10 @@ export class GatewayClient {
 				this.connect();
 			}, delay);
 		} else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			console.error('Max reconnection attempts reached');
+			this.log(
+				'Max reconnection attempts reached. Shutting down gateway.',
+			);
+			this.config.onMaxReconnectReached?.();
 		}
 	}
 

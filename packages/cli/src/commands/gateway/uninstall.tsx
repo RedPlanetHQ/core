@@ -120,7 +120,7 @@ export default function GatewayUninstall(_props: Props) {
 				<ErrorMessage message="Gateway is not installed" hideTitle />
 			) : status === 'success' ? (
 				<SuccessMessage
-					message="Gateway service removed.\n\nThe gateway will no longer auto-start.\nTo reinstall: corebrain gateway on"
+					message={`Gateway service removed.\n\nThe gateway will no longer auto-start.\nTo reinstall: corebrain gateway on`}
 				/>
 			) : status === 'error' ? (
 				<ErrorMessage message={`Failed to uninstall: ${error}`} />

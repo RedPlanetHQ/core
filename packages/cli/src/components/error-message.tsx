@@ -5,6 +5,17 @@ import { memo } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useTerminalWidth } from '@/hooks/useTerminalWidth';
 
+function MessageLines({ message, color }: { message: string; color: string }) {
+	const lines = message.split('\n');
+	return (
+		<>
+			{lines.map((line, i) => (
+				<Text key={i} color={color}>{line}</Text>
+			))}
+		</>
+	);
+}
+
 export default memo(function ErrorMessage({
 	message,
 	hideTitle = false,
@@ -14,13 +25,14 @@ export default memo(function ErrorMessage({
 	hideTitle?: boolean;
 	hideBox?: boolean;
 }) {
+
 	const boxWidth = useTerminalWidth();
 	const { colors } = useTheme();
 	return (
 		<>
 			{hideBox ? (
 				<Box width={boxWidth} flexDirection="column" marginBottom={1}>
-					<Text color={colors.error}>{message}</Text>
+					<MessageLines message={message} color={colors.error} />
 				</Box>
 			) : hideTitle ? (
 				<Box
@@ -31,7 +43,7 @@ export default memo(function ErrorMessage({
 					paddingY={0}
 					flexDirection="column"
 				>
-					<Text color={colors.error}>{message}</Text>
+					<MessageLines message={message} color={colors.error} />
 				</Box>
 			) : (
 				<TitledBox
@@ -45,7 +57,7 @@ export default memo(function ErrorMessage({
 					paddingY={1}
 					flexDirection="column"
 				>
-					<Text color={colors.error}>{message}</Text>
+					<MessageLines message={message} color={colors.error} />
 				</TitledBox>
 			)}
 		</>

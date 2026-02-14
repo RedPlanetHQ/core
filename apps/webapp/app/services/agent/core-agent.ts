@@ -4,8 +4,9 @@ import { z } from "zod";
 import { runOrchestrator } from "./orchestrator";
 
 import { logger } from "../logger.service";
+import { createGatewayTools, getGatewayAgents } from "./gateway";
 
-export const createTools = (
+export const createTools = async (
   userId: string,
   workspaceId: string,
   timezone: string,
@@ -104,5 +105,9 @@ export const createTools = (
     }),
   };
 
-  return tools;
+  const gatewayAgents = await getGatewayAgents(workspaceId);
+  const gatewayTools = createGatewayTools(gatewayAgents);
+
+  console.log({ ...tools, ...gatewayTools });
+  return { ...tools, ...gatewayTools };
 };

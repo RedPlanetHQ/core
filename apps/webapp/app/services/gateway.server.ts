@@ -20,6 +20,7 @@ export async function verifyGatewayToken(token: string) {
 // === Gateway CRUD operations ===
 
 interface UpsertGatewayParams {
+  id: string;
   workspaceId: string;
   userId: string;
   name: string;
@@ -32,12 +33,11 @@ interface UpsertGatewayParams {
 export async function upsertGateway(params: UpsertGatewayParams) {
   return prisma.gateway.upsert({
     where: {
-      workspaceId_name: {
-        workspaceId: params.workspaceId,
-        name: params.name,
-      },
+      id: params.id,
+      workspaceId: params.workspaceId,
     },
     create: {
+      id: params.id,
       name: params.name,
       description: params.description,
       workspaceId: params.workspaceId,
@@ -57,6 +57,7 @@ export async function upsertGateway(params: UpsertGatewayParams) {
       clientVersion: params.clientVersion,
       platform: params.platform,
       hostname: params.hostname,
+      name: params.name,
     },
   });
 }

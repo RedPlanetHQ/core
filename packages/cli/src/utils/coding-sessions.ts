@@ -1,9 +1,9 @@
 import {existsSync, readFileSync, writeFileSync, mkdirSync} from 'node:fs';
 import {join} from 'node:path';
-import {homedir} from 'node:os';
+import {getConfigPath} from '@/config/paths';
 
-// Sessions file path
-const SESSIONS_DIR = join(homedir(), '.corebrain');
+// Sessions file path - uses same directory as config
+const SESSIONS_DIR = getConfigPath();
 const SESSIONS_FILE = join(SESSIONS_DIR, 'sessions.json');
 
 // Session status

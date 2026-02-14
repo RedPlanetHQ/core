@@ -125,7 +125,7 @@ const { loader, action } = createHybridActionApiRoute(
 
     const metadata = user?.metadata as Record<string, unknown> | null;
     const timezone = metadata?.timezone as string ?? "UTC"
-    const tools = createTools(authentication.userId, authentication.workspaceId as string, timezone, body.source);
+    const tools = await createTools(authentication.userId, authentication.workspaceId as string, timezone, body.source);
 
 
     // Build system prompt with persona context if available

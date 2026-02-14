@@ -1,16 +1,16 @@
-import {useEffect, useState} from 'react';
-import {Text} from 'ink';
+import { useEffect, useState } from 'react';
+import { Text } from 'ink';
 import zod from 'zod';
-import {getConfig} from '@/config/index';
-import {getPreferences, updatePreferences} from '@/config/preferences';
+import { getConfig } from '@/config/index';
+import { getPreferences, updatePreferences } from '@/config/preferences';
 import SuccessMessage from '@/components/success-message';
 import ErrorMessage from '@/components/error-message';
-import {ThemeContext} from '@/hooks/useTheme';
-import {themeContextValue} from '@/config/themes';
-import {hostname} from 'node:os';
-import {homedir} from 'node:os';
-import {join, dirname} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import { ThemeContext } from '@/hooks/useTheme';
+import { themeContextValue } from '@/config/themes';
+import { getConfigPath } from '@/config/paths';
+import { homedir } from 'node:os';
+import { join, dirname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
 	installService,
 	getServiceStatus,
@@ -19,12 +19,9 @@ import {
 	getServiceType,
 	getServicePid,
 } from '@/utils/service-manager';
-import type {ServiceConfig} from '@/utils/service-manager';
+import type { ServiceConfig } from '@/utils/service-manager';
 
-export const options = zod.object({
-	name: zod.string().optional().describe('Gateway name'),
-	description: zod.string().optional().describe('Gateway description'),
-});
+export const options = zod.object({});
 
 type Props = {
 	options: zod.infer<typeof options>;
@@ -39,10 +36,11 @@ function getGatewayEntryPath(): string {
 	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
 }
 
-export default function GatewayOn({options}: Props) {
+export default function GatewayOn(_props: Props) {
 	const [status, setStatus] = useState<
 		| 'checking'
 		| 'not-authenticated'
+		| 'not-configured'
 		| 'not-supported'
 		| 'installing'
 		| 'starting'
@@ -70,9 +68,20 @@ export default function GatewayOn({options}: Props) {
 				// Check if authenticated
 				const config = getConfig();
 
+
 				if (!config.auth?.apiKey || !config.auth?.url) {
 					if (!cancelled) {
 						setStatus('not-authenticated');
+						setExitCode(1);
+					}
+					return;
+				}
+
+				// Check if gateway is configured
+				const prefs = getPreferences();
+				if (!prefs.gateway?.id || !prefs.gateway?.name) {
+					if (!cancelled) {
+						setStatus('not-configured');
 						setExitCode(1);
 					}
 					return;
@@ -90,24 +99,19 @@ export default function GatewayOn({options}: Props) {
 					return;
 				}
 
-				// Get gateway name
-				const gatewayName = options.name || `${hostname()}-browser`;
-				const gatewayDescription =
-					options.description || 'Browser automation gateway';
-
 				// Install/update the service
 				if (!cancelled) {
 					setStatus('installing');
 				}
 
 				const gatewayEntryPath = getGatewayEntryPath();
-				const logDir = join(homedir(), '.corebrain', 'logs');
+				const logDir = join(getConfigPath(), 'logs');
 
 				const serviceConfig: ServiceConfig = {
 					name: serviceName,
 					displayName: 'CoreBrain Gateway',
 					command: process.execPath, // Node.js path
-					args: [gatewayEntryPath, gatewayName, gatewayDescription],
+					args: [gatewayEntryPath], // No longer passing name/description as args
 					port: 0, // Not applicable for WebSocket client
 					workingDirectory: homedir(),
 					logPath: join(logDir, 'gateway-stdout.log'),
@@ -156,7 +160,7 @@ export default function GatewayOn({options}: Props) {
 		return () => {
 			cancelled = true;
 		};
-	}, [options.name, options.description]);
+	}, []);
 
 	// Exit after showing result
 	useEffect(() => {
@@ -174,6 +178,8 @@ export default function GatewayOn({options}: Props) {
 				<Text dimColor>Checking configuration...</Text>
 			) : status === 'not-authenticated' ? (
 				<ErrorMessage message="Not authenticated. Run `corebrain login` first." />
+			) : status === 'not-configured' ? (
+				<ErrorMessage message="Gateway not configured. Run `corebrain gateway config` first." />
 			) : status === 'not-supported' ? (
 				<ErrorMessage message="Service management not supported on this platform. Only macOS (launchd) and Linux (systemd) are supported." />
 			) : status === 'installing' ? (
