@@ -39,7 +39,7 @@ const SKIPPED_ASPECTS: StatementAspect[] = [
   "Relationship",
   "Knowledge",
   "Belief",
-  "Action",
+  "Habit",
   "Goal",
   "Decision",
   "Problem",
@@ -86,8 +86,8 @@ export const ASPECT_SECTION_MAP: Record<
     filterGuidance:
       "Include: communication style, formatting preferences, tool choices, workflow preferences, tone preferences. These are 'I prefer X' statements. Exclude: hard rules (those are Directives), one-time requests, and project-specific preferences.",
   },
-  Action: {
-    title: "BEHAVIORS",
+  Habit: {
+    title: "HABITS",
     description: "Regular habits, workflows, routines - work and personal",
     agentQuestion: "What do they do regularly? (So I fit into their life)",
     filterGuidance:
@@ -751,95 +751,114 @@ async function generateAllAspectSections(
     ),
   });
 
-  // Process large sections with chunking (sequentially to avoid too many parallel batches)
+  // Run all sections in parallel - large (chunked) and small (single batch) concurrently
+  const parallelTasks: Promise<PersonaSectionResult[]>[] = [];
+
+  // Task for each large section (chunking handled internally)
   for (const aspectData of largeAspects) {
-    const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
-
-    const content = await generateSectionWithChunking(aspectData, userContext);
-
-    if (content && !content.includes("INSUFFICIENT_DATA")) {
-      sections.push({
-        aspect: aspectData.aspect,
-        title: sectionInfo.title,
-        content,
-        statementCount: aspectData.statements.length,
-        episodeCount: aspectData.episodes.length,
-      });
-    }
+    parallelTasks.push(
+      generateSectionWithChunking(aspectData, userContext).then((content) => {
+        if (content && !content.includes("INSUFFICIENT_DATA")) {
+          const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
+          return [
+            {
+              aspect: aspectData.aspect,
+              title: sectionInfo.title,
+              content,
+              statementCount: aspectData.statements.length,
+              episodeCount: aspectData.episodes.length,
+            },
+          ];
+        }
+        return [];
+      }),
+    );
   }
 
-  // Process small sections in a single batch (existing logic)
+  // Task for all small sections in a single batch
   if (smallAspects.length > 0) {
-    // Sort statements and episodes by recency for small sections too
-    const sortedSmallAspects = smallAspects.map((aspectData) => ({
-      ...aspectData,
-      statements: [...aspectData.statements].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-      ),
-      episodes: [...aspectData.episodes].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-      ),
-    }));
+    parallelTasks.push(
+      (async () => {
+        const sortedSmallAspects = smallAspects.map((aspectData) => ({
+          ...aspectData,
+          statements: [...aspectData.statements].sort(
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          ),
+          episodes: [...aspectData.episodes].sort(
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          ),
+        }));
 
-    const batchRequests = sortedSmallAspects.map((aspectData) => {
-      const prompt = buildAspectSectionPrompt(aspectData, userContext);
-      return {
-        customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
-        messages: [prompt],
-        systemPrompt: "",
-      };
-    });
-
-    logger.info(
-      `Generating ${batchRequests.length} small persona sections in batch`,
-      {
-        aspects: sortedSmallAspects.map((a) => a.aspect),
-      },
-    );
-
-    const { batchId } = await createBatch({
-      requests: batchRequests,
-      outputSchema: SectionContentSchema,
-      maxRetries: 3,
-      timeoutMs: 1200000,
-    });
-
-    const batch = await pollBatchCompletion(batchId, 1200000);
-
-    if (batch.results && batch.results.length > 0) {
-      for (let i = 0; i < batch.results.length; i++) {
-        const result = batch.results[i];
-        const aspectData = sortedSmallAspects[i];
-        const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
-
-        if (result.error || !result.response) {
-          logger.warn(`Error generating ${aspectData.aspect} section`, {
-            error: result.error,
-          });
-          continue;
-        }
-
-        const content =
-          typeof result.response === "string"
-            ? result.response
-            : result.response.content || "";
-
-        if (content.includes("INSUFFICIENT_DATA")) {
-          logger.info(
-            `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
-          );
-          continue;
-        }
-
-        sections.push({
-          aspect: aspectData.aspect,
-          title: sectionInfo.title,
-          content,
-          statementCount: aspectData.statements.length,
-          episodeCount: aspectData.episodes.length,
+        const batchRequests = sortedSmallAspects.map((aspectData) => {
+          const prompt = buildAspectSectionPrompt(aspectData, userContext);
+          return {
+            customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
+            messages: [prompt],
+            systemPrompt: "",
+          };
         });
-      }
-    }
+
+        logger.info(
+          `Generating ${batchRequests.length} small persona sections in batch`,
+          {
+            aspects: sortedSmallAspects.map((a) => a.aspect),
+          },
+        );
+
+        const { batchId } = await createBatch({
+          requests: batchRequests,
+          outputSchema: SectionContentSchema,
+          maxRetries: 3,
+          timeoutMs: 1200000,
+        });
+
+        const batch = await pollBatchCompletion(batchId, 1200000);
+        const results: PersonaSectionResult[] = [];
+
+        if (batch.results && batch.results.length > 0) {
+          for (let i = 0; i < batch.results.length; i++) {
+            const result = batch.results[i];
+            const aspectData = sortedSmallAspects[i];
+            const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
+
+            if (result.error || !result.response) {
+              logger.warn(`Error generating ${aspectData.aspect} section`, {
+                error: result.error,
+              });
+              continue;
+            }
+
+            const content =
+              typeof result.response === "string"
+                ? result.response
+                : result.response.content || "";
+
+            if (content.includes("INSUFFICIENT_DATA")) {
+              logger.info(
+                `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
+              );
+              continue;
+            }
+
+            results.push({
+              aspect: aspectData.aspect,
+              title: sectionInfo.title,
+              content,
+              statementCount: aspectData.statements.length,
+              episodeCount: aspectData.episodes.length,
+            });
+          }
+        }
+
+        return results;
+      })(),
+    );
+  }
+
+  // Wait for all tasks to complete in parallel
+  const allResults = await Promise.all(parallelTasks);
+  for (const result of allResults) {
+    sections.push(...result);
   }
 
   return sections;

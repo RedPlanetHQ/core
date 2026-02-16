@@ -188,7 +188,7 @@ export const StatementAspects = [
   "Knowledge",    // What they know - expertise, skills, understanding
   "Belief",       // Why they think that way - values, opinions, reasoning
   "Preference",   // How they want things - likes, dislikes, style choices
-  "Action",       // What they do - observable behaviors, habits, practices
+  "Habit",         // What they do regularly - recurring behaviors, habits, routines
   "Goal",         // What they want to achieve - future targets, aims
   "Directive",    // Rules and automation - always do X, notify when Y, remind me to Z
   "Decision",     // Choices made, conclusions reached

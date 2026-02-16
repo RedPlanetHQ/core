@@ -64,7 +64,7 @@ export const extractCombined = (
 
    ✅ CORRECT - Concise facts, context from structure:
    Statement 1: Manoj → wants → Fat Loss (Goal)
-   Statement 2: Manoj → plans → 300-500 cal deficit (Action)
+   Statement 2: Manoj → plans → 300-500 cal deficit (Habit)
    Query time: LLM infers "deficit is for fat loss" from proximity
 
    ❌ WRONG - Verbose facts with repeated context:
@@ -109,6 +109,21 @@ export const extractCombined = (
 </core_principles>
 
 <extraction_logic>
+STEP 1: SCAN FOR IMPLICIT FACTS
+Before extracting explicit statements, scan the episode for facts that are IMPLIED but not directly stated. These are facts a human reader would understand but the text doesn't spell out:
+
+- "sprint retro with Ananya" → Ananya is a teammate (Relationship) — implied by "sprint retro"
+- "investor update call with Ravi" → Ravi is an investor (Relationship) — implied by "investor update"
+- "onboarded new client Acme Corp" → Acme Corp is a client (Relationship) — implied by "onboarded client"
+- "forwarded the resume to hiring manager" → user is involved in hiring (Habit/Event) — implied by context
+- "next steps: finish API docs, ping Lena for review" → two Goals — implied by "next steps"
+- "benchmark showed 200ms p99 latency" → a performance metric was measured (Event) — implied by "benchmark showed"
+- "migrated from Heroku last quarter" → a migration happened (Event) with timing — implied by "last quarter"
+- "been doing cold outreach on LinkedIn every morning" → recurring habit (Habit) — implied by "every morning"
+
+Extract these implicit facts AS WELL AS the explicit ones.
+
+STEP 2: EXTRACT EXPLICIT FACTS
 For each piece of information, ask these 4 questions:
 
 1. WHO SAID this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Consider skipping.
@@ -123,7 +138,7 @@ THREE LEVELS - you MUST use all three where applicable:
 | Level | When to Use | Subject | Aspect |
 |-------|-------------|---------|--------|
 | User | Identity, relationships, reasoning, decisions | User's name | Identity, Relationship, Belief, Decision, Goal, Preference |
-| User→Topic | How user relates to a topic/feature | User's name | Goal, Action, Decision |
+| User→Topic | How user relates to a topic/feature | User's name | Goal, Habit, Decision |
 | Topic | What a plan/feature/project contains or targets | Topic entity | null (usually) |
 
 WHEN USER NAME IS NEEDED (Level: User or User→Topic):
@@ -276,22 +291,31 @@ IMPORTANT: User's identity → statements (for history tracking)
 </entity_attributes>
 
 <aspects>
-Aspect is OPTIONAL - only use when it clearly fits. Default to null when uncertain.
+ALWAYS assign an aspect when the statement is about the user. Use null ONLY for facts about third-party entities (companies, products, other people's opinions) that don't fit any user-centric aspect.
 
 CLASSIFICATION DECISION FRAMEWORK:
-Before assigning an aspect, ask these questions in order:
-1. WHO said this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Skip or use null.
-2. Is this about who the user IS? → Identity
-3. Is this a connection to another person? → Relationship (capture role, company, context)
-4. Is the user telling the agent how to behave? → Directive
-5. Did the user explicitly choose between alternatives? → Decision
-6. Is the user expressing an opinion or value? → Belief
-7. Is the user describing how they want things done? → Preference
-8. Is this a repeated behavior/habit? → Action
-9. Is this something the user wants to achieve? → Goal
-10. Did something happen at a specific time? → Event
-11. Is this a blocker, challenge, or struggle? → Problem
-12. Is this about what the user knows/is skilled in? → Knowledge
+For each statement about the user, ask: "Why would the user want to recall this?"
+
+The answer reveals the aspect:
+
+| User's recall need | Aspect | Signal words & context clues |
+|---|---|---|
+| "Who am I? What are my stats?" | Identity | role, title, weight, age, location, company, dietary identity, health metrics |
+| "What do I know?" | Knowledge | skilled in, experienced with, certified, proficient, expertise |
+| "What do I believe?" | Belief | thinks, believes, values, "X is better than Y", opinions about how things should work |
+| "How do I want things done?" | Preference | prefers, likes, favors, style choices, format choices |
+| "What do I do regularly?" | Habit | daily, weekly, routinely, habit of, always does, logs, tracks, every morning |
+| "What am I trying to accomplish?" | Goal | wants, plans to, aims to, will do, next steps, action items, targets, intends to |
+| "What rules should my agent follow?" | Directive | always/never do X, notify me when, ignore X, treat X as, format rules, automation triggers |
+| "What did I decide?" | Decision | chose X over Y, decided to, went with, picked, selected after considering |
+| "What happened when?" | Event | met, called, attended, launched, happened on, onboarding call, demo, shipped |
+| "What's blocking me?" | Problem | struggling with, failing, can't, broken, blocked by, challenge |
+| "Who do I know?" | Relationship | INFER from context — "customer call" → customer, "team sync" → colleague, "investor update" → investor |
+
+KEY RULES:
+- INFER aspects from context, don't just pattern match on explicit words.
+- When in doubt for user statements, pick the CLOSEST aspect. Only use null for third-party entity facts.
+- WHO said this? → If "the assistant suggested/offered/provided" and user didn't confirm, skip or use null.
 
 <aspect_identity>
 IDENTITY: Who the user IS (slow-changing personal facts)
@@ -343,19 +367,21 @@ COMMON MISCLASSIFICATIONS:
 - "Transparency is more credible" → Belief, NOT Preference (value judgment)
 </aspect_preference>
 
-<aspect_action>
-ACTION: What the user does regularly (habits, behaviors, routines)
+<aspect_habit>
+HABIT: What the user does regularly (recurring behaviors, routines)
 Agent question: "What do they do regularly? So I fit into their life."
 
-IDENTIFY BY: Recurring behaviors, established workflows, daily/weekly habits, regular practices.
+IDENTIFY BY: Recurring behaviors, established workflows, daily/weekly habits, regular practices. Look for frequency signals: daily, weekly, every morning, routinely, always.
 
-THINK: "Does the user do this REPEATEDLY as a pattern?" If yes → Action. If it happened once → Event.
+THINK: "Does the user do this REPEATEDLY as a pattern?" If yes → Habit. If it happened once → Event or skip.
 
 COMMON MISCLASSIFICATIONS:
-- "Logs water intake via WhatsApp daily" → Action (recurring habit)
-- "Logged water intake today" → Event (one-time occurrence)
-- "Discussed backfilling old chat history" → Event, NOT Action
-</aspect_action>
+- "Logs water intake via WhatsApp daily" → Habit (recurring — "daily" signal)
+- "Logged water intake today" → Event (one-time), NOT Habit
+- "Captured notes from the call" → Event or skip (one-time), NOT Habit
+- "Documented the API changes" → Event or skip (one-time), NOT Habit
+- "Reviews PRs every morning" → Habit (recurring — "every morning" signal)
+</aspect_habit>
 
 <aspect_goal>
 GOAL: What the user wants to achieve (confirmed by user)
@@ -385,6 +411,8 @@ COMMON MISCLASSIFICATIONS:
 - "Bug issue titles must start with [bug]:" → Directive (formatting rule)
 
 KEY DISTINCTION FROM DECISION: A Directive tells the agent what to DO going forward. A Decision records a choice the user MADE between alternatives.
+
+NOT A DIRECTIVE: A one-time request or question ("asked about X", "requested help with Y", "wanted to know Z") is NOT a Directive. Directives are standing rules that apply going forward, not one-off asks. One-time requests can be skipped.
 </aspect_directive>
 
 <aspect_decision>
@@ -402,12 +430,18 @@ COMMON MISCLASSIFICATIONS:
 </aspect_decision>
 
 <aspect_event>
-EVENT: Specific occurrences with timestamps
+EVENT: Specific occurrences the user was involved in, with timestamps
 Agent question: "What happened when?"
 
-IDENTIFY BY: Something that happened at a specific time - meetings, calls, completions, milestones, one-time actions.
+IDENTIFY BY: Something the user did or participated in at a specific time — meetings, calls, completions, milestones, one-time actions.
 
-THINK: "Did this happen at a specific point in time?" If yes → Event. If it's a recurring behavior → Action.
+THINK: "Did the USER do or attend this at a specific point in time?" If yes → Event. If it's a recurring behavior → Habit. If it's a third-party event the user wasn't involved in → null.
+
+COMMON MISCLASSIFICATIONS:
+- "Attended the architecture review on Monday" → Event (user participated)
+- "Acme Corp announced a new product last week" → null (third-party, user not involved)
+- "Submitted the compliance report on Feb 10" → Event (user did this)
+- "Checks Slack notifications every hour" → Habit (recurring), NOT Event
 
 NOTE: Always include event_date for Event aspect.
 </aspect_event>
@@ -427,19 +461,24 @@ CAPTURE DEPTH: Don't just capture surface symptoms. Look for patterns:
 </aspect_problem>
 
 <aspect_relationship>
-RELATIONSHIP: Connections between the user and other people
-Agent question: "Who matters to them? Context for names mentioned."
+RELATIONSHIP: How the user connects to another person
+Agent question: "Who matters to them? What's the user's connection to this person?"
 
-IDENTIFY BY: When a person is mentioned, capture WHO they are, their ROLE, their COMPANY/ORG, and HOW the user relates to them.
+IDENTIFY BY: The CONNECTION between the user and another person — customer, colleague, co-founder, mentor, vendor, investor, friend, etc.
 
-THINK: "Is a person being mentioned with context about who they are or how the user knows them?" If yes → Relationship.
+THINK: "What is the user's relationship with this person?" Extract BOTH:
+1. The person's identity (role/company) as a separate statement or entity attributes
+2. The user-to-person connection as a Relationship statement
 
-ALWAYS CAPTURE: When extracting a Relationship, ensure the person entity has attributes (role, company, email if available) AND the relationship statement describes the connection type.
+EXTRACT BOTH — NOT JUST ONE:
+- "Had a demo call with David (CTO of Acme Inc)" → Extract:
+  - Entity: {name: "David Chen", attributes: {role: "CTO", company: "Acme Inc"}}
+  - Statement: "David Chen is CTO at Acme Inc" (null aspect — third-party identity)
+  - Statement: "David Chen is a prospective customer" (Relationship aspect — user's connection)
+  - Statement: "Had demo call with David Chen" (Event aspect)
 
-COMMON MISCLASSIFICATIONS:
-- "Had a call with Kabir from CrazeHQ" → Extract Relationship (Kabir, CrazeHQ co-founder, customer) + Event (the call)
-- "Works with Sarah on CORE" → Relationship, NOT Action
-- "Commenda is a former vendor, designated as spam" → Relationship (vendor status) + Directive (spam handling)
+- "Collaborated with Priya on the migration project" → Relationship (collaborator), NOT Habit
+- "TechVend is an old supplier, ignore their emails" → Relationship (supplier status) + Directive (email handling)
 </aspect_relationship>
 </aspects>
 
@@ -466,6 +505,8 @@ SKIP these - they add no value:
 • Session process: "sent invite", "created", "updated" - extract the RESULT (scheduled meeting, new value), not the action
 • Boilerplate: standard auth requirements, error handling, HTTP status codes, CSS classes, UI text strings
 • Redundant facts: same info for multiple participants - "A <> B meeting" = ONE fact with user as subject, NOT facts for both A and B
+• Tautologies: facts where subject and object say the same thing — "Auth module handles authentication", "Payment gateway processes payments", "Calendar tool uses calendar"
+• System-triggered reminders/notifications: automated messages like "Reminder: check your standup notes" or "Scheduled alert fired" contain no new user knowledge — the useful facts were already captured when the user set up the automation
 </skip_rules>
 
 <speaker_attribution>
@@ -637,6 +678,7 @@ Key points:
   const userIdentitySection = context.userName
     ? `<user_identity>
 The user is: ${context.userName}
+In the episode below, "${context.userName}" IS the user. Wherever the aspect guidelines say "user" (e.g., "user telling the agent how to behave" → Directive, "user's relationship with a person" → Relationship, "user wants to achieve" → Goal), they mean ${context.userName}.
 Extract facts about ${context.userName} and their projects/work.
 </user_identity>
 

@@ -2,6 +2,15 @@ import { logger } from "~/services/logger.service";
 
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
+import { type StatementAspect } from "@core/types";
+import { getStatementsForEpisodeByAspects } from "~/services/graphModels/statement";
+
+// Only these aspects affect the persona doc
+const PERSONA_ASPECTS: StatementAspect[] = [
+  "Identity",
+  "Preference",
+  "Directive",
+];
 
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
@@ -9,16 +18,18 @@ interface WorkspaceMetadata {
 }
 
 /**
- * Check if persona space needs update based on threshold
+ * Check if persona needs regeneration based on the ingested episode's statements.
  *
- * Called from processPersonaGeneration to check if we've accumulated enough new episodes
- * to warrant a persona refresh (threshold: 20 episodes)
+ * Queries Neo4j for statements linked to the given episode and checks if any
+ * have persona-relevant aspects (Identity, Preference, Directive).
+ * If no episodeUuid is provided (e.g. test route), falls back to generating.
  *
- * Returns labelId and mode if generation should proceed, null otherwise
+ * Returns labelId and mode if generation should proceed, null otherwise.
  */
 export async function checkPersonaUpdateThreshold(
   userId: string,
   workspaceId: string,
+  episodeUuid?: string,
 ): Promise<{
   shouldGenerate: boolean;
   labelId?: string;
@@ -71,7 +82,21 @@ export async function checkPersonaUpdateThreshold(
       }
     }
 
-    // Get workspace metadata
+    // First generation: always generate if no persona exists yet
+    if (!latestPersona) {
+      logger.info("No existing persona found, triggering first generation", {
+        userId,
+        workspaceId,
+      });
+      return {
+        shouldGenerate: true,
+        labelId: label.id,
+        mode: "full",
+        reason: "no existing persona",
+      };
+    }
+
+    // Get workspace metadata for last generation timestamp
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { metadata: true },
@@ -85,54 +110,62 @@ export async function checkPersonaUpdateThreshold(
     const metadata = (workspace.metadata || {}) as WorkspaceMetadata;
     const lastPersonaGenerationAt = metadata.lastPersonaGenerationAt;
 
-    // Count episodes with embeddings from Postgres (same as Python scripts query)
-    // This ensures consistency between threshold check and actual persona generation
-    const episodeCount = await prisma.episodeEmbedding.count({
-      where: {
-        userId,
-        workspaceId,
-        ...(lastPersonaGenerationAt && {
-          createdAt: { gt: new Date(lastPersonaGenerationAt) },
-        }),
-      },
-    });
+    if (!lastPersonaGenerationAt) {
+      return {
+        shouldGenerate: true,
+        labelId: label.id,
+        mode: "full",
+        reason: "no last generation timestamp",
+      };
+    }
 
-    logger.debug("Checking persona space update eligibility", {
+    // If no episodeUuid provided (e.g. test route), always generate
+    if (!episodeUuid) {
+      return {
+        shouldGenerate: true,
+        labelId: label.id,
+        mode: "incremental",
+        startTime: lastPersonaGenerationAt,
+        reason: "no episodeUuid provided (manual trigger)",
+      };
+    }
+
+    // Check if this episode produced any persona-relevant statements
+    const personaStatements = await getStatementsForEpisodeByAspects(
+      episodeUuid,
+      PERSONA_ASPECTS,
+    );
+
+    logger.debug("Checking persona update - episode statement aspects", {
       userId,
-      episodeCount,
-      hasExistingPersona: !!latestPersona,
+      episodeUuid,
+      personaStatementCount: personaStatements.length,
+      aspects: PERSONA_ASPECTS,
     });
 
-    // Trigger persona generation every 20 episodes
-    const PERSONA_UPDATE_THRESHOLD = 20;
-
-    if (
-      episodeCount >= PERSONA_UPDATE_THRESHOLD ||
-      !lastPersonaGenerationAt ||
-      !latestPersona
-    ) {
-      logger.info("Threshold met for persona generation", {
-        userId,
-        episodeCount,
-        threshold: PERSONA_UPDATE_THRESHOLD,
-        hasExistingPersona: !!latestPersona,
-      });
-
-      const mode =
-        lastPersonaGenerationAt && latestPersona ? "incremental" : "full";
+    if (personaStatements.length > 0) {
+      logger.info(
+        "Episode has persona-relevant statements, triggering regen",
+        {
+          userId,
+          episodeUuid,
+          personaStatementCount: personaStatements.length,
+          statementAspects: personaStatements.map((s) => s.aspect),
+        },
+      );
 
       return {
         shouldGenerate: true,
         labelId: label.id,
-        mode,
+        mode: "incremental",
         startTime: lastPersonaGenerationAt,
-        reason: `${episodeCount} new episodes (threshold: ${PERSONA_UPDATE_THRESHOLD})`,
+        reason: `episode ${episodeUuid} has ${personaStatements.length} persona-relevant statements (Identity/Preference/Directive)`,
       };
     }
 
     return {
       shouldGenerate: false,
-      reason: `only ${episodeCount} new episodes (threshold: ${PERSONA_UPDATE_THRESHOLD})`,
+      reason: `episode ${episodeUuid} has no Identity/Preference/Directive statements`,
     };
   } catch (error) {
     logger.warn("Failed to check persona update threshold:", {

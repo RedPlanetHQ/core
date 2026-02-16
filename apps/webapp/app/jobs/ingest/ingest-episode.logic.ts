@@ -73,6 +73,7 @@ export async function processEpisodeIngestion(
   enqueuePersonaGeneration?: (params: {
     userId: string;
     workspaceId: string;
+    episodeUuid?: string;
   }) => Promise<any>,
   enqueueGraphResolution?: (params: {
     episodeUuid: string;
@@ -273,10 +274,11 @@ export async function processEpisodeIngestion(
           workspaceId: payload.workspaceId,
         });
 
-        // Trigger persona generation task - threshold check happens within the task
+        // Trigger persona generation - checks if episode has persona-relevant statements
         await enqueuePersonaGeneration({
           userId: payload.userId,
           workspaceId: payload.workspaceId,
+          episodeUuid: episodeDetails?.episodeUuid || undefined,
         });
       }
     } catch (personaTriggerError) {
