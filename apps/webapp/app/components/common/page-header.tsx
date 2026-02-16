@@ -13,6 +13,7 @@ export interface PageHeaderAction {
   icon?: React.ReactNode;
   onClick: () => void;
   variant?: "default" | "secondary" | "outline" | "ghost";
+  disabled?: boolean;
 }
 
 export interface PageHeaderTab {
@@ -154,6 +155,7 @@ export function PageHeader({
                   onClick={action.onClick}
                   variant={action.variant || "secondary"}
                   className="gap-2"
+                  disabled={action.disabled}
                 >
                   {action.icon}
                   {action.label}

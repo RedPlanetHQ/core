@@ -23,7 +23,6 @@ import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
 import { Plus } from "lucide-react";
 
-import { type IntegrationAccount } from "@prisma/client";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);

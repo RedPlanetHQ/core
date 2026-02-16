@@ -15,21 +15,28 @@ import {
 import { logger } from "../logger.service";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
+import { type GatewayAgentInfo, getGatewayAgents, runGatewayExplorer } from "./gateway";
 
 export type OrchestratorMode = "read" | "write";
 
 const getOrchestratorPrompt = (
   integrations: string,
   mode: OrchestratorMode,
+  gateways: string,
 ) => {
   if (mode === "write") {
-    return `You are an orchestrator. Execute actions on integrations.
+    return `You are an orchestrator. Execute actions on integrations or gateways.
 
 CONNECTED INTEGRATIONS:
 ${integrations}
 
+<gateways>
+${gateways || "No gateways connected"}
+</gateways>
+
 TOOLS:
 - integration_action: Execute an action on a connected service (create, update, delete)
+- gateway_*: Offload tasks to connected gateways based on their description
 
 EXAMPLES:
 
@@ -45,10 +52,17 @@ Execute: integration_action({ integration: "notion", action: "create page titled
 Action: "block 2pm tomorrow on calendar for deep work"
 Execute: integration_action({ integration: "google-calendar", action: "create event tomorrow 2pm titled deep work" })
 
+Action: "fix the auth bug in core repo" (gateway description: "personal coding tasks")
+Execute: gateway_harshith_mac({ intent: "fix the auth bug in core repo" })
+
+Action: "order pizza from dominos" (gateway description: "food orders, amazon orders")
+Execute: gateway_harshith_mac({ intent: "order pizza from dominos" })
+
 RULES:
 - Execute the action. No personality.
 - Return result of action (success/failure and details).
-- If integration not connected, say so.
+- If integration/gateway not connected, say so.
+- Match tasks to gateways based on their descriptions.
 
 CRITICAL - FINAL SUMMARY:
 When you have completed the action, write a clear, concise summary as your final response.
@@ -65,10 +79,15 @@ Example final summary: "Created GitHub issue #123 'Fix auth bug' in core repo. U
 CONNECTED INTEGRATIONS:
 ${integrations}
 
+<gateways>
+${gateways || "No gateways connected"}
+</gateways>
+
 TOOLS:
 - memory_search: Past conversations, stored knowledge, decisions, preferences. CORE handles query understanding internally.
 - integration_query: Live data from connected services (emails, calendar, issues, messages)
 - web_search: Real-time information from the web (news, current events, documentation, prices, weather, general knowledge). Also use to read/summarize URLs shared by user.
+- gateway_*: Offload tasks to connected gateways based on their description (can gather info too)
 
 YOUR JOB:
 Read the intent carefully. Decide WHERE the information lives:
@@ -168,8 +187,17 @@ export async function runOrchestrator(
     )
     .join("\n");
 
+  // Get connected gateways
+  const gateways = await getGatewayAgents(workspaceId);
+  const gatewaysList = gateways
+    .map(
+      (gw, index) =>
+        `${index + 1}. **${gw.name}** (tool: gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}): ${gw.description}`,
+    )
+    .join("\n");
+
   logger.info(
-    `Orchestrator: Loaded ${connectedIntegrations.length} integrations, mode: ${mode}`,
+    `Orchestrator: Loaded ${connectedIntegrations.length} integrations, ${gateways.length} gateways, mode: ${mode}`,
   );
 
   // Build tools based on mode
@@ -305,12 +333,59 @@ export async function runOrchestrator(
     });
   }
 
+  // Add gateway tools for both modes
+  for (const gateway of gateways) {
+    if (gateway.status !== "CONNECTED") continue;
+
+    const toolName = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+
+    tools[toolName] = tool({
+      description: `**${gateway.name}** - ${gateway.description}`,
+      inputSchema: z.object({
+        intent: z
+          .string()
+          .describe(
+            "Describe what you want to accomplish. Be specific about the task.",
+          ),
+      }),
+      execute: async function* ({ intent }, { abortSignal }) {
+        logger.info(
+          `Orchestrator: Gateway ${gateway.name} - ${intent}`,
+        );
+
+        const { stream, gatewayConnected } = await runGatewayExplorer(
+          gateway.id,
+          intent,
+          abortSignal,
+        );
+
+        if (!gatewayConnected || !stream) {
+          yield {
+            parts: [
+              {
+                type: "text",
+                text: `Gateway "${gateway.name}" is not connected.`,
+              },
+            ],
+          };
+          return;
+        }
+
+        for await (const message of readUIMessageStream({
+          stream: stream.toUIMessageStream(),
+        })) {
+          yield message;
+        }
+      },
+    });
+  }
+
   const model = getModelForTask("high");
   const modelInstance = getModel(model);
 
   const stream = streamText({
     model: modelInstance as LanguageModel,
-    system: getOrchestratorPrompt(integrationsList, mode),
+    system: getOrchestratorPrompt(integrationsList, mode, gatewaysList),
     messages: [{ role: "user", content: userMessage }],
     tools,
     stopWhen: stepCountIs(10),

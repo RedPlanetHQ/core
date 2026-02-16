@@ -33,10 +33,7 @@ function getDefaultSyncTime(): string {
 /**
  * Fetch and process tasks created or updated since last sync
  */
-async function processNewTasks(
-  config: TodoistConfig,
-  lastSyncTime: string
-): Promise<any[]> {
+async function processNewTasks(config: TodoistConfig, lastSyncTime: string): Promise<any[]> {
   const activities = [];
 
   try {
@@ -45,7 +42,7 @@ async function processNewTasks(
 
     // Filter tasks created or updated since last sync
     const lastSyncDate = new Date(lastSyncTime);
-    const newTasks = tasks.filter((task) => {
+    const newTasks = tasks.filter(task => {
       const createdDate = new Date(task.created_at);
       return createdDate > lastSyncDate;
     });
@@ -86,21 +83,16 @@ async function processNewTasks(
 /**
  * Fetch and process completed tasks since last sync
  */
-async function processCompletedTasks(
-  config: TodoistConfig,
-  lastSyncTime: string
-): Promise<any[]> {
+async function processCompletedTasks(config: TodoistConfig, lastSyncTime: string): Promise<any[]> {
   const activities = [];
 
   try {
     // Note: Todoist REST API v2 doesn't directly support filtering by completion time
     // This is a simplified implementation that would need to use Sync API for full functionality
     // For now, we'll skip completed tasks in the basic implementation
-
     // To properly implement this, you would need to:
     // 1. Use the Sync API v9 with completed items endpoint
     // 2. Or maintain a local state of task IDs and compare
-
   } catch (error) {
     console.error('Error fetching completed tasks:', error);
   }

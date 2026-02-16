@@ -5,7 +5,6 @@ import {
   CreditCard,
   User,
   Tag,
-  Plug,
 } from "lucide-react";
 
 import {
@@ -54,7 +53,6 @@ export default function Settings() {
       { name: "Billing", icon: CreditCard, path: "billing" },
       { name: "API", icon: Code, path: "api" },
       { name: "Webhooks", icon: Webhook, path: "webhooks" },
-      { name: "MCP", icon: Plug, path: "mcp-integrations" },
     ],
   };
   const navigate = useNavigate();

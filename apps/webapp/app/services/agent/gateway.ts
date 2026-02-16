@@ -229,7 +229,7 @@ export interface GatewayAgentInfo {
   tools: string[]; // Tool names for display
   platform: string | null;
   hostname: string | null;
-  connected: boolean;
+  status: "CONNECTED" | "DISCONNECTED";
 }
 
 /**
@@ -250,7 +250,7 @@ export async function getGatewayAgents(
       tools: tools.map((t) => t.name),
       platform: gateway.platform,
       hostname: gateway.hostname,
-      connected: true,
+      status: gateway.status as "CONNECTED" | "DISCONNECTED",
     };
   });
 }
@@ -281,7 +281,7 @@ export function createGatewayTools(gateways: GatewayAgentInfo[]) {
   const tools: Record<string, any> = {};
 
   gateways.forEach((gateway) => {
-    if (!gateway.connected) return;
+    if (gateway.status !== "CONNECTED") return;
 
     const toolName = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
     const capabilities = categorizeTools(gateway.tools);

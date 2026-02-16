@@ -3,7 +3,7 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
 import { useTypedLoaderData } from "remix-typedjson";
-import { parseWithZod } from "@conform-to/zod/v4";
+import { parseWithZod } from "@conform-to/zod";
 import { redirect, json } from "@remix-run/node";
 import {
   requireUser,

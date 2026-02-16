@@ -1,15 +1,16 @@
-import { integrationCreate } from './account-create';
-import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-  Message,
 } from '@redplanethq/sdk';
+
+import { integrationCreate } from './account-create';
+import { handleSchedule } from './schedule';
 import { getTools, callTool } from './mcp';
 
-export async function run(eventPayload: IntegrationEventPayload) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export async function run(eventPayload: IntegrationEventPayload): Promise<any> {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
@@ -18,12 +19,14 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return await handleSchedule(eventPayload.config, eventPayload.state);
 
     case IntegrationEventType.GET_TOOLS: {
-      const tools = await getTools();
+      const config = eventPayload.config as Record<string, string>;
+      const tools = await getTools(config);
 
       return tools;
     }
 
     case IntegrationEventType.CALL_TOOL: {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 
