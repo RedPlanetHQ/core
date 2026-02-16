@@ -15,65 +15,84 @@ export function createUserMethods(core: Neo4jCore) {
     },
 
     /**
-     * Get graph data with episode-episode connections based on shared statements
+     * Get graph data with session-to-session connections based on shared statements
+     * Each node represents a sessionId, using the latest episode of that session
      */
     async getClusteredGraphData(userId: string, limit?: number, workspaceId?: string): Promise<RawTriplet[]> {
       try {
         const wsFilter = workspaceId ? ", workspaceId: $workspaceId" : "";
-        const query = `MATCH (e1:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(stmt:Statement)<-[:HAS_PROVENANCE]-(e2:Episode {userId: $userId${wsFilter}})
-         WHERE e1.uuid < e2.uuid
 
-         WITH DISTINCT e1, e2, stmt
+        // Query to find session-to-session connections via shared statements
+        // 1. Find all episodes with their sessionId
+        // 2. Get the latest episode per sessionId
+        // 3. Find connections between sessions that share statements
+        const query = `
+          // First, get the latest episode for each sessionId
+          MATCH (e:Episode {userId: $userId${wsFilter}})
+          WHERE e.sessionId IS NOT NULL
+          WITH e.sessionId as sessionId, e
+          ORDER BY e.createdAt DESC
+          WITH sessionId, collect(e)[0] as latestEpisode
 
-         WITH e1, e2,
-              collect(DISTINCT {uuid: stmt.uuid, fact: stmt.fact}) as sharedStatements
+          // Now find sessions that share statements through any of their episodes
+          MATCH (anyEpisode1:Episode {sessionId: sessionId, userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(stmt:Statement)<-[:HAS_PROVENANCE]-(anyEpisode2:Episode {userId: $userId${wsFilter}})
+          WHERE anyEpisode1.sessionId <> anyEpisode2.sessionId
+            AND anyEpisode2.sessionId IS NOT NULL
 
-         WITH e1, e2, sharedStatements,
-              size(sharedStatements) as totalSharedStatements
+          // Get the latest episode for the connected session
+          WITH sessionId, latestEpisode, anyEpisode2.sessionId as connectedSessionId, stmt
+          MATCH (connectedLatest:Episode {sessionId: connectedSessionId, userId: $userId${wsFilter}})
+          WITH sessionId, latestEpisode, connectedSessionId, connectedLatest, stmt
+          ORDER BY connectedLatest.createdAt DESC
+          WITH sessionId, latestEpisode, connectedSessionId, collect(connectedLatest)[0] as connectedLatestEpisode, count(DISTINCT stmt) as totalSharedStatements
 
-         WHERE totalSharedStatements >= 1
+          // Only keep unique session pairs (smaller sessionId first)
+          WHERE sessionId < connectedSessionId AND totalSharedStatements >= 1
 
-         RETURN DISTINCT
-           e1.uuid as source_uuid,
-           e1.createdAt as source_createdAt,
-           e1.queueId as source_queueId,
-           CASE WHEN size(e1.labelIds) > 0 THEN e1.labelIds[0] ELSE null END as source_clusterId,
-           e2.uuid as target_uuid,
-           e2.createdAt as target_createdAt,
-           e2.queueId as target_queueId,
-           CASE WHEN size(e2.labelIds) > 0 THEN e2.labelIds[0] ELSE null END as target_clusterId,
-           sharedStatements,
-           totalSharedStatements,
-           [s IN sharedStatements | s.fact] as statementFacts`
+          RETURN DISTINCT
+            sessionId as source_sessionId,
+            latestEpisode.uuid as source_uuid,
+            latestEpisode.createdAt as source_createdAt,
+            latestEpisode.queueId as source_queueId,
+            CASE WHEN size(latestEpisode.labelIds) > 0 THEN latestEpisode.labelIds[0] ELSE null END as source_clusterId,
+            connectedSessionId as target_sessionId,
+            connectedLatestEpisode.uuid as target_uuid,
+            connectedLatestEpisode.createdAt as target_createdAt,
+            connectedLatestEpisode.queueId as target_queueId,
+            CASE WHEN size(connectedLatestEpisode.labelIds) > 0 THEN connectedLatestEpisode.labelIds[0] ELSE null END as target_clusterId,
+            totalSharedStatements`
 
         const result = await core.runQuery(query, { userId, ...(workspaceId && { workspaceId }) })
 
         if (core.logger) {
-          core.logger.info(`Fetched ${result.length} episode pairs`);
+          core.logger.info(`Fetched ${result.length} session pairs`);
         }
 
-        // Convert Cypher results to triplet format and deduplicate by edge key
+        // Convert Cypher results to triplet format and deduplicate by session pair
         const edgeMap = new Map<string, RawTriplet>();
 
         result.forEach((record) => {
+          const sourceSessionId = record.get("source_sessionId");
+          const targetSessionId = record.get("target_sessionId");
           const sourceUuid = record.get("source_uuid");
           const targetUuid = record.get("target_uuid");
-          const statementFacts = record.get("statementFacts");
+          const totalSharedStatements = record.get("totalSharedStatements")?.toNumber?.() || Number(record.get("totalSharedStatements")) || 0;
 
-          // Create a consistent edge key (always use lexicographically smaller UUID first)
+          // Create a consistent edge key using sessionIds
           const edgeKey =
-            sourceUuid < targetUuid
-              ? `${sourceUuid}|${targetUuid}`
-              : `${targetUuid}|${sourceUuid}`;
+            sourceSessionId < targetSessionId
+              ? `${sourceSessionId}|${targetSessionId}`
+              : `${targetSessionId}|${sourceSessionId}`;
 
-          // Only add if this edge doesn't exist yet
+          // Only add if this session pair doesn't exist yet
           if (!edgeMap.has(edgeKey)) {
             edgeMap.set(edgeKey, {
               sourceNode: {
-                uuid: sourceUuid,
-                labels: ["Episode"],
+                uuid: sourceSessionId,
+                labels: ["Session"],
                 attributes: {
-                  nodeType: "Episode",
+                  nodeType: "Session",
+                  sessionId: sourceSessionId,
                   episodeUuid: sourceUuid,
                   clusterId: record.get("source_clusterId"),
                   queueId: record.get("source_queueId"),
@@ -84,19 +103,19 @@ export function createUserMethods(core: Neo4jCore) {
               edge: {
                 uuid: edgeKey,
                 type: "SHARES_STATEMENTS_WITH",
-                source_node_uuid: sourceUuid,
-                target_node_uuid: targetUuid,
+                source_node_uuid: sourceSessionId,
+                target_node_uuid: targetSessionId,
                 attributes: {
-                  totalSharedStatements: record.get("totalSharedStatements"),
-                  statementFacts,
+                  totalSharedStatements,
                 },
                 createdAt: record.get("source_createdAt") || "",
               },
               targetNode: {
-                uuid: targetUuid,
-                labels: ["Episode"],
+                uuid: targetSessionId,
+                labels: ["Session"],
                 attributes: {
-                  nodeType: "Episode",
+                  nodeType: "Session",
+                  sessionId: targetSessionId,
                   episodeUuid: targetUuid,
                   clusterId: record.get("target_clusterId"),
                   queueId: record.get("target_queueId"),
@@ -112,7 +131,7 @@ export function createUserMethods(core: Neo4jCore) {
 
         if (core.logger) {
           core.logger.info(
-            `Returning ${triplets.length} final episode-episode connections (deduplicated from ${result.length})`
+            `Returning ${triplets.length} final session-session connections (deduplicated from ${result.length})`
           );
         }
 

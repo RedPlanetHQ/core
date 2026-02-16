@@ -1,6 +1,11 @@
 import { useMemo, useState, useEffect } from "react";
 import { json } from "@remix-run/node";
-import { useLoaderData, useRevalidator, useFetcher } from "@remix-run/react";
+import {
+  useLoaderData,
+  useRevalidator,
+  useFetcher,
+  useSearchParams,
+} from "@remix-run/react";
 import {
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
@@ -9,15 +14,15 @@ import { requireUserId, requireWorkpace } from "~/services/session.server";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { IntegrationGrid } from "~/components/integrations/integration-grid";
+import {
+  CustomMcpGrid,
+} from "~/components/integrations/custom-mcp-grid";
+import { type McpIntegration } from "~/components/integrations/custom-mcp-card";
 import { PageHeader } from "~/components/common/page-header";
-import { Plus, Trash2, Plug } from "lucide-react";
+import { Plus } from "lucide-react";
 import { prisma } from "~/db.server";
 import { updateUser } from "~/models/user.server";
 
-import { PROVIDER_CONFIGS } from "~/components/onboarding/provider-config";
-import { type Provider } from "~/components/onboarding/types";
-import { useMcpSessions } from "~/hooks/use-mcp-sessions";
-import { ProviderCard } from "~/components/integrations/provider-card";
 import { Button, Input } from "~/components/ui";
 import {
   Card,
@@ -26,12 +31,7 @@ import {
   CardHeader,
   CardTitle,
 } from "~/components/ui/card";
-
-type McpIntegration = {
-  name: string;
-  serverUrl: string;
-  apiKey?: string;
-};
+import { useToast } from "~/hooks/use-toast";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
@@ -42,7 +42,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const metadata = (user?.metadata as any) || {};
-  const mcpIntegrations = (metadata?.mcpIntegrations || []) as McpIntegration[];
+  const mcpIntegrations = (metadata?.mcpIntegrations ||
+    []) as McpIntegration[];
 
   if (!workspace) {
     return json({
@@ -58,7 +59,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
     getIntegrationAccounts(userId as string),
   ]);
 
-  // Combine fixed integrations with dynamic ones
   const allIntegrations = [...integrationDefinitions];
 
   return json({
@@ -91,7 +91,7 @@ export async function action({ request }: ActionFunctionArgs) {
       case "create": {
         const name = formData.get("name") as string;
         const serverUrl = formData.get("serverUrl") as string;
-        const apiKey = formData.get("apiKey") as string | undefined;
+        const accessToken = formData.get("accessToken") as string | undefined;
 
         if (!name || !serverUrl) {
           return json(
@@ -103,7 +103,11 @@ export async function action({ request }: ActionFunctionArgs) {
         const newIntegration: McpIntegration = {
           name,
           serverUrl,
-          apiKey: apiKey || undefined,
+          ...(accessToken && {
+            oauth: {
+              accessToken,
+            },
+          }),
         };
 
         const updatedIntegrations = [...currentIntegrations, newIntegration];
@@ -161,27 +165,59 @@ function NewIntegrationForm({
   onCancel: () => void;
   onSuccess: () => void;
 }) {
-  const fetcher = useFetcher<{ success: boolean; error?: string }>();
+  const fetcher = useFetcher<{
+    success: boolean;
+    error?: string;
+    redirectURL?: string;
+  }>();
+  const localFetcher = useFetcher<{ success: boolean; error?: string }>();
+  const [isRedirecting, setIsRedirecting] = useState(false);
+  const [accessToken, setAccessToken] = useState("");
 
   useEffect(() => {
-    if (fetcher.data?.success) {
+    if (fetcher.data?.success && fetcher.data?.redirectURL) {
+      setIsRedirecting(true);
+      window.location.href = fetcher.data.redirectURL;
+    }
+  }, [fetcher.data]);
+
+  useEffect(() => {
+    if (localFetcher.data?.success) {
       onSuccess();
     }
-  }, [fetcher.data, onSuccess]);
+  }, [localFetcher.data, onSuccess]);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+
+    if (accessToken.trim()) {
+      formData.set("intent", "create");
+      formData.set("accessToken", accessToken);
+      localFetcher.submit(formData, { method: "post" });
+    } else {
+      formData.set("intent", "initiate");
+      formData.set("redirectURL", window.location.href);
+      fetcher.submit(formData, {
+        method: "post",
+        action: "/api/v1/oauth/custom-mcp",
+      });
+    }
+  };
+
+  const isSubmitting =
+    fetcher.state === "submitting" || localFetcher.state === "submitting";
 
   return (
     <Card className="p-4">
       <CardHeader className="p-0 pb-4">
         <CardTitle>New Custom Integration</CardTitle>
         <CardDescription>
-          Use the Model Context Protocol to extend Core's capabilities with
-          external data and tools
+          Connect an external MCP server using OAuth or an access token
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
-        <fetcher.Form method="post" className="space-y-4">
-          <input type="hidden" name="intent" value="create" />
-
+        <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
             <label htmlFor="name" className="text-sm font-medium">
               Name
@@ -207,19 +243,27 @@ function NewIntegrationForm({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="apiKey" className="text-sm font-medium">
-              API Key (optional)
+            <label htmlFor="accessToken" className="text-sm font-medium">
+              Access Token (optional)
             </label>
             <Input
-              id="apiKey"
-              name="apiKey"
+              id="accessToken"
+              name="accessToken"
               placeholder="sk-..."
               type="password"
+              value={accessToken}
+              onChange={(e) => setAccessToken(e.target.value)}
             />
+            <p className="text-muted-foreground text-xs">
+              Provide an access token to skip OAuth, or leave empty to
+              authenticate via OAuth
+            </p>
           </div>
 
-          {fetcher.data?.error && (
-            <div className="text-destructive text-sm">{fetcher.data.error}</div>
+          {(fetcher.data?.error || localFetcher.data?.error) && (
+            <div className="text-destructive text-sm">
+              {fetcher.data?.error || localFetcher.data?.error}
+            </div>
           )}
 
           <div className="flex justify-end gap-2">
@@ -229,57 +273,19 @@ function NewIntegrationForm({
             <Button
               type="submit"
               variant="secondary"
-              disabled={fetcher.state === "submitting"}
+              disabled={isSubmitting || isRedirecting}
             >
-              {fetcher.state === "submitting" ? "Adding..." : "Add Integration"}
+              {isSubmitting
+                ? "Connecting..."
+                : isRedirecting
+                  ? "Redirecting..."
+                  : accessToken.trim()
+                    ? "Add Integration"
+                    : "Connect with OAuth"}
             </Button>
           </div>
-        </fetcher.Form>
+        </form>
       </CardContent>
-    </Card>
-  );
-}
-
-function CustomIntegrationCard({
-  integration,
-  index,
-  onDelete,
-}: {
-  integration: McpIntegration;
-  index: number;
-  onDelete: () => void;
-}) {
-  const fetcher = useFetcher<{ success: boolean }>();
-
-  useEffect(() => {
-    if (fetcher.data?.success) {
-      onDelete();
-    }
-  }, [fetcher.data, onDelete]);
-
-  return (
-    <Card className="flex items-center justify-between p-4">
-      <div className="flex items-center gap-3">
-        <div className="bg-muted flex h-10 w-10 items-center justify-center rounded-lg">
-          <Plug className="h-5 w-5" />
-        </div>
-        <div>
-          <h3 className="font-medium">{integration.name}</h3>
-          <p className="text-muted-foreground text-xs">{integration.serverUrl}</p>
-        </div>
-      </div>
-      <fetcher.Form method="post">
-        <input type="hidden" name="intent" value="delete" />
-        <input type="hidden" name="index" value={index} />
-        <Button
-          type="submit"
-          variant="ghost"
-          size="sm"
-          disabled={fetcher.state === "submitting"}
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </fetcher.Form>
     </Card>
   );
 }
@@ -289,17 +295,31 @@ export default function Integrations() {
     useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const [showNewForm, setShowNewForm] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { toast } = useToast();
 
-  const { sessions } = useMcpSessions({
-    endpoint: "/api/v1/mcp/sessions",
-  });
+  useEffect(() => {
+    const success = searchParams.get("success");
+    const error = searchParams.get("error");
+    const integrationName = searchParams.get("integrationName");
 
-  // Get unique provider names from MCP sessions
-  const connectedProviders = new Set(
-    sessions
-      .filter((session) => session.source)
-      .map((session) => session.source!.toLowerCase())
-  );
+    if (success === "true" && integrationName) {
+      toast({
+        title: "Integration connected",
+        description: `${integrationName} has been connected successfully.`,
+        variant: "success",
+      });
+      setSearchParams({});
+      revalidator.revalidate();
+    } else if (success === "false" && error) {
+      toast({
+        title: "Connection failed",
+        description: decodeURIComponent(error),
+        variant: "destructive",
+      });
+      setSearchParams({});
+    }
+  }, [searchParams, toast, setSearchParams, revalidator]);
 
   const activeAccountIds = useMemo(
     () =>
@@ -311,85 +331,62 @@ export default function Integrations() {
     [integrationAccounts]
   );
 
-  const isProviderConnected = (provider: Provider): boolean => {
-    return connectedProviders.has(provider.toLowerCase());
-  };
-
-  const providers = Object.values(PROVIDER_CONFIGS);
-
   return (
-    <>
-      <div className="flex h-full flex-col">
-        <PageHeader title="Integrations" />
-        <div className="home flex h-[calc(100vh_-_40px)] flex-col gap-6 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
-          {/* Integrations Section */}
-          <div className="space-y-3">
+    <div className="flex h-full flex-col">
+      <PageHeader title="Integrations" />
+      <div className="home flex h-[calc(100vh_-_40px)] flex-col gap-6 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+        {/* Integrations Section */}
+        <div className="space-y-3">
+          <div>
+            <h2 className="text-lg font-semibold">Integrations</h2>
+            <p className="text-muted-foreground text-sm">
+              Connect third-party apps and services to enhance your Core
+              experience.
+            </p>
+          </div>
+          <IntegrationGrid
+            integrations={integrationDefinitions}
+            activeAccountIds={activeAccountIds}
+          />
+        </div>
+
+        {/* Custom MCP Integrations Section */}
+        <div className="space-y-3">
+          <div className="flex items-start justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Integrations</h2>
+              <h2 className="text-lg font-semibold">Custom Integrations</h2>
               <p className="text-muted-foreground text-sm">
-                Connect third-party apps and services to enhance your Core
-                experience.
+                Connect external MCP servers to extend Core with custom tools
+                and data sources.
               </p>
             </div>
-            <IntegrationGrid
-              integrations={integrationDefinitions}
-              activeAccountIds={activeAccountIds}
+            <Button
+              variant="secondary"
+              onClick={() => setShowNewForm(true)}
+              disabled={showNewForm}
+              className="gap-2"
+            >
+              <Plus size={14} />
+              Add Custom Integration
+            </Button>
+          </div>
+
+          {showNewForm && (
+            <NewIntegrationForm
+              onCancel={() => setShowNewForm(false)}
+              onSuccess={() => {
+                setShowNewForm(false);
+                revalidator.revalidate();
+              }}
             />
-          </div>
+          )}
 
-          {/* Custom MCP Integrations Section */}
-          <div className="space-y-3">
-            <div className="flex items-start justify-between">
-              <div>
-                <h2 className="text-lg font-semibold">Custom Integrations</h2>
-                <p className="text-muted-foreground text-sm">
-                  Connect external MCP servers to extend Core with custom tools
-                  and data sources.
-                </p>
-              </div>
-              <Button
-                variant="secondary"
-                onClick={() => setShowNewForm(true)}
-                disabled={showNewForm}
-                className="gap-2"
-              >
-                <Plus size={14} />
-                Add Custom Integration
-              </Button>
-            </div>
-
-            {showNewForm && (
-              <NewIntegrationForm
-                onCancel={() => setShowNewForm(false)}
-                onSuccess={() => {
-                  setShowNewForm(false);
-                  revalidator.revalidate();
-                }}
-              />
-            )}
-
-            {mcpIntegrations.length === 0 && !showNewForm ? (
-              <Card className="p-8 text-center">
-                <p className="text-muted-foreground">
-                  No custom integrations configured. Click "Add Custom
-                  Integration" to connect an MCP server.
-                </p>
-              </Card>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {mcpIntegrations.map((integration, index) => (
-                  <CustomIntegrationCard
-                    key={index}
-                    integration={integration}
-                    index={index}
-                    onDelete={() => revalidator.revalidate()}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+          <CustomMcpGrid
+            integrations={mcpIntegrations}
+            onDelete={() => revalidator.revalidate()}
+          />
         </div>
       </div>
-    </>
+    </div>
   );
 }

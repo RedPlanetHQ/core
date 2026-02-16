@@ -15,16 +15,29 @@ import {
   CollapsibleTrigger,
 } from "../ui/collapsible";
 import StaticLogo from "../logo/logo";
-import { titleCase } from "~/utils";
 import { Button } from "../ui";
-import { ChevronsUpDown, LoaderCircle, TriangleAlert } from "lucide-react";
+import { ArrowDown, ArrowRight, ChevronDown, ChevronRight, LoaderCircle, TriangleAlert } from "lucide-react";
 import { ApprovalComponent } from "./approval-component";
-import { findAllToolsDeep, findFirstPendingApprovalIndex, isToolDisabled, hasNeedsApprovalDeep } from "./conversation-utils";
+import { findAllToolsDeep, findFirstPendingApprovalIndex, isToolDisabled, hasNeedsApprovalDeep, getToolDisplayName } from "./conversation-utils";
 
 interface AIConversationItemProps {
   message: UIMessage;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
 }
+
+// Helper to get nested parts from output (checks both .parts and .content)
+const getNestedPartsFromOutput = (output: any): any[] => {
+  if (!output) return [];
+  // Check output.parts first (sub-agent response structure)
+  if (output.parts && Array.isArray(output.parts)) {
+    return output.parts;
+  }
+  // Fallback to output.content
+  if (output.content && Array.isArray(output.content)) {
+    return output.content;
+  }
+  return [];
+};
 
 const Tool = ({
   part,
@@ -32,20 +45,24 @@ const Tool = ({
   isDisabled = false,
   allToolsFlat = [],
   firstPendingApprovalIdx = -1,
+  isNested = false,
 }: {
   part: ToolUIPart<any>;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
   isDisabled?: boolean;
   allToolsFlat?: any[];
   firstPendingApprovalIdx?: number;
+  isNested?: boolean;
 }) => {
   const needsApproval = part.state === "approval-requested";
 
-  console.log(part.output)
-  // Check for nested tool parts in output.content
-  const nestedToolParts = (part as any).output?.content?.filter(
+  // Get all nested parts from output (handles both .parts and .content)
+  const allNestedParts = getNestedPartsFromOutput((part as any).output);
+
+  // Filter to get only tool parts
+  const nestedToolParts = allNestedParts.filter(
     (item: any) => item.type?.includes("tool-")
-  ) || [];
+  );
   const hasNestedTools = nestedToolParts.length > 0;
 
   // Check if any nested tool (at any depth) needs approval (to auto-open)
@@ -54,12 +71,13 @@ const Tool = ({
   const [isOpen, setIsOpen] = useState(needsApproval || hasNestedApproval);
 
   // Extract text parts from output (non-tool content)
-  const textParts = (part as any).output?.content?.filter(
-    (item: any) => !item.type?.includes("tool-") && item.text
-  ) || [];
-  const textPart = textParts.map((t: any) => t.text).join("\n");
+  const textParts = allNestedParts.filter(
+    (item: any) => !item.type?.includes("tool-") && (item.text || item.type === "text")
+  );
+  const textPart = textParts.map((t: any) => t.text).filter(Boolean).join("\n");
 
   const handleApprove = () => {
+    console.log("asdfasdf")
     if (addToolApprovalResponse && (part as any)?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: (part as any)?.approval?.id, approved: true });
       setIsOpen(false);
@@ -67,6 +85,9 @@ const Tool = ({
   };
 
   const handleReject = () => {
+
+    console.log("reasdfasdf")
+
     if (addToolApprovalResponse && (part as any)?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: (part as any)?.approval?.id, approved: false });
       setIsOpen(false);
@@ -89,88 +110,103 @@ const Tool = ({
     }
 
     if (part.state === "output-denied") {
-      return <TriangleAlert size={18} className="rounded-dm" />;
+      return <TriangleAlert size={18} className="rounded-sm" />;
     }
 
-    return <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />;
+    return <LoaderCircle className="h-4 w-4 animate-spin" />;
   }
+
+  // Get the display name for this tool
+  const displayName = getToolDisplayName(part.type);
+
+  // Render leaf tool (no nested tools) - compact output
+  const renderLeafContent = () => {
+    if (needsApproval) {
+      if (isDisabled) {
+        return (
+          <div className="text-muted-foreground py-1 text-sm">
+            Waiting for previous tool approval...
+          </div>
+        );
+      }
+      return (
+        <ApprovalComponent
+          onApprove={handleApprove}
+          onReject={handleReject}
+        />
+      );
+    }
+
+    // Show JSON output for leaf tools
+    const output = (part as any).output;
+    const outputContent = output?.content || output;
+
+    return (
+      <div className="py-1">
+        <p className="text-muted-foreground mb-1 text-xs font-medium">Result</p>
+        <pre className="bg-grayAlpha-50 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
+          {typeof outputContent === "string"
+            ? outputContent
+            : JSON.stringify(outputContent, null, 2)}
+        </pre>
+      </div>
+    );
+  };
+
+  // Render nested tools (parent node)
+  const renderNestedContent = () => {
+    return (
+      <div className="mt-1">
+        {nestedToolParts.map((nestedPart: any, idx: number) => {
+          const nestedDisabled = isToolDisabled(nestedPart, allToolsFlat, firstPendingApprovalIdx);
+          return (
+            <Tool
+              key={`nested-${idx}`}
+              part={nestedPart}
+              addToolApprovalResponse={addToolApprovalResponse}
+              isDisabled={nestedDisabled}
+              allToolsFlat={allToolsFlat}
+              firstPendingApprovalIdx={firstPendingApprovalIdx}
+              isNested={true}
+            />
+          );
+        })}
+        {textPart && (
+          <div className="py-1">
+            <p className="text-muted-foreground mb-1 text-xs font-medium">Response</p>
+            <p className="font-mono text-xs text-[#BF4594]">{textPart}</p>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <Collapsible
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        "my-1 w-full rounded border-1 border-gray-300 px-2",
+        "w-full",
+        isNested && "ml-4 border-l-2 border-gray-200 pl-3",
+        !isNested && "my-1",
         isDisabled && "cursor-not-allowed opacity-50",
       )}
     >
       <CollapsibleTrigger asChild>
-        <Button
-          variant="link"
-          full
-          size="xl"
-          className="flex justify-between gap-4 px-2 py-2"
+        <button
+          className={cn(
+            "flex w-full items-center gap-2 py-1 text-left hover:cursor-pointer",
+            isDisabled && "cursor-not-allowed",
+          )}
           disabled={isDisabled}
         >
-          <div className="flex items-center gap-2">
-            {getIcon()}
-            {titleCase(part.type.replace("tool-", "").replace(/_/g, " "))}
-          </div>
-
-          <ChevronsUpDown size={16} />
-        </Button>
+          {getIcon()}
+          <span >{displayName}</span>
+          <span className="text-muted-foreground">{isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</span>
+        </button>
       </CollapsibleTrigger>
-      <CollapsibleContent className="w-full">
-        <div className="flex flex-col gap-2">
-          {!isDisabled && (
-            <div className="bg-grayAlpha-50 rounded p-2">
-              <p className="text-muted-foreground text-sm"> Request </p>
-              <p className="mt-2 font-mono text-[#BF4594]">
-                {JSON.stringify(part.input, null, 2)}
-              </p>
-            </div>
-          )}
-          {needsApproval ? (
-            isDisabled ? (
-              <div className="rounded p-3 text-sm">
-                Waiting for previous tool approval...
-              </div>
-            ) : (
-              <ApprovalComponent
-                onApprove={handleApprove}
-                onReject={handleReject}
-              />
-            )
-          ) : hasNestedTools ? (
-            // Render nested tool parts recursively
-            <div className="ml-2 border-l-2 border-gray-200 pl-2">
-              {nestedToolParts.map((nestedPart: any, idx: number) => {
-                const nestedDisabled = isToolDisabled(nestedPart, allToolsFlat, firstPendingApprovalIdx);
-                return (
-                  <Tool
-                    key={`nested-${idx}`}
-                    part={nestedPart}
-                    addToolApprovalResponse={addToolApprovalResponse}
-                    isDisabled={nestedDisabled}
-                    allToolsFlat={allToolsFlat}
-                    firstPendingApprovalIdx={firstPendingApprovalIdx}
-                  />
-                );
-              })}
-              {textPart && (
-                <div className="bg-grayAlpha-50 mb-2 max-w-full rounded p-2">
-                  <p className="text-muted-foreground text-sm"> Response </p>
-                  <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="bg-grayAlpha-50 mb-2 max-w-full rounded p-2">
-              <p className="text-muted-foreground text-sm"> Response </p>
-              <p className="mt-2 font-mono text-[#BF4594]">{textPart}</p>
-            </div>
-          )}
-        </div>
+      <CollapsibleContent className={cn("w-full", isNested && "pl-6")}>
+        {hasNestedTools ? renderNestedContent() : renderLeafContent()}
       </CollapsibleContent>
     </Collapsible>
   );
@@ -184,6 +220,7 @@ const ConversationItemComponent = ({
   const textPart = message.parts.find((part) => part.type === "text");
   const [showAllTools, setShowAllTools] = useState(false);
 
+  console.log(message)
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
     editable: false,
@@ -200,8 +237,6 @@ const ConversationItemComponent = ({
   if (!message) {
     return null;
   }
-
-  console.log(message)
 
   // Group consecutive tools together
   const groupedParts: Array<{ type: "tool-group" | "single"; parts: any[] }> =
@@ -240,6 +275,7 @@ const ConversationItemComponent = ({
   const handleToolApproval = (params: { id: string; approved: boolean }) => {
     addToolApprovalResponse(params);
 
+    console.log(params)
     // If rejected, auto-reject all subsequent tools that need approval
     if (!params.approved) {
       // Find all tools in the message (including nested sub-agents)
@@ -256,6 +292,7 @@ const ConversationItemComponent = ({
               addToolApprovalResponse({
                 id: part.approval.id,
                 approved: false,
+                reason: "don't call this"
               });
             }, 100);
           }

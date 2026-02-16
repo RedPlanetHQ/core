@@ -1,7 +1,115 @@
-import { type Document } from "@prisma/client";
+import { type Prisma, type Document } from "@prisma/client";
 
 import { addToQueue } from "~/lib/ingest.server";
 import { prisma } from "~/trigger/utils/prisma";
+
+export interface DocumentSearchParams {
+  query?: string;
+  labelIds?: string[];
+  limit?: number;
+}
+
+export interface DocumentSearchResult {
+  id: string;
+  sessionId: string | null;
+  title: string;
+  source: string;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/**
+ * Search documents by text (title/content) and/or labelIds
+ * Returns full document info - useful for cmd+k search
+ */
+export const searchDocuments = async (
+  workspaceId: string,
+  params: DocumentSearchParams,
+): Promise<DocumentSearchResult[]> => {
+  const { query, labelIds, limit = 50 } = params;
+
+  const conditions: Prisma.DocumentWhereInput[] = [
+    { workspaceId },
+    { deleted: null },
+  ];
+
+  // Text search on title and content
+  if (query && query.trim()) {
+    conditions.push({
+      OR: [
+        { title: { contains: query, mode: "insensitive" } },
+        { content: { contains: query, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  // Filter by labelIds (document must have at least one of the specified labels)
+  if (labelIds && labelIds.length > 0) {
+    conditions.push({
+      labelIds: { hasSome: labelIds },
+    });
+  }
+
+  const documents = await prisma.document.findMany({
+    where: { AND: conditions },
+    select: {
+      id: true,
+      sessionId: true,
+      title: true,
+      source: true,
+      createdAt: true,
+      updatedAt: true,
+    },
+    take: limit,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  return documents;
+};
+
+/**
+ * Search documents and return only sessionIds
+ * Optimized for graph filtering - minimal data transfer
+ */
+export const searchDocumentSessionIds = async (
+  workspaceId: string,
+  params: DocumentSearchParams,
+): Promise<string[]> => {
+  const { query, labelIds, limit = 100 } = params;
+
+  const conditions: Prisma.DocumentWhereInput[] = [
+    { workspaceId },
+    { deleted: null },
+    { sessionId: { not: null } },
+  ];
+
+  // Text search on title and content
+  if (query && query.trim()) {
+    conditions.push({
+      OR: [
+        { title: { contains: query, mode: "insensitive" } },
+        { content: { contains: query, mode: "insensitive" } },
+      ],
+    });
+  }
+
+  // Filter by labelIds
+  if (labelIds && labelIds.length > 0) {
+    conditions.push({
+      labelIds: { hasSome: labelIds },
+    });
+  }
+
+  const documents = await prisma.document.findMany({
+    where: { AND: conditions },
+    select: { sessionId: true },
+    take: limit,
+    orderBy: { updatedAt: "desc" },
+  });
+
+  // Deduplicate sessionIds
+  return [...new Set(documents.map((d) => d.sessionId as string))];
+};
 
 interface DocumentUpdateParams {
   labelIds?: string[];

@@ -1,10 +1,34 @@
-import { type Tool, tool, readUIMessageStream } from "ai";
+import { type Tool, tool, readUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 
 import { runOrchestrator } from "./orchestrator";
 
 import { logger } from "../logger.service";
 import { createGatewayTools, getGatewayAgents } from "./gateway";
+
+/**
+ * Recursively checks if a message contains any tool part with state "approval-requested"
+ */
+const hasApprovalRequested = (message: UIMessage): boolean => {
+  const checkParts = (parts: any[]): boolean => {
+    for (const part of parts) {
+      if (part.state === "approval-requested") {
+        return true;
+      }
+      // Check nested output.parts (sub-agent responses)
+      if (part.output?.parts && Array.isArray(part.output.parts)) {
+        if (checkParts(part.output.parts)) return true;
+      }
+      // Check nested output.content
+      if (part.output?.content && Array.isArray(part.output.content)) {
+        if (checkParts(part.output.content)) return true;
+      }
+    }
+    return false;
+  };
+
+  return message.parts ? checkParts(message.parts) : false;
+};
 
 export const createTools = async (
   userId: string,
@@ -49,6 +73,7 @@ export const createTools = async (
             "Your intent - what you're looking for and why. Describe it like you're asking a colleague to find something.",
           ),
       }),
+
       execute: async function* ({ query }, { abortSignal }) {
         logger.info(`Core brain: Gathering context for: ${query}`);
 
@@ -63,10 +88,24 @@ export const createTools = async (
         );
 
         // Stream the orchestrator's work to the UI
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          // Skip yielding if we already detected approval (but consume stream to avoid errors)
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          // Check if this message has approval requested
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Core brain: Stopping gather_context - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     }),
@@ -96,18 +135,28 @@ export const createTools = async (
         );
 
         // Stream the orchestrator's work to the UI
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          // Skip yielding if we already detected approval (but consume stream to avoid errors)
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          // Check if this message has approval requested
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Core brain: Stopping take_action - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     }),
   };
 
-  const gatewayAgents = await getGatewayAgents(workspaceId);
-  const gatewayTools = createGatewayTools(gatewayAgents);
-
-  console.log({ ...tools, ...gatewayTools });
-  return { ...tools, ...gatewayTools };
+  return { ...tools };
 };

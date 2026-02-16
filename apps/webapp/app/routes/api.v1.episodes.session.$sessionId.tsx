@@ -16,7 +16,6 @@ export const loader = createHybridLoaderApiRoute(
     findResource: async () => 1,
   },
   async ({ authentication, params }) => {
-    const userId = authentication.userId;
     const sessionId = params.sessionId;
 
     if (!sessionId) {
@@ -24,7 +23,7 @@ export const loader = createHybridLoaderApiRoute(
     }
 
     try {
-    
+
 
       if (!authentication.workspaceId) {
         return json({ error: "Workspace not found" }, { status: 404 });

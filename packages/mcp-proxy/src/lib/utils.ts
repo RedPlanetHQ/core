@@ -1,7 +1,4 @@
-import {
-  OAuthClientProvider,
-  UnauthorizedError,
-} from "@modelcontextprotocol/sdk/client/auth.js";
+import { OAuthClientProvider, UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
@@ -20,11 +17,7 @@ export const REASON_AUTH_NEEDED = "authentication-needed";
 export const REASON_TRANSPORT_FALLBACK = "falling-back-to-alternate-transport";
 
 // Transport strategy types
-export type TransportStrategy =
-  | "sse-only"
-  | "http-only"
-  | "sse-first"
-  | "http-first";
+export type TransportStrategy = "sse-only" | "http-only" | "sse-first" | "http-first";
 
 export const MCP_REMOTE_VERSION = "1.0.0";
 
@@ -80,9 +73,7 @@ export async function connectToRemoteServer(
           headers: {
             ...(init?.headers as Record<string, string> | undefined),
             ...headers,
-            ...(tokens?.access_token
-              ? { Authorization: `Bearer ${tokens.access_token}` }
-              : {}),
+            ...(tokens?.access_token ? { Authorization: `Bearer ${tokens.access_token}` } : {}),
             Accept: "text/event-stream",
           } as Record<string, string>,
         })
@@ -95,8 +86,7 @@ export async function connectToRemoteServer(
     transportStrategy === "http-first" || transportStrategy === "sse-first";
 
   // Create transport instance based on the strategy
-  const sseTransport =
-    transportStrategy === "sse-only" || transportStrategy === "sse-first";
+  const sseTransport = transportStrategy === "sse-only" || transportStrategy === "sse-first";
   const transport = sseTransport
     ? new SSEClientTransport(url, {
         authProvider,
@@ -109,8 +99,7 @@ export async function connectToRemoteServer(
       });
 
   try {
-    if (DEBUG)
-      debugLog("Attempting to connect to remote server", { sseTransport });
+    if (DEBUG) debugLog("Attempting to connect to remote server", { sseTransport });
 
     if (client) {
       if (DEBUG) debugLog("Connecting client to transport");
@@ -119,8 +108,7 @@ export async function connectToRemoteServer(
       if (DEBUG) debugLog("Starting transport directly");
       await transport.start();
       if (!sseTransport) {
-        if (DEBUG)
-          debugLog("Creating test transport for HTTP-only connection test");
+        if (DEBUG) debugLog("Creating test transport for HTTP-only connection test");
         const testTransport = new StreamableHTTPClientTransport(url, {
           authProvider,
           requestInit: { headers },
@@ -187,9 +175,7 @@ export async function connectToRemoteServer(
       const { waitForAuthCode, skipBrowserAuth } = await authInitializer();
 
       if (skipBrowserAuth) {
-        log(
-          "Authentication required but skipping browser auth - using shared auth"
-        );
+        log("Authentication required but skipping browser auth - using shared auth");
       } else {
         log("Authentication required. Waiting for authorization...");
       }
@@ -257,9 +243,7 @@ export async function connectToRemoteServer(
 /**
  * Finds an available port on the local machine
  */
-export async function findAvailablePort(
-  preferredPort?: number
-): Promise<number> {
+export async function findAvailablePort(preferredPort?: number): Promise<number> {
   return new Promise((resolve, reject) => {
     const server = net.createServer();
 

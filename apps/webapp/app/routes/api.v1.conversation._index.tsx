@@ -218,9 +218,14 @@ const { loader, action } = createHybridActionApiRoute(
 
     result.consumeStream(); // no await
 
+
     return result.toUIMessageStreamResponse({
       generateMessageId: () => crypto.randomUUID(),
       originalMessages: validatedMessages,
+      onError: (error) => {
+        console.log(error)
+        return "asdf"
+      },
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();
 
@@ -263,6 +268,7 @@ const { loader, action } = createHybridActionApiRoute(
       //   );
       // },
     });
+
   },
 );
 

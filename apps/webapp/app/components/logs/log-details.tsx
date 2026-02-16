@@ -81,12 +81,12 @@ function getStatusValue(status: string) {
 export function LogDetails({ document, labels }: LogDetailsProps) {
   const [title, setTitle] = useState(document.title ?? "Untitled");
   const fetcher = useFetcher();
-  const debounceTimerRef = useRef<NodeJS.Timeout>();
+  const debounceTimerRef = useRef<NodeJS.Timeout>(null);
 
   // Update local state when document.title changes
   useEffect(() => {
     setTitle(document.title ?? "Untitled");
-  }, [document.title]);
+  }, [document.id]);
 
   // Debounced API call to update title
   useEffect(() => {

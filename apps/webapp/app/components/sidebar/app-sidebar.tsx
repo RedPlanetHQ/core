@@ -12,14 +12,13 @@ import {
 import {
   LayoutGrid,
   MessageSquare,
-  Network,
   Plus,
   MessageCircle,
   BookOpen,
   Mail,
   Phone,
   Search,
-  Inbox,
+  Settings,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -35,9 +34,11 @@ import {
 } from "../ui/dropdown-menu";
 
 import { type Label } from "@prisma/client";
-import { DocumentList } from "./document-list";
+
 import { useNavigate } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
+import { Agent } from "./agent";
+import { Memory } from "./memory";
 
 const data = {
   navMain: [
@@ -47,19 +48,14 @@ const data = {
       icon: MessageSquare,
     },
     {
-      title: "Documents",
-      url: "/home/episodes",
-      icon: Inbox,
-    },
-    {
-      title: "My mind",
-      url: "/home/graph",
-      icon: Network,
-    },
-    {
       title: "Integrations",
       url: "/home/integrations",
       icon: LayoutGrid,
+    },
+    {
+      title: "Settings",
+      url: "/settings/account",
+      icon: Settings,
     },
   ],
 };
@@ -110,7 +106,9 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          {/* <DocumentList labels={labels} /> */}
+          <Agent />
+          <Memory />
+
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">

@@ -12,9 +12,10 @@ import {
 
 interface DocumentEditorViewProps {
   document: DocumentItem;
+  editable?: boolean
 }
 
-export function DocumentEditorView({ document }: DocumentEditorViewProps) {
+export function DocumentEditorView({ document, editable: defaultEditable }: DocumentEditorViewProps) {
   const [editor, setEditor] = useState<Editor>();
   const [hasChanges, setHasChanges] = useState(false);
   const fetcher = useFetcher<{ success?: boolean; error?: boolean }>();
@@ -47,7 +48,7 @@ export function DocumentEditorView({ document }: DocumentEditorViewProps) {
   }, [fetcher.data, fetcher.state]);
 
 
-  const editable = document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
+  const editable = defaultEditable && document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
 
   return (
     <div className="flex w-full flex-col gap-4 p-4 pt-0">

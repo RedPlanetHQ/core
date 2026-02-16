@@ -1,6 +1,5 @@
 import { IntegrationEventType, type OAuth2Params } from "@core/types";
 import * as simpleOauth2 from "simple-oauth2";
-import { tasks } from "@trigger.dev/sdk/v3";
 import {
   getSimpleOAuth2ClientConfig,
   getTemplate,
@@ -19,7 +18,6 @@ import { scheduler } from "./scheduler";
 
 // Use process.env for config in Remix
 const CALLBACK_URL = `${env.APP_ORIGIN}/api/v1/oauth/callback`;
-const MCP_CALLBACK_URL = `${CALLBACK_URL}/mcp`;
 
 // Session store (in-memory, for single server)
 const session: Record<string, SessionRecord> = {};
@@ -258,63 +256,6 @@ export async function getRedirectURL(
     logger.warn(e);
     throw new Error(e.message);
   }
-}
-
-export async function getRedirectURLForMCP(
-  oAuthBody: OAuthBodyInterface,
-  userId: string,
-  workspaceId?: string,
-) {
-  const { integrationDefinitionId, integrationAccountId } = oAuthBody;
-
-  logger.info(
-    `We got OAuth request for ${workspaceId}: ${userId}: ${integrationDefinitionId}`,
-  );
-
-  const redirectURL = oAuthBody.redirectURL ?? `${env.APP_ORIGIN}/integrations`;
-
-  const integrationDefinition = await getIntegrationDefinitionWithId(
-    integrationDefinitionId,
-  );
-
-  if (!integrationAccountId) {
-    throw new Error("No integration account found");
-  }
-
-  if (!integrationDefinition) {
-    throw new Error("No integration definition found");
-  }
-
-  const spec = integrationDefinition.spec as any;
-
-  if (!spec.mcp) {
-    throw new Error("MCP auth configuration not found for this integration");
-  }
-
-  const { url, transportStrategy } = spec.mcp;
-
-  const authClient = createMCPAuthClient({
-    serverUrl: url,
-    transportStrategy: transportStrategy || "sse-first",
-    redirectUrl: MCP_CALLBACK_URL,
-  });
-
-  const { authUrl, state } = await authClient.getAuthorizationURL({
-    scope: "read write",
-  });
-
-  mcpSession[state] = {
-    integrationDefinitionId: integrationDefinition.id,
-    redirectURL,
-    userId,
-    workspaceId: workspaceId as string,
-    integrationAccountId,
-  };
-
-  return {
-    status: 200,
-    redirectURL: authUrl,
-  };
 }
 
 export async function getIntegrationDefinitionForState(state: string) {

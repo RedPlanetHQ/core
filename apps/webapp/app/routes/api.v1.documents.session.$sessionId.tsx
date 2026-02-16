@@ -6,41 +6,37 @@ import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.
 import { getDocumentForSession } from "~/services/document.server";
 
 // Schema for space ID parameter
-const DocumentParamsSchema = z.object({
-  documentId: z.string(),
-});
-
-export const LogUpdateBody = z.object({
-  labels: z.array(z.string()).optional(),
-  title: z.string().optional(),
-});
-
-export const ContentUpdateBody = z.object({
-  content: z.string(),
+const SessionParamsSchema = z.object({
+  sessionId: z.string(),
 });
 
 const loader = createHybridLoaderApiRoute(
   {
-    params: DocumentParamsSchema,
+    params: SessionParamsSchema,
     findResource: async () => 1,
     corsStrategy: "all",
     allowJWT: true,
   },
   async ({ params, authentication }) => {
     const document = await getDocumentForSession(
-      params.documentId,
+      params.sessionId,
       authentication.workspaceId as string,
     );
 
     const pendingIngestions = await getPendingIngestionsForSession(
-      params.documentId,
+      params.sessionId,
     );
     const pendingIngestionContent = pendingIngestions
       .map((pi) => (pi.data as any).episodeBody)
       .join("-----\n");
 
     return json({
-      context: `${document?.content}\n\n---------------------------\n\n${pendingIngestionContent}`,
+      title: document?.title || null,
+      content: document?.content || null,
+      createdAt: document?.createdAt || null,
+      updatedAt: document?.updatedAt || null,
+      pendingContent: pendingIngestionContent || null,
+      context: `${document?.content || ""}\n\n---------------------------\n\n${pendingIngestionContent}`,
     });
   },
 );

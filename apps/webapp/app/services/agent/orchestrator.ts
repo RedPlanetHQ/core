@@ -4,6 +4,7 @@ import {
   stepCountIs,
   tool,
   readUIMessageStream,
+  type UIMessage,
 } from "ai";
 import { z } from "zod";
 
@@ -15,7 +16,35 @@ import {
 import { logger } from "../logger.service";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import { type GatewayAgentInfo, getGatewayAgents, runGatewayExplorer } from "./gateway";
+import {
+  type GatewayAgentInfo,
+  getGatewayAgents,
+  runGatewayExplorer,
+} from "./gateway";
+
+/**
+ * Recursively checks if a message contains any tool part with state "approval-requested"
+ */
+const hasApprovalRequested = (message: UIMessage): boolean => {
+  const checkParts = (parts: any[]): boolean => {
+    for (const part of parts) {
+      if (part.state === "approval-requested") {
+        return true;
+      }
+      // Check nested output.parts (sub-agent responses)
+      if (part.output?.parts && Array.isArray(part.output.parts)) {
+        if (checkParts(part.output.parts)) return true;
+      }
+      // Check nested output.content
+      if (part.output?.content && Array.isArray(part.output.content)) {
+        if (checkParts(part.output.content)) return true;
+      }
+    }
+    return false;
+  };
+
+  return message.parts ? checkParts(message.parts) : false;
+};
 
 export type OrchestratorMode = "read" | "write";
 
@@ -225,10 +254,22 @@ export async function runOrchestrator(
         );
 
         // Stream the memory explorer's work
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Orchestrator: Stopping memory_search - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     });
@@ -266,10 +307,22 @@ export async function runOrchestrator(
         }
 
         // Stream the integration explorer's work
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Orchestrator: Stopping integration_query - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     });
@@ -324,10 +377,22 @@ export async function runOrchestrator(
         }
 
         // Stream the integration explorer's work
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Orchestrator: Stopping integration_action - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     });
@@ -349,9 +414,7 @@ export async function runOrchestrator(
           ),
       }),
       execute: async function* ({ intent }, { abortSignal }) {
-        logger.info(
-          `Orchestrator: Gateway ${gateway.name} - ${intent}`,
-        );
+        logger.info(`Orchestrator: Gateway ${gateway.name} - ${intent}`);
 
         const { stream, gatewayConnected } = await runGatewayExplorer(
           gateway.id,
@@ -371,10 +434,22 @@ export async function runOrchestrator(
           return;
         }
 
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Orchestrator: Stopping gateway ${gateway.name} - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     });
