@@ -6,9 +6,164 @@ import type {
 import {
   UnauthorizedError,
   type OAuthClientProvider,
+  discoverOAuthMetadata,
+  refreshAuthorization,
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+
+/**
+ * Stored OAuth credentials for a custom MCP integration
+ */
+export interface CustomMcpStoredCredentials {
+  accessToken: string;
+  refreshToken?: string;
+  expiresIn?: number;
+  clientId?: string;
+  clientSecret?: string;
+}
+
+/**
+ * Token provider for custom MCP integrations with automatic refresh support.
+ * Use this when you have stored OAuth credentials and want to create a client.
+ */
+export class CustomMcpTokenProvider implements OAuthClientProvider {
+  private _tokens: OAuthTokens;
+  private _clientInformation?: OAuthClientInformationFull;
+  private _serverUrl: string;
+
+  constructor(
+    serverUrl: string,
+    credentials: CustomMcpStoredCredentials,
+    private readonly _onTokensRefreshed?: (
+      newCredentials: CustomMcpStoredCredentials
+    ) => Promise<void>
+  ) {
+    this._serverUrl = serverUrl;
+    this._tokens = {
+      access_token: credentials.accessToken,
+      refresh_token: credentials.refreshToken,
+      expires_in: credentials.expiresIn,
+      token_type: "Bearer",
+    };
+
+    if (credentials.clientId) {
+      this._clientInformation = {
+        client_id: credentials.clientId,
+        client_secret: credentials.clientSecret,
+      } as OAuthClientInformationFull;
+    }
+  }
+
+  get redirectUrl(): string {
+    return "";
+  }
+
+  get clientMetadata(): OAuthClientMetadata {
+    return {
+      client_name: "Core MCP Client",
+      redirect_uris: [],
+      grant_types: ["refresh_token"],
+      response_types: ["code"],
+      token_endpoint_auth_method: "client_secret_post",
+    };
+  }
+
+  clientInformation(): OAuthClientInformationFull | undefined {
+    return this._clientInformation;
+  }
+
+  saveClientInformation(clientInformation: OAuthClientInformationFull): void {
+    this._clientInformation = clientInformation;
+  }
+
+  tokens(): OAuthTokens | undefined {
+    return this._tokens;
+  }
+
+  async saveTokens(tokens: OAuthTokens): Promise<void> {
+    this._tokens = tokens;
+
+    // Notify about new tokens if callback provided
+    if (this._onTokensRefreshed) {
+      await this._onTokensRefreshed({
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token as string,
+        expiresIn: tokens.expires_in as number,
+        clientId: this._clientInformation?.client_id as string,
+        clientSecret: this._clientInformation?.client_secret as string,
+      });
+    }
+  }
+
+  redirectToAuthorization(_authorizationUrl: URL): void {
+    // Not used for token-based auth
+  }
+
+  saveCodeVerifier(_codeVerifier: string): void {
+    // Not used for token-based auth
+  }
+
+  codeVerifier(): string {
+    return "";
+  }
+
+  /**
+   * Attempt to refresh the access token using the refresh token
+   */
+  async refreshTokens(): Promise<boolean> {
+    if (!this._tokens.refresh_token) {
+      return false;
+    }
+
+    try {
+      const metadata = await discoverOAuthMetadata(this._serverUrl);
+
+      const newTokens = await refreshAuthorization(this._serverUrl, {
+        metadata: metadata as any,
+        clientInformation: this._clientInformation as any,
+        refreshToken: this._tokens.refresh_token,
+      });
+
+      await this.saveTokens(newTokens);
+      return true;
+    } catch (error) {
+      console.error("Failed to refresh tokens:", error);
+      return false;
+    }
+  }
+}
+
+/**
+ * Create an MCP client connected to a custom MCP server with stored credentials.
+ * The client automatically handles token refresh via the auth provider.
+ */
+export async function createCustomMcpClient(options: {
+  serverUrl: string;
+  credentials: CustomMcpStoredCredentials;
+  onTokensRefreshed?: (newCredentials: CustomMcpStoredCredentials) => Promise<void>;
+}): Promise<Client> {
+  const { serverUrl, credentials, onTokensRefreshed } = options;
+
+  const authProvider = new CustomMcpTokenProvider(serverUrl, credentials, onTokensRefreshed);
+
+  const client = new Client(
+    {
+      name: "Core MCP Client",
+      version: "1.0.0",
+    },
+    { capabilities: {} }
+  );
+
+  const baseUrl = new URL(serverUrl);
+  const transport = new StreamableHTTPClientTransport(baseUrl, {
+    authProvider,
+  });
+
+  await client.connect(transport as any);
+
+  return client;
+}
 
 /**
  * OAuth session data stored during the authorization flow

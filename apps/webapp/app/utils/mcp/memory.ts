@@ -272,7 +272,7 @@ export async function callMemoryTool(
       case "get_integrations":
         return await handleGetIntegrations({ ...args, userId });
       case "get_integration_actions":
-        return await handleGetIntegrationActions({ ...args });
+        return await handleGetIntegrationActions({ ...args, userId });
       case "execute_integration_action":
         return await handleExecuteIntegrationAction({
           ...args,

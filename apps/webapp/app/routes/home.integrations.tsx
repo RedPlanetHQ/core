@@ -101,6 +101,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
 
         const newIntegration: McpIntegration = {
+          id: crypto.randomUUID(),
           name,
           serverUrl,
           ...(accessToken && {

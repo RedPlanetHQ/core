@@ -12,9 +12,12 @@ export {
 export {
   getCustomMcpAuthorizationUrl,
   completeCustomMcpOAuth,
+  createCustomMcpClient,
   CustomMcpOAuthProvider,
+  CustomMcpTokenProvider,
   type CustomMcpOAuthSession,
   type CustomMcpOAuthResult,
+  type CustomMcpStoredCredentials,
 } from "./lib/custom-mcp-oauth.js";
 
 export {

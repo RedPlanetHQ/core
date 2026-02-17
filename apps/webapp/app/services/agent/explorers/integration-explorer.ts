@@ -1,10 +1,4 @@
-import {
-  streamText,
-  type LanguageModel,
-  stepCountIs,
-  tool,
-  StreamTextResult,
-} from "ai";
+import { streamText, type LanguageModel, stepCountIs, tool } from "ai";
 import { z } from "zod";
 
 import { logger } from "~/services/logger.service";
@@ -198,6 +192,7 @@ export async function runIntegrationExplorer(
           const actions = await handleGetIntegrationActions({
             accountId,
             query,
+            userId,
           });
           // Return full action details including schema
           return JSON.stringify(actions, null, 2);
@@ -218,7 +213,6 @@ export async function runIntegrationExplorer(
           .string()
           .describe("Action parameters as JSON string based on inputSchema"),
       }),
-
       execute: async ({ accountId, action, parameters }) => {
         try {
           const parsedParams = JSON.parse(parameters);

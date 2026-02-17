@@ -11,6 +11,7 @@ import { Button } from "~/components/ui/button";
 import { Plug, Trash2 } from "lucide-react";
 
 export type McpIntegration = {
+  id: string;
   name: string;
   serverUrl: string;
   oauth?: {

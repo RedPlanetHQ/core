@@ -1,8 +1,38 @@
 import { prisma } from "~/db.server";
 import { execFile } from "child_process";
 import { promisify } from "util";
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const execFileAsync = promisify(execFile);
+
+export interface CustomMcpIntegration {
+  id: string;
+  name: string;
+  serverUrl: string;
+  oauth?: {
+    accessToken: string;
+    refreshToken?: string;
+    expiresIn?: number;
+    clientId?: string;
+  };
+}
+
+export interface CustomMcpAccount {
+  id: string;
+  accountId: string;
+  integrationConfiguration: any;
+  isActive: boolean;
+  isCustomMcp: true;
+  integrationDefinition: {
+    id: string;
+    name: string;
+    slug: string;
+    spec: any;
+  };
+  serverUrl: string;
+  accessToken?: string;
+}
 
 export interface IntegrationAccountWithDefinition {
   id: string;
@@ -25,12 +55,13 @@ export class IntegrationLoader {
   /**
    * Get all connected and active integration accounts for a user/workspace
    * Filtered by integration slugs if provided
+   * Also includes custom MCP integrations from user metadata
    */
   static async getConnectedIntegrationAccounts(
     userId: string,
     workspaceId: string,
     integrationSlugs?: string[],
-  ): Promise<IntegrationAccountWithDefinition[]> {
+  ): Promise<(IntegrationAccountWithDefinition | CustomMcpAccount)[]> {
     const whereClause: any = {
       integratedById: userId,
       workspaceId: workspaceId,
@@ -62,15 +93,48 @@ export class IntegrationLoader {
       },
     });
 
-    return integrationAccounts;
+    // Also get custom MCP integrations from user metadata
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true },
+    });
+
+    const metadata = (user?.metadata as any) || {};
+    const customMcpIntegrations = (metadata?.mcpIntegrations ||
+      []) as CustomMcpIntegration[];
+
+    // Convert custom MCPs to the same format as regular integration accounts
+    const customMcpAccounts: CustomMcpAccount[] = customMcpIntegrations
+      .filter((mcp) => mcp.oauth?.accessToken) // Only include connected ones
+      .map((mcp) => ({
+        id: mcp.id,
+        accountId: mcp.id,
+        integrationConfiguration: {
+          accessToken: mcp.oauth?.accessToken,
+        },
+        isActive: true,
+        isCustomMcp: true as const,
+        integrationDefinition: {
+          id: mcp.id,
+          name: mcp.name,
+          slug: mcp.name.toLowerCase().replace(/\s+/g, "-"),
+          spec: null,
+        },
+        serverUrl: mcp.serverUrl,
+        accessToken: mcp.oauth?.accessToken,
+      }));
+
+    return [...integrationAccounts, ...customMcpAccounts];
   }
 
   /**
-   * Get integration account by ID
+   * Get integration account by ID (supports both regular and custom MCP accounts)
    */
   static async getIntegrationAccountById(
     accountId: string,
-  ): Promise<IntegrationAccountWithDefinition> {
+    userId?: string,
+  ): Promise<IntegrationAccountWithDefinition | CustomMcpAccount> {
+    // First try regular integration account
     const account = await prisma.integrationAccount.findUnique({
       where: { id: accountId },
       include: {
@@ -86,13 +150,73 @@ export class IntegrationLoader {
       },
     });
 
-    if (!account || !account.isActive) {
-      throw new Error(
-        `Integration account '${accountId}' not found or not active.`,
-      );
+    if (account && account.isActive) {
+      return account;
     }
 
-    return account;
+    // If not found, check custom MCP integrations from user metadata
+    if (userId) {
+      const customMcp = await this.getCustomMcpById(accountId, userId);
+      if (customMcp) {
+        return customMcp;
+      }
+    }
+
+    throw new Error(
+      `Integration account '${accountId}' not found or not active.`,
+    );
+  }
+
+  /**
+   * Get a custom MCP integration by ID from user metadata
+   */
+  static async getCustomMcpById(
+    mcpId: string,
+    userId: string,
+  ): Promise<CustomMcpAccount | null> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true },
+    });
+
+    const metadata = (user?.metadata as any) || {};
+    const customMcpIntegrations = (metadata?.mcpIntegrations ||
+      []) as CustomMcpIntegration[];
+
+    const mcp = customMcpIntegrations.find((m) => m.id === mcpId);
+    if (!mcp || !mcp.oauth?.accessToken) {
+      return null;
+    }
+
+    return {
+      id: mcp.id,
+      accountId: mcp.id,
+      integrationConfiguration: {
+        accessToken: mcp.oauth.accessToken,
+        refreshToken: mcp.oauth.refreshToken,
+        expiresIn: mcp.oauth.expiresIn,
+        clientId: mcp.oauth.clientId,
+      },
+      isActive: true,
+      isCustomMcp: true as const,
+      integrationDefinition: {
+        id: mcp.id,
+        name: mcp.name,
+        slug: mcp.name.toLowerCase().replace(/\s+/g, "-"),
+        spec: null,
+      },
+      serverUrl: mcp.serverUrl,
+      accessToken: mcp.oauth.accessToken,
+    };
+  }
+
+  /**
+   * Check if an account is a custom MCP
+   */
+  static isCustomMcp(
+    account: IntegrationAccountWithDefinition | CustomMcpAccount,
+  ): account is CustomMcpAccount {
+    return "isCustomMcp" in account && account.isCustomMcp === true;
   }
 
   /**

@@ -691,6 +691,31 @@ model RecallLog {
   metadata Json? @default("{}")
 }
 
+model Reminder {
+  id               String    @id @default(uuid())
+  workspaceId      String
+  workspace        Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  text             String // Action text - can include goal context (e.g., "drink water (goal: 3L daily)")
+  schedule         String // RRule string (e.g., "FREQ=DAILY;BYHOUR=9" or "FREQ=MINUTELY;INTERVAL=15")
+  startDate        DateTime? // Don't fire before this date (for "tomorrow at X" reminders)
+  nextRunAt        DateTime? // Next scheduled run time (computed from rrule)
+  maxOccurrences   Int? // null = unlimited, 1 = one-time, N = limited
+  occurrenceCount  Int       @default(0) // Auto-deactivate when >= maxOccurrences
+  endDate          DateTime? // Optional: auto-deactivate after this date
+  channel          String    @default("whatsapp") // "whatsapp" or "email"
+  isActive         Boolean   @default(true)
+  confirmedActive  Boolean   @default(false) // User said "yes" to keep - never ask again
+  unrespondedCount Int       @default(0)
+  lastSentAt       DateTime?
+  metadata         Json? // Flexible tracking: { followUpSentAt, lastAcknowledgedAt, skipCount, etc. }
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@index([isActive])
+  @@index([nextRunAt])
+}
+
 model StatementEmbedding {
   id        String   @id
   createdAt DateTime @default(now())
@@ -935,6 +960,7 @@ model Workspace {
   episodeEmbeddings       EpisodeEmbedding[]
   entityEmbeddings        EntityEmbedding[]
   gateways                Gateway[]
+  reminders               Reminder[]
 }
 
 enum PlanType {

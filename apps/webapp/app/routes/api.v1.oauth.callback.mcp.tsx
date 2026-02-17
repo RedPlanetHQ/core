@@ -9,6 +9,7 @@ import { updateUser } from "~/models/user.server";
 const MCP_CALLBACK_URL = `${env.APP_ORIGIN}/api/v1/oauth/callback/mcp`;
 
 type McpIntegration = {
+  id: string;
   name: string;
   serverUrl: string;
   oauth?: {
@@ -77,6 +78,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
     // Create new integration with OAuth data
     const newIntegration: McpIntegration = {
+      id: crypto.randomUUID(),
       name,
       serverUrl,
       oauth: {

@@ -1,5 +1,5 @@
 import { Button } from "../ui";
-import { useNavigate } from "@remix-run/react";
+import { useLocation, useNavigate } from "@remix-run/react";
 import { ChevronRight, Inbox, Network, Tag } from "lucide-react";
 import {
   Collapsible,
@@ -9,6 +9,7 @@ import {
 
 export const Memory = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   return (
     <Collapsible defaultOpen className="px-2 mt-2">
@@ -22,6 +23,7 @@ export const Memory = () => {
             <Button
               variant="secondary"
               className="gap-2"
+              isActive={location.pathname.includes("/home/episode")}
               onClick={() => {
                 navigate(`/home/episodes`);
               }}
@@ -34,6 +36,7 @@ export const Memory = () => {
             <Button
               variant="secondary"
               className="gap-2"
+              isActive={location.pathname.includes("/home/graph")}
               onClick={() => {
                 navigate(`/home/graph`);
               }}
@@ -46,6 +49,7 @@ export const Memory = () => {
             <Button
               variant="secondary"
               className="gap-2"
+              isActive={location.pathname.includes("/home/label")}
               onClick={() => {
                 navigate(`/home/labels/no_label`);
               }}
