@@ -57,6 +57,22 @@ export function getModelForTask(complexity: ModelComplexity = "high"): string {
   return downgrades[baseModel] || baseModel;
 }
 
+/**
+ * Get the model to use for batch API calls.
+ * Some models (e.g. gpt-5.2) don't work well with batch API,
+ * so we downgrade to a known-working variant.
+ */
+export function getModelForBatch(): string {
+  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+
+  const batchDowngrades: Record<string, string> = {
+    "gpt-5.2-2025-12-11": "gpt-5-2025-08-07",
+    "gpt-5.1-2025-11-13": "gpt-5-2025-08-07",
+  };
+
+  return batchDowngrades[baseModel] || baseModel;
+}
+
 export const getModel = (takeModel?: string) => {
   let model = takeModel;
 

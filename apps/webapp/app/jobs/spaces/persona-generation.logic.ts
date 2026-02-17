@@ -14,6 +14,7 @@ import { savePersonaDocument } from "./utils";
 export interface PersonaGenerationPayload {
   userId: string;
   workspaceId: string;
+  episodeUuid?: string;
 }
 
 export interface PersonaGenerationResult {
@@ -84,15 +85,16 @@ export async function processPersonaGeneration(
     ingestionQueueId?: string,
   ) => Promise<{ id?: string }>,
 ): Promise<PersonaGenerationResult> {
-  const { userId, workspaceId } = payload;
+  const { userId, workspaceId, episodeUuid } = payload;
 
   logger.info("Checking persona generation threshold", {
     userId,
     workspaceId,
+    episodeUuid,
   });
 
   // Check threshold first - early return if not met
-  const thresholdCheck = await checkPersonaUpdateThreshold(userId, workspaceId);
+  const thresholdCheck = await checkPersonaUpdateThreshold(userId, workspaceId, episodeUuid);
 
   if (!thresholdCheck.shouldGenerate) {
     logger.info("Persona generation skipped - threshold not met", {

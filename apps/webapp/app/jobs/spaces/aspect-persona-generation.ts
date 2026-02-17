@@ -34,7 +34,16 @@ const MAX_EPISODES_PER_CHUNK = 20;
 
 // Aspects to skip entirely from persona generation
 // Event: Transient calendar/schedule data - agents can query graph directly for specific dates
-const SKIPPED_ASPECTS: StatementAspect[] = ["Event", "Relationship"];
+const SKIPPED_ASPECTS: StatementAspect[] = [
+  "Event",
+  "Relationship",
+  "Knowledge",
+  "Belief",
+  "Habit",
+  "Goal",
+  "Decision",
+  "Problem",
+];
 
 // Aspect to persona section mapping with filtering guidance
 // Each section answers a specific question an AI agent might have
@@ -50,10 +59,10 @@ export const ASPECT_SECTION_MAP: Record<
   Identity: {
     title: "IDENTITY",
     description:
-      "Who they are - name, role, contact info, location, physical stats",
-    agentQuestion: "Who am I talking to? How do I reach them?",
+      "Who they are - name, role, affiliations, contact info, location",
+    agentQuestion: "Who am I talking to?",
     filterGuidance:
-      "Include: name, profession, role, email, phone, location, timezone, physical stats (height, weight, body composition). Any agent might need these identifiers.",
+      "Include: name, profession, role, affiliations, email, phone, location, timezone. Exclude: health metrics, body composition, detailed physical stats - those belong in memory, not persona.",
   },
   Knowledge: {
     title: "EXPERTISE",
@@ -71,13 +80,14 @@ export const ASPECT_SECTION_MAP: Record<
   },
   Preference: {
     title: "PREFERENCES",
-    description: "Communication style, formats, how they want things done",
-    agentQuestion: "How do they want things? (Style, format, approach)",
+    description:
+      "How they want things done - style, format, approach, tools",
+    agentQuestion: "How do they want things done?",
     filterGuidance:
-      "Include: all communication preferences, formatting rules, style choices, tool preferences. Be specific - vague preferences are useless to agents.",
+      "Include: communication style, formatting preferences, tool choices, workflow preferences, tone preferences. These are 'I prefer X' statements. Exclude: hard rules (those are Directives), one-time requests, and project-specific preferences.",
   },
-  Action: {
-    title: "BEHAVIORS",
+  Habit: {
+    title: "HABITS",
     description: "Regular habits, workflows, routines - work and personal",
     agentQuestion: "What do they do regularly? (So I fit into their life)",
     filterGuidance:
@@ -92,10 +102,11 @@ export const ASPECT_SECTION_MAP: Record<
   },
   Directive: {
     title: "DIRECTIVES",
-    description: "Standing rules - always do X, never do Y, notify when Z",
-    agentQuestion: "What rules must I follow?",
+    description:
+      "Standing rules and active decisions - always do X, never do Y, use Z for W",
+    agentQuestion: "What rules must I follow? What's already decided?",
     filterGuidance:
-      "Include: all standing instructions, hard constraints, automation rules. These are non-negotiable for agents.",
+      "Include: all standing instructions, hard constraints, automation rules, and active decisions that should not be re-litigated. These are non-negotiable. Format as actionable rules: 'Always...', 'Never...', 'Use X for Y'.",
   },
   Decision: {
     title: "DECISIONS",
@@ -299,10 +310,11 @@ ${
     ? `
 **PREFERENCES can be detailed** - Style rules, communication preferences, and formatting requirements need specificity to be useful.
 
-- Include specific rules agents should follow (e.g., "lowercase month abbreviations: jan, feb, mar")
+- Include specific style preferences (e.g., "prefers lowercase month abbreviations: jan, feb, mar")
 - Group related preferences under sub-headers
 - Be precise - vague preferences are useless
 - Max 20 words per bullet point
+- These are "I prefer" / "I like" statements, NOT hard rules (those go in DIRECTIVES)
 `
     : `
 **BE ULTRA-CONCISE** - This is not the Preferences section.
@@ -318,15 +330,16 @@ ${
 ## What to Include vs Exclude
 
 ✅ INCLUDE:
-- Patterns that change how an agent should behave
+- Facts that change how an agent should behave in EVERY interaction
 - Ongoing/current state (not historical)
-- General principles (not specific instances)
+- General principles (not one-time or project-specific)
 
 ❌ EXCLUDE:
-- Facts that don't affect agent behavior
+- Anything an agent can get from memory search at runtime
 - Completed/past items
-- Specific dates, events, contact details
-- Redundant information (don't repeat what's in other sections)
+- Project-specific or temporary context
+- Detailed health data, specific events, relationship details
+- Skills/expertise (agent doesn't need to know what you know)
 
 ## Format
 
@@ -547,10 +560,10 @@ async function generateSectionWithChunking(
     requests: chunkRequests,
     outputSchema: SectionContentSchema,
     maxRetries: 3,
-    timeoutMs: 180000,
+    timeoutMs: 1200000,
   });
 
-  const chunkBatch = await pollBatchCompletion(chunkBatchId, 180000);
+  const chunkBatch = await pollBatchCompletion(chunkBatchId, 1200000);
 
   if (!chunkBatch.results || chunkBatch.results.length === 0) {
     logger.warn(`No chunk results for ${aspect}`);
@@ -593,10 +606,10 @@ async function generateSectionWithChunking(
     requests: [mergeRequest],
     outputSchema: SectionContentSchema,
     maxRetries: 3,
-    timeoutMs: 120000,
+    timeoutMs: 1200000,
   });
 
-  const mergeBatch = await pollBatchCompletion(mergeBatchId, 120000);
+  const mergeBatch = await pollBatchCompletion(mergeBatchId, 1200000);
 
   if (!mergeBatch.results || mergeBatch.results.length === 0) {
     logger.warn(`No merge result for ${aspect}`);
@@ -644,11 +657,11 @@ async function generateAspectSection(
     requests: [batchRequest],
     outputSchema: SectionContentSchema,
     maxRetries: 3,
-    timeoutMs: 120000,
+    timeoutMs: 1200000,
   });
 
   // Poll for completion
-  const batch = await pollBatchCompletion(batchId, 120000);
+  const batch = await pollBatchCompletion(batchId, 1200000);
 
   if (!batch.results || batch.results.length === 0) {
     logger.warn(`No results for ${aspect} section`);
@@ -738,95 +751,114 @@ async function generateAllAspectSections(
     ),
   });
 
-  // Process large sections with chunking (sequentially to avoid too many parallel batches)
+  // Run all sections in parallel - large (chunked) and small (single batch) concurrently
+  const parallelTasks: Promise<PersonaSectionResult[]>[] = [];
+
+  // Task for each large section (chunking handled internally)
   for (const aspectData of largeAspects) {
-    const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
-
-    const content = await generateSectionWithChunking(aspectData, userContext);
-
-    if (content && !content.includes("INSUFFICIENT_DATA")) {
-      sections.push({
-        aspect: aspectData.aspect,
-        title: sectionInfo.title,
-        content,
-        statementCount: aspectData.statements.length,
-        episodeCount: aspectData.episodes.length,
-      });
-    }
+    parallelTasks.push(
+      generateSectionWithChunking(aspectData, userContext).then((content) => {
+        if (content && !content.includes("INSUFFICIENT_DATA")) {
+          const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
+          return [
+            {
+              aspect: aspectData.aspect,
+              title: sectionInfo.title,
+              content,
+              statementCount: aspectData.statements.length,
+              episodeCount: aspectData.episodes.length,
+            },
+          ];
+        }
+        return [];
+      }),
+    );
   }
 
-  // Process small sections in a single batch (existing logic)
+  // Task for all small sections in a single batch
   if (smallAspects.length > 0) {
-    // Sort statements and episodes by recency for small sections too
-    const sortedSmallAspects = smallAspects.map((aspectData) => ({
-      ...aspectData,
-      statements: [...aspectData.statements].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-      ),
-      episodes: [...aspectData.episodes].sort(
-        (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
-      ),
-    }));
+    parallelTasks.push(
+      (async () => {
+        const sortedSmallAspects = smallAspects.map((aspectData) => ({
+          ...aspectData,
+          statements: [...aspectData.statements].sort(
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          ),
+          episodes: [...aspectData.episodes].sort(
+            (a, b) => b.createdAt.getTime() - a.createdAt.getTime(),
+          ),
+        }));
 
-    const batchRequests = sortedSmallAspects.map((aspectData) => {
-      const prompt = buildAspectSectionPrompt(aspectData, userContext);
-      return {
-        customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
-        messages: [prompt],
-        systemPrompt: "",
-      };
-    });
-
-    logger.info(
-      `Generating ${batchRequests.length} small persona sections in batch`,
-      {
-        aspects: sortedSmallAspects.map((a) => a.aspect),
-      },
-    );
-
-    const { batchId } = await createBatch({
-      requests: batchRequests,
-      outputSchema: SectionContentSchema,
-      maxRetries: 3,
-      timeoutMs: 300000,
-    });
-
-    const batch = await pollBatchCompletion(batchId, 300000);
-
-    if (batch.results && batch.results.length > 0) {
-      for (let i = 0; i < batch.results.length; i++) {
-        const result = batch.results[i];
-        const aspectData = sortedSmallAspects[i];
-        const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
-
-        if (result.error || !result.response) {
-          logger.warn(`Error generating ${aspectData.aspect} section`, {
-            error: result.error,
-          });
-          continue;
-        }
-
-        const content =
-          typeof result.response === "string"
-            ? result.response
-            : result.response.content || "";
-
-        if (content.includes("INSUFFICIENT_DATA")) {
-          logger.info(
-            `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
-          );
-          continue;
-        }
-
-        sections.push({
-          aspect: aspectData.aspect,
-          title: sectionInfo.title,
-          content,
-          statementCount: aspectData.statements.length,
-          episodeCount: aspectData.episodes.length,
+        const batchRequests = sortedSmallAspects.map((aspectData) => {
+          const prompt = buildAspectSectionPrompt(aspectData, userContext);
+          return {
+            customId: `persona-section-${aspectData.aspect}-${Date.now()}`,
+            messages: [prompt],
+            systemPrompt: "",
+          };
         });
-      }
-    }
+
+        logger.info(
+          `Generating ${batchRequests.length} small persona sections in batch`,
+          {
+            aspects: sortedSmallAspects.map((a) => a.aspect),
+          },
+        );
+
+        const { batchId } = await createBatch({
+          requests: batchRequests,
+          outputSchema: SectionContentSchema,
+          maxRetries: 3,
+          timeoutMs: 1200000,
+        });
+
+        const batch = await pollBatchCompletion(batchId, 1200000);
+        const results: PersonaSectionResult[] = [];
+
+        if (batch.results && batch.results.length > 0) {
+          for (let i = 0; i < batch.results.length; i++) {
+            const result = batch.results[i];
+            const aspectData = sortedSmallAspects[i];
+            const sectionInfo = ASPECT_SECTION_MAP[aspectData.aspect];
+
+            if (result.error || !result.response) {
+              logger.warn(`Error generating ${aspectData.aspect} section`, {
+                error: result.error,
+              });
+              continue;
+            }
+
+            const content =
+              typeof result.response === "string"
+                ? result.response
+                : result.response.content || "";
+
+            if (content.includes("INSUFFICIENT_DATA")) {
+              logger.info(
+                `${aspectData.aspect} section returned INSUFFICIENT_DATA`,
+              );
+              continue;
+            }
+
+            results.push({
+              aspect: aspectData.aspect,
+              title: sectionInfo.title,
+              content,
+              statementCount: aspectData.statements.length,
+              episodeCount: aspectData.episodes.length,
+            });
+          }
+        }
+
+        return results;
+      })(),
+    );
+  }
+
+  // Wait for all tasks to complete in parallel
+  const allResults = await Promise.all(parallelTasks);
+  for (const result of allResults) {
+    sections.push(...result);
   }
 
   return sections;
@@ -839,17 +871,10 @@ function combineIntoPersonaDocument(
   sections: PersonaSectionResult[],
   userContext: UserContext,
 ): string {
-  // Sort sections by a logical order (Event, Relationship excluded - query graph when needed)
   const sectionOrder: StatementAspect[] = [
     "Identity",
-    "Knowledge",
-    "Belief",
     "Preference",
-    "Action",
-    "Goal",
     "Directive",
-    "Decision",
-    "Problem",
   ];
 
   const sortedSections = sections.sort((a, b) => {

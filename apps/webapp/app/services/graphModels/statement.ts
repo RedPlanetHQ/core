@@ -1,5 +1,6 @@
 import {
   type StatementNode,
+  type StatementAspect,
   type Triple,
 } from "@core/types";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
@@ -332,4 +333,31 @@ export async function deleteStatements(
 
 export async function getEpisodeIdsForStatements(statementUuids: string[], userId?: string, workspaceId?: string): Promise<Map<string, string>> {
   return getGraphProvider().getEpisodeIdsForStatements(statementUuids, userId, workspaceId);
+}
+
+/**
+ * Get valid statements for an episode filtered by aspects.
+ * Used to check if an episode produced persona-relevant statements (Identity, Preference, Directive).
+ */
+export async function getStatementsForEpisodeByAspects(
+  episodeUuid: string,
+  aspects: StatementAspect[],
+): Promise<Omit<StatementNode, "factEmbedding">[]> {
+  const query = `
+    MATCH (e:Episode {uuid: $episodeUuid})-[:HAS_PROVENANCE]->(s:Statement)
+    WHERE s.invalidAt IS NULL
+      AND s.aspect IN $aspects
+    RETURN s
+  `;
+
+  const results = await getGraphProvider().runQuery(query, {
+    episodeUuid,
+    aspects,
+  });
+
+  return results.map((record) => {
+    const node = record.get("s").properties;
+    const { factEmbedding, ...rest } = parseStatementNode(node);
+    return rest;
+  });
 }

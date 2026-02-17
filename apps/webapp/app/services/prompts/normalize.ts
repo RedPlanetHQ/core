@@ -70,6 +70,10 @@ When user dismisses or rejects an assistant's task/suggestion (e.g., "ignore", "
      * "I avoid creating files" → "John avoids creating new files unless necessary"
      * "My manager is Alex" → "Mike is managed by Alex"
      * "I prefer X, Y, and avoid Z" → "John prefers X. John prefers Y. John avoids Z."
+   - IMPORTANT: When the user describes a product, project, or system, keep the product/project as the subject — NOT the user. Only use the user's name for personal statements (identity, preferences, goals, decisions, habits).
+     * "We use Redis for caching" → "The system uses Redis for caching" (NOT "Sarah says the system uses Redis")
+     * "The search pipeline supports vector queries" → keep as-is (NOT "Mike stated the search pipeline supports vector queries")
+     * "Authentication is handled via OAuth 2.0" → keep as-is (NOT "Tom said authentication is handled via OAuth 2.0")
 7. VISUAL CONTENT - Capture exact text on signs, objects shown, specific details from images
 8. EMOTIONAL PRESERVATION - Maintain tone and feeling of emotional exchanges
 9. TECHNICAL CONTENT - Preserve commands, paths, version numbers, configurations, procedures

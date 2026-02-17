@@ -11,14 +11,16 @@ import {
   type BatchResponse,
 } from "../types";
 import { logger } from "~/services/logger.service";
-import { getModelForTask } from "~/lib/model.server";
+import { getModelForBatch } from "~/lib/model.server";
 
 export class OpenAIBatchProvider extends BaseBatchProvider {
   providerName = "openai";
   supportedModels = [
-    "gpt-4.1-2025-04-14",
-    "gpt-5-mini-2025-08-07",
+    "gpt-5.2-2025-12-11",
+    "gpt-5.1-2025-11-13",
     "gpt-5-2025-08-07",
+    "gpt-5-mini-2025-08-07",
+    "gpt-4.1-2025-04-14",
     "gpt-4.1-mini-2025-04-14",
     "gpt-4.1-nano-2025-04-14",
     "gpt-4o*",
@@ -41,7 +43,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
     try {
       this.validateRequests(params.requests);
 
-      const model = getModelForTask(params.modelComplexity || "high");
+      const model = getModelForBatch();
       // Convert requests to OpenAI batch format
       const batchRequests = params.requests.map((request, index) => ({
         custom_id: request.customId,

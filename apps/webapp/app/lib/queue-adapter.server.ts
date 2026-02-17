@@ -143,6 +143,7 @@ export async function enqueueSessionCompaction(
 export async function enqueuePersonaGeneration(payload: {
   userId: string;
   workspaceId: string;
+  episodeUuid?: string;
 }): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
