@@ -31,7 +31,6 @@ export default function LabelsIndex() {
   const { labels } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
-  console.log(labels)
 
   return (
     <div className="flex h-full flex-col">

@@ -77,7 +77,7 @@ const Tool = ({
   const textPart = textParts.map((t: any) => t.text).filter(Boolean).join("\n");
 
   const handleApprove = () => {
-    console.log("asdfasdf")
+
     if (addToolApprovalResponse && (part as any)?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: (part as any)?.approval?.id, approved: true });
       setIsOpen(false);
@@ -85,8 +85,6 @@ const Tool = ({
   };
 
   const handleReject = () => {
-
-    console.log("reasdfasdf")
 
     if (addToolApprovalResponse && (part as any)?.approval?.id && !isDisabled) {
       addToolApprovalResponse({ id: (part as any)?.approval?.id, approved: false });
@@ -220,7 +218,7 @@ const ConversationItemComponent = ({
   const textPart = message.parts.find((part) => part.type === "text");
   const [showAllTools, setShowAllTools] = useState(false);
 
-  console.log(message)
+
   const editor = useEditor({
     extensions: [...extensionsForConversation, skillExtension],
     editable: false,
@@ -275,7 +273,7 @@ const ConversationItemComponent = ({
   const handleToolApproval = (params: { id: string; approved: boolean }) => {
     addToolApprovalResponse(params);
 
-    console.log(params)
+
     // If rejected, auto-reject all subsequent tools that need approval
     if (!params.approved) {
       // Find all tools in the message (including nested sub-agents)

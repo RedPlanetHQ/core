@@ -98,17 +98,44 @@ export function canCreateSession(): {allowed: boolean; count: number} {
 
 // ============ Installation ============
 
-export async function isAgentBrowserInstalled(): Promise<boolean> {
+/**
+ * Get the agent-browser binary path (cross-platform)
+ */
+function getAgentBrowserPath(): string | null {
 	try {
-		execSync('which agent-browser', {stdio: 'pipe'});
-		return true;
+		const command = process.platform === 'win32' ? 'where agent-browser' : 'which agent-browser';
+		const result = execSync(command, {stdio: 'pipe', encoding: 'utf-8'});
+		const path = result.trim().split('\n')[0]; // Take first result on Windows (where can return multiple)
+		return path || null;
 	} catch {
-		return false;
+		return null;
 	}
 }
 
+// Cache the binary path
+let cachedBinaryPath: string | null | undefined;
+
+function getBinaryPath(): string | null {
+	if (cachedBinaryPath === undefined) {
+		cachedBinaryPath = getAgentBrowserPath();
+	}
+	return cachedBinaryPath;
+}
+
+// Clear cache (useful after installation)
+export function clearBinaryPathCache(): void {
+	cachedBinaryPath = undefined;
+}
+
+export async function isAgentBrowserInstalled(): Promise<boolean> {
+	return getBinaryPath() !== null;
+}
+
 export async function installAgentBrowser(): Promise<CommandResult> {
-	return runNpmCommand(['install', '-g', 'agent-browser']);
+	const result = await runNpmCommand(['install', '-g', 'agent-browser']);
+	// Clear cache so next check finds the newly installed binary
+	clearBinaryPathCache();
+	return result;
 }
 
 function runNpmCommand(args: string[]): Promise<CommandResult> {
@@ -145,16 +172,21 @@ async function runAgentBrowserCommand(
 	sessionName: string,
 	args: string[],
 ): Promise<CommandResult> {
+	const binaryPath = getBinaryPath();
+	if (!binaryPath) {
+		return {
+			stdout: '',
+			stderr: 'agent-browser not found. Run: npm install -g agent-browser',
+			code: 1,
+		};
+	}
+
 	return new Promise(resolve => {
 		const fullArgs = [...args, '--session', sessionName];
-		const proc = spawn(
-			'/Users/harshithmullapudi/.nvm/versions/node/v20.18.3/lib/node_modules/agent-browser/bin/agent-browser-darwin-arm64',
-			fullArgs,
-			{
-				cwd: COREBRAIN_DIR,
-				stdio: ['pipe', 'pipe', 'pipe'],
-			},
-		);
+		const proc = spawn(binaryPath, fullArgs, {
+			cwd: COREBRAIN_DIR,
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
 
 		let stdout = '';
 		let stderr = '';

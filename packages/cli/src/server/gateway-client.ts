@@ -118,8 +118,7 @@ export class GatewayClient {
 	 * Build the WebSocket URL from config
 	 */
 	private buildWsUrl(): string {
-		// let baseUrl = this.config.url;
-		let baseUrl = `http://localhost:3033`;
+		let baseUrl = this.config.url;
 
 		// Convert http(s) to ws(s)
 		if (baseUrl.startsWith('https://')) {
@@ -134,7 +133,7 @@ export class GatewayClient {
 		}
 
 		return `${baseUrl}/gateway/ws?token=${encodeURIComponent(
-			'rc_pat_is6m8b8meuz9b98kyoq5qjv75371cmzqgizbdese',
+			this.config.apiKey,
 		)}`;
 	}
 
@@ -253,14 +252,18 @@ export class GatewayClient {
 					}
 
 					if (result.success) {
-						this.log(`TOOL_RESULT: ${toolCall.tool} (id: ${toolCall.id}) - success`);
+						this.log(
+							`TOOL_RESULT: ${toolCall.tool} (id: ${toolCall.id}) - success`,
+						);
 						this.send({
 							type: 'tool_result',
 							id: toolCall.id,
 							result: result.result,
 						});
 					} else {
-						this.log(`TOOL_ERROR: ${toolCall.tool} (id: ${toolCall.id}) - ${result.error}`);
+						this.log(
+							`TOOL_ERROR: ${toolCall.tool} (id: ${toolCall.id}) - ${result.error}`,
+						);
 						this.send({
 							type: 'tool_result',
 							id: toolCall.id,
@@ -268,8 +271,11 @@ export class GatewayClient {
 						});
 					}
 				} catch (err) {
-					const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-					this.log(`TOOL_EXCEPTION: ${toolCall.tool} (id: ${toolCall.id}) - ${errorMessage}`);
+					const errorMessage =
+						err instanceof Error ? err.message : 'Unknown error';
+					this.log(
+						`TOOL_EXCEPTION: ${toolCall.tool} (id: ${toolCall.id}) - ${errorMessage}`,
+					);
 					this.send({
 						type: 'tool_result',
 						id: toolCall.id,
@@ -281,7 +287,9 @@ export class GatewayClient {
 
 			case 'error': {
 				const errorMsg = message as unknown as ErrorMessage;
-				this.log(`ERROR: Gateway error: ${errorMsg.message} (${errorMsg.code})`);
+				this.log(
+					`ERROR: Gateway error: ${errorMsg.message} (${errorMsg.code})`,
+				);
 				break;
 			}
 
@@ -330,9 +338,7 @@ export class GatewayClient {
 				this.connect();
 			}, delay);
 		} else if (this.reconnectAttempts >= this.maxReconnectAttempts) {
-			this.log(
-				'Max reconnection attempts reached. Shutting down gateway.',
-			);
+			this.log('Max reconnection attempts reached. Shutting down gateway.');
 			this.config.onMaxReconnectReached?.();
 		}
 	}

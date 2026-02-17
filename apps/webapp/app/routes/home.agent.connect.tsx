@@ -192,7 +192,7 @@ function EmailModal({
           <div className="bg-gray-300 rounded-lg p-4">
             <p className="mb-1 text-sm font-medium">Email Address</p>
             <code className="text-primary text-lg font-semibold">
-              brain@getcore.dev
+              brain@getcore.me
             </code>
           </div>
 
