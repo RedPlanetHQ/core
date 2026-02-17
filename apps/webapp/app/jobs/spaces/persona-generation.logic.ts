@@ -4,10 +4,12 @@ import { type z } from "zod";
 import { prisma } from "~/trigger/utils/prisma";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
-import { type ModelMessage } from "ai";
 
 // Import aspect-based persona generation
-import { generateAspectBasedPersona, generateIncrementalPersona } from "./aspect-persona-generation";
+import {
+  generateAspectBasedPersona,
+  generateIncrementalPersona,
+} from "./aspect-persona-generation";
 import { savePersonaDocument } from "./utils";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 
@@ -95,7 +97,11 @@ export async function processPersonaGeneration(
   });
 
   // Check threshold first - early return if not met
-  const thresholdCheck = await checkPersonaUpdateThreshold(userId, workspaceId, episodeUuid);
+  const thresholdCheck = await checkPersonaUpdateThreshold(
+    userId,
+    workspaceId,
+    episodeUuid,
+  );
 
   if (!thresholdCheck.shouldGenerate) {
     logger.info("Persona generation skipped - threshold not met", {
@@ -150,11 +156,21 @@ export async function processPersonaGeneration(
 
       if (!existingPersona) {
         // Fallback to full if no existing doc found
-        logger.info("No existing persona doc found, falling back to full generation", { userId });
+        logger.info(
+          "No existing persona doc found, falling back to full generation",
+          { userId },
+        );
         summary = await generateAspectBasedPersona(userId);
       } else {
-        logger.info("Running incremental persona generation", { userId, episodeUuid });
-        summary = await generateIncrementalPersona(userId, episodeUuid, existingPersona);
+        logger.info("Running incremental persona generation", {
+          userId,
+          episodeUuid,
+        });
+        summary = await generateIncrementalPersona(
+          userId,
+          episodeUuid,
+          existingPersona,
+        );
       }
     }
 

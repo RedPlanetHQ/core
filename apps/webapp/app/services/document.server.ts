@@ -1,6 +1,7 @@
 import { type Document } from "@prisma/client";
-import { prisma } from "~/db.server";
+
 import { addToQueue } from "~/lib/ingest.server";
+import { prisma } from "~/trigger/utils/prisma";
 
 interface DocumentUpdateParams {
   labelIds?: string[];
