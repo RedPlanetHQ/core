@@ -113,6 +113,7 @@ const { loader, action } = createHybridActionApiRoute(
       .join("\n");
 
     let finalMessages = messages;
+    const message = body.message?.parts[0].text;
 
     if (!isAssistantApproval) {
       const message = body.message?.parts[0].text;
@@ -243,17 +244,17 @@ const { loader, action } = createHybridActionApiRoute(
           if (textParts && textParts.length > 0) {
             const messageText = textParts.join("\n");
 
-            // await addToQueue(
-            //   {
-            //     episodeBody: `<user>${message}</user><assistant>${messageText}</assistant>`,
-            //     source: "core",
-            //     referenceTime: new Date().toISOString(),
-            //     type: EpisodeType.CONVERSATION,
-            //     sessionId: body.id,
-            //   },
-            //   authentication.userId,
-            //   authentication.workspaceId || ""
-            // );
+            await addToQueue(
+              {
+                episodeBody: `<user>${message}</user><assistant>${messageText}</assistant>`,
+                source: "core",
+                referenceTime: new Date().toISOString(),
+                type: EpisodeType.CONVERSATION,
+                sessionId: body.id,
+              },
+              authentication.userId,
+              authentication.workspaceId || ""
+            );
           }
         }
       },
