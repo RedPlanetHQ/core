@@ -473,19 +473,12 @@ async function runInteractiveConfig() {
 }
 
 async function runConfig(opts: zod.infer<typeof options>) {
-	// Check if any direct options are provided
-	const hasDirectOptions =
-		opts.name !== undefined ||
-		opts.description !== undefined ||
-		opts.coding !== undefined ||
-		opts.browser !== undefined ||
-		opts.exec !== undefined ||
-		opts.show;
-
-	if (hasDirectOptions) {
+	// Only show config if --show flag is explicitly passed
+	if (opts.show) {
 		return runDirectUpdate(opts);
 	}
 
+	// Otherwise always run interactive config
 	return runInteractiveConfig();
 }
 
