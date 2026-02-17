@@ -84,6 +84,7 @@ export interface GatewayConfig {
 	id?: string; // Generated gateway ID
 	name?: string; // Gateway name
 	description?: string; // Gateway description/role for meta-agent selection
+	url?: string; // App URL (default: https://app.getcore.me)
 	port?: number;
 	pid: number;
 	startedAt: number;

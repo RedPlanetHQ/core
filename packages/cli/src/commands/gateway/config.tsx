@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
 import { getPreferences, updatePreferences } from '@/config/preferences';
+import { getConfig } from '@/config/index';
 import {
 	getServiceType,
 	getServiceName,
@@ -27,6 +28,8 @@ import type { GatewayConfig, GatewaySlots } from '@/types/config';
 import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
 
 const execAsync = promisify(exec);
+
+const DEFAULT_APP_URL = 'https://app.getcore.me';
 
 export const options = zod.object({
 	// Direct set options (non-interactive)
@@ -109,6 +112,7 @@ function formatConfig(config: GatewayConfig | undefined): string {
 	return [
 		`${chalk.bold('Name:')} ${config.name || chalk.dim('(not set)')}`,
 		`${chalk.bold('Description:')} ${config.description || chalk.dim('(none)')}`,
+		`${chalk.bold('URL:')} ${config.url || DEFAULT_APP_URL}`,
 		`${chalk.bold('Coding:')} ${config.slots?.coding?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
 		`${chalk.bold('Browser:')} ${config.slots?.browser?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
 		`${chalk.bold('Exec:')} ${config.slots?.exec?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
@@ -126,12 +130,15 @@ async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ succe
 		return { success: true };
 	}
 
-	if (!existingConfig?.id) {
-		p.log.error('Gateway not configured. Run `corebrain gateway config` without flags first.');
-		return { success: false, error: 'Not configured' };
-	}
+	// Generate id if not exists
+	const gatewayId = existingConfig?.id || randomUUID();
 
-	const newConfig: GatewayConfig = { ...existingConfig };
+	const newConfig: GatewayConfig = {
+		...existingConfig,
+		id: gatewayId,
+		pid: existingConfig?.pid || 0,
+		startedAt: existingConfig?.startedAt || 0,
+	};
 
 	if (opts.name !== undefined) {
 		newConfig.name = opts.name;
@@ -141,7 +148,7 @@ async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ succe
 	}
 
 	// Update slots
-	const slots: GatewaySlots = { ...existingConfig.slots };
+	const slots: GatewaySlots = { ...existingConfig?.slots };
 	if (opts.coding !== undefined) {
 		slots.coding = { ...slots.coding, enabled: opts.coding };
 	}
@@ -244,7 +251,7 @@ async function runInteractiveConfig() {
 		codingEnabled = enableCoding;
 	}
 
-	// Step 4: Browser slot
+	// Step 5: Browser slot
 	const browserSpinner = p.spinner();
 	browserSpinner.start('Checking for agent-browser...');
 	let browserInstalled = await isAgentBrowserInstalled();
@@ -303,7 +310,7 @@ async function runInteractiveConfig() {
 		browserEnabled = enableBrowser;
 	}
 
-	// Step 5: Exec slot
+	// Step 6: Exec slot
 	const enableExec = await p.confirm({
 		message: 'Enable exec tools? (run shell commands)',
 		initialValue: existingConfig?.slots?.exec?.enabled ?? false,
@@ -367,11 +374,16 @@ async function runInteractiveConfig() {
 		},
 	};
 
+	// Get URL from auth config (set during login)
+	const appConfig = getConfig();
+	const authUrl = appConfig.auth?.url || DEFAULT_APP_URL;
+
 	const newConfig: GatewayConfig = {
 		...prefs.gateway,
 		id: gatewayId,
 		name: name as string,
 		description: (description as string) || '',
+		url: authUrl,
 		port: prefs.gateway?.port || 0,
 		pid: prefs.gateway?.pid || 0,
 		startedAt: prefs.gateway?.startedAt || 0,
@@ -488,12 +500,12 @@ export default function GatewayConfigCommand({ options: opts }: Props) {
 		runConfig(opts)
 			.then((result) => {
 				if (mounted) {
-					if (result.cancelled) {
+					if ('cancelled' in result && result.cancelled) {
 						setStatus('done');
-					} else if (result.success) {
+					} else if ('success' in result && result.success) {
 						setStatus('done');
 					} else {
-						setError(result.error || 'Unknown error');
+						setError(('error' in result && result.error) || 'Unknown error');
 						setStatus('error');
 					}
 				}

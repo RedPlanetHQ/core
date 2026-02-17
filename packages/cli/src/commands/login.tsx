@@ -7,7 +7,7 @@ import { exec } from 'node:child_process';
 import { CoreClient } from '@redplanethq/sdk';
 import { getConfig, updateConfig } from '@/config/index';
 
-const BASE_URL = 'https://app.getcore.me';
+const DEFAULT_URL = 'https://app.getcore.me';
 const POLL_INTERVAL_MS = 2000;
 const POLL_TIMEOUT_MS = 300_000; // 5 minutes
 
@@ -35,15 +35,30 @@ type Props = {
 async function runLogin(): Promise<{ success: boolean; error?: string }> {
 	p.intro(chalk.bgCyan(chalk.black(' Login ')));
 
+	const config = getConfig();
+
+	// Step 1: Ask for host URL first
+	const hostUrl = await p.text({
+		message: 'Host URL',
+		placeholder: DEFAULT_URL,
+		initialValue: config.auth?.url || DEFAULT_URL,
+	});
+
+	if (p.isCancel(hostUrl)) {
+		p.cancel('Login cancelled');
+		return { success: false, error: 'Cancelled' };
+	}
+
+	const baseUrl = (hostUrl as string) || DEFAULT_URL;
+
 	const spinner = p.spinner();
 
-	// Step 1: Check if already authenticated
+	// Step 2: Check if already authenticated
 	spinner.start('Checking existing authentication...');
-	const config = getConfig();
-	if (config.auth?.apiKey) {
+	if (config.auth?.apiKey && config.auth?.url === baseUrl) {
 		try {
 			const client = new CoreClient({
-				baseUrl: config.auth.url || BASE_URL,
+				baseUrl,
 				token: config.auth.apiKey,
 			});
 			await client.checkAuth();
@@ -55,9 +70,9 @@ async function runLogin(): Promise<{ success: boolean; error?: string }> {
 		}
 	}
 
-	// Step 2: Request authorization code
+	// Step 3: Request authorization code
 	spinner.message('Requesting authorization code...');
-	const client = new CoreClient({ baseUrl: BASE_URL, token: '' });
+	const client = new CoreClient({ baseUrl, token: '' });
 	let authCode = '';
 	let verifyUrl = '';
 	try {
@@ -66,7 +81,7 @@ async function runLogin(): Promise<{ success: boolean; error?: string }> {
 		const base64Token = Buffer.from(
 			JSON.stringify({ authorizationCode: authCode, source: 'core-cli', clientName: 'core-cli' })
 		).toString('base64');
-		verifyUrl = `${BASE_URL}/agent/verify/${base64Token}?source=core-cli`;
+		verifyUrl = `${baseUrl}/agent/verify/${base64Token}?source=core-cli`;
 	} catch (err) {
 		spinner.stop(chalk.red('Failed to get authorization code'));
 		return {
@@ -100,7 +115,7 @@ async function runLogin(): Promise<{ success: boolean; error?: string }> {
 				const pat = tokenRes.token.token!;
 				updateConfig({
 					auth: {
-						url: BASE_URL,
+						url: baseUrl,
 						apiKey: pat,
 					},
 				});

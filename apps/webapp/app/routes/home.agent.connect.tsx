@@ -248,7 +248,7 @@ export default function Connect() {
         {/* Direct Section */}
         <div className="space-y-3">
           <div>
-            <h2 className="text-lg font-semibold">Direct</h2>
+            <h2 className="text-lg font-semibold">Messaging channels</h2>
             <p className="text-muted-foreground text-sm">
               Chat naturally with Core's Meta Agent through your preferred
               communication channel. Your agent has access to memory, toolkit
@@ -279,8 +279,8 @@ export default function Connect() {
           <div>
             <h2 className="text-lg font-semibold">AI Tools</h2>
             <p className="text-muted-foreground text-sm">
-              Connect Core's memory to your favorite AI coding assistants and
-              tools via MCP.
+              For AI Tools can you write this
+              Give any AI tool two superpowers: persistent memory across sessions and actions in your apps (GitHub, Slack, Linear, Gmail, and more). Connect once and every tool shares the same brain via MCP
             </p>
           </div>
 
