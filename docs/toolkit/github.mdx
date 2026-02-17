@@ -3,15 +3,15 @@ title: "GitHub"
 description: "Comprehensive repository management, issue tracking, and CI/CD automation for your GitHub workflows"
 ---
 
-### Overview
+## Overview
 
 Integrate GitHub to manage repositories, issues, pull requests, and automate development workflows directly from CORE. Access 60+ tools for complete GitHub operations without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **GitHub** card
@@ -20,237 +20,7 @@ Integrate GitHub to manage repositories, issues, pull requests, and automate dev
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `repo` - Repository access (read/write)
-- `repo:status` - Commit status access
-- `repo_deployment` - Deployment status access
-- `public_repo` - Public repository access
-- `repo:invite` - Repository invitations
-- `security_events` - Security events access
-- `write:repo_hook` - Repository webhooks
-- `read:repo_hook` - Read repository webhooks
-- `admin:org` - Organization administration
-- `write:org` - Organization membership
-- `read:org` - Read organization data
-- `admin:public_key` - Public key administration
-- `write:public_key` - Public key write access
-- `read:public_key` - Public key read access
-- `admin:org_hook` - Organization webhooks
-- `gist` - Gist access
-- `notifications` - Notifications access
-- `user` - User profile access
-- `read:user` - Read user profile
-- `user:email` - User email access
-- `user:follow` - Follow/unfollow users
-- `delete_repo` - Delete repositories
-- `write:discussion` - Discussions write access
-- `read:discussion` - Discussions read access
-- `write:packages` - Packages write access
-- `read:packages` - Packages read access
-- `delete:packages` - Delete packages
-- `admin:gpg_key` - GPG key administration
-- `write:gpg_key` - GPG key write access
-- `read:gpg_key` - GPG key read access
-- `workflow` - Workflow access
-
-### Available MCP Tools
-
-The GitHub integration provides 60+ tools for comprehensive repository management:
-
-
-<Tabs>
-  <Tab title="Repository Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_repo` | Get details of a specific repository |
-| `list_repos` | List repositories for the authenticated user |
-| `create_repository` | Create a new repository |
-| `fork_repository` | Fork an existing repository |
-| `search_repositories` | Search repositories across GitHub |
-</Tab>
-<Tab title="Issues">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_issues` | List issues in a repository with advanced filtering |
-| `get_issue` | Get details of a specific issue |
-| `create_issue` | Create a new issue |
-| `update_issue` | Update an existing issue |
-| `search_issues` | Search for issues and pull requests |
-| `list_issue_comments` | List comments on an issue |
-| `create_issue_comment` | Create a comment on an issue |
-| `update_issue_comment` | Update an existing issue comment |
-| `delete_issue_comment` | Delete an issue comment |
-</Tab>
-<Tab title="Pull Requests">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_pull_requests` | List pull requests in a repository |
-| `get_pull_request` | Get details of a specific pull request |
-| `create_pull_request` | Create a new pull request |
-| `update_pull_request` | Update an existing pull request |
-| `merge_pull_request` | Merge a pull request |
-| `list_pr_reviews` | List reviews on a pull request |
-| `create_pr_review` | Create a review on a pull request |
-| `list_pr_comments` | List review comments on a pull request |
-| `create_pr_comment` | Create a review comment on a pull request |
-</Tab>
-<Tab title="Files & Content">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_file_content` | Get the content of a file from a repository |
-| `create_or_update_file` | Create or update a file in a repository |
-| `delete_file` | Delete a file from a repository |
-| `push_files` | Push multiple files to repository |
-| `search_code` | Search for code across GitHub repositories |
-</Tab>
-<Tab title="Projects">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_projects` | List projects for a repository or organization |
-| `create_project` | Create a new project |
-| `update_project` | Update an existing project |
-| `delete_project` | Delete a project |
-</Tab>
-<Tab title="Milestones">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_milestones` | List milestones in a repository |
-| `get_milestone` | Get details of a specific milestone |
-| `create_milestone` | Create a new milestone |
-| `update_milestone` | Update an existing milestone |
-| `delete_milestone` | Delete a milestone |
-</Tab>
-<Tab title="Notifications">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_notifications` | List notifications for the authenticated user |
-| `mark_notification_read` | Mark a notification as read |
-| `mark_all_notifications_read` | Mark all notifications as read |
-</Tab>
-<Tab title="Labels">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_labels` | List labels in a repository |
-| `create_label` | Create a new label |
-| `update_label` | Update an existing label |
-| `delete_label` | Delete a label |
-</Tab>
-<Tab title="Branches & Commits">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_branches` | List branches in a repository |
-| `create_branch` | Create a new branch |
-| `list_commits` | List commits in a repository |
-| `get_commit` | Get commit details |
-</Tab>
-<Tab title="Tags & Releases">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_tags` | List tags in a repository |
-| `get_tag` | Get tag details |
-| `list_releases` | List releases in a repository |
-| `get_latest_release` | Get the latest release |
-| `get_release_by_tag` | Get a release by tag name |
-</Tab>
-<Tab title="GitHub Actions">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_workflows` | List repository workflows |
-| `list_workflow_runs` | List workflow runs |
-| `get_workflow_run` | Get workflow run details |
-| `rerun_workflow` | Rerun a workflow |
-| `cancel_workflow_run` | Cancel a workflow run |
-| `trigger_workflow` | Trigger a workflow dispatch event |
-</Tab>
-<Tab title="Reactions">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_issue_reactions` | List reactions on an issue |
-| `add_issue_reaction` | Add reaction to an issue |
-| `add_comment_reaction` | Add reaction to a comment |
-| `delete_reaction` | Delete a reaction |
-</Tab>
-<Tab title="Gists">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_gists` | List your gists |
-| `get_gist` | Get a gist |
-| `create_gist` | Create a gist |
-| `update_gist` | Update a gist |
-| `delete_gist` | Delete a gist |
-</Tab>
-</Tabs>
-
-### Triggers
-
-GitHub triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Issues">
-
-| Event | Description |
-|-------|-------------|
-| `GITHUB_ISSUE_CREATED` | Triggered when a new issue is opened in the repository |
-| `GITHUB_ISSUE_UPDATED` | Triggered when an issue is edited or modified |
-| `GITHUB_ISSUE_CLOSED` | Triggered when an issue is closed |
-| `GITHUB_ISSUE_REOPENED` | Triggered when a closed issue is reopened |
-| `GITHUB_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
-| `GITHUB_ISSUE_LABELED` | Triggered when a label is added to an issue |
-</Tab>
-<Tab title="Pull Requests">
-
-| Event | Description |
-|-------|-------------|
-| `GITHUB_PR_CREATED` | Triggered when a new pull request is opened |
-| `GITHUB_PR_UPDATED` | Triggered when a pull request is edited |
-| `GITHUB_PR_MERGED` | Triggered when a pull request is merged |
-| `GITHUB_PR_CLOSED` | Triggered when a pull request is closed without merging |
-| `GITHUB_PR_REVIEW_REQUESTED` | Triggered when a review is requested on a PR |
-| `GITHUB_PR_REVIEWED` | Triggered when a review is submitted on a PR |
-</Tab>
-<Tab title="Commits & Branches">
-
-| Event | Description |
-|-------|-------------|
-| `GITHUB_PUSH` | Triggered when commits are pushed to a branch |
-| `GITHUB_BRANCH_CREATED` | Triggered when a new branch is created |
-| `GITHUB_BRANCH_DELETED` | Triggered when a branch is deleted |
-| `GITHUB_TAG_CREATED` | Triggered when a new tag is created |
-</Tab>
-<Tab title="Releases & Deployments">
-
-| Event | Description |
-|-------|-------------|
-| `GITHUB_RELEASE_PUBLISHED` | Triggered when a release is published |
-| `GITHUB_RELEASE_CREATED` | Triggered when a release draft is created |
-| `GITHUB_DEPLOYMENT_CREATED` | Triggered when a deployment is created |
-| `GITHUB_DEPLOYMENT_STATUS_UPDATED` | Triggered when deployment status changes |
-</Tab>
-<Tab title="Actions & Workflows">
-
-| Event | Description |
-|-------|-------------|
-| `GITHUB_WORKFLOW_RUN_COMPLETED` | Triggered when a workflow run completes |
-| `GITHUB_WORKFLOW_RUN_FAILED` | Triggered when a workflow run fails |
-| `GITHUB_CHECK_RUN_COMPLETED` | Triggered when a check run completes |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -462,6 +232,236 @@ With webhooks enabled, CORE monitors GitHub 24/7 and acts automatically based on
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `repo` - Repository access (read/write)
+- `repo:status` - Commit status access
+- `repo_deployment` - Deployment status access
+- `public_repo` - Public repository access
+- `repo:invite` - Repository invitations
+- `security_events` - Security events access
+- `write:repo_hook` - Repository webhooks
+- `read:repo_hook` - Read repository webhooks
+- `admin:org` - Organization administration
+- `write:org` - Organization membership
+- `read:org` - Read organization data
+- `admin:public_key` - Public key administration
+- `write:public_key` - Public key write access
+- `read:public_key` - Public key read access
+- `admin:org_hook` - Organization webhooks
+- `gist` - Gist access
+- `notifications` - Notifications access
+- `user` - User profile access
+- `read:user` - Read user profile
+- `user:email` - User email access
+- `user:follow` - Follow/unfollow users
+- `delete_repo` - Delete repositories
+- `write:discussion` - Discussions write access
+- `read:discussion` - Discussions read access
+- `write:packages` - Packages write access
+- `read:packages` - Packages read access
+- `delete:packages` - Delete packages
+- `admin:gpg_key` - GPG key administration
+- `write:gpg_key` - GPG key write access
+- `read:gpg_key` - GPG key read access
+- `workflow` - Workflow access
+
+## Available MCP Tools
+
+The GitHub integration provides 60+ tools for comprehensive repository management:
+
+
+<Tabs>
+  <Tab title="Repository Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_repo` | Get details of a specific repository |
+| `list_repos` | List repositories for the authenticated user |
+| `create_repository` | Create a new repository |
+| `fork_repository` | Fork an existing repository |
+| `search_repositories` | Search repositories across GitHub |
+</Tab>
+<Tab title="Issues">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_issues` | List issues in a repository with advanced filtering |
+| `get_issue` | Get details of a specific issue |
+| `create_issue` | Create a new issue |
+| `update_issue` | Update an existing issue |
+| `search_issues` | Search for issues and pull requests |
+| `list_issue_comments` | List comments on an issue |
+| `create_issue_comment` | Create a comment on an issue |
+| `update_issue_comment` | Update an existing issue comment |
+| `delete_issue_comment` | Delete an issue comment |
+</Tab>
+<Tab title="Pull Requests">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_pull_requests` | List pull requests in a repository |
+| `get_pull_request` | Get details of a specific pull request |
+| `create_pull_request` | Create a new pull request |
+| `update_pull_request` | Update an existing pull request |
+| `merge_pull_request` | Merge a pull request |
+| `list_pr_reviews` | List reviews on a pull request |
+| `create_pr_review` | Create a review on a pull request |
+| `list_pr_comments` | List review comments on a pull request |
+| `create_pr_comment` | Create a review comment on a pull request |
+</Tab>
+<Tab title="Files & Content">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_file_content` | Get the content of a file from a repository |
+| `create_or_update_file` | Create or update a file in a repository |
+| `delete_file` | Delete a file from a repository |
+| `push_files` | Push multiple files to repository |
+| `search_code` | Search for code across GitHub repositories |
+</Tab>
+<Tab title="Projects">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_projects` | List projects for a repository or organization |
+| `create_project` | Create a new project |
+| `update_project` | Update an existing project |
+| `delete_project` | Delete a project |
+</Tab>
+<Tab title="Milestones">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_milestones` | List milestones in a repository |
+| `get_milestone` | Get details of a specific milestone |
+| `create_milestone` | Create a new milestone |
+| `update_milestone` | Update an existing milestone |
+| `delete_milestone` | Delete a milestone |
+</Tab>
+<Tab title="Notifications">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_notifications` | List notifications for the authenticated user |
+| `mark_notification_read` | Mark a notification as read |
+| `mark_all_notifications_read` | Mark all notifications as read |
+</Tab>
+<Tab title="Labels">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_labels` | List labels in a repository |
+| `create_label` | Create a new label |
+| `update_label` | Update an existing label |
+| `delete_label` | Delete a label |
+</Tab>
+<Tab title="Branches & Commits">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_branches` | List branches in a repository |
+| `create_branch` | Create a new branch |
+| `list_commits` | List commits in a repository |
+| `get_commit` | Get commit details |
+</Tab>
+<Tab title="Tags & Releases">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_tags` | List tags in a repository |
+| `get_tag` | Get tag details |
+| `list_releases` | List releases in a repository |
+| `get_latest_release` | Get the latest release |
+| `get_release_by_tag` | Get a release by tag name |
+</Tab>
+<Tab title="GitHub Actions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_workflows` | List repository workflows |
+| `list_workflow_runs` | List workflow runs |
+| `get_workflow_run` | Get workflow run details |
+| `rerun_workflow` | Rerun a workflow |
+| `cancel_workflow_run` | Cancel a workflow run |
+| `trigger_workflow` | Trigger a workflow dispatch event |
+</Tab>
+<Tab title="Reactions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_issue_reactions` | List reactions on an issue |
+| `add_issue_reaction` | Add reaction to an issue |
+| `add_comment_reaction` | Add reaction to a comment |
+| `delete_reaction` | Delete a reaction |
+</Tab>
+<Tab title="Gists">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_gists` | List your gists |
+| `get_gist` | Get a gist |
+| `create_gist` | Create a gist |
+| `update_gist` | Update a gist |
+| `delete_gist` | Delete a gist |
+</Tab>
+</Tabs>
+
+## Triggers
+
+GitHub triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Issues">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_ISSUE_CREATED` | Triggered when a new issue is opened in the repository |
+| `GITHUB_ISSUE_UPDATED` | Triggered when an issue is edited or modified |
+| `GITHUB_ISSUE_CLOSED` | Triggered when an issue is closed |
+| `GITHUB_ISSUE_REOPENED` | Triggered when a closed issue is reopened |
+| `GITHUB_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
+| `GITHUB_ISSUE_LABELED` | Triggered when a label is added to an issue |
+</Tab>
+<Tab title="Pull Requests">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_PR_CREATED` | Triggered when a new pull request is opened |
+| `GITHUB_PR_UPDATED` | Triggered when a pull request is edited |
+| `GITHUB_PR_MERGED` | Triggered when a pull request is merged |
+| `GITHUB_PR_CLOSED` | Triggered when a pull request is closed without merging |
+| `GITHUB_PR_REVIEW_REQUESTED` | Triggered when a review is requested on a PR |
+| `GITHUB_PR_REVIEWED` | Triggered when a review is submitted on a PR |
+</Tab>
+<Tab title="Commits & Branches">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_PUSH` | Triggered when commits are pushed to a branch |
+| `GITHUB_BRANCH_CREATED` | Triggered when a new branch is created |
+| `GITHUB_BRANCH_DELETED` | Triggered when a branch is deleted |
+| `GITHUB_TAG_CREATED` | Triggered when a new tag is created |
+</Tab>
+<Tab title="Releases & Deployments">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_RELEASE_PUBLISHED` | Triggered when a release is published |
+| `GITHUB_RELEASE_CREATED` | Triggered when a release draft is created |
+| `GITHUB_DEPLOYMENT_CREATED` | Triggered when a deployment is created |
+| `GITHUB_DEPLOYMENT_STATUS_UPDATED` | Triggered when deployment status changes |
+</Tab>
+<Tab title="Actions & Workflows">
+
+| Event | Description |
+|-------|-------------|
+| `GITHUB_WORKFLOW_RUN_COMPLETED` | Triggered when a workflow run completes |
+| `GITHUB_WORKFLOW_RUN_FAILED` | Triggered when a workflow run fails |
+| `GITHUB_CHECK_RUN_COMPLETED` | Triggered when a check run completes |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

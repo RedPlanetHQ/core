@@ -3,15 +3,15 @@ title: "Todoist"
 description: "Personal and team task management with projects and priorities"
 ---
 
-### Overview
+## Overview
 
 Integrate Todoist to create, organize, and manage tasks with support for projects, priorities, and labels. Access 12 tools to manage your tasks and projects programmatically, with flexible scheduling and comprehensive organization features.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Todoist** card
@@ -20,68 +20,7 @@ Integrate Todoist to create, organize, and manage tasks with support for project
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `data:read_write` - Read and write access to tasks
-- `project:read_write` - Read and write access to projects
-- `data:delete` - Delete tasks and projects
-
-### Available MCP Tools
-
-The Todoist integration provides 12 tools for comprehensive task and project management:
-
-
-<Tabs>
-  <Tab title="Task Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_tasks` | Retrieves all active tasks, optionally filtered by project |
-| `get_task` | Retrieves a specific task by ID with full details including description, priority, and due date |
-| `create_task` | Creates a new task with optional metadata (description, project, due date, priority, labels) |
-| `update_task` | Updates an existing task with new information |
-| `close_task` | Marks a task as complete |
-| `reopen_task` | Reopens a completed task, marking it as active again |
-| `delete_task` | Permanently deletes a task |
-</Tab>
-<Tab title="Project Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_projects` | Retrieves all projects in your Todoist workspace |
-| `get_project` | Retrieves a specific project by ID with all details |
-| `create_project` | Creates a new project with optional color and favorite status |
-| `update_project` | Updates an existing project |
-| `delete_project` | Permanently deletes a project and all its tasks |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Todoist triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Tasks">
-
-| Event | Description |
-|-------|-------------|
-| `TODOIST_TASK_CREATED` | Triggered when a new task is created in any project |
-| `TODOIST_TASK_UPDATED` | Triggered when a task is modified (title, description, due date, priority, etc.) |
-| `TODOIST_TASK_COMPLETED` | Triggered when a task is marked as complete |
-| `TODOIST_TASK_REOPENED` | Triggered when a completed task is reopened |
-| `TODOIST_TASK_DELETED` | Triggered when a task is permanently deleted |
-</Tab>
-<Tab title="Projects">
-
-| Event | Description |
-|-------|-------------|
-| `TODOIST_PROJECT_CREATED` | Triggered when a new project is created |
-| `TODOIST_PROJECT_UPDATED` | Triggered when a project is modified |
-| `TODOIST_PROJECT_DELETED` | Triggered when a project is deleted |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -240,7 +179,68 @@ With webhooks enabled, CORE monitors Todoist 24/7 and acts automatically based o
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `data:read_write` - Read and write access to tasks
+- `project:read_write` - Read and write access to projects
+- `data:delete` - Delete tasks and projects
+
+## Available MCP Tools
+
+The Todoist integration provides 12 tools for comprehensive task and project management:
+
+
+<Tabs>
+  <Tab title="Task Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_tasks` | Retrieves all active tasks, optionally filtered by project |
+| `get_task` | Retrieves a specific task by ID with full details including description, priority, and due date |
+| `create_task` | Creates a new task with optional metadata (description, project, due date, priority, labels) |
+| `update_task` | Updates an existing task with new information |
+| `close_task` | Marks a task as complete |
+| `reopen_task` | Reopens a completed task, marking it as active again |
+| `delete_task` | Permanently deletes a task |
+</Tab>
+<Tab title="Project Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_projects` | Retrieves all projects in your Todoist workspace |
+| `get_project` | Retrieves a specific project by ID with all details |
+| `create_project` | Creates a new project with optional color and favorite status |
+| `update_project` | Updates an existing project |
+| `delete_project` | Permanently deletes a project and all its tasks |
+</Tab>
+</Tabs>
+
+## Triggers
+
+Todoist triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Tasks">
+
+| Event | Description |
+|-------|-------------|
+| `TODOIST_TASK_CREATED` | Triggered when a new task is created in any project |
+| `TODOIST_TASK_UPDATED` | Triggered when a task is modified (title, description, due date, priority, etc.) |
+| `TODOIST_TASK_COMPLETED` | Triggered when a task is marked as complete |
+| `TODOIST_TASK_REOPENED` | Triggered when a completed task is reopened |
+| `TODOIST_TASK_DELETED` | Triggered when a task is permanently deleted |
+</Tab>
+<Tab title="Projects">
+
+| Event | Description |
+|-------|-------------|
+| `TODOIST_PROJECT_CREATED` | Triggered when a new project is created |
+| `TODOIST_PROJECT_UPDATED` | Triggered when a project is modified |
+| `TODOIST_PROJECT_DELETED` | Triggered when a project is deleted |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
 

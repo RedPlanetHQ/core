@@ -3,15 +3,15 @@ title: "HubSpot"
 description: "Comprehensive CRM for contacts, companies, deals, and ticket management"
 ---
 
-### Overview
+## Overview
 
 Integrate HubSpot to manage your complete customer relationship management system directly from CORE. Access 20 tools for comprehensive CRM operations including contact management, company records, deal tracking, and support ticket handling without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **HubSpot** card
@@ -20,120 +20,7 @@ Integrate HubSpot to manage your complete customer relationship management syste
 5. Grant the required permissions to your HubSpot account
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `crm.objects.contacts.read` - Read contact information
-- `crm.objects.contacts.write` - Create and update contacts
-- `crm.objects.contacts.delete` - Delete contacts
-- `crm.objects.companies.read` - Read company information
-- `crm.objects.companies.write` - Create and update companies
-- `crm.objects.companies.delete` - Delete companies
-- `crm.objects.deals.read` - Read deal information
-- `crm.objects.deals.write` - Create and update deals
-- `crm.objects.deals.delete` - Delete deals
-- `crm.objects.tickets.read` - Read ticket information
-- `crm.objects.tickets.write` - Create and update tickets
-- `crm.objects.tickets.delete` - Delete tickets
-- `crm.objects.contacts.owned` - Access owned contacts
-
-### Available MCP Tools
-
-The HubSpot integration provides 20 tools for comprehensive CRM management:
-
-
-<Tabs>
-  <Tab title="Contact Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_contact` | Creates a new contact in HubSpot with email and optional details |
-| `get_contact` | Retrieves a contact by ID with all properties |
-| `update_contact` | Updates contact properties (name, phone, company, etc.) |
-| `search_contacts` | Searches for contacts using text query or advanced filters |
-| `delete_contact` | Deletes a contact permanently |
-</Tab>
-<Tab title="Company Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_company` | Creates a new company with name and optional details |
-| `get_company` | Retrieves a company by ID with all properties |
-| `update_company` | Updates company properties (domain, industry, size, etc.) |
-| `search_companies` | Searches for companies using text query or advanced filters |
-| `delete_company` | Deletes a company permanently |
-</Tab>
-<Tab title="Deal Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_deal` | Creates a new deal with name, stage, and optional amount |
-| `get_deal` | Retrieves a deal by ID with all properties |
-| `update_deal` | Updates deal properties (amount, stage, close date, etc.) |
-| `search_deals` | Searches for deals using text query or advanced filters |
-| `delete_deal` | Deletes a deal permanently |
-</Tab>
-<Tab title="Ticket Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_ticket` | Creates a new support ticket with subject and pipeline stage |
-| `get_ticket` | Retrieves a ticket by ID with all properties |
-| `update_ticket` | Updates ticket properties (status, priority, description, etc.) |
-| `search_tickets` | Searches for tickets using text query or advanced filters |
-| `delete_ticket` | Deletes a ticket permanently |
-</Tab>
-<Tab title="Object Associations">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `associate_objects` | Creates associations between contacts, companies, deals, and tickets |
-</Tab>
-</Tabs>
-
-### Triggers
-
-HubSpot triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Contacts">
-
-| Event | Description |
-|-------|-------------|
-| `HUBSPOT_CONTACT_CREATED` | Triggered when a new contact is created |
-| `HUBSPOT_CONTACT_UPDATED` | Triggered when contact properties are modified |
-| `HUBSPOT_CONTACT_DELETED` | Triggered when a contact is deleted |
-| `HUBSPOT_CONTACT_MERGED` | Triggered when contacts are merged together |
-</Tab>
-<Tab title="Companies">
-
-| Event | Description |
-|-------|-------------|
-| `HUBSPOT_COMPANY_CREATED` | Triggered when a new company is created |
-| `HUBSPOT_COMPANY_UPDATED` | Triggered when company properties are modified |
-| `HUBSPOT_COMPANY_DELETED` | Triggered when a company is deleted |
-</Tab>
-<Tab title="Deals">
-
-| Event | Description |
-|-------|-------------|
-| `HUBSPOT_DEAL_CREATED` | Triggered when a new deal is created |
-| `HUBSPOT_DEAL_UPDATED` | Triggered when deal properties are modified |
-| `HUBSPOT_DEAL_STAGE_CHANGED` | Triggered when a deal moves to a different pipeline stage |
-| `HUBSPOT_DEAL_CLOSED_WON` | Triggered when a deal is marked as closed won |
-| `HUBSPOT_DEAL_CLOSED_LOST` | Triggered when a deal is marked as closed lost |
-</Tab>
-<Tab title="Tickets">
-
-| Event | Description |
-|-------|-------------|
-| `HUBSPOT_TICKET_CREATED` | Triggered when a new support ticket is created |
-| `HUBSPOT_TICKET_UPDATED` | Triggered when ticket properties are modified |
-| `HUBSPOT_TICKET_STATUS_CHANGED` | Triggered when ticket status changes |
-| `HUBSPOT_TICKET_CLOSED` | Triggered when a ticket is closed |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -356,6 +243,119 @@ With webhooks enabled, CORE monitors HubSpot 24/7 and acts automatically based o
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `crm.objects.contacts.read` - Read contact information
+- `crm.objects.contacts.write` - Create and update contacts
+- `crm.objects.contacts.delete` - Delete contacts
+- `crm.objects.companies.read` - Read company information
+- `crm.objects.companies.write` - Create and update companies
+- `crm.objects.companies.delete` - Delete companies
+- `crm.objects.deals.read` - Read deal information
+- `crm.objects.deals.write` - Create and update deals
+- `crm.objects.deals.delete` - Delete deals
+- `crm.objects.tickets.read` - Read ticket information
+- `crm.objects.tickets.write` - Create and update tickets
+- `crm.objects.tickets.delete` - Delete tickets
+- `crm.objects.contacts.owned` - Access owned contacts
+
+## Available MCP Tools
+
+The HubSpot integration provides 20 tools for comprehensive CRM management:
+
+
+<Tabs>
+  <Tab title="Contact Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_contact` | Creates a new contact in HubSpot with email and optional details |
+| `get_contact` | Retrieves a contact by ID with all properties |
+| `update_contact` | Updates contact properties (name, phone, company, etc.) |
+| `search_contacts` | Searches for contacts using text query or advanced filters |
+| `delete_contact` | Deletes a contact permanently |
+</Tab>
+<Tab title="Company Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_company` | Creates a new company with name and optional details |
+| `get_company` | Retrieves a company by ID with all properties |
+| `update_company` | Updates company properties (domain, industry, size, etc.) |
+| `search_companies` | Searches for companies using text query or advanced filters |
+| `delete_company` | Deletes a company permanently |
+</Tab>
+<Tab title="Deal Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_deal` | Creates a new deal with name, stage, and optional amount |
+| `get_deal` | Retrieves a deal by ID with all properties |
+| `update_deal` | Updates deal properties (amount, stage, close date, etc.) |
+| `search_deals` | Searches for deals using text query or advanced filters |
+| `delete_deal` | Deletes a deal permanently |
+</Tab>
+<Tab title="Ticket Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_ticket` | Creates a new support ticket with subject and pipeline stage |
+| `get_ticket` | Retrieves a ticket by ID with all properties |
+| `update_ticket` | Updates ticket properties (status, priority, description, etc.) |
+| `search_tickets` | Searches for tickets using text query or advanced filters |
+| `delete_ticket` | Deletes a ticket permanently |
+</Tab>
+<Tab title="Object Associations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `associate_objects` | Creates associations between contacts, companies, deals, and tickets |
+</Tab>
+</Tabs>
+
+## Triggers
+
+HubSpot triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Contacts">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_CONTACT_CREATED` | Triggered when a new contact is created |
+| `HUBSPOT_CONTACT_UPDATED` | Triggered when contact properties are modified |
+| `HUBSPOT_CONTACT_DELETED` | Triggered when a contact is deleted |
+| `HUBSPOT_CONTACT_MERGED` | Triggered when contacts are merged together |
+</Tab>
+<Tab title="Companies">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_COMPANY_CREATED` | Triggered when a new company is created |
+| `HUBSPOT_COMPANY_UPDATED` | Triggered when company properties are modified |
+| `HUBSPOT_COMPANY_DELETED` | Triggered when a company is deleted |
+</Tab>
+<Tab title="Deals">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_DEAL_CREATED` | Triggered when a new deal is created |
+| `HUBSPOT_DEAL_UPDATED` | Triggered when deal properties are modified |
+| `HUBSPOT_DEAL_STAGE_CHANGED` | Triggered when a deal moves to a different pipeline stage |
+| `HUBSPOT_DEAL_CLOSED_WON` | Triggered when a deal is marked as closed won |
+| `HUBSPOT_DEAL_CLOSED_LOST` | Triggered when a deal is marked as closed lost |
+</Tab>
+<Tab title="Tickets">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_TICKET_CREATED` | Triggered when a new support ticket is created |
+| `HUBSPOT_TICKET_UPDATED` | Triggered when ticket properties are modified |
+| `HUBSPOT_TICKET_STATUS_CHANGED` | Triggered when ticket status changes |
+| `HUBSPOT_TICKET_CLOSED` | Triggered when a ticket is closed |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

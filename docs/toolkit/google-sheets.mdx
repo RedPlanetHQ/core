@@ -3,15 +3,15 @@ title: "Google Sheets"
 description: "Spreadsheet management and data manipulation"
 ---
 
-### Overview
+## Overview
 
 Integrate Google Sheets to manage spreadsheets, manipulate data, and automate reporting from CORE. Access 8 essential tools for complete spreadsheet management including data reading, writing, formatting, and batch operations without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0 (Google)
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Google Sheets** card
@@ -20,48 +20,7 @@ Integrate Google Sheets to manage spreadsheets, manipulate data, and automate re
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `https://www.googleapis.com/auth/spreadsheets` - Read and write access to spreadsheets
-- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
-
-### Available MCP Tools
-
-The Google Sheets integration provides 8 tools for comprehensive spreadsheet management:
-
-
-<Tabs>
-  <Tab title="Spreadsheet Discovery">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_spreadsheets` | Lists all Google Sheets spreadsheets in the user's Google Drive with metadata including creation and modification times |
-| `list_sheets` | Lists all sheets within a spreadsheet with metadata (sheetId, title, index, row count, column count). Does not include cell data. Use this to discover available sheets before fetching data. |
-</Tab>
-<Tab title="Data Reading">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `read_range` | Reads values from a specified range in a spreadsheet using A1 notation |
-</Tab>
-<Tab title="Data Writing">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `write_range` | Writes values to a specified range in a spreadsheet, overwriting existing data |
-| `write_to_cell` | Writes a single value to a specific cell in a spreadsheet |
-| `append_range` | Appends values to the next available row in a specified range. Perfect for adding new records without overwriting existing data. |
-</Tab>
-<Tab title="Spreadsheet Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_spreadsheet` | Creates a new spreadsheet with optional initial sheets |
-| `batch_update` | Performs batch updates for advanced operations like formatting, sorting, filtering, adding/removing sheets, and more |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Google Sheets tasks, it uses MCP tools to execute your requests:
 
@@ -136,10 +95,47 @@ When you ask CORE to perform Google Sheets tasks, it uses MCP tools to execute y
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `https://www.googleapis.com/auth/spreadsheets` - Read and write access to spreadsheets
+- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
+
+## Available MCP Tools
+
+The Google Sheets integration provides 8 tools for comprehensive spreadsheet management:
+
+
+<Tabs>
+  <Tab title="Spreadsheet Discovery">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_spreadsheets` | Lists all Google Sheets spreadsheets in the user's Google Drive with metadata including creation and modification times |
+| `list_sheets` | Lists all sheets within a spreadsheet with metadata (sheetId, title, index, row count, column count). Does not include cell data. Use this to discover available sheets before fetching data. |
+</Tab>
+<Tab title="Data Reading">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `read_range` | Reads values from a specified range in a spreadsheet using A1 notation |
+</Tab>
+<Tab title="Data Writing">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `write_range` | Writes values to a specified range in a spreadsheet, overwriting existing data |
+| `write_to_cell` | Writes a single value to a specific cell in a spreadsheet |
+| `append_range` | Appends values to the next available row in a specified range. Perfect for adding new records without overwriting existing data. |
+</Tab>
+<Tab title="Spreadsheet Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_spreadsheet` | Creates a new spreadsheet with optional initial sheets |
+| `batch_update` | Performs batch updates for advanced operations like formatting, sorting, filtering, adding/removing sheets, and more |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
-
-
-
----

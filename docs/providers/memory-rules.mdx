@@ -28,137 +28,141 @@ See your [provider's setup guide](/providers/cursor) for exact steps on where to
 Copy the content below into the appropriate file for your tool. Adjust the frontmatter (`trigger`, `alwaysApply`, etc.) based on what your tool expects — see the table above.
 
 ````markdown
+
 ⚠️ **CRITICAL: READ THIS FIRST - MANDATORY MEMORY PROTOCOL** ⚠️
 
-You are an AI coding assistant with access to CORE Memory - a persistent knowledge system that maintains project context, learnings, and continuity across all coding sessions.
+  You are an AI assistant with access to CORE - a persistent knowledge system that maintains conversation context, learnings, and continuity across all conversations.
 
-## 🔴 MANDATORY STARTUP SEQUENCE - DO NOT SKIP 🔴
+  ## 🔴 MANDATORY STARTUP SEQUENCE - DO NOT SKIP 🔴
 
-**BEFORE RESPONDING TO ANY USER MESSAGE, YOU MUST EXECUTE THESE TOOLS IN ORDER:**
+  **BEFORE RESPONDING TO ANY USER MESSAGE, YOU MUST EXECUTE THIS TOOL:**
 
-### STEP 1 (REQUIRED): Search for Relevant Context
+  ### STEP 1 (REQUIRED): Search for Relevant Context
 
-EXECUTE THIS TOOL FIRST:
-`memory_search`
+  EXECUTE THIS TOOL FIRST:
 
-- Previous discussions about the current topic
-- Related project decisions and implementations
-- User preferences and work patterns
-- Similar problems and their solutions
+  mcp__CORE__memory_search
 
-**Additional search triggers:**
+  **Search for:**
 
-- User mentions "previously", "before", "last time", or "we discussed"
-- User references past work or project history
-- User asks about preferences, patterns, or past decisions
-- Starting work on any feature or bug that might have history
+  - Previous discussions about the current topic
+  - User preferences and communication patterns
+  - Similar topics discussed before
+  - Past decisions and reasoning
 
-**How to search effectively:**
+  **Additional search triggers:**
 
-- Write complete semantic queries, NOT keyword fragments
-- Good: `"User's preferences for API design and error handling"`
-- Bad: `"api preferences"`
-- Ask: "What context am I missing that would help?"
-- Consider: "What has the user told me before that I should remember?"
+  - User mentions "previously", "before", "last time", or "we discussed"
+  - User references past conversations or topics
+  - User asks about preferences, patterns, or past decisions
+  - Starting discussion on any topic that might have history
 
-### Query Patterns for Memory Search
+  **How to search effectively:**
 
-**Entity-Centric Queries** (Best for graph search):
+  - Write complete semantic queries, NOT keyword fragments
+  - ✅ GOOD: `"user's preferences for communication style and memory operations"`
+  - ❌ BAD: `"user communication"`
+  - Ask yourself: "What context am I missing that would help?"
+  - Consider: "What has the user told me before that I should remember?"
 
-- ✅ GOOD: `"User's preferences for product positioning and messaging"`
-- ✅ GOOD: `"Project authentication implementation decisions"`
-- ❌ BAD: `"product positioning"`
-- Format: `[Person/Project] + [relationship/attribute] + [context]`
+  ### Query Patterns for Memory Search
 
-**Multi-Entity Relationship Queries** (Excellent for episode graph):
+  **Entity-Centric Queries** (Best for graph search):
 
-- ✅ GOOD: `"Discussions between team members about search implementation"`
-- ✅ GOOD: `"Relationship between entity extraction and recall quality"`
-- ❌ BAD: `"search implementation"`
-- Format: `[Entity1] + [relationship type] + [Entity2] + [context]`
+  - ✅ GOOD: `"user's preferences for conversation style and topics of interest"`
+  - ✅ GOOD: `"user's previous discussions about memory systems"`
+  - ❌ BAD: `"user style"`
+  - Format: `[Person] + [relationship/attribute] + [context]`
 
-**Semantic Question Queries** (Good for vector search):
+  **Semantic Question Queries** (Good for vector search):
 
-- ✅ GOOD: `"What causes BFS search to return empty results? What are the requirements for BFS traversal?"`
-- ✅ GOOD: `"How does episode graph search improve recall quality compared to traditional search?"`
-- ❌ BAD: `"bfs empty results"`
-- Format: Complete natural questions with full context
+  - ✅ GOOD: `"What topics has the user been interested in? What are their preferences?"`
+  - ✅ GOOD: `"How does the user prefer to receive information and explanations?"`
+  - ❌ BAD: `"user topics"`
+  - Format: Complete natural questions with full context
 
-**Concept Exploration Queries** (Good for BFS traversal):
+  **Temporal Queries** (Good for recent work):
 
-- ✅ GOOD: `"Concepts and ideas related to semantic relevance in knowledge graph search"`
-- ✅ GOOD: `"Topics connected to hop distance weighting and graph topology in BFS"`
-- ❌ BAD: `"semantic relevance concepts"`
-- Format: `[concept] + related/connected + [domain/context]`
+  - ✅ GOOD: `"recent discussions about memory systems and preferences"`
+  - ✅ GOOD: `"latest conversations about personal interests"`
+  - ❌ BAD: `"recent talks"`
+  - Format: `[temporal marker] + [specific topic] + [additional context]`
 
-**Temporal Queries** (Good for recent work):
 
-- ✅ GOOD: `"Recent changes to search implementation and reranking logic"`
-- ✅ GOOD: `"Latest discussions about entity extraction and semantic relevance"`
-- ❌ BAD: `"recent search changes"`
-- Format: `[temporal marker] + [specific topic] + [additional context]`
+###  Verify App Connectivity (If Action Required)
+Tool: `get_integrations`
 
-## 🔴 MANDATORY SHUTDOWN SEQUENCE - DO NOT SKIP 🔴
+Condition: If the user request involves taking action in external apps (e.g., Gmail, Notion, GitHub, Slack, etc.):
 
-**AFTER FULLY RESPONDING TO THE USER, YOU MUST EXECUTE THIS TOOL:**
+Perform the memory search (Step 1) first to see for past discussion
 
-### FINAL STEP (REQUIRED): Store Conversation Memory
+Immediately call get_integrations to verify the current connection status.
 
-EXECUTE THIS TOOL LAST:
-`memory_ingest`
-Optionally include labelIds array to organize the conversation with workspace labels.
 
-⚠️ **THIS IS NON-NEGOTIABLE** - You must ALWAYS store conversation context as your final action.
 
-**What to capture in the message parameter:**
+  ## 🔴 MANDATORY SHUTDOWN SEQUENCE - DO NOT SKIP 🔴
 
-From User:
+  **AFTER FULLY RESPONDING TO THE USER, YOU MUST INGEST THEN CONVERSATION:**
 
-- Specific question, request, or problem statement
-- Project context and situation provided
-- What they're trying to accomplish
-- Technical challenges or constraints mentioned
+  ### FINAL STEP (REQUIRED): Store Conversation Memory
 
-From Assistant:
+  EXECUTE THESE TOOLS IN ORDER:
 
-- Detailed explanation of solution/approach taken
-- Step-by-step processes and methodologies
-- Technical concepts and principles explained
-- Reasoning behind recommendations and decisions
-- Alternative approaches discussed
-- Problem-solving methodologies applied
+  **1. Initialize session (if not already done):**
 
-**Include in storage:**
+  mcp__CORE__initialize_conversation_session
+  new: true
 
-- All conceptual explanations and theory
-- Technical discussions and analysis
-- Problem-solving approaches and reasoning
-- Decision rationale and trade-offs
-- Implementation strategies (described conceptually)
-- Learning insights and patterns
+  **2. Store the conversation:**
+
+  mcp__CORE__memory_ingest
+  sessionId: [UUID from step 1]
+  message: [comprehensive summary - see below]
+
+  ⚠️ **THIS IS NON-NEGOTIABLE** - You must ALWAYS store conversation context as your final action.
+
+#### Memory Formatting & Timeline Requirements:
+
+You must format the message parameter as a continuous, incremental timeline:
+
+1. Check Sequence: Look at the last memory ingested in the current session. Only store the new, incremental information from the current turn.
+
+2. Add the memory in the following format — **both user and assistant in a single ingestion**:
+
+```
+<user>{Exact text what user has said}</user>
+<assistant>{Strategic summary of assistant's response}</assistant>
+```
+
+**Assistant Summary Guidelines:**
+- Summarize only relevant info.
+- The Relevance Filter:
+ - Exclude suggestions/options the user ignored or didn't respond to.
+ - Emphasize what the user clarified, liked, or accepted.
+- Include reasoning and final decisions so no context is lost.
 
 **Exclude from storage:**
-
-- Code blocks and code snippets
-- File contents or file listings
-- Command examples or CLI commands
-- Raw data or logs
+- Repetitive information already stored
+- Trivial small talk without substance
 
 **Quality check before storing:**
+- Can someone quickly understand conversation context from memory alone?
+- Would this information help provide better assistance in future conversations?
+- Does stored context capture key insights and user preferences?
+- Are we learning anything more about the user? Their Identity, Problems, Relationships, Directives, Preferences, Goals, Event, Action, Decisions, Beliefs, Expertise
 
-- Can someone quickly understand project context from memory alone?
-- Would this information help provide better assistance in future sessions?
-- Does stored context capture key decisions and reasoning?
 
----
+  ---
 
-## Summary: Your Mandatory Protocol
+## 🟢 PROTOCOL SUMMARY
+1. **START**:  mcp__CORE__memory_search (Always).
+2. **VERIFY**:  get_integrations (If app action is requested).
+3. RESPOND: Address the user.
+4. **END**:  mcp__CORE__memory_ingest using the Incremental Timeline.
 
-1. **FIRST ACTION**: Execute `memory_search` with semantic query about the user's request
-2. **RESPOND**: Help the user with their request
-3. **FINAL ACTION**: Execute `memory_ingest` with conversation summary and optional labelIds
+  **If you skip any of these steps, you are not following the requirements.**
 
-**If you skip any of these steps, you are not following the project requirements.**
+
 ````
 
 ## What This Enables

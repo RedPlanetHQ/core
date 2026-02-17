@@ -3,15 +3,15 @@ title: "Google Docs"
 description: "Document creation and editing with rich text formatting"
 ---
 
-### Overview
+## Overview
 
 Integrate Google Docs to create, edit, and format documents seamlessly from CORE. Access 8 tools for complete document management including text manipulation, rich formatting, image insertion, and automated report generation without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0 (Google)
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Google Docs** card
@@ -20,43 +20,7 @@ Integrate Google Docs to create, edit, and format documents seamlessly from CORE
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `https://www.googleapis.com/auth/documents` - Read and write access to documents
-- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
-
-### Available MCP Tools
-
-The Google Docs integration provides 8 tools for comprehensive document management:
-
-
-<Tabs>
-  <Tab title="Document Discovery">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_documents` | Lists all Google Docs documents in the user's Google Drive with metadata including creation time, modification time, and direct links |
-| `create_document` | Creates a new Google Doc with an optional title |
-| `read_document` | Reads the full content of a Google Doc with optional view mode for suggestions |
-</Tab>
-<Tab title="Text Content">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `insert_text` | Inserts text at a specific location in a document. Default location is index 1 (start of document). |
-| `append_text` | Appends text to the end of a document |
-| `replace_text` | Replaces all occurrences of text in a document with case-sensitive or case-insensitive matching |
-</Tab>
-<Tab title="Formatting">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `format_text` | Applies formatting to text in a document including bold, italic, underline, font size, and color |
-| `insert_image` | Inserts an image into a document at a specified location with optional sizing |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Google Docs tasks, it uses MCP tools to execute your requests:
 
@@ -128,10 +92,44 @@ When you ask CORE to perform Google Docs tasks, it uses MCP tools to execute you
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `https://www.googleapis.com/auth/documents` - Read and write access to documents
+- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
+
+## Available MCP Tools
+
+The Google Docs integration provides 8 tools for comprehensive document management:
+
+
+<Tabs>
+  <Tab title="Document Discovery">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_documents` | Lists all Google Docs documents in the user's Google Drive with metadata including creation time, modification time, and direct links |
+| `create_document` | Creates a new Google Doc with an optional title |
+| `read_document` | Reads the full content of a Google Doc with optional view mode for suggestions |
+</Tab>
+<Tab title="Text Content">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `insert_text` | Inserts text at a specific location in a document. Default location is index 1 (start of document). |
+| `append_text` | Appends text to the end of a document |
+| `replace_text` | Replaces all occurrences of text in a document with case-sensitive or case-insensitive matching |
+</Tab>
+<Tab title="Formatting">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `format_text` | Applies formatting to text in a document including bold, italic, underline, font size, and color |
+| `insert_image` | Inserts an image into a document at a specified location with optional sizing |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
 
 
-
----

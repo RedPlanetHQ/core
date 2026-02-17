@@ -3,15 +3,15 @@ title: "Discord"
 description: "Community management and server interactions for messaging, channels, and role management"
 ---
 
-### Overview
+## Overview
 
 Integrate Discord to manage communities, servers, channels, messages, and members directly from CORE. Access 20+ tools for complete Discord operations including messaging, server management, role assignment, channel organization, and member coordination without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Discord** card
@@ -20,106 +20,7 @@ Integrate Discord to manage communities, servers, channels, messages, and member
 5. Grant the required permissions to your server
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `messages/read` - Read message content from channels
-- `messages/write` - Send messages to channels
-- `channels/read` - List and view channel information
-- `channels/manage` - Create, update, and delete channels
-- `roles/manage` - Create, update, and delete roles
-- `members/manage` - View and manage guild members
-- `guilds/read` - Access guild/server information
-- `users/read` - View user information
-
-### Available MCP Tools
-
-The Discord integration provides 20+ tools for comprehensive server management:
-
-
-<Tabs>
-  <Tab title="Message Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `send_message` | Send a message to a Discord channel |
-| `get_message` | Retrieve a specific message by ID |
-| `get_channel_messages` | List messages from a channel with pagination |
-| `delete_message` | Delete a message |
-| `add_reaction` | Add an emoji reaction to a message |
-</Tab>
-<Tab title="Channel Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_channel` | Create a new channel (text, voice, category, or announcement) |
-| `get_channel` | Get details of a specific channel |
-| `update_channel` | Update channel name, topic, or position |
-| `delete_channel` | Delete a channel |
-| `list_guild_channels` | List all channels in a server |
-</Tab>
-<Tab title="Guild (Server) Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_guild` | Get server information and details |
-| `list_guilds` | List all servers the bot is in |
-| `get_guild_members` | List members in a server with pagination |
-| `get_guild_member` | Get details of a specific guild member |
-</Tab>
-<Tab title="Role Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_role` | Create a new role with custom permissions and color |
-| `update_role` | Update role name, permissions, or appearance |
-| `delete_role` | Delete a role |
-| `add_member_role` | Add a role to a guild member |
-| `remove_member_role` | Remove a role from a guild member |
-</Tab>
-<Tab title="User Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_current_user` | Get information about the authenticated user |
-| `get_user` | Get details about a specific user |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Discord triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Messages">
-
-| Event | Description |
-|-------|-------------|
-| `DISCORD_MESSAGE_CREATED` | Triggered when a new message is posted to any channel |
-| `DISCORD_MESSAGE_UPDATED` | Triggered when a message is edited |
-| `DISCORD_MESSAGE_DELETED` | Triggered when a message is deleted |
-| `DISCORD_REACTION_ADDED` | Triggered when a reaction is added to a message |
-| `DISCORD_REACTION_REMOVED` | Triggered when a reaction is removed from a message |
-</Tab>
-<Tab title="Channels">
-
-| Event | Description |
-|-------|-------------|
-| `DISCORD_CHANNEL_CREATED` | Triggered when a new channel is created |
-| `DISCORD_CHANNEL_UPDATED` | Triggered when a channel is modified |
-| `DISCORD_CHANNEL_DELETED` | Triggered when a channel is deleted |
-</Tab>
-<Tab title="Members">
-
-| Event | Description |
-|-------|-------------|
-| `DISCORD_MEMBER_JOINED` | Triggered when a new member joins the server |
-| `DISCORD_MEMBER_LEFT` | Triggered when a member leaves the server |
-| `DISCORD_MEMBER_UPDATED` | Triggered when member properties change (roles, nickname, etc.) |
-| `DISCORD_MEMBER_ROLE_ADDED` | Triggered when a role is added to a member |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -308,65 +209,106 @@ With webhooks enabled, CORE monitors Discord 24/7 and acts automatically based o
   </Accordion>
 </AccordionGroup>
 
-## Message Features
 
-### Rich Embeds
+## Scopes
 
-Messages support rich embeds with titles, descriptions, colors, and fields for professional-looking announcements:
+- `messages/read` - Read message content from channels
+- `messages/write` - Send messages to channels
+- `channels/read` - List and view channel information
+- `channels/manage` - Create, update, and delete channels
+- `roles/manage` - Create, update, and delete roles
+- `members/manage` - View and manage guild members
+- `guilds/read` - Access guild/server information
+- `users/read` - View user information
 
-```
-Send a formatted embed with:
-- Title: "New Feature Release"
-- Description: "Check out our latest update"
-- Color: #5865F2 (Discord Blurple)
-- Fields with inline content
-```
+## Available MCP Tools
 
-### Text-to-Speech
+The Discord integration provides 20+ tools for comprehensive server management:
 
-Messages can be sent with text-to-speech enabled for important announcements:
 
-```
-"Send an announcement about a server maintenance window using text-to-speech"
-```
+<Tabs>
+  <Tab title="Message Management">
 
-### Reactions
+| Tool Name | Description |
+|-----------|-------------|
+| `send_message` | Send a message to a Discord channel |
+| `get_message` | Retrieve a specific message by ID |
+| `get_channel_messages` | List messages from a channel with pagination |
+| `delete_message` | Delete a message |
+| `add_reaction` | Add an emoji reaction to a message |
+</Tab>
+<Tab title="Channel Management">
 
-Add emoji reactions to messages for quick acknowledgments, voting, or content flagging:
+| Tool Name | Description |
+|-----------|-------------|
+| `create_channel` | Create a new channel (text, voice, category, or announcement) |
+| `get_channel` | Get details of a specific channel |
+| `update_channel` | Update channel name, topic, or position |
+| `delete_channel` | Delete a channel |
+| `list_guild_channels` | List all channels in a server |
+</Tab>
+<Tab title="Guild (Server) Management">
 
-```
-"Add a thumbsup reaction to the announcement,
-and add a warning emoji to the spam message"
-```
+| Tool Name | Description |
+|-----------|-------------|
+| `get_guild` | Get server information and details |
+| `list_guilds` | List all servers the bot is in |
+| `get_guild_members` | List members in a server with pagination |
+| `get_guild_member` | Get details of a specific guild member |
+</Tab>
+<Tab title="Role Management">
 
-## Channel Types
+| Tool Name | Description |
+|-----------|-------------|
+| `create_role` | Create a new role with custom permissions and color |
+| `update_role` | Update role name, permissions, or appearance |
+| `delete_role` | Delete a role |
+| `add_member_role` | Add a role to a guild member |
+| `remove_member_role` | Remove a role from a guild member |
+</Tab>
+<Tab title="User Management">
 
-Discord channels can be created as different types:
+| Tool Name | Description |
+|-----------|-------------|
+| `get_current_user` | Get information about the authenticated user |
+| `get_user` | Get details about a specific user |
+</Tab>
+</Tabs>
 
-- **Text Channels (0)**: Standard message channels for conversation
-- **Voice Channels (2)**: Audio communication channels
-- **Categories (4)**: Organize channels into groups
-- **Announcement Channels (5)**: Broadcast-only channels with cross-posting
+## Triggers
 
-## Role Permissions
+Discord triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
 
-Roles can be configured with granular Discord permissions:
+<Tabs>
+  <Tab title="Messages">
 
-- **Message Permissions**: Send messages, delete messages, manage messages
-- **Channel Permissions**: Manage channels, create channels, view channels
-- **Role Permissions**: Manage roles, mention @everyone/@here
-- **Member Permissions**: Kick members, ban members, mute members
-- **Voice Permissions**: Connect to voice, speak, use voice activity
+| Event | Description |
+|-------|-------------|
+| `DISCORD_MESSAGE_CREATED` | Triggered when a new message is posted to any channel |
+| `DISCORD_MESSAGE_UPDATED` | Triggered when a message is edited |
+| `DISCORD_MESSAGE_DELETED` | Triggered when a message is deleted |
+| `DISCORD_REACTION_ADDED` | Triggered when a reaction is added to a message |
+| `DISCORD_REACTION_REMOVED` | Triggered when a reaction is removed from a message |
+</Tab>
+<Tab title="Channels">
 
-Permissions are managed using Discord's bitwise permission system.
+| Event | Description |
+|-------|-------------|
+| `DISCORD_CHANNEL_CREATED` | Triggered when a new channel is created |
+| `DISCORD_CHANNEL_UPDATED` | Triggered when a channel is modified |
+| `DISCORD_CHANNEL_DELETED` | Triggered when a channel is deleted |
+</Tab>
+<Tab title="Members">
 
-## Limitations & Considerations
+| Event | Description |
+|-------|-------------|
+| `DISCORD_MEMBER_JOINED` | Triggered when a new member joins the server |
+| `DISCORD_MEMBER_LEFT` | Triggered when a member leaves the server |
+| `DISCORD_MEMBER_UPDATED` | Triggered when member properties change (roles, nickname, etc.) |
+| `DISCORD_MEMBER_ROLE_ADDED` | Triggered when a role is added to a member |
+</Tab>
+</Tabs>
 
-- **Rate Limiting**: Discord API has rate limits; batching operations helps
-- **Bot Permissions**: The bot must have appropriate permissions in the server
-- **Message History**: Message retrieval is limited to channels the bot can access
-- **Member Data**: Only accessible within servers where the bot is present
-- **Token Refresh**: OAuth tokens are automatically refreshed when expired
 
 ## Need Help?
 

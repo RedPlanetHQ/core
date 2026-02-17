@@ -3,15 +3,15 @@ title: "Google Calendar"
 description: "Schedule and manage calendar events with availability checking"
 ---
 
-### Overview
+## Overview
 
 Integrate Google Calendar to schedule meetings, manage events, and check availability directly from CORE. Access 8 powerful tools for complete calendar management without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0 (Google)
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Google Calendar** card
@@ -20,45 +20,7 @@ Integrate Google Calendar to schedule meetings, manage events, and check availab
 5. Grant the required permissions to access your calendars
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `calendar.readonly` - Read access to your calendars
-- `calendar.events` - Read and write access to calendar events
-- `calendar.events.readonly` - Read access to event details
-- `calendar.freebusy` - Access to free/busy information
-- `calendar.settings.readonly` - Access to calendar settings
-
-### Available MCP Tools
-
-The Google Calendar integration provides 8 essential tools for comprehensive calendar management:
-
-<Tabs>
-  <Tab title="Event Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `create_event` | Create a new calendar event with attendees, reminders, and Google Meet link |
-| `get_event` | Get detailed information about a specific calendar event |
-| `list_events` | List calendar events within a specified time range with search and filtering |
-| `update_event` | Update an existing calendar event including time, attendees, and recurrence |
-| `delete_event` | Delete a calendar event with optional notification to attendees |
-</Tab>
-<Tab title="Calendar Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_calendars` | List all calendars accessible to the user with access role and metadata |
-| `quick_add_event` | Create an event using natural language parsing (e.g., "Dinner at 7pm") |
-</Tab>
-<Tab title="Availability">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `get_freebusy` | Retrieve free/busy information for calendars to check availability |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Google Calendar tasks, it uses MCP tools to execute your requests:
 
@@ -161,15 +123,44 @@ When you ask CORE to perform Google Calendar tasks, it uses MCP tools to execute
   </Accordion>
 </AccordionGroup>
 
-#### Recurrence Rules (RRULE) Examples
+## Scopes
 
-Google Calendar supports RFC 5545 recurrence rules:
+- `calendar.readonly` - Read access to your calendars
+- `calendar.events` - Read and write access to calendar events
+- `calendar.events.readonly` - Read access to event details
+- `calendar.freebusy` - Access to free/busy information
+- `calendar.settings.readonly` - Access to calendar settings
 
-- **Daily for 10 times**: `RRULE:FREQ=DAILY;COUNT=10`
-- **Weekly on Mon/Wed/Fri until end of year**: `RRULE:FREQ=WEEKLY;BYDAY=MO,WE,FR;UNTIL=20241231T235959Z`
-- **Monthly on the 15th**: `RRULE:FREQ=MONTHLY;BYMONTHDAY=15`
-- **Yearly on January 1st**: `RRULE:FREQ=YEARLY;BYMONTH=1;BYMONTHDAY=1`
-- **Every 2 weeks on Tuesday**: `RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=TU`
+## Available MCP Tools
+
+The Google Calendar integration provides 8 essential tools for comprehensive calendar management:
+
+<Tabs>
+  <Tab title="Event Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_event` | Create a new calendar event with attendees, reminders, and Google Meet link |
+| `get_event` | Get detailed information about a specific calendar event |
+| `list_events` | List calendar events within a specified time range with search and filtering |
+| `update_event` | Update an existing calendar event including time, attendees, and recurrence |
+| `delete_event` | Delete a calendar event with optional notification to attendees |
+</Tab>
+<Tab title="Calendar Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_calendars` | List all calendars accessible to the user with access role and metadata |
+| `quick_add_event` | Create an event using natural language parsing (e.g., "Dinner at 7pm") |
+</Tab>
+<Tab title="Availability">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_freebusy` | Retrieve free/busy information for calendars to check availability |
+</Tab>
+</Tabs>
+
 
 ## Need Help?
 

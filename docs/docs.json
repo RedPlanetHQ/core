@@ -78,79 +78,85 @@
         "tab": "Connect",
         "groups": [
           {
-            "group": "Overview",
+            "group": "Connect CORE",
             "pages": [
               "access-core/overview"
             ]
           },
           {
-            "group": "Talk to CORE",
+            "group": "Channels",
             "pages": [
               "access-core/channels/web-dashboard",
-              "access-core/channels/whatsapp",
               "access-core/channels/email",
-              "access-core/channels/slack"
+              "access-core/channels/whatsapp",
+              "access-core/channels/imessage",
+              "access-core/channels/slack",
+              "access-core/channels/telegram",
+              "access-core/channels/discord",
+              "access-core/channels/google-chat",
+              "access-core/channels/signal"
             ]
           },
           {
-            "group": "Add CORE to Your AI Tools",
+            "group": "AI Providers",
             "pages": [
               "providers/memory-rules",
+              {
+                "group": "Plugins",
+                "pages": [
+                  "providers/claude-code",
+                  "providers/openclaw"
+                ]
+              },
               {
                 "group": "IDE",
                 "pages": [
                   "providers/cursor",
-                  "providers/zed",
+                  "providers/windsurf",
                   "providers/vscode",
                   "providers/vscode-insiders",
-                  "providers/windsurf"
+                  "providers/zed"
                 ]
               },
               {
                 "group": "Coding Agents",
                 "pages": [
-                  "providers/amp",
-                  "providers/augment-code",
                   "providers/cline",
+                  "providers/roo-code",
+                  "providers/augment-code",
                   "providers/copilot-coding-agent",
+                  "providers/qodo-gen",
                   "providers/kilo-code",
+                  "providers/amp",
                   "providers/kiro",
                   "providers/opencode",
-                  "providers/qodo-gen",
-                  "providers/qwen-coder",
-                  "providers/roo-code"
+                  "providers/qwen-coder"
                 ]
               },
               {
-                "group": "CLI",
+                "group": "Desktop AI Apps",
                 "pages": [
-                  "providers/claude-code",
+                  "providers/claude",
+                  "providers/perplexity",
+                  "providers/browser-extension",
+                  "providers/obsidian"
+                ]
+              },
+              {
+                "group": "Terminal & CLI",
+                "pages": [
+                  "providers/warp",
+                  "providers/crush",
                   "providers/codex",
                   "providers/copilot-cli"
                 ]
               },
               {
-                "group": "Terminals",
-                "pages": [
-                  "providers/crush",
-                  "providers/warp"
-                ]
-              },
-              {
-                "group": "Desktop and Webapp",
-                "pages": [
-                  "providers/browser-extension",
-                  "providers/claude",
-                  "providers/obsidian",
-                  "providers/perplexity"
-                ]
-              },
-              {
-                "group": "Development Tools",
+                "group": "Development Platforms",
                 "pages": [
                   "providers/factory",
-                  "providers/rovo-dev",
-                  "providers/trae"
+                  "providers/trae",
+                  "providers/rovo-dev"
                 ]
               }
             ]

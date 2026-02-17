@@ -3,15 +3,15 @@ title: "Gmail"
 description: "Comprehensive email management with advanced search and filtering"
 ---
 
-### Overview
+## Overview
 
 Integrate Gmail to manage emails, labels, filters, and attachments directly from CORE. Access 20+ tools for complete email management including sending, drafting, advanced search, batch operations, and automation without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0 (Google)
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Gmail** card
@@ -20,102 +20,7 @@ Integrate Gmail to manage emails, labels, filters, and attachments directly from
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `gmail.send` - Send emails on behalf of the user
-- `gmail.compose` - Create and modify drafts
-- `gmail.readonly` - Read email messages and settings
-- `gmail.modify` - Manage labels and organize emails
-- `gmail.labels` - Create and manage labels
-- `gmail.settings.basic` - Manage filters and email settings
-- `gmail.metadata` - Access email headers and metadata
-
-### Available MCP Tools
-
-The Gmail integration provides 20+ tools for comprehensive email management:
-
-<Tabs>
-  <Tab title="Email Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `send_email` | Send a new email with support for attachments, HTML formatting, and threading |
-| `draft_email` | Create a draft email without sending it for later modification |
-| `read_email` | Retrieve the full content of a specific email message with headers and body |
-| `read_email_thread` | Retrieve all messages in an email thread/conversation in chronological order |
-| `modify_email` | Modify email labels (move to folders, apply/remove tags) |
-| `delete_email` | Permanently delete an email message |
-</Tab>
-<Tab title="Search & Filter">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `search_emails` | Search for emails using Gmail's powerful search syntax with timezone conversion |
-| `create_filter` | Create a new Gmail filter with custom criteria and actions |
-| `create_filter_from_template` | Create a filter using a pre-defined template for common scenarios |
-| `list_filters` | Retrieve all Gmail filters with their criteria and actions |
-| `get_filter` | Get details of a specific Gmail filter by ID |
-| `delete_filter` | Delete a Gmail filter |
-</Tab>
-<Tab title="Label Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_email_labels` | Retrieve all available Gmail labels (system and user-created) |
-| `create_label` | Create a new Gmail label for organizing emails |
-| `update_label` | Update properties of an existing Gmail label |
-| `delete_label` | Delete a Gmail label (emails keep their other labels) |
-| `get_or_create_label` | Get an existing label by name or create it if it doesn't exist |
-</Tab>
-<Tab title="Batch Operations">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `batch_modify_emails` | Modify labels for multiple emails efficiently in batches |
-| `batch_delete_emails` | Permanently delete multiple emails efficiently in batches |
-</Tab>
-<Tab title="Attachments">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `download_attachment` | Download an email attachment to a specified location on disk |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Gmail triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Messages">
-
-| Event | Description |
-|-------|-------------|
-| `GMAIL_MESSAGE_RECEIVED` | Triggered when a new email is received |
-| `GMAIL_MESSAGE_SENT` | Triggered when an email is sent from your account |
-| `GMAIL_MESSAGE_LABELED` | Triggered when a label is added to an email |
-| `GMAIL_MESSAGE_UNLABELED` | Triggered when a label is removed from an email |
-| `GMAIL_MESSAGE_STARRED` | Triggered when an email is starred |
-| `GMAIL_MESSAGE_TRASHED` | Triggered when an email is moved to trash |
-</Tab>
-<Tab title="Threads">
-
-| Event | Description |
-|-------|-------------|
-| `GMAIL_THREAD_RECEIVED` | Triggered when a new email thread starts |
-| `GMAIL_THREAD_REPLIED` | Triggered when you reply to a thread |
-</Tab>
-<Tab title="Labels">
-
-| Event | Description |
-|-------|-------------|
-| `GMAIL_LABEL_CREATED` | Triggered when a new label is created |
-| `GMAIL_LABEL_UPDATED` | Triggered when a label is renamed or modified |
-| `GMAIL_LABEL_DELETED` | Triggered when a label is deleted |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -291,6 +196,101 @@ With webhooks enabled, CORE monitors Gmail 24/7 and acts automatically based on 
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `gmail.send` - Send emails on behalf of the user
+- `gmail.compose` - Create and modify drafts
+- `gmail.readonly` - Read email messages and settings
+- `gmail.modify` - Manage labels and organize emails
+- `gmail.labels` - Create and manage labels
+- `gmail.settings.basic` - Manage filters and email settings
+- `gmail.metadata` - Access email headers and metadata
+
+## Available MCP Tools
+
+The Gmail integration provides 20+ tools for comprehensive email management:
+
+<Tabs>
+  <Tab title="Email Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `send_email` | Send a new email with support for attachments, HTML formatting, and threading |
+| `draft_email` | Create a draft email without sending it for later modification |
+| `read_email` | Retrieve the full content of a specific email message with headers and body |
+| `read_email_thread` | Retrieve all messages in an email thread/conversation in chronological order |
+| `modify_email` | Modify email labels (move to folders, apply/remove tags) |
+| `delete_email` | Permanently delete an email message |
+</Tab>
+<Tab title="Search & Filter">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `search_emails` | Search for emails using Gmail's powerful search syntax with timezone conversion |
+| `create_filter` | Create a new Gmail filter with custom criteria and actions |
+| `create_filter_from_template` | Create a filter using a pre-defined template for common scenarios |
+| `list_filters` | Retrieve all Gmail filters with their criteria and actions |
+| `get_filter` | Get details of a specific Gmail filter by ID |
+| `delete_filter` | Delete a Gmail filter |
+</Tab>
+<Tab title="Label Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_email_labels` | Retrieve all available Gmail labels (system and user-created) |
+| `create_label` | Create a new Gmail label for organizing emails |
+| `update_label` | Update properties of an existing Gmail label |
+| `delete_label` | Delete a Gmail label (emails keep their other labels) |
+| `get_or_create_label` | Get an existing label by name or create it if it doesn't exist |
+</Tab>
+<Tab title="Batch Operations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `batch_modify_emails` | Modify labels for multiple emails efficiently in batches |
+| `batch_delete_emails` | Permanently delete multiple emails efficiently in batches |
+</Tab>
+<Tab title="Attachments">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `download_attachment` | Download an email attachment to a specified location on disk |
+</Tab>
+</Tabs>
+
+## Triggers
+
+Gmail triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Messages">
+
+| Event | Description |
+|-------|-------------|
+| `GMAIL_MESSAGE_RECEIVED` | Triggered when a new email is received |
+| `GMAIL_MESSAGE_SENT` | Triggered when an email is sent from your account |
+| `GMAIL_MESSAGE_LABELED` | Triggered when a label is added to an email |
+| `GMAIL_MESSAGE_UNLABELED` | Triggered when a label is removed from an email |
+| `GMAIL_MESSAGE_STARRED` | Triggered when an email is starred |
+| `GMAIL_MESSAGE_TRASHED` | Triggered when an email is moved to trash |
+</Tab>
+<Tab title="Threads">
+
+| Event | Description |
+|-------|-------------|
+| `GMAIL_THREAD_RECEIVED` | Triggered when a new email thread starts |
+| `GMAIL_THREAD_REPLIED` | Triggered when you reply to a thread |
+</Tab>
+<Tab title="Labels">
+
+| Event | Description |
+|-------|-------------|
+| `GMAIL_LABEL_CREATED` | Triggered when a new label is created |
+| `GMAIL_LABEL_UPDATED` | Triggered when a label is renamed or modified |
+| `GMAIL_LABEL_DELETED` | Triggered when a label is deleted |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

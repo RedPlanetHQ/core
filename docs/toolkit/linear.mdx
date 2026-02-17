@@ -3,15 +3,15 @@ title: "Linear"
 description: "Modern issue tracking and project management platform for seamless team collaboration"
 ---
 
-### Overview
+## Overview
 
 Integrate Linear to manage issues, projects, workflows, and team collaboration directly from CORE. Access 20+ tools for complete issue tracking and project management operations without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : API Key
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [Linear Settings](https://linear.app/settings) → **API**
 2. Click **Create new API key** under Personal API keys
@@ -21,119 +21,7 @@ Integrate Linear to manage issues, projects, workflows, and team collaboration d
 6. Paste the API key into the configuration field
 7. Click **Connect** to establish the integration
 
-### Available MCP Tools
-
-The Linear integration provides 20+ tools for comprehensive issue tracking and project management:
-
-
-<Tabs>
-  <Tab title="Issue Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_create_issue` | Create a new issue with title, description, assignee, and priority |
-| `linear_update_issue` | Update an existing issue (title, description, state, assignee, etc.) |
-| `linear_get_issue` | Get detailed information about a specific issue |
-| `linear_search_issues` | Search for issues with advanced filters (team, assignee, state, project, labels) |
-| `linear_delete_issue` | Delete an issue |
-</Tab>
-<Tab title="Comment Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_create_comment` | Create a comment on an issue (markdown supported) |
-| `linear_update_comment` | Update an existing comment |
-| `linear_delete_comment` | Delete a comment |
-</Tab>
-<Tab title="Project Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_create_project` | Create a new project with teams, lead, and dates |
-| `linear_update_project` | Update project details (name, description, state, lead) |
-| `linear_list_projects` | List all projects with optional team filtering |
-| `linear_get_project` | Get detailed project information including issues and progress |
-</Tab>
-<Tab title="Team Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_list_teams` | List all teams in the organization |
-| `linear_get_team` | Get team details including members and workflow states |
-</Tab>
-<Tab title="User Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_list_users` | List all users in the organization |
-| `linear_get_user` | Get details of a specific user and their assigned issues |
-| `linear_get_viewer` | Get details of the authenticated user and organization |
-</Tab>
-<Tab title="Workflow States">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_list_workflow_states` | List workflow states with optional team filtering |
-</Tab>
-<Tab title="Labels">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_create_label` | Create a new label with optional color and description |
-| `linear_list_labels` | List all labels with optional team filtering |
-</Tab>
-<Tab title="Cycles">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `linear_create_cycle` | Create a sprint/cycle with start and end dates |
-| `linear_list_cycles` | List all cycles with progress information |
-| `linear_get_cycle` | Get cycle details including assigned issues |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Linear triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Issues">
-
-| Event | Description |
-|-------|-------------|
-| `LINEAR_ISSUE_CREATED` | Triggered when a new issue is created |
-| `LINEAR_ISSUE_UPDATED` | Triggered when an issue is modified (title, description, status, etc.) |
-| `LINEAR_ISSUE_DELETED` | Triggered when an issue is deleted |
-| `LINEAR_ISSUE_STATUS_CHANGED` | Triggered when an issue's workflow state changes |
-| `LINEAR_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
-| `LINEAR_ISSUE_PRIORITY_CHANGED` | Triggered when an issue's priority is updated |
-</Tab>
-<Tab title="Comments">
-
-| Event | Description |
-|-------|-------------|
-| `LINEAR_COMMENT_CREATED` | Triggered when a comment is added to an issue |
-| `LINEAR_COMMENT_UPDATED` | Triggered when a comment is edited |
-| `LINEAR_COMMENT_DELETED` | Triggered when a comment is deleted |
-</Tab>
-<Tab title="Projects">
-
-| Event | Description |
-|-------|-------------|
-| `LINEAR_PROJECT_CREATED` | Triggered when a new project is created |
-| `LINEAR_PROJECT_UPDATED` | Triggered when a project is modified |
-| `LINEAR_PROJECT_STATUS_CHANGED` | Triggered when a project's status changes |
-</Tab>
-<Tab title="Cycles">
-
-| Event | Description |
-|-------|-------------|
-| `LINEAR_CYCLE_STARTED` | Triggered when a new cycle/sprint starts |
-| `LINEAR_CYCLE_COMPLETED` | Triggered when a cycle/sprint is completed |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -345,6 +233,118 @@ With webhooks enabled, CORE monitors Linear 24/7 and acts automatically based on
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Available MCP Tools
+
+The Linear integration provides 20+ tools for comprehensive issue tracking and project management:
+
+
+<Tabs>
+  <Tab title="Issue Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_issue` | Create a new issue with title, description, assignee, and priority |
+| `linear_update_issue` | Update an existing issue (title, description, state, assignee, etc.) |
+| `linear_get_issue` | Get detailed information about a specific issue |
+| `linear_search_issues` | Search for issues with advanced filters (team, assignee, state, project, labels) |
+| `linear_delete_issue` | Delete an issue |
+</Tab>
+<Tab title="Comment Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_comment` | Create a comment on an issue (markdown supported) |
+| `linear_update_comment` | Update an existing comment |
+| `linear_delete_comment` | Delete a comment |
+</Tab>
+<Tab title="Project Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_project` | Create a new project with teams, lead, and dates |
+| `linear_update_project` | Update project details (name, description, state, lead) |
+| `linear_list_projects` | List all projects with optional team filtering |
+| `linear_get_project` | Get detailed project information including issues and progress |
+</Tab>
+<Tab title="Team Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_teams` | List all teams in the organization |
+| `linear_get_team` | Get team details including members and workflow states |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_users` | List all users in the organization |
+| `linear_get_user` | Get details of a specific user and their assigned issues |
+| `linear_get_viewer` | Get details of the authenticated user and organization |
+</Tab>
+<Tab title="Workflow States">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_workflow_states` | List workflow states with optional team filtering |
+</Tab>
+<Tab title="Labels">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_label` | Create a new label with optional color and description |
+| `linear_list_labels` | List all labels with optional team filtering |
+</Tab>
+<Tab title="Cycles">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_cycle` | Create a sprint/cycle with start and end dates |
+| `linear_list_cycles` | List all cycles with progress information |
+| `linear_get_cycle` | Get cycle details including assigned issues |
+</Tab>
+</Tabs>
+
+### Triggers
+
+Linear triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Issues">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_ISSUE_CREATED` | Triggered when a new issue is created |
+| `LINEAR_ISSUE_UPDATED` | Triggered when an issue is modified (title, description, status, etc.) |
+| `LINEAR_ISSUE_DELETED` | Triggered when an issue is deleted |
+| `LINEAR_ISSUE_STATUS_CHANGED` | Triggered when an issue's workflow state changes |
+| `LINEAR_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
+| `LINEAR_ISSUE_PRIORITY_CHANGED` | Triggered when an issue's priority is updated |
+</Tab>
+<Tab title="Comments">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_COMMENT_CREATED` | Triggered when a comment is added to an issue |
+| `LINEAR_COMMENT_UPDATED` | Triggered when a comment is edited |
+| `LINEAR_COMMENT_DELETED` | Triggered when a comment is deleted |
+</Tab>
+<Tab title="Projects">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_PROJECT_CREATED` | Triggered when a new project is created |
+| `LINEAR_PROJECT_UPDATED` | Triggered when a project is modified |
+| `LINEAR_PROJECT_STATUS_CHANGED` | Triggered when a project's status changes |
+</Tab>
+<Tab title="Cycles">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_CYCLE_STARTED` | Triggered when a new cycle/sprint starts |
+| `LINEAR_CYCLE_COMPLETED` | Triggered when a cycle/sprint is completed |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

@@ -3,15 +3,15 @@ title: "Cal.com"
 description: "Meeting scheduling and availability management"
 ---
 
-### Overview
+## Overview
 
 Integrate Cal.com to manage calendars, schedules, and availability directly from CORE. Create and manage multiple schedules, set availability windows, configure time zones, and automate meeting scheduling workflows.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : API Key
 
-### How to Connect
+## How to Connect
 
 1. Log in to [cal.com](https://cal.com) and sign in to your account
 2. Navigate to **Settings** by clicking on your profile
@@ -22,26 +22,7 @@ Integrate Cal.com to manage calendars, schedules, and availability directly from
 7. Paste your API key into the authentication field
 8. Click **Save** to complete the setup
 
-### Available MCP Tools
-
-The Cal.com integration provides 6 tools for comprehensive schedule management:
-
-
-<Tabs>
-  <Tab title="Schedule Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `cal_get_all_schedules` | Retrieve all schedules from Cal.com API |
-| `cal_create_a_schedule` | Create a new schedule with name, time zone, and availability blocks |
-| `cal_update_a_schedule` | Update an existing schedule including availability and overrides |
-| `cal_get_default_schedule` | Get the default schedule with all its details |
-| `cal_get_schedule` | Get a specific schedule by its ID |
-| `cal_delete_a_schedule` | Delete a schedule by its ID |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Cal.com tasks, it uses MCP tools to execute your requests:
 
@@ -101,94 +82,27 @@ When you ask CORE to perform Cal.com tasks, it uses MCP tools to execute your re
   </Accordion>
 </AccordionGroup>
 
-## Common Patterns
+## Available MCP Tools
 
-### Setting Business Hours
+The Cal.com integration provides 6 tools for comprehensive schedule management:
 
-Create a standard business hours schedule:
 
-```json
-{
-  "name": "Business Hours",
-  "timeZone": "America/New_York",
-  "isDefault": true,
-  "availability": [
-    {
-      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-      "startTime": "09:00",
-      "endTime": "17:00"
-    }
-  ]
-}
-```
+<Tabs>
+  <Tab title="Schedule Management">
 
-### Managing Multiple Time Zones
+| Tool Name | Description |
+|-----------|-------------|
+| `cal_get_all_schedules` | Retrieve all schedules from Cal.com API |
+| `cal_create_a_schedule` | Create a new schedule with name, time zone, and availability blocks |
+| `cal_update_a_schedule` | Update an existing schedule including availability and overrides |
+| `cal_get_default_schedule` | Get the default schedule with all its details |
+| `cal_get_schedule` | Get a specific schedule by its ID |
+| `cal_delete_a_schedule` | Delete a schedule by its ID |
+</Tab>
+</Tabs>
 
-Create schedules for different regions:
 
-```json
-{
-  "name": "Pacific Time",
-  "timeZone": "America/Los_Angeles",
-  "isDefault": false,
-  "availability": [
-    {
-      "days": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"],
-      "startTime": "08:00",
-      "endTime": "16:00"
-    }
-  ]
-}
-```
-
-### Handling Special Days
-
-Update a schedule with date-specific overrides for holidays or special events:
-
-```json
-{
-  "schedule_id": 123,
-  "overrides": [
-    {
-      "date": "2024-12-25",
-      "startTime": "00:00",
-      "endTime": "00:00"
-    },
-    {
-      "date": "2024-12-26",
-      "startTime": "10:00",
-      "endTime": "14:00"
-    }
-  ]
-}
-```
-
-## Error Handling
-
-The integration will return error messages from Cal.com API if:
-
-- Invalid API key or authentication fails
-- Schedule ID does not exist
-- Invalid time zone specified
-- Malformed availability or override data
-- Time conflicts in scheduling
-
-## Time Zone Reference
-
-Common time zone IDs supported:
-- `America/New_York` - Eastern Time
-- `America/Chicago` - Central Time
-- `America/Denver` - Mountain Time
-- `America/Los_Angeles` - Pacific Time
-- `Europe/London` - GMT/BST
-- `Europe/Paris` - CET/CEST
-- `Asia/Tokyo` - JST
-- `Australia/Sydney` - AEDT/AEST
-- `UTC` - Coordinated Universal Time
-
-For a complete list, see [IANA Time Zone Database](https://www.iana.org/assignments/timezone-abbr/timezone-abbr.xhtml).
-
-### Need Help?
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
 

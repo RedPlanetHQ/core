@@ -3,15 +3,15 @@ title: "Google Tasks"
 description: "Simple task lists integrated with Google Workspace"
 ---
 
-### Overview
+## Overview
 
 Integrate Google Tasks to manage task lists, create and organize tasks, set due dates, and clear completed items directly from CORE. Access 12 tools for comprehensive task management including list creation, task hierarchies, filtering, and status tracking without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0 (Google)
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Google Tasks** card
@@ -20,71 +20,7 @@ Integrate Google Tasks to manage task lists, create and organize tasks, set due 
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `https://www.googleapis.com/auth/tasks` - Read and write access to task lists and tasks
-
-### Available MCP Tools
-
-The Google Tasks integration provides 12 tools for comprehensive task management:
-
-
-<Tabs>
-  <Tab title="Task List Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_task_lists` | Returns all of the authenticated user's task lists with pagination support |
-| `get_task_list` | Returns the authenticated user's specified task list with metadata |
-| `create_task_list` | Creates a new task list for the authenticated user |
-| `update_task_list` | Updates the authenticated user's specified task list |
-| `delete_task_list` | Deletes the authenticated user's specified task list |
-</Tab>
-<Tab title="Task Operations">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `list_tasks` | Returns all tasks in the specified task list with advanced filtering options |
-| `get_task` | Returns the specified task with full details and metadata |
-| `create_task` | Creates a new task on the specified task list with support for subtasks |
-| `update_task` | Updates the specified task with new values |
-| `delete_task` | Deletes the specified task from the task list |
-</Tab>
-<Tab title="Task Organization">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `move_task` | Moves the specified task to another position in the task list or changes its parent |
-| `clear_completed_tasks` | Clears all completed tasks from the specified task list permanently |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Google Tasks triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
-
-<Tabs>
-  <Tab title="Tasks">
-
-| Event | Description |
-|-------|-------------|
-| `GOOGLE_TASKS_TASK_CREATED` | Triggered when a new task is created |
-| `GOOGLE_TASKS_TASK_UPDATED` | Triggered when a task is modified |
-| `GOOGLE_TASKS_TASK_COMPLETED` | Triggered when a task is marked as completed |
-| `GOOGLE_TASKS_TASK_DELETED` | Triggered when a task is deleted |
-| `GOOGLE_TASKS_TASK_MOVED` | Triggered when a task is moved to a different position or parent |
-</Tab>
-<Tab title="Task Lists">
-
-| Event | Description |
-|-------|-------------|
-| `GOOGLE_TASKS_LIST_CREATED` | Triggered when a new task list is created |
-| `GOOGLE_TASKS_LIST_UPDATED` | Triggered when a task list is modified |
-| `GOOGLE_TASKS_LIST_DELETED` | Triggered when a task list is deleted |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -243,10 +179,71 @@ With webhooks enabled, CORE monitors Google Tasks 24/7 and acts automatically ba
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `https://www.googleapis.com/auth/tasks` - Read and write access to task lists and tasks
+
+## Available MCP Tools
+
+The Google Tasks integration provides 12 tools for comprehensive task management:
+
+
+<Tabs>
+  <Tab title="Task List Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_task_lists` | Returns all of the authenticated user's task lists with pagination support |
+| `get_task_list` | Returns the authenticated user's specified task list with metadata |
+| `create_task_list` | Creates a new task list for the authenticated user |
+| `update_task_list` | Updates the authenticated user's specified task list |
+| `delete_task_list` | Deletes the authenticated user's specified task list |
+</Tab>
+<Tab title="Task Operations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_tasks` | Returns all tasks in the specified task list with advanced filtering options |
+| `get_task` | Returns the specified task with full details and metadata |
+| `create_task` | Creates a new task on the specified task list with support for subtasks |
+| `update_task` | Updates the specified task with new values |
+| `delete_task` | Deletes the specified task from the task list |
+</Tab>
+<Tab title="Task Organization">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `move_task` | Moves the specified task to another position in the task list or changes its parent |
+| `clear_completed_tasks` | Clears all completed tasks from the specified task list permanently |
+</Tab>
+</Tabs>
+
+### Triggers
+
+Google Tasks triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Tasks">
+
+| Event | Description |
+|-------|-------------|
+| `GOOGLE_TASKS_TASK_CREATED` | Triggered when a new task is created |
+| `GOOGLE_TASKS_TASK_UPDATED` | Triggered when a task is modified |
+| `GOOGLE_TASKS_TASK_COMPLETED` | Triggered when a task is marked as completed |
+| `GOOGLE_TASKS_TASK_DELETED` | Triggered when a task is deleted |
+| `GOOGLE_TASKS_TASK_MOVED` | Triggered when a task is moved to a different position or parent |
+</Tab>
+<Tab title="Task Lists">
+
+| Event | Description |
+|-------|-------------|
+| `GOOGLE_TASKS_LIST_CREATED` | Triggered when a new task list is created |
+| `GOOGLE_TASKS_LIST_UPDATED` | Triggered when a task list is modified |
+| `GOOGLE_TASKS_LIST_DELETED` | Triggered when a task list is deleted |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
 
-
-
----

@@ -1,0 +1,244 @@
+---
+title: "OpenClaw"
+description: "Connect OpenClaw to CORE's memory system for persistent context and integrations"
+---
+
+CORE transforms OpenClaw into a persistent memory agent that automatically remembers conversations, recalls relevant context, and builds a comprehensive user profile across all sessions.
+
+## Prerequisites
+
+- [OpenClaw](https://github.com/RedPlanetHQ/openclaw) installed
+- CORE account - [Sign up at app.getcore.me](https://app.getcore.me)
+
+## Installation
+
+### Step 1: Install the CORE Plugin
+
+```bash
+openclaw plugins install @redplanethq/openclaw-corebrain
+```
+
+### Step 2: Configure Your API Key
+
+You have two options for providing your CORE API key:
+
+**Option 1: Environment Variable (Recommended)**
+
+```bash
+export CORE_API_KEY=your_api_key_here
+```
+
+**Option 2: OpenClaw Configuration File**
+
+Add to your `openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "@redplanethq/openclaw-corebrain": {
+      "apiKey": "your_api_key_here"
+    }
+  }
+}
+```
+
+### Step 3: Get Your API Key
+
+1. Log into your CORE dashboard at [app.getcore.me](https://app.getcore.me)
+2. Navigate to **Settings** (bottom left)
+3. Go to **API Key** → **Generate new key**
+4. Name it "openclaw"
+5. Copy the generated key and use it in Step 2
+
+## How It Works
+
+### Auto-Recall & Auto-Capture
+
+The CORE plugin operates seamlessly in the background:
+
+**Before AI Responses (Auto-Recall)**
+- Automatically injects relevant past conversations into the AI's context
+- Searches your memory graph for related discussions
+- Provides the AI with your preferences and past decisions
+
+**After Each Interaction (Auto-Capture)**
+- Stores new conversations in your CORE memory
+- Extracts key facts and relationships
+- Updates your persistent user profile
+
+This creates a continuous memory loop where every conversation builds on the last, across all your CORE-connected tools.
+
+### Integration Support
+
+Connect external services through your CORE dashboard, and OpenClaw's AI can:
+
+- **Discover available actions** across your connected apps
+- **Execute actions autonomously** - fetch GitHub PRs, create Linear issues, send Slack messages
+- **Access real-time data** from all your integrated services
+
+**Supported Integrations:**
+- GitHub (PRs, issues, code reviews)
+- Linear (tasks, projects, updates)
+- Slack (messages, channels, threads)
+- Gmail, Google Calendar, Notion, and 20+ more
+
+## Features
+
+### 1. Persistent Memory Across Sessions
+
+Your CORE memory includes:
+
+- **Conversation History**: Every interaction stored and searchable
+- **User Profile**: Automatically generated from your conversations
+  - Preferences and coding style
+  - Past decisions and their reasoning
+  - Technologies and concepts you use
+  - Goals and working patterns
+- **Relationship Graph**: Connections between people, projects, and concepts
+
+### 2. Semantic Memory Search
+
+Use the `/search` command to find relevant context:
+
+```bash
+/search authentication implementation
+/search discussions about API design with team
+/search recent bug fixes in production
+```
+
+The AI can also search your memory automatically during conversations when it needs context.
+
+### 3. Integration Actions
+
+Execute actions in your connected apps directly from OpenClaw:
+
+- Create and read GitHub issues and PRs
+- Manage Linear tasks and projects
+- Send Slack messages
+- Draft and send emails
+- Update calendar events
+- Modify Notion pages and Google Sheets
+
+### 4. User Profile Access
+
+View your auto-generated profile:
+
+```bash
+/me
+```
+
+This shows your comprehensive user profile built from all your CORE conversations, including preferences, expertise, and working patterns.
+
+## Available Commands
+
+### Slash Commands
+
+- `/search <query>` - Search your CORE memory semantically
+- `/me` - View your auto-generated user profile
+- `/integrations` - List all connected integrations and available actions
+
+### AI Tools
+
+The plugin provides these tools to the AI:
+
+- **memory_search**: Semantic search across your knowledge graph
+- **get_integrations**: Discover connected services
+- **get_integration_actions**: List available actions for an integration
+- **execute_integration_action**: Perform actions in connected apps
+
+## Configuration Options
+
+### Capture Modes
+
+Configure how conversations are captured in your `openclaw.json`:
+
+```json
+{
+  "plugins": {
+    "@redplanethq/openclaw-corebrain": {
+      "captureMode": "auto",
+      "debugLogging": false
+    }
+  }
+}
+```
+
+**Capture Modes:**
+- `auto` (default) - Automatically capture all conversations
+- `manual` - Only capture when explicitly requested
+- `selective` - Capture based on conversation importance (coming soon)
+
+### Debug Logging
+
+Enable debug logging to troubleshoot issues:
+
+```json
+{
+  "plugins": {
+    "@redplanethq/openclaw-corebrain": {
+      "debugLogging": true
+    }
+  }
+}
+```
+
+## What Makes This Different
+
+**Traditional RAG**: "What text chunks look similar to this query?"
+
+**CORE Memory Agent**: "What does the user want to know, and where in their organized knowledge does that live?"
+
+CORE doesn't just search text—it understands intent, classifies queries, and retrieves exactly what matters. Your preferences from 3 months ago, the decision you made last week, the problem you solved yesterday—all connected and surfaced at the right time.
+
+## Verify Connection
+
+Test that everything works:
+
+```bash
+# Search your memory
+/search recent work
+
+# View your profile
+/me
+
+# List integrations
+/integrations
+```
+
+You should see results from your CORE memory and connected integrations.
+
+## Troubleshooting
+
+**Plugin Installation Issues:**
+
+- Ensure OpenClaw is properly installed: `openclaw --version`
+- Try reinstalling the plugin: `openclaw plugins uninstall @redplanethq/openclaw-corebrain && openclaw plugins install @redplanethq/openclaw-corebrain`
+- Check that your OpenClaw version is up to date
+
+**Authentication Issues:**
+
+- Verify your API key is correct and not expired
+- Check that the API key is properly set in environment or config
+- Ensure you're logged into your CORE account at app.getcore.me
+- Try generating a new API key
+
+**Memory Search Not Working:**
+
+- Verify plugin is installed: `openclaw plugins list` should show `@redplanethq/openclaw-corebrain`
+- Check that you have conversations stored in CORE
+- Try manual search: `/search test query`
+- Enable debug logging to see detailed error messages
+
+**Integration Actions Failing:**
+
+- Verify integrations are connected in your CORE dashboard
+- Check integration permissions in CORE settings
+- Test with `/integrations` to see available services
+- Ensure you have the necessary permissions in the target app
+
+## Learn More
+
+- **OpenClaw Repository**: [https://github.com/RedPlanetHQ/openclaw](https://github.com/RedPlanetHQ/openclaw) - Learn more about OpenClaw
+- **CORE Plugin**: [https://github.com/RedPlanetHQ/openclaw-core](https://github.com/RedPlanetHQ/openclaw-core) - Plugin source code and documentation
+- **Discord Community**: [Join #core-support](https://discord.gg/dVTC3BmgEq) for help and discussions
+- **Documentation**: [docs.getcore.me](https://docs.getcore.me) for comprehensive guides

@@ -3,15 +3,15 @@ title: "Zoho Mail"
 description: "Enterprise email solution with comprehensive management capabilities"
 ---
 
-### Overview
+## Overview
 
 Integrate Zoho Mail to seamlessly send, receive, organize, and manage your enterprise email workflows directly from CORE. Access 15+ specialized tools for complete email management.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Zoho Mail** card
@@ -20,66 +20,7 @@ Integrate Zoho Mail to seamlessly send, receive, organize, and manage your enter
 5. Grant the required permissions
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `ZohoMail.messages.READ` - Read email messages
-- `ZohoMail.messages.CREATE` - Send and compose emails
-- `ZohoMail.messages.UPDATE` - Update email properties
-- `ZohoMail.messages.DELETE` - Delete emails
-- `ZohoMail.folders.READ` - Read folder information
-- `ZohoMail.folders.CREATE` - Create and manage folders
-- `ZohoMail.accounts.READ` - Access account information
-- `ZohoMail.attachments.READ` - Read attachment information
-
-### Available MCP Tools
-
-The Zoho Mail integration provides 15+ tools for complete enterprise email management:
-
-
-<Tabs>
-  <Tab title="Email Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `zoho_send_email` | Sends a new email with support for CC, BCC, and HTML formatting |
-| `zoho_send_reply` | Sends a reply to an existing email message |
-| `zoho_get_message` | Retrieves the full content of a specific email message with headers and body |
-</Tab>
-<Tab title="Email Search and Listing">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `zoho_list_emails` | Lists emails from a specified folder with pagination support |
-| `zoho_search_emails` | Searches for emails using search query syntax |
-</Tab>
-<Tab title="Message Actions">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `zoho_read_messages` | Marks one or more emails as read |
-| `zoho_delete_email` | Permanently deletes one or more email messages |
-| `zoho_move_messages` | Moves emails from one folder to another |
-| `zoho_archive_message` | Archives one or more email messages |
-| `zoho_spam_message` | Marks one or more emails as spam |
-| `zoho_flag_messages` | Flags emails with different flag types for organization and priority |
-</Tab>
-<Tab title="Folder Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `zoho_create_folder` | Creates a new folder for organizing emails |
-| `zoho_get_folders` | Lists all folders in the account with unread email counts |
-</Tab>
-<Tab title="Account and Attachments">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `zoho_get_accounts` | Retrieves all Zoho Mail accounts associated with the authenticated user |
-| `zoho_get_attachments` | Retrieves attachment information for a specific email message |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Zoho Mail tasks, it uses MCP tools to execute your requests:
 
@@ -147,6 +88,65 @@ When you ask CORE to perform Zoho Mail tasks, it uses MCP tools to execute your 
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `ZohoMail.messages.READ` - Read email messages
+- `ZohoMail.messages.CREATE` - Send and compose emails
+- `ZohoMail.messages.UPDATE` - Update email properties
+- `ZohoMail.messages.DELETE` - Delete emails
+- `ZohoMail.folders.READ` - Read folder information
+- `ZohoMail.folders.CREATE` - Create and manage folders
+- `ZohoMail.accounts.READ` - Access account information
+- `ZohoMail.attachments.READ` - Read attachment information
+
+## Available MCP Tools
+
+The Zoho Mail integration provides 15+ tools for complete enterprise email management:
+
+
+<Tabs>
+  <Tab title="Email Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_send_email` | Sends a new email with support for CC, BCC, and HTML formatting |
+| `zoho_send_reply` | Sends a reply to an existing email message |
+| `zoho_get_message` | Retrieves the full content of a specific email message with headers and body |
+</Tab>
+<Tab title="Email Search and Listing">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_list_emails` | Lists emails from a specified folder with pagination support |
+| `zoho_search_emails` | Searches for emails using search query syntax |
+</Tab>
+<Tab title="Message Actions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_read_messages` | Marks one or more emails as read |
+| `zoho_delete_email` | Permanently deletes one or more email messages |
+| `zoho_move_messages` | Moves emails from one folder to another |
+| `zoho_archive_message` | Archives one or more email messages |
+| `zoho_spam_message` | Marks one or more emails as spam |
+| `zoho_flag_messages` | Flags emails with different flag types for organization and priority |
+</Tab>
+<Tab title="Folder Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_create_folder` | Creates a new folder for organizing emails |
+| `zoho_get_folders` | Lists all folders in the account with unread email counts |
+</Tab>
+<Tab title="Account and Attachments">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_get_accounts` | Retrieves all Zoho Mail accounts associated with the authenticated user |
+| `zoho_get_attachments` | Retrieves attachment information for a specific email message |
+</Tab>
+</Tabs>
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

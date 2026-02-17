@@ -1,11 +1,11 @@
 ---
-title: "Email (brain@getcore.me)"
+title: "Email"
 description: "Email your Meta Agent for asynchronous assistance"
 ---
 
 ## Overview
 
-Send emails to **brain@getcore.me** and get intelligent responses from CORE's Meta Agent. Perfect for longer requests, asynchronous workflows, or when you're already in your email client.
+Send emails to **brain@getcore.me** and get intelligent responses from CORE's Agent. Perfect for longer requests, asynchronous workflows, or when you're already in your email client.
 
 ## Getting Started
 
@@ -15,146 +15,217 @@ Simply email **brain@getcore.me** from your registered email address. Your agent
 3. Take actions across your connected apps
 4. Reply with results and context
 
-## Features
-
-<CardGroup cols={2}>
-  <Card title="Asynchronous" icon="clock">
-    Send requests anytime and get thoughtful responses - perfect for complex queries that need processing time.
-  </Card>
-
-  <Card title="Long-Form" icon="file-lines">
-    Write detailed requests and get comprehensive responses with full context and explanations.
-  </Card>
-
-  <Card title="Email Integration" icon="envelope">
-    Stay in your email workflow - no context switching required.
-  </Card>
-
-  <Card title="Attachment Support" icon="paperclip">
-    Include files, documents, and images in your requests for context.
-  </Card>
-</CardGroup>
 
 ## How It Works
 
-1. **Send an email** to brain@getcore.me from your registered account
-2. **Write your request** naturally in the subject or body
-3. **Attach files** if needed for context
-4. **Receive a reply** with your agent's response and any actions taken
+1. **Compose or forward** an email to brain@getcore.me from your registered account
+2. **Add your instructions** in the email body (or just forward with a quick note)
+3. **Include context** by forwarding email threads, attaching files, or referencing past conversations
+4. **Get intelligent replies** with drafted responses, action confirmations, or requested information
+
+**Email Forwarding Workflow:**
+When you forward an email to brain@getcore.me, CORE preserves the entire thread context, making it perfect for:
+- Setting reminders to follow up
+- Extracting action items and creating tasks
+- Getting summaries of long threads
+- Drafting context-aware responses
+- Saving important discussions to memory
 
 ## Use Cases
 
 <AccordionGroup>
-  <Accordion title="Weekly Reports" icon="chart-line">
-    **Scenario**: Get automated weekly summaries
+  <Accordion title="Set Reminders from Email Threads" icon="bell">
+    **Scenario**: Never forget to follow up on important emails
 
     ```
-    Subject: Weekly summary
+    To: brain@getcore.me
+    Subject: Fwd: Q1 Budget Approval
 
-    Body: Generate a summary of what I worked on this week.
-    Include: GitHub commits, Linear issues closed, and Slack discussions.
+    [Forward the email thread]
+
+    Remind me to follow up on this if I don't hear back by Friday.
     ```
 
-    Your agent compiles a comprehensive report from all your connected tools.
+    CORE saves the email context to memory and will remind you at the right time, with full context of the original thread.
   </Accordion>
 
-  <Accordion title="Complex Research" icon="magnifying-glass">
-    **Scenario**: Deep dive into past context
+  <Accordion title="Draft Responses with Context" icon="pen">
+    **Scenario**: Write emails that need information from other tools
 
     ```
-    Subject: Authentication architecture history
+    To: brain@getcore.me
+    Subject: Draft response to client
 
-    Body: I need a detailed summary of all technical decisions we made
-    regarding authentication over the last 3 months. Include:
-    - GitHub PRs and discussions
-    - Linear epics and design docs
-    - Slack architecture channel conversations
-    - Any Notion documentation
+    I need to respond to Sarah's email about the API migration timeline.
+    Please draft a response that includes:
+    - Current status from Linear project "API Migration"
+    - Completed PRs from GitHub in the last week
+    - Any blockers mentioned in #engineering Slack channel
     ```
 
-    Perfect for queries that need time to process and aggregate data from multiple sources.
+    CORE gathers information from your connected apps and drafts a complete, context-aware email response.
   </Accordion>
 
-  <Accordion title="Batch Operations" icon="list-check">
-    **Scenario**: Perform multiple actions
+  <Accordion title="Extract and Track Action Items" icon="list-check">
+    **Scenario**: Turn email discussions into trackable tasks
 
     ```
-    Subject: Project cleanup
+    To: brain@getcore.me
+    Subject: Fwd: Meeting notes - Product roadmap
 
-    Body: Please help me clean up the Q4 project:
-    1. Close all completed Linear issues
-    2. Archive the #project-q4 Slack channel
-    3. Move relevant Notion docs to archive
-    4. Generate a final project summary
-    ```
+    [Forward the email with meeting notes]
 
-    Your agent executes multiple actions across apps and confirms completion.
-  </Accordion>
-
-  <Accordion title="Document Analysis" icon="file">
-    **Scenario**: Analyze attached documents
-
-    ```
-    Subject: Review meeting notes
-
-    Body: I've attached notes from today's planning meeting.
-    Please:
-    - Extract action items
+    Extract all action items from this email and:
     - Create Linear issues for each task
-    - Send a summary to the team Slack channel
+    - Assign them to the people mentioned
+    - Add them to the "Q1 Roadmap" project
+    - Reply with a summary of created tasks
     ```
 
-    Attach files for your agent to analyze and act upon.
+    CORE processes the email, creates tasks across your tools, and confirms what was done.
+  </Accordion>
+
+  <Accordion title="Summarize Long Email Threads" icon="compress">
+    **Scenario**: Catch up on lengthy discussions quickly
+
+    ```
+    To: brain@getcore.me
+    Subject: Fwd: Re: Re: Re: Design system discussion (24 messages)
+
+    [Forward the long email thread]
+
+    Summarize this thread for me:
+    - What's the current decision?
+    - Who's responsible for what?
+    - What are the next steps?
+    ```
+
+    Perfect for when you're cc'd on a long thread and need the TL;DR without reading 50+ messages.
+  </Accordion>
+
+  <Accordion title="Context Retrieval for Responses" icon="magnifying-glass">
+    **Scenario**: Pull context from past conversations to answer emails
+
+    ```
+    To: brain@getcore.me
+    Subject: Need context on authentication work
+
+    John is asking about the authentication system we built last quarter.
+    Find all the details:
+    - Original design decisions from Slack/memory
+    - Related GitHub PRs
+    - Documentation in Notion
+
+    Then draft a reply explaining the current architecture and why we chose it.
+    ```
+
+    CORE searches your memory and connected tools, then drafts an informed response.
+  </Accordion>
+
+  <Accordion title="Email Triage and Prioritization" icon="filter">
+    **Scenario**: Get help organizing your inbox
+
+    ```
+    To: brain@getcore.me
+    Subject: Triage my action items
+
+    [Forward 5-10 emails that need responses]
+
+    Which of these emails need urgent attention and why?
+    For each:
+    - Priority level
+    - Why it matters
+    - Suggested response or action
+    ```
+
+    CORE analyzes each email with context from your memory and suggests how to prioritize.
+  </Accordion>
+
+  <Accordion title="Delegate Tasks from Emails" icon="share">
+    **Scenario**: Convert emails into delegated work without leaving your inbox
+
+    ```
+    To: brain@getcore.me
+    Subject: Fwd: Bug report from customer
+
+    [Forward customer email about bug]
+
+    Create a high-priority Linear bug issue with:
+    - Title: "Customer report: [extract from email]"
+    - Description: [full customer report]
+    - Assign to: engineering on-call
+    - Send a Slack message to #bugs channel
+    - Draft a reply to customer saying we're investigating
+    ```
+
+    CORE handles the entire workflow and gives you a draft customer response to review.
+  </Accordion>
+
+  <Accordion title="Research and Report" icon="chart-line">
+    **Scenario**: Get detailed reports for email responses
+
+    ```
+    To: brain@getcore.me
+    Subject: Weekly update for investors
+
+    Create a weekly update email covering:
+    - What shipped (GitHub releases + Linear completed issues)
+    - Team velocity (last 3 sprints from Linear)
+    - Customer feedback highlights (from support emails)
+    - Next week's priorities (from Linear current sprint)
+
+    Make it investor-friendly and concise.
+    ```
+
+    CORE compiles data from multiple sources and drafts a polished update email.
   </Accordion>
 </AccordionGroup>
 
-## Email Format
-
-**Subject Line:**
-Keep it descriptive but concise. The subject helps your agent understand the request type.
-
-**Body:**
-- Be specific about what you need
-- Use bullet points for clarity
-- Reference past context when relevant
-- Specify which apps to interact with
-
-**Attachments:**
-- Supported formats: PDF, DOCX, TXT, images, spreadsheets
-- Max size: 25MB per email
-- Multiple attachments supported
 
 ## Example Emails
 
-**Quick Action:**
+**Forward to Set Reminder:**
 ```
 To: brain@getcore.me
-Subject: Create bug issue
+Subject: Fwd: Partnership proposal from Acme Corp
 
-Create a high-priority Linear issue:
-"Login form validation not working on mobile Safari"
-Assign to @sarah
+[Forwarded email thread]
+
+Set a reminder to follow up on this next Tuesday if they haven't responded.
+Also save this to memory under "partnership opportunities."
 ```
 
-**Memory Search:**
-```
-To: brain@getcore.me
-Subject: Find API discussion
-
-When did we discuss changing the webhooks API?
-I need the full context and any decisions made.
-```
-
-**Multi-App Workflow:**
+**Draft Response with Context:**
 ```
 To: brain@getcore.me
-Subject: Sprint planning prep
+Subject: Help draft reply to CEO
 
-Help me prepare for sprint planning:
-1. List all unassigned bugs in Linear
-2. Get velocity from last 3 sprints
-3. Find any GitHub issues labeled "technical-debt"
-4. Create a summary document in Notion
+The CEO just asked about our API rate limiting strategy.
+Draft a response that includes:
+- Current limits and why we chose them
+- Any recent discussions about changing them (check Slack #engineering)
+- Related GitHub issues or PRs
+```
+
+**Extract Action Items from Thread:**
+```
+To: brain@getcore.me
+Subject: Fwd: Kickoff meeting notes
+
+[Forwarded meeting notes email]
+
+Extract all action items, create Linear issues for each,
+and send a summary to #project-alpha Slack channel.
+```
+
+**Get Context for Email Reply:**
+```
+To: brain@getcore.me
+Subject: Need pricing discussion context
+
+Michael is asking about enterprise pricing.
+Find our previous discussions about pricing tiers and
+draft a response explaining our current structure.
 ```
 
 ## Response Time
@@ -163,26 +234,16 @@ Help me prepare for sprint planning:
 - **Complex requests**: May take 5-10 minutes for thorough analysis
 - **Batch operations**: Depends on number of actions (you'll get progress updates)
 
-## Tips
+## Tips for Email Workflows
 
-- **Be specific**: Clear requests get better results
-- **Use lists**: Bullet points help structure complex requests
-- **Reference tools**: Mention which apps to use (Linear, Slack, etc.)
-- **Include context**: Attach relevant files or reference past conversations
+- **Forward liberally**: Forward any email thread to CORE for context, reminders, or drafting replies
+- **Use subject lines**: Put key instructions in the subject for quick processing
+- **Set follow-up reminders**: Never forget to circle back - just forward and ask for a reminder
+- **Draft before sending**: Ask CORE to draft responses that need context from other tools
+- **Batch forward**: Send multiple emails at once and ask for prioritization or summaries
+- **Include deadlines**: "Remind me Friday" or "Follow up in 3 days" works naturally
+- **Reference people naturally**: Use @mentions or names, CORE will map them to your contacts
 
-## Privacy & Security
-
-- Only emails from your registered account are processed
-- All communication encrypted in transit and at rest
-- Attachments processed securely and not retained after analysis
-- You can disable email access anytime in settings
-
-## Limitations
-
-- Must email from registered account address
-- 25MB attachment limit per email
-- Rate limited to prevent abuse (100 emails/day)
-- Cannot send emails on your behalf (only receive and respond)
 
 ## Need Help?
 

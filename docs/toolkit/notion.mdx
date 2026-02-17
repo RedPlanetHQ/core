@@ -3,15 +3,15 @@ title: "Notion"
 description: "All-in-one workspace for notes, databases, and collaborative documentation with powerful knowledge management tools"
 ---
 
-### Overview
+## Overview
 
 Integrate Notion to create, organize, and manage pages, databases, and collaborative documentation directly from CORE. Access 15+ tools for complete knowledge management operations without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Notion** card
@@ -20,64 +20,7 @@ Integrate Notion to create, organize, and manage pages, databases, and collabora
 5. Grant the required permissions (select specific workspaces or grant access to all)
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `read_content` - Read access to pages and databases
-- `update_content` - Create and update pages
-- `insert_content` - Create and update databases
-- `read_user` - Access to user profile information
-- `read_comment` - Access to comments and discussions
-- `insert_comment` - Create comments on pages and blocks
-
-### Available MCP Tools
-
-The Notion integration provides 15+ tools for comprehensive knowledge management:
-
-<Tabs>
-  <Tab title="Page Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `notion_create_page` | Create one or more Notion pages with properties and content |
-| `notion_get_page` | Retrieve a page with full content, metadata, and all blocks |
-| `notion_update_page` | Update page properties or content with flexible editing commands |
-| `notion_retrieve_page_property` | Retrieve specific page property details |
-| `notion_move_pages` | Move pages or databases to a new parent location |
-</Tab>
-<Tab title="Database Operations">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `notion_query_database` | Query a database with filters and sorting |
-| `notion_get_database` | Retrieve database schema and metadata |
-| `notion_create_database` | Create a new database with custom properties |
-| `notion_update_database` | Update database properties, title, or status |
-| `notion_create_database_item` | Create items in a database with properties |
-</Tab>
-<Tab title="Search & Discovery">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `notion_search` | Search pages and databases across workspace |
-</Tab>
-<Tab title="User Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `notion_get_user` | Retrieve specific user information |
-| `notion_list_users` | List all users in the workspace |
-| `notion_get_me` | Get current bot user information |
-</Tab>
-<Tab title="Comments">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `notion_create_comment` | Create a comment on a page or block |
-| `notion_get_comments` | Retrieve comments on a specific block |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 When you ask CORE to perform Notion tasks, it uses MCP tools to execute your requests:
 
@@ -202,58 +145,63 @@ When you ask CORE to perform Notion tasks, it uses MCP tools to execute your req
   </Accordion>
 </AccordionGroup>
 
-### Database Properties
+## Scopes
 
-Notion supports various property types that the integration handles:
+- `read_content` - Read access to pages and databases
+- `update_content` - Create and update pages
+- `insert_content` - Create and update databases
+- `read_user` - Access to user profile information
+- `read_comment` - Access to comments and discussions
+- `insert_comment` - Create comments on pages and blocks
 
-### Basic Properties
-- **Title**: Page or item title
-- **Text**: Short text fields
-- **Rich Text**: Formatted text with styling
-- **Checkbox**: Boolean true/false values
-- **Numbers**: Numeric data
+## Available MCP Tools
 
-### Date Properties
-Date properties are split into components:
-- `date:{property}:start` - Start date
-- `date:{property}:end` - Optional end date
-- `date:{property}:is_datetime` - Whether it includes time (0 or 1)
+The Notion integration provides 15+ tools for comprehensive knowledge management:
 
-Example: `"date:Timeline:start": "2024-02-15"`
+<Tabs>
+  <Tab title="Page Management">
 
-### Specialized Properties
-- **Place Properties**: Address, coordinates, and location data
-  - `place:{property}:name` - Location name
-  - `place:{property}:address` - Street address
-  - `place:{property}:latitude` - Latitude coordinate
-  - `place:{property}:longitude` - Longitude coordinate
-- **Files**: Attachments and file links
-- **Relations**: References to other database items
-- **Rollups**: Aggregated data from related items
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_create_page` | Create one or more Notion pages with properties and content |
+| `notion_get_page` | Retrieve a page with full content, metadata, and all blocks |
+| `notion_update_page` | Update page properties or content with flexible editing commands |
+| `notion_retrieve_page_property` | Retrieve specific page property details |
+| `notion_move_pages` | Move pages or databases to a new parent location |
+</Tab>
+<Tab title="Database Operations">
 
-### Special Property Names
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_query_database` | Query a database with filters and sorting |
+| `notion_get_database` | Retrieve database schema and metadata |
+| `notion_create_database` | Create a new database with custom properties |
+| `notion_update_database` | Update database properties, title, or status |
+| `notion_create_database_item` | Create items in a database with properties |
+</Tab>
+<Tab title="Search & Discovery">
 
-Properties named "id" or "url" (case insensitive) must be prefixed with "userDefined:":
-- Use `userDefined:id` instead of `id`
-- Use `userDefined:URL` instead of `url`
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_search` | Search pages and databases across workspace |
+</Tab>
+<Tab title="User Management">
 
-## Block Types Supported
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_get_user` | Retrieve specific user information |
+| `notion_list_users` | List all users in the workspace |
+| `notion_get_me` | Get current bot user information |
+</Tab>
+<Tab title="Comments">
 
-The integration handles various Notion block types:
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_create_comment` | Create a comment on a page or block |
+| `notion_get_comments` | Retrieve comments on a specific block |
+</Tab>
+</Tabs>
 
-- **Text Blocks**: Paragraphs, headings (h1, h2, h3), quotes, callouts
-- **Lists**: Bulleted lists, numbered lists, to-do items
-- **Content**: Code blocks, equations, dividers
-- **Media**: Images, bookmarks, embeds, videos
-- **Organization**: Toggle blocks, child pages, child databases
-- **Rich Text**: Full markdown formatting support
-
-## Connection Details
-
-- **API Version**: Notion API v1 (2022-06-28)
-- **Base URL**: https://api.notion.com/v1
-- **Rate Limits**: Standard Notion API rate limits apply
-- **Pagination**: Supports cursor-based pagination for large result sets
 
 ## Need Help?
 

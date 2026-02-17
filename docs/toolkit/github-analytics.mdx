@@ -3,15 +3,15 @@ title: "GitHub Analytics"
 description: "DORA metrics and engineering performance tracking for GitHub repositories"
 ---
 
-### Overview
+## Overview
 
 Integrate GitHub Analytics to measure and track engineering performance metrics directly from CORE. Access comprehensive DORA metrics (Deployment Frequency, Lead Time, Change Failure Rate) along with additional delivery, stability, and code quality metrics to gain insights into your team's productivity and engineering excellence.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **GitHub Analytics** card
@@ -20,74 +20,7 @@ Integrate GitHub Analytics to measure and track engineering performance metrics 
 5. Grant the required permissions (read access to repositories and their data)
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `repo` - Repository access (read)
-- `read:org` - Read organization data
-- `read:user` - Read user profile data
-
-### Available MCP Tools
-
-The GitHub Analytics integration provides 10 tools for comprehensive performance tracking:
-
-
-<Tabs>
-  <Tab title="Delivery Speed">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `deployment_frequency` | Calculate deployment frequency - number of releases/deployments per week. DORA metric for delivery speed. |
-| `lead_time_for_changes` | Calculate lead time for changes - time from first commit to production deployment (in hours/days). DORA metric for delivery speed. |
-| `pr_merge_time` | Calculate PR merge time - average time from PR creation to merge (in hours). Delivery speed metric. |
-| `pr_throughput` | Calculate PR throughput - number of PRs merged per week. Delivery speed metric. |
-| `commit_frequency` | Calculate commit frequency - number of commits to main branch per week. Delivery speed metric. |
-</Tab>
-<Tab title="Stability & Reliability">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `change_failure_rate` | Calculate change failure rate - percentage of deployments that cause production failures. DORA metric for stability & reliability. |
-| `hotfix_rate` | Calculate hotfix rate - percentage of releases that are emergency hotfixes. Stability & reliability metric. |
-| `revert_rate` | Calculate revert rate - percentage of merged PRs that get reverted. Stability & reliability metric. |
-</Tab>
-<Tab title="Code Quality">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `pr_size` | Calculate PR size - average lines changed (additions + deletions) per PR. Code quality metric. |
-</Tab>
-<Tab title="Comprehensive Analysis">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `all_metrics` | Calculate all GitHub analytics metrics at once - includes all DORA metrics, delivery speed, stability, and code quality metrics. |
-</Tab>
-</Tabs>
-
-### Tool Parameters
-
-#### Common Parameters
-
-Most analytics tools accept the following parameters:
-
-| Parameter | Type | Required | Description |
-|-----------|------|----------|-------------|
-| `owner` | string | Yes | Repository owner (organization or user) |
-| `repo` | string | Yes | Repository name |
-| `days` | number | No | Number of days to analyze (default: 30) |
-| `startDate` | string | No | Start date in YYYY-MM-DD format (overrides days) |
-| `endDate` | string | No | End date in YYYY-MM-DD format (default: today) |
-| `compareWithPrevious` | boolean | No | Compare with previous period for week-over-week analysis (default: false) |
-
-#### Specialized Parameters
-
-**Commit Frequency**: Includes `branch` parameter (default: main) to analyze specific branches
-
-**Change Failure Rate**: Includes `incidentLabels` array parameter (default: ["incident", "production", "outage", "bug"]) to identify production incidents
-
-**Hotfix Rate**: Includes `hotfixPatterns` array parameter (default: ["hotfix", "emergency", "patch"]) to identify emergency releases
-
-### Use Cases
+## Use Cases
 
 <AccordionGroup>
   <Accordion title="Track DORA Metrics" icon="chart-line">
@@ -236,7 +169,7 @@ Most analytics tools accept the following parameters:
   </Accordion>
 </AccordionGroup>
 
-### Understanding the Metrics
+## Understanding the Metrics
 
 #### DORA Metrics (Industry Standard)
 
@@ -266,25 +199,89 @@ Most analytics tools accept the following parameters:
 
 #### Delivery Metrics
 
-**PR Merge Time**: Average hours from PR creation to merge (indicates review efficiency)
-
-**PR Throughput**: Number of PRs merged per week (indicates team velocity)
-
-**Commit Frequency**: Number of commits to main branch per week (indicates development activity)
+- **PR Merge Time**: Average hours from PR creation to merge (indicates review efficiency)
+- **PR Throughput**: Number of PRs merged per week (indicates team velocity)
+- **Commit Frequency**: Number of commits to main branch per week (indicates development activity)
 
 #### Stability Metrics
 
-**Hotfix Rate**: Percentage of emergency releases (indicates production pressure)
+- **Hotfix Rate**: Percentage of emergency releases (indicates production pressure)
+- **Revert Rate**: Percentage of merged PRs that get reverted (indicates code quality issues)
 
-**Revert Rate**: Percentage of merged PRs that get reverted (indicates code quality issues)
-
-### Integration Notes
+## Integration Notes
 
 - All metrics are calculated in real-time from GitHub data
 - Analysis includes merged and released code only
 - Custom date ranges provide flexibility for any analysis window
 - Week-over-week comparisons help identify trends
 - Metrics support both organizations and personal repositories
+
+## Scopes
+
+- `repo` - Repository access (read)
+- `read:org` - Read organization data
+- `read:user` - Read user profile data
+
+## Available MCP Tools
+
+The GitHub Analytics integration provides 10 tools for comprehensive performance tracking:
+
+
+<Tabs>
+  <Tab title="Delivery Speed">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `deployment_frequency` | Calculate deployment frequency - number of releases/deployments per week. DORA metric for delivery speed. |
+| `lead_time_for_changes` | Calculate lead time for changes - time from first commit to production deployment (in hours/days). DORA metric for delivery speed. |
+| `pr_merge_time` | Calculate PR merge time - average time from PR creation to merge (in hours). Delivery speed metric. |
+| `pr_throughput` | Calculate PR throughput - number of PRs merged per week. Delivery speed metric. |
+| `commit_frequency` | Calculate commit frequency - number of commits to main branch per week. Delivery speed metric. |
+</Tab>
+<Tab title="Stability & Reliability">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `change_failure_rate` | Calculate change failure rate - percentage of deployments that cause production failures. DORA metric for stability & reliability. |
+| `hotfix_rate` | Calculate hotfix rate - percentage of releases that are emergency hotfixes. Stability & reliability metric. |
+| `revert_rate` | Calculate revert rate - percentage of merged PRs that get reverted. Stability & reliability metric. |
+</Tab>
+<Tab title="Code Quality">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `pr_size` | Calculate PR size - average lines changed (additions + deletions) per PR. Code quality metric. |
+</Tab>
+<Tab title="Comprehensive Analysis">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `all_metrics` | Calculate all GitHub analytics metrics at once - includes all DORA metrics, delivery speed, stability, and code quality metrics. |
+</Tab>
+</Tabs>
+
+## Tool Parameters
+
+#### Common Parameters
+
+Most analytics tools accept the following parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `owner` | string | Yes | Repository owner (organization or user) |
+| `repo` | string | Yes | Repository name |
+| `days` | number | No | Number of days to analyze (default: 30) |
+| `startDate` | string | No | Start date in YYYY-MM-DD format (overrides days) |
+| `endDate` | string | No | End date in YYYY-MM-DD format (default: today) |
+| `compareWithPrevious` | boolean | No | Compare with previous period for week-over-week analysis (default: false) |
+
+#### Specialized Parameters
+
+- **Commit Frequency**: Includes `branch` parameter (default: main) to analyze specific branches
+- **Change Failure Rate**: Includes `incidentLabels` array parameter (default: ["incident", "production", "outage", "bug"]) to identify production incidents
+- **Hotfix Rate**: Includes `hotfixPatterns` array parameter (default: ["hotfix", "emergency", "patch"]) to identify emergency releases
+
+
 
 ### Need Help?
 

@@ -3,15 +3,15 @@ title: "Slack"
 description: "Team messaging platform for channels, direct messages, and file sharing"
 ---
 
-### Overview
+## Overview
 
 Integrate Slack to manage team communications, channels, messages, and collaborate seamlessly from CORE. Access 40+ tools for complete Slack operations including messaging, channel management, user coordination, and file sharing without leaving your workspace.
 
-### Setup Guide
+## Setup Guide
 
 - `Authentication Type` : OAuth 2.0
 
-### How to Connect
+## How to Connect
 
 1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
 2. Click on the **Slack** card
@@ -20,125 +20,7 @@ Integrate Slack to manage team communications, channels, messages, and collabora
 5. Grant the required permissions to your workspace
 6. You'll be redirected back to CORE once connected
 
-### Scopes
-
-- `chat:write` - Send messages to channels
-- `chat:write.public` - Send messages to public channels
-- `channels:read` - List and view channel information
-- `channels:manage` - Create and archive channels
-- `conversations:write` - Modify conversations (channels/DMs)
-- `users:read` - List and view user profiles
-- `users:read.email` - Access user email addresses
-- `reactions:read` - View message reactions
-- `reactions:write` - Add and remove reactions
-- `team:read` - Access workspace information
-- `files:read` - View files (when enabled)
-- `files:write` - Upload files (when enabled)
-
-### Available MCP Tools
-
-The Slack integration provides 40+ tools for comprehensive team communication:
-
-<Tabs>
-  <Tab title="Message Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_send_message` | Send a message to a channel or direct message |
-| `slack_update_message` | Update an existing message |
-| `slack_delete_message` | Delete a message |
-| `slack_get_message` | Get details of a specific message |
-| `slack_list_messages` | List messages from a channel with pagination |
-| `slack_search_messages` | Search for messages across workspace |
-| `slack_get_unread` | Get unread messages from a channel |
-| `slack_get_thread_replies` | Get all replies in a thread |
-</Tab>
-<Tab title="Reactions">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_add_reaction` | Add emoji reaction to a message |
-| `slack_remove_reaction` | Remove a reaction from a message |
-| `slack_get_reactions` | Get all reactions on a message |
-</Tab>
-<Tab title="Channel Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_list_channels` | List all channels in workspace with filtering |
-| `slack_get_channel` | Get details of a specific channel |
-| `slack_create_channel` | Create a new channel (public or private) |
-| `slack_archive_channel` | Archive a channel |
-| `slack_unarchive_channel` | Unarchive a channel |
-| `slack_invite_to_channel` | Invite users to a channel |
-| `slack_kick_from_channel` | Remove a user from a channel |
-| `slack_join_channel` | Join a channel |
-| `slack_leave_channel` | Leave a channel |
-| `slack_rename_channel` | Rename a channel |
-| `slack_set_channel_topic` | Set channel topic |
-| `slack_set_channel_purpose` | Set channel purpose/description |
-</Tab>
-<Tab title="User Management">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_list_users` | List all users in workspace |
-| `slack_get_user` | Get details of a specific user |
-| `slack_get_user_by_email` | Find a user by email address |
-| `slack_get_user_presence` | Get user presence status |
-| `slack_set_user_presence` | Set your presence status |
-</Tab>
-<Tab title="Starred Items">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_add_star` | Star a message or file |
-| `slack_remove_star` | Remove a star from message or file |
-| `slack_list_stars` | List all starred items |
-</Tab>
-<Tab title="Workspace">
-
-| Tool Name | Description |
-|-----------|-------------|
-| `slack_get_team_info` | Get workspace/team information |
-</Tab>
-</Tabs>
-
-### Triggers
-
-Slack triggers enable CORE's Meta Agent to wake up and act proactively when events occur in real-time via webhooks.
-
-<Tabs>
-  <Tab title="Messages">
-
-| Event | Description |
-|-------|-------------|
-| `SLACK_RECEIVE_MESSAGE` | Triggered when a new message is posted to any channel |
-| `SLACK_RECEIVE_DIRECT_MESSAGE` | Triggered when a new direct message is received |
-| `SLACK_RECEIVE_MPIM_MESSAGE` | Triggered when a message is posted in a multi-person DM |
-| `SLACK_RECEIVE_GROUP_MESSAGE` | Triggered when a message is posted in a private channel |
-| `SLACK_RECEIVE_BOT_MESSAGE` | Triggered when a bot posts a message |
-| `SLACK_RECEIVE_THREAD_REPLY` | Triggered when a reply is posted to a thread |
-</Tab>
-<Tab title="Reactions">
-
-| Event | Description |
-|-------|-------------|
-| `SLACK_REACTION_ADDED` | Triggered when an emoji reaction is added to a message |
-| `SLACK_REACTION_REMOVED` | Triggered when an emoji reaction is removed from a message |
-</Tab>
-<Tab title="Channels">
-
-| Event | Description |
-|-------|-------------|
-| `SLACK_CHANNEL_CREATED` | Triggered when a new channel is created |
-| `SLACK_CHANNEL_ARCHIVED` | Triggered when a channel is archived |
-| `SLACK_CHANNEL_DELETED` | Triggered when a channel is deleted |
-| `SLACK_CHANNEL_RENAMED` | Triggered when a channel is renamed |
-</Tab>
-</Tabs>
-
-### Use Cases
+## Use Cases
 
 #### Action Use Cases
 
@@ -281,7 +163,127 @@ With webhooks enabled, CORE monitors Slack 24/7 and acts automatically based on 
   </Accordion>
 </AccordionGroup>
 
-### Need Help?
+## Scopes
+
+- `chat:write` - Send messages to channels
+- `chat:write.public` - Send messages to public channels
+- `channels:read` - List and view channel information
+- `channels:manage` - Create and archive channels
+- `conversations:write` - Modify conversations (channels/DMs)
+- `users:read` - List and view user profiles
+- `users:read.email` - Access user email addresses
+- `reactions:read` - View message reactions
+- `reactions:write` - Add and remove reactions
+- `team:read` - Access workspace information
+- `files:read` - View files (when enabled)
+- `files:write` - Upload files (when enabled)
+
+## Available MCP Tools
+
+The Slack integration provides 40+ tools for comprehensive team communication:
+
+<Tabs>
+  <Tab title="Message Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_send_message` | Send a message to a channel or direct message |
+| `slack_update_message` | Update an existing message |
+| `slack_delete_message` | Delete a message |
+| `slack_get_message` | Get details of a specific message |
+| `slack_list_messages` | List messages from a channel with pagination |
+| `slack_search_messages` | Search for messages across workspace |
+| `slack_get_unread` | Get unread messages from a channel |
+| `slack_get_thread_replies` | Get all replies in a thread |
+</Tab>
+<Tab title="Reactions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_add_reaction` | Add emoji reaction to a message |
+| `slack_remove_reaction` | Remove a reaction from a message |
+| `slack_get_reactions` | Get all reactions on a message |
+</Tab>
+<Tab title="Channel Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_list_channels` | List all channels in workspace with filtering |
+| `slack_get_channel` | Get details of a specific channel |
+| `slack_create_channel` | Create a new channel (public or private) |
+| `slack_archive_channel` | Archive a channel |
+| `slack_unarchive_channel` | Unarchive a channel |
+| `slack_invite_to_channel` | Invite users to a channel |
+| `slack_kick_from_channel` | Remove a user from a channel |
+| `slack_join_channel` | Join a channel |
+| `slack_leave_channel` | Leave a channel |
+| `slack_rename_channel` | Rename a channel |
+| `slack_set_channel_topic` | Set channel topic |
+| `slack_set_channel_purpose` | Set channel purpose/description |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_list_users` | List all users in workspace |
+| `slack_get_user` | Get details of a specific user |
+| `slack_get_user_by_email` | Find a user by email address |
+| `slack_get_user_presence` | Get user presence status |
+| `slack_set_user_presence` | Set your presence status |
+</Tab>
+<Tab title="Starred Items">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_add_star` | Star a message or file |
+| `slack_remove_star` | Remove a star from message or file |
+| `slack_list_stars` | List all starred items |
+</Tab>
+<Tab title="Workspace">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_get_team_info` | Get workspace/team information |
+</Tab>
+</Tabs>
+
+## Triggers
+
+Slack triggers enable CORE's Meta Agent to wake up and act proactively when events occur in real-time via webhooks.
+
+<Tabs>
+  <Tab title="Messages">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_RECEIVE_MESSAGE` | Triggered when a new message is posted to any channel |
+| `SLACK_RECEIVE_DIRECT_MESSAGE` | Triggered when a new direct message is received |
+| `SLACK_RECEIVE_MPIM_MESSAGE` | Triggered when a message is posted in a multi-person DM |
+| `SLACK_RECEIVE_GROUP_MESSAGE` | Triggered when a message is posted in a private channel |
+| `SLACK_RECEIVE_BOT_MESSAGE` | Triggered when a bot posts a message |
+| `SLACK_RECEIVE_THREAD_REPLY` | Triggered when a reply is posted to a thread |
+</Tab>
+<Tab title="Reactions">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_REACTION_ADDED` | Triggered when an emoji reaction is added to a message |
+| `SLACK_REACTION_REMOVED` | Triggered when an emoji reaction is removed from a message |
+</Tab>
+<Tab title="Channels">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_CHANNEL_CREATED` | Triggered when a new channel is created |
+| `SLACK_CHANNEL_ARCHIVED` | Triggered when a channel is archived |
+| `SLACK_CHANNEL_DELETED` | Triggered when a channel is deleted |
+| `SLACK_CHANNEL_RENAMED` | Triggered when a channel is renamed |
+</Tab>
+</Tabs>
+
+
+
+## Need Help?
 
 Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
 
