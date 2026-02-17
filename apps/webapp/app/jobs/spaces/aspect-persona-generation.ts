@@ -533,6 +533,11 @@ async function generateSectionWithChunking(
   const { aspect, statements, episodes } = aspectData;
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
 
+  if (!sectionInfo) {
+    logger.warn(`No section mapping for aspect "${aspect}" — skipping chunking`);
+    return null;
+  }
+
   // Check if chunking is needed
   const needsChunking = statements.length > MAX_STATEMENTS_PER_CHUNK;
 
@@ -635,6 +640,11 @@ async function generateAspectSection(
 ): Promise<PersonaSectionResult | null> {
   const { aspect, statements, episodes } = aspectData;
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
+
+  if (!sectionInfo) {
+    logger.warn(`No section mapping for aspect "${aspect}" — skipping`);
+    return null;
+  }
 
   // Skip if insufficient data (except Identity - always include even with 1-2 statements)
   if (aspect !== "Identity" && statements.length < MIN_STATEMENTS_PER_SECTION) {
@@ -933,7 +943,229 @@ async function pollBatchCompletion(batchId: string, maxPollingTime: number) {
 }
 
 /**
- * Main entry point for aspect-based persona generation
+ * Fetch statements for a specific episode, grouped by aspect
+ * Used for incremental persona generation — only gets statements from one episode
+ */
+export async function getStatementsForEpisodeByAspect(
+  userId: string,
+  episodeUuid: string,
+): Promise<Map<StatementAspect, AspectData>> {
+  const graphProvider = ProviderFactory.getGraphProvider();
+
+  const query = `
+    MATCH (e:Episode {uuid: $episodeUuid})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId})
+    WHERE s.invalidAt IS NULL
+      AND s.aspect IS NOT NULL
+      AND s.aspect IN $personaAspects
+    RETURN s.aspect AS aspect,
+           collect(DISTINCT {
+             uuid: s.uuid,
+             fact: s.fact,
+             createdAt: s.createdAt,
+             validAt: s.validAt,
+             attributes: s.attributes,
+             aspect: s.aspect
+           }) AS statements
+    ORDER BY aspect
+  `;
+
+  const results = await graphProvider.runQuery(query, {
+    userId,
+    episodeUuid,
+    personaAspects: ["Identity", "Preference", "Directive"],
+  });
+
+  const aspectDataMap = new Map<StatementAspect, AspectData>();
+
+  for (const record of results) {
+    const aspect = record.get("aspect") as StatementAspect;
+    const rawStatements = record.get("statements") as any[];
+
+    const statements: StatementNode[] = rawStatements.map((s) => ({
+      uuid: s.uuid,
+      fact: s.fact,
+      factEmbedding: [],
+      createdAt: new Date(s.createdAt),
+      validAt: new Date(s.validAt),
+      invalidAt: null,
+      attributes:
+        typeof s.attributes === "string"
+          ? JSON.parse(s.attributes)
+          : s.attributes || {},
+      userId,
+      aspect: s.aspect,
+    }));
+
+    // Episodes not needed for incremental — we already have the existing persona doc
+    aspectDataMap.set(aspect, { aspect, statements, episodes: [] });
+  }
+
+  return aspectDataMap;
+}
+
+/**
+ * Build prompt for incremental persona update
+ * Takes existing persona doc + new statements from a single episode
+ * Returns the complete updated persona document
+ */
+function buildIncrementalPersonaPrompt(
+  existingPersona: string,
+  newStatements: Map<StatementAspect, AspectData>,
+  userContext: UserContext,
+): ModelMessage {
+  // Format new statements grouped by aspect
+  const statementsText = Array.from(newStatements.entries())
+    .map(([aspect, data]) => {
+      const sectionInfo = ASPECT_SECTION_MAP[aspect];
+      if (!sectionInfo) return "";
+      const facts = data.statements.map((s, i) => `${i + 1}. ${s.fact}`).join("\n");
+      return `### ${sectionInfo.title}\n${facts}`;
+    })
+    .filter(Boolean)
+    .join("\n\n");
+
+  // Collect filterGuidance for each persona aspect
+  const sectionRules = (["Identity", "Preference", "Directive"] as StatementAspect[])
+    .map((aspect) => {
+      const info = ASPECT_SECTION_MAP[aspect];
+      return `**${info.title}**: ${info.filterGuidance}`;
+    })
+    .join("\n\n");
+
+  const content = `
+You are performing a MINIMAL UPDATE to an existing persona document. A few new facts were learned from a recent episode. Your job is to incorporate ONLY those new facts into the existing document.
+
+## CRITICAL: This is a MERGE operation, NOT a rewrite
+
+⚠️ You MUST preserve ALL existing content. The existing document was carefully generated from hundreds of statements. You are adding/updating a few lines, not regenerating from scratch.
+
+**Rule: Start with the existing document as-is, then apply the minimum changes needed to incorporate the new facts below.**
+
+If a section has NO new facts below, copy that section EXACTLY as-is — do not summarize, rephrase, or remove anything.
+
+## Existing Persona Document (PRESERVE THIS)
+
+${existingPersona}
+
+## New Facts to Incorporate
+
+${statementsText}
+
+## How to Merge
+
+1. **Add** new facts that don't exist yet — insert them into the appropriate section
+2. **Update** existing entries only if a new fact directly contradicts them (e.g., new role replaces old role)
+3. **Never remove** existing entries unless explicitly contradicted by a new fact above
+4. **Never rephrase** existing entries — keep them word-for-word
+5. **Keep the same section structure**: ## IDENTITY, ## PREFERENCES, ## DIRECTIVES
+6. **Keep existing confidence levels** unless the new facts significantly change a section
+
+## Section Rules
+
+${sectionRules}
+
+## Format
+
+- Same markdown format as the existing document
+- Keep the # PERSONA header and metadata line (update the date to today)
+- End each section with [Confidence: HIGH|MEDIUM|LOW]
+
+Return the complete document with the new facts merged in.
+  `.trim();
+
+  return { role: "user", content };
+}
+
+/**
+ * Generate an incremental persona update using a single LLM call
+ * Takes existing persona + new episode's statements → complete updated doc
+ */
+export async function generateIncrementalPersona(
+  userId: string,
+  episodeUuid: string,
+  existingPersonaContent: string,
+): Promise<string> {
+  logger.info("Starting incremental persona generation", { userId, episodeUuid });
+
+  // Step 1: Get user context
+  const userContext = await getUserContext(userId);
+
+  // Step 2: Get this episode's persona-relevant statements
+  const episodeStatements = await getStatementsForEpisodeByAspect(userId, episodeUuid);
+
+  if (episodeStatements.size === 0) {
+    logger.info("No persona-relevant statements in episode, returning existing persona", {
+      userId,
+      episodeUuid,
+    });
+    return existingPersonaContent;
+  }
+
+  const totalStatements = Array.from(episodeStatements.values()).reduce(
+    (sum, d) => sum + d.statements.length,
+    0,
+  );
+
+  logger.info("Episode persona statements fetched", {
+    userId,
+    episodeUuid,
+    aspects: Array.from(episodeStatements.keys()),
+    totalStatements,
+  });
+
+  // Step 3: Build incremental prompt
+  const prompt = buildIncrementalPersonaPrompt(
+    existingPersonaContent,
+    episodeStatements,
+    userContext,
+  );
+
+  // Step 4: Single batch call
+  const { batchId } = await createBatch({
+    requests: [
+      {
+        customId: `persona-incremental-${Date.now()}`,
+        messages: [prompt],
+        systemPrompt: "",
+      },
+    ],
+    outputSchema: SectionContentSchema,
+    maxRetries: 3,
+    timeoutMs: 1200000,
+  });
+
+  const batch = await pollBatchCompletion(batchId, 1200000);
+
+  if (!batch.results || batch.results.length === 0) {
+    logger.warn("No results from incremental persona batch, returning existing persona");
+    return existingPersonaContent;
+  }
+
+  const result = batch.results[0];
+  if (result.error || !result.response) {
+    logger.warn("Error in incremental persona generation, returning existing persona", {
+      error: result.error,
+    });
+    return existingPersonaContent;
+  }
+
+  const updatedPersona =
+    typeof result.response === "string"
+      ? result.response
+      : result.response.content || existingPersonaContent;
+
+  logger.info("Incremental persona generation completed", {
+    userId,
+    episodeUuid,
+    originalLength: existingPersonaContent.length,
+    updatedLength: updatedPersona.length,
+  });
+
+  return updatedPersona;
+}
+
+/**
+ * Main entry point for aspect-based persona generation (full mode)
  */
 export async function generateAspectBasedPersona(
   userId: string,

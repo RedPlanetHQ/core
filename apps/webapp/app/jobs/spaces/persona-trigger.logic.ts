@@ -40,20 +40,19 @@ export async function checkPersonaUpdateThreshold(
   try {
     const labelService = new LabelService();
 
-    // Check if persona ingestion exists in queue
+    // Check if persona document exists
     const personaSessionId = `persona-v2-${workspaceId}`;
-    const latestPersona = await prisma.ingestionQueue.findFirst({
+    const latestPersona = await prisma.document.findFirst({
       where: {
         sessionId: personaSessionId,
         workspaceId,
-        status: "COMPLETED",
+        source: "persona-v2",
       },
       orderBy: {
         createdAt: "desc",
       },
       select: {
         id: true,
-        output: true,
       },
     });
 
