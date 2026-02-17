@@ -23,9 +23,9 @@ export const Agent = () => {
             <Button
               variant="secondary"
               className="gap-2"
-              isActive={location.pathname.includes("/home/reminders")}
+              isActive={location.pathname.includes("/home/agent/reminders")}
               onClick={() => {
-                navigate(`/home/labels/no_label`);
+                navigate(`/home/agent/reminders`);
               }}
             >
               <Clock size={16} />
@@ -36,9 +36,9 @@ export const Agent = () => {
             <Button
               variant="secondary"
               className="gap-2"
-              isActive={location.pathname.includes("/home/skills")}
+              isActive={location.pathname.includes("/home/agent/skills")}
               onClick={() => {
-                navigate(`/home/labels/no_label`);
+                navigate(`/home/agent/skills`);
               }}
             >
               <Library size={16} />
@@ -49,9 +49,9 @@ export const Agent = () => {
             <Button
               variant="secondary"
               className="gap-2"
-              isActive={location.pathname.includes("/home/connect")}
+              isActive={location.pathname.includes("/home/agent/connect")}
               onClick={() => {
-                navigate(`/home/labels/no_label`);
+                navigate(`/home/agent/connect`);
               }}
             >
               <Plug size={16} />

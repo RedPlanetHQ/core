@@ -30,8 +30,7 @@ export enum Provider {
 
 export enum OnboardingStep {
   PROVIDER_SELECTION = "provider_selection",
-  FIRST_INGESTION = "first_ingestion",
-  VERIFICATION = "verification",
+  INSTALLATION_STEPS = "installation_steps",
   COMPLETE = "complete",
 }
 
