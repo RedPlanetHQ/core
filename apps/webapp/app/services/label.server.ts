@@ -73,6 +73,37 @@ export class LabelService {
   }
 
   /**
+   * Get all labels for a workspace with document counts
+   */
+  async getWorkspaceLabelsWithCounts(
+    workspaceId: string,
+  ): Promise<(Label & { documentCount: number })[]> {
+    // Get labels and document counts in parallel
+    const [labels, countResults] = await Promise.all([
+      prisma.label.findMany({
+        where: { workspaceId },
+        orderBy: { name: "asc" },
+      }),
+      prisma.$queryRaw<{ label_id: string; count: bigint }[]>`
+        SELECT unnest("labelIds") as label_id, COUNT(*) as count
+        FROM "Document"
+        WHERE "workspaceId" = ${workspaceId} AND deleted IS NULL
+        GROUP BY label_id
+      `,
+    ]);
+
+    // Create a map for O(1) lookup
+    const countMap = new Map(
+      countResults.map((r) => [r.label_id, Number(r.count)]),
+    );
+
+    return labels.map((label) => ({
+      ...label,
+      documentCount: countMap.get(label.id) ?? 0,
+    }));
+  }
+
+  /**
    * Get label by name in workspace
    */
   async getLabelByName(

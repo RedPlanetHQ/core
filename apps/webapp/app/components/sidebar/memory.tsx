@@ -51,7 +51,7 @@ export const Memory = () => {
               className="gap-2"
               isActive={location.pathname.includes("/home/label")}
               onClick={() => {
-                navigate(`/home/labels/no_label`);
+                navigate(`/home/labels`);
               }}
             >
               <Tag size={16} />

@@ -1,8 +1,9 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
 import { type Editor } from "@tiptap/react";
 import { EditorContent, EditorRoot } from "novel";
 import { type DocumentItem } from "~/hooks/use-documents";
+import { useDebounce } from "~/hooks/use-debounce";
 
 import { cn } from "~/lib/utils";
 import {
@@ -15,38 +16,42 @@ interface DocumentEditorViewProps {
   editable?: boolean
 }
 
+const DEBOUNCE_MS = 500;
+
 export function DocumentEditorView({ document, editable: defaultEditable }: DocumentEditorViewProps) {
   const [editor, setEditor] = useState<Editor>();
-  const [hasChanges, setHasChanges] = useState(false);
+  const [content, setContent] = useState<string | null>(null);
   const fetcher = useFetcher<{ success?: boolean; error?: boolean }>();
+  const isInitialMount = useRef(true);
 
+  const debouncedContent = useDebounce(content, DEBOUNCE_MS);
   const isLoading = fetcher.state === "submitting";
+  const hasChanges = content !== null && content !== debouncedContent;
 
-  const handleSave = useCallback(() => {
-    if (!editor || isLoading) return;
+  // Save when debounced content changes
+  useEffect(() => {
+    if (isInitialMount.current) {
+      isInitialMount.current = false;
+      return;
+    }
 
-    const content = editor?.storage.markdown.getMarkdown();
+    if (debouncedContent === null || isLoading) return;
 
-    // Save using the new document API
     fetcher.submit(
-      { content },
+      { content: debouncedContent },
       {
         action: `/api/v1/documents/${document.id}`,
         method: "POST",
         encType: "application/json",
       },
     );
+  }, [debouncedContent, document.id]);
 
-    setHasChanges(false);
-  }, [editor, document.id, fetcher, isLoading]);
-
-  // Update last saved time after successful save
-  useEffect(() => {
-    if (fetcher.data?.success && fetcher.state === "idle") {
-      setHasChanges(false);
-    }
-  }, [fetcher.data, fetcher.state]);
-
+  const handleUpdate = useCallback(() => {
+    if (!editor) return;
+    const newContent = editor.storage.markdown.getMarkdown();
+    setContent(newContent);
+  }, [editor]);
 
   const editable = defaultEditable && document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
 
@@ -72,7 +77,7 @@ export function DocumentEditorView({ document, editable: defaultEditable }: Docu
               onCreate={({ editor }) => {
                 setEditor(editor);
               }}
-              onUpdate={handleSave}
+              onUpdate={handleUpdate}
               extensions={[
                 ...extensionsForConversation,
                 getPlaceholder("Start writing here..."),

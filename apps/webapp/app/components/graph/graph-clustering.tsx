@@ -18,12 +18,14 @@ import {
   getNodeColor as getNodeColorByLabel,
   nodeColorPalette,
 } from "./node-colors";
+import { toHex } from "~/lib/color-utils";
 import { useTheme } from "remix-themes";
 
 export interface ClusterData {
   id: string;
   name: string;
   description?: string;
+  color?: string;
   size: number;
   cohesionScore?: number;
   aspectType?: "thematic" | "social" | "activity";
@@ -68,21 +70,6 @@ export interface GraphClusteringRef {
   highlightCluster: (clusterId: string) => void;
   resetHighlights: () => void;
 }
-
-// Use node-colors palette for cluster colors
-const generateClusterColors = (
-  clusterCount: number,
-  isDarkMode: boolean,
-): string[] => {
-  const palette = isDarkMode ? nodeColorPalette.dark : nodeColorPalette.light;
-  const colors: string[] = [];
-
-  for (let i = 0; i < clusterCount; i++) {
-    colors.push(palette[i % palette.length]);
-  }
-
-  return colors;
-};
 
 export const GraphClustering = forwardRef<
   GraphClusteringRef,
@@ -149,19 +136,18 @@ export const GraphClustering = forwardRef<
       onActiveNodesChange(activeNodes);
     }, [onActiveNodesChange]);
 
-    // Create cluster color mapping
+    // Create cluster color mapping - use database colors when available
     const clusterColorMap = useMemo(() => {
       if (!enableClusterColors) return new Map();
 
-      const clusterIds = clusters.map((c) => c.id);
-      const clusterColors = generateClusterColors(
-        clusterIds.length,
-        themeMode === "dark",
-      );
+      const palette = themeMode === "dark" ? nodeColorPalette.dark : nodeColorPalette.light;
       const colorMap = new Map<string, string>();
 
-      clusterIds.forEach((id, index) => {
-        colorMap.set(id, clusterColors[index]);
+      clusters.forEach((cluster, index) => {
+        // Use database color if available, otherwise fall back to palette
+        // Convert to hex for Sigma.js canvas compatibility
+        const color = cluster.color ? toHex(cluster.color) : palette[index % palette.length];
+        colorMap.set(cluster.id, color);
       });
 
       return colorMap;

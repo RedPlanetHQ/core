@@ -154,12 +154,12 @@ export function computeNextRun(
 }
 
 /**
- * Add a new reminder for a user
+ * Add a new reminder for a workspace
  * Schedule is stored as-is (in user's local timezone)
  * nextRunAt is computed and stored in UTC
  */
 export async function addReminder(
-  userId: string,
+  workspaceId: string,
   data: ReminderData,
 ): Promise<{
   id: string;
@@ -168,12 +168,14 @@ export async function addReminder(
   nextRunAt: Date | null;
 }> {
   try {
-    // Get user's timezone
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: { timezone: true },
+    // Get user's timezone from workspace's user metadata
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: { UserWorkspace: { include: { user: true }, take: 1 } },
     });
-    const timezone = user?.timezone || "UTC";
+    const user = workspace?.UserWorkspace[0]?.user;
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const timezone = (metadata?.timezone as string) ?? "UTC";
 
     // Determine the "after" time for computing next run
     // If startDate is provided, use start of that day in user's timezone
@@ -196,7 +198,7 @@ export async function addReminder(
 
     const reminder = await prisma.reminder.create({
       data: {
-        userId,
+        workspaceId,
         text: data.text,
         schedule: data.schedule, // Store as-is (local timezone)
         startDate: data.startDate ?? null,
@@ -215,14 +217,14 @@ export async function addReminder(
     if (reminder.isActive && nextRunAt) {
       await scheduleNextReminder(
         reminder.id,
-        userId,
+        workspaceId,
         reminder.channel as "whatsapp" | "email",
         nextRunAt,
       );
     }
 
     logger.info(
-      `Created reminder ${reminder.id} for user ${userId}, next run: ${nextRunAt}`,
+      `Created reminder ${reminder.id} for workspace ${workspaceId}, next run: ${nextRunAt}`,
     );
     return {
       id: reminder.id,
@@ -231,7 +233,7 @@ export async function addReminder(
       nextRunAt,
     };
   } catch (error) {
-    logger.error("Failed to create reminder", {error});
+    logger.error("Failed to create reminder", { error });
     throw new Error("Failed to create reminder");
   }
 }
@@ -241,7 +243,7 @@ export async function addReminder(
  */
 export async function updateReminder(
   reminderId: string,
-  userId: string,
+  workspaceId: string,
   data: ReminderUpdateData,
 ): Promise<{
   id: string;
@@ -251,15 +253,21 @@ export async function updateReminder(
 }> {
   try {
     const existing = await prisma.reminder.findFirst({
-      where: { id: reminderId, userId },
-      include: { user: { select: { timezone: true } } },
+      where: { id: reminderId, workspaceId },
+      include: {
+        workspace: {
+          include: { UserWorkspace: { include: { user: true }, take: 1 } },
+        },
+      },
     });
 
     if (!existing) {
       throw new Error("Reminder not found or access denied");
     }
 
-    const timezone = existing.user?.timezone || "UTC";
+    const user = existing.workspace?.UserWorkspace[0]?.user;
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const timezone = (metadata?.timezone as string) ?? "UTC";
 
     // Use new schedule or keep existing
     const schedule = data.schedule ?? existing.schedule;
@@ -288,13 +296,13 @@ export async function updateReminder(
     if (reminder.isActive && reminder.nextRunAt) {
       await scheduleNextReminder(
         reminder.id,
-        userId,
+        workspaceId,
         reminder.channel as "whatsapp" | "email",
         reminder.nextRunAt,
       );
     }
 
-    logger.info(`Updated reminder ${reminder.id} for user ${userId}`);
+    logger.info(`Updated reminder ${reminder.id} for workspace ${workspaceId}`);
     return {
       id: reminder.id,
       text: reminder.text,
@@ -302,7 +310,7 @@ export async function updateReminder(
       nextRunAt: reminder.nextRunAt,
     };
   } catch (error) {
-    logger.error("Failed to update reminder", {error});
+    logger.error("Failed to update reminder", { error });
     throw new Error(
       error instanceof Error ? error.message : "Failed to update reminder",
     );
@@ -314,11 +322,11 @@ export async function updateReminder(
  */
 export async function deleteReminder(
   reminderId: string,
-  userId: string,
+  workspaceId: string,
 ): Promise<{ success: boolean }> {
   try {
     const existing = await prisma.reminder.findFirst({
-      where: { id: reminderId, userId },
+      where: { id: reminderId, workspaceId },
     });
 
     if (!existing) {
@@ -331,10 +339,10 @@ export async function deleteReminder(
 
     await removeScheduledReminder(reminderId);
 
-    logger.info(`Deleted reminder ${reminderId} for user ${userId}`);
+    logger.info(`Deleted reminder ${reminderId} for workspace ${workspaceId}`);
     return { success: true };
   } catch (error) {
-    logger.error("Failed to delete reminder", {error});
+    logger.error("Failed to delete reminder", { error });
     throw new Error(
       error instanceof Error ? error.message : "Failed to delete reminder",
     );
@@ -342,16 +350,16 @@ export async function deleteReminder(
 }
 
 /**
- * Get all active reminders for a user
+ * Get all active reminders for a workspace
  */
-export async function getUserReminders(userId: string) {
+export async function getWorkspaceReminders(workspaceId: string) {
   try {
     return await prisma.reminder.findMany({
-      where: { userId, isActive: true },
+      where: { workspaceId, isActive: true },
       orderBy: { createdAt: "desc" },
     });
   } catch (error) {
-    logger.error("Failed to get user reminders", {error});
+    logger.error("Failed to get workspace reminders", { error });
     return [];
   }
 }
@@ -365,7 +373,7 @@ export async function getActiveReminders() {
       where: { isActive: true },
     });
   } catch (error) {
-    logger.error("Failed to get active reminders", {error});
+    logger.error("Failed to get active reminders", { error });
     return [];
   }
 }
@@ -379,7 +387,7 @@ export async function getReminderById(reminderId: string) {
       where: { id: reminderId },
     });
   } catch (error) {
-    logger.error("Failed to get reminder", {error});
+    logger.error("Failed to get reminder", { error });
     return null;
   }
 }
@@ -393,14 +401,20 @@ export async function scheduleNextOccurrence(
   try {
     const reminder = await prisma.reminder.findUnique({
       where: { id: reminderId },
-      include: { user: { select: { timezone: true } } },
+      include: {
+        workspace: {
+          include: { UserWorkspace: { include: { user: true }, take: 1 } },
+        },
+      },
     });
 
     if (!reminder || !reminder.isActive) {
       return false;
     }
 
-    const timezone = reminder.user?.timezone || "UTC";
+    const user = reminder.workspace?.UserWorkspace[0]?.user;
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const timezone = (metadata?.timezone as string) ?? "UTC";
 
     // Compute next run from now (schedule is in user's local timezone)
     const nextRunAt = computeNextRun(reminder.schedule, timezone);
@@ -425,7 +439,7 @@ export async function scheduleNextOccurrence(
 
     await scheduleNextReminder(
       reminderId,
-      reminder.userId,
+      reminder.workspaceId,
       reminder.channel as "whatsapp" | "email",
       nextRunAt,
     );
@@ -435,7 +449,7 @@ export async function scheduleNextOccurrence(
     );
     return true;
   } catch (error) {
-    logger.error("Failed to schedule next occurrence", {error});
+    logger.error("Failed to schedule next occurrence", { error });
     return false;
   }
 }
@@ -458,7 +472,7 @@ export async function incrementUnrespondedCount(reminderId: string) {
     );
     return reminder;
   } catch (error) {
-    logger.error("Failed to increment unresponded count", {error});
+    logger.error("Failed to increment unresponded count", { error });
     throw error;
   }
 }
@@ -474,7 +488,7 @@ export async function resetUnrespondedCount(reminderId: string) {
     });
     logger.info(`Reset unresponded count for reminder ${reminderId}`);
   } catch (error) {
-    logger.error("Failed to reset unresponded count", {error});
+    logger.error("Failed to reset unresponded count", { error });
   }
 }
 
@@ -484,16 +498,16 @@ export async function resetUnrespondedCount(reminderId: string) {
  */
 export async function confirmReminderActive(
   reminderId: string,
-  userId: string,
+  workspaceId: string,
 ) {
   try {
     await prisma.reminder.update({
-      where: { id: reminderId, userId },
+      where: { id: reminderId, workspaceId },
       data: { confirmedActive: true, unrespondedCount: 0 },
     });
     logger.info(`Confirmed reminder ${reminderId} as active`);
   } catch (error) {
-    logger.error("Failed to confirm reminder active", {error});
+    logger.error("Failed to confirm reminder active", { error });
     throw error;
   }
 }
@@ -547,7 +561,7 @@ export async function incrementOccurrenceCount(
 
     return { reminder, shouldDeactivate };
   } catch (error) {
-    logger.error("Failed to increment occurrence count", {error});
+    logger.error("Failed to increment occurrence count", { error });
     throw error;
   }
 }
@@ -592,7 +606,7 @@ export async function deactivateReminder(reminderId: string): Promise<void> {
 
     logger.info(`Deactivated reminder ${reminderId}`);
   } catch (error) {
-    logger.error("Failed to deactivate reminder", {error});
+    logger.error("Failed to deactivate reminder", { error });
     throw error;
   }
 }
@@ -614,10 +628,10 @@ export interface FollowUpMetadata {
 }
 
 /**
- * Get pending follow-up reminders for a user
+ * Get pending follow-up reminders for a workspace
  * Used by Sol to weave follow-ups into conversation naturally
  */
-export async function getPendingFollowUpReminders(userId: string): Promise<
+export async function getPendingFollowUpReminders(workspaceId: string): Promise<
   Array<{
     id: string;
     parentReminderId: string;
@@ -629,7 +643,7 @@ export async function getPendingFollowUpReminders(userId: string): Promise<
   try {
     const reminders = await prisma.reminder.findMany({
       where: {
-        userId,
+        workspaceId,
         isActive: true,
         nextRunAt: { not: null },
       },
@@ -653,7 +667,7 @@ export async function getPendingFollowUpReminders(userId: string): Promise<
       });
   } catch (error) {
     logger.error("Failed to get pending follow-up reminders", {
-      userId,
+      workspaceId,
       error,
     });
     return [];
@@ -702,16 +716,16 @@ export async function cancelFollowUpsForParentReminder(
 }
 
 /**
- * Cancel all pending follow-ups for a user
+ * Cancel all pending follow-ups for a workspace
  * Called when user sends any message (they're active)
  */
-export async function cancelAllFollowUpsForUser(
-  userId: string,
+export async function cancelAllFollowUpsForWorkspace(
+  workspaceId: string,
 ): Promise<number> {
   try {
     const followUps = await prisma.reminder.findMany({
       where: {
-        userId,
+        workspaceId,
         isActive: true,
       },
     });
@@ -729,19 +743,22 @@ export async function cancelAllFollowUpsForUser(
 
     if (cancelledCount > 0) {
       logger.info(
-        `Cancelled ${cancelledCount} follow-up(s) for user ${userId}`,
+        `Cancelled ${cancelledCount} follow-up(s) for workspace ${workspaceId}`,
       );
     }
 
     return cancelledCount;
   } catch (error) {
-    logger.error("Failed to cancel follow-ups for user", { userId, {error} });
+    logger.error("Failed to cancel follow-ups for workspace", {
+      workspaceId,
+      error,
+    });
     return 0;
   }
 }
 
 export async function recalculateRemindersForTimezone(
-  userId: string,
+  workspaceId: string,
   _oldTimezone: string,
   newTimezone: string,
 ): Promise<{ updated: number; failed: number }> {
@@ -750,7 +767,7 @@ export async function recalculateRemindersForTimezone(
 
   try {
     const reminders = await prisma.reminder.findMany({
-      where: { userId, isActive: true },
+      where: { workspaceId, isActive: true },
     });
 
     logger.info(
@@ -796,7 +813,7 @@ export async function recalculateRemindersForTimezone(
         if (nextRunAt) {
           await scheduleNextReminder(
             reminder.id,
-            userId,
+            workspaceId,
             reminder.channel as "whatsapp" | "email",
             nextRunAt,
           );
@@ -804,7 +821,9 @@ export async function recalculateRemindersForTimezone(
 
         updated++;
       } catch (error) {
-        logger.error(`Failed to recalculate reminder ${reminder.id}`, {error});
+        logger.error(`Failed to recalculate reminder ${reminder.id}`, {
+          error,
+        });
         failed++;
       }
     }
@@ -814,7 +833,9 @@ export async function recalculateRemindersForTimezone(
     );
     return { updated, failed };
   } catch (error) {
-    logger.error("Failed to recalculate reminders for timezone change", {error});
+    logger.error("Failed to recalculate reminders for timezone change", {
+      error,
+    });
     return { updated, failed };
   }
 }
