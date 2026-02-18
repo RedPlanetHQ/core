@@ -4,6 +4,7 @@ import { prisma } from "~/db.server";
 
 import { z } from "zod";
 import { trackFeatureUsage } from "~/services/telemetry.server";
+import { logger } from "./logger.service";
 
 export const CreateConversationSchema = z.object({
   message: z.string(),
@@ -295,4 +296,40 @@ export async function getConversationsList(
       hasPrev: page > 1,
     },
   };
+}
+
+/**
+ * Check if user has sent a WhatsApp message within the last 24 hours.
+ * Per WhatsApp Business API guidelines, businesses can only send
+ * proactive messages within this 24-hour window.
+ */
+export async function isWithinWhatsApp24hWindow(workspaceId: string): Promise<boolean> {
+  try {
+    const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const recentUserMessage = await prisma.conversationHistory.findFirst({
+      where: {
+        conversation: {
+          workspaceId,
+          source: "whatsapp",
+        },
+        userType: "User",
+        createdAt: { gte: cutoffTime },
+      },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+
+    const isWithin = recentUserMessage !== null;
+    logger.info(`WhatsApp 24h window check for workspace ${workspaceId}: ${isWithin}`, {
+      lastUserMessage: recentUserMessage?.createdAt,
+      cutoffTime,
+    });
+
+    return isWithin;
+  } catch (error) {
+    logger.error("Failed to check WhatsApp 24h window", {error});
+    // Default to false (don't send) if we can't check
+    return false;
+  }
 }

@@ -19,16 +19,9 @@
     "emitDecoratorMetadata": true,
     "jsx": "react-jsx"
   },
-  "include": [
-    "src/**/*"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist",
-    "build",
-    "bin"
-  ],
+  "include": ["src/**/*"],
+  "exclude": ["node_modules", "dist", "build", "bin"],
   "ts-node": {
     "esm": true
   }
-} 
+}

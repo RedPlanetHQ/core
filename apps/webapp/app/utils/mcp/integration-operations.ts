@@ -1,5 +1,8 @@
 import { logger } from "~/services/logger.service";
-import { IntegrationLoader } from "./integration-loader";
+import {
+  IntegrationLoader,
+  type CustomMcpIntegration,
+} from "./integration-loader";
 import { makeModelCall } from "~/lib/model.server";
 import {
   INTEGRATION_ACTION_SELECTION_SYSTEM_PROMPT,
@@ -8,6 +11,10 @@ import {
 import { prisma } from "~/db.server";
 import PQueue from "p-queue";
 import { getUserById } from "~/models/user.server";
+import {
+  createCustomMcpClient,
+  type CustomMcpStoredCredentials,
+} from "@core/mcp-proxy";
 
 // Integration execution queue with concurrency limit
 // Limits concurrent child processes to prevent server overload
@@ -53,6 +60,8 @@ export async function handleGetIntegrations(args: any) {
       accountId: account.accountId,
     }));
 
+    console.log(integrations, simplifiedIntegrations);
+
     // Format as readable text
     const formattedText =
       simplifiedIntegrations.length === 0
@@ -93,26 +102,105 @@ export async function handleGetIntegrations(args: any) {
 }
 
 /**
+ * Helper to create token refresh callback for custom MCPs
+ */
+function createTokenRefreshCallback(userId: string, mcpId: string) {
+  return async (newCredentials: CustomMcpStoredCredentials) => {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true },
+    });
+
+    const metadata = (user?.metadata as any) || {};
+    const mcpIntegrations = (metadata?.mcpIntegrations ||
+      []) as CustomMcpIntegration[];
+
+    const updatedIntegrations = mcpIntegrations.map((mcp) => {
+      if (mcp.id === mcpId) {
+        return {
+          ...mcp,
+          oauth: {
+            ...mcp.oauth,
+            accessToken: newCredentials.accessToken,
+            refreshToken: newCredentials.refreshToken,
+            expiresIn: newCredentials.expiresIn,
+            clientId: newCredentials.clientId,
+          },
+        };
+      }
+      return mcp;
+    });
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: {
+        metadata: {
+          ...metadata,
+          mcpIntegrations: updatedIntegrations,
+        },
+      },
+    });
+
+    logger.info(`Refreshed tokens for custom MCP ${mcpId}`);
+  };
+}
+
+/**
  * Get integration actions for an account.
  * - If query is provided, uses LLM to filter relevant actions.
  * - If no query, returns all available tools.
  * Queued with concurrency control to prevent server overload.
+ * Supports both regular integrations and custom MCPs.
  */
 export async function getIntegrationActions(
   accountId: string,
   query?: string,
+  userId?: string,
 ): Promise<any[]> {
   // Queue the get-tools call to limit concurrent child processes
   return integrationQueue.add(async () => {
-    const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
-    const tools = JSON.parse(toolsJson);
+    const account = await IntegrationLoader.getIntegrationAccountById(
+      accountId,
+      userId,
+    );
+
+    let tools: any[];
+
+    // Check if this is a custom MCP
+    if (IntegrationLoader.isCustomMcp(account)) {
+      // Connect to custom MCP server and list tools
+      const client = await createCustomMcpClient({
+        serverUrl: account.serverUrl,
+        credentials: {
+          accessToken: account.accessToken!,
+          refreshToken: account.integrationConfiguration.refreshToken,
+          expiresIn: account.integrationConfiguration.expiresIn,
+          clientId: account.integrationConfiguration.clientId,
+        },
+        onTokensRefreshed: userId
+          ? createTokenRefreshCallback(userId, account.id)
+          : undefined,
+      });
+
+      try {
+        const result = await client.listTools();
+        tools = result.tools.map((tool) => ({
+          name: tool.name,
+          description: tool.description,
+          inputSchema: tool.inputSchema,
+        }));
+      } finally {
+        await client.close();
+      }
+    } else {
+      const toolsJson = await IntegrationLoader.getIntegrationTools(accountId);
+      tools = JSON.parse(toolsJson);
+    }
 
     if (!query) {
       return tools;
     }
 
-    const account =
-      await IntegrationLoader.getIntegrationAccountById(accountId);
     const integrationSlug = account.integrationDefinition.slug;
 
     const userPrompt = buildIntegrationActionSelectionPrompt(
@@ -166,6 +254,7 @@ export async function getIntegrationActions(
  * Execute an action on an integration account.
  * Logs the call result to the database.
  * Queued with concurrency control to prevent server overload.
+ * Supports both regular integrations and custom MCPs.
  */
 export async function executeIntegrationAction(
   accountId: string,
@@ -180,47 +269,84 @@ export async function executeIntegrationAction(
 
   // Queue the integration call to limit concurrent child processes
   return integrationQueue.add(async () => {
-    const account =
-      await IntegrationLoader.getIntegrationAccountById(accountId);
-    const integrationSlug = account.integrationDefinition.slug;
-    const toolName = `${integrationSlug}_${action}`;
+    const account = await IntegrationLoader.getIntegrationAccountById(
+      accountId,
+      userId,
+    );
 
     let result: any;
-    try {
-      result = await IntegrationLoader.callIntegrationTool(
-        accountId,
-        toolName,
-        parameters,
-        timezone,
-      );
-    } catch (error) {
+
+    // Check if this is a custom MCP
+    if (IntegrationLoader.isCustomMcp(account)) {
+      try {
+        const client = await createCustomMcpClient({
+          serverUrl: account.serverUrl,
+          credentials: {
+            accessToken: account.accessToken!,
+            refreshToken: account.integrationConfiguration.refreshToken,
+            expiresIn: account.integrationConfiguration.expiresIn,
+            clientId: account.integrationConfiguration.clientId,
+          },
+          onTokensRefreshed: createTokenRefreshCallback(userId, account.id),
+        });
+
+        try {
+          const callResult = await client.callTool({
+            name: action,
+            arguments: parameters,
+          });
+
+          result = {
+            content: callResult.content,
+            isError: callResult.isError || false,
+          };
+        } finally {
+          await client.close();
+        }
+      } catch (error) {
+        logger.error(`Custom MCP call error for ${account.id}: ${error}`);
+        throw error;
+      }
+    } else {
+      const integrationSlug = account.integrationDefinition.slug;
+      const toolName = `${integrationSlug}_${action}`;
+
+      try {
+        result = await IntegrationLoader.callIntegrationTool(
+          accountId,
+          toolName,
+          parameters,
+          timezone,
+        );
+      } catch (error) {
+        await prisma.integrationCallLog
+          .create({
+            data: {
+              integrationAccountId: accountId,
+              toolName: action,
+              source: source || null,
+              error: error instanceof Error ? error.message : String(error),
+            },
+          })
+          .catch((logError: any) => {
+            logger.error(`Failed to log integration call error: ${logError}`);
+          });
+        throw error;
+      }
+
       await prisma.integrationCallLog
         .create({
           data: {
             integrationAccountId: accountId,
             toolName: action,
             source: source || null,
-            error: error instanceof Error ? error.message : String(error),
+            error: null,
           },
         })
         .catch((logError: any) => {
-          logger.error(`Failed to log integration call error: ${logError}`);
+          logger.error(`Failed to log integration call: ${logError}`);
         });
-      throw error;
     }
-
-    await prisma.integrationCallLog
-      .create({
-        data: {
-          integrationAccountId: accountId,
-          toolName: action,
-          source: source || null,
-          error: null,
-        },
-      })
-      .catch((logError: any) => {
-        logger.error(`Failed to log integration call: ${logError}`);
-      });
 
     return result;
   });
@@ -231,7 +357,7 @@ export async function executeIntegrationAction(
  * Wraps getIntegrationActions with MCP { content, isError } response format
  */
 export async function handleGetIntegrationActions(args: any) {
-  const { accountId, query } = args;
+  const { accountId, query, userId } = args;
 
   try {
     if (!accountId) {
@@ -242,7 +368,7 @@ export async function handleGetIntegrationActions(args: any) {
       throw new Error("query is required");
     }
 
-    const actions = await getIntegrationActions(accountId, query);
+    const actions = await getIntegrationActions(accountId, query, userId);
 
     if (actions.length > 0) {
       return {

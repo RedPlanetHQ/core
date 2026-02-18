@@ -8,6 +8,18 @@ export {
   MCPAuthenticationClient,
 } from "./core/mcp-remote-client.js";
 
+// Custom MCP OAuth utilities
+export {
+  getCustomMcpAuthorizationUrl,
+  completeCustomMcpOAuth,
+  createCustomMcpClient,
+  CustomMcpOAuthProvider,
+  CustomMcpTokenProvider,
+  type CustomMcpOAuthSession,
+  type CustomMcpOAuthResult,
+  type CustomMcpStoredCredentials,
+} from "./lib/custom-mcp-oauth.js";
+
 export {
   type MCPRemoteClientConfig,
   type ProxyConnectionConfig,

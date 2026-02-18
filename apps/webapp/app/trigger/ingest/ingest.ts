@@ -4,7 +4,6 @@ import {
   IngestBodyRequest,
   type IngestEpisodePayload,
 } from "~/jobs/ingest/ingest-episode.logic";
-import { triggerSessionCompaction } from "../session/session-compaction";
 import { labelAssignmentTask } from "../labels/label-assignment";
 import { titleGenerationTask } from "../titles/title-generation";
 import { personaGenerationTask } from "../spaces/persona-generation";
@@ -43,10 +42,6 @@ export const ingestTask = task({
         await titleGenerationTask.trigger(params, {
           tags: [payload.queueId],
         });
-      },
-      // Callback for session compaction
-      async (params) => {
-        await triggerSessionCompaction(params);
       },
       // Callback for persona generation
       async (params) => {

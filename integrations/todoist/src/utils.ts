@@ -50,7 +50,7 @@ export async function getTasks(
 ): Promise<TodoistTask[]> {
   const client = getTodoistClient(config);
   const response = await client.get('/tasks', { params: filters });
-  return response.data;
+  return response.data.results;
 }
 
 /**
@@ -135,7 +135,7 @@ export async function deleteTask(config: TodoistConfig, taskId: string): Promise
 export async function getProjects(config: TodoistConfig): Promise<TodoistProject[]> {
   const client = getTodoistClient(config);
   const response = await client.get('/projects');
-  return response.data;
+  return response.data.results;
 }
 
 /**

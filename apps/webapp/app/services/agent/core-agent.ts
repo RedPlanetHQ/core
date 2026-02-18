@@ -1,15 +1,42 @@
-import { type Tool, tool, readUIMessageStream } from "ai";
+import { type Tool, tool, readUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 
 import { runOrchestrator } from "./orchestrator";
 
 import { logger } from "../logger.service";
+import { getReminderTools } from "./tools/reminder-tools";
 
-export const createTools = (
+/**
+ * Recursively checks if a message contains any tool part with state "approval-requested"
+ */
+const hasApprovalRequested = (message: UIMessage): boolean => {
+  const checkParts = (parts: any[]): boolean => {
+    for (const part of parts) {
+      if (part.state === "approval-requested") {
+        return true;
+      }
+      // Check nested output.parts (sub-agent responses)
+      if (part.output?.parts && Array.isArray(part.output.parts)) {
+        if (checkParts(part.output.parts)) return true;
+      }
+      // Check nested output.content
+      if (part.output?.content && Array.isArray(part.output.content)) {
+        if (checkParts(part.output.content)) return true;
+      }
+    }
+    return false;
+  };
+
+  return message.parts ? checkParts(message.parts) : false;
+};
+
+export const createTools = async (
   userId: string,
   workspaceId: string,
   timezone: string,
   source: string,
+  readOnly: boolean = false,
+  persona?: string,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -48,6 +75,7 @@ export const createTools = (
             "Your intent - what you're looking for and why. Describe it like you're asking a colleague to find something.",
           ),
       }),
+
       execute: async function* ({ query }, { abortSignal }) {
         logger.info(`Core brain: Gathering context for: ${query}`);
 
@@ -59,17 +87,35 @@ export const createTools = (
           timezone,
           source,
           abortSignal,
+          persona,
         );
 
         // Stream the orchestrator's work to the UI
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          // Skip yielding if we already detected approval (but consume stream to avoid errors)
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          // Check if this message has approval requested
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Core brain: Stopping gather_context - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
     }),
-    take_action: tool({
+  };
+
+  if (!readOnly) {
+    tools["take_action"] = tool({
       description: `Execute actions on user's connected integrations.
       Use this to CREATE/SEND/UPDATE/DELETE: gmail filters/labels, calendar events, github issues, slack messages, notion pages.
       Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout"
@@ -92,17 +138,37 @@ export const createTools = (
           timezone,
           source,
           abortSignal,
+          persona,
         );
 
         // Stream the orchestrator's work to the UI
+        let approvalRequested = false;
         for await (const message of readUIMessageStream({
           stream: stream.toUIMessageStream(),
         })) {
+          // Skip yielding if we already detected approval (but consume stream to avoid errors)
+          if (approvalRequested) {
+            continue;
+          }
+
           yield message;
+
+          // Check if this message has approval requested
+          if (hasApprovalRequested(message)) {
+            logger.info(
+              `Core brain: Stopping take_action - approval requested`,
+            );
+            approvalRequested = true;
+          }
         }
       },
-    }),
-  };
+    });
+  }
 
-  return tools;
+  // Add reminder management tools
+  // WhatsApp source → whatsapp, everything else (web/email) → email
+  const channel = source === "whatsapp" ? "whatsapp" : "email";
+  const reminderTools = getReminderTools(workspaceId, channel, timezone);
+
+  return { ...tools, ...reminderTools };
 };

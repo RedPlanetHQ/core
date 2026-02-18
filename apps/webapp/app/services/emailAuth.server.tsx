@@ -17,7 +17,7 @@ const emailStrategy = new EmailLinkStrategy(
     secret,
     magicEndpoint: `${APP_ORIGIN}/magic`,
     cookie: {
-      name: "core:magiclink",
+      name: "core_magiclink",
     },
   },
   async ({ email }: { email: string }) => {

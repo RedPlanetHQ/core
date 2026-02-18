@@ -64,12 +64,6 @@ export async function processEpisodeIngestion(
     userId: string;
     workspaceId: string;
   }) => Promise<any>,
-  enqueueSessionCompaction?: (params: {
-    userId: string;
-    sessionId: string;
-    source: string;
-    workspaceId: string;
-  }) => Promise<any>,
   enqueuePersonaGeneration?: (params: {
     userId: string;
     workspaceId: string;

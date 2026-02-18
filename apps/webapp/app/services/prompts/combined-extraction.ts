@@ -397,18 +397,23 @@ CRITICAL: Assistant recommendations that the user has NOT confirmed are NOT Goal
 </aspect_goal>
 
 <aspect_directive>
-DIRECTIVE: Instructions for how the agent should behave (standing rules)
+DIRECTIVE: Instructions the user gives to a system, agent, assistant, or automation about how it should behave (standing rules)
 Agent question: "What rules must I follow?"
 
-IDENTIFY BY: User telling the agent what to always/never do, handling rules, automation triggers, content rules, notification preferences, things to ignore or surface.
+IDENTIFY BY: User telling any system/agent/assistant/automation what to always/never do, handling rules, automation behavior, content rules, notification preferences, things to ignore or surface.
 
-THINK: "Is the user giving the agent a standing instruction about how to behave going forward?" If yes → Directive.
+THINK: "Is the user giving an instruction about how a system/agent/automation should behave going forward?" If yes → Directive. The subject can be the system/automation — it's still a Directive if the user instructed it.
+
+IMPORTANT: Directives can have the system/automation as the subject, not just the user. If the user instructed how an automation should behave, that fact is a Directive even when written as "System X does Y" — because the user defined that behavior.
+- "Morning report includes unread Slack highlights" → Directive (user configured this)
+- "Webhook listener ignores test environment events" → Directive (user set this rule)
+- "The assistant should draft replies in a formal tone" → Directive (user instructed this)
 
 COMMON MISCLASSIFICATIONS:
-- "Don't use Commenda, treat their emails as spam" → Directive (agent behavior rule), NOT Decision
-- "Always use Proper Case for emails" → Directive (standing rule), NOT Preference
-- "Notify me at 3PM for water check" → Directive (automation trigger)
-- "Bug issue titles must start with [bug]:" → Directive (formatting rule)
+- "Mark all vendor invoices as low priority" → Directive (handling rule), NOT Decision
+- "Use bullet points for all summaries" → Directive (formatting rule), NOT Preference
+- "Alert me when CPU usage exceeds 80%" → Directive (automation trigger)
+- "PR titles must follow conventional commits format" → Directive (formatting rule)
 
 KEY DISTINCTION FROM DECISION: A Directive tells the agent what to DO going forward. A Decision records a choice the user MADE between alternatives.
 

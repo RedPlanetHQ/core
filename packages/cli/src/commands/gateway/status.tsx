@@ -1,5 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Text } from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
+import * as p from '@clack/prompts';
+import chalk from 'chalk';
 import zod from 'zod';
 import { getPreferences } from '@/config/preferences';
 import {
@@ -7,29 +9,14 @@ import {
 	getServiceName,
 	isServiceInstalled,
 	getServiceStatus,
+	getServicePid,
 } from '@/utils/service-manager/index';
-import { getLaunchdServicePid } from '@/utils/service-manager/launchd';
-import { getSystemdServicePid } from '@/utils/service-manager/systemd';
-import InfoMessage from '@/components/info-message';
-import ErrorMessage from '@/components/error-message';
-import { ThemeContext } from '@/hooks/useTheme';
-import { themeContextValue } from '@/config/themes';
 
 export const options = zod.object({});
 
 type Props = {
 	options: zod.infer<typeof options>;
 };
-
-interface GatewayStatus {
-	running: boolean;
-	installed: boolean;
-	port?: number;
-	pid?: number;
-	startedAt?: number;
-	uptime?: string;
-	serviceType?: 'launchd' | 'systemd';
-}
 
 function formatUptime(startedAt: number): string {
 	const uptimeMs = Date.now() - startedAt;
@@ -44,107 +31,78 @@ function formatUptime(startedAt: number): string {
 	return `${seconds}s`;
 }
 
+function getServiceTypeLabel(type: string): string {
+	if (type === 'launchd') return 'launchd (macOS)';
+	if (type === 'systemd') return 'systemd (Linux)';
+	return 'unknown';
+}
+
+async function runGatewayStatus(): Promise<void> {
+	const spinner = p.spinner();
+	spinner.start('Checking gateway status...');
+
+	const serviceType = getServiceType();
+
+	if (serviceType === 'none') {
+		spinner.stop(chalk.red('Not supported'));
+		p.log.error('Service management not supported on this platform.');
+		return;
+	}
+
+	const serviceName = getServiceName();
+	const installed = await isServiceInstalled(serviceName);
+
+	if (!installed) {
+		spinner.stop(chalk.yellow('Not installed'));
+		p.log.warning('Gateway not installed.');
+		p.log.info("Start with: corebrain gateway on");
+		return;
+	}
+
+	const status = await getServiceStatus(serviceName);
+	const running = status === 'running';
+
+	if (!running) {
+		spinner.stop(chalk.yellow('Stopped'));
+		p.log.warning('Gateway installed but stopped.');
+		p.log.info("Start with: corebrain gateway on");
+		return;
+	}
+
+	// Get PID from service manager, fallback to preferences
+	const prefs = getPreferences();
+	let pid: number | null = getServicePid(serviceName);
+	if (!pid && prefs.gateway?.pid) {
+		pid = prefs.gateway.pid;
+	}
+
+	spinner.stop(chalk.green('Running'));
+
+	p.note(
+		[
+			`${chalk.bold('Status:')} ${chalk.green('Running')}`,
+			`${chalk.bold('Service:')} ${getServiceTypeLabel(serviceType)}`,
+			`${chalk.bold('PID:')} ${pid || 'unknown'}`,
+			`${chalk.bold('Uptime:')} ${prefs.gateway?.startedAt ? formatUptime(prefs.gateway.startedAt) : 'unknown'}`,
+			'',
+			`${chalk.dim('Logs: ~/.corebrain/logs/gateway.log')}`,
+		].join('\n'),
+		'Gateway Status'
+	);
+}
+
 export default function GatewayStatus(_props: Props) {
-	const [status, setStatus] = useState<'loading' | 'ready' | 'unsupported'>('loading');
-	const [gatewayStatus, setGatewayStatus] = useState<GatewayStatus>({
-		running: false,
-		installed: false,
-	});
+	const { exit } = useApp();
 
 	useEffect(() => {
-		let cancelled = false;
+		runGatewayStatus()
+			.catch((err) => {
+				p.log.error(err instanceof Error ? err.message : 'Unknown error');
+			})
+			.finally(() => {
+				setTimeout(() => exit(), 100);
+			});
+	}, [exit]);
 
-		(async () => {
-			try {
-				const serviceType = getServiceType();
-
-				if (serviceType === 'none') {
-					if (!cancelled) {
-						setStatus('unsupported');
-					}
-					return;
-				}
-
-				const serviceName = getServiceName();
-				const installed = await isServiceInstalled(serviceName);
-
-				if (!installed) {
-					if (!cancelled) {
-						setGatewayStatus({ running: false, installed: false });
-						setStatus('ready');
-					}
-					return;
-				}
-
-				const serviceStatus = await getServiceStatus(serviceName);
-				const running = serviceStatus === 'running';
-
-				// Get PID
-				let pid: number | null = null;
-				if (running) {
-					if (serviceType === 'launchd') {
-						pid = getLaunchdServicePid(serviceName);
-					} else if (serviceType === 'systemd') {
-						pid = getSystemdServicePid(serviceName);
-					}
-				}
-
-				const prefs = getPreferences();
-
-				if (!cancelled) {
-					setGatewayStatus({
-						running,
-						installed: true,
-						port: prefs.gateway?.port,
-						pid: pid || undefined,
-						startedAt: prefs.gateway?.startedAt,
-						uptime: prefs.gateway?.startedAt
-							? formatUptime(prefs.gateway.startedAt)
-							: undefined,
-						serviceType: serviceType === 'launchd' ? 'launchd' : 'systemd',
-					});
-					setStatus('ready');
-				}
-			} catch {
-				if (!cancelled) {
-					setGatewayStatus({ running: false, installed: false });
-					setStatus('ready');
-				}
-			}
-		})();
-
-		return () => {
-			cancelled = true;
-		};
-	}, []);
-
-	const getServiceTypeLabel = () => {
-		if (gatewayStatus.serviceType === 'launchd') return 'launchd (macOS)';
-		if (gatewayStatus.serviceType === 'systemd') return 'systemd (Linux)';
-		return 'unknown';
-	};
-
-	return (
-		<ThemeContext.Provider value={themeContextValue}>
-			{status === 'loading' ? (
-				<Text dimColor>Checking gateway status...</Text>
-			) : status === 'unsupported' ? (
-				<ErrorMessage message="Service management not supported on this platform." />
-			) : !gatewayStatus.installed ? (
-				<ErrorMessage
-					message="Gateway not installed.\n\nStart with: corebrain gateway on"
-					hideTitle
-				/>
-			) : !gatewayStatus.running ? (
-				<ErrorMessage
-					message="Gateway installed but stopped.\n\nStart with: corebrain gateway on"
-					hideTitle
-				/>
-			) : (
-				<InfoMessage
-					message={`Gateway: Running\n\nService: ${getServiceTypeLabel()}\nPort: ${gatewayStatus.port || 3456}\nPID: ${gatewayStatus.pid || 'unknown'}\nUptime: ${gatewayStatus.uptime || 'unknown'}\n\nAPI: http://localhost:${gatewayStatus.port || 3456}`}
-				/>
-			)}
-		</ThemeContext.Provider>
-	);
+	return null;
 }

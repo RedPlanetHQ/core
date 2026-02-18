@@ -34,17 +34,22 @@ const loader = createHybridLoaderApiRoute(
     searchParams: SearchParamsSchema,
     allowJWT: true,
     corsStrategy: "all",
-    findResource: async (params) => {
+    findResource: async (params, authentication) => {
       return IntegrationLoader.getIntegrationAccountById(
         params.integrationAccountId,
+        authentication.userId,
       );
     },
   },
-  async ({ params, searchParams }) => {
+  async ({ params, searchParams, authentication }) => {
     const { integrationAccountId } = params;
     const { query } = searchParams;
 
-    const actions = await getIntegrationActions(integrationAccountId, query);
+    const actions = await getIntegrationActions(
+      integrationAccountId,
+      query,
+      authentication.userId,
+    );
 
     return json({ actions });
   },
@@ -62,7 +67,7 @@ const { action } = createHybridActionApiRoute(
     allowJWT: true,
     corsStrategy: "all",
   },
-  async ({ params, body }) => {
+  async ({ params, body, authentication }) => {
     const { integrationAccountId } = params;
     const { action: actionName, parameters } = body;
 
@@ -70,6 +75,7 @@ const { action } = createHybridActionApiRoute(
       integrationAccountId,
       actionName,
       parameters,
+      authentication.userId,
     );
 
     return json({ result });

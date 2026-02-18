@@ -1099,11 +1099,3 @@ url = "https://app.getcore.me/api/v1/mcp?source=codex"`}
   },
 };
 
-export const SUGGESTED_INGESTION_PROMPTS = [
-  "I'm a full-stack developer working on a React and Node.js application. I prefer TypeScript, functional programming patterns, and writing comprehensive tests.",
-  "I'm working on a machine learning project using Python and PyTorch. I focus on computer vision and prefer Jupyter notebooks for exploration.",
-  "I'm a DevOps engineer managing Kubernetes clusters. I work primarily with Terraform, Helm, and CI/CD pipelines using GitHub Actions.",
-];
-
-export const VERIFICATION_PROMPT =
-  "Use the memory search tool with query: 'What do you know about my technical background, skills, and development preferences?'";

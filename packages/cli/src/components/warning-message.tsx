@@ -5,7 +5,19 @@ import { memo } from 'react';
 import { useTheme } from '@/hooks/useTheme';
 import { useTerminalWidth } from '@/hooks/useTerminalWidth';
 
-export default memo(function WarningMessage({
+function MessageLines({ message, color }: { message: string; color: string }) {
+	console.log(message)
+	const lines = message.split('\n');
+	return (
+		<>
+			{lines.map((line, i) => (
+				<Text key={i} color={color}>{line}</Text>
+			))}
+		</>
+	);
+}
+
+export default function WarningMessage({
 	message,
 	hideTitle = false,
 	hideBox = false,
@@ -16,11 +28,13 @@ export default memo(function WarningMessage({
 }) {
 	const boxWidth = useTerminalWidth();
 	const { colors } = useTheme();
+
 	return (
 		<>
 			{hideBox ? (
 				<Box width={boxWidth} flexDirection="column" marginBottom={1}>
-					<Text color={colors.warning}>{message}</Text>
+					<MessageLines message={message} color={colors.warning} />
+
 				</Box>
 			) : hideTitle ? (
 				<Box
@@ -31,7 +45,8 @@ export default memo(function WarningMessage({
 					paddingY={0}
 					flexDirection="column"
 				>
-					<Text color={colors.warning}>{message}</Text>
+					<MessageLines message={message} color={colors.warning} />
+
 				</Box>
 			) : (
 				<TitledBox
@@ -45,9 +60,10 @@ export default memo(function WarningMessage({
 					paddingY={1}
 					flexDirection="column"
 				>
-					<Text color={colors.warning}>{message}</Text>
+					<MessageLines message={message} color={colors.warning} />
+
 				</TitledBox>
 			)}
 		</>
 	);
-});
+};

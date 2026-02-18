@@ -9,6 +9,7 @@
 import { PERSONALITY } from "./personality";
 import { CAPABILITIES } from "./capabilities";
 import { CHANNEL_FORMATS, type ChannelType } from "./channel-formats";
+import { buildDecisionAgentPrompt } from "./decision-prompt";
 
 export interface UserInfo {
   name: string;
@@ -60,3 +61,4 @@ export { PERSONALITY } from "./personality";
 export { CAPABILITIES } from "./capabilities";
 export { CHANNEL_FORMATS } from "./channel-formats";
 export type { ChannelType } from "./channel-formats";
+export { buildDecisionAgentPrompt };

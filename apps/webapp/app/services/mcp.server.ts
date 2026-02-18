@@ -18,6 +18,10 @@ import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
 import { ensureBillingInitialized } from "./billing.server";
 import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
+import {
+  getGatewayMCPTools,
+  handleGatewayToolCall,
+} from "~/services/agent/gateway-operations";
 
 const QueryParams = z.object({
   source: z.string().optional(),
@@ -54,15 +58,30 @@ async function createMcpServer(
     },
   );
 
-  // Dynamic tool listing - only expose memory tools and meta-tools
+  // Store gateway tools info for call handling
+  let gatewayToolsMap: Map<string, { id: string; name: string }> = new Map();
+
+  // Dynamic tool listing - memory tools + dynamic gateway tools
   server.setRequestHandler(ListToolsRequestSchema, async () => {
-    // Only return memory tools (which now includes integration meta-tools)
-    // Integration-specific tools are discovered via get_integration_actions
-    let tools = memoryTools;
+    // Start with memory tools
+    let tools = [...memoryTools];
 
     // Filter out skipped tools if specified
     if (skipTools && skipTools.length > 0) {
       tools = tools.filter((tool) => !skipTools.includes(tool.name));
+    }
+
+    // Add dynamic gateway tools
+    try {
+      const gatewayTools = await getGatewayMCPTools(workspaceId);
+      gatewayToolsMap = new Map(
+        gatewayTools.map((g) => [g.name, { id: g.id, name: g.name }]),
+      );
+
+      // Add gateway tools to the list (without the 'id' field which is internal)
+      tools = tools.concat(gatewayTools.map(({ id, ...rest }) => rest));
+    } catch (error) {
+      logger.error("Error loading gateway tools:", { error });
     }
 
     return {
@@ -70,9 +89,40 @@ async function createMcpServer(
     };
   });
 
-  // Handle tool calls for both memory and integration tools
+  // Handle tool calls for memory, integration, and gateway tools
   server.setRequestHandler(CallToolRequestSchema, async (request) => {
     const { name, arguments: args } = request.params;
+
+    // Handle gateway tools (dynamically created per gateway)
+    if (name.startsWith("gateway_")) {
+      // Refresh gateway tools map to get latest connection status
+      const gatewayTools = await getGatewayMCPTools(workspaceId);
+      gatewayToolsMap = new Map(
+        gatewayTools.map((g) => [g.name, { id: g.id, name: g.name }]),
+      );
+
+      const gatewayInfo = gatewayToolsMap.get(name);
+      if (gatewayInfo) {
+        const intent = (args as { intent?: string })?.intent;
+        if (!intent) {
+          return {
+            content: [
+              {
+                type: "text",
+                text: "Missing 'intent' parameter. Please specify what you want the gateway to do.",
+              },
+            ],
+            isError: true,
+          };
+        }
+        return await handleGatewayToolCall(
+          gatewayInfo.id,
+          gatewayInfo.name,
+          intent,
+        );
+      }
+      throw new Error(`Gateway not found or not connected: ${name}`);
+    }
 
     // Handle memory tools and integration meta-tools
     if (
@@ -83,7 +133,6 @@ async function createMcpServer(
       name === "execute_integration_action" ||
       name === "get_labels"
     ) {
-      // Get workspace for integration tools
       return await callMemoryTool(
         name,
         {

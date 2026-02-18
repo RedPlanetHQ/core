@@ -34,7 +34,6 @@ export class OAuthBodyInterface {
 export const OAuthBodySchema = z.object({
   redirectURL: z.string(),
   integrationDefinitionId: z.string(),
-  mcp: z.boolean().optional().default(false),
   integrationAccountId: z.string().optional(),
 });
 

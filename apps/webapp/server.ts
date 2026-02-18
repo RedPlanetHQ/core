@@ -2,6 +2,8 @@ import { createRequestHandler } from "@remix-run/express";
 import compression from "compression";
 import express from "express";
 import morgan from "morgan";
+import { createServer } from "http";
+import { setupWebSocket } from "./websocket";
 
 // import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 // import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
@@ -252,9 +254,21 @@ async function init() {
   // handle SSR requests
   app.all("*", remixHandler);
 
+  // Create HTTP server and setup WebSocket
+  const server = createServer(app);
+
+  // Setup WebSocket with gateway module functions
+  setupWebSocket(server, {
+    verifyGatewayToken: module.verifyGatewayToken,
+    upsertGateway: module.upsertGateway,
+    updateGatewayTools: module.updateGatewayTools,
+    updateGatewayLastSeen: module.updateGatewayLastSeen,
+    disconnectGateway: module.disconnectGateway,
+  });
+
   const port = process.env.REMIX_APP_PORT || 3000;
-  app.listen(port, () =>
-    console.log(`Express server listening at http://localhost:${port}`),
+  server.listen(port, () =>
+    console.log(`Server listening at http://localhost:${port}`),
   );
 }
 

@@ -73,7 +73,7 @@ export function GraphFilters({
                     className="justify-start"
                     onClick={() => setStep("cluster")}
                   >
-                    Cluster
+                    Label
                   </Button>
                 </div>
               )}
@@ -89,7 +89,7 @@ export function GraphFilters({
                       setStep("main");
                     }}
                   >
-                    All Clusters
+                    All Labels
                   </Button>
                   {clusters.map((cluster, index) => {
                     const palette =

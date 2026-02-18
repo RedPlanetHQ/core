@@ -40,7 +40,7 @@ const loader = createHybridLoaderApiRoute(
       .join("-----\n");
 
     return json({
-      context: `${document.content}\n\n---------------------------\n\n${pendingIngestionContent}`,
+      context: `${document?.content}\n\n---------------------------\n\n${pendingIngestionContent}`,
     });
   },
 );

@@ -69,7 +69,7 @@ export const ConversationNew = ({
           <div className="flex w-full flex-col items-center">
             <div className="w-full max-w-[90ch] pt-[5rem]">
               <h1 className="mx-1 mb-4 text-center text-3xl font-medium">
-                What would you like me to remember?
+                How can I help you today?
               </h1>
 
               <div className="bg-background-3 mb-4 rounded-lg border-1 border-gray-300 py-2">

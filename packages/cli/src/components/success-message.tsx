@@ -4,6 +4,18 @@ import { Text, Box } from 'ink';
 import { useTheme } from '@/hooks/useTheme';
 import { useTerminalWidth } from '@/hooks/useTerminalWidth';
 
+function MessageLines({ message, color }: { message: string; color: string }) {
+
+	const lines = message.split('\n');
+	return (
+		<>
+			{lines.map((line, i) => (
+				<Text key={i} color={color}>{line}</Text>
+			))}
+		</>
+	);
+}
+
 export default function SuccessMessage({
 	message,
 	hideTitle = false,
@@ -19,7 +31,7 @@ export default function SuccessMessage({
 		<>
 			{hideBox ? (
 				<Box width={boxWidth} flexDirection="column" marginBottom={1}>
-					<Text color={colors.success}>{message}</Text>
+					<MessageLines message={message} color={colors.success} />
 				</Box>
 			) : hideTitle ? (
 				<Box
@@ -30,7 +42,7 @@ export default function SuccessMessage({
 					paddingY={0}
 					flexDirection="column"
 				>
-					<Text color={colors.success}>{message}</Text>
+					<MessageLines message={message} color={colors.success} />
 				</Box>
 			) : (
 				<TitledBox
@@ -44,7 +56,7 @@ export default function SuccessMessage({
 					paddingY={1}
 					flexDirection="column"
 				>
-					<Text color={colors.success}>{message}</Text>
+					<MessageLines message={message} color={colors.success} />
 				</TitledBox>
 			)}
 		</>

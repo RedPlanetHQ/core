@@ -1,9 +1,9 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { homedir } from 'node:os';
+import { getConfigPath } from '@/config/paths';
 
-const COREBRAIN_DIR = join(homedir(), '.corebrain');
+const COREBRAIN_DIR = getConfigPath();
 const LOGS_DIR = join(COREBRAIN_DIR, 'logs');
 
 // Ensure directories exist

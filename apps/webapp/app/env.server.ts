@@ -140,6 +140,14 @@ const EnvironmentSchema = z
     MODEL_PROVIDER: z.enum(["vercel-ai"]).default("vercel-ai"),
 
     EXA_API_KEY: z.string().optional(),
+
+    // Twilio (WhatsApp)
+    TWILIO_ACCOUNT_SID: z.string().optional(),
+    TWILIO_AUTH_TOKEN: z.string().optional(),
+    TWILIO_WHATSAPP_NUMBER: z.string().optional(),
+
+    // Resend
+    RESEND_WEBHOOK_SECRET: z.string().optional(),
   })
   .refine(
     (data) => {

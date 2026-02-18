@@ -270,6 +270,10 @@ export async function deleteUser(id: User["id"]) {
   });
 }
 
+export async function getUserByPhone(phoneNumber: string) {
+  return prisma.user.findUnique({ where: { phoneNumber } });
+}
+
 export const setPhoneNumber = async (phoneNumber: string, userId: string) => {
   return await prisma.user.update({
     where: {

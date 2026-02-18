@@ -1,5 +1,3 @@
-import { Prisma } from "@prisma/client";
-
 import { ProviderFactory } from "@core/providers";
 import { prisma } from "~/trigger/utils/prisma";
 

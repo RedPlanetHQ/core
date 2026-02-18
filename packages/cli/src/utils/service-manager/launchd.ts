@@ -1,8 +1,14 @@
-import { execSync, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, writeFileSync, unlinkSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { homedir } from 'node:os';
-import type { ServiceConfig, ServiceStatus } from './index';
+import {execSync, spawn} from 'node:child_process';
+import {
+	existsSync,
+	mkdirSync,
+	writeFileSync,
+	unlinkSync,
+	readFileSync,
+} from 'node:fs';
+import {join} from 'node:path';
+import {homedir} from 'node:os';
+import type {ServiceConfig, ServiceStatus} from './index';
 
 export const LAUNCHD_SERVICE_NAME = 'dev.corebrain.gateway';
 
@@ -21,13 +27,15 @@ function generatePlist(config: ServiceConfig): string {
 	// Ensure log directory exists
 	const logDir = logPath.substring(0, logPath.lastIndexOf('/'));
 	if (!existsSync(logDir)) {
-		mkdirSync(logDir, { recursive: true });
+		mkdirSync(logDir, {recursive: true});
 	}
 
 	// Build program arguments array
 	const programArgs = [config.command, ...config.args]
-		.map((arg) => `		<string>${escapeXml(arg)}</string>`)
+		.map(arg => `		<string>${escapeXml(arg)}</string>`)
 		.join('\n');
+
+	const userPath = process.env.PATH;
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -55,7 +63,7 @@ ${programArgs}
 	<key>EnvironmentVariables</key>
 	<dict>
 		<key>PATH</key>
-		<string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+		<string>${userPath}</string>
 	</dict>
 </dict>
 </plist>
@@ -74,10 +82,12 @@ function escapeXml(str: string): string {
 /**
  * Install the gateway as a launchd service
  */
-export async function installLaunchdService(config: ServiceConfig): Promise<void> {
+export async function installLaunchdService(
+	config: ServiceConfig,
+): Promise<void> {
 	// Ensure LaunchAgents directory exists
 	if (!existsSync(LAUNCH_AGENTS_DIR)) {
-		mkdirSync(LAUNCH_AGENTS_DIR, { recursive: true });
+		mkdirSync(LAUNCH_AGENTS_DIR, {recursive: true});
 	}
 
 	const plistPath = getPlistPath(config.name);
@@ -85,7 +95,7 @@ export async function installLaunchdService(config: ServiceConfig): Promise<void
 	// Unload existing service if it exists
 	if (existsSync(plistPath)) {
 		try {
-			execSync(`launchctl unload "${plistPath}"`, { stdio: 'ignore' });
+			execSync(`launchctl unload "${plistPath}"`, {stdio: 'ignore'});
 		} catch {
 			// Ignore errors if service wasn't loaded
 		}
@@ -97,10 +107,12 @@ export async function installLaunchdService(config: ServiceConfig): Promise<void
 
 	// Load the service
 	try {
-		execSync(`launchctl load "${plistPath}"`, { stdio: 'pipe' });
+		execSync(`launchctl load "${plistPath}"`, {stdio: 'pipe'});
 	} catch (error) {
 		throw new Error(
-			`Failed to load launchd service: ${error instanceof Error ? error.message : String(error)}`,
+			`Failed to load launchd service: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
 		);
 	}
 }
@@ -117,7 +129,7 @@ export async function uninstallLaunchdService(name: string): Promise<void> {
 
 	// Unload the service
 	try {
-		execSync(`launchctl unload "${plistPath}"`, { stdio: 'ignore' });
+		execSync(`launchctl unload "${plistPath}"`, {stdio: 'ignore'});
 	} catch {
 		// Ignore errors if service wasn't loaded
 	}
@@ -137,7 +149,9 @@ export function isLaunchdServiceInstalled(name: string): boolean {
 /**
  * Get the status of the launchd service
  */
-export async function getLaunchdServiceStatus(name: string): Promise<ServiceStatus> {
+export async function getLaunchdServiceStatus(
+	name: string,
+): Promise<ServiceStatus> {
 	if (!isLaunchdServiceInstalled(name)) {
 		return 'not-installed';
 	}
@@ -179,17 +193,19 @@ export async function startLaunchdService(name: string): Promise<void> {
 
 	try {
 		// First ensure it's loaded
-		execSync(`launchctl load "${plistPath}" 2>/dev/null`, { stdio: 'ignore' });
+		execSync(`launchctl load "${plistPath}" 2>/dev/null`, {stdio: 'ignore'});
 	} catch {
 		// May already be loaded, ignore
 	}
 
 	try {
 		// Start the service
-		execSync(`launchctl start "${name}"`, { stdio: 'pipe' });
+		execSync(`launchctl start "${name}"`, {stdio: 'pipe'});
 	} catch (error) {
 		throw new Error(
-			`Failed to start service: ${error instanceof Error ? error.message : String(error)}`,
+			`Failed to start service: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
 		);
 	}
 }
@@ -199,10 +215,12 @@ export async function startLaunchdService(name: string): Promise<void> {
  */
 export async function stopLaunchdService(name: string): Promise<void> {
 	try {
-		execSync(`launchctl stop "${name}"`, { stdio: 'pipe' });
+		execSync(`launchctl stop "${name}"`, {stdio: 'pipe'});
 	} catch (error) {
 		throw new Error(
-			`Failed to stop service: ${error instanceof Error ? error.message : String(error)}`,
+			`Failed to stop service: ${
+				error instanceof Error ? error.message : String(error)
+			}`,
 		);
 	}
 }

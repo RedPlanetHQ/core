@@ -1,6 +1,6 @@
 {
 	"name": "@redplanethq/corebrain",
-	"version": "1.0.0",
+	"version": "2.3.4",
 	"type": "module",
 	"engines": {
 		"node": ">=16"
@@ -14,26 +14,31 @@
 	"author": "RedPlanetHQ",
 	"scripts": {
 		"build": "tsc && tsc-alias && chmod +x dist/cli.js",
-		"dev": "tsc --watch",
 		"test": "prettier --check . && xo && ava"
 	},
 	"files": [
 		"dist"
 	],
 	"dependencies": {
+		"@clack/prompts": "^1.0.1",
 		"@mishieck/ink-titled-box": "^0.4.2",
 		"@redplanethq/sdk": "workspace:*",
 		"dotenv": "^17.2.3",
 		"ink": "^6.6.0",
+		"ink-select-input": "^6.2.0",
+		"ink-spinner": "5.0.0",
+		"ink-stepper": "0.2.0",
+		"ink-text-input": "^6.0.0",
 		"pastel": "^4.0.0",
 		"react": "^19.2.4",
-		"zod": "^4.3.6",
-		"zod-to-json-schema": "^3.25.1"
+		"ws": "^8.18.0",
+		"zod": "^4.3.6"
 	},
 	"devDependencies": {
 		"@sindresorhus/tsconfig": "^8.1.0",
 		"@types/node": "18",
 		"@types/react": "^19.2.13",
+		"@types/ws": "^8.5.13",
 		"@vdemedes/prettier-config": "^2.0.1",
 		"ava": "^6.4.1",
 		"chalk": "^5.2.0",

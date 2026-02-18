@@ -18,19 +18,31 @@ import {
   getNodeColor as getNodeColorByLabel,
   nodeColorPalette,
 } from "./node-colors";
+import { toHex } from "~/lib/color-utils";
 import { useTheme } from "remix-themes";
-import { drawHover } from "./utils";
 
 export interface ClusterData {
   id: string;
   name: string;
   description?: string;
+  color?: string;
   size: number;
   cohesionScore?: number;
   aspectType?: "thematic" | "social" | "activity";
   createdAt: string;
   updatedAt: string;
   workspaceId: string;
+}
+
+export interface NodeHoverData {
+  nodeId: string;
+  sessionId: string | null;
+  position: { x: number; y: number };
+}
+
+export interface ActiveNodeLabel {
+  sessionId: string;
+  position: { x: number; y: number };
 }
 
 export interface GraphClusteringProps {
@@ -40,6 +52,8 @@ export interface GraphClusteringProps {
   height?: number;
   zoomOnMount?: boolean;
   onNodeClick?: (nodeId: string) => void;
+  onNodeHover?: (data: NodeHoverData | null) => void;
+  onActiveNodesChange?: (nodes: ActiveNodeLabel[]) => void;
   onEdgeClick?: (edgeId: string) => void;
   onClusterClick?: (clusterId: string) => void;
   onBlur?: () => void;
@@ -57,21 +71,6 @@ export interface GraphClusteringRef {
   resetHighlights: () => void;
 }
 
-// Use node-colors palette for cluster colors
-const generateClusterColors = (
-  clusterCount: number,
-  isDarkMode: boolean,
-): string[] => {
-  const palette = isDarkMode ? nodeColorPalette.dark : nodeColorPalette.light;
-  const colors: string[] = [];
-
-  for (let i = 0; i < clusterCount; i++) {
-    colors.push(palette[i % palette.length]);
-  }
-
-  return colors;
-};
-
 export const GraphClustering = forwardRef<
   GraphClusteringRef,
   GraphClusteringProps
@@ -84,6 +83,8 @@ export const GraphClustering = forwardRef<
       height = 800,
       zoomOnMount = false,
       onNodeClick,
+      onNodeHover,
+      onActiveNodesChange,
       onEdgeClick,
       onClusterClick,
       onBlur,
@@ -104,21 +105,49 @@ export const GraphClustering = forwardRef<
     const selectedNodeRef = useRef<string | null>(null);
     const selectedEdgeRef = useRef<string | null>(null);
     const selectedClusterRef = useRef<string | null>(null);
+    const activeNodeIdsRef = useRef<Set<string>>(new Set());
     const size = forOnboarding ? 16 : 4;
 
-    // Create cluster color mapping
+    // Helper to calculate positions for active nodes (relative to container)
+    const updateActiveNodePositions = useCallback(() => {
+      if (!onActiveNodesChange || !sigmaRef.current || !graphRef.current || activeNodeIdsRef.current.size === 0) return;
+
+      const sigma = sigmaRef.current;
+      const graph = graphRef.current;
+      const activeNodes: ActiveNodeLabel[] = [];
+
+      activeNodeIdsRef.current.forEach((nodeId) => {
+        const x = graph.getNodeAttribute(nodeId, "x");
+        const y = graph.getNodeAttribute(nodeId, "y");
+
+        if (x !== undefined && y !== undefined) {
+          // Convert graph coordinates to viewport coordinates (relative to container)
+          const viewportPos = sigma.graphToViewport({ x, y });
+          activeNodes.push({
+            sessionId: nodeId,
+            position: {
+              x: viewportPos.x,
+              y: viewportPos.y,
+            },
+          });
+        }
+      });
+
+      onActiveNodesChange(activeNodes);
+    }, [onActiveNodesChange]);
+
+    // Create cluster color mapping - use database colors when available
     const clusterColorMap = useMemo(() => {
       if (!enableClusterColors) return new Map();
 
-      const clusterIds = clusters.map((c) => c.id);
-      const clusterColors = generateClusterColors(
-        clusterIds.length,
-        themeMode === "dark",
-      );
+      const palette = themeMode === "dark" ? nodeColorPalette.dark : nodeColorPalette.light;
       const colorMap = new Map<string, string>();
 
-      clusterIds.forEach((id, index) => {
-        colorMap.set(id, clusterColors[index]);
+      clusters.forEach((cluster, index) => {
+        // Use database color if available, otherwise fall back to palette
+        // Convert to hex for Sigma.js canvas compatibility
+        const color = cluster.color ? toHex(cluster.color) : palette[index % palette.length];
+        colorMap.set(cluster.id, color);
       });
 
       return colorMap;
@@ -198,13 +227,13 @@ export const GraphClustering = forwardRef<
 
         const nodeData = nodeDataMap.get(node.id) || node;
 
-        // Check if this is an Episode node
-        const isEpisodeNode =
-          nodeData.attributes.nodeType === "Episode" ||
-          (nodeData.labels && nodeData.labels.includes("Episode"));
+        // Check if this is a Session node
+        const isSessionNode =
+          nodeData.attributes?.nodeType === "Session" ||
+          (nodeData.labels && nodeData.labels.includes("Session"));
 
-        if (isEpisodeNode) {
-          // Episode nodes with cluster IDs use cluster colors
+        if (isSessionNode) {
+          // Session nodes with cluster IDs use cluster colors
           if (
             enableClusterColors &&
             nodeData.clusterId &&
@@ -235,48 +264,48 @@ export const GraphClustering = forwardRef<
       triplets.forEach((triplet) => {
         if (!nodeMap.has(triplet.source.id)) {
           const nodeColor = getNodeColor(triplet.source);
-          const isEpisodeNode =
-            triplet.source.attributes?.nodeType === "Episode" ||
+          const isSessionNode =
+            triplet.source.attributes?.nodeType === "Session" ||
             (triplet.source.labels &&
-              triplet.source.labels.includes("Episode"));
+              triplet.source.labels.includes("Session"));
 
           nodeMap.set(triplet.source.id, {
             id: triplet.source.id,
             label: triplet.source.value
               ? triplet.source.value.split(/\s+/).slice(0, 4).join(" ") +
-                (triplet.source.value.split(/\s+/).length > 4 ? " ..." : "")
+              (triplet.source.value.split(/\s+/).length > 4 ? " ..." : "")
               : "",
-            size: isEpisodeNode ? size : size / 2, // Episode nodes slightly larger
+            size: isSessionNode ? size : size / 2, // Session nodes slightly larger
             color: nodeColor,
             x: width,
             y: height,
             nodeData: triplet.source,
             clusterId: triplet.source.clusterId,
-            // Enhanced border for visual appeal, thicker for Episode nodes
+            // Enhanced border for visual appeal, thicker for Session nodes
             borderSize: 1,
             borderColor: nodeColor,
           });
         }
         if (!nodeMap.has(triplet.target.id)) {
           const nodeColor = getNodeColor(triplet.target);
-          const isEpisodeNode =
-            triplet.target.attributes?.nodeType === "Episode" ||
+          const isSessionNode =
+            triplet.target.attributes?.nodeType === "Session" ||
             (triplet.target.labels &&
-              triplet.target.labels.includes("Episode"));
+              triplet.target.labels.includes("Session"));
 
           nodeMap.set(triplet.target.id, {
             id: triplet.target.id,
             label: triplet.target.value
               ? triplet.target.value.split(/\s+/).slice(0, 4).join(" ") +
-                (triplet.target.value.split(/\s+/).length > 4 ? " ..." : "")
+              (triplet.target.value.split(/\s+/).length > 4 ? " ..." : "")
               : "",
-            size: isEpisodeNode ? size : size / 2, // Episode nodes slightly larger
+            size: isSessionNode ? size : size / 2, // Session nodes slightly larger
             color: nodeColor,
             x: width,
             y: height,
             nodeData: triplet.target,
             clusterId: triplet.target.clusterId,
-            // Enhanced border for visual appeal, thicker for Episode nodes
+            // Enhanced border for visual appeal, thicker for Session nodes
             borderSize: 1,
             borderColor: nodeColor,
           });
@@ -333,13 +362,13 @@ export const GraphClustering = forwardRef<
       graph.forEachNode((node) => {
         const nodeData = graph.getNodeAttribute(node, "nodeData");
         const originalColor = getNodeColor(nodeData);
-        const isEpisodeNode =
-          nodeData?.attributes.nodeType === "Episode" ||
-          (nodeData?.labels && nodeData.labels.includes("Episode"));
+        const isSessionNode =
+          nodeData?.attributes.nodeType === "Session" ||
+          (nodeData?.labels && nodeData.labels.includes("Session"));
 
         graph.setNodeAttribute(node, "highlighted", false);
         graph.setNodeAttribute(node, "color", originalColor);
-        graph.setNodeAttribute(node, "size", isEpisodeNode ? size : size / 2);
+        graph.setNodeAttribute(node, "size", isSessionNode ? size : size / 2);
         graph.setNodeAttribute(node, "zIndex", 1);
       });
       graph.forEachEdge((edge) => {
@@ -517,7 +546,7 @@ export const GraphClustering = forwardRef<
       return {
         scalingRatio: Math.round(scalingRatio * 10) / 10,
         gravity: Math.round(gravity * 10) / 10,
-        duration: 5, // in seconds
+        duration: 1, // in seconds
       };
     }, []);
 
@@ -545,19 +574,19 @@ export const GraphClustering = forwardRef<
 
       // Apply layout
       if (graph.order > 0) {
-        // Strong cluster-based positioning for Episode nodes only
+        // Strong cluster-based positioning for Session nodes only
         const clusterNodeMap = new Map<string, string[]>();
         const entityNodes: string[] = [];
 
-        // Group Episode nodes by their cluster ID, separate Entity nodes
+        // Group Session nodes by their cluster ID, separate Entity nodes
         graph.forEachNode((nodeId, attributes) => {
-          const isEpisodeNode =
-            attributes.nodeData?.nodeType === "Episode" ||
+          const isSessionNode =
+            attributes.nodeData?.nodeType === "Session" ||
             (attributes.nodeData?.labels &&
-              attributes.nodeData.labels.includes("Episode"));
+              attributes.nodeData.labels.includes("Session"));
 
-          if (isEpisodeNode && attributes.clusterId) {
-            // Episode nodes with cluster IDs go into clusters
+          if (isSessionNode && attributes.clusterId) {
+            // Session nodes with cluster IDs go into clusters
             if (!clusterNodeMap.has(attributes.clusterId)) {
               clusterNodeMap.set(attributes.clusterId, []);
             }
@@ -634,7 +663,7 @@ export const GraphClustering = forwardRef<
         }
 
         // Position Entity nodes using ForceAtlas2 natural positioning
-        // They will be positioned by the algorithm based on their connections to Episode nodes
+        // They will be positioned by the algorithm based on their connections to Session nodes
         entityNodes.forEach((nodeId) => {
           // Give them initial random positions, ForceAtlas2 will adjust based on connections
           graph.setNodeAttribute(nodeId, "x", Math.random() * width);
@@ -666,7 +695,7 @@ export const GraphClustering = forwardRef<
         }
       }
 
-      // Create Sigma instance
+      // Create Sigma instance - disable all default label rendering
       const sigma = new Sigma(graph, containerRef.current, {
         renderEdgeLabels: false,
         defaultEdgeColor: "#0000001A",
@@ -676,12 +705,11 @@ export const GraphClustering = forwardRef<
           "edges-fast": EdgeLineProgram,
         },
         renderLabels: false,
-        labelRenderedSizeThreshold: 15, // labels appear when node size >= 10px
-
+        labelRenderedSizeThreshold: Infinity, // Never show labels based on size
+        defaultDrawNodeLabel: () => { }, // Disable default label drawing
+        defaultDrawNodeHover: () => { }, // Disable default hover drawing
         enableEdgeEvents: true,
         minCameraRatio: 0.01,
-        defaultDrawNodeHover: drawHover,
-
         maxCameraRatio: 2,
         allowInvalidContainer: true,
       });
@@ -763,16 +791,16 @@ export const GraphClustering = forwardRef<
           if (!connectedNodes.has(nodeId)) {
             const nodeData = graph.getNodeAttribute(nodeId, "nodeData");
 
-            const isEpisodeNode =
-              nodeData?.attributes.nodeType === "Episode" ||
-              (nodeData?.labels && nodeData.labels.includes("Episode"));
+            const isSessionNode =
+              nodeData?.attributes.nodeType === "Session" ||
+              (nodeData?.labels && nodeData.labels.includes("Session"));
 
             // Reduce opacity by using dimmed color
             graph.setNodeAttribute(nodeId, "color", "#0000001A");
             graph.setNodeAttribute(
               nodeId,
               "size",
-              (isEpisodeNode ? size : size / 2) * 0.6,
+              (isSessionNode ? size : size / 2) * 0.6,
             );
             graph.setNodeAttribute(nodeId, "zIndex", 0);
           }
@@ -815,6 +843,10 @@ export const GraphClustering = forwardRef<
           );
           graph.setNodeAttribute(otherNode, "zIndex", 2);
         });
+
+        // Store active node IDs and update positions
+        activeNodeIdsRef.current = connectedNodes;
+        updateActiveNodePositions();
       });
 
       // Edge click handler
@@ -850,8 +882,44 @@ export const GraphClustering = forwardRef<
         // Restore camera state
         camera.setState(currentState);
 
+        // Clear active node labels
+        activeNodeIdsRef.current = new Set();
+        if (onActiveNodesChange) {
+          onActiveNodesChange([]);
+        }
+
         if (onBlur) {
           onBlur();
+        }
+      });
+
+      // Hover handlers for tooltip
+      sigma.on("enterNode", ({ node, event }) => {
+        if (onNodeHover) {
+          const nodeData = graph.getNodeAttribute(node, "nodeData");
+          // For Session nodes, the node ID is the sessionId
+          const sessionId = nodeData?.attributes?.sessionId || node;
+          onNodeHover({
+            nodeId: node,
+            sessionId,
+            position: {
+              x: event.x,
+              y: event.y,
+            },
+          });
+        }
+      });
+
+      sigma.on("leaveNode", () => {
+        if (onNodeHover) {
+          onNodeHover(null);
+        }
+      });
+
+      // Update tooltip positions on camera change (zoom/pan)
+      sigma.getCamera().on("updated", () => {
+        if (activeNodeIdsRef.current.size > 0) {
+          updateActiveNodePositions();
         }
       });
 
@@ -871,15 +939,15 @@ export const GraphClustering = forwardRef<
         }
         isInitializedRef.current = false;
       };
-    }, [nodes, edges, clusters, showClusterLabels]);
+    }, [nodes, edges, clusters, showClusterLabels, updateActiveNodePositions]);
 
     return (
       <div
         ref={containerRef}
         className=""
         style={{
-          width: forOnboarding ? "100%" : `${width}px`,
-          height: forOnboarding ? "100%" : `${height}px`,
+          width: "100%",
+          height: "100%",
           borderRadius: "8px",
           cursor: "grab",
           fontSize: "12px",

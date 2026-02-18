@@ -60,8 +60,8 @@
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
     "@redplanethq/sdk": "0.1.9",
-    "@modelcontextprotocol/sdk": "^0.4.0",
-    "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.22.1"
+    "@modelcontextprotocol/sdk": "^1.26.0",
+    "zod": "^3.25.4",
+    "zod-to-json-schema": "^3.25.1"
   }
 }

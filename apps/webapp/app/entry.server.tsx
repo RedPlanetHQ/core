@@ -18,6 +18,13 @@ import { initializeStartupServices } from "./utils/startup";
 import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
 import { trackError } from "~/services/telemetry.server";
+import {
+  verifyGatewayToken,
+  upsertGateway,
+  updateGatewayTools,
+  updateGatewayLastSeen,
+  disconnectGateway,
+} from "~/services/gateway.server";
 
 const ABORT_DELAY = 5_000;
 
@@ -189,4 +196,14 @@ function handleBrowserRequest(
   });
 }
 
-export { handleMCPRequest, handleSessionRequest, authenticateHybridRequest };
+export {
+  handleMCPRequest,
+  handleSessionRequest,
+  authenticateHybridRequest,
+  // Gateway functions
+  verifyGatewayToken,
+  upsertGateway,
+  updateGatewayTools,
+  updateGatewayLastSeen,
+  disconnectGateway,
+};
