@@ -4,6 +4,7 @@ import { LabelService } from "~/services/label.server";
 import { prisma } from "~/trigger/utils/prisma";
 import { type StatementAspect } from "@core/types";
 import { getStatementsForEpisodeByAspects } from "~/services/graphModels/statement";
+import { getWorkspacePersona } from "~/models/workspace.server";
 
 // Only these aspects affect the persona doc
 const PERSONA_ASPECTS: StatementAspect[] = [
@@ -41,20 +42,7 @@ export async function checkPersonaUpdateThreshold(
     const labelService = new LabelService();
 
     // Check if persona document exists
-    const personaSessionId = `persona-v2-${workspaceId}`;
-    const latestPersona = await prisma.document.findFirst({
-      where: {
-        sessionId: personaSessionId,
-        workspaceId,
-        source: "persona-v2",
-      },
-      orderBy: {
-        createdAt: "desc",
-      },
-      select: {
-        id: true,
-      },
-    });
+    const latestPersona = await getWorkspacePersona(workspaceId);
 
     let label = await labelService.getLabelByName("Persona", workspaceId);
 

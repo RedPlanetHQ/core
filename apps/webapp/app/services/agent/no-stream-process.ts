@@ -5,6 +5,7 @@ import { generateId, generateText, type LanguageModel, stepCountIs } from "ai";
 import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
+import { type MessagePlan } from "~/services/agent/types/decision-agent";
 
 interface NoStreamProcessBody {
   id: string;
@@ -22,6 +23,8 @@ interface NoStreamProcessBody {
   source: string;
   /** Override the user type for the inbound message (e.g. System for reminders) */
   messageUserType?: UserTypeEnum;
+  /** Action plan from Decision Agent — passed to buildAgentContext for system prompt injection */
+  actionPlan?: MessagePlan;
 }
 
 export async function noStreamProcess(body: NoStreamProcessBody, userId: string, workspaceId: string) {
@@ -92,6 +95,7 @@ export async function noStreamProcess(body: NoStreamProcessBody, userId: string,
       workspaceId,
       source: body.source as any,
       finalMessages,
+      actionPlan: body.actionPlan,
     });
 
     // Generate response using generateText (non-streaming)

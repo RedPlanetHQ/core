@@ -9,6 +9,7 @@ import { UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
+import { type MessagePlan } from "~/services/agent/types/decision-agent";
 
 interface ProcessInboundMessageParams {
   userId: string;
@@ -17,6 +18,8 @@ interface ProcessInboundMessageParams {
   userMessage: string;
   /** Override message type (e.g. System for reminders). Defaults to User. */
   messageUserType?: UserTypeEnum;
+  /** Action plan from Decision Agent — injected into core brain system prompt */
+  actionPlan?: MessagePlan;
 }
 
 interface ProcessInboundMessageResult {
@@ -65,6 +68,7 @@ export async function processInboundMessage({
   channel,
   userMessage,
   messageUserType,
+  actionPlan,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId = await getOrCreateDailyConversation(
     userId,
@@ -82,6 +86,7 @@ export async function processInboundMessage({
       },
       source: channel,
       messageUserType,
+      actionPlan,
     },
     userId,
     workspaceId,

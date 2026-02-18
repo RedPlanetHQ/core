@@ -11,7 +11,6 @@ import {
   ReminderTrigger,
   DecisionContext,
   TodayState,
-  RelevantHistory,
   ReminderSummary,
   UserState,
 } from "../types/decision-agent";
@@ -27,17 +26,15 @@ export async function buildDecisionContext(
   const { userId, channel } = trigger;
 
   // Gather context in parallel where possible
-  const [userState, todayState, relevantHistory] = await Promise.all([
+  const [userState, todayState] = await Promise.all([
     getUserState(userId, timezone),
     getTodayState(userId, channel),
-    getRelevantHistory(userId, channel),
   ]);
 
   return {
     trigger,
     user: userState,
     todayState,
-    relevantHistory,
   };
 }
 
@@ -60,10 +57,10 @@ async function getUserState(
 ): Promise<UserState> {
   try {
     // Get last user activity from conversation messages
-    const lastUserMessage = await prisma.conversationMessage.findFirst({
+    const lastUserMessage = await prisma.conversationHistory.findFirst({
       where: {
         conversation: { userId },
-        role: "user",
+        userType: "User",
       },
       orderBy: { createdAt: "desc" },
       select: { createdAt: true },
@@ -145,7 +142,7 @@ async function getTodayState(
       goalProgress: [], // Will be populated when goals are implemented
     };
   } catch (error) {
-    logger.error("Failed to get today state", { userId, error });
+    logger.error("Failed to get today state", { workspaceId, error });
     return {
       remindersSent: [],
       remindersAcknowledged: 0,
@@ -156,54 +153,12 @@ async function getTodayState(
 }
 
 /**
- * Get relevant message history
- */
-async function getRelevantHistory(
-  userId: string,
-  channel: "whatsapp" | "email",
-): Promise<RelevantHistory> {
-  try {
-    // Get messages from last 2 hours
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000);
-
-    const recentMessages = await prisma.conversationMessage.findMany({
-      where: {
-        conversation: {
-          userId,
-          source: channel,
-        },
-        createdAt: { gte: twoHoursAgo },
-      },
-      orderBy: { createdAt: "desc" },
-      take: 10,
-      select: {
-        role: true,
-        content: true,
-        createdAt: true,
-      },
-    });
-
-    return {
-      recentMessages: recentMessages.reverse().map((m) => ({
-        role: m.role as "user" | "assistant" | "system",
-        content: m.content,
-        timestamp: m.createdAt,
-      })),
-    };
-  } catch (error) {
-    logger.error("Failed to get relevant history", { userId, error });
-    return {
-      recentMessages: [],
-    };
-  }
-}
-
-/**
  * Create a reminder trigger from database reminder
  */
 export function createReminderTriggerFromDb(reminder: {
   id: string;
   userId: string;
+  workspaceId: string;
   text: string;
   channel: string;
   unrespondedCount: number;
@@ -213,6 +168,7 @@ export function createReminderTriggerFromDb(reminder: {
   return {
     type: "reminder_fired",
     timestamp: new Date(),
+    workspaceId: reminder.workspaceId,
     userId: reminder.userId,
     channel: reminder.channel as "whatsapp" | "email",
     data: {
@@ -232,6 +188,7 @@ export function createReminderTriggerFromDb(reminder: {
 export function createFollowUpTrigger(reminder: {
   id: string;
   userId: string;
+  workspaceId: string;
   text: string;
   channel: string;
   unrespondedCount: number;
@@ -242,6 +199,7 @@ export function createFollowUpTrigger(reminder: {
     type: "reminder_followup",
     timestamp: new Date(),
     userId: reminder.userId,
+    workspaceId: reminder.workspaceId,
     channel: reminder.channel as "whatsapp" | "email",
     data: {
       reminderId: reminder.id,
@@ -295,13 +253,13 @@ export async function hasUserRespondedRecently(
   try {
     const cutoff = new Date(Date.now() - minutesAgo * 60 * 1000);
 
-    const recentUserMessage = await prisma.conversationMessage.findFirst({
+    const recentUserMessage = await prisma.conversationHistory.findFirst({
       where: {
         conversation: {
           userId,
           source: channel,
         },
-        role: "user",
+        userType: "User",
         createdAt: { gte: cutoff },
       },
     });

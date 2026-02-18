@@ -191,8 +191,8 @@ export async function runDecisionAgent(
 
     // Build tools if MCP client is provided
     const tools = await createTools(
-      context.user.userId,
-      context.user.workspaceId,
+      context.user.userId as string,
+      context.user.workspaceId as string,
       context.user.timezone,
       trigger.channel,
       true,

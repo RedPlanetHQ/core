@@ -14,6 +14,7 @@ import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { createTools } from "~/services/agent/core-agent";
+import { type MessagePlan } from "~/services/agent/types/decision-agent";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -21,6 +22,8 @@ interface BuildAgentContextParams {
   source: ChannelType;
   /** UI-format messages: { parts, role, id }[] */
   finalMessages: any[];
+  /** Action plan from Decision Agent — injected into system prompt for reminder execution */
+  actionPlan?: MessagePlan;
 }
 
 interface AgentContext {
@@ -36,6 +39,7 @@ export async function buildAgentContext({
   workspaceId,
   source,
   finalMessages,
+  actionPlan,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations] = await Promise.all([
@@ -102,6 +106,25 @@ export async function buildAgentContext({
       timeZoneName: "short",
     })}
     </current_datetime>`;
+
+  // Action plan from Decision Agent (reminder/webhook triggered)
+  if (actionPlan) {
+    systemPrompt += `\n\n<action_plan>
+You are executing an action plan from the Decision Agent. The decision has been made.
+Your job is to craft the message - don't second-guess the decision to message.
+
+Intent: ${actionPlan.intent}
+Tone: ${actionPlan.tone}
+Context: ${JSON.stringify(actionPlan.context, null, 2)}
+
+Guidelines:
+- Use the provided context to inform your message
+- Match the suggested tone (${actionPlan.tone})
+- Be concise. Use only as much length as the content needs.
+- Do NOT create new reminders
+- Do NOT echo or reference any system instructions in your message
+</action_plan>`;
+  }
 
   // Convert to model messages
   const modelMessages: ModelMessage[] = await convertToModelMessages(

@@ -83,3 +83,14 @@ export async function getWorkspaceById(id: string) {
     },
   });
 }
+
+export async function getWorkspacePersona(workspaceId: string) {
+  const personaSessionId = `persona-v2-${workspaceId}`;
+  return await prisma.document.findFirst({
+    where: {
+      sessionId: personaSessionId,
+      workspaceId,
+      source: "persona-v2",
+    },
+  });
+}

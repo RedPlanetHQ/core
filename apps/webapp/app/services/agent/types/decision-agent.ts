@@ -20,6 +20,7 @@ export interface BaseTrigger {
   type: TriggerType;
   timestamp: Date;
   userId: string;
+  workspaceId: string;
   channel: "whatsapp" | "email";
 }
 
@@ -150,8 +151,8 @@ export interface ActionPlan {
 
 export interface UserState {
   timezone: string;
-  userId: string;
-  workspaceId: string;
+  userId?: string;
+  workspaceId?: string;
   lastActiveAt?: Date;
   currentlyBusy: boolean;
 }
@@ -211,7 +212,7 @@ export interface DecisionContext {
   trigger: Trigger;
   user: UserState;
   todayState: TodayState;
-  relevantHistory: RelevantHistory;
+  relevantHistory?: RelevantHistory;
   gatheredData?: GatheredData;
 }
 
