@@ -4,7 +4,7 @@ import { Gmail } from "../icons/gmail";
 import { GoogleCalendar } from "../icons/google-calendar";
 import { GoogleSheets } from "../icons/google-sheets";
 import { LinearIcon } from "../icons/linear-icon";
-import { RiGithubFill } from "@remixicon/react";
+import { RiGithubFill, RiLinkedinFill } from "@remixicon/react";
 
 interface UseCase {
   icon: any;
@@ -186,6 +186,21 @@ const useCases: UseCase[] = [
       "Get all active Linear issues for [Team name], group by assignee, and show workload distribution",
     category: "Linear",
   },
+  // LinkedIn Integration
+  {
+    icon: RiLinkedinFill,
+    title: "Post Professional Update",
+    prompt:
+      "Post a LinkedIn update about [Topic] based on our conversation, and ask for engagement",
+    category: "LinkedIn",
+  },
+  {
+    icon: RiLinkedinFill,
+    title: "Fetch My Profile",
+    prompt:
+      "Get my LinkedIn profile information and summarize my professional background",
+    category: "LinkedIn",
+  },
 ];
 
 const categories = [
@@ -208,6 +223,10 @@ const categories = [
   {
     category: "Linear",
     icon: LinearIcon,
+  },
+  {
+    category: "LinkedIn",
+    icon: RiLinkedinFill,
   },
 ];
 
