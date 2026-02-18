@@ -1,4 +1,5 @@
-import { RRule } from "rrule";
+import rrulePkg from "rrule";
+const { RRule } = rrulePkg;
 import { DateTime } from "luxon";
 
 import {
