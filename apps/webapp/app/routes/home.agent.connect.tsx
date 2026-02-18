@@ -122,14 +122,14 @@ function DirectChannelCard({
             <Icon size={18} />
           </div>
           {isWaitlist && isOptedIn && (
-            <Badge className="bg-green-100 text-xs text-green-800">
-              <Check size={10} className="mr-1" />
+            <Badge className="bg-green-100 text-xs text-green-800 rounded">
+              <Check size={10} />
               On Waitlist
             </Badge>
           )}
           {isWaitlist && !isOptedIn && (
             <Badge variant="secondary" className="text-xs">
-              <Clock size={10} className="mr-1" />
+              <Clock size={10} />
               Waitlist
             </Badge>
           )}
@@ -139,7 +139,7 @@ function DirectChannelCard({
             </Badge>
           )}
           {channel.status === "available" && (
-            <Badge className="bg-green-100 text-xs text-green-800">
+            <Badge className="bg-green-100 text-xs text-green-800 rounded">
               Available
             </Badge>
           )}
