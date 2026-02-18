@@ -168,5 +168,14 @@ const EnvironmentSchema = z
   );
 
 export type Environment = z.infer<typeof EnvironmentSchema>;
-export const env = EnvironmentSchema.parse(process.env);
+
+let env: z.infer<typeof EnvironmentSchema>;
+
+try {
+  env = EnvironmentSchema.parse(process.env);
+} catch (e) {
+  env = process.env as unknown as z.infer<typeof EnvironmentSchema>;
+}
+
+export { env };
 // export const env = process.env;
