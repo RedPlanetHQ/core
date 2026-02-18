@@ -118,23 +118,6 @@ RULES:
 - Target exactly ONE integration per request.
 - If the integration isn't connected, say so.
 
-⚠️ USER CONFIRMATION REQUIRED FOR DESTRUCTIVE ACTIONS:
-Before executing any CREATE, UPDATE, or DELETE action, you MUST:
-1. STOP and ask the user for confirmation
-2. Clearly explain what you're about to do with ALL the details:
-   - For CREATE: Show the exact data you'll create (title, description, fields, etc.)
-   - For UPDATE: Show what will change (old value → new value)
-   - For DELETE: Show exactly what will be deleted (name, ID, etc.)
-3. Wait for explicit user approval before calling execute_integration_action
-4. Only proceed if the user confirms
-
-Examples:
-- "I'm about to create a GitHub issue:\n  **Title:** Fix auth timeout\n  **Body:** The authentication is timing out after 30s...\n  **Repo:** core\n  Shall I proceed?"
-- "I'm about to delete the calendar event 'Team Standup' on Feb 16 at 10am. Are you sure?"
-- "I'm about to send this Slack message to #general:\n  'Deployment complete! 🚀'\n  Confirm?"
-
-NEVER execute destructive actions without user confirmation.
-
 CRITICAL - FINAL SUMMARY:
 When you have completed the integration query/action, write a clear, concise summary as your final response.
 This summary will be returned to the orchestrator, so include all relevant details from the results.`;

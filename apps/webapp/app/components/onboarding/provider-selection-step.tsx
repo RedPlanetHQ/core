@@ -33,13 +33,15 @@ export function ProviderSelectionStep({
             <Button
               key={provider.id}
               variant="outline"
-              onClick={() => onSelectProvider(provider.id)}
+              onClick={() => {
+                onSelectProvider(provider.id);
+                onContinue();
+              }}
               size="2xl"
-              className={`relative flex flex-col items-start justify-center gap-1 rounded-lg border-1 border-gray-300 p-4 text-left transition-all ${
-                isSelected
-                  ? "border-primary bg-primary/5"
-                  : "hover:border-primary/50 border-gray-300"
-              }`}
+              className={`relative flex flex-col items-start justify-center gap-1 rounded-lg border-1 border-gray-300 p-4 text-left transition-all ${isSelected
+                ? "border-primary bg-primary/5"
+                : "hover:border-primary/50 border-gray-300"
+                }`}
             >
               <div className="flex h-full items-center gap-2">
                 {getIconForAuthorise(provider.icon, 20)}
@@ -52,16 +54,6 @@ export function ProviderSelectionStep({
         })}
       </div>
 
-      <div className="flex justify-end pt-4">
-        <Button
-          onClick={onContinue}
-          disabled={!selectedProvider}
-          size="lg"
-          variant="secondary"
-        >
-          Continue
-        </Button>
-      </div>
     </div>
   );
 }

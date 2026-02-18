@@ -162,6 +162,18 @@ function DirectChannelCard({
             {isJoining ? "Joining..." : "Join Waitlist"}
           </Button>
         )}
+        {channel.id === "email" && <Button
+          variant="secondary"
+
+          className="mt-2 w-full rounded"
+          onClick={(e) => {
+            e.stopPropagation();
+            onClick && onClick();
+          }}
+          disabled={isJoining}
+        >
+          Connect
+        </Button>}
       </CardHeader>
     </Card>
   );
@@ -189,7 +201,7 @@ function EmailModal({
             request using your memory and connected integrations.
           </p>
 
-          <div className="bg-gray-300 rounded-lg p-4">
+          <div className="bg-gray-300 rounded-lg p-2">
             <p className="mb-1 text-sm font-medium">Email Address</p>
             <code className="text-primary text-lg font-semibold">
               brain@getcore.me

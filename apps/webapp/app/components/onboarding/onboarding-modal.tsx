@@ -71,12 +71,12 @@ export function OnboardingModal({
                 variant="ghost"
                 size="sm"
                 onClick={handleBack}
-                className="gap-1 px-2"
+                className="gap-1 px-2 rounded"
               >
                 <ArrowLeft className="h-4 w-4" />
               </Button>
             )}
-            <DialogTitle className="text-2xl">Connect to Core</DialogTitle>
+            <DialogTitle className="text-xl">Connect to Core {selectedProvider ? `with ${PROVIDER_CONFIGS[selectedProvider].name}` : null}</DialogTitle>
           </div>
         </DialogHeader>
 

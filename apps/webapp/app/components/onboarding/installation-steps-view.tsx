@@ -16,7 +16,7 @@ export function InstallationStepsView({
   return (
     <div className="space-y-4">
       <InstallationSteps
-        title={`Connect Core in ${providerConfig.name}`}
+        title={``}
         steps={providerConfig.installationSteps}
       />
 
