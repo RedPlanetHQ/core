@@ -57,6 +57,7 @@ import {
   saveMCPConfig,
 } from "~/trigger/utils/message-utils";
 import { extractMessagesFromOutput } from "~/trigger/utils/cli-message-handler";
+import { closeReminderScheduler } from "~/services/reminder-scheduler";
 
 /**
  * Episode preprocessing worker
@@ -243,6 +244,7 @@ export async function closeAllWorkers(): Promise<void> {
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
     integrationRunWorker.close(),
+    closeReminderScheduler(),
   ]);
   logger.log("All BullMQ workers closed");
 }

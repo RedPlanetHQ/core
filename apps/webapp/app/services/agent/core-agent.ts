@@ -5,6 +5,7 @@ import { runOrchestrator } from "./orchestrator";
 
 import { logger } from "../logger.service";
 import { createGatewayTools, getGatewayAgents } from "./gateway";
+import { getReminderTools } from "./tools/reminder-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -158,5 +159,8 @@ export const createTools = async (
     }),
   };
 
-  return { ...tools };
+  // Add reminder management tools
+  const reminderTools = getReminderTools(workspaceId, "whatsapp", timezone);
+
+  return { ...tools, ...reminderTools };
 };

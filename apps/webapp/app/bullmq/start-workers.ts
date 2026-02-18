@@ -19,6 +19,7 @@ import {
   titleGenerationWorker,
   integrationRunWorker,
 } from "./workers";
+import { initializeReminderScheduler } from "~/services/reminder-scheduler";
 import {
   ingestQueue,
   conversationTitleQueue,
@@ -115,6 +116,9 @@ export async function initWorkers(): Promise<void> {
     60000, // Log metrics every 60 seconds
   );
 
+  // Initialize reminder scheduler (starts its own workers + recovers missed jobs)
+  await initializeReminderScheduler();
+
   // Log worker startup
   logger.log("\n🚀 Starting BullMQ workers...");
   logger.log("─".repeat(80));
@@ -137,6 +141,7 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
   );
+  logger.log(`✓ Reminder scheduler: reminder-queue + followup-queue`);
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");
   logger.log("📊 Metrics will be logged every 60 seconds\n");
