@@ -14,7 +14,6 @@
 	"author": "RedPlanetHQ",
 	"scripts": {
 		"build": "tsc && tsc-alias && chmod +x dist/cli.js",
-		"dev": "tsc --watch",
 		"test": "prettier --check . && xo && ava"
 	},
 	"files": [

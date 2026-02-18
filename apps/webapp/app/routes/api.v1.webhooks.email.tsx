@@ -15,7 +15,6 @@ import { processInboundMessage } from "~/services/agent/message-processor";
 import { logger } from "~/services/logger.service";
 import { Resend } from "resend";
 
-const resend = new Resend(env.RESEND_API_KEY);
 
 
 interface ResendWebhookPayload {
@@ -90,39 +89,41 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   // Return 200 immediately, process in background
-  (async () => {
-    try {
-      // Fetch email body from Resend API
-      const emailDetails = await resend.emails.receiving.get(email_id);
 
-      const { html, text } = emailDetails.data || {};
+  try {
+    const resend = new Resend(env.RESEND_API_KEY);
 
-      const messageContent = text || html || "";
-      if (!messageContent) {
-        logger.warn("Empty email body", { emailId: email_id });
-        return; 
-      }
+    // Fetch email body from Resend API
+    const emailDetails = await resend.emails.receiving.get(email_id);
 
-      const { responseText } = await processInboundMessage({
-        userId: user.id,
-        workspaceId: userWorkspace.workspaceId,
-        channel: "email",
-        userMessage: messageContent,
-      });
+    const { html, text } = emailDetails.data || {};
 
-      await sendPlainTextEmail({
-        to: senderEmail,
-        replyTo: env.FROM_EMAIL,
-        subject: `Re: ${subject ?? ""}`,
-        text: responseText,
-      });
-    } catch (err) {
-      logger.error("Email message processing failed", {
-        userId: user.id,
-        error: String(err),
-      });
+    const messageContent = text || html || "";
+    if (!messageContent) {
+      logger.warn("Empty email body", { emailId: email_id });
+      return;
     }
-  })();
+
+    const { responseText } = await processInboundMessage({
+      userId: user.id,
+      workspaceId: userWorkspace.workspaceId,
+      channel: "email",
+      userMessage: messageContent,
+    });
+
+    await sendPlainTextEmail({
+      to: senderEmail,
+      replyTo: env.FROM_EMAIL,
+      subject: `Re: ${subject ?? ""}`,
+      text: responseText,
+    });
+  } catch (err) {
+    logger.error("Email message processing failed", {
+      userId: user.id,
+      error: String(err),
+    });
+  }
+
 
   return json({ received: true }, { status: 200 });
 }

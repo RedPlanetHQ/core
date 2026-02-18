@@ -343,7 +343,7 @@ export async function removeScheduledReminder(
     try {
       const pendingRuns = await runs.list({
         tag: [`reminder:${reminderId}`],
-        status: ["QUEUED"],
+        status: ["QUEUED", "DELAYED"],
       });
 
       for await (const run of pendingRuns) {
@@ -416,7 +416,7 @@ export async function cancelFollowUpsForReminder(
     try {
       const pendingRuns = await runs.list({
         tag: [`followup:${reminderId}`],
-        status: ["QUEUED"],
+        status: ["QUEUED", "DELAYED"],
       });
 
       let cancelledCount = 0;

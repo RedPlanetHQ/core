@@ -114,14 +114,16 @@ interface ReminderItem {
   createdAt: string;
 }
 
-function formatSchedule(schedule: string): string {
+function formatSchedule(schedule: string, maxOccurrences: number | null): string {
   const freqMatch = schedule.match(/FREQ=(\w+)/);
   const hourMatch = schedule.match(/BYHOUR=(\d+)/);
+  const minuteMatch = schedule.match(/BYMINUTE=(\d+)/);
   const dayMatch = schedule.match(/BYDAY=([A-Z,]+)/);
   const intervalMatch = schedule.match(/INTERVAL=(\d+)/);
 
   const freq = freqMatch ? freqMatch[1] : "DAILY";
   const hour = hourMatch ? parseInt(hourMatch[1]) : null;
+  const minute = minuteMatch ? parseInt(minuteMatch[1]) : 0;
   const interval = intervalMatch ? parseInt(intervalMatch[1]) : 1;
 
   const dayNames: Record<string, string> = {
@@ -134,10 +136,26 @@ function formatSchedule(schedule: string): string {
     SU: "Sun",
   };
 
+  // Format time string
+  let timeStr = "";
+  if (hour !== null) {
+    const ampm = hour >= 12 ? "PM" : "AM";
+    const hour12 = hour % 12 || 12;
+    timeStr = minute > 0 ? `${hour12}:${minute.toString().padStart(2, "0")}${ampm}` : `${hour12}${ampm}`;
+  }
+
+  // One-time reminder
+  if (maxOccurrences === 1) {
+    if (timeStr) {
+      return `Once at ${timeStr}`;
+    }
+    return "Once";
+  }
+
   let result = "";
 
   if (freq === "MINUTELY") {
-    result = interval > 1 ? `Every ${interval} minutes` : "Every minute";
+    result = interval > 1 ? `Every ${interval} min` : "Every minute";
   } else if (freq === "HOURLY") {
     result = interval > 1 ? `Every ${interval} hours` : "Hourly";
   } else if (freq === "DAILY") {
@@ -154,10 +172,8 @@ function formatSchedule(schedule: string): string {
     result = interval > 1 ? `Every ${interval} weeks` : "Weekly";
   }
 
-  if (hour !== null) {
-    const ampm = hour >= 12 ? "PM" : "AM";
-    const hour12 = hour % 12 || 12;
-    result += ` at ${hour12}${ampm}`;
+  if (timeStr) {
+    result += ` at ${timeStr}`;
   }
 
   return result || schedule;
@@ -206,7 +222,7 @@ function ReminderRow({ reminder, onToggle, onDelete }: ReminderRowProps) {
           {/* Schedule */}
           <div className="flex items-center gap-1">
             <Clock size={12} />
-            <span>{formatSchedule(reminder.schedule)}</span>
+            <span>{formatSchedule(reminder.schedule, reminder.maxOccurrences)}</span>
           </div>
 
           {/* Channel */}

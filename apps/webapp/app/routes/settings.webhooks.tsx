@@ -29,12 +29,11 @@ import { prisma } from "~/db.server";
 import { SettingSection } from "~/components/setting-section";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
 
   const webhooks = await prisma.webhookConfiguration.findMany({
     where: {
-      workspaceId: workspace.id,
+      workspaceId: workspace?.id,
     },
     include: {
       _count: {
