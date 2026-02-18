@@ -74,7 +74,7 @@ export async function loader({ request }: LoaderFunctionArgs): Promise<any> {
   }
 
   const magicLinkSent = new Cookie(request.headers.get("cookie") ?? "").has(
-    "core:magiclink",
+    "core_magiclink",
   );
 
   return typedjson(
@@ -119,7 +119,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     throw redirect("/login/magic", { headers });
   } else {
-    const myCookie = createCookie("core:magiclink");
+    const myCookie = createCookie("core_magiclink");
 
     return redirect("/login/magic", {
       headers: {
