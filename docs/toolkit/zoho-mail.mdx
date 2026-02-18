@@ -1,0 +1,152 @@
+---
+title: "Zoho Mail"
+description: "Enterprise email solution with comprehensive management capabilities"
+---
+
+## Overview
+
+Integrate Zoho Mail to seamlessly send, receive, organize, and manage your enterprise email workflows directly from CORE. Access 15+ specialized tools for complete email management.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Zoho Mail** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Zoho to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+When you ask CORE to perform Zoho Mail tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Send and Reply to Emails" icon="paper-plane">
+    **Scenario**: Send emails programmatically with multiple recipients
+
+    ```
+    "Send an email to client@example.com with CC to team@company.com about
+    the project update, with HTML formatting"
+    ```
+
+    The agent will use `zoho_send_email` to send new emails with CC, BCC, and HTML formatting support, or `zoho_send_reply` to respond to existing messages.
+  </Accordion>
+
+  <Accordion title="Search and Retrieve Messages" icon="magnifying-glass">
+    **Scenario**: Find emails using advanced search
+
+    ```
+    "Search for all emails from client@example.com in the last week
+    and show me their content"
+    ```
+
+    The agent will:
+    1. Use `zoho_search_emails` with appropriate search query
+    2. Use `zoho_get_message` to retrieve full content
+    3. Use `zoho_get_attachments` to identify attachments if needed
+  </Accordion>
+
+  <Accordion title="Organize with Folders" icon="folder">
+    **Scenario**: Keep your mailbox organized with custom folders
+
+    ```
+    "Create a new folder called 'Q1 Projects' and move all emails
+    from project-team@company.com to it"
+    ```
+
+    The agent will use `zoho_create_folder` to create the folder, `zoho_search_emails` to find matching emails, and `zoho_move_messages` to organize them.
+  </Accordion>
+
+  <Accordion title="Email Workflow Automation" icon="arrows-spin">
+    **Scenario**: Automate email processing and organization
+
+    ```
+    "Mark all emails from newsletter@company.com as read,
+    flag important ones, and archive the rest"
+    ```
+
+    The agent will:
+    1. Use `zoho_search_emails` to find matching emails
+    2. Use `zoho_read_messages` to mark as read
+    3. Use `zoho_flag_messages` for priority management
+    4. Use `zoho_archive_message` for completed items
+  </Accordion>
+
+  <Accordion title="Manage Multiple Accounts" icon="users">
+    **Scenario**: Work with multiple Zoho Mail accounts
+
+    ```
+    "Show me all my Zoho Mail accounts and list unread emails
+    from my work account"
+    ```
+
+    The agent will use `zoho_get_accounts` to retrieve all accounts, then `zoho_list_emails` with the appropriate accountId to access specific account data.
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `ZohoMail.messages.READ` - Read email messages
+- `ZohoMail.messages.CREATE` - Send and compose emails
+- `ZohoMail.messages.UPDATE` - Update email properties
+- `ZohoMail.messages.DELETE` - Delete emails
+- `ZohoMail.folders.READ` - Read folder information
+- `ZohoMail.folders.CREATE` - Create and manage folders
+- `ZohoMail.accounts.READ` - Access account information
+- `ZohoMail.attachments.READ` - Read attachment information
+
+## Available MCP Tools
+
+The Zoho Mail integration provides 15+ tools for complete enterprise email management:
+
+
+<Tabs>
+  <Tab title="Email Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_send_email` | Sends a new email with support for CC, BCC, and HTML formatting |
+| `zoho_send_reply` | Sends a reply to an existing email message |
+| `zoho_get_message` | Retrieves the full content of a specific email message with headers and body |
+</Tab>
+<Tab title="Email Search and Listing">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_list_emails` | Lists emails from a specified folder with pagination support |
+| `zoho_search_emails` | Searches for emails using search query syntax |
+</Tab>
+<Tab title="Message Actions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_read_messages` | Marks one or more emails as read |
+| `zoho_delete_email` | Permanently deletes one or more email messages |
+| `zoho_move_messages` | Moves emails from one folder to another |
+| `zoho_archive_message` | Archives one or more email messages |
+| `zoho_spam_message` | Marks one or more emails as spam |
+| `zoho_flag_messages` | Flags emails with different flag types for organization and priority |
+</Tab>
+<Tab title="Folder Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_create_folder` | Creates a new folder for organizing emails |
+| `zoho_get_folders` | Lists all folders in the account with unread email counts |
+</Tab>
+<Tab title="Account and Attachments">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `zoho_get_accounts` | Retrieves all Zoho Mail accounts associated with the authenticated user |
+| `zoho_get_attachments` | Retrieves attachment information for a specific email message |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

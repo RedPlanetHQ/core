@@ -1,0 +1,350 @@
+---
+title: "Linear"
+description: "Modern issue tracking and project management platform for seamless team collaboration"
+---
+
+## Overview
+
+Integrate Linear to manage issues, projects, workflows, and team collaboration directly from CORE. Access 20+ tools for complete issue tracking and project management operations without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : API Key
+
+## How to Connect
+
+1. Navigate to [Linear Settings](https://linear.app/settings) → **API**
+2. Click **Create new API key** under Personal API keys
+3. Copy the generated key (it will only be shown once and keep it secure)
+4. Go to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+5. Click on the **Linear** card
+6. Paste the API key into the configuration field
+7. Click **Connect** to establish the integration
+
+## Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Linear tasks, it uses MCP tools to execute your requests:
+
+
+<AccordionGroup>
+  <Accordion title="Create and Track Issues" icon="code">
+    **Scenario**: Automatically create issues in Linear from your workflow
+
+    ```
+    "Create an issue in Linear titled 'Implement user authentication'
+    in the Engineering team with high priority,
+    assign it to @john, and add a due date of next Friday"
+    ```
+
+    The agent will use `linear_create_issue` to create the issue with all specified parameters and return the issue URL and ID.
+  </Accordion>
+
+  <Accordion title="Manage Project Workflows" icon="workflow">
+    **Scenario**: Track project progress and update issue states
+
+    ```
+    "Show me all issues in the 'Q1 Product Launch' project,
+    then move all completed issues to the 'Done' state
+    and update their status"
+    ```
+
+    The agent will:
+    1. Use `linear_list_projects` to find the project
+    2. Use `linear_get_project` to view issues
+    3. Use `linear_update_issue` to change states
+  </Accordion>
+
+  <Accordion title="Search and Filter Issues" icon="search">
+    **Scenario**: Find specific issues across your workspace
+
+    ```
+    "Search for all open issues assigned to me in the Engineering team
+    that have 'backend' label or are marked as urgent"
+    ```
+
+    The agent will use `linear_search_issues` with appropriate filters to find matching issues and display them with relevant details.
+  </Accordion>
+
+  <Accordion title="Team Collaboration" icon="users">
+    **Scenario**: View team information and coordinate work
+
+    ```
+    "Show me the Engineering team members and their assigned issues,
+    then create a comment on issue ENG-42 with the meeting summary"
+    ```
+
+    The agent will:
+    1. Use `linear_get_team` to fetch team members
+    2. Use `linear_get_issue` to view current issue
+    3. Use `linear_create_comment` to add the meeting notes
+  </Accordion>
+
+  <Accordion title="Sprint Planning" icon="calendar">
+    **Scenario**: Organize work into sprints/cycles
+
+    ```
+    "Create a new sprint called 'Sprint 15' starting next Monday for 2 weeks,
+    then find all issues with 'next-sprint' label and add them to the cycle"
+    ```
+
+    The agent will:
+    1. Use `linear_create_cycle` to create the sprint
+    2. Use `linear_search_issues` to find labeled issues
+    3. Use `linear_update_issue` to assign issues to the cycle
+  </Accordion>
+
+  <Accordion title="Project Setup Automation" icon="rocket">
+    **Scenario**: Quickly set up new projects with standard configuration
+
+    ```
+    "Create a new project 'Mobile App Redesign' for the Design and Engineering teams,
+    add labels for 'design', 'development', and 'testing',
+    and create a sprint for the first 2 weeks"
+    ```
+
+    The agent will:
+    1. Use `linear_create_project` to create the project
+    2. Use `linear_create_label` to create team labels
+    3. Use `linear_create_cycle` to create the sprint
+  </Accordion>
+
+  <Accordion title="Issue Status Updates" icon="refresh">
+    **Scenario**: Keep issues updated and monitor progress
+
+    ```
+    "Show me all 'In Progress' issues in my team,
+    update the ones with completed subtasks to 'Review',
+    and add a comment indicating they're ready for review"
+    ```
+
+    The agent will:
+    1. Use `linear_search_issues` to find in-progress issues
+    2. Use `linear_update_issue` to change states
+    3. Use `linear_create_comment` to add status updates
+  </Accordion>
+
+  <Accordion title="Bulk Organization" icon="list">
+    **Scenario**: Organize issues with labels and priorities
+
+    ```
+    "Find all unassigned issues in the Engineering team,
+    assign them to team members based on workload,
+    and set appropriate priority levels"
+    ```
+
+    The agent will use `linear_search_issues` to find unassigned items and `linear_update_issue` to assign and prioritize them.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors Linear 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Auto-Sync GitHub and Linear" icon="link">
+    **Trigger**: New GitHub issue created
+
+    **Automated Action**: Create corresponding Linear issue
+
+    ```
+    "When a bug issue is created in GitHub with label 'needs-triage',
+    automatically create a Linear issue in the Engineering team,
+    link it to the GitHub issue,
+    and assign it to the on-call engineer"
+    ```
+
+    Keep GitHub and Linear in sync automatically. CORE creates linked issues across platforms, maintaining a single source of truth.
+  </Accordion>
+
+  <Accordion title="Status Update Notifications" icon="bell">
+    **Trigger**: Issue status changed to "Done"
+
+    **Automated Action**: Notify stakeholders and update memory
+
+    ```
+    "When an issue is moved to 'Done' status,
+    save the completion details to CORE memory,
+    and send a summary to the project Slack channel"
+    ```
+
+    Broadcast progress automatically. CORE tracks completed work, updates memory, and keeps teams informed on Slack.
+  </Accordion>
+
+  <Accordion title="Priority Escalation" icon="exclamation">
+    **Trigger**: Issue priority changed to "Urgent"
+
+    **Automated Action**: Notify team and create follow-up tasks
+
+    ```
+    "When an issue is marked as urgent priority,
+    notify the team lead on WhatsApp,
+    send a Slack message to #engineering-urgent,
+    and add it to the current sprint if not already assigned"
+    ```
+
+    Escalate critical issues instantly. CORE routes urgent work to the right people across multiple channels.
+  </Accordion>
+
+  <Accordion title="Sprint Progress Tracking" icon="chart-line">
+    **Trigger**: Issue completed within active cycle
+
+    **Automated Action**: Update sprint metrics and notify
+
+    ```
+    "When an issue is completed in the current sprint,
+    save the completion data to memory with label 'sprint-metrics',
+    calculate remaining sprint capacity,
+    and send a daily summary of progress to #team-standup"
+    ```
+
+    Track sprint velocity automatically. CORE monitors completions, calculates metrics, and provides daily progress updates.
+  </Accordion>
+
+  <Accordion title="Blocked Issue Alerts" icon="octagon">
+    **Trigger**: Issue comment contains "blocked"
+
+    **Automated Action**: Escalate and track blockage
+
+    ```
+    "When a comment on an issue contains the word 'blocked',
+    change the issue status to 'Blocked',
+    notify the project manager on Slack,
+    and create a tracking entry in CORE memory"
+    ```
+
+    Surface blockers immediately. CORE detects blocking comments and escalates to unblock work faster.
+  </Accordion>
+
+  <Accordion title="Team Workload Balancing" icon="users">
+    **Trigger**: Issue assigned to team member
+
+    **Automated Action**: Check workload and suggest rebalancing
+
+    ```
+    "When an issue is assigned to someone,
+    check their current issue count,
+    and if they have more than 10 open issues,
+    send a notification to the team lead suggesting workload review"
+    ```
+
+    Prevent team burnout. CORE monitors assignments and flags potential overload before it becomes a problem.
+  </Accordion>
+</AccordionGroup>
+
+## Available MCP Tools
+
+The Linear integration provides 20+ tools for comprehensive issue tracking and project management:
+
+
+<Tabs>
+  <Tab title="Issue Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_issue` | Create a new issue with title, description, assignee, and priority |
+| `linear_update_issue` | Update an existing issue (title, description, state, assignee, etc.) |
+| `linear_get_issue` | Get detailed information about a specific issue |
+| `linear_search_issues` | Search for issues with advanced filters (team, assignee, state, project, labels) |
+| `linear_delete_issue` | Delete an issue |
+</Tab>
+<Tab title="Comment Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_comment` | Create a comment on an issue (markdown supported) |
+| `linear_update_comment` | Update an existing comment |
+| `linear_delete_comment` | Delete a comment |
+</Tab>
+<Tab title="Project Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_project` | Create a new project with teams, lead, and dates |
+| `linear_update_project` | Update project details (name, description, state, lead) |
+| `linear_list_projects` | List all projects with optional team filtering |
+| `linear_get_project` | Get detailed project information including issues and progress |
+</Tab>
+<Tab title="Team Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_teams` | List all teams in the organization |
+| `linear_get_team` | Get team details including members and workflow states |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_users` | List all users in the organization |
+| `linear_get_user` | Get details of a specific user and their assigned issues |
+| `linear_get_viewer` | Get details of the authenticated user and organization |
+</Tab>
+<Tab title="Workflow States">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_list_workflow_states` | List workflow states with optional team filtering |
+</Tab>
+<Tab title="Labels">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_label` | Create a new label with optional color and description |
+| `linear_list_labels` | List all labels with optional team filtering |
+</Tab>
+<Tab title="Cycles">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `linear_create_cycle` | Create a sprint/cycle with start and end dates |
+| `linear_list_cycles` | List all cycles with progress information |
+| `linear_get_cycle` | Get cycle details including assigned issues |
+</Tab>
+</Tabs>
+
+### Triggers
+
+Linear triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Issues">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_ISSUE_CREATED` | Triggered when a new issue is created |
+| `LINEAR_ISSUE_UPDATED` | Triggered when an issue is modified (title, description, status, etc.) |
+| `LINEAR_ISSUE_DELETED` | Triggered when an issue is deleted |
+| `LINEAR_ISSUE_STATUS_CHANGED` | Triggered when an issue's workflow state changes |
+| `LINEAR_ISSUE_ASSIGNED` | Triggered when an issue is assigned to a user |
+| `LINEAR_ISSUE_PRIORITY_CHANGED` | Triggered when an issue's priority is updated |
+</Tab>
+<Tab title="Comments">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_COMMENT_CREATED` | Triggered when a comment is added to an issue |
+| `LINEAR_COMMENT_UPDATED` | Triggered when a comment is edited |
+| `LINEAR_COMMENT_DELETED` | Triggered when a comment is deleted |
+</Tab>
+<Tab title="Projects">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_PROJECT_CREATED` | Triggered when a new project is created |
+| `LINEAR_PROJECT_UPDATED` | Triggered when a project is modified |
+| `LINEAR_PROJECT_STATUS_CHANGED` | Triggered when a project's status changes |
+</Tab>
+<Tab title="Cycles">
+
+| Event | Description |
+|-------|-------------|
+| `LINEAR_CYCLE_STARTED` | Triggered when a new cycle/sprint starts |
+| `LINEAR_CYCLE_COMPLETED` | Triggered when a cycle/sprint is completed |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

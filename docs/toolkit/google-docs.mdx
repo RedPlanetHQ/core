@@ -1,0 +1,135 @@
+---
+title: "Google Docs"
+description: "Document creation and editing with rich text formatting"
+---
+
+## Overview
+
+Integrate Google Docs to create, edit, and format documents seamlessly from CORE. Access 8 tools for complete document management including text manipulation, rich formatting, image insertion, and automated report generation without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0 (Google)
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Google Docs** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Google to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+When you ask CORE to perform Google Docs tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Create Documentation" icon="file-word">
+    **Scenario**: Create professional documents programmatically with structured content
+
+    ```
+    "Create a new document titled 'Q1 2026 Strategy Report',
+    add a header section with formatted text, and insert our company logo"
+    ```
+
+    The agent will:
+    1. Use `create_document` to generate the new document
+    2. Use `append_text` to add content sections
+    3. Use `format_text` to apply styling and structure
+    4. Use `insert_image` to add the logo
+  </Accordion>
+
+  <Accordion title="Edit Documents" icon="pen-to-square">
+    **Scenario**: Modify existing documents with text insertions and replacements
+
+    ```
+    "Read the 'Meeting Notes' document, replace all occurrences of 'TBD' with 'To Be Determined',
+    and append today's action items to the end"
+    ```
+
+    The agent will:
+    1. Use `read_document` to understand current content
+    2. Use `replace_text` to update placeholder text
+    3. Use `append_text` to add new sections
+  </Accordion>
+
+  <Accordion title="Format Content" icon="paintbrush">
+    **Scenario**: Apply professional formatting with consistent styling
+
+    ```
+    "Format all section headers in the document as bold 16pt text,
+    make important notes italic, and highlight key metrics in blue"
+    ```
+
+    The agent will use `format_text` to apply styling including bold, italic, font sizes, and colors to specific text ranges.
+  </Accordion>
+
+  <Accordion title="Insert Images" icon="image">
+    **Scenario**: Embed visual content in documents for enhanced presentations
+
+    ```
+    "Insert the quarterly sales chart at the beginning of the report,
+    and add product screenshots in the features section"
+    ```
+
+    The agent will use `insert_image` with valid image URIs to embed pictures, charts, or screenshots at specific locations with custom sizing.
+  </Accordion>
+
+  <Accordion title="Automate Reports" icon="file-chart-column">
+    **Scenario**: Build automated document generation workflows for recurring reports
+
+    ```
+    "Create a weekly status report with this week's metrics,
+    format the headers, add the performance charts, and share the link"
+    ```
+
+    The agent will:
+    1. Use `create_document` for template creation
+    2. Use `append_text` for dynamic content insertion
+    3. Use `format_text` for consistent formatting
+    4. Use `insert_image` for visual elements
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `https://www.googleapis.com/auth/documents` - Read and write access to documents
+- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
+
+## Available MCP Tools
+
+The Google Docs integration provides 8 tools for comprehensive document management:
+
+
+<Tabs>
+  <Tab title="Document Discovery">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_documents` | Lists all Google Docs documents in the user's Google Drive with metadata including creation time, modification time, and direct links |
+| `create_document` | Creates a new Google Doc with an optional title |
+| `read_document` | Reads the full content of a Google Doc with optional view mode for suggestions |
+</Tab>
+<Tab title="Text Content">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `insert_text` | Inserts text at a specific location in a document. Default location is index 1 (start of document). |
+| `append_text` | Appends text to the end of a document |
+| `replace_text` | Replaces all occurrences of text in a document with case-sensitive or case-insensitive matching |
+</Tab>
+<Tab title="Formatting">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `format_text` | Applies formatting to text in a document including bold, italic, underline, font size, and color |
+| `insert_image` | Inserts an image into a document at a specified location with optional sizing |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
+
+

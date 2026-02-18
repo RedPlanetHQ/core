@@ -1,0 +1,208 @@
+---
+title: "Notion"
+description: "All-in-one workspace for notes, databases, and collaborative documentation with powerful knowledge management tools"
+---
+
+## Overview
+
+Integrate Notion to create, organize, and manage pages, databases, and collaborative documentation directly from CORE. Access 15+ tools for complete knowledge management operations without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Notion** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Notion to authorize the application
+5. Grant the required permissions (select specific workspaces or grant access to all)
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+When you ask CORE to perform Notion tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Create and Organize Pages" icon="book">
+
+    **Scenario**: Quickly create structured notes and organize them hierarchically
+
+    ```
+    "Create a new Notion page titled 'Q1 Planning' with content about
+    quarterly goals, and then create three subpages under it:
+    'January Goals', 'February Goals', and 'March Goals'"
+    ```
+
+    The agent will:
+    1. Use `notion_create_page` to create the main page
+    2. Use `notion_create_page` multiple times with the parent set to create subpages
+    3. Organize the hierarchy automatically
+  </Accordion>
+
+  <Accordion title="Query and Update Databases" icon="table">
+
+    **Scenario**: Extract data from databases and update records
+
+    ```
+    "Query my 'Projects' database for all items marked as 'In Progress',
+    then update each one to set the 'Last Reviewed' date to today"
+    ```
+
+    The agent will:
+    1. Use `notion_get_database` to understand the schema
+    2. Use `notion_query_database` with filters to find items in progress
+    3. Use `notion_update_page` on each result to update the date property
+  </Accordion>
+
+  <Accordion title="Search Knowledge Base" icon="search">
+
+    **Scenario**: Find specific pages or databases across your entire workspace
+
+    ```
+    "Search for all pages mentioning 'customer feedback' in my workspace"
+    ```
+
+    The agent will use `notion_search` to find matching pages and databases, returning results with metadata and links.
+  </Accordion>
+
+  <Accordion title="Team Collaboration" icon="users">
+
+    **Scenario**: Enable team contributions and discussions
+
+    ```
+    "Get all users in my workspace and show which ones have commented
+    on my 'Team Roadmap' page in the last week"
+    ```
+
+    The agent will:
+    1. Use `notion_list_users` to get team members
+    2. Use `notion_get_page` to retrieve the page
+    3. Use `notion_get_comments` to check recent discussions
+  </Accordion>
+
+  <Accordion title="Project Documentation" icon="file-lines">
+
+    **Scenario**: Maintain up-to-date project documentation
+
+    ```
+    "Create a new database for tracking project milestones with properties
+    for Title, Status, Due Date, and Owner. Then create entries for
+    Q1, Q2, Q3, and Q4 deliverables"
+    ```
+
+    The agent will:
+    1. Use `notion_create_database` with the specified properties
+    2. Use `notion_create_database_item` to add each milestone entry
+    3. Populate properties with the correct data types
+  </Accordion>
+
+  <Accordion title="Meeting Notes Automation" icon="note">
+
+    **Scenario**: Organize meeting notes and action items
+
+    ```
+    "Create a page for today's meeting notes under my 'Meetings' database.
+    Title it with today's date and the team name.
+    Add the attendees as properties and create an action items section"
+    ```
+
+    The agent will:
+    1. Use `notion_get_database` to understand the meetings schema
+    2. Use `notion_create_database_item` to create a new meeting entry
+    3. Populate all properties and create the content structure
+  </Accordion>
+
+  <Accordion title="Knowledge Base Management" icon="folder">
+
+    **Scenario**: Maintain organized documentation
+
+    ```
+    "Update my 'Documentation' database by moving all archived pages
+    to the 'Archive' folder and removing outdated entries"
+    ```
+
+    The agent will:
+    1. Use `notion_query_database` to find archived items
+    2. Use `notion_move_pages` to reorganize the hierarchy
+    3. Use `notion_update_page` to mark items as archived
+  </Accordion>
+
+  <Accordion title="Data Extraction and Analysis" icon="chart-simple">
+
+    **Scenario**: Extract structured data from databases
+
+    ```
+    "Query my 'Contacts' database for all entries in the 'Sales' company,
+    and export their names, emails, and last contact dates"
+    ```
+
+    The agent will:
+    1. Use `notion_get_database` to understand the schema
+    2. Use `notion_query_database` with appropriate filters
+    3. Extract and format the data for analysis or export
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `read_content` - Read access to pages and databases
+- `update_content` - Create and update pages
+- `insert_content` - Create and update databases
+- `read_user` - Access to user profile information
+- `read_comment` - Access to comments and discussions
+- `insert_comment` - Create comments on pages and blocks
+
+## Available MCP Tools
+
+The Notion integration provides 15+ tools for comprehensive knowledge management:
+
+<Tabs>
+  <Tab title="Page Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_create_page` | Create one or more Notion pages with properties and content |
+| `notion_get_page` | Retrieve a page with full content, metadata, and all blocks |
+| `notion_update_page` | Update page properties or content with flexible editing commands |
+| `notion_retrieve_page_property` | Retrieve specific page property details |
+| `notion_move_pages` | Move pages or databases to a new parent location |
+</Tab>
+<Tab title="Database Operations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_query_database` | Query a database with filters and sorting |
+| `notion_get_database` | Retrieve database schema and metadata |
+| `notion_create_database` | Create a new database with custom properties |
+| `notion_update_database` | Update database properties, title, or status |
+| `notion_create_database_item` | Create items in a database with properties |
+</Tab>
+<Tab title="Search & Discovery">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_search` | Search pages and databases across workspace |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_get_user` | Retrieve specific user information |
+| `notion_list_users` | List all users in the workspace |
+| `notion_get_me` | Get current bot user information |
+</Tab>
+<Tab title="Comments">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `notion_create_comment` | Create a comment on a page or block |
+| `notion_get_comments` | Retrieve comments on a specific block |
+</Tab>
+</Tabs>
+
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

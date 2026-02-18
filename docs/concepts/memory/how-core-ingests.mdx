@@ -1,0 +1,72 @@
+---
+title: "How CORE Ingests Memory"
+description: "How information enters and structures your knowledge graph"
+---
+
+## Overview
+
+Ingestion is how raw information becomes structured knowledge in your graph. Every conversation, app event, and document goes through a pipeline that extracts entities, identifies relationships, classifies facts by aspect, and links everything into your growing knowledge graph.
+
+---
+
+## The Ingestion Pipeline
+
+<Steps>
+  <Step title="Raw Input Capture">
+    Information arrives from conversations with the CORE Agent, integration activity (GitHub commits, Slack messages, Linear issues), manual document uploads, or scheduled syncs from connected apps.
+  </Step>
+
+  <Step title="Episode Creation">
+    The raw content becomes an **Episode** - the atomic unit of memory. Original content is preserved as source of truth, metadata is captured (timestamp, source, channel), and labels are applied based on context.
+  </Step>
+
+  <Step title="Entity Extraction">
+    CORE identifies all entities mentioned - people, projects, technologies, concepts, companies. Entities are normalized and deduplicated (e.g., "Sarah", "sarah", "@sarah" resolve to the same entity).
+  </Step>
+
+  <Step title="Statement Extraction">
+    Facts are extracted as structured triples: subject → predicate → object. Each statement is classified into one of [11 aspects](/concepts/memory/aspects) (Identity, Preference, Decision, etc.).
+  </Step>
+
+  <Step title="Graph Integration">
+    New information integrates with existing knowledge. Duplicate facts are deduplicated, contradictions are handled (newer facts supersede older ones), and related entities are automatically linked.
+  </Step>
+</Steps>
+
+---
+
+## Automatic vs Manual Ingestion
+
+**Automatic:** Connected integrations feed activity into memory in real-time or via scheduled syncs. Conversations with the CORE Agent are captured automatically. Zero effort - happens in the background.
+
+**Manual:** Tell the agent directly: "Remember this: I prefer using Fastify over Express for APIs because of better TypeScript support." Or use the MCP `memory_ingest` tool from any connected AI agent.
+
+---
+
+## How CORE Handles Conflicts
+
+### Entity Resolution
+
+When the same person or concept is mentioned differently across conversations ("Sarah", "Sarah Chen", "@sarah", "sarah@company.com"), CORE resolves them to a single entity. Searching for "Sarah" surfaces everything connected to her - not just exact name matches.
+
+### Contradiction Handling
+
+When new facts contradict old ones, CORE doesn't overwrite - it creates a temporal chain. The old statement is marked as superseded with its timestamp, and the new statement becomes current. Search results show the current state while preserving history: "Currently prefers GraphQL (as of Feb 10), previously preferred REST."
+
+---
+
+## Next Steps
+
+<CardGroup cols={3}>
+  <Card title="How CORE Searches" icon="magnifying-glass" href="/concepts/memory/how-core-searches">
+    How CORE retrieves information from your memory
+  </Card>
+
+  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
+    How facts are categorized during ingestion
+  </Card>
+
+  <Card title="Labels" icon="tag" href="/concepts/memory/labels">
+    Organize ingested content with labels
+  </Card>
+</CardGroup>

@@ -1,0 +1,249 @@
+---
+title: "Todoist"
+description: "Personal and team task management with projects and priorities"
+---
+
+## Overview
+
+Integrate Todoist to create, organize, and manage tasks with support for projects, priorities, and labels. Access 12 tools to manage your tasks and projects programmatically, with flexible scheduling and comprehensive organization features.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Todoist** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Todoist to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Todoist tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Create and Manage Tasks" icon="check-square">
+    **Scenario**: Quickly add tasks with priorities and due dates
+
+    ```
+    "Create a high-priority task 'Review contract' due tomorrow
+    with label 'urgent' in my Work project"
+    ```
+
+    The agent will use `create_task` with priority level 4, due_string "tomorrow", and the appropriate project_id and labels.
+  </Accordion>
+
+  <Accordion title="Organize with Projects" icon="folder">
+    **Scenario**: Structure work with projects and task hierarchies
+
+    ```
+    "Create a new project called '2026 Product Roadmap' and add three tasks
+    for planning, development, and launch"
+    ```
+
+    The agent will:
+    1. Use `create_project` to create the project
+    2. Use `create_task` for each task with the project ID
+    3. Use `update_project` to mark as favorite if needed
+  </Accordion>
+
+  <Accordion title="Track Task Progress" icon="list-check">
+    **Scenario**: Monitor and update task status
+
+    ```
+    "Show me all active tasks in my Personal project,
+    mark the completed ones as done"
+    ```
+
+    The agent will use `get_tasks` filtered by project, then `close_task` for completed items.
+  </Accordion>
+
+  <Accordion title="Priority Management" icon="exclamation">
+    **Scenario**: Set and manage task priorities across your workflow
+
+    ```
+    "List all urgent priority tasks across all projects
+    and update the ones due this week"
+    ```
+
+    The agent will use `get_tasks` to retrieve tasks, filter by priority level 4, and `update_task` to modify as needed.
+  </Accordion>
+
+  <Accordion title="Bulk Task Operations" icon="tasks">
+    **Scenario**: Automate task creation and updates
+
+    ```
+    "Create five tasks for the weekly team meeting agenda
+    and mark them all with the 'meeting' label"
+    ```
+
+    The agent will use `create_task` multiple times with consistent project_id and labels for bulk operations.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors Todoist 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Auto-Sync Tasks Across Tools" icon="arrows-rotate">
+    **Trigger**: Task created with specific label
+
+    **Automated Action**: Create corresponding task in other tools
+
+    ```
+    "When a task is created in Todoist with label 'work',
+    automatically create a matching issue in Linear,
+    and notify me on Slack with the task details"
+    ```
+
+    Keep task management synchronized. CORE creates matching tasks across platforms and notifies you where needed.
+  </Accordion>
+
+  <Accordion title="Daily Task Digest" icon="list">
+    **Trigger**: Task completed
+
+    **Automated Action**: Track completions and send daily summary
+
+    ```
+    "When I complete tasks in Todoist,
+    save them to CORE memory with label 'completed-tasks',
+    and send me a daily summary of what I accomplished at 6 PM"
+    ```
+
+    Track productivity automatically. CORE monitors completions and provides daily achievement summaries.
+  </Accordion>
+
+  <Accordion title="Deadline Reminders" icon="bell">
+    **Trigger**: Task updated with due date
+
+    **Automated Action**: Set up smart reminders
+
+    ```
+    "When a task gets a due date added in Todoist,
+    send me a WhatsApp reminder 24 hours before,
+    and another reminder 1 hour before it's due"
+    ```
+
+    Never miss deadlines. CORE watches for due dates and sends timely reminders across your preferred channels.
+  </Accordion>
+
+  <Accordion title="Priority Escalation" icon="exclamation">
+    **Trigger**: Task marked as high priority
+
+    **Automated Action**: Escalate and notify
+
+    ```
+    "When a task is set to priority 1 (urgent) in Todoist,
+    send an immediate notification to my phone,
+    add it to today's calendar as a blocked time,
+    and save it to CORE memory with label 'urgent-items'"
+    ```
+
+    Escalate urgent tasks instantly. CORE routes high-priority work to multiple channels for immediate attention.
+  </Accordion>
+
+  <Accordion title="Project Progress Tracking" icon="chart-line">
+    **Trigger**: Task completed in specific project
+
+    **Automated Action**: Update project metrics
+
+    ```
+    "When a task is completed in my 'Product Launch' project,
+    calculate the completion percentage,
+    save progress to CORE memory,
+    and send weekly updates to #product-team on Slack"
+    ```
+
+    Track project velocity automatically. CORE monitors completions and provides stakeholders with progress updates.
+  </Accordion>
+
+  <Accordion title="Smart Task Distribution" icon="share-nodes">
+    **Trigger**: New task created in shared project
+
+    **Automated Action**: Auto-assign based on rules
+
+    ```
+    "When a task is created in the 'Team Tasks' project with label 'bug',
+    assign it to the on-call engineer,
+    create a GitHub issue,
+    and notify #engineering on Slack"
+    ```
+
+    Automate task routing. CORE distributes work based on labels and creates tracking items across your workflow.
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `data:read_write` - Read and write access to tasks
+- `project:read_write` - Read and write access to projects
+- `data:delete` - Delete tasks and projects
+
+## Available MCP Tools
+
+The Todoist integration provides 12 tools for comprehensive task and project management:
+
+
+<Tabs>
+  <Tab title="Task Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_tasks` | Retrieves all active tasks, optionally filtered by project |
+| `get_task` | Retrieves a specific task by ID with full details including description, priority, and due date |
+| `create_task` | Creates a new task with optional metadata (description, project, due date, priority, labels) |
+| `update_task` | Updates an existing task with new information |
+| `close_task` | Marks a task as complete |
+| `reopen_task` | Reopens a completed task, marking it as active again |
+| `delete_task` | Permanently deletes a task |
+</Tab>
+<Tab title="Project Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_projects` | Retrieves all projects in your Todoist workspace |
+| `get_project` | Retrieves a specific project by ID with all details |
+| `create_project` | Creates a new project with optional color and favorite status |
+| `update_project` | Updates an existing project |
+| `delete_project` | Permanently deletes a project and all its tasks |
+</Tab>
+</Tabs>
+
+## Triggers
+
+Todoist triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Tasks">
+
+| Event | Description |
+|-------|-------------|
+| `TODOIST_TASK_CREATED` | Triggered when a new task is created in any project |
+| `TODOIST_TASK_UPDATED` | Triggered when a task is modified (title, description, due date, priority, etc.) |
+| `TODOIST_TASK_COMPLETED` | Triggered when a task is marked as complete |
+| `TODOIST_TASK_REOPENED` | Triggered when a completed task is reopened |
+| `TODOIST_TASK_DELETED` | Triggered when a task is permanently deleted |
+</Tab>
+<Tab title="Projects">
+
+| Event | Description |
+|-------|-------------|
+| `TODOIST_PROJECT_CREATED` | Triggered when a new project is created |
+| `TODOIST_PROJECT_UPDATED` | Triggered when a project is modified |
+| `TODOIST_PROJECT_DELETED` | Triggered when a project is deleted |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
+
+
+
+

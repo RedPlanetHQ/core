@@ -1,0 +1,45 @@
+---
+title: "Statement Aspects"
+description: "How CORE categorizes every fact for intelligent retrieval"
+---
+
+## What Are Aspects?
+
+Every fact in your CORE memory is automatically classified into one of 11 aspects. Think of aspects as filing cabinet drawers - when you need something specific, CORE knows exactly which drawer to open.
+
+## The 11 Aspects
+
+| Aspect | What it captures | Example | When it surfaces |
+|--------|-----------------|---------|-----------------|
+| **Identity** | Who you are (slow-changing attributes) | "Manik works at Red Planet" | Understanding your role, company, or background |
+| **Knowledge** | What you know and understand | "Expert in TypeScript and React" | Explaining concepts or choosing complexity level |
+| **Belief** | Why you think that way | "Values simplicity over complexity in code" | Architectural decisions or design choices |
+| **Preference** | How you want things done | "Prefers pnpm over npm" | Code reviews, setup, choosing tools |
+| **Action** | What you actually do (habitual behaviors) | "Reviews PRs every morning before standup" | Suggesting workflows or understanding routines |
+| **Goal** | What you want to achieve | "Launch MVP by Q2 2026" | Planning features, prioritizing work |
+| **Directive** | Hard rules and automation triggers | "Always run tests before creating a PR" | **Always** - directives are enforced rules |
+| **Decision** | Past choices and their reasoning | "Chose Neo4j for graph storage because of relationship traversal performance" | Encountering similar technical choices |
+| **Event** | Things that happened (with timestamps) | "Started working on authentication refactor on Jan 15, 2026" | Temporal queries ("what happened", "when did we") |
+| **Problem** | Challenges, blockers, issues | "Hit rate limits with GitHub API when syncing 50+ repos" | Debugging similar issues or planning around constraints |
+| **Relationship** | Connections between people, teams, projects | "Works with Sarah on CORE project" | Understanding team dynamics or collaborators |
+
+## Why Aspects Matter
+
+When you ask "What are my coding preferences?", CORE doesn't search through all your conversations. It:
+
+1. Classifies your query as an **Aspect Query** for `Preference`
+2. Filters statements where `aspect = Preference`
+3. Returns only preference facts: "Prefers TypeScript", "Uses pnpm", "Avoids class components"
+
+**Result**: 5 precise facts in 300ms, instead of 50 maybe-relevant chunks in 2000ms.
+
+## How They're Used Together
+
+| What the agent is doing | Aspects surfaced |
+|------------------------|------------------|
+| Writing code | Preference, Directive, Knowledge |
+| Code review | Preference, Directive |
+| Architectural decision | Decision, Belief, Problem |
+| Debugging | Problem, Knowledge, Decision |
+| Planning features | Goal, Decision, Directive |
+| Explaining concepts | Knowledge, Identity |

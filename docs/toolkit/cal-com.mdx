@@ -1,0 +1,110 @@
+---
+title: "Cal.com"
+description: "Meeting scheduling and availability management"
+---
+
+## Overview
+
+Integrate Cal.com to manage calendars, schedules, and availability directly from CORE. Create and manage multiple schedules, set availability windows, configure time zones, and automate meeting scheduling workflows.
+
+## Setup Guide
+
+- `Authentication Type` : API Key
+
+## How to Connect
+
+1. Log in to [cal.com](https://cal.com) and sign in to your account
+2. Navigate to **Settings** by clicking on your profile
+3. Go to **Security** → **API Keys**
+4. Click **Generate new API key** and copy the key
+5. Go to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+6. Click on the **Cal.com** card
+7. Paste your API key into the authentication field
+8. Click **Save** to complete the setup
+
+## Use Cases
+
+When you ask CORE to perform Cal.com tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Manage Schedules" icon="calendar-days">
+    **Scenario**: Create and manage multiple schedules for different purposes
+
+    ```
+    "Create a new business hours schedule for weekdays from 9am to 5pm
+    in Eastern Time, and set it as my default schedule"
+    ```
+
+    The agent will use `cal_create_a_schedule` to create the schedule with the specified parameters.
+  </Accordion>
+
+  <Accordion title="Set Availability" icon="clock">
+    **Scenario**: Define recurring availability windows with day/time specifications
+
+    ```
+    "Update my schedule to be available only on Monday, Wednesday, and Friday
+    from 10am to 3pm"
+    ```
+
+    The agent will use `cal_update_a_schedule` to modify the availability windows.
+  </Accordion>
+
+  <Accordion title="Configure Meeting Types" icon="list">
+    **Scenario**: Organize different types of meetings with specific schedules
+
+    ```
+    "Show me all my schedules and tell me which one is set as default"
+    ```
+
+    The agent will use `cal_get_all_schedules` to retrieve and display schedule information.
+  </Accordion>
+
+  <Accordion title="Team Scheduling" icon="users">
+    **Scenario**: Manage schedules across team members
+
+    ```
+    "Create a schedule for Pacific Time zone with availability
+    from 8am to 4pm on weekdays"
+    ```
+
+    The agent will use `cal_create_a_schedule` to set up the region-specific schedule.
+  </Accordion>
+
+  <Accordion title="Automated Booking" icon="calendar-check">
+    **Scenario**: Automate meeting creation and availability updates through workflows
+
+    ```
+    "Add date-specific overrides to my schedule for December 25th
+    to mark it as unavailable"
+    ```
+
+    The agent will use `cal_update_a_schedule` with override parameters to handle special days.
+  </Accordion>
+</AccordionGroup>
+
+## Available MCP Tools
+
+The Cal.com integration provides 6 tools for comprehensive schedule management:
+
+
+<Tabs>
+  <Tab title="Schedule Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `cal_get_all_schedules` | Retrieve all schedules from Cal.com API |
+| `cal_create_a_schedule` | Create a new schedule with name, time zone, and availability blocks |
+| `cal_update_a_schedule` | Update an existing schedule including availability and overrides |
+| `cal_get_default_schedule` | Get the default schedule with all its details |
+| `cal_get_schedule` | Get a specific schedule by its ID |
+| `cal_delete_a_schedule` | Delete a schedule by its ID |
+</Tab>
+</Tabs>
+
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
+
+
+

@@ -1,0 +1,141 @@
+---
+title: "Google Sheets"
+description: "Spreadsheet management and data manipulation"
+---
+
+## Overview
+
+Integrate Google Sheets to manage spreadsheets, manipulate data, and automate reporting from CORE. Access 8 essential tools for complete spreadsheet management including data reading, writing, formatting, and batch operations without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0 (Google)
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Google Sheets** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Google to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+When you ask CORE to perform Google Sheets tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Read and Analyze Data" icon="table">
+    **Scenario**: Extract data from spreadsheets for analysis, reporting, or processing
+
+    ```
+    "List all my spreadsheets, then read data from the 'Sales Report' sheet
+    in the Q1 2026 spreadsheet and show me the totals"
+    ```
+
+    The agent will:
+    1. Use `list_spreadsheets` to find the spreadsheet
+    2. Use `list_sheets` to discover available sheets
+    3. Use `read_range` to get the data you need
+  </Accordion>
+
+  <Accordion title="Update Spreadsheets" icon="pen">
+    **Scenario**: Modify spreadsheet data programmatically with single or batch updates
+
+    ```
+    "Update cell B2 in the 'Budget' sheet to 50000,
+    then update the entire row 5 with the new quarterly figures"
+    ```
+
+    The agent will:
+    1. Use `write_to_cell` for updating single values
+    2. Use `write_range` for updating multiple cells at once
+    3. Use `batch_update` for complex operations with formatting
+  </Accordion>
+
+  <Accordion title="Create Reports" icon="chart-line">
+    **Scenario**: Generate new spreadsheets for reports, exports, or data organization
+
+    ```
+    "Create a new spreadsheet called 'Monthly Sales Report',
+    add headers in the first row, and populate it with this month's data"
+    ```
+
+    The agent will:
+    1. Use `create_spreadsheet` with appropriate sheet titles
+    2. Use `write_range` to add headers and initial data
+    3. Use `append_range` to add records as they're generated
+  </Accordion>
+
+  <Accordion title="Data Automation" icon="rotate">
+    **Scenario**: Automate repetitive data tasks and keep spreadsheets synchronized
+
+    ```
+    "Read the current inventory data from the warehouse sheet,
+    update the quantities based on today's orders, and write back the new values"
+    ```
+
+    The agent will:
+    1. Use `read_range` to get current data
+    2. Process the data with business logic
+    3. Use `write_range` or `append_range` to update the spreadsheet
+  </Accordion>
+
+  <Accordion title="Batch Operations" icon="layer-group">
+    **Scenario**: Handle large volumes of data efficiently with batch append and update operations
+
+    ```
+    "Add 100 new customer records to the end of the Customers sheet,
+    then format the header row as bold and sort by customer name"
+    ```
+
+    The agent will:
+    1. Use `append_range` to add multiple rows of data efficiently
+    2. Use `batch_update` to apply formatting and sorting in one operation
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `https://www.googleapis.com/auth/spreadsheets` - Read and write access to spreadsheets
+- `https://www.googleapis.com/auth/drive.readonly` - Read-only access to Google Drive for file discovery
+
+## Available MCP Tools
+
+The Google Sheets integration provides 8 tools for comprehensive spreadsheet management:
+
+
+<Tabs>
+  <Tab title="Spreadsheet Discovery">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `list_spreadsheets` | Lists all Google Sheets spreadsheets in the user's Google Drive with metadata including creation and modification times |
+| `list_sheets` | Lists all sheets within a spreadsheet with metadata (sheetId, title, index, row count, column count). Does not include cell data. Use this to discover available sheets before fetching data. |
+</Tab>
+<Tab title="Data Reading">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `read_range` | Reads values from a specified range in a spreadsheet using A1 notation |
+</Tab>
+<Tab title="Data Writing">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `write_range` | Writes values to a specified range in a spreadsheet, overwriting existing data |
+| `write_to_cell` | Writes a single value to a specific cell in a spreadsheet |
+| `append_range` | Appends values to the next available row in a specified range. Perfect for adding new records without overwriting existing data. |
+</Tab>
+<Tab title="Spreadsheet Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_spreadsheet` | Creates a new spreadsheet with optional initial sheets |
+| `batch_update` | Performs batch updates for advanced operations like formatting, sorting, filtering, adding/removing sheets, and more |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

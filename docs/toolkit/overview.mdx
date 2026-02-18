@@ -1,0 +1,204 @@
+---
+title: "Toolkit Overview"
+description: "A unified actions layer for any AI agent"
+---
+
+## What is the Toolkit?
+
+CORE's Toolkit is a unified actions layer — 50+ app integrations exposed through a single MCP endpoint. Any MCP-compatible agent can use it: Claude Code, Cursor, Windsurf, CORE's own Agent, or your custom agents.
+
+Connect an app once on the [CORE Dashboard](https://app.getcore.me), and every connected agent gets access. No need to build or maintain separate tool integrations per agent.
+
+## Why Use CORE's Toolkit?
+
+1. **One endpoint, all your apps**: Instead of configuring a separate MCP server for GitHub, another for Slack, another for Calendar — connect CORE once and get everything through a single endpoint. One connection, 15+ integrations.
+
+2. **On-demand tool loading**: CORE doesn't dump all tools into your agent's context. When an agent needs to act, it describes what it wants to do. CORE filters and returns only the 1-3 relevant tools with their schemas. This saves thousands of tokens and keeps your agent focused.
+
+3. **Works with any MCP-compatible agent**: Claude Code, Cursor, Windsurf, your custom agents — anything that speaks MCP gets the full toolkit without extra setup.
+
+## How It Works
+
+#### Connect apps on the CORE Dashboard
+
+Connect each integration securelt and authenticates via OAuth or API keys
+
+#### Agent describes intent
+When a user ask a question, agent sends an intent query e.g "send a slack message" and gets back only the relevant tool schemas.
+
+#### Agent executes
+Agent then calls the action/tools with the right parameters, CORE handles the rest
+  
+```
+You: "Create a GitHub issue for the auth bug and message Sarah on Slack"
+
+Agent:
+→ Calls get_integration_actions("create github issue") → gets create_issue schema
+→ Calls execute_integration_action(create_issue, {title, body, repo})
+→ Calls get_integration_actions("send slack message") → gets send_message schema
+→ Calls execute_integration_action(send_message, {channel, text})
+```
+
+## Connecting via MCP
+
+All toolkit actions are exposed through a single MCP endpoint. Instead of configuring separate MCP servers per app, you connect CORE once.
+
+**Base MCP URL:**
+```
+https://mcp.getcore.me/api/v1/mcp
+```
+
+```
+Traditional:  Your AI Tool → GitHub MCP Server (auth required)
+              Your AI Tool → Linear MCP Server (auth required)
+              Your AI Tool → Slack MCP Server (auth required)
+
+With CORE:    Your AI Tool → CORE MCP Endpoint → All Integrations (pre-authenticated)
+```
+
+See [MCP Configuration](/mcp/configuration) for query parameters and [Authentication](/mcp/authentication) for OAuth and API key setup.
+
+---
+
+## Webhooks & Triggers
+
+CORE also supports **proactive automation**. When events happen in your connected apps e.g new email, GitHub issue created, Slack message in a channel, CORE can automatically respond based on your configured triggers.
+
+Each integration page below lists its available webhook triggers alongside its action tools.
+
+## Most Used Integrations
+
+<CardGroup cols={3}>
+  <Card title="GitHub" icon="github" href="/toolkit/github">
+    Manage repositories, issues, pull requests, and code reviews
+  </Card>
+<Card title="Linear" icon="list" href="/toolkit/linear">
+    Create and manage issues, projects, and workflows
+  </Card>
+  <Card title="Gmail" icon="envelope" href="/toolkit/gmail">
+    Send, read, and manage emails with full search capabilities
+  </Card>
+  <Card title="Notion" icon="book" href="/toolkit/notion">
+    Manage pages, databases, and knowledge bases
+  </Card>
+    <Card title="Todoist" icon="list" href="/toolkit/slack">
+    Personal and team task management
+  </Card>
+  <Card title="Google Calendar" icon="calendar" href="/toolkit/google-calendar">
+    Create, update, and manage calendar events
+  </Card>
+</CardGroup>
+
+---
+
+## Communication & Collaboration
+
+<CardGroup cols={3}>
+  <Card title="Slack" icon="slack" href="/toolkit/slack">
+    Team messaging, channels, and file sharing
+  </Card>
+  <Card title="Discord" icon="discord" href="/toolkit/discord">
+    Community management and server interactions
+  </Card>
+  <Card title="Gmail" icon="envelope" href="/toolkit/gmail">
+    Email management with advanced filtering
+  </Card>
+  <Card title="Zoho Mail" icon="envelope" href="/toolkit/zoho-mail">
+    Enterprise email solution with full capabilities
+  </Card>
+</CardGroup>
+
+---
+
+## Project & Task Management
+
+<CardGroup cols={3}>
+  <Card title="Linear" icon="linear" href="/toolkit/linear">
+    Modern issue tracking and project planning
+  </Card>
+  <Card title="Todoist" icon="check-square" href="/toolkit/todoist">
+    Personal and team task management
+  </Card>
+  <Card title="Google Tasks" icon="list-check" href="/toolkit/google-tasks">
+    Simple task lists integrated with Google Workspace
+  </Card>
+</CardGroup>
+
+---
+
+## Development & Version Control
+
+<CardGroup cols={3}>
+  <Card title="GitHub" icon="github" href="/toolkit/github">
+    Complete GitHub API access for code management
+  </Card>
+  <Card title="GitHub Analytics" icon="chart-line" href="/toolkit/github-analytics">
+    DORA metrics and performance tracking
+  </Card>
+</CardGroup>
+
+---
+
+## Calendar & Scheduling
+
+<CardGroup cols={3}>
+  <Card title="Google Calendar" icon="calendar" href="/toolkit/google-calendar">
+    Event creation, scheduling, and availability checking
+  </Card>
+  <Card title="Cal.com" icon="calendar-days" href="/toolkit/cal-com">
+    Meeting scheduling and availability management
+  </Card>
+</CardGroup>
+
+---
+
+## Knowledge & Documentation
+
+<CardGroup cols={3}>
+  <Card title="Notion" icon="book" href="/toolkit/notion">
+    Pages, databases, and collaborative workspaces
+  </Card>
+  <Card title="Google Docs" icon="file-word" href="/toolkit/google-docs">
+    Document creation and editing
+  </Card>
+</CardGroup>
+
+---
+
+## Data & Spreadsheets
+
+<CardGroup cols={3}>
+  <Card title="Google Sheets" icon="table" href="/toolkit/google-sheets">
+    Spreadsheet management and data manipulation
+  </Card>
+</CardGroup>
+
+---
+
+## CRM & Sales
+
+<CardGroup cols={3}>
+  <Card title="HubSpot" icon="building" href="/toolkit/hubspot">
+    Contact, company, deal, and ticket management
+  </Card>
+</CardGroup>
+
+---
+
+## Request a New Integration
+
+Don't see the integration you need? We'd love to hear from you!
+
+<Card title="Request Integration" icon="plus" href="https://github.com/RedPlanetHQ/core/issues/new?labels=integration-request&template=integration_request.md">
+  Create an issue on GitHub to request a new integration
+</Card>
+
+---
+
+## Contribute an Integration
+
+Want to build an integration yourself? Check out our comprehensive guide:
+
+<Card title="Building Integrations" icon="code" href="/integrations/building-integrations">
+  Learn how to create custom integrations for CORE
+</Card>

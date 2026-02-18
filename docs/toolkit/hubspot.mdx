@@ -1,0 +1,361 @@
+---
+title: "HubSpot"
+description: "Comprehensive CRM for contacts, companies, deals, and ticket management"
+---
+
+## Overview
+
+Integrate HubSpot to manage your complete customer relationship management system directly from CORE. Access 20 tools for comprehensive CRM operations including contact management, company records, deal tracking, and support ticket handling without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **HubSpot** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to HubSpot to authorize the application
+5. Grant the required permissions to your HubSpot account
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform HubSpot tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Manage Contacts" icon="users">
+    **Scenario**: Maintain an up-to-date contact database with customer information
+
+    ```
+    "Create a new contact for alice@company.com with first name Alice,
+    last name Smith, phone number 555-0123, and mark as a customer"
+    ```
+
+    The agent will use `create_contact` to add the new contact, then `update_contact` if additional properties need to be modified later.
+  </Accordion>
+
+  <Accordion title="Track Deals" icon="briefcase">
+    **Scenario**: Monitor sales pipeline and deal progress
+
+    ```
+    "Search for all deals in the negotiation stage with amounts over $50,000,
+    then update the deal with ID 123 to move it to the contract stage"
+    ```
+
+    The agent will use `search_deals` to find matching deals and `update_deal` to progress them through the pipeline.
+  </Accordion>
+
+  <Accordion title="Handle Support Tickets" icon="ticket">
+    **Scenario**: Manage customer support requests and track resolutions
+
+    ```
+    "Create a new support ticket with subject 'Account login issue',
+    mark it as high priority, and search for similar tickets from the last week"
+    ```
+
+    The agent will use `create_ticket` to register the issue and `search_tickets` to find related problems for context.
+  </Accordion>
+
+  <Accordion title="Company Management" icon="building">
+    **Scenario**: Build and maintain accurate company records
+
+    ```
+    "Search for companies in the technology industry,
+    then create a new company record for TechCorp with domain techcorp.com"
+    ```
+
+    The agent will use `search_companies` to research the market and `create_company` to add the new organization.
+  </Accordion>
+
+  <Accordion title="Sales Pipeline Automation" icon="chart-line">
+    **Scenario**: Automate deal progression and follow-ups
+
+    ```
+    "Find all deals that haven't been updated in the last 30 days,
+    then create follow-up tasks by updating their stage and adding notes"
+    ```
+
+    The agent will use `search_deals` to identify stalled opportunities and `update_deal` to move them forward.
+  </Accordion>
+
+  <Accordion title="CRM Data Sync" icon="arrows-rotate">
+    **Scenario**: Synchronize customer data across systems
+
+    ```
+    "Get all contacts from the customer lifecycle stage,
+    associate them with their company records,
+    and update their company information with the latest data"
+    ```
+
+    The agent will use `get_contact`, `associate_objects`, and `update_company` to maintain data consistency.
+  </Accordion>
+
+  <Accordion title="Sales Process Management" icon="list-check">
+    **Scenario**: Create and manage your entire sales process
+
+    ```
+    "Create a new deal called 'Enterprise Contract' with amount $100,000,
+    set it to the proposal stage, assign it to the sales team,
+    then associate it with the ABC Corp company account"
+    ```
+
+    The agent will:
+    1. Use `create_deal` to initialize the opportunity
+    2. Use `update_deal` to set stage and owner information
+    3. Use `associate_objects` to link it to the company
+  </Accordion>
+
+  <Accordion title="Lead Qualification Workflow" icon="user-check">
+    **Scenario**: Organize and qualify leads efficiently
+
+    ```
+    "Search for all contacts with 'lead' lifecycle stage from finance industry,
+    get details for the top 5, then update them to 'opportunity' stage"
+    ```
+
+    The agent will use `search_contacts`, `get_contact`, and `update_contact` to manage the qualification process.
+  </Accordion>
+
+  <Accordion title="Customer Data Enrichment" icon="database">
+    **Scenario**: Keep customer records complete and accurate
+
+    ```
+    "Get the company record for ID 456,
+    search for all contacts associated with that company,
+    then update their company field if it's missing"
+    ```
+
+    The agent will use `get_company`, `search_contacts`, and `update_contact` for data enrichment.
+  </Accordion>
+
+  <Accordion title="Support Ticket Triage" icon="life-ring">
+    **Scenario**: Organize incoming support requests
+
+    ```
+    "Search for all high-priority open tickets,
+    get details on each one, then create follow-up tasks or escalations"
+    ```
+
+    The agent will use `search_tickets` and `get_ticket` to identify and manage urgent issues.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors HubSpot 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Lead Qualification Automation" icon="user-check">
+    **Trigger**: New contact created
+
+    **Automated Action**: Qualify and route leads
+
+    ```
+    "When a new contact is created in HubSpot,
+    check if they're from a target industry,
+    automatically update their lead score,
+    assign to the appropriate sales rep,
+    and notify them on Slack with contact details"
+    ```
+
+    Accelerate lead response. CORE qualifies and routes new leads to sales reps instantly.
+  </Accordion>
+
+  <Accordion title="Deal Stage Notifications" icon="bell">
+    **Trigger**: Deal moves to new pipeline stage
+
+    **Automated Action**: Notify team and update systems
+
+    ```
+    "When a deal moves to 'Contract Sent' stage,
+    notify the sales manager on Slack,
+    create a task in Todoist to follow up in 3 days,
+    and save the deal details to CORE memory with label 'active-contracts'"
+    ```
+
+    Track deal progression automatically. CORE keeps stakeholders informed as deals advance through the pipeline.
+  </Accordion>
+
+  <Accordion title="Customer Onboarding Trigger" icon="rocket">
+    **Trigger**: Deal marked as closed won
+
+    **Automated Action**: Initiate onboarding workflow
+
+    ```
+    "When a deal is closed won,
+    create a new project in Notion for customer onboarding,
+    send a welcome email with next steps,
+    create a Slack channel for the customer,
+    and notify the customer success team"
+    ```
+
+    Start onboarding immediately. CORE triggers the entire customer success workflow when deals close.
+  </Accordion>
+
+  <Accordion title="Support Ticket Escalation" icon="ticket">
+    **Trigger**: Ticket created with high priority
+
+    **Automated Action**: Escalate and track
+
+    ```
+    "When a high-priority support ticket is created,
+    create a Linear issue for engineering,
+    notify the support lead on WhatsApp,
+    and add it to today's standup agenda in Google Docs"
+    ```
+
+    Escalate urgent issues instantly. CORE routes critical tickets across teams for rapid resolution.
+  </Accordion>
+
+  <Accordion title="Revenue Tracking" icon="dollar-sign">
+    **Trigger**: Deal closed won with amount
+
+    **Automated Action**: Update metrics and celebrate
+
+    ```
+    "When a deal is won,
+    save the deal amount and details to CORE memory with label 'revenue',
+    calculate the running total for this month,
+    post a celebration message in #sales-wins on Slack,
+    and update the revenue tracking spreadsheet"
+    ```
+
+    Track revenue in real-time. CORE maintains metrics and celebrates wins with the team automatically.
+  </Accordion>
+
+  <Accordion title="Contact Data Enrichment" icon="database">
+    **Trigger**: Contact updated with new company
+
+    **Automated Action**: Enrich company data
+
+    ```
+    "When a contact is associated with a new company,
+    search for the company on LinkedIn,
+    update company details in HubSpot with industry and size,
+    and check if there are existing deals with that company"
+    ```
+
+    Maintain complete CRM data. CORE enriches records automatically to keep your database accurate and comprehensive.
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `crm.objects.contacts.read` - Read contact information
+- `crm.objects.contacts.write` - Create and update contacts
+- `crm.objects.contacts.delete` - Delete contacts
+- `crm.objects.companies.read` - Read company information
+- `crm.objects.companies.write` - Create and update companies
+- `crm.objects.companies.delete` - Delete companies
+- `crm.objects.deals.read` - Read deal information
+- `crm.objects.deals.write` - Create and update deals
+- `crm.objects.deals.delete` - Delete deals
+- `crm.objects.tickets.read` - Read ticket information
+- `crm.objects.tickets.write` - Create and update tickets
+- `crm.objects.tickets.delete` - Delete tickets
+- `crm.objects.contacts.owned` - Access owned contacts
+
+## Available MCP Tools
+
+The HubSpot integration provides 20 tools for comprehensive CRM management:
+
+
+<Tabs>
+  <Tab title="Contact Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_contact` | Creates a new contact in HubSpot with email and optional details |
+| `get_contact` | Retrieves a contact by ID with all properties |
+| `update_contact` | Updates contact properties (name, phone, company, etc.) |
+| `search_contacts` | Searches for contacts using text query or advanced filters |
+| `delete_contact` | Deletes a contact permanently |
+</Tab>
+<Tab title="Company Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_company` | Creates a new company with name and optional details |
+| `get_company` | Retrieves a company by ID with all properties |
+| `update_company` | Updates company properties (domain, industry, size, etc.) |
+| `search_companies` | Searches for companies using text query or advanced filters |
+| `delete_company` | Deletes a company permanently |
+</Tab>
+<Tab title="Deal Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_deal` | Creates a new deal with name, stage, and optional amount |
+| `get_deal` | Retrieves a deal by ID with all properties |
+| `update_deal` | Updates deal properties (amount, stage, close date, etc.) |
+| `search_deals` | Searches for deals using text query or advanced filters |
+| `delete_deal` | Deletes a deal permanently |
+</Tab>
+<Tab title="Ticket Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `create_ticket` | Creates a new support ticket with subject and pipeline stage |
+| `get_ticket` | Retrieves a ticket by ID with all properties |
+| `update_ticket` | Updates ticket properties (status, priority, description, etc.) |
+| `search_tickets` | Searches for tickets using text query or advanced filters |
+| `delete_ticket` | Deletes a ticket permanently |
+</Tab>
+<Tab title="Object Associations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `associate_objects` | Creates associations between contacts, companies, deals, and tickets |
+</Tab>
+</Tabs>
+
+## Triggers
+
+HubSpot triggers enable CORE's Meta Agent to wake up and act proactively when events are detected via scheduled polling.
+
+<Tabs>
+  <Tab title="Contacts">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_CONTACT_CREATED` | Triggered when a new contact is created |
+| `HUBSPOT_CONTACT_UPDATED` | Triggered when contact properties are modified |
+| `HUBSPOT_CONTACT_DELETED` | Triggered when a contact is deleted |
+| `HUBSPOT_CONTACT_MERGED` | Triggered when contacts are merged together |
+</Tab>
+<Tab title="Companies">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_COMPANY_CREATED` | Triggered when a new company is created |
+| `HUBSPOT_COMPANY_UPDATED` | Triggered when company properties are modified |
+| `HUBSPOT_COMPANY_DELETED` | Triggered when a company is deleted |
+</Tab>
+<Tab title="Deals">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_DEAL_CREATED` | Triggered when a new deal is created |
+| `HUBSPOT_DEAL_UPDATED` | Triggered when deal properties are modified |
+| `HUBSPOT_DEAL_STAGE_CHANGED` | Triggered when a deal moves to a different pipeline stage |
+| `HUBSPOT_DEAL_CLOSED_WON` | Triggered when a deal is marked as closed won |
+| `HUBSPOT_DEAL_CLOSED_LOST` | Triggered when a deal is marked as closed lost |
+</Tab>
+<Tab title="Tickets">
+
+| Event | Description |
+|-------|-------------|
+| `HUBSPOT_TICKET_CREATED` | Triggered when a new support ticket is created |
+| `HUBSPOT_TICKET_UPDATED` | Triggered when ticket properties are modified |
+| `HUBSPOT_TICKET_STATUS_CHANGED` | Triggered when ticket status changes |
+| `HUBSPOT_TICKET_CLOSED` | Triggered when a ticket is closed |
+</Tab>
+</Tabs>
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

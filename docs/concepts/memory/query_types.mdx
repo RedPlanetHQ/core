@@ -1,0 +1,68 @@
+---
+title: "Query Types"
+description: "How CORE understands what you're looking for"
+---
+
+## Intent-Driven Retrieval
+
+When you search your memory, CORE doesn't just keyword match. It first understands **what kind of question you're asking**, then routes to the optimal search strategy. Different queries need different approaches - asking for your preferences is fundamentally different from asking what happened last week.
+
+## The 5 Query Types
+
+### 1. Aspect Query
+
+You're asking about a specific type of information.
+
+- "What are my coding preferences?"
+- "Show me my decisions about authentication"
+- "What are my directives for code review?"
+
+CORE extracts the relevant aspects (Preference, Decision, Directive), filters statements by those aspects, and returns structured facts.
+
+---
+
+### 2. Entity Lookup
+
+You're asking about a specific person, project, technology, or concept.
+
+- "Tell me about Sarah"
+- "What do I know about TypeScript?"
+- "Show me everything about the CORE project"
+
+CORE finds the entity node in the graph and returns all statements where that entity is the subject or object, grouped by aspect.
+
+---
+
+### 3. Temporal Query
+
+You're asking about what happened in a specific time range.
+
+- "What happened last week?"
+- "Show me my work from January"
+- "What did we decide yesterday?"
+
+CORE extracts the time range from natural language and filters episodes and statements by when they were recorded or when events occurred.
+
+---
+
+### 4. Exploratory
+
+You're asking for broad context or a catch-up.
+
+- "Catch me up on recent work"
+- "What have I been working on?"
+- "Show me my recent activity"
+
+CORE returns recent session summaries grouped by topic - broad discovery mode with no specific filtering.
+
+---
+
+### 5. Relationship Query
+
+You're asking about how two entities are connected.
+
+- "How do I know Sarah?"
+- "What's the connection between TypeScript and CORE?"
+- "How is the payment service related to Stripe?"
+
+CORE finds statements connecting both entities and can compute shortest paths between indirectly connected entities through the graph.

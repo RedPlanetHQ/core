@@ -1,0 +1,292 @@
+---
+title: "Slack"
+description: "Team messaging platform for channels, direct messages, and file sharing"
+---
+
+## Overview
+
+Integrate Slack to manage team communications, channels, messages, and collaborate seamlessly from CORE. Access 40+ tools for complete Slack operations including messaging, channel management, user coordination, and file sharing without leaving your workspace.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Slack** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Slack to authorize the application
+5. Grant the required permissions to your workspace
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Slack tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Send Team Updates" icon="megaphone">
+    **Scenario**: Broadcast important updates to specific channels
+
+    ```
+    "Send a message to the #announcements channel saying 'New release v2.0 is live!'
+    then post the same message to #product-team"
+    ```
+
+    The agent will use `slack_send_message` to deliver updates to multiple channels, keeping teams synchronized on important news.
+  </Accordion>
+
+  <Accordion title="Search Conversation History" icon="search">
+    **Scenario**: Find past discussions and decisions
+
+    ```
+    "Search for all messages mentioning 'database migration' from the last week
+    and show me who was involved in those conversations"
+    ```
+
+    The agent will use `slack_search_messages` to find relevant discussions and can follow up with `slack_get_message` to retrieve full context.
+  </Accordion>
+
+  <Accordion title="Manage Channels" icon="hash">
+    **Scenario**: Create and organize project channels
+
+    ```
+    "Create a new private channel called 'project-alpha',
+    add team members john, jane, and mike to it,
+    and set the channel topic to 'Alpha project planning and tracking'"
+    ```
+
+    The agent will:
+    1. Use `slack_create_channel` to create the private channel
+    2. Use `slack_invite_to_channel` to add team members
+    3. Use `slack_set_channel_topic` to set the channel description
+  </Accordion>
+
+  <Accordion title="React to Messages" icon="heart">
+    **Scenario**: Acknowledge messages without creating noise
+
+    ```
+    "Add a thumbsup reaction to the latest message from @sarah in #general,
+    and add a heart reaction to the announcement in #announcements"
+    ```
+
+    The agent will use `slack_add_reaction` to provide quick acknowledgments and emoji responses.
+  </Accordion>
+
+  <Accordion title="Monitor Important Channels" icon="bell">
+    **Scenario**: Stay updated on critical conversations
+
+    ```
+    "Check #critical-alerts for any unread messages
+    and get a list of the last 10 messages from #security-updates"
+    ```
+
+    The agent will use `slack_get_unread` and `slack_list_messages` to keep you informed on critical topics without missing important updates.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+With webhooks enabled, CORE monitors Slack 24/7 and acts automatically based on your instructions:
+
+<AccordionGroup>
+  <Accordion title="Auto-Capture Customer Feedback" icon="comment">
+    **Trigger**: New message in `#sales-feedback` channel
+
+    **Automated Action**: Extract insights and save to CORE memory
+
+    ```
+    "Whenever a message is posted in #sales-feedback,
+    extract the key insights and save them to my memory
+    with the label 'customer-feedback'"
+    ```
+
+    CORE monitors the channel and automatically captures feedback without manual intervention. You can later search and analyze patterns across all feedback.
+  </Accordion>
+
+  <Accordion title="Release Notifications" icon="rocket">
+    **Trigger**: New message in `#deployments` channel containing "released"
+
+    **Automated Action**: Send summary notification via WhatsApp
+
+    ```
+    "When a release is posted in #deployments,
+    send me a WhatsApp message with a brief summary
+    of what was released"
+    ```
+
+    Stay informed on releases without monitoring Slack. CORE watches for deployment messages and notifies you on your preferred channel.
+  </Accordion>
+
+  <Accordion title="Smart Message Routing" icon="envelope">
+    **Trigger**: Direct message from specific users (e.g., your manager)
+
+    **Automated Action**: Cross-post to WhatsApp with priority flag
+
+    ```
+    "If I receive a DM from @manager on Slack,
+    immediately forward it to me on WhatsApp
+    and mark it as urgent"
+    ```
+
+    Never miss critical messages. CORE routes important communications to where you'll see them fastest.
+  </Accordion>
+
+  <Accordion title="Team Onboarding" icon="user-plus">
+    **Trigger**: New user joins `#engineering` channel
+
+    **Automated Action**: Send onboarding resources and log to memory
+
+    ```
+    "When someone joins #engineering,
+    send them our onboarding doc link
+    and add their name to the team members list in my memory"
+    ```
+
+    Automate team onboarding. CORE welcomes new members and keeps your team roster updated automatically.
+  </Accordion>
+
+  <Accordion title="Urgent Alert Escalation" icon="bell">
+    **Trigger**: Message contains keywords like "urgent", "critical", or "down"
+
+    **Automated Action**: Notify across channels and create task
+
+    ```
+    "If anyone posts a message with 'production down' in #alerts,
+    notify me on WhatsApp immediately
+    and create a high-priority task in Linear"
+    ```
+
+    CORE monitors for critical keywords and escalates issues across your entire workflow automatically.
+  </Accordion>
+</AccordionGroup>
+
+## Scopes
+
+- `chat:write` - Send messages to channels
+- `chat:write.public` - Send messages to public channels
+- `channels:read` - List and view channel information
+- `channels:manage` - Create and archive channels
+- `conversations:write` - Modify conversations (channels/DMs)
+- `users:read` - List and view user profiles
+- `users:read.email` - Access user email addresses
+- `reactions:read` - View message reactions
+- `reactions:write` - Add and remove reactions
+- `team:read` - Access workspace information
+- `files:read` - View files (when enabled)
+- `files:write` - Upload files (when enabled)
+
+## Available MCP Tools
+
+The Slack integration provides 40+ tools for comprehensive team communication:
+
+<Tabs>
+  <Tab title="Message Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_send_message` | Send a message to a channel or direct message |
+| `slack_update_message` | Update an existing message |
+| `slack_delete_message` | Delete a message |
+| `slack_get_message` | Get details of a specific message |
+| `slack_list_messages` | List messages from a channel with pagination |
+| `slack_search_messages` | Search for messages across workspace |
+| `slack_get_unread` | Get unread messages from a channel |
+| `slack_get_thread_replies` | Get all replies in a thread |
+</Tab>
+<Tab title="Reactions">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_add_reaction` | Add emoji reaction to a message |
+| `slack_remove_reaction` | Remove a reaction from a message |
+| `slack_get_reactions` | Get all reactions on a message |
+</Tab>
+<Tab title="Channel Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_list_channels` | List all channels in workspace with filtering |
+| `slack_get_channel` | Get details of a specific channel |
+| `slack_create_channel` | Create a new channel (public or private) |
+| `slack_archive_channel` | Archive a channel |
+| `slack_unarchive_channel` | Unarchive a channel |
+| `slack_invite_to_channel` | Invite users to a channel |
+| `slack_kick_from_channel` | Remove a user from a channel |
+| `slack_join_channel` | Join a channel |
+| `slack_leave_channel` | Leave a channel |
+| `slack_rename_channel` | Rename a channel |
+| `slack_set_channel_topic` | Set channel topic |
+| `slack_set_channel_purpose` | Set channel purpose/description |
+</Tab>
+<Tab title="User Management">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_list_users` | List all users in workspace |
+| `slack_get_user` | Get details of a specific user |
+| `slack_get_user_by_email` | Find a user by email address |
+| `slack_get_user_presence` | Get user presence status |
+| `slack_set_user_presence` | Set your presence status |
+</Tab>
+<Tab title="Starred Items">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_add_star` | Star a message or file |
+| `slack_remove_star` | Remove a star from message or file |
+| `slack_list_stars` | List all starred items |
+</Tab>
+<Tab title="Workspace">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `slack_get_team_info` | Get workspace/team information |
+</Tab>
+</Tabs>
+
+## Triggers
+
+Slack triggers enable CORE's Meta Agent to wake up and act proactively when events occur in real-time via webhooks.
+
+<Tabs>
+  <Tab title="Messages">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_RECEIVE_MESSAGE` | Triggered when a new message is posted to any channel |
+| `SLACK_RECEIVE_DIRECT_MESSAGE` | Triggered when a new direct message is received |
+| `SLACK_RECEIVE_MPIM_MESSAGE` | Triggered when a message is posted in a multi-person DM |
+| `SLACK_RECEIVE_GROUP_MESSAGE` | Triggered when a message is posted in a private channel |
+| `SLACK_RECEIVE_BOT_MESSAGE` | Triggered when a bot posts a message |
+| `SLACK_RECEIVE_THREAD_REPLY` | Triggered when a reply is posted to a thread |
+</Tab>
+<Tab title="Reactions">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_REACTION_ADDED` | Triggered when an emoji reaction is added to a message |
+| `SLACK_REACTION_REMOVED` | Triggered when an emoji reaction is removed from a message |
+</Tab>
+<Tab title="Channels">
+
+| Event | Description |
+|-------|-------------|
+| `SLACK_CHANNEL_CREATED` | Triggered when a new channel is created |
+| `SLACK_CHANNEL_ARCHIVED` | Triggered when a channel is archived |
+| `SLACK_CHANNEL_DELETED` | Triggered when a channel is deleted |
+| `SLACK_CHANNEL_RENAMED` | Triggered when a channel is renamed |
+</Tab>
+</Tabs>
+
+
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
+
+
+
+---

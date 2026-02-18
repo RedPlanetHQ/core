@@ -1,50 +1,56 @@
 ---
-title: "Overview"
-description: "How CORE works as your memory agent"
+title: About CORE
+description: Understanding the four pillars that make CORE your digital brain
 ---
 
-## What Is CORE?
+## What Makes a Digital Brain?
 
-CORE is a memory agent that replicates how human memory actually works. Your brain doesn't store memories as plain text—it organizes episodes into topics, creates associations, and knows where things belong. CORE does the same for your AI tools.
+A digital brain isn't just another AI assistant. It needs to do four things:
 
-## The Core Concepts
+### It Remembers Everything
 
-### 1. [Memory Graph](/concepts/memory_graph)
-How your knowledge is structured: Episodes, Entities, Statements
+Nothing you say is ever lost. Every conversation, decision, preference, and relationship is retained - not as raw text, but as structured knowledge. It knows who said what, when things changed, and what kind of information it's holding (a preference vs. a decision vs. a goal). Ask about something from weeks ago and the answer is there, with full context of how you got there.
 
-### 2. [Statement Aspects](/concepts/aspects)
-The 11 categories that classify every fact (Preference, Decision, Directive, etc.)
+CORE implements this through a [temporal knowledge graph](/concepts/memory/overview) that captures, classifies, and connects everything over time.
 
-### 3. [Query Types](/concepts/query_types)
-The 5 ways CORE understands what you're looking for (Aspect, Entity, Temporal, etc.)
+### It Can Take Actions
 
-### 4. [Entity Types](/concepts/entity_types)
-How people, projects, technologies, and concepts are categorized
+Remembering is not enough if it can't act on what it knows. A digital brain should be able to perform actions on your behalf without you leaving the conversation.
 
-### 5. [Labels](/concepts/labels)
-How episodes are automatically organized by topic
+Simple actions: create a GitHub issue, send a Slack message, add a calendar event.
 
-## How It Works in 30 Seconds
+Complex actions: research LinkedIn to find leads matching a criteria, add them to a Google Sheet, and send the sheet over Slack to your sales team — all from a single request. Multiple tools, multiple steps, orchestrated together with context carried through each one.
 
-1. **You talk to Claude/Cursor/ChatGPT** → CORE captures the conversation
-2. **Facts are extracted** → "Manik prefers TypeScript" becomes a structured statement
-3. **Categorized by aspect** → This is a Preference (1 of 11 types)
-4. **Stored in knowledge graph** → Connected to entities (Manik, TypeScript)
-5. **Surfaced when needed** → Next time Claude writes code, your Preference statements are available
+CORE's [Toolkit](/concepts/toolkit) gives the brain hands — 200+ actions across 50+ apps, all through a single connection point.
 
-## Memory Agent vs RAG
+### It Thinks and Works Across Systems
 
-**Traditional RAG**: "Search all text for similarity"
-**CORE**: "Understand what you're asking, search precisely"
+Your tools are siloed. Claude Code can't talk to your WhatsApp. Cursor can't check your calendar. A digital brain breaks these walls — it can access and coordinate across all your agents and apps from any single interface.
 
-When you ask "What are my coding preferences?":
-- **RAG**: Searches everything, returns 50 chunks, hopes relevant ones are there
-- **CORE**: Classifies as Aspect Query, filters by `aspect=Preference`, returns 5 precise facts
+Message the CORE Agent on WhatsApp and it can spin up a Claude Code session to fix a bug, start a browser session to research something, or pull context from memory - all without you opening a laptop. One brain that reaches into every tool you use, from wherever you are.
 
-**Result**: 3-4x faster, infinitely more accurate.
+The [CORE Agent](/concepts/meta-agent) is this orchestrator - it understands intent, searches memory, picks tools, and coordinates across agents and apps.
 
-## Next Steps
+### It Can Proactively Act
 
-- [Understand the Memory Graph](/concepts/memory_graph)
-- [Learn about Statement Aspects](/concepts/aspects)
-- [See Query Types in action](/concepts/query_types)
+You shouldn't have to ask for everything. A digital brain monitors what's happening — a new email, a GitHub event, a calendar change — and evaluates it against what it knows about you: your preferences, your rules, your relationships. When the situation calls for it, it acts on your behalf. An email arrives from a client; your brain already knows how you handle that relationship and drafts the right response for your review.
+
+CORE combines [CORE Agent, Memory, and Toolkit](/concepts/memory/overview#how-core-learns-about-you) to make this happen.
+
+## How CORE Implements This
+
+CORE's architecture has three layers that implement these four pillars:
+
+<CardGroup cols={3}>
+  <Card title="CORE Agent" icon="brain" href="/concepts/meta-agent">
+    The orchestrator. Understands intent, searches memory, routes to tools, and acts proactively. (Pillars 3 & 4)
+  </Card>
+
+  <Card title="Memory" icon="database" href="/concepts/memory/overview">
+    The knowledge graph. Stores episodes, entities, and facts. Gets smarter over time. (Pillar 1)
+  </Card>
+
+  <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
+    The actions layer. 15+ app integrations through a single MCP endpoint. (Pillar 2)
+  </Card>
+</CardGroup>

@@ -1,0 +1,59 @@
+---
+title: "Entity Types"
+description: "How CORE recognizes and connects the people, projects, and concepts in your world"
+---
+
+## What Are Entities?
+
+Entities are the nodes of your memory graph — the people, projects, companies, tools, and concepts that appear across your conversations. When you mention "Sarah" in a Slack thread, reference "TaskMaster" in a GitHub PR, and discuss "authentication" in Claude Code, CORE recognizes these as entities and connects them.
+
+Every statement in your memory links back to entities. "Sarah works on TaskMaster" connects the Person entity `Sarah` to the Organization entity `TaskMaster` through a relationship.
+
+---
+
+## Core Entity Types
+
+| **Type** | **Description** | **Key Attributes** | **Example** |
+| --- | --- | --- | --- |
+| **Person** | People in your network | email, role | "Sarah (Engineer, sarah@company.com)" |
+| **Organization** | Companies, teams, groups | industry, size | "TaskMaster (Startup, Series A)" |
+| **Place** | Physical or virtual locations | address | "San Francisco Office (123 Main St)" |
+| **Event** | Time-based occurrences | startTime, endTime | "TaskMaster Launch (Q2 2025)" |
+| **File** | Documents, code, and media | fileId, source | "Wireframes (Figma, Updated Daily)" |
+
+## Application-Specific Entities
+
+CORE also understands entities from your connected apps:
+
+| **Source** | **Entity Types** |
+| --- | --- |
+| **GitHub** | Repositories, issues, pull requests, commits |
+| **Slack** | Channels, threads |
+| **Linear** | Issues, projects, teams |
+| **Gmail** | Contacts, threads |
+
+---
+
+## How Entities Are Extracted
+
+When CORE ingests a conversation, it automatically:
+
+1. **Identifies entities** — Names, projects, tools, and concepts are recognized from natural language
+2. **Resolves duplicates** — "Sarah," "Sarah Chen," and "@sarah" are linked to the same Person entity
+3. **Creates relationships** — "Sarah works on TaskMaster" creates a `works_on` edge between two entities
+4. **Updates over time** — If Sarah switches teams, CORE marks the old relationship as superseded and creates a new one with temporal metadata
+
+This means searching for "Sarah" doesn't just find mentions of her name — it surfaces everything connected to her: projects, decisions, conversations, code reviews, and open issues.
+
+---
+
+## How Entities Connect
+
+Entities form the backbone of your memory graph. Each entity can connect to:
+
+- **Other entities** via relationships ("Sarah `works_on` TaskMaster")
+- **Statements** that reference them ("Sarah prefers TypeScript" is a statement about the entity `Sarah`)
+- **Episodes** where they appear (the Slack thread where Sarah was mentioned)
+
+This structure enables [relationship queries](/concepts/memory/query_types) — asking "How do I know Sarah?" traverses the entity graph to find all connections: shared projects, conversations, decisions, and interactions.
+

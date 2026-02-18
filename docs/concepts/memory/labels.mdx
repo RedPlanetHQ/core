@@ -1,0 +1,45 @@
+---
+title: "Labels"
+description: "Organize your memory with workspace-scoped labels"
+---
+
+## What Are Labels?
+
+Labels are CORE's tagging system for organizing episodes, sessions, and documents. Think of them as project tags - you can apply multiple labels to any piece of content, making it easy to filter and find related memories across different contexts.
+
+Labels are scoped to your workspace (unique per workspace, not global) and use a flat structure - no hierarchies, no nesting.
+
+---
+
+## Using Labels in Search
+
+Labels make searches faster and more precise. When you filter by labels, CORE narrows the search space before executing - across all search methods (vector, BM25, graph traversal).
+
+```
+Query: "API design decisions"
+Labels: ["Project: TaskMaster"]
+→ Only returns TaskMaster-related API decisions
+```
+
+You can combine labels with time filters, aspect filters, or use multiple labels together.
+
+---
+
+## Creating Labels
+
+From the CORE web dashboard, navigate to **Settings → Labels** and create labels with a name, optional description, and color. Labels appear in your workspace immediately and can be applied to episodes during ingestion or retroactively.
+
+---
+
+## Example: Organizing a Multi-Project Workspace
+
+```
+Labels:
+- "Project: TaskMaster" (color: blue)
+- "Project: CORE Features" (color: green)
+- "Client: Acme Corp" (color: purple)
+- "Topic: Authentication" (color: red)
+- "Topic: Performance" (color: orange)
+```
+
+Keep labels concise and use consistent naming. 2-4 labels per episode is typical - don't over-label.

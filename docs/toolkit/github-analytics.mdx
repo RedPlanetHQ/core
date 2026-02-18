@@ -1,0 +1,288 @@
+---
+title: "GitHub Analytics"
+description: "DORA metrics and engineering performance tracking for GitHub repositories"
+---
+
+## Overview
+
+Integrate GitHub Analytics to measure and track engineering performance metrics directly from CORE. Access comprehensive DORA metrics (Deployment Frequency, Lead Time, Change Failure Rate) along with additional delivery, stability, and code quality metrics to gain insights into your team's productivity and engineering excellence.
+
+## Setup Guide
+
+- `Authentication Type` : OAuth 2.0
+
+## How to Connect
+
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **GitHub Analytics** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to GitHub to authorize the application
+5. Grant the required permissions (read access to repositories and their data)
+6. You'll be redirected back to CORE once connected
+
+## Use Cases
+
+<AccordionGroup>
+  <Accordion title="Track DORA Metrics" icon="chart-line">
+    **Scenario**: Get all four key DORA metrics for your repository
+
+    ```
+    "Calculate all DORA metrics for the 'myorg/myapp' repository
+    for the last 30 days"
+    ```
+
+    The agent will use `all_metrics` to calculate:
+    - Deployment Frequency: releases per week
+    - Lead Time for Changes: time from commit to production
+    - Change Failure Rate: percentage of failed deployments
+    - Time to Restore Service: recovery time from failures
+  </Accordion>
+
+  <Accordion title="Monitor Deployment Frequency" icon="rocket">
+    **Scenario**: Track how often your team deploys to production
+
+    ```
+    "What's the deployment frequency for 'company/product'?
+    Show me the last 60 days and compare it to the previous 60 days"
+    ```
+
+    The agent will use `deployment_frequency` with:
+    - `days: 60`
+    - `compareWithPrevious: true`
+
+    This reveals trends in deployment velocity and identifies acceleration or slowdowns.
+  </Accordion>
+
+  <Accordion title="Measure Lead Time" icon="clock">
+    **Scenario**: Understand how long it takes from code commit to production
+
+    ```
+    "Calculate the lead time for changes in 'team/api' repository.
+    I want to see if we're improving our time to production"
+    ```
+
+    The agent will use `lead_time_for_changes` to measure the average time from first commit to deployment, helping identify bottlenecks in your delivery pipeline.
+  </Accordion>
+
+  <Accordion title="Analyze PR Performance" icon="code-pull-request">
+    **Scenario**: Evaluate pull request merge times and throughput
+
+    ```
+    "Show me PR metrics for 'org/web-app':
+    - Average time to merge a PR
+    - Number of PRs merged per week
+    - Average PR size"
+    ```
+
+    The agent will use:
+    - `pr_merge_time`: Average hours from PR creation to merge
+    - `pr_throughput`: PRs merged per week (velocity indicator)
+    - `pr_size`: Average lines changed per PR (complexity indicator)
+  </Accordion>
+
+  <Accordion title="Team Productivity Insights" icon="users">
+    **Scenario**: Measure overall team productivity and commit activity
+
+    ```
+    "How productive is our team on the 'core' repository?
+    Show me commit frequency and compare with last month"
+    ```
+
+    The agent will use `commit_frequency` to show:
+    - Commits per week to main branch
+    - Week-over-week trends
+    - Team activity patterns
+  </Accordion>
+
+  <Accordion title="Engineering Metrics Dashboard" icon="gauge">
+    **Scenario**: Build a comprehensive performance dashboard
+
+    ```
+    "Create a performance report for 'company/main-app':
+    - All DORA metrics for the last quarter
+    - Stability metrics (change failure rate, hotfix rate, revert rate)
+    - Code quality (average PR size)
+    - Compare current period with previous quarter"
+    ```
+
+    The agent will use `all_metrics` with custom date ranges to generate a comprehensive engineering performance report suitable for stakeholder presentations.
+  </Accordion>
+
+  <Accordion title="Stability Assessment" icon="shield-check">
+    **Scenario**: Understand your system's stability and reliability
+
+    ```
+    "How stable is our 'backend/api' repository?
+    Show me change failure rate, hotfix rate, and revert rate for the last month"
+    ```
+
+    The agent will use:
+    - `change_failure_rate`: Percentage of deployments causing issues
+    - `hotfix_rate`: Percentage of emergency releases
+    - `revert_rate`: Percentage of merged PRs that get reverted
+
+    These metrics together indicate system stability and code quality.
+  </Accordion>
+
+  <Accordion title="Identify Bottlenecks" icon="magnifying-glass-chart">
+    **Scenario**: Find where delays occur in your delivery process
+
+    ```
+    "Analyze delivery metrics for 'team/service':
+    - How often do we deploy?
+    - How long does it take from commit to deployment?
+    - How long do PRs sit before being merged?
+    - What's our change failure rate?"
+    ```
+
+    The agent will correlate multiple metrics to identify whether delays are in:
+    - Code development (commit frequency)
+    - Code review (PR merge time)
+    - Deployment process (deployment frequency, lead time)
+    - Quality assurance (change failure rate)
+  </Accordion>
+
+  <Accordion title="Custom Date Range Analysis" icon="calendar">
+    **Scenario**: Analyze metrics for specific periods
+
+    ```
+    "Calculate all metrics for 'org/app' from 2024-01-01 to 2024-03-31
+    (Q1 performance review)"
+    ```
+
+    Using `startDate` and `endDate` parameters allows analysis of:
+    - Quarterly performance reviews
+    - Sprint-specific metrics
+    - Post-incident analysis windows
+    - Year-over-year comparisons
+  </Accordion>
+
+  <Accordion title="Incident Impact Analysis" icon="triangle-exclamation">
+    **Scenario**: Understand the impact of incidents on metrics
+
+    ```
+    "For 'platform/core', what's the change failure rate?
+    Use custom incident labels: ['critical', 'p0', 'sev1']"
+    ```
+
+    The agent will calculate failure rate based on your organization's incident classification system, enabling accurate measurement of production stability.
+  </Accordion>
+</AccordionGroup>
+
+## Understanding the Metrics
+
+#### DORA Metrics (Industry Standard)
+
+**Deployment Frequency**: How often releases happen to production
+- Elite: On-demand
+- High: Weekly releases
+- Medium: Monthly releases
+- Low: Less than monthly
+
+**Lead Time for Changes**: Time from code commit to production
+- Elite: Less than 1 hour
+- High: 1 hour to 1 day
+- Medium: 1 day to 1 week
+- Low: More than 1 week
+
+**Change Failure Rate**: Percentage of deployments causing failures
+- Elite: 0-15% failure rate
+- High: 16-30%
+- Medium: 31-45%
+- Low: 46%+
+
+**Time to Restore Service**: How quickly you recover from failures
+- Elite: Less than 1 hour
+- High: 1-24 hours
+- Medium: 1-7 days
+- Low: More than 7 days
+
+#### Delivery Metrics
+
+- **PR Merge Time**: Average hours from PR creation to merge (indicates review efficiency)
+- **PR Throughput**: Number of PRs merged per week (indicates team velocity)
+- **Commit Frequency**: Number of commits to main branch per week (indicates development activity)
+
+#### Stability Metrics
+
+- **Hotfix Rate**: Percentage of emergency releases (indicates production pressure)
+- **Revert Rate**: Percentage of merged PRs that get reverted (indicates code quality issues)
+
+## Integration Notes
+
+- All metrics are calculated in real-time from GitHub data
+- Analysis includes merged and released code only
+- Custom date ranges provide flexibility for any analysis window
+- Week-over-week comparisons help identify trends
+- Metrics support both organizations and personal repositories
+
+## Scopes
+
+- `repo` - Repository access (read)
+- `read:org` - Read organization data
+- `read:user` - Read user profile data
+
+## Available MCP Tools
+
+The GitHub Analytics integration provides 10 tools for comprehensive performance tracking:
+
+
+<Tabs>
+  <Tab title="Delivery Speed">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `deployment_frequency` | Calculate deployment frequency - number of releases/deployments per week. DORA metric for delivery speed. |
+| `lead_time_for_changes` | Calculate lead time for changes - time from first commit to production deployment (in hours/days). DORA metric for delivery speed. |
+| `pr_merge_time` | Calculate PR merge time - average time from PR creation to merge (in hours). Delivery speed metric. |
+| `pr_throughput` | Calculate PR throughput - number of PRs merged per week. Delivery speed metric. |
+| `commit_frequency` | Calculate commit frequency - number of commits to main branch per week. Delivery speed metric. |
+</Tab>
+<Tab title="Stability & Reliability">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `change_failure_rate` | Calculate change failure rate - percentage of deployments that cause production failures. DORA metric for stability & reliability. |
+| `hotfix_rate` | Calculate hotfix rate - percentage of releases that are emergency hotfixes. Stability & reliability metric. |
+| `revert_rate` | Calculate revert rate - percentage of merged PRs that get reverted. Stability & reliability metric. |
+</Tab>
+<Tab title="Code Quality">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `pr_size` | Calculate PR size - average lines changed (additions + deletions) per PR. Code quality metric. |
+</Tab>
+<Tab title="Comprehensive Analysis">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `all_metrics` | Calculate all GitHub analytics metrics at once - includes all DORA metrics, delivery speed, stability, and code quality metrics. |
+</Tab>
+</Tabs>
+
+## Tool Parameters
+
+#### Common Parameters
+
+Most analytics tools accept the following parameters:
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `owner` | string | Yes | Repository owner (organization or user) |
+| `repo` | string | Yes | Repository name |
+| `days` | number | No | Number of days to analyze (default: 30) |
+| `startDate` | string | No | Start date in YYYY-MM-DD format (overrides days) |
+| `endDate` | string | No | End date in YYYY-MM-DD format (default: today) |
+| `compareWithPrevious` | boolean | No | Compare with previous period for week-over-week analysis (default: false) |
+
+#### Specialized Parameters
+
+- **Commit Frequency**: Includes `branch` parameter (default: main) to analyze specific branches
+- **Change Failure Rate**: Includes `incidentLabels` array parameter (default: ["incident", "production", "outage", "bug"]) to identify production incidents
+- **Hotfix Rate**: Includes `hotfixPatterns` array parameter (default: ["hotfix", "emergency", "patch"]) to identify emergency releases
+
+
+
+### Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
