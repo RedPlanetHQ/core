@@ -140,9 +140,7 @@ FOLLOW-UP REMINDERS:
 - Set isFollowUp=true and parentReminderId to create a follow-up
 - Follow-ups are one-time and check if user responded to the original`,
       inputSchema: z.object({
-        text: z
-          .string()
-          .describe("The action to perform when triggered."),
+        text: z.string().describe("The action to perform when triggered."),
         schedule: z
           .string()
           .describe(
@@ -236,8 +234,7 @@ FOLLOW-UP REMINDERS:
           if (isFollowUp) {
             limitInfo = " (follow-up)";
           } else if (maxOcc) {
-            limitInfo =
-              maxOcc === 1 ? " (one-time)" : ` (${maxOcc} times max)`;
+            limitInfo = maxOcc === 1 ? " (one-time)" : ` (${maxOcc} times max)`;
           } else if (endDate) {
             limitInfo = ` (until ${endDate})`;
           }
@@ -260,10 +257,7 @@ FOLLOW-UP REMINDERS:
       inputSchema: z.object({
         reminderId: z.string().describe("The ID of the reminder to update"),
         text: z.string().optional().describe("New action text"),
-        schedule: z
-          .string()
-          .optional()
-          .describe("New RRule schedule string"),
+        schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
           .boolean()
           .optional()
@@ -334,9 +328,7 @@ FOLLOW-UP REMINDERS:
       inputSchema: z.object({}),
       execute: async () => {
         try {
-          logger.info(
-            `Listing reminders for workspace ${workspaceId}`,
-          );
+          logger.info(`Listing reminders for workspace ${workspaceId}`);
           const reminders = await getWorkspaceReminders(workspaceId);
 
           if (reminders.length === 0) {
@@ -351,9 +343,7 @@ FOLLOW-UP REMINDERS:
               if (r.maxOccurrences) {
                 const remaining = r.maxOccurrences - r.occurrenceCount;
                 limitInfo =
-                  remaining === 1
-                    ? " (one-time)"
-                    : ` (${remaining} left)`;
+                  remaining === 1 ? " (one-time)" : ` (${remaining} left)`;
               } else if (r.endDate) {
                 limitInfo = ` (until ${new Date(r.endDate).toLocaleDateString()})`;
               }

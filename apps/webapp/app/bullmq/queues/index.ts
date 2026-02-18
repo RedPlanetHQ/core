@@ -202,3 +202,45 @@ export const integrationRunQueue = new Queue("integration-run-queue", {
     },
   },
 });
+
+/**
+ * Reminder queue
+ * Handles scheduled reminder processing
+ */
+export const reminderQueue = new Queue("reminder-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      count: 100,
+    },
+    removeOnFail: {
+      count: 500,
+    },
+  },
+});
+
+/**
+ * Follow-up queue
+ * Handles follow-up reminders
+ */
+export const followUpQueue = new Queue("followup-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: {
+      type: "exponential",
+      delay: 5000,
+    },
+    removeOnComplete: {
+      count: 100,
+    },
+    removeOnFail: {
+      count: 500,
+    },
+  },
+});

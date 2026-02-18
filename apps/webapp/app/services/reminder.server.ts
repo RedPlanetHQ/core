@@ -3,9 +3,9 @@ import { DateTime } from "luxon";
 import { type Prisma, prisma } from "../db.server";
 
 import {
-  scheduleNextReminder,
+  enqueueReminder,
   removeScheduledReminder,
-} from "./reminder-scheduler";
+} from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
 
 export interface ReminderData {
@@ -213,12 +213,14 @@ export async function addReminder(
       },
     });
 
-    // Schedule in BullMQ
+    // Schedule job
     if (reminder.isActive && nextRunAt) {
-      await scheduleNextReminder(
-        reminder.id,
-        workspaceId,
-        reminder.channel as "whatsapp" | "email",
+      await enqueueReminder(
+        {
+          reminderId: reminder.id,
+          workspaceId,
+          channel: reminder.channel as "whatsapp" | "email",
+        },
         nextRunAt,
       );
     }
@@ -291,13 +293,15 @@ export async function updateReminder(
       },
     });
 
-    // Reschedule in BullMQ
+    // Reschedule job
     await removeScheduledReminder(reminderId);
     if (reminder.isActive && reminder.nextRunAt) {
-      await scheduleNextReminder(
-        reminder.id,
-        workspaceId,
-        reminder.channel as "whatsapp" | "email",
+      await enqueueReminder(
+        {
+          reminderId: reminder.id,
+          workspaceId,
+          channel: reminder.channel as "whatsapp" | "email",
+        },
         reminder.nextRunAt,
       );
     }
@@ -437,10 +441,12 @@ export async function scheduleNextOccurrence(
       data: { nextRunAt },
     });
 
-    await scheduleNextReminder(
-      reminderId,
-      reminder.workspaceId,
-      reminder.channel as "whatsapp" | "email",
+    await enqueueReminder(
+      {
+        reminderId,
+        workspaceId: reminder.workspaceId,
+        channel: reminder.channel as "whatsapp" | "email",
+      },
       nextRunAt,
     );
 
@@ -808,13 +814,15 @@ export async function recalculateRemindersForTimezone(
           data: { nextRunAt },
         });
 
-        // Reschedule in BullMQ
+        // Reschedule job
         await removeScheduledReminder(reminder.id);
         if (nextRunAt) {
-          await scheduleNextReminder(
-            reminder.id,
-            workspaceId,
-            reminder.channel as "whatsapp" | "email",
+          await enqueueReminder(
+            {
+              reminderId: reminder.id,
+              workspaceId,
+              channel: reminder.channel as "whatsapp" | "email",
+            },
             nextRunAt,
           );
         }

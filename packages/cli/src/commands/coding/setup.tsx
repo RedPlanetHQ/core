@@ -29,7 +29,7 @@ const agentTemplates: AgentTemplate[] = [
 		defaultConfig: {
 			args: ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
 			resumeArgs: ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--resume', '{sessionId}'],
-			sessionArg: '--session',
+			sessionArg: '--session-id',
 			sessionMode: 'always',
 			sessionIdFields: ['session_id'],
 		},

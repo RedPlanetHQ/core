@@ -18,6 +18,11 @@ import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logi
 import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
 import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logic";
 import type { IntegrationRunPayload } from "~/jobs/integrations/integration-run.logic";
+import type {
+  ReminderJobData,
+  FollowUpJobData,
+} from "~/jobs/reminder/reminder.logic";
+import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
 
@@ -286,6 +291,158 @@ export async function enqueueIntegrationRun(
       backoff: { type: "exponential", delay: 2000 },
     });
     return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue reminder job (with delay support for scheduling)
+ */
+export async function enqueueReminder(
+  payload: ReminderJobData,
+  nextRunAt: Date,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const delay = Math.max(nextRunAt.getTime() - Date.now(), 0);
+  const jobId = `reminder-${payload.reminderId}-${nextRunAt.getTime()}`;
+
+  if (provider === "trigger") {
+    const { reminderTask } = await import("~/trigger/reminders/reminder");
+    const handler = await reminderTask.trigger(payload, {
+      queue: "reminder-queue",
+      delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
+      concurrencyKey: payload.workspaceId,
+      idempotencyKey: jobId,
+      tags: [`reminder:${payload.reminderId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { reminderQueue } = await import("~/bullmq/queues");
+    const job = await reminderQueue.add(
+      `reminder-${payload.reminderId}`,
+      payload,
+      {
+        delay,
+        jobId,
+      },
+    );
+    return { id: job.id };
+  }
+}
+
+/**
+ * Remove scheduled reminder job
+ */
+export async function removeScheduledReminder(
+  reminderId: string,
+): Promise<void> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    // Trigger.dev - find and cancel runs by tag
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`reminder:${reminderId}`],
+        status: ["QUEUED"],
+      });
+
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+      }
+    } catch (error) {
+      // Silently fail - job may not exist
+    }
+  } else {
+    // BullMQ - find and remove jobs matching reminderId
+    const { reminderQueue } = await import("~/bullmq/queues");
+    const delayed = await reminderQueue.getDelayed();
+    const waiting = await reminderQueue.getWaiting();
+    const jobs = [...delayed, ...waiting];
+
+    for (const job of jobs) {
+      if (job.data.reminderId === reminderId) {
+        await job.remove();
+      }
+    }
+  }
+}
+
+/**
+ * Enqueue follow-up job
+ */
+export async function enqueueFollowUp(
+  payload: FollowUpJobData,
+  scheduledFor: Date,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const delay = Math.max(scheduledFor.getTime() - Date.now(), 0);
+  const jobId = `followup-${payload.parentReminderId}-${scheduledFor.getTime()}`;
+
+  if (provider === "trigger") {
+    const { followUpTask } = await import("~/trigger/reminders/reminder");
+    const handler = await followUpTask.trigger(payload, {
+      queue: "followup-queue",
+      delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
+      idempotencyKey: jobId,
+      concurrencyKey: payload.workspaceId,
+      tags: [`followup:${payload.parentReminderId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { followUpQueue } = await import("~/bullmq/queues");
+    const job = await followUpQueue.add(
+      `followup-${payload.parentReminderId}`,
+      payload,
+      {
+        delay,
+        jobId,
+      },
+    );
+    return { id: job.id };
+  }
+}
+
+/**
+ * Cancel follow-ups for a reminder
+ */
+export async function cancelFollowUpsForReminder(
+  reminderId: string,
+): Promise<number> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    // Trigger.dev - find and cancel runs by tag
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`followup:${reminderId}`],
+        status: ["QUEUED"],
+      });
+
+      let cancelledCount = 0;
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+        cancelledCount++;
+      }
+      return cancelledCount;
+    } catch (error) {
+      return 0;
+    }
+  } else {
+    // BullMQ
+    const { followUpQueue } = await import("~/bullmq/queues");
+    const delayed = await followUpQueue.getDelayed();
+    const waiting = await followUpQueue.getWaiting();
+    const jobs = [...delayed, ...waiting];
+
+    let cancelledCount = 0;
+    for (const job of jobs) {
+      if (job.data.parentReminderId === reminderId) {
+        await job.remove();
+        cancelledCount++;
+      }
+    }
+    return cancelledCount;
   }
 }
 

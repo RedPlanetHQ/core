@@ -1,16 +1,19 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { Link, useLoaderData, useNavigate } from "@remix-run/react";
+import { useRef } from "react";
 import { Tag, Plus, FileText } from "lucide-react";
-import { PageHeader } from "~/components/common/page-header";
 import {
-  Card,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "~/components/ui/card";
+  AutoSizer,
+  CellMeasurer,
+  CellMeasurerCache,
+  List,
+  type ListRowProps,
+} from "react-virtualized";
+import { PageHeader } from "~/components/common/page-header";
 import { withOpacity } from "~/lib/color-utils";
 import { LabelService } from "~/services/label.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
+import { cn } from "~/lib/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -27,10 +30,99 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 }
 
+interface LabelItem {
+  id: string;
+  name: string;
+  description: string | null;
+  color: string;
+  documentCount: number;
+}
+
+function LabelRowRenderer(
+  props: ListRowProps,
+  labels: LabelItem[],
+  cache: CellMeasurerCache,
+) {
+  const { index, key, style, parent } = props;
+  const label = labels[index];
+
+  if (!label) {
+    return (
+      <CellMeasurer
+        key={key}
+        cache={cache}
+        columnIndex={0}
+        parent={parent}
+        rowIndex={index}
+      >
+        <div key={key} style={style} className="p-2">
+          <div className="h-16 animate-pulse rounded bg-gray-200" />
+        </div>
+      </CellMeasurer>
+    );
+  }
+
+  return (
+    <CellMeasurer
+      key={key}
+      cache={cache}
+      columnIndex={0}
+      parent={parent}
+      rowIndex={index}
+    >
+      <div key={key} style={style} className="px-2 py-1">
+        <Link
+          to={`/home/labels/${label.id}`}
+          className={cn(
+            "group flex items-start gap-3 rounded-lg border border-gray-300 p-3",
+            "bg-background-3 hover:bg-background-3/50 transition-all",
+          )}
+        >
+          {/* Tag Icon */}
+          <div
+            className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded"
+            style={{ backgroundColor: withOpacity(label.color, 0.12) }}
+          >
+            <Tag size={16} style={{ color: label.color }} />
+          </div>
+
+          {/* Content */}
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="truncate font-medium">{label.name}</h3>
+              <div className="text-muted-foreground flex shrink-0 items-center gap-1">
+                <FileText size={16} />
+                <span>{label.documentCount}</span>
+              </div>
+            </div>
+            {label.description && (
+              <p className="text-muted-foreground mt-0.5 line-clamp-1 text-sm">
+                {label.description}
+              </p>
+            )}
+          </div>
+        </Link>
+      </div>
+    </CellMeasurer>
+  );
+}
+
 export default function LabelsIndex() {
   const { labels } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
+  const cacheRef = useRef<CellMeasurerCache | null>(null);
+  if (!cacheRef.current) {
+    cacheRef.current = new CellMeasurerCache({
+      defaultHeight: 72,
+      fixedWidth: true,
+    });
+  }
+  const cache = cacheRef.current;
+
+  const rowRenderer = (props: ListRowProps) => {
+    return LabelRowRenderer(props, labels, cache);
+  };
 
   return (
     <div className="flex h-full flex-col">
@@ -56,35 +148,21 @@ export default function LabelsIndex() {
             </p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
-            {labels.map((label) => (
-              <Link
-                key={label.id}
-                to={`/home/labels/${label.id}`}
-                className="bg-background-3 h-full rounded-lg"
-              >
-                <Card className="transition-all hover:border-primary/50">
-                  <CardHeader className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div
-                        className="mb-2 flex h-6 w-6 items-center justify-center rounded"
-                        style={{ backgroundColor: withOpacity(label.color, 0.12) }}
-                      >
-                        <Tag size={14} style={{ color: label.color }} />
-                      </div>
-                      <div className="text-muted-foreground flex items-center gap-1 text-sm">
-                        <FileText size={12} />
-                        <span>{label.documentCount}</span>
-                      </div>
-                    </div>
-                    <CardTitle className="text-base">{label.name}</CardTitle>
-                    <CardDescription className="line-clamp-2 text-sm">
-                      {label.description || "No description"}
-                    </CardDescription>
-                  </CardHeader>
-                </Card>
-              </Link>
-            ))}
+          <div className="h-full grow overflow-hidden rounded-lg">
+            <AutoSizer className="h-full">
+              {({ width, height }) => (
+                <List
+                  className="h-auto overflow-auto"
+                  height={height}
+                  width={width}
+                  rowCount={labels.length}
+                  rowHeight={({ index }) => cache.getHeight(index, 0)}
+                  rowRenderer={rowRenderer}
+                  deferredMeasurementCache={cache}
+                  overscanRowCount={5}
+                />
+              )}
+            </AutoSizer>
           </div>
         )}
       </div>

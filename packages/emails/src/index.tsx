@@ -60,9 +60,9 @@ export class EmailClient {
 
   async sendPlainText(options: SendPlainTextOptions) {
     await this.#transport.sendPlainText({
+      replyTo: this.#replyTo,
       ...options,
       from: this.#from,
-      replyTo: this.#replyTo,
     });
   }
 

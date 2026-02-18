@@ -160,7 +160,7 @@ export const createTools = async (
   };
 
   // Add reminder management tools
-  const reminderTools = getReminderTools(workspaceId, "whatsapp", timezone);
+  const reminderTools = getReminderTools(workspaceId, "email", timezone);
 
   return { ...tools, ...reminderTools };
 };

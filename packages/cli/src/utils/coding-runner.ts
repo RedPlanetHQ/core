@@ -90,7 +90,7 @@ export function buildResumeArgs(
 ): string[] {
 	if (config.resumeArgs) {
 		// Use resume args and replace {sessionId} placeholder
-		const args = config.resumeArgs.map((arg) =>
+		const args = config.resumeArgs.map(arg =>
 			arg.replace('{sessionId}', params.sessionId),
 		);
 		args.push(params.prompt);
@@ -112,6 +112,7 @@ export function startAgentProcess(
 	args: string[],
 	workingDirectory: string,
 ): {pid: number | undefined} {
+	console.log(config.command, args);
 	const proc = spawn(config.command, args, {
 		cwd: workingDirectory,
 		shell: true,
@@ -128,17 +129,17 @@ export function startAgentProcess(
 	};
 
 	// Collect stdout
-	proc.stdout?.on('data', (data) => {
+	proc.stdout?.on('data', data => {
 		runningProc.stdout += data.toString();
 	});
 
 	// Collect stderr
-	proc.stderr?.on('data', (data) => {
+	proc.stderr?.on('data', data => {
 		runningProc.stderr += data.toString();
 	});
 
 	// Handle process exit - save to sessions.json and schedule cleanup
-	proc.on('close', (code) => {
+	proc.on('close', code => {
 		runningProc.exitCode = code;
 
 		// Save final output to sessions.json
@@ -155,7 +156,7 @@ export function startAgentProcess(
 		}, CLEANUP_DELAY);
 	});
 
-	proc.on('error', (err) => {
+	proc.on('error', err => {
 		runningProc.stderr += `\nProcess error: ${err.message}`;
 		runningProc.exitCode = 1;
 

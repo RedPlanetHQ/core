@@ -201,9 +201,9 @@ function EmailModal({
             request using your memory and connected integrations.
           </p>
 
-          <div className="bg-gray-300 rounded-lg p-2">
-            <p className="mb-1 text-sm font-medium">Email Address</p>
-            <code className="text-primary text-lg font-semibold">
+          <div className="bg-background rounded-lg p-2">
+            <p className="text-sm font-medium">Email Address</p>
+            <code className="text-primary text-md font-semibold">
               brain@getcore.me
             </code>
           </div>

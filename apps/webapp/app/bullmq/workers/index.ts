@@ -51,13 +51,23 @@ import {
   processIntegrationRun,
 } from "~/jobs/integrations/integration-run.logic";
 import {
+  type ReminderJobData,
+  type FollowUpJobData,
+  processReminderJob,
+  processFollowUpJob,
+} from "~/jobs/reminder/reminder.logic";
+import {
   createActivities,
   createIntegrationAccount,
   saveIntegrationAccountState,
   saveMCPConfig,
 } from "~/trigger/utils/message-utils";
 import { extractMessagesFromOutput } from "~/trigger/utils/cli-message-handler";
-import { closeReminderScheduler } from "~/services/reminder-scheduler";
+import {
+  scheduleNextOccurrence,
+  deactivateReminder,
+} from "~/services/reminder.server";
+import { reminderQueue, followUpQueue } from "~/bullmq/queues";
 
 /**
  * Episode preprocessing worker
@@ -100,7 +110,6 @@ export const ingestWorker = new Worker(
       // Callbacks to enqueue follow-up jobs
       enqueueLabelAssignment,
       enqueueTitleGeneration,
-      enqueueSessionCompaction,
       enqueuePersonaGeneration,
       enqueueGraphResolution,
     );
@@ -231,6 +240,44 @@ export const integrationRunWorker = new Worker(
 );
 
 /**
+ * Reminder worker
+ * Processes scheduled reminders
+ */
+export const reminderWorker = new Worker(
+  "reminder-queue",
+  async (job) => {
+    const payload = job.data as ReminderJobData;
+
+    return await processReminderJob(
+      payload,
+      scheduleNextOccurrence,
+      deactivateReminder,
+    );
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 10, // Process up to 10 reminders in parallel
+  },
+);
+
+/**
+ * Follow-up worker
+ * Processes follow-up reminders
+ */
+export const followUpWorker = new Worker(
+  "followup-queue",
+  async (job) => {
+    const payload = job.data as FollowUpJobData;
+
+    return await processFollowUpJob(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5, // Process up to 5 follow-ups in parallel
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -244,7 +291,10 @@ export async function closeAllWorkers(): Promise<void> {
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
     integrationRunWorker.close(),
-    closeReminderScheduler(),
+    reminderWorker.close(),
+    followUpWorker.close(),
+    reminderQueue.close(),
+    followUpQueue.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

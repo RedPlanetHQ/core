@@ -40,6 +40,9 @@ export const CloseSessionSchema = zod.object({
 
 export const ReadSessionSchema = zod.object({
 	sessionId: zod.string(),
+	lines: zod.number().optional(),
+	offset: zod.number().optional(),
+	tail: zod.boolean().optional(),
 });
 
 export const ListSessionsSchema = zod.object({});
@@ -103,6 +106,18 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			sessionId: {
 				type: 'string',
 				description: 'Session ID to read output from',
+			},
+			lines: {
+				type: 'number',
+				description: 'Number of lines to return (default: all)',
+			},
+			offset: {
+				type: 'number',
+				description: 'Line offset to start reading from (0-indexed, default: 0)',
+			},
+			tail: {
+				type: 'boolean',
+				description: 'If true, return the last N lines instead of first N (default: false)',
 			},
 		},
 		required: ['sessionId'],
@@ -283,6 +298,40 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	};
 }
 
+/**
+ * Apply line slicing to output
+ */
+function sliceOutput(
+	output: string,
+	options: {lines?: number; offset?: number; tail?: boolean},
+): {sliced: string; totalLines: number; returnedLines: number} {
+	const allLines = output.split('\n');
+	const totalLines = allLines.length;
+
+	if (!options.lines && !options.offset) {
+		return {sliced: output, totalLines, returnedLines: totalLines};
+	}
+
+	let resultLines: string[];
+
+	if (options.tail && options.lines) {
+		// Get last N lines
+		const start = Math.max(0, totalLines - options.lines);
+		resultLines = allLines.slice(start);
+	} else {
+		// Get lines from offset with limit
+		const offset = options.offset || 0;
+		const limit = options.lines || totalLines;
+		resultLines = allLines.slice(offset, offset + limit);
+	}
+
+	return {
+		sliced: resultLines.join('\n'),
+		totalLines,
+		returnedLines: resultLines.length,
+	};
+}
+
 function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// First check stored session exists
 	const session = getSession(params.sessionId);
@@ -296,6 +345,12 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// Read from running process
 	const output = readProcessOutput(params.sessionId);
 
+	const sliceOptions = {
+		lines: params.lines,
+		offset: params.offset,
+		tail: params.tail,
+	};
+
 	if (output.found) {
 		// Process is tracked in memory, return live output
 		const status = output.running
@@ -303,6 +358,11 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			: output.exitCode === 0
 				? 'completed'
 				: 'error';
+
+		const {sliced, totalLines, returnedLines} = sliceOutput(
+			output.stdout,
+			sliceOptions,
+		);
 
 		return {
 			success: true,
@@ -313,16 +373,23 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 				dir: session.dir,
 				status,
 				running: output.running,
-				output: output.stdout,
+				output: sliced,
 				error: output.stderr || undefined,
 				exitCode: output.exitCode,
 				startedAt: session.startedAt,
 				updatedAt: session.updatedAt,
+				totalLines,
+				returnedLines,
 			},
 		};
 	}
 
 	// Process not in memory, return stored session data from sessions.json
+	const {sliced, totalLines, returnedLines} = sliceOutput(
+		session.output || '',
+		sliceOptions,
+	);
+
 	return {
 		success: true,
 		result: {
@@ -332,11 +399,13 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			dir: session.dir,
 			status: session.status,
 			running: false,
-			output: session.output,
+			output: sliced,
 			error: session.error,
 			exitCode: null,
 			startedAt: session.startedAt,
 			updatedAt: session.updatedAt,
+			totalLines,
+			returnedLines,
 		},
 	};
 }
