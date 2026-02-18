@@ -6,11 +6,7 @@
  * needed to call generateText / streamText.
  */
 
-import {
-  convertToModelMessages,
-  type ModelMessage,
-  type Tool,
-} from "ai";
+import { convertToModelMessages, type ModelMessage, type Tool } from "ai";
 
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
@@ -51,7 +47,14 @@ export async function buildAgentContext({
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
 
-  const tools = await createTools(userId, workspaceId, timezone, source, persona ?? undefined);
+  const tools = await createTools(
+    userId,
+    workspaceId,
+    timezone,
+    source,
+    false,
+    persona ?? undefined,
+  );
 
   // Build system prompt
   let systemPrompt = getCorePrompt(

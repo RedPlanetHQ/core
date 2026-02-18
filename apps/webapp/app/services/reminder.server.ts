@@ -1,12 +1,13 @@
 import { RRule } from "rrule";
 import { DateTime } from "luxon";
-import { type Prisma, prisma } from "../db.server";
 
 import {
   enqueueReminder,
   removeScheduledReminder,
 } from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
+import { prisma } from "~/trigger/utils/prisma";
+import { type Prisma } from "@prisma/client";
 
 export interface ReminderData {
   text: string;

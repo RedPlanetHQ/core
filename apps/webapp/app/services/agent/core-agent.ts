@@ -35,6 +35,7 @@ export const createTools = async (
   workspaceId: string,
   timezone: string,
   source: string,
+  readOnly: boolean = false,
   persona?: string,
 ) => {
   const tools: Record<string, Tool> = {
@@ -111,7 +112,10 @@ export const createTools = async (
         }
       },
     }),
-    take_action: tool({
+  };
+
+  if (!readOnly) {
+    tools["take_action"] = tool({
       description: `Execute actions on user's connected integrations.
       Use this to CREATE/SEND/UPDATE/DELETE: gmail filters/labels, calendar events, github issues, slack messages, notion pages.
       Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout"
@@ -158,8 +162,8 @@ export const createTools = async (
           }
         }
       },
-    }),
-  };
+    });
+  }
 
   // Add reminder management tools
   // WhatsApp source → whatsapp, everything else (web/email) → email

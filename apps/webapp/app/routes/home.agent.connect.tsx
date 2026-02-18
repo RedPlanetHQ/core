@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
-import { MessageSquare, Mail, Clock, Check } from "lucide-react";
+import { Mail, Clock, Check } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import {
   Card,
