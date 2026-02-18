@@ -20,6 +20,7 @@
     "zod": "4.3.6"
   },
   "devDependencies": {
+    "@react-email/preview-server": "5.2.8",
     "@types/nodemailer": "^6.4.17",
     "@types/react": "19.2.13"
   },

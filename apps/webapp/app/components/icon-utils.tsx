@@ -1,4 +1,4 @@
-import { RiGithubFill, RiMailFill } from "@remixicon/react";
+import { RiGithubFill, RiMailFill, RiLinkedinFill } from "@remixicon/react";
 import { LayoutGrid } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
@@ -30,6 +30,7 @@ export const ICON_MAPPING = {
   slack: SlackIcon,
   email: RiMailFill,
   github: RiGithubFill,
+  linkedin: RiLinkedinFill,
 
   gmail: Gmail,
   "google-calendar": GoogleCalendar,
