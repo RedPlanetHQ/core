@@ -40,7 +40,7 @@
     <a href="https://docs.getcore.me/providers/claude-code">
         <img src="https://img.shields.io/badge/Add_to-Claude_Code-F97316?style=for-the-badge&logo=anthropic&logoColor=white" alt="Add to Claude Code" />
     </a>
-    <a href="https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==">
+    <a href="https://cursor.com/en/install-mcp?name=corebrain&config=eyJ1cmwiOiJodHRwczovL2FwcC5nZXRjb3JlLm1lL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9">
         <img src="https://cursor.com/deeplink/mcp-install-dark.svg" width="150px" alt="Add to Cursor" />
     </a>
     <a href="https://docs.getcore.me/providers/openclaw">
@@ -165,7 +165,7 @@ Then type `/mcp` and open core-memory for authentication.
 <details>
 <summary><b>Cursor</b></summary>
 
-[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=core-memory&config=eyJ1cmwiOiJodHRwczovL2NvcmUuaGV5c29sLmFpL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9Cg==)
+[![Install MCP Server](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/en/install-mcp?name=corebrain&config=eyJ1cmwiOiJodHRwczovL2FwcC5nZXRjb3JlLm1lL2FwaS92MS9tY3A/c291cmNlPWN1cnNvciJ9)
 
 </details>
 
