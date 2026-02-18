@@ -1,242 +1,97 @@
 ---
 title: "CORE Agent"
-description: "Your personal AI that orchestrates memory and actions across all your tools"
+description: "The orchestrator that ties memory and actions together across all your tools"
 ---
 
-## What is the Meta Agent?
+## What is the CORE Agent?
 
-The Meta Agent is your personal AI — the intelligent orchestrator of your digital brain. Unlike ChatGPT or Claude that forget between conversations, the Meta Agent has persistent memory of everything you've discussed, decided, and built. It doesn't just chat — it thinks, remembers, and acts across all your connected tools.
+The CORE Agent is your digital brain's orchestrator. It sits between you and everything CORE knows and can do - memory, toolkit, connected apps. When you send a message, the agent figures out what you need, pulls the right context, takes the right actions, and responds. Every conversation it has gets ingested back into memory, so it gets sharper over time.
 
-Think of it as your chief of staff: it knows your preferences, remembers past decisions, understands your projects, and can take actions across your entire digital workspace.
+You can talk to it from WhatsApp, the web dashboard, email, or through any MCP-compatible agent like Claude Code or Cursor. Same brain, same memory, regardless of where you start.
 
 <Frame>
-  <img src="/images/meta-agent-overview.png" alt="Meta Agent Architecture" />
+  <img src="/images/meta-agent-overview.png" alt="CORE Agent Architecture" />
 </Frame>
 
 ---
 
-## Core Capabilities
+## How It Works
 
-<AccordionGroup>
-  <Accordion title="1. Natural Conversation" icon="messages">
-    Talk to your Meta Agent like you would a colleague who knows your entire work history.
-
-    **What it does:**
-    - Understands context from your entire conversation history
-    - Asks clarifying questions when needed
-    - Provides detailed answers grounded in your memory
-    - Maintains conversation threads across days, weeks, and months
-
-    **Example:**
-    ```
-    You: "What did we decide about the authentication approach?"
-
-    Meta Agent: "In your discussion with Sarah on Feb 8, you decided
-    to use JWT tokens with 15-minute expiry and refresh token rotation.
-    The decision was documented in Linear issue ENG-142 and discussed
-    further in GitHub PR #234."
-    ```
-  </Accordion>
-
-  <Accordion title="2. Memory-Aware Responses" icon="brain">
-    Every response is grounded in your personal knowledge graph — your preferences, decisions, and past work.
-
-    **What it does:**
-    - Searches your memory graph for relevant context
-    - Surfaces past decisions when facing similar choices
-    - Remembers your preferences and applies them automatically
-    - Links related information across conversations and tools
-
-    **Example:**
-    ```
-    You: "Should we use REST or GraphQL for the new API?"
-
-    Meta Agent: "Based on your past decision for the TaskMaster project,
-    you chose REST for simplicity and predictable caching. You noted that
-    GraphQL added complexity your team didn't need. However, you mentioned
-    reconsidering it once the team grows beyond 5 engineers."
-    ```
-  </Accordion>
-
-  <Accordion title="3. Actions Across Connected Apps" icon="bolt">
-    Through the Toolkit, your Meta Agent can take actions in all your connected apps — no switching, no context loss.
-
-    **What it does:**
-    - Creates GitHub issues and pull requests
-    - Sends Slack messages to channels or individuals
-    - Updates Linear tasks and project statuses
-    - Schedules calendar events
-    - Drafts emails and documents
-    - And 200+ more actions across 15+ platforms
-
-    **Example:**
-    ```
-    You: "Create a Linear issue for the auth bug we just discussed
-    and assign it to Sarah"
-
-    Meta Agent:
-    ✓ Created Linear issue ENG-143: "Fix JWT refresh token rotation"
-      Description: Includes context from today's discussion and
-                   links to related PR #234
-      Assigned to: @sarah
-      Labels: bug, authentication
-
-    ✓ Also sent Sarah a Slack DM about the new issue
-    ```
-  </Accordion>
-
-  <Accordion title="4. Intelligent Scheduling & Automation" icon="calendar">
-    The Meta Agent can work on your behalf, scheduling tasks and automating workflows based on your preferences.
-
-    **What it does:**
-    - Schedules recurring reviews and check-ins
-    - Monitors connected apps for important updates
-    - Sends proactive reminders based on your goals
-    - Automates routine actions based on your directives
-
-    **Example:**
-    ```
-    You: "Remind me every Monday morning about open PRs that need review"
-
-    Meta Agent:
-    ✓ Created automation rule
-    ✓ Will check GitHub every Monday at 9 AM
-    ✓ Will send summary of PRs awaiting your review
-    ```
-  </Accordion>
-</AccordionGroup>
-
----
-
-## How to Access the Meta Agent
-
-<CardGroup cols={2}>
-  <Card title="Web Dashboard" icon="browser" href="/access-core/channels/web-dashboard">
-    Full-featured web interface with conversation history and memory explorer.
-
-    **Best for:** Deep work sessions, exploring memory, managing integrations
-  </Card>
-
-  <Card title="WhatsApp" icon="whatsapp" href="/access-core/channels/whatsapp">
-    Chat with your Meta Agent directly on WhatsApp.
-
-    **Best for:** Quick queries, on-the-go tasks, mobile access
-  </Card>
-
-  <Card title="Email" icon="envelope" href="/access-core/channels/email">
-    Send emails to brain@getcore.me and get intelligent responses.
-
-    **Best for:** Asynchronous communication, long-form queries
-  </Card>
-
-  <Card title="Slack" icon="slack" href="/access-core/channels/slack">
-    Add the Meta Agent to your Slack workspace. (Coming Soon)
-
-    **Best for:** Team collaboration, project updates
-  </Card>
-</CardGroup>
-
-**One brain, many interfaces:** Your memory and conversations sync across all channels. Start on WhatsApp, continue on the web — it's all connected.
-
----
-
-## Real-World Examples
-
-### Engineering Team Lead
-
-**Monday Morning:**
-```
-You (WhatsApp): "What happened in engineering last week?"
-
-Meta Agent: "4 key updates:
-1. Sarah completed auth refactor (ENG-142)
-2. API v2 testing delayed - needs review
-3. Tom asked about deployment pipeline changes
-4. 2 critical bugs reported in production
-
-Should I create a standup summary?"
-```
-
-**Tuesday Afternoon:**
-```
-You (Web): "Create a Linear issue for the API v2 testing delay and
-schedule a meeting with the team for tomorrow"
-
-Meta Agent:
-✓ Created ENG-144: "Complete API v2 testing before Friday deploy"
-✓ Scheduled meeting: "API v2 Testing Review"
-  Tomorrow 2 PM, invited team@company.com
-✓ Added meeting notes doc with context from last week
-```
-
-### Freelance Developer
-
-**Project Kickoff:**
-```
-You: "Starting new project for Acme Corp - e-commerce site with
-Stripe integration. I prefer Next.js and Tailwind."
-
-Meta Agent:
-✓ Created label: "Project: Acme Corp"
-✓ Remembered tech preferences
-```
-
-**Two Weeks Later:**
-```
-You: "What's the Stripe integration approach I used last time?"
-
-Meta Agent: "In your TaskMaster project (Nov 2025), you used
-Stripe Checkout with webhook handlers. You noted that Stripe
-Elements was too complex for your needs.
-
-Code reference: /apps/taskmaster/stripe-webhook.ts"
-```
-
----
-
-## Behind the Scenes
-
-When you interact with the Meta Agent, here's what happens:
+When you send a message, here's what happens:
 
 <Steps>
-  <Step title="You Send a Message">
-    Through any channel (web, WhatsApp, email), you send a query or command.
+  <Step title="Load Context">
+    The agent loads your conversation history and persona document - a living summary of your preferences, directives, expertise, and decisions generated from your memory.
   </Step>
 
-  <Step title="Intent Classification">
-    The Meta Agent analyzes your message:
-    - Question about the past? → Memory search
-    - Action request? → Toolkit integration
-    - Something to remember? → Memory ingestion
+  <Step title="Understand Intent">
+    It analyzes your message and decides what's needed: information from memory, live data from apps, web search, or an action to execute.
   </Step>
 
-  <Step title="Memory Search">
-    Classifies your [query type](/concepts/memory/query_types) (entity lookup, temporal, aspect query) and uses the right retrieval strategy — graph traversal, vector search, or BFS.
+  <Step title="Gather or Act">
+    The agent has two core tools:
+
+    - **gather_context** (READ) — routes to 3 specialized explorers:
+      - *Memory Explorer* — searches your knowledge graph for past conversations, decisions, preferences
+      - *Integration Explorer* — queries live data from connected apps (emails, calendar, issues)
+      - *Web Explorer* — searches the web for real-time information
+
+    - **take_action** (WRITE) — executes actions in your connected apps via the Integration Explorer
   </Step>
 
-  <Step title="Action Execution">
-    Determines which integration to use, executes with full context, and confirms completion.
-  </Step>
-
-  <Step title="Memory Ingestion">
-    Extracts new facts and entities, updates your memory graph, and links to existing context.
+  <Step title="Respond and Remember">
+    The agent synthesizes results into a response. After responding, the conversation is automatically ingested into your memory graph - building context for future interactions.
   </Step>
 </Steps>
 
 ---
 
-## Next Steps
+## It Can Spawn Other Agents
+
+The CORE Agent isn't limited to its own capabilities. It can spin up other agents on your behalf - a Claude Code session to write code, a browser session to research something - all triggered from whatever channel you're on.
+
+You're outside, a production bug comes in. You message the CORE Agent on WhatsApp: "Fix the auth timeout issue in the API." The agent spins up a Claude Code session on your machine, pulls the relevant context from memory, and starts working on the fix - while you're still on your phone.
+
+---
+
+## Reminders and Scheduled Actions
+
+The agent can execute actions at scheduled times - one-time or recurring. This isn't just "send me a notification." The agent runs the full workflow: searches memory for your rules and preferences, gathers context from connected apps, and takes actions.
+
+**Daily email triage:** Every morning at 10am, the agent wakes up, goes through your inbox, and handles emails based on your email management skills stored in memory - drafting responses, flagging priorities, archiving noise.
+
+**Overnight monitoring:** You tell the agent to watch Sentry while you sleep. A critical error comes in at 3am. The agent evaluates it, spins up a Claude Code session to investigate and fix the issue, then sends you a summary when you wake up.
+
+**Weekly lead research:** Every Monday, the agent researches LinkedIn for leads matching your ICP, compiles them into a Google Sheet with notes, and sends it to your sales channel on Slack - ready for your team's morning standup.
+
+All of this from a single message on WhatsApp: "Every Monday at 9am, find 10 new leads matching our ICP on LinkedIn, add them to the Leads sheet, and share it on #sales in Slack."
+
+---
+
+## How to Access
 
 <CardGroup cols={3}>
+  <Card title="Web Dashboard" icon="browser" href="/access-core/channels/web-dashboard">
+  </Card>
+
+  <Card title="WhatsApp" icon="whatsapp" href="/access-core/channels/whatsapp">
+  </Card>
+
+  <Card title="All Channels" icon="grid" href="/access-core/overview">
+    Email, Slack, Telegram, Discord, and more
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
   <Card title="Memory" icon="database" href="/concepts/memory/overview">
-    Understand the knowledge graph that powers the Meta Agent
+    How the knowledge graph stores and organizes your information
   </Card>
 
   <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
-    See how actions work across your connected apps
-  </Card>
-
-  <Card title="Access CORE" icon="plug" href="/access-core/overview">
-    Choose how you want to interact with your Meta Agent
+    How actions work across your connected apps
   </Card>
 </CardGroup>

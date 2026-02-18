@@ -3,9 +3,9 @@ title: "Memory Overview"
 description: "How CORE's temporal knowledge graph stores and organizes your information"
 ---
 
-## Your Digital Brain's Memory
+## Pillar 1: It Remembers Everything
 
-Memory is the foundation of CORE. It's a temporal knowledge graph that captures everything — conversations, decisions, preferences, relationships — and organizes it so the right context surfaces at the right time.
+Memory is the foundation of CORE - the first pillar of your digital brain. It's a temporal knowledge graph that captures everything - conversations, decisions, preferences, relationships - and organizes it so the right context surfaces at the right time.
 
 Unlike simple note-taking or RAG systems that store text chunks, CORE's memory understands *what kind* of information it's storing, *who* it's about, and *when* it changed.
 
@@ -13,88 +13,40 @@ Unlike simple note-taking or RAG systems that store text chunks, CORE's memory u
 
 ## How Memory is Structured
 
-Your memory is built from three building blocks:
+- **Episodes** are the documents you see on your CORE dashboard. Every conversation, email, or synced app activity becomes an episode - the raw source of truth for everything CORE knows.
 
-<CardGroup cols={3}>
-  <Card title="Episodes" icon="clock">
-    Raw conversations and interactions. Every chat, email, or synced app activity becomes an episode — the source of truth for everything CORE knows.
-  </Card>
+- **Entities** are the people, projects, companies, and concepts extracted from your episodes. When the same entity (say "Sarah") appears in multiple episodes, those episodes are automatically linked through that entity - connecting a Slack conversation about a bug to a GitHub PR to a Linear issue, all because Sarah was mentioned in each. Learn more about [entity types](/concepts/memory/entity_types).
 
-  <Card title="Entities" icon="users">
-    People, projects, companies, and concepts in your world. CORE automatically extracts and links them across conversations.
-  </Card>
-
-  <Card title="Statements" icon="quote-left">
-    Atomic facts extracted from episodes. "Alex works on TaskMaster" or "Manik prefers TypeScript" — each traceable back to its source.
-  </Card>
-</CardGroup>
-
-Every statement is classified into one of [11 aspects](/concepts/memory/aspects) (preference, decision, directive, etc.) so CORE can filter precisely — asking for your coding preferences doesn't surface your meeting schedule.
+- **Statements** are atomic facts extracted from each episode. "User works on TaskMaster" or "User prefers TypeScript" - each traceable back to its source episode. Every statement is classified into one of [11 aspects](/concepts/memory/aspects) (preference, decision, directive, goal, etc.) so CORE can filter precisely - asking for your coding preferences doesn't surface your meeting schedule.
 
 ---
 
-## How It Works in Practice
+## How Your Memory Grows
 
-**Scenario:** You're working on an authentication bug.
+CORE automatically syncs conversations from your connected AI tools - Claude Code, Cursor, Windsurf, and others after you connect them via MCP. Every conversation they have with your memory becomes a new episode, so your knowledge keeps evolving without any manual effort.
 
-<Steps>
-  <Step title="Morning: First Mention">
-    Sarah mentions the auth bug in Slack. CORE captures the conversation, links it to the authentication project, notes Sarah's involvement.
-  </Step>
+You can also add information manually: upload documents directly from the dashboard, or ask the CORE Agent to pull and save information from your connected apps ("Save my last 10 emails" or "Sync my recent Linear issues").
 
-  <Step title="Afternoon: GitHub Discussion">
-    You discuss potential fixes in a PR review. CORE links the PR to the Slack discussion, connects technical approaches to team members.
-  </Step>
+Any conversation you have with the CORE Agent is automatically added to memory too. The more you talk to it, the more it knows about you - your preferences, decisions, and how you work.
 
-  <Step title="Evening: Quick Check">
-    You ask CORE: "What's the status on the auth bug?" CORE searches memory, finds the Slack + GitHub context, and responds with a full summary — without you re-explaining anything.
-  </Step>
-
-  <Step title="Next Day: Take Action">
-    You say: "Create a Linear issue for the remaining work." CORE creates it with full context from yesterday's discussions, automatically linked to the right project and people.
-  </Step>
-</Steps>
+Learn more about [how CORE ingests memory](/concepts/memory/how-core-ingests).
 
 ---
 
-## How CORE Learns About You
+## How CORE Searches Memory
 
-When you first connect Gmail and Calendar, CORE scans your recent emails and events to build an initial understanding of your work. It extracts:
+CORE's memory isn't a simple Graph RAG that embeds text and returns the top-k similar chunks. It uses intent-driven retrieval - first classifying what kind of question you're asking, then applying the optimal search strategy.
 
-- **Who you work with** — team members, collaborators, external contacts
-- **What you're working on** — projects, topics, recurring themes
-- **How you communicate** — patterns, preferences, tone
+Asking for your coding preferences? CORE filters by the Preference aspect and returns only preference facts. Asking what happened last week? It scopes to that time range. Asking how two people are connected? It traverses the entity graph across multiple hops.
 
-This becomes your **persona document** — a living summary of your preferences, rules, and decisions that's automatically injected into your AI agents (Claude Code, Cursor, etc.) so they understand your context from session one.
+Under the hood, CORE combines vector search (semantic similarity), BM25 keyword search (precise term matching), and graph traversal (relationship discovery) - running them in parallel and fusing the results. This makes searches 3-4x faster and significantly more precise than traditional RAG.
 
-The more you use CORE, the richer this gets. Every conversation adds new facts, updates existing ones, and strengthens connections.
+Learn more about the [search pipeline](/concepts/memory/how-core-searches).
 
 ---
 
-## Dive Deeper
+## Organizing Memory
 
-<CardGroup cols={3}>
-  <Card title="Memory Graph" icon="diagram-project" href="/concepts/memory/memory_graph">
-    How episodes, entities, and statements connect
-  </Card>
+CORE classifies every query into one of [5 query types](/concepts/memory/query_types) - aspect, entity, temporal, exploratory, and relationship - each with its own optimized search strategy. This means you don't need to think about how to search; just ask naturally and CORE routes to the right approach.
 
-  <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
-    The 11 categories CORE uses to classify facts
-  </Card>
-
-  <Card title="Query Types" icon="search" href="/concepts/memory/query_types">
-    How CORE understands what you're looking for
-  </Card>
-
-  <Card title="How CORE Searches" icon="magnifying-glass" href="/concepts/memory/how-core-searches">
-    The search pipeline, ranking, and v2 improvements
-  </Card>
-
-  <Card title="How CORE Ingests" icon="inbox" href="/concepts/memory/how-core-ingests">
-    How information enters your knowledge graph
-  </Card>
-
-  <Card title="Labels" icon="bookmark" href="/concepts/memory/labels">
-    Organize memory with workspace-scoped labels
-  </Card>
-</CardGroup>
+You can also organize your memory with [labels](/concepts/memory/labels) - workspace-scoped tags that let you group episodes by project, topic, or context. Labels narrow the search space before execution, making filtered searches faster and more precise.

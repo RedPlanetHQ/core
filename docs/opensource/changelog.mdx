@@ -3,6 +3,209 @@ title: "Changelog"
 description: "Product updates and announcements"
 ---
 
+<Update label="January 2026" description="v0.2.2 - v0.2.3">
+
+## 🎯 New Features
+
+**Claude Code Plugin**
+
+- Native CORE integration for Claude Code via MCP
+- Access your memory and take actions directly from your terminal
+- Seamlessly connect CORE's knowledge graph to your coding workflow
+
+**Memory Search Agent**
+
+- Advanced v2 search powered by an intelligent agent orchestrator
+- Faster, more precise retrieval from your knowledge graph
+- Better understanding of complex queries with multi-step reasoning
+
+**New Integrations**
+
+- **Todoist**: Task management actions from any AI agent
+- **Google Tasks**: Manage to-dos across Google Workspace
+- Auto-create Google integrations on signup for faster setup
+
+**CORE SDK**
+
+- Build custom integrations and tools on top of CORE
+- Programmatic access to memory, search, and actions
+- Extend CORE's capabilities for your specific workflows
+
+**Aspect-Based Persona Generation**
+
+- Smarter user profiles that understand context across 11 aspects
+- More accurate representation of your work patterns and preferences
+- Better AI responses tailored to how you actually work
+
+## ⚡ Performance & Reliability
+
+- **Faster Search**: Agent orchestrator architecture for 2-3x speed improvement
+- **Optimized Knowledge Graph**: Enhanced entity resolution and relationship mapping
+- **Better Session Compaction**: Improved prompt compression for efficient memory storage
+- **Vector Similarity Ordering**: More relevant results from semantic queries
+
+## 🔧 Improvements
+
+- **Simpler Onboarding**: Streamlined setup flow with fewer steps
+- **Multiple Tool Approval**: Handle batch tool requests in a single approval flow
+- **Better Slack Handling**: Support for multiple account events and message arrays
+- **Enhanced Authentication**: Clearer completion messages and status updates
+- **Webhook Raw Events**: Access to raw event data for custom processing
+
+## 🐛 Fixes
+
+- Resolved 502 errors from synchronous integration tool execution
+- Fixed persona document ingestion log handling
+- Corrected onboarding agent ID passing
+- Fixed search v2 error handling
+- Resolved document editing assertion issues
+- Fixed Gmail thread userId parameter
+- Corrected session compaction sessionId handling
+- Fixed documentId vs sessionId confusion
+- Improved Google OAuth scope handling
+
+</Update>
+
+<Update label="December 2025" description="v0.1.30 - v0.2.1">
+
+## 🎯 New Features
+
+**Labels System (Migration from Neo4j to Postgres)**
+
+- Labels now stored in Postgres for faster access and updates
+- Document table as single source of truth for better consistency
+- Improved label assignment and management across workspace
+
+**GitHub Analytics Integration**
+
+- Track DORA metrics (deployment frequency, lead time, change failure rate, MTTR)
+- Engineering insights and productivity analytics
+- Date range comparisons and period-over-period analysis
+
+**Linear & Slack MCP Integrations**
+
+- Native Linear issue management via MCP
+- Slack messaging and channel actions through MCP
+- Unified access across all your AI agents
+
+**Episode-Level Vector Search**
+
+- Improved handling of broad, exploratory queries
+- Search entire conversation episodes for better context
+- Enhanced recall quality for complex information needs
+
+**One-Click Railway Deployment**
+
+- Self-host CORE with a single click
+- Official Railway deployment support
+- Production-ready configuration out of the box
+
+## ⚡ Performance & Reliability
+
+- **Persona Generation Migration**: Moved to Postgres for faster profile updates
+- **Knowledge Graph Improvements**: More relationship-focused structure
+- **Vector Storage Enhancements**: Added ingestionQueueId, labelIds, sessionId tracking
+- **Dual-Queue System**: Trigger.dev + BullMQ for reliable integration execution
+
+## 🔧 Improvements
+
+- **Alfred Persona**: Enhanced agent system prompt for more natural conversations
+- **Session & Episode Deletion**: Full control over conversation history
+- **Simplified Logs**: Cleaner, more readable activity tracking
+- **Proactive AI**: Chat prompts emphasize cross-tool intelligence and temporal awareness
+- **Mobile UI**: Improved Gmail integration page responsiveness
+
+## 🐛 Fixes
+
+- Fixed ingestion queue deletion cascades
+- Resolved document update latency issues
+- Corrected Zoho integration authentication
+- Fixed PostHog proxy connection errors
+- Resolved Python 3.9 datetime parsing compatibility
+- Fixed new conversation integration failures
+- Corrected GitHub analytics date filtering
+
+## 🔒 Security & Privacy
+
+- **Better Data Isolation**: Improved workspace and label scoping
+- **Enhanced OAuth Flows**: More secure Google integration setup
+- **MCP Session Handling**: Proper namespace isolation and sessionId management
+
+</Update>
+
+<Update label="November 2025" description="v0.1.26 - v0.1.29">
+
+## 🎯 New Features
+
+**Google Workspace Integrations**
+
+- **Gmail**: Read, search, and send emails from any AI agent
+- **Google Sheets**: Update spreadsheets and analyze data
+- **Google Docs**: Access and edit documents programmatically
+- **Google Calendar**: Manage events and check availability
+
+**User Persona v0**
+
+- AI-generated user profiles based on your memory and conversations
+- Automatically surfaces your preferences, patterns, and work style
+- Helps AI agents provide more personalized and contextual responses
+
+**17+ New AI Provider Integrations**
+
+- Codex, Gemini CLI, Windsurf, ChatGPT, and 13 more providers
+- Connect CORE memory to your preferred AI tools
+- Unified onboarding flow for faster provider setup
+
+**Additional Integrations**
+
+- **Zoho Mail**: Email management for Zoho users
+- **Notion**: Access workspace pages and databases
+- **Cal.com**: Calendar scheduling and meeting management
+
+**Session Compaction**
+
+- Automatically compress conversations after 3 exchanges
+- Preserve important context while reducing memory footprint
+- Smarter long-term recall without losing key information
+
+**Reranking Model**
+
+- Advanced reranking for more precise episode retrieval
+- Better result ordering based on semantic relevance
+- Improved search quality across all query types
+
+## ⚡ Performance & Reliability
+
+- **Optimized Ingestion**: Faster document processing and knowledge graph updates
+- **Entity Deduplication**: Exact name matching before LLM resolution (2-3x faster)
+- **Vector Search Optimization**: Improved candidate retrieval across all graph models
+- **Episode Retrieval**: Exclude embeddings from queries for faster results
+- **GDS Cosine Similarity**: Replaced vector index queries for better performance
+
+## 🔧 Improvements
+
+- **Mobile-Friendly Product**: Fully responsive interface for mobile devices
+- **Enhanced Onboarding**: Added skip button and improved flow persistence
+- **Recency Sorting**: Time-based filtering and entity-based search
+- **MCP Specification Compliance**: More complete and standards-compliant MCP server
+- **GitHub Community Manager Skill**: Pre-built skill for community management workflows
+
+## 🐛 Fixes
+
+- Fixed persona generation threshold checking
+- Resolved integration tool failures
+- Corrected episode and document deletion handling
+- Fixed recall deduplication issues
+- Resolved embedding size validation
+- Fixed document title regeneration
+- Corrected label assignment in persona generation
+- Fixed session compaction timing
+- Resolved OAuth2 form responsiveness
+- Fixed domain cookie handling for non-HTTPS
+- Corrected MCP session_id failures
+
+</Update>
+
 <Update label="October 2025" description="v0.1.24 - v0.1.25">
 
 ## 🎯 New Features
@@ -82,6 +285,59 @@ description: "Product updates and announcements"
 - **Proper Resource Cleanup**: Removes all associated API keys, labels, and episodes
 
 </Update>
+
+<Update label="September 2025" description="v0.1.21 - v0.1.23">
+
+## 🎯 New Features
+
+**Documents in Knowledge Graph**
+
+- Full document context now stored in the knowledge graph
+- Better relationship mapping between documents and conversations
+- Enhanced cross-document search and recall
+
+**Space Summaries by Topics**
+
+- Automatically generated topic summaries for your workspaces
+- Quick overview of key themes and concepts in each space
+- Easier navigation through large knowledge bases
+
+**User Profile Memory Tool**
+
+- MCP tool for accessing user profile information
+- AI agents can understand your preferences and context
+- More personalized responses across all connected tools
+
+**Enhanced Onboarding**
+
+- Save and persist onboarding answers
+- Improved loading states and user feedback
+- Faster time-to-first-memory
+
+## ⚡ Performance & Reliability
+
+- **Optimized Entity Extraction**: Enhanced prompts for better entity recognition
+- **Chunking Improvements**: Reduced chunk size to 1-3k tokens for better precision
+- **Simplified Entity Resolution**: Type-free handling for faster processing
+- **Increased Reranking Threshold**: Better filtering of low-quality results
+
+## 🔧 Improvements
+
+- **Activity UI Refresh**: Cleaner activity tracking interface
+- **Document Logs Enhancement**: New API for episode deletion
+- **GitHub Notifications**: Improved notification messages and integration README
+- **Obsidian & Figma Support**: Added logos and integration documentation
+
+## 🐛 Fixes
+
+- Fixed graph visualization issues in Chrome 140
+- Resolved deleted episode ingestion queue handling
+- Corrected MCP tool descriptions
+- Fixed invalidated statement search queries
+- Various onboarding and UI fixes
+
+</Update>
+
 
 <Update label="August 2025" description="v0.1.13 - v0.1.18">
 

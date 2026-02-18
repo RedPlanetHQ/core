@@ -5,186 +5,64 @@ description: "How CORE understands what you're looking for"
 
 ## Intent-Driven Retrieval
 
-When you search your memory, CORE doesn't just keyword match. It first understands **what kind of question you're asking**, then routes to the exact search strategy.
+When you search your memory, CORE doesn't just keyword match. It first understands **what kind of question you're asking**, then routes to the optimal search strategy. Different queries need different approaches - asking for your preferences is fundamentally different from asking what happened last week.
 
 ## The 5 Query Types
 
 ### 1. Aspect Query
-**You're asking about**: A specific type of information
 
-**Example queries**:
+You're asking about a specific type of information.
+
 - "What are my coding preferences?"
 - "Show me my decisions about authentication"
 - "What are my directives for code review?"
 
-**What CORE does**:
-1. Extracts which aspects are relevant (Preference, Decision, Directive)
-2. Vector searches labels to find relevant topics
-3. Filters statements by aspect within those topics
-4. Returns structured facts grouped by aspect
-
-**Example flow**:
-```
-Query: "What are my coding preferences?"
-→ Aspects: [Preference]
-→ Labels matched: [Programming, CORE Project]
-→ Returns: All Preference statements in those topics
-```
+CORE extracts the relevant aspects (Preference, Decision, Directive), filters statements by those aspects, and returns structured facts.
 
 ---
 
 ### 2. Entity Lookup
-**You're asking about**: A specific person, project, technology, or concept
 
-**Example queries**:
+You're asking about a specific person, project, technology, or concept.
+
 - "Tell me about Sarah"
 - "What do I know about TypeScript?"
 - "Show me everything about the CORE project"
 
-**What CORE does**:
-1. Parses entity name from query
-2. Finds the Entity node in the graph
-3. Returns all statements where entity is subject OR object
-4. Groups by aspect for clarity
-
-**Example flow**:
-```
-Query: "What's my history with Neo4j?"
-→ Entity: "Neo4j"
-→ Returns: All statements mentioning Neo4j
-  - Decision: "Chose Neo4j for graph storage"
-  - Problem: "Hit query timeout on 5-hop traversal"
-  - Knowledge: "Familiar with Cypher query language"
-```
+CORE finds the entity node in the graph and returns all statements where that entity is the subject or object, grouped by aspect.
 
 ---
 
 ### 3. Temporal Query
-**You're asking about**: What happened in a specific time range
 
-**Example queries**:
+You're asking about what happened in a specific time range.
+
 - "What happened last week?"
 - "Show me my work from January"
 - "What did we decide yesterday?"
 
-**What CORE does**:
-1. Extracts time range from natural language ("last week" → Jan 23-30)
-2. Filters by `validAt` (when fact was recorded) OR `occurredAt` (when event happened)
-3. Returns time-bound episodes and statements
-
-**Example flow**:
-```
-Query: "What did I decide last month?"
-→ Time range: [Dec 29 - Jan 29]
-→ Aspects: [Decision, Event]
-→ Returns: All decisions/events within that range
-```
+CORE extracts the time range from natural language and filters episodes and statements by when they were recorded or when events occurred.
 
 ---
 
 ### 4. Exploratory
-**You're asking for**: Broad context or catch-up
 
-**Example queries**:
+You're asking for broad context or a catch-up.
+
 - "Catch me up on recent work"
 - "What have I been working on?"
 - "Show me my recent activity"
 
-**What CORE does**:
-1. Returns recent session summaries (compacted sessions)
-2. Shows label/topic overviews
-3. No specific filtering—broad discovery mode
-
-**Example flow**:
-```
-Query: "Catch me up on the CORE project"
-→ Returns: Last 5-10 session summaries grouped by topic
-  - Recent discussions about search optimization
-  - Decisions made on plugin architecture
-  - Problems encountered with Neo4j indexing
-```
+CORE returns recent session summaries grouped by topic - broad discovery mode with no specific filtering.
 
 ---
 
 ### 5. Relationship Query
-**You're asking about**: How two entities are connected
 
-**Example queries**:
+You're asking about how two entities are connected.
+
 - "How do I know Sarah?"
 - "What's the connection between TypeScript and CORE?"
 - "How is the payment service related to Stripe?"
 
-**What CORE does**:
-1. Extracts two entity hints from query
-2. Finds statements connecting both entities (in either direction)
-3. Can compute shortest path if entities aren't directly connected
-
-**Example flow**:
-```
-Query: "How is Sarah related to the CORE project?"
-→ Entities: ["Sarah", "CORE"]
-→ Returns: Statements where (Sarah)-[*]-(CORE)
-  - Relationship: "Sarah works on CORE"
-  - Action: "Sarah implemented BFS search for CORE"
-```
-
----
-
-## Why This Matters
-
-**Traditional RAG**:
-- Same search strategy for all queries
-- Searches everything, ranks by similarity
-- Slow (1200-2400ms)
-
-**CORE Memory Agent**:
-- Different search strategy per query type
-- Searches only relevant parts of the graph
-- 3-4x faster (300-450ms)
-
-**Example comparison**:
-
-Query: "What are my coding preferences?"
-
-**RAG approach**:
-```
-1. Embed query
-2. Search all text chunks
-3. Rank by similarity
-4. Return top 20 chunks
-→ Result: Mix of preferences, decisions, examples, unrelated mentions
-→ Time: 1800ms
-```
-
-**CORE approach**:
-```
-1. Classify as Aspect Query (Preference)
-2. Vector search labels for "coding"
-3. Filter statements by aspect=Preference
-4. Return precise facts
-→ Result: Only preference statements
-→ Time: 320ms
-```
-
----
-
-## Query Pattern Examples
-
-### Good Queries (Semantic, Complete)
-
-**Aspect Query**: "Manik's preferences for API design and error handling"
-
-**Entity Lookup**: "CORE project authentication implementation decisions"
-
-**Temporal**: "Recent changes to search implementation and reranking logic"
-
-**Relationship**: "Manik and Harshith discussions about BFS search implementation"
-
-### Bad Queries (Keyword Fragments)
-
-❌ "manik api preferences"
-❌ "core auth"
-❌ "recent search"
-❌ "manik harshith bfs"
-
-**Tip**: Write complete questions or semantic descriptions, not keyword searches.
+CORE finds statements connecting both entities and can compute shortest paths between indirectly connected entities through the graph.

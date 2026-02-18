@@ -1,31 +1,25 @@
 ---
 title: "How CORE Searches Memory"
-description: "Understanding CORE's intelligent search system and v2 improvements"
+description: "Understanding CORE's intelligent search pipeline"
 ---
 
 ## Overview
 
-CORE's search system is fundamentally different from traditional search engines or RAG systems. Instead of treating every query the same way, CORE first understands **what kind of question you're asking**, then applies the optimal search strategy for that specific query type.
-
-This intent-driven approach makes searches 3-4x faster and significantly more precise than traditional vector similarity search alone.
+CORE's search is fundamentally different from traditional RAG. Instead of treating every query the same way, CORE first understands what kind of question you're asking, then applies the optimal search strategy for that query type. This makes searches 3-4x faster and significantly more precise.
 
 ---
 
 ## The Search Pipeline
 
-When you ask the Meta Agent a question or search your memory, here's what happens:
+When you ask the CORE Agent a question or search your memory:
 
 <Steps>
   <Step title="Query Classification">
-    CORE analyzes your natural language query to determine:
-    - What kind of information you're looking for
-    - Which query type best matches your intent
-    - What time range (if any) is relevant
-    - Which aspects should be prioritized
+    CORE analyzes your query to determine the [query type](/concepts/memory/query_types) (aspect, entity, temporal, exploratory, or relationship), relevant time range, and which aspects to prioritize.
   </Step>
 
   <Step title="Strategy Selection">
-    Based on the query type, CORE selects the optimal search strategy:
+    Based on the query type, CORE selects the search strategy:
     - **Aspect Query** → Filter by aspect, then vector search
     - **Entity Lookup** → Graph traversal from entity node
     - **Temporal Query** → Time-based filtering first
@@ -33,408 +27,23 @@ When you ask the Meta Agent a question or search your memory, here's what happen
     - **Relationship Query** → Multi-hop graph traversal
   </Step>
 
-  <Step title="Primary Search">
-    CORE executes the primary search using one or more methods:
-    - **Vector Search**: Semantic similarity in embedding space
-    - **BM25 Search**: Keyword-based relevance scoring
-    - **Graph Traversal**: BFS/DFS through entity relationships
-    - **Hybrid Search**: Combines multiple methods
+  <Step title="Search Execution">
+    CORE runs the search using a hybrid of three methods:
+    - **Vector search** for semantic similarity ("what's my approach to error handling?" finds related content even without exact keywords)
+    - **BM25 keyword search** for precise term matching ("Stripe integration" ranks documents with those terms highly)
+    - **Graph traversal** for relationship discovery (follows entity connections across multiple hops)
+
+    These run in parallel and results are fused together for optimal precision and recall.
   </Step>
 
-  <Step title="Relevance Ranking & Reranking">
-    Results are scored and reranked based on:
-    - Semantic relevance to your query
-    - Recency and temporal context
-    - Entity centrality and importance
-    - Label and topic relevance
-    - Statement aspect priority
+  <Step title="Relevance Ranking">
+    Results are scored based on semantic relevance, recency, entity importance, label/topic match, and aspect priority. More recent facts rank higher while historical facts remain accessible.
   </Step>
 
   <Step title="Context Assembly">
-    CORE assembles the final context package:
-    - Groups related facts by entity or aspect
-    - Includes source episodes for traceability
-    - Links to related entities and relationships
-    - Adds temporal context (when facts were recorded)
+    CORE assembles the final response: groups related facts by entity or aspect, includes source episodes for traceability, and adds temporal context.
   </Step>
 </Steps>
-
----
-
-## V2 Search Improvements
-
-CORE's v2 search represents a major evolution in how memory retrieval works:
-
-### What Changed in V2
-
-<AccordionGroup>
-  <Accordion title="1. Hybrid Search Architecture" icon="layer-group">
-    **Before (v1)**: Pure vector search with simple reranking
-
-    **After (v2)**: Intelligent hybrid approach
-    - Combines BM25 keyword search for precision
-    - Vector search for semantic understanding
-    - Graph traversal for relationship discovery
-    - Adaptive fusion based on query type
-
-    **Impact**: 40% improvement in recall for entity-specific queries, 2x faster for aspect queries
-  </Accordion>
-
-  <Accordion title="2. Advanced Reranking" icon="arrow-up-short-wide">
-    **Before (v1)**: Simple cosine similarity scoring
-
-    **After (v2)**: Multi-factor reranking
-    - Cross-encoder models for fine-grained relevance
-    - Temporal decay for time-sensitive information
-    - Entity importance weighting
-    - Label-based boosting
-    - Aspect priority scoring
-
-    **Impact**: 35% improvement in precision, especially for complex queries
-  </Accordion>
-
-  <Accordion title="3. BFS Graph Exploration" icon="sitemap">
-    **Before (v1)**: Limited to direct entity connections
-
-    **After (v2)**: Breadth-first search with hop limits
-    - Multi-hop relationship traversal
-    - Configurable depth limits (default: 3 hops)
-    - Entity importance scoring during traversal
-    - Label-scoped exploration
-
-    **Impact**: Can now answer "How do X and Y relate?" even for indirectly connected entities
-  </Accordion>
-
-  <Accordion title="4. Label-Aware Filtering" icon="tags">
-    **Before (v1)**: Post-search filtering by labels
-
-    **After (v2)**: Native label integration
-    - Pre-filters search space by labels
-    - Applies across all search methods (BM25, vector, graph)
-    - Efficient index-level filtering
-    - Multi-label support with OR/AND logic
-
-    **Impact**: 60% faster searches when using label filters, more precise project-scoped queries
-  </Accordion>
-
-  <Accordion title="5. Query Intent Understanding" icon="brain">
-    **Before (v1)**: All queries processed the same way
-
-    **After (v2)**: Intent classification first
-    - Identifies 5 distinct query types
-    - Routes to specialized search pipelines
-    - Optimizes for each intent pattern
-    - Adaptive parameter tuning
-
-    **Impact**: Overall 3-4x speed improvement, better precision for all query types
-  </Accordion>
-</AccordionGroup>
-
----
-
-## Search Methods Explained
-
-### Vector Search
-
-**How it works**: Embeds your query and finds semantically similar episodes and statements using cosine similarity.
-
-**Best for**:
-- Semantic questions: "What's my approach to error handling?"
-- Conceptual queries: "How do I think about API design?"
-- Fuzzy matching: "Something about authentication we discussed"
-
-**Example**:
-```
-Query: "What are my thoughts on testing?"
-→ Finds statements about testing philosophy, TDD, coverage preferences
-→ Even if you never used the exact word "testing"
-```
-
-### BM25 Search
-
-**How it works**: Traditional keyword-based search with term frequency and document length normalization.
-
-**Best for**:
-- Specific term matching: "Stripe integration"
-- Technical keywords: "JWT token rotation"
-- Exact names: "TaskMaster project"
-
-**Example**:
-```
-Query: "TaskMaster authentication"
-→ Ranks episodes containing both terms highly
-→ Prioritizes documents where these terms are prominent
-```
-
-### Graph Traversal (BFS)
-
-**How it works**: Breadth-first search starting from entity nodes, exploring relationships across the knowledge graph.
-
-**Best for**:
-- Relationship queries: "How do Sarah and the CORE project relate?"
-- Entity exploration: "Everything connected to authentication"
-- Multi-hop connections: "What connects Stripe to our payment service?"
-
-**Example**:
-```
-Query: "How is Sarah related to the authentication work?"
-→ Finds: Sarah → works on → CORE Project
-→ CORE Project → has component → Authentication Service
-→ Returns all statements in this path
-```
-
-**Hop Distance Weighting**: Closer relationships score higher
-- 1 hop: Direct connection (score: 1.0)
-- 2 hops: One degree of separation (score: 0.7)
-- 3 hops: Two degrees of separation (score: 0.5)
-
-### Hybrid Search (Default in V2)
-
-**How it works**: Combines multiple search methods and fuses results intelligently.
-
-**Strategy**:
-1. Run vector search and BM25 in parallel
-2. Score results from each method
-3. Apply reciprocal rank fusion to combine scores
-4. Rerank with cross-encoder model
-5. Filter and group by aspect/entity
-
-**Best for**: Most queries - the default for optimal precision and recall.
-
----
-
-## Relevance Ranking
-
-### Scoring Factors
-
-CORE uses multiple signals to rank search results:
-
-| Factor | Weight | Description |
-|--------|--------|-------------|
-| **Semantic Similarity** | High | How closely the content matches your query intent |
-| **Recency** | Medium | More recent facts rank higher (configurable decay) |
-| **Entity Centrality** | Medium | Statements about important entities score higher |
-| **Aspect Match** | High | Exact aspect matches (when requested) get boosted |
-| **Label Relevance** | Medium | Statements in relevant projects/topics score higher |
-| **Source Episode Quality** | Low | Longer, more detailed episodes slightly boosted |
-
-### Temporal Decay
-
-Facts naturally decay in relevance over time:
-
-```
-Recency Score = 1.0 / (1 + (days_old / 30) ^ 0.5)
-
-Examples:
-- Today: 1.0
-- 1 month ago: 0.58
-- 3 months ago: 0.37
-- 1 year ago: 0.21
-```
-
-This ensures recent context surfaces first while keeping historical facts accessible.
-
----
-
-## Search Examples
-
-### Aspect Query Example
-
-**Query**: "What are my coding preferences?"
-
-**Search Process**:
-1. Intent: Aspect Query (Preference aspect)
-2. Vector search for "coding" topics → finds labels: [Programming, CORE Project]
-3. Filter statements where `aspect = Preference` AND labels match
-4. Return grouped by subtopic
-
-**Results**:
-```
-Preferences - Language & Tooling:
-- "Prefers TypeScript over JavaScript"
-- "Uses pnpm for package management"
-- "Avoids class components in React"
-
-Preferences - Code Style:
-- "Values explicit over implicit code"
-- "Prefers functional programming patterns"
-```
-
-### Entity Lookup Example
-
-**Query**: "Tell me about the TaskMaster project"
-
-**Search Process**:
-1. Intent: Entity Lookup (entity: TaskMaster)
-2. Find Entity node in graph
-3. Get all statements where TaskMaster is subject OR object
-4. Group by aspect
-
-**Results**:
-```
-Identity:
-- "TaskMaster is a task management SaaS"
-
-Knowledge:
-- "TaskMaster uses Next.js and Prisma"
-
-Decision:
-- "Chose Stripe for TaskMaster payments"
-
-Problem:
-- "TaskMaster hit rate limits with GitHub API"
-
-Goal:
-- "Launch TaskMaster MVP by Q2 2026"
-```
-
-### Temporal Query Example
-
-**Query**: "What happened last week?"
-
-**Search Process**:
-1. Intent: Temporal Query (Jan 5-12, 2026)
-2. Filter episodes where `occurredAt` in range
-3. Extract statements and events
-4. Sort by date, group by day
-
-**Results**:
-```
-Monday, Jan 6:
-- Started authentication refactor
-- Meeting with Sarah about API design
-
-Wednesday, Jan 8:
-- Deployed v2 to staging
-- Fixed critical bug in payment flow
-
-Friday, Jan 10:
-- Completed Linear issue ENG-142
-- Code review with team
-```
-
-### Relationship Query Example
-
-**Query**: "How does Sarah relate to the authentication work?"
-
-**Search Process**:
-1. Intent: Relationship Query (entities: Sarah, Authentication)
-2. BFS traversal from both entities, max 3 hops
-3. Find connecting paths
-4. Return statements along paths
-
-**Results**:
-```
-Direct Relationships:
-- "Sarah works on CORE Project"
-- "Sarah implemented JWT token rotation"
-
-Connected Through CORE Project:
-- "CORE Project has component: Authentication Service"
-- "Authentication Service uses JWT for session management"
-
-Collaboration:
-- "Sarah and Manik discussed auth security on Jan 8"
-```
-
----
-
-## Optimizing Your Queries
-
-### Write Semantic Queries
-
-Good queries are complete, natural language descriptions:
-
-**Good Examples**:
-- "Manik's preferences for API design and error handling"
-- "Recent discussions about authentication security"
-- "What causes memory search to return empty results?"
-- "Sarah and Tom's work on the CORE project"
-
-**Bad Examples** (keyword fragments):
-- "manik api preferences"
-- "auth security"
-- "memory search empty"
-- "sarah tom core"
-
-### Use Labels for Project Context
-
-Filter by labels to scope searches to specific projects:
-
-```
-Query: "API design decisions"
-Labels: ["Project: TaskMaster"]
-→ Only returns TaskMaster-related API decisions
-```
-
-### Specify Time Ranges
-
-Add temporal context when relevant:
-
-```
-Query: "Recent authentication changes"
-→ CORE infers "last 2 weeks"
-
-Query: "Authentication changes in January"
-→ CORE filters to January date range
-```
-
-### Ask About Relationships
-
-Use relationship-oriented language:
-
-```
-Query: "How do X and Y relate?"
-Query: "What connects X to Y?"
-Query: "X and Y collaboration"
-```
-
----
-
-## Search Performance
-
-### V2 Performance Benchmarks
-
-| Query Type | V1 Time | V2 Time | Improvement |
-|------------|---------|---------|-------------|
-| Aspect Query | 1200ms | 320ms | 3.75x faster |
-| Entity Lookup | 800ms | 280ms | 2.86x faster |
-| Temporal Query | 1500ms | 450ms | 3.33x faster |
-| Exploratory | 2000ms | 600ms | 3.33x faster |
-| Relationship Query | 2400ms | 700ms | 3.43x faster |
-
-### Why V2 is Faster
-
-1. **Intent Classification**: Routes to specialized pipelines instead of one-size-fits-all
-2. **Index-Level Filtering**: Labels and aspects filter before search, not after
-3. **Parallel Execution**: BM25 and vector search run concurrently
-4. **Smart Caching**: Frequently accessed entities and labels cached
-5. **Optimized Graph Queries**: BFS with early termination and hop limits
-
----
-
-## How Meta Agent Uses Search
-
-When you ask the Meta Agent a question, it:
-
-1. **Analyzes Your Query**: Determines what information you need
-2. **Searches Memory**: Uses the appropriate search strategy
-3. **Assembles Context**: Combines search results with current conversation
-4. **Generates Response**: Answers with grounded, traceable information
-
-**Example Flow**:
-```
-You: "What's my usual approach to error handling?"
-
-Meta Agent Process:
-1. Query Type: Aspect Query (Preference, Knowledge)
-2. Search: aspect=Preference AND topic="error handling"
-3. Found 4 relevant preferences
-4. Response: "Based on your past work, you prefer..."
-   [Links to source episodes]
-```
-
-The Meta Agent's responses are always grounded in your memory, with links back to the original conversations where facts were established.
 
 ---
 
@@ -442,26 +51,14 @@ The Meta Agent's responses are always grounded in your memory, with links back t
 
 <CardGroup cols={3}>
   <Card title="Query Types" icon="magnifying-glass" href="/concepts/memory/query_types">
-    Deep dive into the 5 query types and how CORE classifies your questions
+    The 5 query types and how CORE classifies your questions
   </Card>
 
   <Card title="How CORE Ingests" icon="download" href="/concepts/memory/how-core-ingests">
-    Learn how information enters your memory graph
+    How information enters your memory graph
   </Card>
 
   <Card title="Statement Aspects" icon="tags" href="/concepts/memory/aspects">
-    Understand how facts are categorized for intelligent retrieval
-  </Card>
-
-  <Card title="Labels" icon="tag" href="/concepts/memory/labels">
-    Learn how to organize memory with project and topic labels
-  </Card>
-
-  <Card title="Memory Graph" icon="sitemap" href="/concepts/memory/memory_graph">
-    Understand the structure of CORE's knowledge graph
-  </Card>
-
-  <Card title="Meta Agent" icon="brain" href="/concepts/meta-agent">
-    See how the Meta Agent orchestrates search and response
+    How facts are categorized for intelligent retrieval
   </Card>
 </CardGroup>

@@ -3,9 +3,9 @@ title: "Toolkit"
 description: "How CORE takes actions across your connected apps"
 ---
 
-## The Action Layer
+## Pillar 2: It Can Take Actions
 
-The Toolkit is CORE's hands. While the Meta Agent thinks and Memory remembers, the Toolkit actually *does things* — creates issues, drafts emails, schedules meetings, sends messages — across all your connected apps.
+The Toolkit is CORE's hands. While the Agent thinks and Memory remembers, the Toolkit actually *does things* — creates issues, drafts emails, schedules meetings, sends messages — across all your connected apps.
 
 You connect each app once. After that, every interface to CORE (WhatsApp, web dashboard, Claude Code, Cursor) can use those integrations. One connection, available everywhere.
 
@@ -81,20 +81,9 @@ See the [Toolkit documentation](/toolkit/overview) for detailed actions availabl
 
 ## How Toolkit Reaches Your AI Agents
 
-Toolkit actions are exposed to your AI agents through **MCP (Model Context Protocol)**. CORE provides a single MCP endpoint that bundles all your integrations:
+Toolkit actions are exposed to AI agents through a single MCP endpoint. Instead of configuring separate MCP servers per app, you connect CORE once and any MCP-compatible agent (Claude Code, Cursor, Windsurf, etc.) gets the full toolkit with on-demand tool loading.
 
-```
-https://mcp.getcore.me/api/v1/mcp
-```
-
-Instead of configuring a separate MCP server for each app (one for GitHub, one for Slack, one for Calendar...), you connect CORE once and get everything through a single endpoint.
-
-This means:
-- **Claude Code** can draft emails and create issues without separate MCP servers
-- **Cursor** can check your calendar and search Slack without additional setup
-- **Any MCP-compatible tool** gets access to your full toolkit
-
-Learn more in the [MCP documentation](/mcp/overview).
+See the [Toolkit Overview](/toolkit/overview) for details on how on-demand tool loading works and MCP configuration.
 
 ---
 

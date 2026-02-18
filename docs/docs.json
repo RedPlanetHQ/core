@@ -40,7 +40,7 @@
             ]
           },
           {
-            "group": "Meta Agent",
+            "group": "Agent",
             "pages": [
               "concepts/meta-agent"
             ]
@@ -49,7 +49,6 @@
             "group": "Memory",
             "pages": [
               "concepts/memory/overview",
-              "concepts/memory/memory_graph",
               "concepts/memory/how-core-searches",
               "concepts/memory/how-core-ingests",
               "concepts/memory/aspects",
@@ -62,14 +61,6 @@
             "group": "Toolkit",
             "pages": [
               "concepts/toolkit"
-            ]
-          },
-          {
-            "group": "MCP",
-            "pages": [
-              "mcp/overview",
-              "mcp/configuration",
-              "mcp/authentication"
             ]
           }
         ]
@@ -169,7 +160,9 @@
           {
             "group": "Overview",
             "pages": [
-              "toolkit/overview"
+              "toolkit/overview",
+              "mcp/configuration",
+              "mcp/authentication"
             ]
           },
           {

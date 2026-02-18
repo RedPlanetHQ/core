@@ -1,71 +1,56 @@
 ---
 title: About CORE
-description: Understanding the three-layer architecture that powers your digital brain
+description: Understanding the four pillars that make CORE your digital brain
 ---
 
-### What is CORE?
+## What Makes a Digital Brain?
 
-CORE is your digital brain — a temporal knowledge graph that remembers everything you do, learn, and build across all AI tools. Unlike traditional AI assistants that forget between sessions, CORE creates persistent, portable memory you own and control.
+A digital brain isn't just another AI assistant. It needs to do four things:
 
-**Three layers:**
-- **CORE Agent**: Your personal AI that uses memory to reason and act
-- **Memory**: Temporal knowledge graph that captures facts, relationships, and evolving context
-- **Toolkit**: Actions across 15+ apps — connect once, use everywhere
+### It Remembers Everything
 
-When you talk to Claude, code in Cursor, or chat on WhatsApp, CORE remembers. That context becomes accessible to every AI tool you connect, eliminating repetition and building knowledge that compounds.
+Nothing you say is ever lost. Every conversation, decision, preference, and relationship is retained - not as raw text, but as structured knowledge. It knows who said what, when things changed, and what kind of information it's holding (a preference vs. a decision vs. a goal). Ask about something from weeks ago and the answer is there, with full context of how you got there.
 
-### Who is it for?
+CORE implements this through a [temporal knowledge graph](/concepts/memory/overview) that captures, classifies, and connects everything over time.
 
-**Developers** who switch between AI coding tools and want persistent context across Claude Code, Cursor, Windsurf, and more.
+### It Can Take Actions
 
-**Teams** who need shared memory, decision provenance, and cross-tool knowledge continuity.
+Remembering is not enough if it can't act on what it knows. A digital brain should be able to perform actions on your behalf without you leaving the conversation.
 
-**Anyone** tired of re-explaining preferences, repeating context, or losing insights when switching AI tools.
+Simple actions: create a GitHub issue, send a Slack message, add a calendar event.
 
-### How it works
+Complex actions: research LinkedIn to find leads matching a criteria, add them to a Google Sheet, and send the sheet over Slack to your sales team — all from a single request. Multiple tools, multiple steps, orchestrated together with context carried through each one.
 
-1. **You interact** via WhatsApp, email, web dashboard, or any connected AI tool
-2. **CORE ingests** conversations, workflows, and app activity into a temporal knowledge graph
-3. **Meta Agent reasons** using that memory to understand context, make decisions, and coordinate actions
-4. **Toolkit executes** across GitHub, Linear, Gmail, Slack, Notion — whatever you've connected
-5. **Memory compounds** over time, making every interaction smarter than the last
+CORE's [Toolkit](/concepts/toolkit) gives the brain hands — 200+ actions across 50+ apps, all through a single connection point.
 
-**Example:** You mention a bug in WhatsApp. CORE remembers it. Later in Cursor, you ask "what was that auth issue?" — CORE recalls the full context. You say "file a GitHub issue" — done. One memory graph. All your tools.
+### It Thinks and Works Across Systems
 
----
+Your tools are siloed. Claude Code can't talk to your WhatsApp. Cursor can't check your calendar. A digital brain breaks these walls — it can access and coordinate across all your agents and apps from any single interface.
 
-### The Compounding Effect
+Message the CORE Agent on WhatsApp and it can spin up a Claude Code session to fix a bug, start a browser session to research something, or pull context from memory - all without you opening a laptop. One brain that reaches into every tool you use, from wherever you are.
 
-CORE gets better the more you use it.
+The [CORE Agent](/concepts/meta-agent) is this orchestrator - it understands intent, searches memory, picks tools, and coordinates across agents and apps.
 
-<Steps>
-  <Step title="Week 1">
-    You discuss a bug with your team. CORE captures the conversation, technical decisions, and who's working on it.
-  </Step>
+### It Can Proactively Act
 
-  <Step title="Week 4">
-    You ask about deployment status. CORE already knows the context, team members, and related GitHub PRs — no re-explaining needed.
-  </Step>
+You shouldn't have to ask for everything. A digital brain monitors what's happening — a new email, a GitHub event, a calendar change — and evaluates it against what it knows about you: your preferences, your rules, your relationships. When the situation calls for it, it acts on your behalf. An email arrives from a client; your brain already knows how you handle that relationship and drafts the right response for your review.
 
-  <Step title="Month 3">
-    You're debugging a similar issue. CORE surfaces the bug from 2 months ago with the solution that worked. New team members can ask CORE about your architecture and get full context.
-  </Step>
-</Steps>
+CORE combines [CORE Agent, Memory, and Toolkit](/concepts/memory/overview#how-core-learns-about-you) to make this happen.
 
----
+## How CORE Implements This
 
-### Dive Deeper
+CORE's architecture has three layers that implement these four pillars:
 
 <CardGroup cols={3}>
   <Card title="CORE Agent" icon="brain" href="/concepts/meta-agent">
-    How CORE's AI orchestrates memory and actions across your tools
+    The orchestrator. Understands intent, searches memory, routes to tools, and acts proactively. (Pillars 3 & 4)
   </Card>
 
   <Card title="Memory" icon="database" href="/concepts/memory/overview">
-    How your knowledge graph stores episodes, entities, and facts
+    The knowledge graph. Stores episodes, entities, and facts. Gets smarter over time. (Pillar 1)
   </Card>
 
   <Card title="Toolkit" icon="wrench" href="/concepts/toolkit">
-    How CORE takes actions across your connected apps via MCP
+    The actions layer. 15+ app integrations through a single MCP endpoint. (Pillar 2)
   </Card>
 </CardGroup>

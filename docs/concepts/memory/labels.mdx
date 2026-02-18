@@ -3,149 +3,36 @@ title: "Labels"
 description: "Organize your memory with workspace-scoped labels"
 ---
 
-## Overview
-
-Labels are CORE's flexible tagging system for organizing episodes, sessions, and documents within your workspace. Think of them as project tags or categories that help you filter and find related memories quickly.
-
-Unlike traditional hierarchical folders, labels use a flat, Linear-style organization that lets you apply multiple tags to any piece of content, making it easy to organize information across different contexts and projects.
-
 ## What Are Labels?
 
-Labels are workspace-unique tags that you can assign to:
-- **Episodes**: Individual conversations and interactions
-- **Sessions**: Related groups of conversations
-- **Documents**: Files and content you've ingested
+Labels are CORE's tagging system for organizing episodes, sessions, and documents. Think of them as project tags - you can apply multiple labels to any piece of content, making it easy to filter and find related memories across different contexts.
 
-Each label has:
-- **Name**: A unique identifier within your workspace (max 100 characters)
-- **Description**: Optional details about what the label represents
-- **Color**: Visual identifier for quick recognition
-- **Workspace Scope**: Labels are unique per workspace, not global
+Labels are scoped to your workspace (unique per workspace, not global) and use a flat structure - no hierarchies, no nesting.
 
-## Key Characteristics
-
-### Workspace-Scoped
-Labels are scoped to your workspace, meaning:
-- Each workspace has its own set of labels
-- Label names must be unique within a workspace
-- Different workspaces can have labels with the same name
-- You can't share labels across workspaces
-
-### Multiple Labels per Item
-You can assign multiple labels to any episode:
-- Episodes have a `labelIds` array field
-- No limit on the number of labels per episode
-- Filter searches by one or multiple labels
-- Labels don't nest or form hierarchies
-
-## How Episodes Use Labels
-
-When you ingest content or have conversations, episodes can be tagged with labels:
-
-```typescript
-{
-  id: "episode-uuid",
-  content: "Conversation about authentication...",
-  labelIds: ["label-uuid-1", "label-uuid-2"],
-  isFavorite: false,
-  folders: [] // User.folders for personal organization
-}
-```
-
-## Creating and Managing Labels
-
-### Via Web Interface
-1. Navigate to **Settings → Labels**
-2. Click **"Create Label"**
-3. Enter name, optional description, and choose a color
-4. Labels appear in your workspace immediately
-
-### Via API
-List all labels in your workspace:
-
-```bash
-GET /api/v1/labels
-```
-
-See the [API Reference](/api-reference) for details.
-
+---
 
 ## Using Labels in Search
 
-Labels provide powerful filtering capabilities across all search methods:
+Labels make searches faster and more precise. When you filter by labels, CORE narrows the search space before executing - across all search methods (vector, BM25, graph traversal).
 
-### Basic Search with Labels
-```typescript
-memory_search({
-  query: "API design decisions",
-  labelIds: ["project-taskmaster-uuid"]
-})
+```
+Query: "API design decisions"
+Labels: ["Project: TaskMaster"]
+→ Only returns TaskMaster-related API decisions
 ```
 
-### Multiple Label Filtering
-Search across multiple labels to find related content:
-```typescript
-memory_search({
-  query: "security vulnerabilities",
-  labelIds: ["label-auth-uuid", "label-api-uuid"]
-})
-```
+You can combine labels with time filters, aspect filters, or use multiple labels together.
 
-### Recent Work by Label
-Combine labels with time filters:
-```typescript
-memory_search({
-  query: "recent progress",
-  labelIds: ["label-project-uuid"],
-  startTime: "2025-01-01T00:00:00Z",
-  sortBy: "recency"
-})
-```
+---
 
-## Label-Based Search Architecture
+## Creating Labels
 
-When you filter by labels, CORE's search system:
+From the CORE web dashboard, navigate to **Settings → Labels** and create labels with a name, optional description, and color. Labels appear in your workspace immediately and can be applied to episodes during ingestion or retroactively.
 
-1. **BM25 Search**: Filters episodes by `labelIds` before scoring
-2. **Vector Search**: Applies label filter to episode embeddings
-3. **Episode Graph Search**: Constrains graph traversal to labeled episodes
-4. **BFS Search**: Limits entity exploration to episodes with matching labels
+---
 
-This ensures that label filtering is efficient and works consistently across all search methods.
+## Example: Organizing a Multi-Project Workspace
 
-## API Endpoints for Label Management
-
-| **Endpoint**                | **Method** | **Description**                    |
-| --------------------------- | ---------- | ---------------------------------- |
-| `/api/v1/labels`            | GET        | List all labels in workspace       |
-
-Additional label management operations (create, update, delete) are available through the web interface.
-
-## MCP Integration with Labels
-
-CORE's MCP server exposes memory tools that support label filtering:
-
-### Available Tools
-- `memory_search`: Search with optional `labelIds` array
-- `memory_ingest`: Store conversations with `labelIds`
-- `memory_get_labels`: List all workspace labels
-- `memory_get_document`: Retrieve specific documents
-
-## Best Practices
-
-### Label Naming
-- Use clear, descriptive names (e.g., "TaskMaster Project", "Authentication")
-- Keep names concise but meaningful
-- Use consistent naming conventions across your workspace
-
-### Label Organization
-- Create labels for projects, topics, or contexts
-- Don't over-label - use 2-4 labels per episode typically
-- Use favorites for truly important items rather than creating "Important" labels
-
-## Examples
-
-### Organizing a Multi-Project Workspace
 ```
 Labels:
 - "Project: TaskMaster" (color: blue)
@@ -155,3 +42,4 @@ Labels:
 - "Topic: Performance" (color: orange)
 ```
 
+Keep labels concise and use consistent naming. 2-4 labels per episode is typical - don't over-label.
