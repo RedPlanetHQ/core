@@ -18,6 +18,7 @@ import { initializeStartupServices } from "./utils/startup";
 import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
 import { trackError } from "~/services/telemetry.server";
+import { setupWebSocket } from '../websocket';
 import {
   verifyGatewayToken,
   upsertGateway,
@@ -83,17 +84,17 @@ export default function handleRequest(
 ) {
   return isbot(request.headers.get("user-agent") || "")
     ? handleBotRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        remixContext,
-      )
+      request,
+      responseStatusCode,
+      responseHeaders,
+      remixContext,
+    )
     : handleBrowserRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        remixContext,
-      );
+      request,
+      responseStatusCode,
+      responseHeaders,
+      remixContext,
+    );
 }
 
 function handleBotRequest(
@@ -206,4 +207,7 @@ export {
   updateGatewayTools,
   updateGatewayLastSeen,
   disconnectGateway,
+
+  //Websocket
+  setupWebSocket
 };

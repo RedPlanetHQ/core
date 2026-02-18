@@ -3,7 +3,6 @@ import compression from "compression";
 import express from "express";
 import morgan from "morgan";
 import { createServer } from "http";
-import { setupWebSocket } from "./websocket";
 
 // import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 // import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
@@ -258,7 +257,7 @@ async function init() {
   const server = createServer(app);
 
   // Setup WebSocket with gateway module functions
-  setupWebSocket(server, {
+  module.setupWebSocket(server, {
     verifyGatewayToken: module.verifyGatewayToken,
     upsertGateway: module.upsertGateway,
     updateGatewayTools: module.updateGatewayTools,
