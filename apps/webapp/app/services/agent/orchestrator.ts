@@ -52,10 +52,15 @@ const getOrchestratorPrompt = (
   integrations: string,
   mode: OrchestratorMode,
   gateways: string,
+  userPersona?: string,
 ) => {
+  const personaSection = userPersona
+    ? `\nUSER PERSONA (identity, preferences, directives - use this FIRST before searching memory):\n${userPersona}\n`
+    : "";
+
   if (mode === "write") {
     return `You are an orchestrator. Execute actions on integrations or gateways.
-
+${personaSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
 
@@ -64,30 +69,33 @@ ${gateways || "No gateways connected"}
 </gateways>
 
 TOOLS:
+- memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
 - integration_action: Execute an action on a connected service (create, update, delete)
 - gateway_*: Offload tasks to connected gateways based on their description
+
+PRIORITY ORDER FOR CONTEXT:
+1. User persona above — check here FIRST for preferences, directives, identity, account details (usernames, etc.)
+2. memory_search — ONLY if persona doesn't have what you need (prior conversations, specific history, details not in persona)
+3. NEVER ask the user for information that's in persona or memory.
+
+If the persona already has the info you need (e.g., github username, preferred channels), skip memory_search and go straight to the action.
 
 EXAMPLES:
 
 Action: "send a slack message to #general saying standup in 5"
-Execute: integration_action({ integration: "slack", action: "send message to #general: standup in 5" })
+Step 1: memory_search("user's preferences for slack messages - preferred channels, formatting, any standing directives about team communication")
+Step 2: integration_action({ integration: "slack", action: "send message to #general: standup in 5" })
 
 Action: "create a github issue for auth bug in core repo"
-Execute: integration_action({ integration: "github", action: "create issue titled auth bug in core repo" })
-
-Action: "add a page to notion called Meeting Notes"
-Execute: integration_action({ integration: "notion", action: "create page titled Meeting Notes" })
-
-Action: "block 2pm tomorrow on calendar for deep work"
-Execute: integration_action({ integration: "google-calendar", action: "create event tomorrow 2pm titled deep work" })
+Step 1: memory_search("user's preferences for github issues - preferred repos, labels, templates, any directives about issue creation")
+Step 2: integration_action({ integration: "github", action: "create issue titled auth bug in core repo" })
 
 Action: "fix the auth bug in core repo" (gateway description: "personal coding tasks")
 Execute: gateway_harshith_mac({ intent: "fix the auth bug in core repo" })
 
-Action: "order pizza from dominos" (gateway description: "food orders, amazon orders")
-Execute: gateway_harshith_mac({ intent: "order pizza from dominos" })
-
 RULES:
+- ALWAYS search memory first (unless persona already has the info), then execute the action.
+- Use memory context to inform how you execute (formatting, recipients, channels, etc.).
 - Execute the action. No personality.
 - Return result of action (success/failure and details).
 - If integration/gateway not connected, say so.
@@ -104,7 +112,7 @@ Example final summary: "Created GitHub issue #123 'Fix auth bug' in core repo. U
   }
 
   return `You are an orchestrator. Gather information based on the intent.
-
+${personaSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
 
@@ -113,20 +121,28 @@ ${gateways || "No gateways connected"}
 </gateways>
 
 TOOLS:
-- memory_search: Past conversations, stored knowledge, decisions, preferences. CORE handles query understanding internally.
+- memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
 - integration_query: Live data from connected services (emails, calendar, issues, messages)
 - web_search: Real-time information from the web (news, current events, documentation, prices, weather, general knowledge). Also use to read/summarize URLs shared by user.
 - gateway_*: Offload tasks to connected gateways based on their description (can gather info too)
 
+PRIORITY ORDER FOR CONTEXT:
+1. User persona above — check here FIRST for preferences, directives, identity, account details (usernames, etc.)
+2. memory_search — if persona doesn't have what you need (prior conversations, specific history, details not in persona)
+3. integration_query / web_search — for live data or real-time info
+4. NEVER ask the user for information that's in persona or memory.
+
 YOUR JOB:
-Read the intent carefully. Decide WHERE the information lives:
-- Memory: past interactions, stored context, history, user preferences
-- Integrations: live/current data from external services (user's emails, calendar, issues)
-- Web: real-time info not in memory or integrations (news, weather, docs, how-tos, current events, general questions)
-- Multiple: when you need info from several sources
+1. FIRST: Check the user persona above for relevant preferences, directives, and identity info.
+2. THEN: If you need prior context not in persona, call memory_search.
+3. THEN: Based on the intent AND context, gather from the right source:
+   - Integrations: live/current data from external services (user's emails, calendar, issues)
+   - Web: real-time info not in memory or integrations (news, weather, docs, how-tos, current events, general questions)
+   - Multiple: when you need info from several sources
 
 CRITICAL FOR memory_search:
 - Describe your INTENT - what you need from memory and why.
+- Always include: preferences, directives, and prior context related to the request.
 - Write it like asking a colleague to find something.
 - CORE has agentic search that understands natural language.
 
@@ -135,44 +151,37 @@ BAD (keyword soup - will fail):
 - "Manoj Sol rerank evaluation dataset methodology"
 
 GOOD (clear intent):
-- "Find past discussions about rerank evaluation - what approach was decided, any metrics discussed, next steps"
+- "Find user preferences, directives, and past discussions about rerank evaluation - what approach was decided, any metrics discussed, next steps"
 - "What has user said about their morning routine preferences and productivity habits"
-- "Previous conversations about the deployment plan and any blockers mentioned"
+- "User's preferences and previous conversations about the deployment plan and any blockers mentioned"
 
 EXAMPLES:
 
 Intent: "What did we discuss about the marketing strategy"
-→ memory_search("Find past discussions about marketing strategy - decisions made, timeline, who's involved")
+Step 1: memory_search("User preferences, directives, and past discussions about marketing strategy - decisions made, timeline, who's involved")
 
 Intent: "Show me my upcoming meetings this week"
-→ integration_query: google-calendar (live data)
+Step 1: memory_search("User's preferences and directives about calendar, meetings, and scheduling")
+Step 2: integration_query: google-calendar (live data)
 
 Intent: "Status of the deployment - what we planned vs current blockers"
-→ memory_search("Previous discussions about deployment planning and decisions") + integration_query: github/linear
+Step 1: memory_search("User preferences, directives, and previous discussions about deployment planning and decisions")
+Step 2: integration_query: github/linear
 
 Intent: "What's the weather in San Francisco"
-→ web_search (real-time data, not in memory or integrations)
+Step 1: memory_search("User's location preferences, directives about weather updates")
+Step 2: web_search (real-time data)
 
 Intent: "Latest news about AI regulation"
-→ web_search (current events)
-
-Intent: "What's the tech news" / "what's happening in AI"
-→ web_search (world/industry news - NOT user's personal inbox)
-
-Intent: "How do I use React Server Components"
-→ web_search (documentation, how-tos)
-
-Intent: "What's the current price of Bitcoin"
-→ web_search (real-time market data)
+Step 1: memory_search("User's interests and directives about AI news and regulation topics")
+Step 2: web_search (current events)
 
 Intent: "What newsletters came in today" / "my GitHub notifications"
-→ integration_query: gmail (user's personal inbox - NOT web search)
+Step 1: memory_search("User's preferences for email filtering, notification priorities, and directives about newsletters")
+Step 2: integration_query: gmail (user's personal inbox)
 
 Intent: "summarize this: https://example.com/article"
-→ web_search (reads the URL content)
-
-Intent: "what does this link say? https://blog.com/post"
-→ web_search (fetches and summarizes the URL)
+→ web_search (reads the URL content) — no memory search needed for pure URL fetching
 
 BE PROACTIVE:
 - If a specific query returns empty, try a broader one to validate data exists.
@@ -180,9 +189,11 @@ BE PROACTIVE:
 - If integration returns empty, confirm the resource exists (repo, channel, calendar) before saying "nothing found".
 
 RULES:
-- For memory_search: describe what you need, not keywords.
+- Check user persona FIRST — it has identity, preferences, directives.
+- Call memory_search for anything not in persona (prior conversations, specific history).
+- NEVER ask the user for info that's already in persona or memory.
+- After getting context, proceed with other tools as needed.
 - Call multiple tools in parallel when data could be in multiple places.
-- When in doubt, include memory_search.
 - No personality. Return raw facts.`;
 };
 
@@ -199,6 +210,7 @@ export async function runOrchestrator(
   timezone: string = "UTC",
   source: string,
   abortSignal?: AbortSignal,
+  userPersona?: string,
 ): Promise<OrchestratorResult> {
   const startTime = Date.now();
 
@@ -233,47 +245,48 @@ export async function runOrchestrator(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const tools: Record<string, any> = {};
 
-  if (mode === "read") {
-    tools.memory_search = tool({
-      description:
-        "Search past conversations, user preferences, stored knowledge. CORE handles query understanding internally.",
-      inputSchema: z.object({
-        query: z
-          .string()
-          .describe("What to search for - describe your intent clearly"),
-      }),
-      execute: async function* ({ query }, { abortSignal }) {
-        logger.info(`Orchestrator: memory search - ${query}`);
+  // memory_search is available in both read and write modes
+  tools.memory_search = tool({
+    description:
+      "Search user preferences, directives, past conversations, and stored knowledge. ALWAYS call this FIRST before any other tool.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe("What to search for - include preferences, directives, and prior context related to the request"),
+    }),
+    execute: async function* ({ query }, { abortSignal }) {
+      logger.info(`Orchestrator: memory search - ${query}`);
 
-        const { stream } = await runMemoryExplorer(
-          query,
-          userId,
-          workspaceId,
-          source,
-          abortSignal,
-        );
+      const { stream } = await runMemoryExplorer(
+        query,
+        userId,
+        workspaceId,
+        source,
+        abortSignal,
+      );
 
-        // Stream the memory explorer's work
-        let approvalRequested = false;
-        for await (const message of readUIMessageStream({
-          stream: stream.toUIMessageStream(),
-        })) {
-          if (approvalRequested) {
-            continue;
-          }
-
-          yield message;
-
-          if (hasApprovalRequested(message)) {
-            logger.info(
-              `Orchestrator: Stopping memory_search - approval requested`,
-            );
-            approvalRequested = true;
-          }
+      // Stream the memory explorer's work
+      let approvalRequested = false;
+      for await (const message of readUIMessageStream({
+        stream: stream.toUIMessageStream(),
+      })) {
+        if (approvalRequested) {
+          continue;
         }
-      },
-    });
 
+        yield message;
+
+        if (hasApprovalRequested(message)) {
+          logger.info(
+            `Orchestrator: Stopping memory_search - approval requested`,
+          );
+          approvalRequested = true;
+        }
+      }
+    },
+  });
+
+  if (mode === "read") {
     tools.integration_query = tool({
       description: "Query a connected integration for current data",
       inputSchema: z.object({
@@ -460,7 +473,7 @@ export async function runOrchestrator(
 
   const stream = streamText({
     model: modelInstance as LanguageModel,
-    system: getOrchestratorPrompt(integrationsList, mode, gatewaysList),
+    system: getOrchestratorPrompt(integrationsList, mode, gatewaysList, userPersona),
     messages: [{ role: "user", content: userMessage }],
     tools,
     stopWhen: stepCountIs(10),

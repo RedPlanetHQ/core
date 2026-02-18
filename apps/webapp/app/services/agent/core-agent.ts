@@ -4,7 +4,6 @@ import { z } from "zod";
 import { runOrchestrator } from "./orchestrator";
 
 import { logger } from "../logger.service";
-import { createGatewayTools, getGatewayAgents } from "./gateway";
 import { getReminderTools } from "./tools/reminder-tools";
 
 /**
@@ -36,6 +35,7 @@ export const createTools = async (
   workspaceId: string,
   timezone: string,
   source: string,
+  persona?: string,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -86,6 +86,7 @@ export const createTools = async (
           timezone,
           source,
           abortSignal,
+          persona,
         );
 
         // Stream the orchestrator's work to the UI
@@ -133,6 +134,7 @@ export const createTools = async (
           timezone,
           source,
           abortSignal,
+          persona,
         );
 
         // Stream the orchestrator's work to the UI
@@ -160,7 +162,9 @@ export const createTools = async (
   };
 
   // Add reminder management tools
-  const reminderTools = getReminderTools(workspaceId, "email", timezone);
+  // WhatsApp source → whatsapp, everything else (web/email) → email
+  const channel = source === "whatsapp" ? "whatsapp" : "email";
+  const reminderTools = getReminderTools(workspaceId, channel, timezone);
 
   return { ...tools, ...reminderTools };
 };

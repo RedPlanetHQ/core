@@ -15,7 +15,9 @@ import {
   getWorkspaceReminders,
   confirmReminderActive,
   getReminderById,
+  recalculateRemindersForTimezone,
 } from "~/services/reminder.server";
+import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 
 /**
@@ -376,6 +378,67 @@ FOLLOW-UP REMINDERS:
         } catch (error) {
           logger.error("Failed to confirm reminder", { error });
           return "Failed to confirm reminder.";
+        }
+      },
+    }),
+
+    set_timezone: tool({
+      description:
+        "Set user's timezone. Use when user mentions their timezone (e.g., 'i'm in PST', 'my timezone is IST'). This will also recalculate all existing reminder schedules to the new timezone.",
+      inputSchema: z.object({
+        timezone: z
+          .string()
+          .describe(
+            "IANA timezone string (e.g., 'America/Los_Angeles', 'Asia/Kolkata', 'Europe/London')",
+          ),
+      }),
+      execute: async ({ timezone: newTimezone }) => {
+        try {
+          // Get the user from workspace
+          const workspace = await prisma.workspace.findUnique({
+            where: { id: workspaceId },
+            include: { UserWorkspace: { include: { user: true }, take: 1 } },
+          });
+
+          const user = workspace?.UserWorkspace[0]?.user;
+          if (!user) {
+            return "failed to update timezone";
+          }
+
+          const existingMetadata =
+            (user.metadata as Record<string, unknown>) || {};
+          const oldTimezone = (existingMetadata.timezone as string) || "UTC";
+
+          // Update user metadata with new timezone
+          await prisma.user.update({
+            where: { id: user.id },
+            data: {
+              metadata: {
+                ...existingMetadata,
+                timezone: newTimezone,
+              },
+            },
+          });
+
+          // Recalculate all reminders if timezone actually changed
+          if (oldTimezone !== newTimezone) {
+            const { updated, failed } = await recalculateRemindersForTimezone(
+              workspaceId,
+              oldTimezone,
+              newTimezone,
+            );
+            if (updated > 0) {
+              logger.info(
+                `Recalculated reminders for timezone change: ${updated} updated, ${failed} failed`,
+              );
+              return `timezone set to ${newTimezone}. ${updated} reminder(s) adjusted.`;
+            }
+          }
+
+          return `timezone set to ${newTimezone}. no reminders to adjust.`;
+        } catch (error) {
+          logger.error("Failed to update timezone", { error });
+          return "failed to update timezone";
         }
       },
     }),
