@@ -307,6 +307,7 @@ export async function searchMemoryWithAgent(
     const v2Promise = searchV2(intent, userId, {
       structured: true,
       limit: options.limit ?? 20,
+      workspaceId,
       source,
       startTime: options.startTime,
       endTime: options.endTime,

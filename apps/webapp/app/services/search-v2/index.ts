@@ -20,6 +20,53 @@ import { formatRecallAsMarkdown, formatForV1Compatibility } from "./formatter";
 import { prisma } from "~/db.server";
 import { applyTokenBudget, DEFAULT_TOKEN_BUDGET } from "~/services/search/tokenBudget";
 
+async function resolveWorkspaceIdForSearch(
+  userId: string,
+  requestedWorkspaceId?: string
+): Promise<string> {
+  if (requestedWorkspaceId) {
+    const membership = await prisma.userWorkspace.findFirst({
+      where: {
+        workspaceId: requestedWorkspaceId,
+        userId,
+      },
+      select: { workspaceId: true },
+    });
+
+    if (!membership) {
+      throw new Error("Workspace not found");
+    }
+
+    return membership.workspaceId;
+  }
+
+  // Backward compatibility: older records may still depend on Workspace.userId.
+  const ownedWorkspace = await prisma.workspace.findFirst({
+    where: { userId },
+    select: { id: true },
+  });
+
+  if (ownedWorkspace) {
+    return ownedWorkspace.id;
+  }
+
+  // Multi-workspace-safe fallback for users linked via UserWorkspace only.
+  const membershipWorkspace = await prisma.userWorkspace.findFirst({
+    where: {
+      userId,
+      isActive: true,
+    },
+    orderBy: { createdAt: "asc" },
+    select: { workspaceId: true },
+  });
+
+  if (!membershipWorkspace) {
+    throw new Error("Workspace not found");
+  }
+
+  return membershipWorkspace.workspaceId;
+}
+
 /**
  * Log recall event to database for analytics
  */
@@ -104,17 +151,12 @@ export async function searchV2(
 ): Promise<ReturnType<typeof formatForV1Compatibility> | string> {
   const startTime = Date.now();
 
-  const workspace = await prisma.workspace.findFirst({where: {
-    userId
-  }})
-  if(!workspace) {
-    throw new Error("Workspace not found");
-  }
+  const workspaceId = await resolveWorkspaceIdForSearch(userId, options.workspaceId);
 
   logger.info(`[SearchV2] Starting search for: "${query.slice(0, 100)}..."`);
 
   // Step 1: Route the intent (parallel vector + LLM)
-  const routerOutput = await routeIntent(query, userId, workspace.id);
+  const routerOutput = await routeIntent(query, userId, workspaceId);
 
   // Step 2: Check if we should search
   if (!shouldProceedWithSearch(routerOutput)) {
@@ -135,7 +177,7 @@ export async function searchV2(
   // Step 3: Build handler context
   const ctx: HandlerContext = {
     userId,
-    workspaceId: workspace.id,
+    workspaceId,
     routerOutput,
     options: {
       ...options,
@@ -202,16 +244,12 @@ export async function searchV2(
  */
 export async function analyzeQuery(
   query: string,
-  userId: string
+  userId: string,
+  workspaceId?: string
 ) {
-  const workspace = await prisma.workspace.findFirst({where: {
-    userId
-  }})
-  if(!workspace) {
-    throw new Error("Workspace not found");
-  }
-  
-  const routerOutput = await routeIntent(query, userId, workspace.id);
+  const resolvedWorkspaceId = await resolveWorkspaceIdForSearch(userId, workspaceId);
+
+  const routerOutput = await routeIntent(query, userId, resolvedWorkspaceId);
 
   return {
     shouldSearch: shouldProceedWithSearch(routerOutput),
