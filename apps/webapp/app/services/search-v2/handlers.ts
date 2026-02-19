@@ -396,10 +396,8 @@ export async function handleExploratory(
     `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxEpisodes: ${maxEpisodes}`
   );
 
-  // If no labels matched, return empty (exploratory requires label context)
   if (labelIds.length === 0) {
-    logger.info("[Handler:exploratory] No labels matched, returning empty");
-    return [];
+    logger.info("[Handler:exploratory] No labels matched, falling back to recent episodes");
   }
 
   // Get episodes filtered by labels using graph provider method
