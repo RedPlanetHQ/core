@@ -318,15 +318,17 @@ export async function createPersonalAccessTokenFromAuthorizationCode(
 }
 
 /** Get or create a PersonalAccessToken for the given name and userId.
- * If one exists (not revoked), return it (without the unencrypted token).
+ * If one exists (not revoked), return it (without the unencrypted token by default).
  * If not, create a new one and return it (with the unencrypted token).
- * We only ever return the unencrypted token once, on creation.
+ *
+ * Pass `returnDecrypted: true` to always return the raw token (for internal server use).
  */
 export async function getOrCreatePersonalAccessToken({
   name,
   userId,
   workspaceId,
-}: CreatePersonalAccessTokenOptions) {
+  returnDecrypted = false,
+}: CreatePersonalAccessTokenOptions & { returnDecrypted?: boolean }) {
   // Try to find an existing, non-revoked token
   const existing = await prisma.personalAccessToken.findFirst({
     where: {
@@ -338,14 +340,13 @@ export async function getOrCreatePersonalAccessToken({
   });
 
   if (existing) {
-    // Do not return the unencrypted token if it already exists
     return {
       id: existing.id,
       name: existing.name,
       userId: existing.userId,
       workspaceId: existing.workspaceId,
       obfuscatedToken: existing.obfuscatedToken,
-      // token is not returned
+      token: returnDecrypted ? decryptPersonalAccessToken(existing) : undefined,
     };
   }
 
