@@ -8,7 +8,7 @@ import { SEARCH_CONTEXT } from "constant";
 import { addEpisode, fetchUserPersona } from "./api-client";
 
 export const HOOK_TIMEOUTS = {
-  DEFAULT: 300000, // Standard HTTP timeout (5 min for slow systems)
+  DEFAULT: 30000, // Standard HTTP timeout (5 min for slow systems)
   HEALTH_CHECK: 30000, // Worker health check (30s for slow systems)
   WORKER_STARTUP_WAIT: 1000,
   WORKER_STARTUP_RETRIES: 300,

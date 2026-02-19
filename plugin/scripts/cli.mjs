@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { execSync } from 'child_process';
-import { appendFileSync, existsSync, readFileSync } from 'fs';
+import { execSync } from "child_process";
+import { appendFileSync, existsSync, readFileSync } from "fs";
 
 var __defProp = Object.defineProperty;
 var __name = (target, value) => __defProp(target, "name", { value, configurable: true });
@@ -9,7 +9,7 @@ var __name = (target, value) => __defProp(target, "name", { value, configurable:
 async function readJsonFromStdin() {
   return new Promise((resolve, reject) => {
     let input = "";
-    process.stdin.on("data", (chunk) => input += chunk);
+    process.stdin.on("data", (chunk) => (input += chunk));
     process.stdin.on("end", () => {
       try {
         resolve(input.trim() ? JSON.parse(input) : void 0);
@@ -29,7 +29,7 @@ function normalizeInput(raw) {
     toolName: r.tool_name,
     toolInput: r.tool_input,
     toolResponse: r.tool_response,
-    transcriptPath: r.transcript_path
+    transcriptPath: r.transcript_path,
   };
 }
 __name(normalizeInput, "normalizeInput");
@@ -44,15 +44,16 @@ function extractMessageContent(parsed) {
   if (typeof msgContent === "string") {
     return msgContent;
   } else if (Array.isArray(msgContent)) {
-    return msgContent.filter((c) => c.type === "text").map((c) => c.text).join("\n");
+    return msgContent
+      .filter((c) => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
   } else {
     throw new Error(`Unknown message content format. Type: ${typeof msgContent}`);
   }
 }
 __name(extractMessageContent, "extractMessageContent");
-var DEFAULTS = [
-  "[Request interrupted by user for tool use]"
-];
+var DEFAULTS = ["[Request interrupted by user for tool use]"];
 function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemReminders = false) {
   if (!transcriptPath || !existsSync(transcriptPath)) {
     throw new Error(`Transcript path missing or file does not exist: ${transcriptPath}`);
@@ -76,7 +77,10 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
   }
   let assistantMessage = extractMessageContent(parsedLines[lastAssistantIndex]);
   if (stripSystemReminders) {
-    assistantMessage = assistantMessage.replace(/<system-reminder>[\s\S]*?<\/system-reminder>/g, "");
+    assistantMessage = assistantMessage.replace(
+      /<system-reminder>[\s\S]*?<\/system-reminder>/g,
+      ""
+    );
     assistantMessage = assistantMessage.replace(/\n{3,}/g, "\n\n").trim();
   }
   const userMessages = [];
@@ -86,16 +90,27 @@ function extractLastAssistantWithPrecedingUsers(transcriptPath, stripSystemRemin
     const content2 = extractMessageContent(parsed);
     if (parsed.type === "assistant" && parsed.message && gotAtleastOne && content2) {
       break;
-    } else if (parsed.type === "user" && parsed.message && !DEFAULTS.includes(content2) && content2) {
-      let strippedcontent = content2.replace(/<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g, "");
-      strippedcontent = content2.replace(/<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g, "");
+    } else if (
+      parsed.type === "user" &&
+      parsed.message &&
+      !DEFAULTS.includes(content2) &&
+      content2
+    ) {
+      let strippedcontent = content2.replace(
+        /<local-command-caveat>[\s\S]*?<\/local-command-caveat>/g,
+        ""
+      );
+      strippedcontent = content2.replace(
+        /<local-command-stdout>[\s\S]*?<\/local-command-stdout>/g,
+        ""
+      );
       userMessages.unshift(strippedcontent);
       gotAtleastOne = true;
     }
   }
   return {
     assistant: assistantMessage,
-    users: userMessages
+    users: userMessages,
   };
 }
 __name(extractLastAssistantWithPrecedingUsers, "extractLastAssistantWithPrecedingUsers");
@@ -182,10 +197,10 @@ async function addEpisode(payload, token) {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT))
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
     });
     if (!response.ok) {
       console.error(`Failed to add episode: HTTP ${response.status}`);
@@ -193,7 +208,9 @@ async function addEpisode(payload, token) {
     }
     return true;
   } catch (error) {
-    console.error(`Error adding episode: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error adding episode: ${error instanceof Error ? error.message : String(error)}`
+    );
     return false;
   }
 }
@@ -203,9 +220,9 @@ async function fetchUserPersona(token) {
     const response = await fetch(`${API_BASE_URL}/me`, {
       headers: {
         Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json"
+        "Content-Type": "application/json",
       },
-      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT))
+      signal: AbortSignal.timeout(getTimeout(HOOK_TIMEOUTS.DEFAULT)),
     });
     if (!response.ok) {
       console.error(`Failed to fetch user persona: HTTP ${response.status}`);
@@ -214,7 +231,9 @@ async function fetchUserPersona(token) {
     const data = await response.json();
     return data.persona || "";
   } catch (error) {
-    console.error(`Error fetching user persona: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error fetching user persona: ${error instanceof Error ? error.message : String(error)}`
+    );
     return null;
   }
 }
@@ -222,22 +241,24 @@ __name(fetchUserPersona, "fetchUserPersona");
 
 // src/cli.ts
 var HOOK_TIMEOUTS = {
-  DEFAULT: 3e5,
+  DEFAULT: 3e4,
   HEALTH_CHECK: 3e4,
   WORKER_STARTUP_WAIT: 1e3,
   WORKER_STARTUP_RETRIES: 300,
   PRE_RESTART_SETTLE_DELAY: 2e3,
   POWERSHELL_COMMAND: 1e4,
-  WINDOWS_MULTIPLIER: 1.5
+  WINDOWS_MULTIPLIER: 1.5,
 };
 var HOOK_EXIT_CODES = {
   SUCCESS: 0,
   FAILURE: 1,
   /** Blocking error - for SessionStart, shows stderr to user only */
-  BLOCKING_ERROR: 2
+  BLOCKING_ERROR: 2,
 };
 function getTimeout(baseTimeout) {
-  return process.platform === "win32" ? Math.round(baseTimeout * HOOK_TIMEOUTS.WINDOWS_MULTIPLIER) : baseTimeout;
+  return process.platform === "win32"
+    ? Math.round(baseTimeout * HOOK_TIMEOUTS.WINDOWS_MULTIPLIER)
+    : baseTimeout;
 }
 __name(getTimeout, "getTimeout");
 function stripAnsiCodes(str) {
@@ -257,11 +278,7 @@ async function getAuthToken() {
       meOutput = execSync("corebrain me", {
         encoding: "utf-8",
         timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-        stdio: [
-          "pipe",
-          "pipe",
-          "pipe"
-        ]
+        stdio: ["pipe", "pipe", "pipe"],
       }).trim();
     } catch (error) {
       meOutput = "";
@@ -272,7 +289,7 @@ async function getAuthToken() {
         execSync("corebrain login", {
           encoding: "utf-8",
           timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-          stdio: "inherit"
+          stdio: "inherit",
         });
       } catch (loginError) {
         console.error("Login failed. Please run 'corebrain login' manually.");
@@ -282,11 +299,7 @@ async function getAuthToken() {
     const tokenOutput = execSync("corebrain token", {
       encoding: "utf-8",
       timeout: getTimeout(HOOK_TIMEOUTS.DEFAULT),
-      stdio: [
-        "pipe",
-        "pipe",
-        "pipe"
-      ]
+      stdio: ["pipe", "pipe", "pipe"],
     });
     const token = extractToken(tokenOutput);
     if (!token) {
@@ -295,7 +308,9 @@ async function getAuthToken() {
     }
     return token;
   } catch (error) {
-    console.error(`Error getting auth token: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error getting auth token: ${error instanceof Error ? error.message : String(error)}`
+    );
     return null;
   }
 }
@@ -305,24 +320,29 @@ async function sessionStart() {
     const token = await getAuthToken();
     if (!token) {
       return {
-        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
     const persona = await fetchUserPersona(token);
     if (persona === null) {
       console.error("Failed to fetch user persona");
       return {
-        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+        exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
       };
     }
     const claudeEnvFile = process.env.CLAUDE_ENV_FILE;
     if (claudeEnvFile) {
       try {
-        appendFileSync(claudeEnvFile, `export CORE_TOKEN="${token}"
-`);
+        appendFileSync(
+          claudeEnvFile,
+          `export CORE_TOKEN="${token}"
+`
+        );
         console.log(`Token exported to ${claudeEnvFile}`);
       } catch (envError) {
-        console.error(`Failed to write to CLAUDE_ENV_FILE: ${envError instanceof Error ? envError.message : String(envError)}`);
+        console.error(
+          `Failed to write to CLAUDE_ENV_FILE: ${envError instanceof Error ? envError.message : String(envError)}`
+        );
       }
     }
     const output = {
@@ -330,17 +350,19 @@ async function sessionStart() {
         hookEventName: "SessionStart",
         additionalContext: `<about_user>${persona}</about_user>
 
-<rules>${SEARCH_CONTEXT}</rules>`
-      }
+<rules>${SEARCH_CONTEXT}</rules>`,
+      },
     };
     return {
       exitCode: HOOK_EXIT_CODES.SUCCESS,
-      output
+      output,
     };
   } catch (error) {
-    console.error(`Error in session-start: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(
+      `Error in session-start: ${error instanceof Error ? error.message : String(error)}`
+    );
     return {
-      exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR
+      exitCode: HOOK_EXIT_CODES.BLOCKING_ERROR,
     };
   }
 }
@@ -355,8 +377,8 @@ async function stop() {
         exitCode: HOOK_EXIT_CODES.FAILURE,
         output: {
           continue: true,
-          suppressOutput: true
-        }
+          suppressOutput: true,
+        },
       };
     }
     const token = await getAuthToken();
@@ -366,8 +388,8 @@ async function stop() {
         exitCode: HOOK_EXIT_CODES.SUCCESS,
         output: {
           continue: true,
-          suppressOutput: true
-        }
+          suppressOutput: true,
+        },
       };
     }
     const { assistant, users } = extractLastAssistantWithPrecedingUsers(input.transcriptPath, true);
@@ -388,13 +410,16 @@ ${assistant}
 </assistant>`;
     }
     if (transcriptContent) {
-      const success = await addEpisode({
-        episodeBody: transcriptContent.trim(),
-        referenceTime: (/* @__PURE__ */ new Date()).toISOString(),
-        source: "claude-code-plugin",
-        type: "CONVERSATION",
-        sessionId: input.sessionId
-      }, token);
+      const success = await addEpisode(
+        {
+          episodeBody: transcriptContent.trim(),
+          referenceTime: /* @__PURE__ */ new Date().toISOString(),
+          source: "claude-code-plugin",
+          type: "CONVERSATION",
+          sessionId: input.sessionId,
+        },
+        token
+      );
       if (success) {
         console.log("Successfully ingested conversation turn");
       } else {
@@ -403,11 +428,11 @@ ${assistant}
     }
     const output = {
       continue: true,
-      suppressOutput: true
+      suppressOutput: true,
     };
     return {
       exitCode: HOOK_EXIT_CODES.SUCCESS,
-      output
+      output,
     };
   } catch (error) {
     console.error(`Error in stop: ${error instanceof Error ? error.message : String(error)}`);
@@ -415,8 +440,8 @@ ${assistant}
       exitCode: HOOK_EXIT_CODES.FAILURE,
       output: {
         continue: true,
-        suppressOutput: true
-      }
+        suppressOutput: true,
+      },
     };
   }
 }
