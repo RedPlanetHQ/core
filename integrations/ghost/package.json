@@ -2,18 +2,17 @@
   "name": "@core/ghost",
   "version": "0.1.0",
   "description": "Ghost Blog integration for Core",
-  "main": "./bin/index.js",
-  "module": "./bin/index.mjs",
+  "main": "./bin/index.cjs",
   "type": "module",
   "files": [
     "ghost",
     "bin"
   ],
   "bin": {
-    "ghost": "./bin/index.js"
+    "ghost": "./bin/index.cjs"
   },
   "scripts": {
-    "build": "rimraf bin && bun build src/index.ts --outfile bin/index.js --target node",
+    "build": "rimraf bin && esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=bin/index.cjs",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
@@ -34,7 +33,8 @@
     "typescript": "^4.7.2",
     "@modelcontextprotocol/sdk": "^0.4.0",
     "zod": "^3.22.4",
-    "zod-to-json-schema": "^3.22.1"
+    "zod-to-json-schema": "^3.22.1",
+    "esbuild": "^0.25.0"
   },
   "publishConfig": {
     "access": "public"

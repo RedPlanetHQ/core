@@ -24,6 +24,7 @@ import { Zoho } from "./icons/zoho";
 import { Hubspot } from "./icons/hubspot";
 import { Discord } from "./icons/discord";
 import { Todoist } from "./icons/todoist";
+import { Ghost } from "./icons/ghost";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -57,6 +58,7 @@ export const ICON_MAPPING = {
   hubspot: Hubspot,
   discord: Discord,
   todoist: Todoist,
+  ghost: Ghost,
 
   // Default icon
   integration: LayoutGrid,
