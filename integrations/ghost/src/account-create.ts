@@ -8,8 +8,11 @@ export async function integrationCreate(data: Record<string, string>) {
 
   const ghostUrl = ghost_url.replace(/\/$/, ''); // strip trailing slash
 
-  const response = await axios.get(`${ghostUrl}/ghost/api/v5/admin/site/`, {
-    headers: getAuthHeaders(admin_api_key),
+  const response = await axios.get(`${ghostUrl}/ghost/api/admin/site/`, {
+    headers: {
+      ...getAuthHeaders(admin_api_key),
+      'Accept-Version': 'v5.0',
+    },
   });
 
   const site = response.data.site;
