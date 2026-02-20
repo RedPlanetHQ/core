@@ -45,33 +45,30 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-// Common exec command patterns
+// Common exec command patterns - simplified groups
 const EXEC_COMMAND_OPTIONS = [
-	{ value: 'Bash(git status)', label: 'git status' },
-	{ value: 'Bash(git diff *)', label: 'git diff' },
-	{ value: 'Bash(git log *)', label: 'git log' },
-	{ value: 'Bash(git branch *)', label: 'git branch' },
-	{ value: 'Bash(git checkout *)', label: 'git checkout' },
-	{ value: 'Bash(git add *)', label: 'git add' },
-	{ value: 'Bash(git commit *)', label: 'git commit' },
-	{ value: 'Bash(git push *)', label: 'git push' },
-	{ value: 'Bash(git pull *)', label: 'git pull' },
-	{ value: 'Bash(git fetch *)', label: 'git fetch' },
-	{ value: 'Bash(npm run *)', label: 'npm run *' },
-	{ value: 'Bash(npm install *)', label: 'npm install' },
-	{ value: 'Bash(pnpm run *)', label: 'pnpm run *' },
-	{ value: 'Bash(pnpm install *)', label: 'pnpm install' },
-	{ value: 'Bash(ls *)', label: 'ls' },
-	{ value: 'Bash(cat *)', label: 'cat' },
-	{ value: 'Bash(grep *)', label: 'grep' },
-	{ value: 'Bash(find *)', label: 'find' },
-	{ value: 'Bash(mkdir *)', label: 'mkdir' },
-	{ value: 'Bash(rm *)', label: 'rm' },
-	{ value: 'Bash(mv *)', label: 'mv' },
-	{ value: 'Bash(cp *)', label: 'cp' },
-	{ value: 'Bash(curl *)', label: 'curl' },
-	{ value: 'Bash(python *)', label: 'python' },
-	{ value: 'Bash(node *)', label: 'node' },
+	{ value: 'Bash(git *)', label: 'git *', hint: 'All git commands' },
+	{ value: 'Bash(npm *)', label: 'npm *', hint: 'All npm commands' },
+	{ value: 'Bash(pnpm *)', label: 'pnpm *', hint: 'All pnpm commands' },
+	{ value: 'Bash(yarn *)', label: 'yarn *', hint: 'All yarn commands' },
+	{ value: 'Bash(ls *)', label: 'ls *', hint: 'List files' },
+	{ value: 'Bash(cat *)', label: 'cat *', hint: 'Read files' },
+	{ value: 'Bash(grep *)', label: 'grep *', hint: 'Search in files' },
+	{ value: 'Bash(find *)', label: 'find *', hint: 'Find files' },
+	{ value: 'Bash(mkdir *)', label: 'mkdir *', hint: 'Create directories' },
+	{ value: 'Bash(rm *)', label: 'rm *', hint: 'Remove files' },
+	{ value: 'Bash(mv *)', label: 'mv *', hint: 'Move files' },
+	{ value: 'Bash(cp *)', label: 'cp *', hint: 'Copy files' },
+	{ value: 'Bash(curl *)', label: 'curl *', hint: 'HTTP requests' },
+	{ value: 'Bash(python *)', label: 'python *', hint: 'Run Python' },
+	{ value: 'Bash(node *)', label: 'node *', hint: 'Run Node.js' },
+];
+
+// Special options for allow/deny mode
+const EXEC_MODE_OPTIONS = [
+	{ value: 'allow_all', label: 'Allow all commands' },
+	{ value: 'deny_all', label: 'Deny all commands' },
+	{ value: 'custom', label: 'Select specific commands' },
 ];
 
 // Get the path to the gateway-entry.js script
@@ -326,35 +323,86 @@ async function runInteractiveConfig() {
 	let execDeny: string[] = [];
 
 	if (execEnabled) {
-		const selectedCommands = await p.multiselect({
-			message: 'Select allowed commands',
-			options: EXEC_COMMAND_OPTIONS,
-			initialValues: existingConfig?.slots?.exec?.allow || [],
-			required: false,
+		// Step 1: Choose mode
+		const execMode = await p.select({
+			message: 'Command access mode',
+			options: EXEC_MODE_OPTIONS,
+			initialValue: 'custom',
 		});
 
-		if (p.isCancel(selectedCommands)) {
+		if (p.isCancel(execMode)) {
 			p.cancel('Configuration cancelled');
 			return { cancelled: true };
 		}
 
-		execAllow = selectedCommands as string[];
-
-		// Ask for denied commands from remaining
-		const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
-			opt => !execAllow.includes(opt.value)
-		);
-
-		if (remainingCommands.length > 0) {
-			const deniedCommands = await p.multiselect({
-				message: 'Select denied commands (optional)',
-				options: remainingCommands,
-				initialValues: existingConfig?.slots?.exec?.deny || [],
+		if (execMode === 'allow_all') {
+			execAllow = ['Bash(*)'];
+		} else if (execMode === 'deny_all') {
+			execDeny = ['Bash(*)'];
+		} else {
+			// Custom mode - select specific commands
+			const selectedAllowed = await p.multiselect({
+				message: 'Select allowed commands (space to toggle)',
+				options: EXEC_COMMAND_OPTIONS,
+				initialValues: existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
 				required: false,
 			});
 
-			if (!p.isCancel(deniedCommands)) {
-				execDeny = deniedCommands as string[];
+			if (p.isCancel(selectedAllowed)) {
+				p.cancel('Configuration cancelled');
+				return { cancelled: true };
+			}
+
+			execAllow = selectedAllowed as string[];
+
+			// Ask for denied commands from remaining
+			const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
+				opt => !execAllow.includes(opt.value)
+			);
+
+			if (remainingCommands.length > 0) {
+				const deniedCommands = await p.multiselect({
+					message: 'Select denied commands (optional)',
+					options: remainingCommands,
+					initialValues: existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
+					required: false,
+				});
+
+				if (!p.isCancel(deniedCommands)) {
+					execDeny = deniedCommands as string[];
+				}
+			}
+
+			// Custom allow patterns
+			const customAllowPatterns = await p.text({
+				message: 'Additional allow patterns (comma-separated, e.g. "docker *, kubectl *")',
+				placeholder: 'Leave empty to skip',
+				initialValue: '',
+			});
+
+			if (!p.isCancel(customAllowPatterns) && customAllowPatterns && customAllowPatterns.trim()) {
+				const patterns = (customAllowPatterns as string)
+					.split(',')
+					.map(s => s.trim())
+					.filter(Boolean)
+					.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+				execAllow.push(...patterns);
+			}
+
+			// Custom deny patterns
+			const customDenyPatterns = await p.text({
+				message: 'Additional deny patterns (comma-separated, e.g. "sudo *, rm -rf *")',
+				placeholder: 'Leave empty to skip',
+				initialValue: '',
+			});
+
+			if (!p.isCancel(customDenyPatterns) && customDenyPatterns && customDenyPatterns.trim()) {
+				const patterns = (customDenyPatterns as string)
+					.split(',')
+					.map(s => s.trim())
+					.filter(Boolean)
+					.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+				execDeny.push(...patterns);
 			}
 		}
 	}

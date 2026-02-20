@@ -31,6 +31,31 @@ importers:
         specifier: 5.5.4
         version: 5.5.4
 
+  apps/integration-server:
+    dependencies:
+      execa:
+        specifier: ^9.6.0
+        version: 9.6.0
+      express:
+        specifier: ^4.18.1
+        version: 4.21.2
+      zod:
+        specifier: 3.25.76
+        version: 3.25.76
+    devDependencies:
+      '@types/express':
+        specifier: ^5.0.6
+        version: 5.0.6
+      '@types/node':
+        specifier: ^20.0.0
+        version: 20.19.7
+      tsx:
+        specifier: 4.20.6
+        version: 4.20.6
+      typescript:
+        specifier: 5.8.3
+        version: 5.8.3
+
   apps/webapp:
     dependencies:
       '@ai-sdk/amazon-bedrock':

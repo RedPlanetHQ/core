@@ -1,8 +1,6 @@
 import {
   handleUserProfile,
   handleMemoryIngest,
-  handleGetDocuments,
-  handleGetDocument,
   handleGetLabels,
   handleGetSessionId,
 } from "./memory-operations";
@@ -98,47 +96,6 @@ export const memoryTools = [
             "Set to true to get full profile. Leave empty for default profile view.",
         },
       },
-    },
-    annotations: {
-      readOnlyHint: true,
-      idempotentHint: true,
-      destructiveHint: false,
-    },
-  },
-  {
-    name: "memory_get_documents",
-    description:
-      "List all user documents. USE THIS TOOL: To discover available documents and get their IDs. Each document represents stored content with a unique Id. Returns: Array of documents with id, title, createdAt.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        limit: {
-          type: "number",
-          description:
-            "Optional: Maximum number of documents to return. Defaults to 50.",
-        },
-      },
-    },
-    annotations: {
-      readOnlyHint: true,
-      idempotentHint: true,
-      destructiveHint: false,
-    },
-  },
-  {
-    name: "memory_get_document",
-    description:
-      "Get detailed information about a specific document including its content. USE THIS TOOL: When you need to retrieve document content by its ID. HOW TO USE: Provide the documentId (ID from get_documents). Returns: Document details with id, title, content, metadata, source, createdAt.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        documentId: {
-          type: "string",
-          description:
-            "Id of the document (required). Get this from get_documents tool.",
-        },
-      },
-      required: ["documentId"],
     },
     annotations: {
       readOnlyHint: true,
@@ -263,10 +220,6 @@ export async function callMemoryTool(
         return await handleGetLabels({ ...args, userId });
       case "memory_about_user":
         return await handleUserProfile(args.workspaceId);
-      case "memory_get_documents":
-        return await handleGetDocuments({ ...args, userId });
-      case "memory_get_document":
-        return await handleGetDocument({ ...args, userId });
       case "initialize_conversation_session":
         return await handleGetSessionId();
       case "get_integrations":

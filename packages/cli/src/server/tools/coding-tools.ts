@@ -14,10 +14,10 @@ import {
 	buildStartArgs,
 	buildResumeArgs,
 	startAgentProcess,
-	readProcessOutput,
 	isProcessRunning,
 	stopProcess,
 } from '@/utils/coding-runner';
+import {readAgentSessionOutput} from '@/utils/coding-agents';
 
 // ============ Zod Schemas ============
 
@@ -298,40 +298,6 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	};
 }
 
-/**
- * Apply line slicing to output
- */
-function sliceOutput(
-	output: string,
-	options: {lines?: number; offset?: number; tail?: boolean},
-): {sliced: string; totalLines: number; returnedLines: number} {
-	const allLines = output.split('\n');
-	const totalLines = allLines.length;
-
-	if (!options.lines && !options.offset) {
-		return {sliced: output, totalLines, returnedLines: totalLines};
-	}
-
-	let resultLines: string[];
-
-	if (options.tail && options.lines) {
-		// Get last N lines
-		const start = Math.max(0, totalLines - options.lines);
-		resultLines = allLines.slice(start);
-	} else {
-		// Get lines from offset with limit
-		const offset = options.offset || 0;
-		const limit = options.lines || totalLines;
-		resultLines = allLines.slice(offset, offset + limit);
-	}
-
-	return {
-		sliced: resultLines.join('\n'),
-		totalLines,
-		returnedLines: resultLines.length,
-	};
-}
-
 function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// First check stored session exists
 	const session = getSession(params.sessionId);
@@ -342,53 +308,32 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 		};
 	}
 
-	// Read from running process
-	const output = readProcessOutput(params.sessionId);
+	// Check if process is still running
+	const running = isProcessRunning(params.sessionId);
 
-	const sliceOptions = {
-		lines: params.lines,
-		offset: params.offset,
-		tail: params.tail,
-	};
-
-	if (output.found) {
-		// Process is tracked in memory, return live output
-		const status = output.running
-			? 'running'
-			: output.exitCode === 0
-				? 'completed'
-				: 'error';
-
-		const {sliced, totalLines, returnedLines} = sliceOutput(
-			output.stdout,
-			sliceOptions,
-		);
-
-		return {
-			success: true,
-			result: {
-				sessionId: session.sessionId,
-				agent: session.agent,
-				prompt: session.prompt,
-				dir: session.dir,
-				status,
-				running: output.running,
-				output: sliced,
-				error: output.stderr || undefined,
-				exitCode: output.exitCode,
-				startedAt: session.startedAt,
-				updatedAt: session.updatedAt,
-				totalLines,
-				returnedLines,
-			},
-		};
-	}
-
-	// Process not in memory, return stored session data from sessions.json
-	const {sliced, totalLines, returnedLines} = sliceOutput(
-		session.output || '',
-		sliceOptions,
+	// Read from agent's session file using the appropriate reader
+	const {output, totalLines, returnedLines, fileExists, error: readError} = readAgentSessionOutput(
+		session.agent,
+		session.dir,
+		params.sessionId,
+		{
+			lines: params.lines,
+			offset: params.offset,
+			tail: params.tail,
+		},
 	);
+
+	// Determine status
+	let status = session.status;
+	if (running) {
+		status = 'running';
+	} else if (fileExists && status === 'running') {
+		// Process finished, update status
+		status = 'completed';
+		session.status = 'completed';
+		session.updatedAt = Date.now();
+		updateSession(session);
+	}
 
 	return {
 		success: true,
@@ -397,15 +342,16 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			agent: session.agent,
 			prompt: session.prompt,
 			dir: session.dir,
-			status: session.status,
-			running: false,
-			output: sliced,
-			error: session.error,
+			status,
+			running,
+			output,
+			error: readError || session.error,
 			exitCode: null,
 			startedAt: session.startedAt,
 			updatedAt: session.updatedAt,
 			totalLines,
 			returnedLines,
+			fileExists,
 		},
 	};
 }

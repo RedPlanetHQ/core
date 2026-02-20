@@ -57,6 +57,7 @@ class GmailCLI extends IntegrationCLI {
     super('gmail', '1.0.0');
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
     return await run(eventPayload);
   }

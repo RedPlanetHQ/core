@@ -148,6 +148,9 @@ const EnvironmentSchema = z
 
     // Resend
     RESEND_WEBHOOK_SECRET: z.string().optional(),
+
+    // Integration Server
+    INTEGRATION_URL: z.string().default("http://localhost:3456"),
   })
   .refine(
     (data) => {

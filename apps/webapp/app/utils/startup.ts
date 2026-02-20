@@ -1,5 +1,5 @@
 import { logger } from "~/services/logger.service";
-import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { ProviderFactory } from "@core/providers";
 import { env } from "~/env.server";
 import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
@@ -115,8 +115,8 @@ export async function initializeStartupServices() {
     await ProviderFactory.initializeSchemaOnce();
     logger.info("Neo4j schema initialization completed");
 
-    await fetchAndSaveIntegrations();
-    logger.info("Stdio integrations initialization completed");
+    await IntegrationRunner.load();
+    logger.info("Integration definitions load completed");
 
     // Initialize vector infrastructure through provider
     await ProviderFactory.initializeVectorInfrastructureOnce();

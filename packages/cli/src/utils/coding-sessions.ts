@@ -16,6 +16,7 @@ export interface StoredSession {
 	prompt: string;
 	dir: string;
 	status: SessionStatus;
+	pid?: number;
 	output?: string;
 	error?: string;
 	startedAt: number;
@@ -87,6 +88,19 @@ export function deleteSession(sessionId: string): boolean {
 		return true;
 	}
 	return false;
+}
+
+/**
+ * Check if a process is still running by PID
+ */
+export function isProcessRunningByPid(pid: number): boolean {
+	try {
+		// Sending signal 0 checks if process exists without killing it
+		process.kill(pid, 0);
+		return true;
+	} catch {
+		return false;
+	}
 }
 
 /**
