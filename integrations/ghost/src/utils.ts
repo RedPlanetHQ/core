@@ -10,7 +10,7 @@ export function generateGhostToken(adminApiKey: string): string {
     keyid: id,
     algorithm: 'HS256',
     expiresIn: '5m',
-    audience: '/v5/admin/',
+    audience: '/admin/',
   });
 }
 

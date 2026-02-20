@@ -1,6 +1,6 @@
 {
   "name": "@core/ghost",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Ghost Blog integration for Core",
   "main": "./bin/index.cjs",
   "type": "module",
@@ -12,7 +12,7 @@
     "ghost": "./bin/index.cjs"
   },
   "scripts": {
-    "build": "rimraf bin && esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=bin/index.cjs",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },

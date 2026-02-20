@@ -9,8 +9,11 @@ let ghostClient: AxiosInstance;
 
 function initializeClient(config: Record<string, string>) {
   ghostClient = axios.create({
-    baseURL: `${config.ghost_url}/ghost/api/v5/admin`,
-    headers: getAuthHeaders(config.admin_api_key),
+    baseURL: `${config.ghost_url}/ghost/api/admin`,
+    headers: {
+      ...getAuthHeaders(config.admin_api_key),
+      'Accept-Version': 'v5.0',
+    },
   });
 }
 
