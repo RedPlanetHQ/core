@@ -19,6 +19,7 @@ import { routeToHandler } from "./handlers";
 import { formatRecallAsMarkdown, formatForV1Compatibility } from "./formatter";
 import { prisma } from "~/db.server";
 import { applyTokenBudget, DEFAULT_TOKEN_BUDGET } from "~/services/search/tokenBudget";
+import { resolveWorkspaceIdForUser } from "~/models/workspace.server";
 
 /**
  * Log recall event to database for analytics
@@ -104,17 +105,12 @@ export async function searchV2(
 ): Promise<ReturnType<typeof formatForV1Compatibility> | string> {
   const startTime = Date.now();
 
-  const workspace = await prisma.workspace.findFirst({where: {
-    userId
-  }})
-  if(!workspace) {
-    throw new Error("Workspace not found");
-  }
+  const workspaceId = await resolveWorkspaceIdForUser(userId, options.workspaceId);
 
   logger.info(`[SearchV2] Starting search for: "${query.slice(0, 100)}..."`);
 
   // Step 1: Route the intent (parallel vector + LLM)
-  const routerOutput = await routeIntent(query, userId, workspace.id);
+  const routerOutput = await routeIntent(query, userId, workspaceId);
 
   // Step 2: Check if we should search
   if (!shouldProceedWithSearch(routerOutput)) {
@@ -135,7 +131,7 @@ export async function searchV2(
   // Step 3: Build handler context
   const ctx: HandlerContext = {
     userId,
-    workspaceId: workspace.id,
+    workspaceId,
     routerOutput,
     options: {
       ...options,
@@ -202,16 +198,12 @@ export async function searchV2(
  */
 export async function analyzeQuery(
   query: string,
-  userId: string
+  userId: string,
+  workspaceId?: string
 ) {
-  const workspace = await prisma.workspace.findFirst({where: {
-    userId
-  }})
-  if(!workspace) {
-    throw new Error("Workspace not found");
-  }
-  
-  const routerOutput = await routeIntent(query, userId, workspace.id);
+  const resolvedWorkspaceId = await resolveWorkspaceIdForUser(userId, workspaceId);
+
+  const routerOutput = await routeIntent(query, userId, resolvedWorkspaceId);
 
   return {
     shouldSearch: shouldProceedWithSearch(routerOutput),

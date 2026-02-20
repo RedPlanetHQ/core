@@ -254,6 +254,9 @@ export interface SearchV2Options {
   // Reranking
   enableReranking?: boolean;
 
+  // Optional workspace override from caller context
+  workspaceId?: string;
+
   // Source tracking (e.g., "Claude-Code", "Cursor", "mcp")
   source?: string;
 }
