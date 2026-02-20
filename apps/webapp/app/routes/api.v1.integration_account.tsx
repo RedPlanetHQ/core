@@ -16,6 +16,8 @@ import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.s
 const IntegrationAccountBodySchema = z.object({
   integrationDefinitionId: z.string(),
   apiKey: z.string(),
+  // Additional fields from multi-field API key auth (e.g., ghost_url)
+  fields: z.record(z.string()).optional(),
 });
 
 /**
@@ -57,7 +59,7 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const { integrationDefinitionId, apiKey } = body;
+    const { integrationDefinitionId, apiKey, fields } = body;
     const { userId } = authentication;
 
 
@@ -74,14 +76,19 @@ const { action } = createHybridActionApiRoute(
         );
       }
 
+      // Build eventBody: if fields are provided, spread them for multi-field auth
+      // For multi-field auth (e.g., Ghost), all values come from fields
+      const hasFields = fields && Object.keys(fields).length > 0;
+      const eventBody = hasFields
+        ? { apiKey: "", ...fields }
+        : { apiKey };
+
       // Trigger the SETUP event for the integration
       const setupResult = await runIntegrationTrigger(
         integrationDefinition,
         {
           event: IntegrationEventType.SETUP,
-          eventBody: {
-            apiKey,
-          },
+          eventBody,
         },
         userId,
         authentication.workspaceId,
