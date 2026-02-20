@@ -341,17 +341,26 @@ THINK: "Does this describe the user's capability or expertise level?" If yes →
 </aspect_knowledge>
 
 <aspect_belief>
-BELIEF: Why the user thinks the way they do (values, opinions, principles)
+BELIEF: Why the user thinks the way they do (values, opinions, principles) — lasting convictions
 Agent question: "What do they believe? So I align with their values."
 
-IDENTIFY BY: Opinions expressed about how things should work, values stated, principles articulated, reasoning about why one approach is better than another.
+IDENTIFY BY: Opinions expressed about how things should work, values stated, principles articulated, reasoning about why one approach is better than another. Must be a LASTING conviction, not in-conversation reactions.
 
-THINK: "Is the user expressing a value judgment or opinion about how things should be?" If yes → Belief.
+THINK: "Is the user expressing a lasting value judgment or principle about how things should be?" If yes → Belief. If it's a momentary reaction during a conversation → NOT a Belief.
+
+NOT A BELIEF:
+- In-conversation feedback: "this looks bad", "that's wrong", "nice work" → momentary reactions, skip
+- Opinions about a specific draft/output: "this email is too long" → feedback on the task, not a belief
+- Emotional reactions: "I'm frustrated with this" → transient state, not a belief
+
+REAL BELIEFS:
+- "Open-source builds more trust than closed products" → Belief (lasting conviction)
+- "Code reviews should focus on architecture, not style" → Belief (principle)
+- "Small teams move faster than large ones" → Belief (value judgment)
 
 COMMON MISCLASSIFICATIONS:
 - "Transparency builds more credibility than polished marketing" → Belief, NOT Preference
 - "Developer communities have a high BS detector" → Belief, NOT Knowledge
-- "AI memory should be tool-agnostic" → Belief, NOT Goal
 </aspect_belief>
 
 <aspect_preference>
@@ -384,16 +393,22 @@ COMMON MISCLASSIFICATIONS:
 </aspect_habit>
 
 <aspect_goal>
-GOAL: What the user wants to achieve (confirmed by user)
+GOAL: What the user wants to achieve long-term or is actively working toward (confirmed by user)
 Agent question: "What are they trying to achieve? So I align suggestions."
 
-IDENTIFY BY: User explicitly stating what they want to accomplish, targets they've set, outcomes they're working toward.
+IDENTIFY BY: User explicitly stating what they want to accomplish, targets they've set, outcomes they're working toward. Must be a SUSTAINED objective, not a one-time request.
 
-THINK: "Did the USER explicitly state they want to achieve this?" If yes → Goal. If the assistant recommended it and user didn't confirm → NOT a Goal.
+THINK: "Did the USER explicitly state they want to achieve this AND is it something they're working toward over time?" If yes → Goal. If it's a one-time ask or in-conversation request → NOT a Goal (skip or null).
 
-CRITICAL: Assistant recommendations that the user has NOT confirmed are NOT Goals.
-- "The assistant suggested leading with cross-tool portability" → NOT a user Goal, skip it
-- "User wants to lose weight" (user said this) → Goal
+NOT A GOAL:
+- One-time requests: "check my calendar", "summarize this doc", "look up that ticket" → these are in-conversation asks, NOT goals
+- Transient tasks: "User asked the assistant to fetch weather data" → one-time ask, skip
+- Assistant recommendations the user has NOT confirmed → NOT a Goal
+
+REAL GOALS:
+- "I want to run a marathon by December" → Goal (sustained objective with target)
+- "We need to launch the beta this quarter" → Goal (working toward over time)
+- "I'm trying to consolidate all my notes into one system" → Goal (ongoing effort)
 </aspect_goal>
 
 <aspect_directive>
@@ -435,34 +450,50 @@ COMMON MISCLASSIFICATIONS:
 </aspect_decision>
 
 <aspect_event>
-EVENT: Specific occurrences the user was involved in, with timestamps
+EVENT: Meaningful specific occurrences the user was involved in, with timestamps
 Agent question: "What happened when?"
 
-IDENTIFY BY: Something the user did or participated in at a specific time — meetings, calls, completions, milestones, one-time actions.
+IDENTIFY BY: Something MEANINGFUL the user did or participated in at a specific time — meetings, calls, completions, milestones, significant one-time actions.
 
-THINK: "Did the USER do or attend this at a specific point in time?" If yes → Event. If it's a recurring behavior → Habit. If it's a third-party event the user wasn't involved in → null.
+THINK: "Did the USER do something MEANINGFUL at a specific point in time that's worth remembering?" If yes → Event. If it's a recurring behavior → Habit. If it's a third-party event the user wasn't involved in → null.
+
+NOT AN EVENT (skip entirely):
+- Trivial interactions: "greeted the assistant", "said hello", "asked a question" → zero recall value, skip
+- Using a tool/channel: "used WhatsApp to ask", "sent a message via Slack" → the medium is not an event, skip
+- System-triggered reminders: "received a reminder", "received a notification" → system noise, skip
+- Scheduling trivial tasks: "set a reminder to buy groceries" → low recall value, skip
+- One-time asks to assistant: "asked the assistant to check email" → conversational, skip
+
+REAL EVENTS:
+- "Had a demo call with the Acme team on Tuesday" → Event (meaningful meeting)
+- "Submitted the board deck on Feb 10" → Event (milestone)
+- "Onboarded three new customers this week" → Event (significant occurrence)
 
 COMMON MISCLASSIFICATIONS:
 - "Attended the architecture review on Monday" → Event (user participated)
 - "Acme Corp announced a new product last week" → null (third-party, user not involved)
-- "Submitted the compliance report on Feb 10" → Event (user did this)
 - "Checks Slack notifications every hour" → Habit (recurring), NOT Event
 
 NOTE: Always include event_date for Event aspect.
 </aspect_event>
 
 <aspect_problem>
-PROBLEM: Blockers, challenges, struggles (technical, behavioral, systemic)
+PROBLEM: Persistent blockers, challenges, struggles that affect the user over time (technical, behavioral, systemic)
 Agent question: "What's blocking them? Where can I help?"
 
-IDENTIFY BY: Technical issues, recurring bugs, behavioral struggles, systemic blockers, operational challenges, health hurdles.
+IDENTIFY BY: Recurring technical issues, ongoing behavioral struggles, systemic blockers, persistent operational challenges. Must be something the user faces REPEATEDLY or that remains unresolved.
 
-THINK: "Is this something that's blocking progress or causing ongoing difficulty?" If yes → Problem.
+THINK: "Is this an ONGOING issue that keeps affecting the user?" If yes → Problem. If it's a one-time failure or transient error during a conversation → NOT a Problem (skip or null).
 
-CAPTURE DEPTH: Don't just capture surface symptoms. Look for patterns:
-- "Google Sheets connection returns 502 errors" → Problem (technical)
-- "Struggles with converting health knowledge into daily action" → Problem (behavioral)
-- "Context compaction causes memory loss" → Problem (systemic)
+NOT A PROBLEM:
+- Transient errors: "API returned a 502 during this session" → one-time failure, skip
+- In-conversation limitations: "The tool couldn't access that service right now" → transient, skip
+- One-off failures: "The export timed out once" → not persistent, skip
+
+REAL PROBLEMS:
+- "CRM integration drops connection every few hours" → Problem (recurring technical)
+- "Keeps forgetting to follow up on open threads" → Problem (behavioral pattern)
+- "Search results consistently miss recent documents" → Problem (systemic)
 </aspect_problem>
 
 <aspect_relationship>
