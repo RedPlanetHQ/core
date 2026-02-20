@@ -60,8 +60,6 @@ export async function handleGetIntegrations(args: any) {
       accountId: account.accountId,
     }));
 
-    console.log(integrations, simplifiedIntegrations);
-
     // Format as readable text
     const formattedText =
       simplifiedIntegrations.length === 0

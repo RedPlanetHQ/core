@@ -1,10 +1,5 @@
 import { prisma } from "~/db.server";
-import { execFile } from "child_process";
-import { promisify } from "util";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
-
-const execFileAsync = promisify(execFile);
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 
 export interface CustomMcpIntegration {
   id: string;
@@ -225,37 +220,12 @@ export class IntegrationLoader {
   static async getIntegrationTools(accountId: string) {
     const account = await this.getIntegrationAccountById(accountId);
 
-    const integrationSlug = account.integrationDefinition.slug;
-    const executablePath = `./integrations/${integrationSlug}/main`;
+    const tools = await IntegrationRunner.getTools({
+      config: account.integrationConfiguration,
+      integrationDefinition: account.integrationDefinition as any,
+    });
 
-    try {
-      // Call the get-tools command with timeout
-      const { stdout } = await execFileAsync(
-        "node",
-        [
-          executablePath,
-          "get-tools",
-          "--config",
-          JSON.stringify(account.integrationConfiguration),
-          "--integration-definition",
-          JSON.stringify(account.integrationDefinition),
-        ],
-        {
-          encoding: "utf-8",
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-          timeout: 30000, // 30 second timeout
-        },
-      );
-
-      return stdout;
-    } catch (error: any) {
-      if (error.killed && error.signal === "SIGTERM") {
-        throw new Error(
-          `Integration get-tools timeout: ${integrationSlug} exceeded 30 seconds`,
-        );
-      }
-      throw error;
-    }
+    return JSON.stringify(tools);
   }
 
   /**
@@ -275,40 +245,21 @@ export class IntegrationLoader {
       throw new Error("Invalid tool name format");
     }
 
-    const integrationSlug = account.integrationDefinition.slug;
     const originalToolName = parts.slice(1).join("_");
-    const executablePath = `./integrations/${integrationSlug}/main`;
 
     try {
-      // Call the call-tool command with timeout
-      const { stdout } = await execFileAsync(
-        "node",
-        [
-          executablePath,
-          "call-tool",
-          "--config",
-          JSON.stringify({
-            ...account.integrationConfiguration,
-            timezone,
-          }),
-          "--integration-definition",
-          JSON.stringify(account.integrationDefinition),
-          "--tool-name",
-          originalToolName,
-          "--tool-arguments",
-          JSON.stringify(args),
-        ],
-        {
-          encoding: "utf-8",
-          maxBuffer: 10 * 1024 * 1024, // 10MB buffer
-          timeout: 30000, // 30 second timeout
-        },
-      );
-
-      // Parse the JSON output (expecting Message format)
-      return JSON.parse(stdout);
+      return await IntegrationRunner.callTool({
+        config: account.integrationConfiguration,
+        integrationDefinition: account.integrationDefinition as any,
+        toolName: originalToolName,
+        toolArguments: args,
+        timezone,
+      });
     } catch (error: any) {
-      if (error.killed && error.signal === "SIGTERM") {
+      const integrationSlug = account.integrationDefinition.slug;
+
+      // Handle timeout errors
+      if (error.message?.includes("timeout")) {
         return {
           content: [
             {
@@ -320,7 +271,7 @@ export class IntegrationLoader {
         };
       }
 
-      // Handle JSON parse errors or other errors
+      // Handle other errors
       return {
         content: [
           {

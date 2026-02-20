@@ -4,8 +4,7 @@ import {
   createHybridLoaderApiRoute,
   createHybridActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
-import { IntegrationEventType } from "@core/types";
-import { runIntegrationTrigger } from "~/services/integration.server";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
 
@@ -84,14 +83,16 @@ const { action } = createHybridActionApiRoute(
         : { apiKey };
 
       // Trigger the SETUP event for the integration
-      const setupResult = await runIntegrationTrigger(
+      const messages = await IntegrationRunner.setup({
+        eventBody,
         integrationDefinition,
-        {
-          event: IntegrationEventType.SETUP,
-          eventBody,
-        },
+      });
+
+      const setupResult = await IntegrationRunner.handleSetupMessages(
+        messages,
+        integrationDefinition,
+        authentication.workspaceId as string,
         userId,
-        authentication.workspaceId,
       );
 
       if (!setupResult.account || !setupResult.account.id) {

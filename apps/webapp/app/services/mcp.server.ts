@@ -14,14 +14,16 @@ import { z } from "zod";
 import { MCPSessionManager } from "~/utils/mcp/session-manager";
 import { TransportManager } from "~/utils/mcp/transport-manager";
 import { callMemoryTool, memoryTools } from "~/utils/mcp/memory";
+import { reminderTools, callReminderTool } from "~/utils/mcp/reminder";
 import { logger } from "~/services/logger.service";
 import { type Response, type Request } from "express";
 import { ensureBillingInitialized } from "./billing.server";
-import { fetchAndSaveIntegrations } from "~/trigger/utils/mcp";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import {
   getGatewayMCPTools,
   handleGatewayToolCall,
 } from "~/services/agent/gateway-operations";
+import { getUserTimezone } from "~/models/user.server";
 
 const QueryParams = z.object({
   source: z.string().optional(),
@@ -79,10 +81,13 @@ async function createMcpServer(
       );
 
       // Add gateway tools to the list (without the 'id' field which is internal)
-      tools = tools.concat(gatewayTools.map(({ id, ...rest }) => rest));
+      tools = tools.concat(gatewayTools.map(({ id, ...rest }) => rest) as any);
     } catch (error) {
       logger.error("Error loading gateway tools:", { error });
     }
+
+    // Add reminder tools
+    tools = tools.concat(reminderTools as any);
 
     return {
       tools,
@@ -145,6 +150,20 @@ async function createMcpServer(
         userId,
         source,
       );
+    }
+
+    // Handle reminder tools
+    const reminderToolNames = [
+      "add_reminder",
+      "update_reminder",
+      "delete_reminder",
+      "list_reminders",
+      "confirm_reminder",
+      "set_timezone",
+    ];
+    if (reminderToolNames.includes(name)) {
+      const timezone = await getUserTimezone(userId);
+      return await callReminderTool(name, args, workspaceId, timezone);
     }
 
     throw new Error(`Unknown tool: ${name}`);
@@ -393,13 +412,13 @@ async function createTransport(
     }
   };
 
-  // Load integration transports
+  // Load integration definitions
   try {
     if (!noIntegrations) {
-      await fetchAndSaveIntegrations();
+      await IntegrationRunner.load();
     }
   } catch (error) {
-    logger.error(`Error loading integration transports: ${error}`);
+    logger.error(`Error loading integration definitions: ${error}`);
   }
 
   // Create and connect MCP server

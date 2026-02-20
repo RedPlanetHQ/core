@@ -284,3 +284,16 @@ export const setPhoneNumber = async (phoneNumber: string, userId: string) => {
     },
   });
 };
+
+export const getUserTimezone = async (userId: string) => {
+  const user = await prisma.user.findUnique({
+    where: {
+      id: userId,
+    },
+  });
+
+  const userMetadata = user?.metadata as Record<string, unknown> | null;
+  const timezone = (userMetadata?.timezone as string) || "UTC";
+
+  return timezone;
+};

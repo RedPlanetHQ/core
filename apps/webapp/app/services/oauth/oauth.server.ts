@@ -1,4 +1,4 @@
-import { IntegrationEventType, type OAuth2Params } from "@core/types";
+import { type OAuth2Params } from "@core/types";
 import * as simpleOauth2 from "simple-oauth2";
 import {
   getSimpleOAuth2ClientConfig,
@@ -10,10 +10,9 @@ import {
 import { getIntegrationDefinitionWithId } from "../integrationDefinition.server";
 
 import { logger } from "../logger.service";
-import { runIntegrationTrigger } from "../integration.server";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import type { IntegrationDefinitionV2 } from "@core/database";
 import { env } from "~/env.server";
-import { createMCPAuthClient } from "@core/mcp-proxy";
 import { scheduler } from "./scheduler";
 
 // Use process.env for config in Remix
@@ -134,24 +133,27 @@ export async function callbackHandler(params: CallbackParams) {
       },
     );
 
-    const setupResult = await runIntegrationTrigger(
-      integrationDefinition,
-      {
-        event: IntegrationEventType.SETUP,
-        eventBody: {
-          oauthResponse: tokensResponse.token,
-          oauthParams: {
-            ...params,
-            redirect_uri: CALLBACK_URL,
-          },
+    const messages = await IntegrationRunner.setup({
+      eventBody: {
+        oauthResponse: tokensResponse.token,
+        oauthParams: {
+          ...params,
+          redirect_uri: CALLBACK_URL,
         },
       },
-      sessionRecord.userId,
+      integrationDefinition: integrationDefinition as any,
+    });
+
+    // Handle the setup result - process account messages
+    const setupResult = await IntegrationRunner.handleSetupMessages(
+      messages,
+      integrationDefinition as any,
       sessionRecord.workspaceId,
+      sessionRecord.userId as string,
     );
 
     await scheduler({
-      integrationAccountId: setupResult?.account?.id,
+      integrationAccountId: setupResult?.account?.id as string,
     });
 
     return new Response(null, {

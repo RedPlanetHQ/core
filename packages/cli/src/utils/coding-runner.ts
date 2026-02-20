@@ -1,21 +1,14 @@
-import {spawn, type ChildProcess} from 'node:child_process';
+import {spawn} from 'node:child_process';
+import {existsSync, mkdirSync, openSync} from 'node:fs';
+import {join} from 'node:path';
+import {homedir} from 'node:os';
 import {getPreferences} from '@/config/preferences';
 import type {CliBackendConfig} from '@/types/config';
-import {completeSession} from '@/utils/coding-sessions';
-
-// Track running processes in memory
-interface RunningProcess {
-	process: ChildProcess;
-	stdout: string;
-	stderr: string;
-	exitCode: number | null;
-	startedAt: number;
-}
-
-const runningProcesses = new Map<string, RunningProcess>();
-
-// Cleanup delay after process exits (ms) - gives time to read final output
-const CLEANUP_DELAY = 5000;
+import {
+	updateSession,
+	getSession,
+	isProcessRunningByPid,
+} from '@/utils/coding-sessions';
 
 /**
  * Get agent configuration by name
@@ -102,9 +95,31 @@ export function buildResumeArgs(
 }
 
 /**
- * Start an agent process in the background
- * Returns immediately, process runs in background
- * Auto-saves output and cleans up memory when process exits
+ * Get path for session stdout/stderr log files
+ */
+function getSessionLogPath(
+	sessionId: string,
+	stream: 'stdout' | 'stderr',
+): string {
+	const logsDir = join(homedir(), '.corebrain', 'logs');
+	return join(logsDir, `${sessionId}.${stream}.log`);
+}
+
+/**
+ * Ensure logs directory exists
+ */
+function ensureLogsDir(): void {
+	const logsDir = join(homedir(), '.corebrain', 'logs');
+
+	if (!existsSync(logsDir)) {
+		mkdirSync(logsDir, {recursive: true});
+	}
+}
+
+/**
+ * Start an agent process in the background (detached)
+ * Returns immediately, CLI can exit while process continues
+ * Output is written by the agent to its own session files (e.g., Claude Code writes to ~/.claude/projects/)
  */
 export function startAgentProcess(
 	sessionId: string,
@@ -112,140 +127,85 @@ export function startAgentProcess(
 	args: string[],
 	workingDirectory: string,
 ): {pid: number | undefined} {
-	console.log(config.command, args);
+	// Ensure logs directory exists
+	ensureLogsDir();
+
+	// Open log files for stdout/stderr (so we can see any errors from the process itself)
+	const stdoutPath = getSessionLogPath(sessionId, 'stdout');
+	const stderrPath = getSessionLogPath(sessionId, 'stderr');
+	const stdoutFd = openSync(stdoutPath, 'w');
+	const stderrFd = openSync(stderrPath, 'w');
+
+	// Spawn detached process
 	const proc = spawn(config.command, args, {
 		cwd: workingDirectory,
 		shell: true,
-		stdio: ['pipe', 'pipe', 'pipe'],
-		detached: false,
+		stdio: ['ignore', stdoutFd, stderrFd],
+		detached: true,
 	});
 
-	const runningProc: RunningProcess = {
-		process: proc,
-		stdout: '',
-		stderr: '',
-		exitCode: null,
-		startedAt: Date.now(),
-	};
+	const pid = proc.pid;
 
-	// Collect stdout
-	proc.stdout?.on('data', data => {
-		runningProc.stdout += data.toString();
-	});
-
-	// Collect stderr
-	proc.stderr?.on('data', data => {
-		runningProc.stderr += data.toString();
-	});
-
-	// Handle process exit - save to sessions.json and schedule cleanup
-	proc.on('close', code => {
-		runningProc.exitCode = code;
-
-		// Save final output to sessions.json
-		completeSession(
-			sessionId,
-			runningProc.stdout,
-			code === 0,
-			runningProc.stderr || undefined,
-		);
-
-		// Schedule cleanup after delay to allow final reads
-		setTimeout(() => {
-			runningProcesses.delete(sessionId);
-		}, CLEANUP_DELAY);
-	});
-
-	proc.on('error', err => {
-		runningProc.stderr += `\nProcess error: ${err.message}`;
-		runningProc.exitCode = 1;
-
-		// Save error to sessions.json
-		completeSession(sessionId, runningProc.stdout, false, runningProc.stderr);
-
-		// Schedule cleanup
-		setTimeout(() => {
-			runningProcesses.delete(sessionId);
-		}, CLEANUP_DELAY);
-	});
-
-	runningProcesses.set(sessionId, runningProc);
-
-	return {pid: proc.pid};
-}
-
-/**
- * Read output from a running or completed process
- */
-export function readProcessOutput(sessionId: string): {
-	found: boolean;
-	stdout: string;
-	stderr: string;
-	running: boolean;
-	exitCode: number | null;
-} {
-	const proc = runningProcesses.get(sessionId);
-	if (!proc) {
-		return {
-			found: false,
-			stdout: '',
-			stderr: '',
-			running: false,
-			exitCode: null,
-		};
+	// Store PID in session
+	const session = getSession(sessionId);
+	if (session && pid) {
+		session.pid = pid;
+		session.updatedAt = Date.now();
+		updateSession(session);
 	}
 
-	return {
-		found: true,
-		stdout: proc.stdout,
-		stderr: proc.stderr,
-		running: proc.exitCode === null,
-		exitCode: proc.exitCode,
-	};
+	// Unref so parent can exit
+	proc.unref();
+
+	return {pid};
 }
 
 /**
- * Check if a process is still running
+ * Check if a process is still running by session ID
  */
 export function isProcessRunning(sessionId: string): boolean {
-	const proc = runningProcesses.get(sessionId);
-	return proc ? proc.exitCode === null : false;
+	const session = getSession(sessionId);
+	if (!session?.pid) {
+		return false;
+	}
+	return isProcessRunningByPid(session.pid);
 }
 
 /**
- * Stop/kill a running process
+ * Stop/kill a running process by session ID
  */
 export function stopProcess(sessionId: string): boolean {
-	const proc = runningProcesses.get(sessionId);
-	if (proc && proc.exitCode === null) {
-		proc.process.kill('SIGTERM');
-		return true;
+	const session = getSession(sessionId);
+	if (!session?.pid) {
+		return false;
+	}
+
+	if (isProcessRunningByPid(session.pid)) {
+		try {
+			process.kill(session.pid, 'SIGTERM');
+			return true;
+		} catch {
+			return false;
+		}
 	}
 	return false;
 }
 
 /**
- * Clean up a process from memory
- */
-export function cleanupProcess(sessionId: string): void {
-	runningProcesses.delete(sessionId);
-}
-
-/**
- * Get process info
+ * Get process info from session
  */
 export function getProcessInfo(sessionId: string): {
 	pid: number | undefined;
 	running: boolean;
 	startedAt: number;
 } | null {
-	const proc = runningProcesses.get(sessionId);
-	if (!proc) {
+	const session = getSession(sessionId);
+	if (!session) {
 		return null;
 	}
 	return {
-		pid: proc.process.pid,
-		running: proc.exitCode === null,
-		startedAt: proc.startedAt,
+		pid: session.pid,
+		running: session.pid ? isProcessRunningByPid(session.pid) : false,
+		startedAt: session.startedAt,
 	};
 }

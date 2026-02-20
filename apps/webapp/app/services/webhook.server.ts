@@ -2,10 +2,9 @@ import {
   type IntegrationDefinitionV2,
   type IntegrationAccount,
 } from "@core/database";
-import { IntegrationEventType } from "@redplanethq/sdk";
 import { prisma } from "~/db.server";
 import { logger } from "./logger.service";
-import { runIntegrationTrigger } from "./integration.server";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { webhookDeliveryTask } from "../trigger/webhooks/webhook-delivery";
 
 export type EventHeaders = Record<string, string | string[]>;
@@ -35,45 +34,17 @@ export class WebhookService {
 
       if (integrationDefinition) {
         try {
-          const identifyResponse = await runIntegrationTrigger(
-            integrationDefinition,
-            {
-              event: IntegrationEventType.IDENTIFY,
-              eventBody: {
-                eventHeaders,
-                event: { ...eventBody },
-              },
+          const messages = await IntegrationRunner.identify({
+            webhookData: {
+              eventHeaders,
+              event: { ...eventBody },
             },
-          );
+            integrationDefinition,
+          });
 
-          let accountIds: string[] = [];
-
-          // Handle new CLI message format response
-          if (identifyResponse?.success && identifyResponse?.result) {
-            // Check if there are identifiers in the response
-            if (
-              identifyResponse.result.identifiers &&
-              identifyResponse.result.identifiers.length > 0
-            ) {
-              accountIds = identifyResponse.result.identifiers.map(
-                (identifier: any) => identifier.id,
-              );
-            }
-          } else if (identifyResponse?.error) {
-            logger.warn("Integration IDENTIFY command failed", {
-              error: identifyResponse.error,
-              sourceName,
-            });
-          } else {
-            // Handle legacy response format for backward compatibility
-            if (
-              identifyResponse?.message?.startsWith("The event payload type is")
-            ) {
-              accountIds = [];
-            } else if (identifyResponse) {
-              accountIds = [identifyResponse];
-            }
-          }
+          const identifyResult =
+            IntegrationRunner.handleIdentifyMessages(messages);
+          const accountIds = identifyResult.identifiers.map((id) => id.id);
 
           if (accountIds.length > 0) {
             integrationAccounts = await prisma.integrationAccount.findMany({
@@ -90,7 +61,7 @@ export class WebhookService {
           } else {
             logger.warn("No account IDs found from IDENTIFY command", {
               sourceName,
-              response: identifyResponse,
+              response: identifyResult,
             });
           }
         } catch (error) {
@@ -161,34 +132,26 @@ export class WebhookService {
             },
           );
 
-          const processResponse = await runIntegrationTrigger(
-            integrationAccount.integrationDefinition,
-            {
-              event: IntegrationEventType.PROCESS,
-              eventBody: {
-                eventHeaders,
-                eventData: { ...eventBody },
-              },
+          const messages = await IntegrationRunner.process({
+            eventData: {
+              eventHeaders,
+              eventData: { ...eventBody },
             },
-            integrationAccount.integratedById,
-            integrationAccount.workspaceId,
-            integrationAccount,
+            config: integrationAccount.integrationConfiguration as any,
+            integrationDefinition: integrationAccount.integrationDefinition,
+            state: (integrationAccount.settings as any)?.state,
+          });
+
+          const processResult = await IntegrationRunner.handleProcessMessages(
+            messages,
+            integrationAccount.id,
           );
 
-          if (processResponse?.success) {
-            logger.log(`Successfully processed webhook for ${sourceName}`, {
-              integrationAccountId: integrationAccount.id,
-              activitiesCreated:
-                processResponse.result?.activities?.length || 0,
-              messagesProcessed: processResponse.messages?.length || 0,
-            });
-          } else {
-            logger.warn(`Webhook processing had issues for ${sourceName}`, {
-              integrationAccountId: integrationAccount.id,
-              error: processResponse?.error,
-              success: processResponse?.success,
-            });
-          }
+          logger.log(`Successfully processed webhook for ${sourceName}`, {
+            integrationAccountId: integrationAccount.id,
+            activitiesCreated: processResult.activities?.length || 0,
+            messagesProcessed: messages.length,
+          });
         } catch (error) {
           logger.error(`Failed to process webhook for ${sourceName}`, {
             error,
