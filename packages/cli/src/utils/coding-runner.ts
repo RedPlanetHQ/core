@@ -127,8 +127,6 @@ export function startAgentProcess(
 	args: string[],
 	workingDirectory: string,
 ): {pid: number | undefined} {
-	console.log(config.command, args);
-
 	// Ensure logs directory exists
 	ensureLogsDir();
 
