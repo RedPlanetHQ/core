@@ -2,7 +2,7 @@
   "mcpServers": {
     "core_brain": {
       "type": "http",
-      "url": "https://mcp.getcore.me/api/v1/mcp?source=claude&skip_tools=memory_ingest,initialize_conversation_session,memory_about_user"
+      "url": "https://app.getcore.me/api/v1/mcp?source=claude&skip_tools=memory_ingest,initialize_conversation_session,memory_about_user"
     }
   }
 }

@@ -34,6 +34,7 @@
   </a>
 
 ## CORE: Your Digital Brain
+
 **It Remembers. It Thinks. It Acts**
 
 <p align="center">
@@ -90,6 +91,7 @@ Create GitHub issues, send Slack messages, manage your calendar without leaving 
 Your tools are siloed. Claude Code can't talk to your WhatsApp. Cursor can't check your calendar. CORE's Agent breaks these walls - it's the orchestrator that ties memory, toolkit, and your apps together.
 
 What the CORE Agent can do:
+
 - **Understand intent**: classifies what you need and routes to the right tools and memory
 - **Spawn other agents**: spin up a Claude Code session or browser session from WhatsApp to fix a bug or research something
 - **Coordinate multi-step workflows**: pull context from memory, act across multiple apps, and report back
@@ -155,7 +157,7 @@ The plugin auto-loads your persona (preferences, rules, decisions) at every sess
 <summary><b>Claude Code (Manual MCP)</b></summary>
 
 ```sh
-claude mcp add --transport http --scope user core-memory https://mcp.getcore.me/api/v1/mcp?source=Claude-Code
+claude mcp add --transport http --scope user core-memory https://app.getcore.me/api/v1/mcp?source=Claude-Code
 ```
 
 Then type `/mcp` and open core-memory for authentication.
@@ -189,7 +191,7 @@ Get your API key from [app.getcore.me](https://app.getcore.me) → Settings → 
 <details>
 <summary><b>Claude Desktop</b></summary>
 
-1. Copy MCP URL: `https://mcp.getcore.me/api/v1/mcp?source=Claude`
+1. Copy MCP URL: `https://app.getcore.me/api/v1/mcp?source=Claude`
 2. Navigate to Settings → Connectors → Add custom connector
 3. Click "Connect" and grant Claude permission to access CORE
 
