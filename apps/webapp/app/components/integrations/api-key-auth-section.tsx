@@ -37,21 +37,16 @@ export function ApiKeyAuthSection({
 
     setIsLoading(true);
 
-    const submittedApiKey = isMultiField
-      ? JSON.stringify(fieldValues)
-      : apiKey;
-
-    apiKeyFetcher.submit(
-      {
-        integrationDefinitionId: integration.id,
-        apiKey: submittedApiKey,
-      },
-      {
-        method: "post",
-        action: "/api/v1/integration_account",
-        encType: "application/json",
-      },
-    );
+    // For multi-field auth, send fields separately; for single-field, just send apiKey
+    apiKeyFetcher.submit({
+      integrationDefinitionId: integration.id,
+      apiKey: isMultiField ? "" : apiKey,
+      fields: isMultiField ? fieldValues : {},
+    }, {
+      method: "post",
+      action: "/api/v1/integration_account",
+      encType: "application/json",
+    });
   }, [integration.id, apiKey, fieldValues, isMultiField, isSubmitDisabled, apiKeyFetcher]);
 
   React.useEffect(() => {

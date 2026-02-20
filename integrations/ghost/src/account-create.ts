@@ -2,12 +2,9 @@ import axios from 'axios';
 
 import { getAuthHeaders } from './utils';
 
-export async function integrationCreate(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: any,
-) {
-  // When multi-field auth is used, apiKey is JSON-stringified { ghost_url, admin_api_key }
-  const { ghost_url, admin_api_key } = JSON.parse(data.apiKey);
+export async function integrationCreate(data: Record<string, string>) {
+  // Fields are passed directly from the endpoint for multi-field auth
+  const { ghost_url, admin_api_key } = data;
 
   const ghostUrl = ghost_url.replace(/\/$/, ''); // strip trailing slash
 
