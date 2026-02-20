@@ -19,53 +19,7 @@ import { routeToHandler } from "./handlers";
 import { formatRecallAsMarkdown, formatForV1Compatibility } from "./formatter";
 import { prisma } from "~/db.server";
 import { applyTokenBudget, DEFAULT_TOKEN_BUDGET } from "~/services/search/tokenBudget";
-
-async function resolveWorkspaceIdForSearch(
-  userId: string,
-  requestedWorkspaceId?: string
-): Promise<string> {
-  if (requestedWorkspaceId) {
-    const membership = await prisma.userWorkspace.findFirst({
-      where: {
-        workspaceId: requestedWorkspaceId,
-        userId,
-      },
-      select: { workspaceId: true },
-    });
-
-    if (!membership) {
-      throw new Error("Workspace not found");
-    }
-
-    return membership.workspaceId;
-  }
-
-  // Backward compatibility: older records may still depend on Workspace.userId.
-  const ownedWorkspace = await prisma.workspace.findFirst({
-    where: { userId },
-    select: { id: true },
-  });
-
-  if (ownedWorkspace) {
-    return ownedWorkspace.id;
-  }
-
-  // Multi-workspace-safe fallback for users linked via UserWorkspace only.
-  const membershipWorkspace = await prisma.userWorkspace.findFirst({
-    where: {
-      userId,
-      isActive: true,
-    },
-    orderBy: { createdAt: "asc" },
-    select: { workspaceId: true },
-  });
-
-  if (!membershipWorkspace) {
-    throw new Error("Workspace not found");
-  }
-
-  return membershipWorkspace.workspaceId;
-}
+import { resolveWorkspaceIdForUser } from "~/models/workspace.server";
 
 /**
  * Log recall event to database for analytics
@@ -151,7 +105,7 @@ export async function searchV2(
 ): Promise<ReturnType<typeof formatForV1Compatibility> | string> {
   const startTime = Date.now();
 
-  const workspaceId = await resolveWorkspaceIdForSearch(userId, options.workspaceId);
+  const workspaceId = await resolveWorkspaceIdForUser(userId, options.workspaceId);
 
   logger.info(`[SearchV2] Starting search for: "${query.slice(0, 100)}..."`);
 
@@ -247,7 +201,7 @@ export async function analyzeQuery(
   userId: string,
   workspaceId?: string
 ) {
-  const resolvedWorkspaceId = await resolveWorkspaceIdForSearch(userId, workspaceId);
+  const resolvedWorkspaceId = await resolveWorkspaceIdForUser(userId, workspaceId);
 
   const routerOutput = await routeIntent(query, userId, resolvedWorkspaceId);
 

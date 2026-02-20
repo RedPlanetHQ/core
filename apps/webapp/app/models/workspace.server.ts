@@ -84,6 +84,47 @@ export async function getWorkspaceById(id: string) {
   });
 }
 
+/**
+ * Resolve workspace ID for a given user.
+ * If workspaceId is provided, verifies active membership.
+ * Otherwise, returns the first active UserWorkspace membership.
+ */
+export async function resolveWorkspaceIdForUser(
+  userId: string,
+  requestedWorkspaceId?: string,
+): Promise<string> {
+  if (requestedWorkspaceId) {
+    const membership = await prisma.userWorkspace.findFirst({
+      where: {
+        workspaceId: requestedWorkspaceId,
+        userId,
+        isActive: true,
+      },
+    });
+
+    if (!membership) {
+      throw new Error("Workspace not found");
+    }
+
+    return requestedWorkspaceId;
+  }
+
+  const membershipWorkspace = await prisma.userWorkspace.findFirst({
+    where: {
+      userId,
+      isActive: true,
+    },
+    orderBy: { createdAt: "asc" },
+    select: { workspaceId: true },
+  });
+
+  if (!membershipWorkspace) {
+    throw new Error("Workspace not found");
+  }
+
+  return membershipWorkspace.workspaceId;
+}
+
 export async function getWorkspacePersona(workspaceId: string) {
   const personaSessionId = `persona-v2-${workspaceId}`;
   return await prisma.document.findFirst({
