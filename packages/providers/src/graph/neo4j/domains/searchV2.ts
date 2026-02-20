@@ -225,9 +225,9 @@ export function createSearchV2Methods(core: Neo4jCore) {
 
       const query = `
                 MATCH (e:Episode {userId: $userId${wsFilter}})
-                WHERE ANY(lid IN e.labelIds WHERE lid IN $labelIds)
-                AND e.content IS NOT NULL
+                WHERE e.content IS NOT NULL
                 AND e.content <> ""
+                ${params.labelIds.length > 0 ? "AND ANY(lid IN e.labelIds WHERE lid IN $labelIds)" : ""}
 
                 WITH e
                 ORDER BY e.validAt DESC
