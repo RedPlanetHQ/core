@@ -736,48 +736,24 @@ async function replaceWithCompacts(
 }
 
 /**
- * Extract invalidated statements for the given episodes
- * Returns facts that have invalidAt set (no longer valid)
+ * Extract invalidated statements for the given episodes.
+ *
+ * Disabled: returning invalidated facts wastes LLM context-window tokens on
+ * information that is explicitly *no longer true*.  The original implementation
+ * also suffered from an N-duplication bug (one row per episode×statement pair
+ * via HAS_PROVENANCE) which amplified the waste.  Skipping the query entirely
+ * saves a Neo4j round-trip per search and keeps the recall payload focused on
+ * current, valid knowledge.
+ *
+ * If invalidated-fact support is re-enabled in the future, the query in
+ * getEpisodesInvalidFacts() should use DISTINCT on statementUuid to avoid
+ * returning the same fact once per linked episode.
  */
 async function extractInvalidatedFacts(
-  episodes: EpisodicNode[],
-  ctx: HandlerContext
+  _episodes: EpisodicNode[],
+  _ctx: HandlerContext
 ): Promise<RecallInvalidatedFact[]> {
-  if (episodes.length === 0) return [];
-
-  const graphProvider = ProviderFactory.getGraphProvider();
-  const episodeUuids = episodes.map((ep) => ep.uuid);
-
-  logger.info(
-    `[extractInvalidatedFacts] Fetching invalidated statements for ${episodeUuids.length} episodes`
-  );
-
-  // Get all statements for these episodes
-  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId, ctx.workspaceId);
-
-  // Deduplicate by statementUuid — a single invalidated statement can be linked
-  // to many episodes via HAS_PROVENANCE, so the query returns one row per
-  // (episode, statement) pair.  Without dedup the same fact is repeated N times
-  // (once per episode), wasting context-window tokens for LLM consumers.
-  const seen = new Map<string, RecallInvalidatedFact>();
-  for (const stmt of invalidFacts) {
-    const key = stmt.statementUuid ?? stmt.fact;
-    if (!seen.has(key)) {
-      seen.set(key, {
-        fact: stmt.fact,
-        validAt: stmt.validAt,
-        invalidAt: stmt.invalidAt,
-        relevantScore: 0,
-      });
-    }
-  }
-  const invalidatedFacts = Array.from(seen.values());
-
-  logger.info(
-    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} unique invalidated facts (${invalidFacts.length} before dedup)`
-  );
-
-  return invalidatedFacts;
+  return [];
 }
 
 /**
