@@ -8,8 +8,27 @@ var util = require('util');
 var zlib = require('zlib');
 var stream3 = require('stream');
 var events = require('events');
+var fs = require('fs');
 
 function _interopDefault (e) { return e && e.__esModule ? e : { default: e }; }
+
+function _interopNamespace(e) {
+  if (e && e.__esModule) return e;
+  var n = Object.create(null);
+  if (e) {
+    Object.keys(e).forEach(function (k) {
+      if (k !== 'default') {
+        var d = Object.getOwnPropertyDescriptor(e, k);
+        Object.defineProperty(n, k, d.get ? d : {
+          enumerable: true,
+          get: function () { return e[k]; }
+        });
+      }
+    });
+  }
+  n.default = e;
+  return Object.freeze(n);
+}
 
 var crypto__default = /*#__PURE__*/_interopDefault(crypto);
 var url__default = /*#__PURE__*/_interopDefault(url);
@@ -18,6 +37,7 @@ var https__default = /*#__PURE__*/_interopDefault(https);
 var util__default = /*#__PURE__*/_interopDefault(util);
 var zlib__default = /*#__PURE__*/_interopDefault(zlib);
 var stream3__default = /*#__PURE__*/_interopDefault(stream3);
+var fs__namespace = /*#__PURE__*/_interopNamespace(fs);
 
 var __create = Object.create;
 var __defProp = Object.defineProperty;
@@ -10037,7 +10057,7 @@ var require_form_data = __commonJS({
     var http2 = __require("http");
     var https2 = __require("https");
     var parseUrl = __require("url").parse;
-    var fs = __require("fs");
+    var fs2 = __require("fs");
     var Stream = __require("stream").Stream;
     var mime = require_mime_types();
     var asynckit = require_asynckit();
@@ -10103,7 +10123,7 @@ var require_form_data = __commonJS({
         if (value.end != void 0 && value.end != Infinity && value.start != void 0) {
           callback(null, value.end + 1 - (value.start ? value.start : 0));
         } else {
-          fs.stat(value.path, function(err, stat) {
+          fs2.stat(value.path, function(err, stat) {
             if (err) {
               callback(err);
               return;
@@ -12867,7 +12887,7 @@ var require_command = __commonJS({
     var EventEmitter2 = __require("events").EventEmitter;
     var childProcess = __require("child_process");
     var path = __require("path");
-    var fs = __require("fs");
+    var fs2 = __require("fs");
     var process2 = __require("process");
     var { Argument: Argument2, humanReadableArgName } = require_argument();
     var { CommanderError: CommanderError2 } = require_error();
@@ -13868,7 +13888,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
        * @param {string} subcommandName
        */
       _checkForMissingExecutable(executableFile, executableDir, subcommandName) {
-        if (fs.existsSync(executableFile)) return;
+        if (fs2.existsSync(executableFile)) return;
         const executableDirMessage = executableDir ? `searched for local subcommand relative to directory '${executableDir}'` : "no directory for search for local subcommand, use .executableDir() to supply a custom directory";
         const executableMissing = `'${executableFile}' does not exist
  - if '${subcommandName}' is not meant to be an executable command, remove description parameter from '.command()' and use '.description()' instead
@@ -13887,10 +13907,10 @@ Expecting one of '${allowedValues.join("', '")}'`);
         const sourceExt = [".js", ".ts", ".tsx", ".mjs", ".cjs"];
         function findFile(baseDir, baseName) {
           const localBin = path.resolve(baseDir, baseName);
-          if (fs.existsSync(localBin)) return localBin;
+          if (fs2.existsSync(localBin)) return localBin;
           if (sourceExt.includes(path.extname(baseName))) return void 0;
           const foundExt = sourceExt.find(
-            (ext) => fs.existsSync(`${localBin}${ext}`)
+            (ext) => fs2.existsSync(`${localBin}${ext}`)
           );
           if (foundExt) return `${localBin}${foundExt}`;
           return void 0;
@@ -13902,7 +13922,7 @@ Expecting one of '${allowedValues.join("', '")}'`);
         if (this._scriptPath) {
           let resolvedScriptPath;
           try {
-            resolvedScriptPath = fs.realpathSync(this._scriptPath);
+            resolvedScriptPath = fs2.realpathSync(this._scriptPath);
           } catch {
             resolvedScriptPath = this._scriptPath;
           }
@@ -18543,11 +18563,14 @@ var {
 
 // src/utils.ts
 async function getLinkedInData(url2, accessToken) {
+  const headers = {
+    Authorization: `Bearer ${accessToken}`
+  };
+  if (url2.includes("/v2/")) {
+    headers["X-Restli-Protocol-Version"] = "2.0.0";
+  }
   return (await axios_default.get(url2, {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      "X-Restli-Protocol-Version": "2.0.0"
-    }
+    headers
   })).data;
 }
 
@@ -18565,19 +18588,19 @@ async function handleSchedule(config, state) {
     const lastSyncTime = settings.lastSyncTime || getDefaultSyncTime();
     if (!settings.id) {
       try {
-        const user = await getLinkedInData("https://api.linkedin.com/v2/me", accessToken);
-        settings.id = user.id;
+        const user = await getLinkedInData("https://api.linkedin.com/v2/userinfo", accessToken);
+        settings.id = user.sub;
       } catch (error) {
         return [];
       }
     }
     const messages = [];
-    const newSyncTime = (/* @__PURE__ */ new Date()).toISOString();
+    const lastSyncTimeUpdate = (/* @__PURE__ */ new Date()).toISOString();
     messages.push({
       type: "state",
       data: {
         ...settings,
-        lastSyncTime: newSyncTime
+        lastSyncTime: lastSyncTimeUpdate
       }
     });
     return messages;
@@ -18595,7 +18618,7 @@ async function integrationCreate(data) {
     access_token: oauthResponse.access_token
   };
   const user = await getLinkedInData(
-    "https://api.linkedin.com/v2/me",
+    "https://api.linkedin.com/v2/userinfo",
     integrationConfiguration.access_token
   );
   return [
@@ -18603,14 +18626,15 @@ async function integrationCreate(data) {
       type: "account",
       data: {
         settings: {
-          firstName: user.localizedFirstName,
-          lastName: user.localizedLastName,
-          id: user.id,
+          firstName: user.given_name,
+          lastName: user.family_name,
+          id: user.sub,
+          email: user.email,
           schedule: {
             frequency: "*/15 * * * *"
           }
         },
-        accountId: user.id,
+        accountId: user.sub,
         config: {
           ...integrationConfiguration,
           mcp: { tokens: { access_token: integrationConfiguration.access_token } }
@@ -24305,8 +24329,6 @@ var zodToJsonSchema = (schema, options) => {
   }
   return combined;
 };
-
-// src/mcp/index.ts
 var linkedinClient;
 async function initializeLinkedInClient(accessToken) {
   linkedinClient = axios_default.create({
@@ -24318,11 +24340,35 @@ async function initializeLinkedInClient(accessToken) {
     }
   });
 }
+async function getUserInfo(accessToken) {
+  const response = await axios_default.get("https://api.linkedin.com/v2/userinfo", {
+    headers: {
+      Authorization: `Bearer ${accessToken}`
+    }
+  });
+  return response.data;
+}
+var GetProfileSchema = external_exports.object({});
+var GetEmailSchema = external_exports.object({});
 var PostUpdateSchema = external_exports.object({
   text: external_exports.string().describe("The text of the post to share on LinkedIn"),
   visibility: external_exports.enum(["PUBLIC", "CONNECTIONS"]).optional().default("PUBLIC").describe("Who can see the post")
 });
-var GetProfileSchema = external_exports.object({});
+var CreateCommentSchema = external_exports.object({
+  postUrn: external_exports.string().describe("The URN of the post to comment on (e.g., urn:li:share:12345 or urn:li:ugcPost:12345)"),
+  text: external_exports.string().describe("The content of your comment")
+});
+var LikePostSchema = external_exports.object({
+  postUrn: external_exports.string().describe("The URN of the post to like (e.g., urn:li:share:12345)")
+});
+var DeletePostSchema = external_exports.object({
+  postUrn: external_exports.string().describe("The URN of the post to delete")
+});
+var PostImageUpdateSchema = external_exports.object({
+  text: external_exports.string().describe("The text of the post"),
+  imagePath: external_exports.string().describe("The absolute path to the image file on your local machine"),
+  visibility: external_exports.enum(["PUBLIC", "CONNECTIONS"]).optional().default("PUBLIC").describe("Who can see the post")
+});
 async function getTools() {
   return [
     {
@@ -24331,9 +24377,34 @@ async function getTools() {
       inputSchema: zodToJsonSchema(GetProfileSchema)
     },
     {
+      name: "get_email",
+      description: "Get the primary email address associated with your LinkedIn account",
+      inputSchema: zodToJsonSchema(GetEmailSchema)
+    },
+    {
       name: "post_update",
-      description: "Share a post on LinkedIn",
+      description: "Share a text post on LinkedIn",
       inputSchema: zodToJsonSchema(PostUpdateSchema)
+    },
+    {
+      name: "post_image_update",
+      description: "Share a post with an image on LinkedIn",
+      inputSchema: zodToJsonSchema(PostImageUpdateSchema)
+    },
+    {
+      name: "create_comment",
+      description: "Add a comment to a LinkedIn post",
+      inputSchema: zodToJsonSchema(CreateCommentSchema)
+    },
+    {
+      name: "like_post",
+      description: "Like a LinkedIn post",
+      inputSchema: zodToJsonSchema(LikePostSchema)
+    },
+    {
+      name: "delete_post",
+      description: "Delete one of your own LinkedIn posts",
+      inputSchema: zodToJsonSchema(DeletePostSchema)
     }
   ];
 }
@@ -24343,26 +24414,30 @@ async function callTool(name, args, config) {
   try {
     switch (name) {
       case "get_profile": {
-        const response = await linkedinClient.get("/v2/me");
-        const r = response.data;
-        const formatted = `Name: ${r.localizedFirstName} ${r.localizedLastName}
-ID: ${r.id}`;
+        const userInfo = await getUserInfo(config.access_token);
+        const formatted = `Name: ${userInfo.given_name} ${userInfo.family_name}
+LinkedIn ID: ${userInfo.sub}
+Email: ${userInfo.email}`;
         return {
           content: [{ type: "text", text: formatted }]
         };
       }
+      case "get_email": {
+        const userInfo = await getUserInfo(config.access_token);
+        return {
+          content: [{ type: "text", text: userInfo.email || "No email found" }]
+        };
+      }
       case "post_update": {
         const { text, visibility } = PostUpdateSchema.parse(args);
-        const meResponse = await linkedinClient.get("/v2/me");
-        const userUrn = `urn:li:person:${meResponse.data.id}`;
+        const userInfo = await getUserInfo(config.access_token);
+        const userUrn = `urn:li:person:${userInfo.sub}`;
         const postData = {
           author: userUrn,
           lifecycleState: "PUBLISHED",
           specificContent: {
             "com.linkedin.ugc.ShareContent": {
-              shareCommentary: {
-                text
-              },
+              shareCommentary: { text },
               shareMediaCategory: "NONE"
             }
           },
@@ -24373,6 +24448,87 @@ ID: ${r.id}`;
         const response = await linkedinClient.post("/v2/ugcPosts", postData);
         return {
           content: [{ type: "text", text: `Post created successfully. ID: ${response.data.id}` }]
+        };
+      }
+      case "post_image_update": {
+        const { text, imagePath, visibility } = PostImageUpdateSchema.parse(args);
+        const userInfo = await getUserInfo(config.access_token);
+        const userUrn = `urn:li:person:${userInfo.sub}`;
+        const registerResponse = await linkedinClient.post("/v2/assets?action=registerUpload", {
+          registerUploadRequest: {
+            recipes: ["urn:li:digitalmediaRecipe:feedshare-image"],
+            owner: userUrn,
+            serviceRelationships: [{
+              relationshipType: "OWNER",
+              identifier: "urn:li:userGeneratedContent"
+            }]
+          }
+        });
+        const uploadUrl = registerResponse.data.value.uploadMechanism["com.linkedin.digitalmedia.uploading.MediaUploadHttpRequest"].uploadUrl;
+        const assetUrn = registerResponse.data.value.asset;
+        const imageBuffer = fs__namespace.readFileSync(imagePath);
+        await axios_default.put(uploadUrl, imageBuffer, {
+          headers: {
+            Authorization: `Bearer ${config.access_token}`,
+            "Content-Type": "application/octet-stream"
+          }
+        });
+        const postData = {
+          author: userUrn,
+          lifecycleState: "PUBLISHED",
+          specificContent: {
+            "com.linkedin.ugc.ShareContent": {
+              shareCommentary: { text },
+              shareMediaCategory: "IMAGE",
+              media: [{
+                status: "READY",
+                description: { text: "Post Image" },
+                media: assetUrn,
+                title: { text: "Post Image" }
+              }]
+            }
+          },
+          visibility: {
+            "com.linkedin.ugc.MemberNetworkVisibility": visibility === "PUBLIC" ? "PUBLIC" : "CONNECTIONS"
+          }
+        };
+        const response = await linkedinClient.post("/v2/ugcPosts", postData);
+        return {
+          content: [{ type: "text", text: `Post with image created successfully. ID: ${response.data.id}` }]
+        };
+      }
+      case "create_comment": {
+        const { postUrn, text } = CreateCommentSchema.parse(args);
+        const userInfo = await getUserInfo(config.access_token);
+        const userUrn = `urn:li:person:${userInfo.sub}`;
+        const commentData = {
+          actor: userUrn,
+          object: postUrn,
+          message: { text }
+        };
+        const response = await linkedinClient.post(`/v2/socialActions/${postUrn}/comments`, commentData);
+        return {
+          content: [{ type: "text", text: `Comment created successfully. ID: ${response.data.id}` }]
+        };
+      }
+      case "like_post": {
+        const { postUrn } = LikePostSchema.parse(args);
+        const userInfo = await getUserInfo(config.access_token);
+        const userUrn = `urn:li:person:${userInfo.sub}`;
+        const reactionData = {
+          actor: userUrn,
+          reactionType: "LIKE"
+        };
+        await linkedinClient.post(`/v2/socialActions/${postUrn}/reactions`, reactionData);
+        return {
+          content: [{ type: "text", text: "Post liked successfully." }]
+        };
+      }
+      case "delete_post": {
+        const { postUrn } = DeletePostSchema.parse(args);
+        await linkedinClient.delete(`/v2/ugcPosts/${postUrn}`);
+        return {
+          content: [{ type: "text", text: "Post deleted successfully." }]
         };
       }
       default:
@@ -24438,7 +24594,7 @@ var LinkedInCLI = class extends IntegrationCLI {
         OAuth2: {
           token_url: "https://www.linkedin.com/oauth/v2/accessToken",
           authorization_url: "https://www.linkedin.com/oauth/v2/authorization",
-          scopes: ["r_liteprofile", "r_emailaddress", "w_member_social"],
+          scopes: ["openid", "profile", "email", "w_member_social"],
           scope_separator: " "
         }
       }

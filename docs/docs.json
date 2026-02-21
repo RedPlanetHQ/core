@@ -108,7 +108,8 @@
               "integrations/overview",
               "integrations/user_rules",
               "integrations/linear",
-              "integrations/github"
+              "integrations/github",
+              "integrations/linkedin"
             ]
           },
           {

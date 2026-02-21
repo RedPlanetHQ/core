@@ -65,11 +65,11 @@ class LinkedInCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
-      auth: {
+        auth: {
         OAuth2: {
           token_url: 'https://www.linkedin.com/oauth/v2/accessToken',
           authorization_url: 'https://www.linkedin.com/oauth/v2/authorization',
-          scopes: ['r_liteprofile', 'r_emailaddress', 'w_member_social'],
+          scopes: ['openid', 'profile', 'email', 'w_member_social'],
           scope_separator: ' ',
         },
       },

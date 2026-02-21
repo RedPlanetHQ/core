@@ -259,6 +259,7 @@ export function IntegrationDetail({
               <IngestionRuleSection
                 ingestionRule={ingestionRule}
                 activeAccount={hasActiveAccounts ? activeAccounts[0] : null}
+                slug={integration.slug}
               />
             </div>
           </Section>
