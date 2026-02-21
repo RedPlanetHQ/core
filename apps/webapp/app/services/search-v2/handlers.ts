@@ -755,16 +755,26 @@ async function extractInvalidatedFacts(
   // Get all statements for these episodes
   const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId, ctx.workspaceId);
 
-  // Filter for invalidated statements only
-  const invalidatedFacts = invalidFacts.map((stmt) => ({
-    fact: stmt.fact,
-    validAt: stmt.validAt,
-    invalidAt: stmt.invalidAt,
-    relevantScore: 0, // No score for invalidated facts
-  }));
+  // Deduplicate by statementUuid — a single invalidated statement can be linked
+  // to many episodes via HAS_PROVENANCE, so the query returns one row per
+  // (episode, statement) pair.  Without dedup the same fact is repeated N times
+  // (once per episode), wasting context-window tokens for LLM consumers.
+  const seen = new Map<string, RecallInvalidatedFact>();
+  for (const stmt of invalidFacts) {
+    const key = stmt.statementUuid ?? stmt.fact;
+    if (!seen.has(key)) {
+      seen.set(key, {
+        fact: stmt.fact,
+        validAt: stmt.validAt,
+        invalidAt: stmt.invalidAt,
+        relevantScore: 0,
+      });
+    }
+  }
+  const invalidatedFacts = Array.from(seen.values());
 
   logger.info(
-    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} invalidated facts`
+    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} unique invalidated facts (${invalidFacts.length} before dedup)`
   );
 
   return invalidatedFacts;
