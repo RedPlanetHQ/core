@@ -1,11 +1,11 @@
-import {useEffect} from 'react';
-import {useApp} from 'ink';
+import { useEffect } from 'react';
+import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import {executeCodingTool} from '@/server/tools/coding-tools';
-import {getPreferences} from '@/config/preferences';
-import type {CliBackendConfig} from '@/types/config';
+import { executeCodingTool } from '@/server/tools/coding-tools';
+import { getPreferences } from '@/config/preferences';
+import type { CliBackendConfig } from '@/types/config';
 
 export const options = zod.object({
 	agent: zod.string().optional().describe('Coding agent to use'),
@@ -36,7 +36,7 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	if (!agent) {
 		const selected = await p.select({
 			message: 'Select agent',
-			options: availableAgents.map((a) => ({value: a, label: a})),
+			options: availableAgents.map((a) => ({ value: a, label: a })),
 		});
 		if (p.isCancel(selected)) {
 			p.cancel('Cancelled');
@@ -98,7 +98,7 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 
 	spinner.stop(chalk.green('Started'));
 
-	const res = result.result as {sessionId: string; pid: number; message: string};
+	const res = result.result as { sessionId: string; pid: number; message: string };
 	p.note(
 		[
 			`${chalk.bold('Session ID:')} ${res.sessionId}`,
@@ -110,8 +110,8 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	);
 }
 
-export default function CodingStart({options: opts}: Props) {
-	const {exit} = useApp();
+export default function CodingStart({ options: opts }: Props) {
+	const { exit } = useApp();
 
 	useEffect(() => {
 		runStartSession(opts)

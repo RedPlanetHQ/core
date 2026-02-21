@@ -116,6 +116,8 @@ function ensureLogsDir(): void {
 	}
 }
 
+export type Logger = (message: string) => void;
+
 /**
  * Start an agent process in the background (detached)
  * Returns immediately, CLI can exit while process continues
@@ -126,25 +128,56 @@ export function startAgentProcess(
 	config: CliBackendConfig,
 	args: string[],
 	workingDirectory: string,
-): {pid: number | undefined} {
+	logger?: Logger,
+): {pid: number | undefined; error?: string} {
+	const log = logger || (() => {});
+
+	log(`SPAWN_START: sessionId=${sessionId}`);
+	log(`SPAWN_COMMAND: ${config.command}`);
+	log(`SPAWN_ARGS: ${JSON.stringify(args)}`);
+	log(`SPAWN_CWD: ${workingDirectory}`);
+
 	// Ensure logs directory exists
 	ensureLogsDir();
 
 	// Open log files for stdout/stderr (so we can see any errors from the process itself)
 	const stdoutPath = getSessionLogPath(sessionId, 'stdout');
 	const stderrPath = getSessionLogPath(sessionId, 'stderr');
+	log(`SPAWN_STDOUT_LOG: ${stdoutPath}`);
+	log(`SPAWN_STDERR_LOG: ${stderrPath}`);
+
 	const stdoutFd = openSync(stdoutPath, 'w');
 	const stderrFd = openSync(stderrPath, 'w');
 
 	// Spawn detached process
-	const proc = spawn(config.command, args, {
-		cwd: workingDirectory,
-		shell: true,
-		stdio: ['ignore', stdoutFd, stderrFd],
-		detached: true,
-	});
+	// Note: shell: false is required to avoid shell metacharacter issues in prompts
+	// (parentheses, quotes, etc. would otherwise be interpreted by the shell)
+	let proc;
+	try {
+		proc = spawn(config.command, args, {
+			cwd: workingDirectory,
+			shell: false,
+			stdio: ['ignore', stdoutFd, stderrFd],
+			detached: true,
+		});
+	} catch (err) {
+		const errorMsg = err instanceof Error ? err.message : String(err);
+		log(`SPAWN_ERROR: Failed to spawn process: ${errorMsg}`);
+		return {pid: undefined, error: errorMsg};
+	}
 
 	const pid = proc.pid;
+	log(`SPAWN_PID: ${pid}`);
+
+	// Handle spawn errors
+	proc.on('error', (err) => {
+		log(`SPAWN_PROCESS_ERROR: ${err.message}`);
+	});
+
+	// Log when process exits (useful for debugging quick failures)
+	proc.on('exit', (code, signal) => {
+		log(`SPAWN_EXIT: pid=${pid} code=${code} signal=${signal}`);
+	});
 
 	// Store PID in session
 	const session = getSession(sessionId);
@@ -152,10 +185,12 @@ export function startAgentProcess(
 		session.pid = pid;
 		session.updatedAt = Date.now();
 		updateSession(session);
+		log(`SPAWN_SESSION_UPDATED: pid stored in session`);
 	}
 
 	// Unref so parent can exit
 	proc.unref();
+	log(`SPAWN_DETACHED: process detached and running`);
 
 	return {pid};
 }

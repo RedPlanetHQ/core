@@ -239,7 +239,7 @@ export class GatewayClient {
 						if (!slots?.coding?.enabled) {
 							result = {success: false, error: 'Coding slot is not enabled'};
 						} else {
-							result = await executeCodingTool(toolCall.tool, toolCall.params);
+							result = await executeCodingTool(toolCall.tool, toolCall.params, (msg) => this.log(msg));
 						}
 					} else if (toolCall.tool.startsWith('exec_')) {
 						if (!slots?.exec?.enabled) {
