@@ -1,6 +1,6 @@
 import Twilio from "twilio";
 import { env } from "~/env.server";
-import { logger } from "./logger.service";
+import { logger } from "~/services/logger.service";
 
 // Lazy-init Twilio client singleton
 let twilioClient: Twilio.Twilio | null = null;

@@ -9,6 +9,7 @@
 import { PERSONALITY } from "./personality";
 import { CAPABILITIES } from "./capabilities";
 import { CHANNEL_FORMATS, type ChannelType } from "./channel-formats";
+import { getChannel } from "~/services/channels";
 import { buildDecisionAgentPrompt } from "./decision-prompt";
 
 export interface UserInfo {
@@ -27,7 +28,12 @@ export function getCorePrompt(
   userInfo?: UserInfo,
   userPersona?: string,
 ): string {
-  const channelFormat = CHANNEL_FORMATS[channel] || CHANNEL_FORMATS.web;
+  let channelFormat: string;
+  try {
+    channelFormat = getChannel(channel).getFormat();
+  } catch {
+    channelFormat = CHANNEL_FORMATS[channel] || CHANNEL_FORMATS.web;
+  }
 
   const timezone = userInfo?.timezone || "UTC";
   const localTime = new Date().toLocaleString("en-US", {
