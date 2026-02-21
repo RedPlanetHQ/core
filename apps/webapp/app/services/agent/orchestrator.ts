@@ -8,11 +8,7 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import {
-  runIntegrationExplorer,
-  runMemoryExplorer,
-  runWebExplorer,
-} from "./explorers";
+import { runIntegrationExplorer, runWebExplorer } from "./explorers";
 import { logger } from "../logger.service";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
@@ -21,6 +17,7 @@ import {
   getGatewayAgents,
   runGatewayExplorer,
 } from "./gateway";
+import { searchMemoryWithAgent } from "./memory";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -252,36 +249,27 @@ export async function runOrchestrator(
     inputSchema: z.object({
       query: z
         .string()
-        .describe("What to search for - include preferences, directives, and prior context related to the request"),
+        .describe(
+          "What to search for - include preferences, directives, and prior context related to the request",
+        ),
     }),
-    execute: async function* ({ query }, { abortSignal }) {
-      logger.info(`Orchestrator: memory search - ${query}`);
+    execute: async function ({ query }, { abortSignal }) {
+      try {
+        logger.info(`MemoryExplorer: Searching memory with query: ${query}`);
 
-      const { stream } = await runMemoryExplorer(
-        query,
-        userId,
-        workspaceId,
-        source,
-        abortSignal,
-      );
-
-      // Stream the memory explorer's work
-      let approvalRequested = false;
-      for await (const message of readUIMessageStream({
-        stream: stream.toUIMessageStream(),
-      })) {
-        if (approvalRequested) {
-          continue;
-        }
-
-        yield message;
-
-        if (hasApprovalRequested(message)) {
-          logger.info(
-            `Orchestrator: Stopping memory_search - approval requested`,
-          );
-          approvalRequested = true;
-        }
+        const result = await searchMemoryWithAgent(
+          query,
+          userId,
+          workspaceId,
+          source,
+          {
+            structured: false,
+          },
+        );
+        return result || "nothing found";
+      } catch (error: any) {
+        logger.warn("Memory search failed", error);
+        return "nothing found";
       }
     },
   });
@@ -473,7 +461,12 @@ export async function runOrchestrator(
 
   const stream = streamText({
     model: modelInstance as LanguageModel,
-    system: getOrchestratorPrompt(integrationsList, mode, gatewaysList, userPersona),
+    system: getOrchestratorPrompt(
+      integrationsList,
+      mode,
+      gatewaysList,
+      userPersona,
+    ),
     messages: [{ role: "user", content: userMessage }],
     tools,
     stopWhen: stepCountIs(10),
