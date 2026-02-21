@@ -52,7 +52,9 @@ const CreatePostSchema = z.object({
 
 const UpdatePostSchema = z.object({
   post_id: z.string().describe('The ID of the post to update'),
-  updated_at: z.string().describe('Current updated_at timestamp of the post (required by Ghost API)'),
+  updated_at: z
+    .string()
+    .describe('Current updated_at timestamp of the post (required by Ghost API)'),
   title: z.string().optional().describe('New post title'),
   html: z.string().optional().describe('New post body HTML content'),
   status: z.enum(['published', 'draft', 'scheduled']).optional().describe('New post status'),
@@ -81,17 +83,15 @@ const ListPagesSchema = z.object({
 const CreatePageSchema = z.object({
   title: z.string().describe('Page title'),
   html: z.string().optional().describe('Page body HTML content'),
-  status: z
-    .enum(['published', 'draft'])
-    .optional()
-    .default('draft')
-    .describe('Page status'),
+  status: z.enum(['published', 'draft']).optional().default('draft').describe('Page status'),
   custom_excerpt: z.string().optional().describe('Short excerpt for the page'),
 });
 
 const UpdatePageSchema = z.object({
   page_id: z.string().describe('The ID of the page to update'),
-  updated_at: z.string().describe('Current updated_at timestamp of the page (required by Ghost API)'),
+  updated_at: z
+    .string()
+    .describe('Current updated_at timestamp of the page (required by Ghost API)'),
   title: z.string().optional().describe('New page title'),
   html: z.string().optional().describe('New page body HTML content'),
   status: z.enum(['published', 'draft']).optional().describe('New page status'),
@@ -202,7 +202,7 @@ export async function getTools() {
 export async function callTool(
   name: string,
   args: Record<string, any>,
-  config: Record<string, string>,
+  config: Record<string, string>
 ) {
   initializeClient(config);
 
@@ -225,7 +225,7 @@ export async function callTool(
         const list = posts
           .map(
             (p: any) =>
-              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nPublished: ${p.published_at || 'N/A'}\nURL: ${p.url}`,
+              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nPublished: ${p.published_at || 'N/A'}\nURL: ${p.url}`
           )
           .join('\n\n');
 
@@ -317,7 +317,7 @@ export async function callTool(
         const list = pages
           .map(
             (p: any) =>
-              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nURL: ${p.url}`,
+              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nURL: ${p.url}`
           )
           .join('\n\n');
 
@@ -370,7 +370,10 @@ export async function callTool(
         }
 
         const list = tags
-          .map((t: any) => `ID: ${t.id}\nName: ${t.name}\nSlug: ${t.slug}\nPosts: ${t.count?.posts ?? 'N/A'}`)
+          .map(
+            (t: any) =>
+              `ID: ${t.id}\nName: ${t.name}\nSlug: ${t.slug}\nPosts: ${t.count?.posts ?? 'N/A'}`
+          )
           .join('\n\n');
 
         return { content: [{ type: 'text', text: `Found ${tags.length} tags:\n\n${list}` }] };
@@ -409,7 +412,7 @@ export async function callTool(
         const list = members
           .map(
             (m: any) =>
-              `Name: ${m.name || 'N/A'}\nEmail: ${m.email}\nStatus: ${m.status}\nCreated: ${m.created_at}`,
+              `Name: ${m.name || 'N/A'}\nEmail: ${m.email}\nStatus: ${m.status}\nCreated: ${m.created_at}`
           )
           .join('\n\n');
 

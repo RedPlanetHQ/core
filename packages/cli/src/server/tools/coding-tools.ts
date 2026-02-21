@@ -16,6 +16,7 @@ import {
 	startAgentProcess,
 	isProcessRunning,
 	stopProcess,
+	type Logger,
 } from '@/utils/coding-runner';
 import {readAgentSessionOutput} from '@/utils/coding-agents';
 
@@ -162,7 +163,7 @@ export const codingTools: GatewayTool[] = [
 
 // ============ Tool Handlers ============
 
-async function handleStartSession(params: zod.infer<typeof StartSessionSchema>) {
+async function handleStartSession(params: zod.infer<typeof StartSessionSchema>, logger?: Logger) {
 	// Check if directory exists
 	if (!existsSync(params.dir)) {
 		return {
@@ -199,7 +200,14 @@ async function handleStartSession(params: zod.infer<typeof StartSessionSchema>) 
 	});
 
 	// Start process in background
-	const {pid} = startAgentProcess(sessionId, config, args, params.dir);
+	const {pid, error} = startAgentProcess(sessionId, config, args, params.dir, logger);
+
+	if (error) {
+		return {
+			success: false,
+			error: `Failed to start session: ${error}`,
+		};
+	}
 
 	return {
 		success: true,
@@ -212,7 +220,7 @@ async function handleStartSession(params: zod.infer<typeof StartSessionSchema>) 
 	};
 }
 
-async function handleResumeSession(params: zod.infer<typeof ResumeSessionSchema>) {
+async function handleResumeSession(params: zod.infer<typeof ResumeSessionSchema>, logger?: Logger) {
 	// Get existing session
 	const session = getSession(params.sessionId);
 	if (!session) {
@@ -260,7 +268,14 @@ async function handleResumeSession(params: zod.infer<typeof ResumeSessionSchema>
 	});
 
 	// Start process in background
-	const {pid} = startAgentProcess(params.sessionId, config, args, session.dir);
+	const {pid, error} = startAgentProcess(params.sessionId, config, args, session.dir, logger);
+
+	if (error) {
+		return {
+			success: false,
+			error: `Failed to resume session: ${error}`,
+		};
+	}
 
 	return {
 		success: true,
@@ -384,14 +399,15 @@ function handleListSessions() {
 export async function executeCodingTool(
 	toolName: string,
 	params: Record<string, unknown>,
+	logger?: Logger,
 ): Promise<{success: boolean; result?: unknown; error?: string}> {
 	try {
 		switch (toolName) {
 			case 'coding_start_session':
-				return await handleStartSession(StartSessionSchema.parse(params));
+				return await handleStartSession(StartSessionSchema.parse(params), logger);
 
 			case 'coding_resume_session':
-				return await handleResumeSession(ResumeSessionSchema.parse(params));
+				return await handleResumeSession(ResumeSessionSchema.parse(params), logger);
 
 			case 'coding_close_session':
 				return handleCloseSession(CloseSessionSchema.parse(params));
