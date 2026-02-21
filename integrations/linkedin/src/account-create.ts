@@ -10,8 +10,9 @@ export async function integrationCreate(
     access_token: oauthResponse.access_token,
   };
 
+  // Using the modern OIDC userinfo endpoint instead of legacy /v2/me
   const user = await getLinkedInData(
-    'https://api.linkedin.com/v2/me',
+    'https://api.linkedin.com/v2/userinfo',
     integrationConfiguration.access_token,
   );
 
@@ -20,14 +21,15 @@ export async function integrationCreate(
       type: 'account',
       data: {
         settings: {
-          firstName: user.localizedFirstName,
-          lastName: user.localizedLastName,
-          id: user.id,
+          firstName: user.given_name,
+          lastName: user.family_name,
+          id: user.sub,
+          email: user.email,
           schedule: {
             frequency: '*/15 * * * *',
           },
         },
-        accountId: user.id,
+        accountId: user.sub,
         config: {
           ...integrationConfiguration,
           mcp: { tokens: { access_token: integrationConfiguration.access_token } },

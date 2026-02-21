@@ -165,7 +165,8 @@ export async function callbackHandler(params: CallbackParams) {
       },
     });
   } catch (e: any) {
-    logger.error(e);
+    logger.error("OAuth callback error:", e);
+    if (e.data) logger.error("OAuth error data:", JSON.stringify(e.data));
 
     return new Response(null, {
       status: 302,
@@ -209,6 +210,10 @@ export async function getRedirectURL(
   const additionalAuthParams = template.authorization_params || {};
 
   const integrationConfig = integrationDefinition.config as any;
+  console.log(`Generating redirect for ${integrationDefinition.name}`, {
+    clientId: integrationConfig?.clientId ? "exists" : "missing",
+    scopes: scopesString
+  });
 
   try {
     const simpleOAuthClient = new simpleOauth2.AuthorizationCode(

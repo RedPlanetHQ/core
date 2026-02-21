@@ -42,8 +42,9 @@ export async function handleSchedule(
     // Fetch user info if not in settings
     if (!settings.id) {
       try {
-        const user = await getLinkedInData('https://api.linkedin.com/v2/me', accessToken);
-        settings.id = user.id;
+        // Use modern OIDC userinfo endpoint
+        const user = await getLinkedInData('https://api.linkedin.com/v2/userinfo', accessToken);
+        settings.id = user.sub;
       } catch (error) {
         return [];
       }
@@ -68,13 +69,13 @@ export async function handleSchedule(
     */
 
     // Update last sync time
-    const newSyncTime = new Date().toISOString();
+    const lastSyncTimeUpdate = new Date().toISOString();
 
     messages.push({
       type: 'state',
       data: {
         ...settings,
-        lastSyncTime: newSyncTime,
+        lastSyncTime: lastSyncTimeUpdate,
       },
     });
 
