@@ -1,0 +1,97 @@
+---
+title: "LinkedIn"
+description: "Connect your professional network to CORE"
+---
+
+![Core LinkedIn](/images/core-linkedin.png)
+
+## Overview
+
+Integrating LinkedIn with CORE allows you to manage your professional presence directly through your Digital Brain. You can fetch profile data, share updates, and engage with posts using MCP tools.
+
+**Key Capabilities:**
+- **Profile Management**: Fetch your professional identity and email.
+- **Content Sharing**: Post text updates and images to your personal feed.
+- **Engagement**: Like posts and add comments using post URNs.
+- **Automation**: Schedule updates or respond to professional triggers.
+
+---
+
+## Prerequisites
+
+Before connecting LinkedIn to CORE, you must create a LinkedIn Developer Application.
+
+### 1. Create a LinkedIn Developer App
+1. Go to the [LinkedIn Developer Portal](https://www.linkedin.com/developers/apps).
+2. Click **Create app**.
+3. **App Name**: Enter "CORE Integration" (or your preference).
+4. **LinkedIn Page**: LinkedIn requires a Company Page to "own" the app. If you don't have one, [create a dummy page](https://www.linkedin.com/company/setup/new/). Paste the Page URL into the form.
+5. **Privacy Policy URL**: You can use a placeholder or your personal website.
+6. **App Logo**: Upload any square image.
+
+### 2. Add Required Products
+Navigate to the **Products** tab in your app settings and request access to:
+- **Sign In with LinkedIn using OpenID Connect**: Enables `openid`, `profile`, and `email` scopes.
+- **Share on LinkedIn**: Enables the `w_member_social` scope for posting.
+
+*Note: Access is usually granted immediately.*
+
+### 3. Configure OAuth Settings
+1. Go to the **Auth** tab.
+2. Note your **Client ID** and **Client Secret**.
+3. Under **OAuth 2.0 settings**, add the following **Authorized redirect URL**:
+   ```
+   http://localhost:3033/api/v1/oauth/callback
+   ```
+
+---
+
+## Setup in CORE
+
+### 1. Configure Environment Variables
+Add your credentials to the `.env` file in the root of your CORE project:
+
+```bash
+########### LinkedIn Integration ############
+LINKEDIN_CLIENT_ID=your_client_id_here
+LINKEDIN_CLIENT_SECRET=your_client_secret_here
+```
+
+### 2. Connect via UI
+1. Navigate to **CORE Dashboard -> Integrations -> LinkedIn**.
+2. Click **Connect to LinkedIn**.
+3. Authorize the application on the LinkedIn pop-up.
+
+---
+
+## Available MCP Tools
+
+Once connected, you can use the following commands in any MCP-enabled environment (Chat, Cursor, Claude Code):
+
+| Tool | Description | Required Args |
+| :--- | :--- | :--- |
+| `get_profile` | Returns your basic member profile. | None |
+| `get_email` | Returns your primary email address. | None |
+| `post_update` | Posts a text update to your feed. | `text` |
+| `post_image_update`| Posts an update with an image. | `text`, `imagePath` |
+| `create_comment` | Adds a comment to a post. | `postUrn`, `text` |
+| `like_post` | Likes a post. | `postUrn` |
+| `delete_post` | Deletes one of your posts. | `postUrn` |
+
+### Example Prompts
+- "Get my LinkedIn profile info."
+- "Post a LinkedIn update: 'Excited to announce I'm using @CORE for my professional automation!'"
+- "Like the LinkedIn post with URN `urn:li:share:123456789`"
+
+---
+
+## Troubleshooting
+
+### Redirect URI Mismatch
+Ensure the redirect URL in the LinkedIn Developer Portal matches exactly: `http://localhost:3033/api/v1/oauth/callback`.
+
+### Unauthorized Scope
+Ensure you have added both **Sign In with LinkedIn using OpenID Connect** and **Share on LinkedIn** products in the Developer Portal.
+
+### Internal Server Error (500)
+Check your server logs. This usually indicates an invalid Client Secret or a mismatch in the OAuth protocol version. CORE supports the modern OpenID Connect scopes.

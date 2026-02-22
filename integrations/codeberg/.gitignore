@@ -1,0 +1,6 @@
+node_modules
+dist
+build
+.turbo
+.DS_Store
+coverage

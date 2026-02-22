@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useFetcher } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Textarea } from "~/components/ui/textarea";
@@ -9,11 +9,13 @@ interface IngestionRuleSectionProps {
     text: string;
   } | null;
   activeAccount: any;
+  slug?: string;
 }
 
 export function IngestionRuleSection({
   ingestionRule,
   activeAccount,
+  slug,
 }: IngestionRuleSectionProps) {
   const [ingestionRuleText, setIngestionRuleText] = useState(
     ingestionRule?.text || "",
@@ -31,11 +33,12 @@ export function IngestionRuleSection({
     );
   }, [ingestionRuleText, ingestionRuleFetcher]);
 
-  React.useEffect(() => {
-    if (ingestionRuleFetcher.state === "idle") {
-      // Optionally show success message or refresh
+  const placeholder = useMemo(() => {
+    if (slug === "linkedin") {
+      return `Example for LinkedIn: "Ingest my posts and professional updates. Capture comments on my posts that mention 'collaboration' or 'partnership'. Ignore generic engagement like 'Congrats!' or 'Good job!'."`;
     }
-  }, [ingestionRuleFetcher.state, ingestionRuleFetcher.data]);
+    return `Example for Gmail: "Only ingest emails from the last 24 hours that contain the word 'urgent' or 'important' in the subject line or body. Skip promotional emails and newsletters. Focus on emails from known contacts or business domains."`;
+  }, [slug]);
 
   if (!activeAccount) {
     return null;
@@ -51,7 +54,7 @@ export function IngestionRuleSection({
           </label>
           <Textarea
             id="ingestionRule"
-            placeholder={`Example for Gmail: "Only ingest emails from the last 24 hours that contain the word 'urgent' or 'important' in the subject line or body. Skip promotional emails and newsletters. Focus on emails from known contacts or business domains."`}
+            placeholder={placeholder}
             value={ingestionRuleText}
             onChange={(e) => setIngestionRuleText(e.target.value)}
             className="min-h-[100px]"

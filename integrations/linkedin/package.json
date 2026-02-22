@@ -1,0 +1,35 @@
+{
+  "name": "@core/linkedin",
+  "version": "0.1.0",
+  "description": "LinkedIn extension for CORE",
+  "main": "./bin/index.js",
+  "module": "./bin/index.mjs",
+  "type": "module",
+  "files": [
+    "linkedin",
+    "bin"
+  ],
+  "bin": {
+    "linkedin": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "rimraf bin && tsup",
+    "lint": "eslint --ext js,ts,tsx src/ --fix",
+    "prettier": "prettier --config .prettierrc --write ."
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "commander": "^12.0.0",
+    "@redplanethq/sdk": "0.1.9",
+    "@modelcontextprotocol/sdk": "^0.4.0",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.1"
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.20",
+    "rimraf": "^3.0.2",
+    "tsup": "^8.0.1",
+    "typescript": "^5.5.4",
+    "prettier": "^3.4.2"
+  }
+}
