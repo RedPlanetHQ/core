@@ -95,7 +95,7 @@ export const loader = createHybridLoaderApiRoute(
 );
 
 // POST - Create a new skill
-export const action = createHybridActionApiRoute(
+const { action } = createHybridActionApiRoute(
   {
     allowJWT: true,
     corsStrategy: "all",
@@ -128,3 +128,6 @@ export const action = createHybridActionApiRoute(
     return json({ skill }, { status: 201 });
   },
 );
+
+
+export { action }

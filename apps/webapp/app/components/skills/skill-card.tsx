@@ -2,7 +2,7 @@ import { cn } from "~/lib/utils";
 import { Badge } from "../ui/badge";
 import { type SkillItem } from "~/hooks/use-skills";
 import { useNavigate } from "@remix-run/react";
-import { Sparkles } from "lucide-react";
+import { Library } from "lucide-react";
 import { format, isThisYear } from "date-fns";
 
 interface SkillCardProps {
@@ -46,7 +46,7 @@ export function SkillCard({ skill }: SkillCardProps) {
                     "text-foreground shrink-0 rounded !bg-transparent px-0 text-sm",
                   )}
                 >
-                  <Sparkles size={16} className="text-primary" />
+                  <Library size={16} className="text-primary" />
                 </Badge>
 
                 <div className={cn("truncate text-left font-medium")}>

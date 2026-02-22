@@ -1,4 +1,4 @@
-import { LoaderCircle, Plus, Sparkles } from "lucide-react";
+import { Library, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { useSkills } from "~/hooks/use-skills";
 import { VirtualSkillsList } from "~/components/skills/virtual-skills-list";
@@ -33,7 +33,7 @@ export default function Skills() {
                 <CardContent className="bg-background-2 flex w-full items-center justify-center py-16">
                   <div className="text-center">
                     <div className="bg-primary/10 mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full">
-                      <Sparkles className="text-primary h-6 w-6" />
+                      <Library className="text-primary h-6 w-6" />
                     </div>
                     <h3 className="text-lg font-semibold">No skills yet</h3>
                     <p className="text-muted-foreground">
