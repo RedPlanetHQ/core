@@ -1014,8 +1014,3 @@ enum WorkspaceRole {
   MEMBER // Can access and use workspace features
   GUEST // Limited read-only access
 }
-
-enum DocumentType {
-  DOCUMENT // Regular document (default)
-  SKILL // Skill document for agent capabilities
-}

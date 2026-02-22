@@ -99,7 +99,6 @@ export const action = createHybridActionApiRoute(
   {
     allowJWT: true,
     corsStrategy: "all",
-    findResource: async () => 1,
   },
   async ({ authentication, request }) => {
     if (request.method !== "POST") {
@@ -120,7 +119,7 @@ export const action = createHybridActionApiRoute(
         source: validatedData.source,
         type: "skill",
         labelIds: validatedData.labelIds,
-        metadata: validatedData.metadata ?? {},
+        metadata: validatedData.metadata ?? {} as any,
         editedBy: authentication.userId,
         workspaceId: authentication.workspaceId,
       },

@@ -93,7 +93,7 @@ function formatScheduleForUser(schedule: string, timezone: string): string {
  */
 export function getReminderTools(
   workspaceId: string,
-  channel: "whatsapp" | "email" = "whatsapp",
+  channel: "whatsapp" | "slack" | "email" = "whatsapp",
   timezone: string = "UTC",
 ): Record<string, Tool> {
   return {

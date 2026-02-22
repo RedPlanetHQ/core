@@ -9,15 +9,11 @@ import {
 import { z } from "zod";
 
 import { runIntegrationExplorer, runWebExplorer } from "./explorers";
+import { searchMemoryWithAgent } from "./memory";
 import { logger } from "../logger.service";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import {
-  type GatewayAgentInfo,
-  getGatewayAgents,
-  runGatewayExplorer,
-} from "./gateway";
-import { searchMemoryWithAgent } from "./memory";
+import { getGatewayAgents, runGatewayExplorer } from "./gateway";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -253,18 +249,15 @@ export async function runOrchestrator(
           "What to search for - include preferences, directives, and prior context related to the request",
         ),
     }),
-    execute: async function ({ query }, { abortSignal }) {
+    execute: async ({ query }) => {
+      logger.info(`Orchestrator: memory search - ${query}`);
       try {
-        logger.info(`MemoryExplorer: Searching memory with query: ${query}`);
-
         const result = await searchMemoryWithAgent(
           query,
           userId,
           workspaceId,
           source,
-          {
-            structured: false,
-          },
+          { structured: false },
         );
         return result || "nothing found";
       } catch (error: any) {
