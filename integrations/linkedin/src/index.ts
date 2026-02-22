@@ -1,13 +1,13 @@
-import { handleSchedule } from './schedule';
-import { integrationCreate } from './account-create';
+import { handleSchedule } from "./schedule";
+import { integrationCreate } from "./account-create";
 
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-} from '@redplanethq/sdk';
-import { callTool, getTools } from './mcp';
+} from "@redplanethq/sdk";
+import { callTool, getTools } from "./mcp";
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -46,7 +46,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
 class LinkedInCLI extends IntegrationCLI {
   constructor() {
-    super('linkedin', '1.0.0');
+    super("linkedin", "1.0.0");
   }
 
   protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
@@ -55,22 +55,20 @@ class LinkedInCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'LinkedIn extension',
-      key: 'linkedin',
-      description: 'Integrate your LinkedIn professional network with CORE. Sync activities and post updates.',
-      icon: 'linkedin',
-      schedule: {
-        frequency: '*/15 * * * *',
-      },
+      name: "LinkedIn extension",
+      key: "linkedin",
+      description:
+        "Integrate your LinkedIn professional network with CORE. Sync activities and post updates.",
+      icon: "linkedin",
       mcp: {
-        type: 'cli',
+        type: "cli",
       },
-        auth: {
+      auth: {
         OAuth2: {
-          token_url: 'https://www.linkedin.com/oauth/v2/accessToken',
-          authorization_url: 'https://www.linkedin.com/oauth/v2/authorization',
-          scopes: ['openid', 'profile', 'email', 'w_member_social'],
-          scope_separator: ' ',
+          token_url: "https://www.linkedin.com/oauth/v2/accessToken",
+          authorization_url: "https://www.linkedin.com/oauth/v2/authorization",
+          scopes: ["openid", "profile", "email", "w_member_social"],
+          scope_separator: " ",
         },
       },
     };
