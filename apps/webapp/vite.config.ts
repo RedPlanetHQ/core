@@ -39,6 +39,7 @@ export default defineConfig({
       "react-tweet",
       "posthog-js",
       "posthog-js/react",
+      "rrule",
     ],
     external: ["@prisma/client"],
   },

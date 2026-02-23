@@ -1,5 +1,4 @@
-import * as rruleModule from "rrule";
-const RRule = (rruleModule as any).default ?? rruleModule.RRule ?? rruleModule;
+import { RRule } from "rrule";
 import { DateTime } from "luxon";
 
 import {
