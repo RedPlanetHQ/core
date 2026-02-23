@@ -1051,7 +1051,8 @@ url = "https://app.getcore.me/api/v1/mcp?source=codex"`}
   "mcp": {
     "core": {
       "type": "http",
-      "url": "https://app.getcore.me/api/v1/mcp?source=Crush",
+      "timeout": 120,
+      "url": "https://app.getcore.me/api/v1/mcp?source=crush",
       "headers": {
         "Authorization": "Bearer YOUR_API_KEY"
       }
