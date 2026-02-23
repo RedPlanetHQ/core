@@ -1,17 +1,18 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isAgentBrowserInstalled, browserOpen, canCreateSession, getSession } from '@/utils/agent-browser';
+import {isBrowserUseInstalled, browserOpen} from '@/utils/browser-use';
 
-export const args = zod.tuple([
-	zod.string().describe('Session name'),
-	zod.string().describe('URL to open'),
-]);
+export const args = zod.tuple([zod.string().describe('URL to open')]);
 
 export const options = zod.object({
-	profile: zod.string().optional().default('corebrain').describe('Browser profile to use (default: corebrain)'),
+	sessionName: zod
+		.string()
+		.optional()
+		.default('default')
+		.describe('Session name for persistence (default: default)'),
 });
 
 type Props = {
@@ -19,31 +20,23 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-async function runBrowserOpen(sessionName: string, url: string, profile: string): Promise<void> {
+async function runBrowserOpen(url: string, sessionName: string): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking agent-browser...');
+	spinner.start('Checking browser-use...');
 
-	const installed = await isAgentBrowserInstalled();
+	const installed = await isBrowserUseInstalled();
 
 	if (!installed) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
+		p.log.error(
+			'browser-use is not installed. Run `corebrain browser install` first.',
+		);
 		return;
 	}
 
-	// Check session limit
-	const { allowed, count } = canCreateSession();
-	const existingSession = getSession(sessionName);
+	spinner.message(`Opening ${url} with session "${sessionName}"...`);
 
-	if (!existingSession && !allowed) {
-		spinner.stop(chalk.red('Session limit reached'));
-		p.log.error(`Maximum 3 sessions allowed. Currently running: ${count}. Close a session first.`);
-		return;
-	}
-
-	spinner.message(`Opening ${url} in session "${sessionName}"...`);
-
-	const result = await browserOpen(sessionName, url, profile);
+	const result = await browserOpen(url, sessionName);
 
 	if (result.code !== 0) {
 		spinner.stop(chalk.red('Failed to open URL'));
@@ -51,21 +44,25 @@ async function runBrowserOpen(sessionName: string, url: string, profile: string)
 		return;
 	}
 
-	spinner.stop(chalk.green(`Opened ${url} in session "${sessionName}" (profile: ${profile})`));
+	spinner.stop(chalk.green(`Opened ${url} (session: ${sessionName})`));
 }
 
-export default function BrowserOpen({ args: [sessionName, url], options }: Props) {
-	const { exit } = useApp();
+export default function BrowserOpen({args: [url], options}: Props) {
+	const {exit} = useApp();
 
 	useEffect(() => {
-		runBrowserOpen(sessionName, url, options.profile)
-			.catch((err) => {
-				p.log.error(`Failed to open URL: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		runBrowserOpen(url, options.sessionName)
+			.catch(err => {
+				p.log.error(
+					`Failed to open URL: ${
+						err instanceof Error ? err.message : 'Unknown error'
+					}`,
+				);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [sessionName, url, options.profile, exit]);
+	}, [url, options.sessionName, exit]);
 
 	return null;
 }

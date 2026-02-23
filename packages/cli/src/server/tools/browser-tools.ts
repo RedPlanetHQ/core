@@ -3,32 +3,41 @@ import {
 	browserOpen,
 	browserClose,
 	browserCommand,
-	browserListSessions,
-	browserGetProfiles,
+	browserGetSessions,
+	browserCloseAll,
 	isBlockedCommand,
-} from '@/utils/agent-browser';
+} from '@/utils/browser-use';
 
 // ============ Zod Schemas ============
 
 export const BrowserOpenSchema = zod.object({
-	session_name: zod.string().describe('Unique session name'),
 	url: zod.string().describe('URL to open'),
-	profile: zod.string().optional().default('corebrain').describe('Browser profile to use (default: corebrain)'),
+	sessionName: zod
+		.string()
+		.optional()
+		.default('default')
+		.describe('Session name for persistence (default: default)'),
 });
 
 export const BrowserCloseSchema = zod.object({
-	session_name: zod.string().describe('Session name to close'),
+	sessionName: zod.string().describe('Session name to close'),
 });
 
 export const BrowserCommandSchema = zod.object({
-	session_name: zod.string().describe('Session name to run command on'),
-	command: zod.string().describe('Command to run (e.g., click, fill, type, screenshot, etc.)'),
-	args: zod.array(zod.string()).optional().default([]).describe('Command arguments'),
+	sessionName: zod.string().describe('Session name to run command on'),
+	command: zod
+		.string()
+		.describe('Command to run (e.g., click, fill, type, screenshot, etc.)'),
+	args: zod
+		.array(zod.string())
+		.optional()
+		.default([])
+		.describe('Command arguments'),
 });
 
-export const BrowserListSessionsSchema = zod.object({});
+export const BrowserGetSessionsSchema = zod.object({});
 
-export const BrowserGetProfilesSchema = zod.object({});
+export const BrowserCloseAllSchema = zod.object({});
 
 // ============ Tool Interface ============
 
@@ -44,26 +53,33 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 	browser_open: {
 		type: 'object',
 		properties: {
-			session_name: {type: 'string', description: 'Unique session name'},
 			url: {type: 'string', description: 'URL to open'},
-			profile: {type: 'string', description: 'Browser profile to use (default: corebrain)'},
+			sessionName: {
+				type: 'string',
+				description:
+					'Session name for persistence (default: default). Use names like "work", "personal" for different contexts.',
+			},
 		},
-		required: ['session_name', 'url'],
+		required: ['url'],
 	},
 	browser_close: {
 		type: 'object',
 		properties: {
-			session_name: {type: 'string', description: 'Session name to close'},
+			sessionName: {type: 'string', description: 'Session name to close'},
 		},
-		required: ['session_name'],
+		required: ['sessionName'],
 	},
 	browser_command: {
 		type: 'object',
 		properties: {
-			session_name: {type: 'string', description: 'Session name to run command on'},
+			sessionName: {
+				type: 'string',
+				description: 'Session name to run command on',
+			},
 			command: {
 				type: 'string',
-				description: 'Command to run. Available: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload. Blocked: open, close, cookies, storage, network, trace, highlight, console, errors, state, download',
+				description:
+					'Command to run. Available: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload. Blocked: open, close, cookies, storage, network, download, run, session, task, tunnel',
 			},
 			args: {
 				type: 'array',
@@ -71,19 +87,19 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				description: 'Command arguments (selector, text, etc.)',
 			},
 		},
-		required: ['session_name', 'command'],
+		required: ['sessionName', 'command'],
 	},
 	browser_list_sessions: {
 		type: 'object',
 		properties: {},
 		required: [],
-		description: 'List all active browser sessions (max 3)',
+		description: 'List all active browser sessions',
 	},
-	browser_get_profiles: {
+	browser_close_all: {
 		type: 'object',
 		properties: {},
 		required: [],
-		description: 'List all available browser profiles',
+		description: 'Close all active browser sessions',
 	},
 };
 
@@ -92,28 +108,30 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 export const browserTools: GatewayTool[] = [
 	{
 		name: 'browser_open',
-		description: 'Open a browser session with a URL. Creates profile if it doesn\'t exist. Max 3 concurrent sessions.',
+		description:
+			'Open a browser with a URL using the specified session. Sessions automatically persist cookies and localStorage across restarts.',
 		inputSchema: jsonSchemas.browser_open!,
 	},
 	{
 		name: 'browser_close',
-		description: 'Close a browser session',
+		description: 'Close a browser for the specified session',
 		inputSchema: jsonSchemas.browser_close!,
 	},
 	{
 		name: 'browser_command',
-		description: 'Run a browser command on a session. Commands: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload',
+		description:
+			'Run a browser command on a session. Commands: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload',
 		inputSchema: jsonSchemas.browser_command!,
 	},
 	{
 		name: 'browser_list_sessions',
-		description: 'List all active browser sessions',
+		description: 'List all active browser sessions.',
 		inputSchema: jsonSchemas.browser_list_sessions!,
 	},
 	{
-		name: 'browser_get_profiles',
-		description: 'List all available browser profiles',
-		inputSchema: jsonSchemas.browser_get_profiles!,
+		name: 'browser_close_all',
+		description: 'Close all active browser sessions at once.',
+		inputSchema: jsonSchemas.browser_close_all!,
 	},
 ];
 
@@ -127,29 +145,28 @@ export async function executeBrowserTool(
 		switch (toolName) {
 			case 'browser_open': {
 				const p = BrowserOpenSchema.parse(params);
-				const r = await browserOpen(p.session_name, p.url, p.profile);
+				const r = await browserOpen(p.url, p.sessionName);
 				if (r.code !== 0) {
 					return {success: false, error: r.stderr || 'Failed to open browser'};
 				}
 				return {
 					success: true,
 					result: {
-						message: `Opened ${p.url} in session "${p.session_name}"`,
-						session_name: p.session_name,
-						profile: p.profile,
+						message: `Opened ${p.url} with session "${p.sessionName}"`,
+						sessionName: p.sessionName,
 					},
 				};
 			}
 
 			case 'browser_close': {
 				const p = BrowserCloseSchema.parse(params);
-				const r = await browserClose(p.session_name);
+				const r = await browserClose(p.sessionName);
 				if (r.code !== 0) {
 					return {success: false, error: r.stderr || 'Failed to close browser'};
 				}
 				return {
 					success: true,
-					result: {message: `Closed session "${p.session_name}"`},
+					result: {message: `Closed browser for session "${p.sessionName}"`},
 				};
 			}
 
@@ -164,38 +181,46 @@ export async function executeBrowserTool(
 					};
 				}
 
-				const r = await browserCommand(p.session_name, p.command, p.args);
+				const r = await browserCommand(p.sessionName, p.command, p.args);
 				if (r.code !== 0) {
-					return {success: false, error: r.stderr || `Failed to run "${p.command}"`};
+					return {
+						success: false,
+						error: r.stderr || `Failed to run "${p.command}"`,
+					};
 				}
 				return {
 					success: true,
 					result: {
-						message: `Executed "${p.command}" on session "${p.session_name}"`,
+						message: `Executed "${p.command}" on session "${p.sessionName}"`,
 						output: r.stdout,
 					},
 				};
 			}
 
 			case 'browser_list_sessions': {
-				BrowserListSessionsSchema.parse(params);
-				const sessions = browserListSessions();
+				BrowserGetSessionsSchema.parse(params);
+				const sessions = await browserGetSessions();
 				return {
 					success: true,
 					result: {
 						sessions,
 						count: sessions.length,
-						max_sessions: 3,
 					},
 				};
 			}
 
-			case 'browser_get_profiles': {
-				BrowserGetProfilesSchema.parse(params);
-				const profiles = browserGetProfiles();
+			case 'browser_close_all': {
+				BrowserCloseAllSchema.parse(params);
+				const r = await browserCloseAll();
+				if (r.code !== 0) {
+					return {
+						success: false,
+						error: r.stderr || 'Failed to close all browsers',
+					};
+				}
 				return {
 					success: true,
-					result: {profiles},
+					result: {message: 'Closed all browser sessions'},
 				};
 			}
 

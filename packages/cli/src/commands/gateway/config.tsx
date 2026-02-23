@@ -25,7 +25,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import type { GatewayConfig, GatewaySlots } from '@/types/config';
-import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
+import { isBrowserUseInstalled, installBrowserUse } from '@/utils/browser-use';
 
 const execAsync = promisify(exec);
 
@@ -250,18 +250,18 @@ async function runInteractiveConfig() {
 
 	// Step 5: Browser slot
 	const browserSpinner = p.spinner();
-	browserSpinner.start('Checking for agent-browser...');
-	let browserInstalled = await isAgentBrowserInstalled();
+	browserSpinner.start('Checking for browser-use...');
+	let browserInstalled = await isBrowserUseInstalled();
 	browserSpinner.stop(browserInstalled
-		? chalk.green('agent-browser installed')
-		: chalk.yellow('agent-browser not found')
+		? chalk.green('browser-use installed')
+		: chalk.yellow('browser-use not found')
 	);
 
 	let browserEnabled = false;
 
 	if (!browserInstalled) {
 		const installBrowser = await p.confirm({
-			message: 'Install agent-browser? (npm install -g agent-browser)',
+			message: 'Install browser-use?',
 			initialValue: false,
 		});
 
@@ -271,24 +271,19 @@ async function runInteractiveConfig() {
 		}
 
 		if (installBrowser) {
-			const npmAvailable = await isNpmAvailable();
-			if (!npmAvailable) {
-				p.log.warning('npm not available, skipping browser installation');
-			} else {
-				const installSpinner = p.spinner();
-				installSpinner.start('Installing agent-browser...');
-				try {
-					const result = await installAgentBrowser();
-					if (result.code === 0) {
-						installSpinner.stop(chalk.green('agent-browser installed'));
-						browserInstalled = true;
-						browserEnabled = true;
-					} else {
-						installSpinner.stop(chalk.red('Installation failed'));
-					}
-				} catch {
+			const installSpinner = p.spinner();
+			installSpinner.start('Installing browser-use...');
+			try {
+				const result = await installBrowserUse();
+				if (result.code === 0) {
+					installSpinner.stop(chalk.green('browser-use installed'));
+					browserInstalled = true;
+					browserEnabled = true;
+				} else {
 					installSpinner.stop(chalk.red('Installation failed'));
 				}
+			} catch {
+				installSpinner.stop(chalk.red('Installation failed'));
 			}
 		}
 	}
@@ -468,7 +463,7 @@ async function runInteractiveConfig() {
 	});
 
 	if (p.isCancel(shouldStart) || !shouldStart) {
-		p.outro(chalk.dim("Run 'corebrain gateway on' to start"));
+		p.outro(chalk.dim("Run 'corebrain gateway start' to start"));
 		return { success: true, started: false };
 	}
 

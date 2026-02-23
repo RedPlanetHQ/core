@@ -1,0 +1,131 @@
+---
+title: "Browser"
+description: "Automate browsers with persistent sessions for authentication and automation"
+---
+
+## Overview
+
+The Browser capability lets CORE control browsers on your machine using [browser-use](https://browser-use.com/) under the hood. Each browser instance uses a **session** - a lightweight persistence layer that automatically saves and restores cookies and localStorage across browser restarts.
+
+Login once, and CORE can access authenticated pages without re-authenticating.
+
+For the full list of available browser commands, see the [browser-use documentation](https://browser-use.com/).
+
+---
+
+## Sessions
+
+Sessions are the core concept. Each session automatically persists:
+
+- Cookies
+- localStorage
+
+Use meaningful session names for different contexts:
+
+```bash
+# Open with a session name
+corebrain browser open https://github.com --session-name work
+corebrain browser open https://twitter.com --session-name personal
+
+# List active sessions
+corebrain browser list-sessions
+```
+
+Sessions are managed by browser-use's built-in session server, providing ~50ms command latency.
+
+---
+
+## Commands
+
+### Open a URL
+
+```bash
+# Open with default session
+corebrain browser open https://github.com
+
+# Open with specific session
+corebrain browser open https://github.com --session-name work
+```
+
+### Open CORE Dashboard
+
+Quick command to open the CORE dashboard with a session selector (headed mode):
+
+```bash
+corebrain browser open-head
+```
+
+This prompts you to select a session and opens `https://app.getcore.me` in headed mode.
+
+### Run Commands
+
+Execute browser automation commands on an open session:
+
+```bash
+corebrain browser command click "#login-button" --session-name work
+corebrain browser command fill "#email" "user@example.com" --session-name work
+corebrain browser command screenshot --session-name work
+```
+
+See [browser-use docs](https://browser-use.com/) for all available commands.
+
+### Close Browser
+
+```bash
+# Close a specific session
+corebrain browser close --session-name work
+
+# Close all sessions
+corebrain browser close --all
+```
+
+### Manage Sessions
+
+```bash
+# List all active sessions
+corebrain browser list-sessions
+
+# Delete a session (closes browser)
+corebrain browser delete-session <name>
+
+# View status
+corebrain browser status
+```
+
+---
+
+## Gateway Tools
+
+When the gateway is running, CORE can use these browser tools:
+
+| Tool | Description |
+|------|-------------|
+| `browser_open` | Open a URL with a session |
+| `browser_close` | Close a browser for a session |
+| `browser_command` | Run a browser command (click, fill, screenshot, etc.) |
+| `browser_list_sessions` | List all active sessions |
+| `browser_close_all` | Close all browser sessions at once |
+
+---
+
+## Use Cases
+
+**Authenticated scraping:** Open a session, login to LinkedIn manually once. Now CORE can research leads on LinkedIn anytime without re-authenticating.
+
+**Form automation:** CORE fills out repetitive forms - expense reports, time tracking, support tickets - using stored login sessions.
+
+**Visual testing:** CORE opens your staging site, navigates through flows, takes screenshots, and compares them to baselines.
+
+**Multi-account management:** Create separate sessions for different accounts (work, personal). CORE switches between them seamlessly.
+
+---
+
+## Prerequisites
+
+The browser capability requires `browser-use` to be installed:
+
+```bash
+corebrain browser install
+```
+
+This installs [browser-use](https://browser-use.com/) and validates the installation with `browser-use doctor`.

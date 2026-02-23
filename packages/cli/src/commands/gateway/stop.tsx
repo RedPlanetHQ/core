@@ -3,12 +3,14 @@ import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
+import { getPreferences, updatePreferences } from '@/config/preferences';
 import {
 	getServiceType,
 	getServiceName,
+	uninstallService,
 	isServiceInstalled,
-	getServiceStatus,
 	stopService,
+	getServiceStatus,
 } from '@/utils/service-manager/index';
 
 export const options = zod.object({});
@@ -17,11 +19,11 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-async function runGatewayOff(): Promise<void> {
+async function runGatewayStop(): Promise<void> {
 	const spinner = p.spinner();
 
-	// Check platform support
 	const serviceType = getServiceType();
+
 	if (serviceType === 'none') {
 		p.log.error('Service management not supported on this platform.');
 		return;
@@ -33,48 +35,54 @@ async function runGatewayOff(): Promise<void> {
 	const installed = await isServiceInstalled(serviceName);
 
 	if (!installed) {
-		spinner.stop(chalk.yellow('Gateway is not installed'));
-		p.log.warning('Run: corebrain gateway on');
-		return;
-	}
+		// Clean up preferences if needed
+		const prefs = getPreferences();
+		if (prefs.gateway?.serviceInstalled) {
+			const { gateway, ...rest } = prefs;
+			updatePreferences(rest);
+		}
 
-	// Check if running
-	const serviceStatus = await getServiceStatus(serviceName);
-
-	if (serviceStatus !== 'running') {
 		spinner.stop(chalk.yellow('Gateway is not running'));
 		return;
 	}
 
-	// Stop the service
-	spinner.message('Stopping gateway...');
-	await stopService(serviceName);
-	await new Promise((resolve) => setTimeout(resolve, 1000));
-
-	// Verify stopped
-	const postStopStatus = await getServiceStatus(serviceName);
-	if (postStopStatus === 'running') {
-		spinner.stop(chalk.red('Failed to stop'));
-		p.log.error('Stop command sent but service is still running');
-		return;
+	// Stop if running
+	const serviceStatus = await getServiceStatus(serviceName);
+	if (serviceStatus === 'running') {
+		spinner.message('Stopping gateway...');
+		try {
+			await stopService(serviceName);
+			await new Promise((resolve) => setTimeout(resolve, 1000));
+		} catch {
+			// Continue anyway
+		}
 	}
+
+	// Uninstall the service
+	spinner.message('Removing service...');
+	await uninstallService(serviceName);
+
+	// Clean up preferences
+	const prefs = getPreferences();
+	const { gateway, ...rest } = prefs;
+	updatePreferences(rest);
 
 	spinner.stop(chalk.green('Gateway stopped'));
 
 	p.note(
 		[
-			'Note: Will auto-start on next login.',
-			'To remove completely: corebrain gateway uninstall',
+			'The gateway has been stopped and removed.',
+			'To start again: corebrain gateway start',
 		].join('\n'),
 		'Gateway Stopped'
 	);
 }
 
-export default function GatewayOff(_props: Props) {
+export default function GatewayStop(_props: Props) {
 	const { exit } = useApp();
 
 	useEffect(() => {
-		runGatewayOff()
+		runGatewayStop()
 			.catch((err) => {
 				p.log.error(`Failed to stop gateway: ${err instanceof Error ? err.message : 'Unknown error'}`);
 			})

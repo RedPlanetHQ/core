@@ -3,42 +3,47 @@ import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isAgentBrowserInstalled, browserClose, getSession } from '@/utils/agent-browser';
+import { isBrowserUseInstalled, browserClose, browserCloseAll } from '@/utils/browser-use';
 
-export const args = zod.tuple([
-	zod.string().describe('Session name to close'),
-]);
-
-export const options = zod.object({});
+export const options = zod.object({
+	sessionName: zod.string().optional().describe('Session name to close'),
+	all: zod.boolean().optional().default(false).describe('Close all sessions'),
+});
 
 type Props = {
-	args: zod.infer<typeof args>;
 	options: zod.infer<typeof options>;
 };
 
-async function runBrowserClose(sessionName: string): Promise<void> {
+async function runBrowserClose(sessionName: string | undefined, closeAll: boolean): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking agent-browser...');
+	spinner.start('Checking browser-use...');
 
-	const installed = await isAgentBrowserInstalled();
+	const installed = await isBrowserUseInstalled();
 
 	if (!installed) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
+		p.log.error('browser-use is not installed. Run `corebrain browser install` first.');
 		return;
 	}
 
-	// Check if session exists
-	const session = getSession(sessionName);
-	if (!session) {
-		spinner.stop(chalk.yellow('Session not found'));
-		p.log.warning(`Session "${sessionName}" not found. Use \`corebrain browser status\` to see active sessions.`);
+	if (closeAll) {
+		spinner.message('Closing all browser sessions...');
+		const result = await browserCloseAll();
+
+		if (result.code !== 0) {
+			spinner.stop(chalk.red('Failed to close all browsers'));
+			p.log.error(result.stderr || 'Failed to close all browsers');
+			return;
+		}
+
+		spinner.stop(chalk.green('Closed all browser sessions'));
 		return;
 	}
 
-	spinner.message(`Closing session "${sessionName}"...`);
+	const session = sessionName || 'default';
+	spinner.message(`Closing browser for session "${session}"...`);
 
-	const result = await browserClose(sessionName);
+	const result = await browserClose(session);
 
 	if (result.code !== 0) {
 		spinner.stop(chalk.red('Failed to close browser'));
@@ -46,21 +51,21 @@ async function runBrowserClose(sessionName: string): Promise<void> {
 		return;
 	}
 
-	spinner.stop(chalk.green(`Closed session "${sessionName}"`));
+	spinner.stop(chalk.green(`Closed browser for session "${session}"`));
 }
 
-export default function BrowserClose({ args: [sessionName] }: Props) {
+export default function BrowserClose({ options }: Props) {
 	const { exit } = useApp();
 
 	useEffect(() => {
-		runBrowserClose(sessionName)
+		runBrowserClose(options.sessionName, options.all)
 			.catch((err) => {
 				p.log.error(`Failed to close browser: ${err instanceof Error ? err.message : 'Unknown error'}`);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [sessionName, exit]);
+	}, [options.sessionName, options.all, exit]);
 
 	return null;
 }

@@ -113,11 +113,13 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			},
 			offset: {
 				type: 'number',
-				description: 'Line offset to start reading from (0-indexed, default: 0)',
+				description:
+					'Line offset to start reading from (0-indexed, default: 0)',
 			},
 			tail: {
 				type: 'boolean',
-				description: 'If true, return the last N lines instead of first N (default: false)',
+				description:
+					'If true, return the last N lines instead of first N (default: false)',
 			},
 		},
 		required: ['sessionId'],
@@ -135,7 +137,8 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_start_session',
-		description: 'Start a new coding session with the specified agent (runs in background)',
+		description:
+			'Start a new coding session with the specified agent (runs in background)',
 		inputSchema: jsonSchemas.coding_start_session!,
 	},
 	{
@@ -150,7 +153,8 @@ export const codingTools: GatewayTool[] = [
 	},
 	{
 		name: 'coding_read_session',
-		description: 'Read current output from a coding session (works while running)',
+		description:
+			'Read current output from a coding session (works while running)',
 		inputSchema: jsonSchemas.coding_read_session!,
 	},
 	{
@@ -162,7 +166,9 @@ export const codingTools: GatewayTool[] = [
 
 // ============ Tool Handlers ============
 
-async function handleStartSession(params: zod.infer<typeof StartSessionSchema>) {
+async function handleStartSession(
+	params: zod.infer<typeof StartSessionSchema>,
+) {
 	// Check if directory exists
 	if (!existsSync(params.dir)) {
 		return {
@@ -212,7 +218,9 @@ async function handleStartSession(params: zod.infer<typeof StartSessionSchema>) 
 	};
 }
 
-async function handleResumeSession(params: zod.infer<typeof ResumeSessionSchema>) {
+async function handleResumeSession(
+	params: zod.infer<typeof ResumeSessionSchema>,
+) {
 	// Get existing session
 	const session = getSession(params.sessionId);
 	if (!session) {
@@ -312,16 +320,17 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	const running = isProcessRunning(params.sessionId);
 
 	// Read from agent's session file using the appropriate reader
-	const {output, totalLines, returnedLines, fileExists, error: readError} = readAgentSessionOutput(
-		session.agent,
-		session.dir,
-		params.sessionId,
-		{
-			lines: params.lines,
-			offset: params.offset,
-			tail: params.tail,
-		},
-	);
+	const {
+		output,
+		totalLines,
+		returnedLines,
+		fileExists,
+		error: readError,
+	} = readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
+		lines: params.lines,
+		offset: params.offset,
+		tail: params.tail,
+	});
 
 	// Determine status
 	let status = session.status;
@@ -361,7 +370,7 @@ function handleListSessions() {
 	return {
 		success: true,
 		result: {
-			sessions: sessions.map((s) => {
+			sessions: sessions.map(s => {
 				// Check if process is still running
 				const running = isProcessRunning(s.sessionId);
 				return {
