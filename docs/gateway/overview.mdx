@@ -1,0 +1,109 @@
+---
+title: "Gateway"
+description: "Run a local agent on your machine that connects CORE to your development environment"
+---
+
+## What is the Gateway?
+
+The Gateway is a local service that runs on your machine, connecting CORE to your development environment. It enables CORE to automate browsers, spawn coding agents, and execute shell commands - all triggered remotely from any channel like WhatsApp, the web dashboard, or another AI agent.
+
+Think of it as the bridge between CORE's cloud intelligence and your local machine's capabilities.
+
+---
+
+## Why Use It?
+
+<CardGroup cols={3}>
+  <Card title="Browser Automation" icon="browser">
+    Control headless or headed browsers with persistent profiles for authentication
+  </Card>
+
+  <Card title="Coding Agents" icon="code">
+    Spawn Claude Code or other coding agents on your machine from anywhere
+  </Card>
+
+  <Card title="Shell Commands" icon="terminal">
+    Execute commands on your machine with configurable allow/deny patterns
+  </Card>
+</CardGroup>
+
+---
+
+## How It Works
+
+<Steps>
+  <Step title="Install the CLI">
+    Install the CORE CLI on your machine:
+    ```bash
+    npm install -g @anthropic/corebrain
+    ```
+  </Step>
+
+  <Step title="Login">
+    Authenticate with your CORE account:
+    ```bash
+    corebrain login
+    ```
+  </Step>
+
+  <Step title="Configure Gateway">
+    Set up your gateway with a name:
+    ```bash
+    corebrain gateway config
+    ```
+  </Step>
+</Steps>
+
+---
+
+## Gateway Commands
+
+| Command | Description |
+|---------|-------------|
+| `corebrain gateway start` | Install and start the gateway service |
+| `corebrain gateway stop` | Stop and remove the gateway service |
+| `corebrain gateway restart` | Restart the gateway service |
+| `corebrain gateway status` | Check gateway status |
+| `corebrain gateway config` | Configure gateway settings |
+
+---
+
+## Capabilities
+
+The gateway exposes three main capabilities to CORE:
+
+<CardGroup cols={3}>
+  <Card title="Browser" icon="browser" href="/gateway/browser">
+    Automate browsers with persistent profiles
+  </Card>
+
+  <Card title="Coding" icon="code" href="/gateway/coding">
+    Spawn and manage coding agent sessions
+  </Card>
+
+  <Card title="Exec" icon="terminal" href="/gateway/exec">
+    Execute shell commands with security controls
+  </Card>
+</CardGroup>
+
+---
+
+## Use Cases
+
+**Remote development:** You're on your phone, a bug comes in. Message CORE on WhatsApp: "Fix the auth timeout issue in the API." CORE spins up Claude Code on your machine, pulls context from memory, and starts working.
+
+**Automated testing:** CORE opens a browser, logs into your staging environment, runs through a test flow, takes screenshots, and reports results - all from a scheduled reminder.
+
+**Daily workflows:** "Every morning at 9am, check my GitHub notifications and summarize what needs attention." CORE runs commands on your machine to gather the data.
+
+---
+
+## Security
+
+The gateway runs locally on your machine with configurable security controls:
+
+- **Browser profiles** are stored locally and persist authentication
+- **Exec commands** can be restricted with allow/deny patterns
+- **Coding agents** run in isolated sessions with full audit trails
+
+All communication between CORE and the gateway is authenticated and encrypted.

@@ -3,10 +3,9 @@ import {hostname} from 'node:os';
 import {browserTools, executeBrowserTool} from '@/server/tools/browser-tools';
 import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
 import {execTools, executeExecTool} from '@/server/tools/exec-tools';
-import {browserCloseAll} from '@/utils/agent-browser';
+import {browserCloseAll} from '@/utils/browser-use';
 import {getPreferences} from '@/config/preferences';
 import type {GatewayTool} from '@/server/tools/browser-tools';
-import type {GatewaySlots} from '@/types/config';
 
 // Slot-based tool organization
 interface ToolSlots {

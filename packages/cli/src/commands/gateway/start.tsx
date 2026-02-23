@@ -31,7 +31,7 @@ function getGatewayEntryPath(): string {
 	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
 }
 
-async function runGatewayOn(): Promise<void> {
+async function runGatewayStart(): Promise<void> {
 	const spinner = p.spinner();
 
 	// Check platform support
@@ -111,23 +111,23 @@ async function runGatewayOn(): Promise<void> {
 		},
 	});
 
-	spinner.stop(chalk.green('Gateway service started'));
+	spinner.stop(chalk.green('Gateway started'));
 
 	p.note(
 		[
 			'The gateway is now running in the background.',
 			"Use 'corebrain gateway status' to check status.",
-			"Use 'corebrain gateway off' to stop.",
+			"Use 'corebrain gateway stop' to stop and remove.",
 		].join('\n'),
 		'Gateway Started'
 	);
 }
 
-export default function GatewayOn(_props: Props) {
+export default function GatewayStart(_props: Props) {
 	const { exit } = useApp();
 
 	useEffect(() => {
-		runGatewayOn()
+		runGatewayStart()
 			.catch((err) => {
 				p.log.error(`Gateway error: ${err instanceof Error ? err.message : 'Unknown error'}`);
 				process.exitCode = 1;

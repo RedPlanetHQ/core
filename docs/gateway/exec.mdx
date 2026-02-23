@@ -1,0 +1,184 @@
+---
+title: "Exec"
+description: "Execute shell commands on your machine with security controls"
+---
+
+## Overview
+
+The Exec capability lets CORE run shell commands on your machine. This is powerful but requires careful configuration - you control exactly which commands are allowed through allow/deny patterns.
+
+---
+
+## Security Model
+
+Commands are validated against configurable patterns before execution:
+
+1. **Deny patterns** are checked first - if a command matches any deny pattern, it's blocked
+2. **Allow patterns** are checked next - if configured, commands must match at least one
+3. If no allow patterns are configured, all non-denied commands are allowed
+
+---
+
+## Configuration
+
+Configure exec patterns through the CLI:
+
+```bash
+corebrain exec config
+```
+
+Or set them in your gateway slots configuration.
+
+### Pattern Format
+
+Patterns use the format `Bash(<glob>)`:
+
+```
+Bash(git *)        # Allow all git commands
+Bash(npm run *)    # Allow npm run scripts
+Bash(ls *)         # Allow ls commands
+Bash(*)            # Allow everything (use with caution)
+```
+
+### Example Configuration
+
+```json
+{
+  "exec": {
+    "allow": [
+      "Bash(git *)",
+      "Bash(npm run *)",
+      "Bash(ls *)",
+      "Bash(cat *)"
+    ],
+    "deny": [
+      "Bash(rm -rf *)",
+      "Bash(sudo *)"
+    ],
+    "defaultDir": "/Users/me/projects"
+  }
+}
+```
+
+---
+
+## Gateway Tool
+
+### exec_command
+
+Execute a shell command:
+
+```json
+{
+  "command": "git status",
+  "dir": "/Users/me/projects/myapp",
+  "timeout": 30000
+}
+```
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `command` | Yes | The command to execute |
+| `dir` | No | Working directory (defaults to `~/.corebrain`) |
+| `timeout` | No | Timeout in milliseconds (default: 30000) |
+
+### Response
+
+```json
+{
+  "success": true,
+  "result": {
+    "command": "git status",
+    "dir": "/Users/me/projects/myapp",
+    "exitCode": 0,
+    "stdout": "On branch main\nnothing to commit, working tree clean",
+    "stderr": null
+  }
+}
+```
+
+---
+
+## Use Cases
+
+**Git operations:** CORE checks branch status, creates commits, pushes changes:
+
+```
+"Check if there are uncommitted changes in the API repo"
+```
+
+**Build and test:** Run build scripts and test suites:
+
+```
+"Run the test suite and tell me if anything fails"
+```
+
+**System checks:** Query system state:
+
+```
+"How much disk space is left on my machine?"
+```
+
+**File operations:** Read and process files:
+
+```
+"Show me the last 50 lines of the server log"
+```
+
+---
+
+## Recommended Patterns
+
+### Development Workflow
+
+```json
+{
+  "allow": [
+    "Bash(git *)",
+    "Bash(npm *)",
+    "Bash(pnpm *)",
+    "Bash(yarn *)",
+    "Bash(cargo *)",
+    "Bash(make *)"
+  ]
+}
+```
+
+### Read-Only Access
+
+```json
+{
+  "allow": [
+    "Bash(ls *)",
+    "Bash(cat *)",
+    "Bash(head *)",
+    "Bash(tail *)",
+    "Bash(grep *)",
+    "Bash(find *)"
+  ]
+}
+```
+
+### Always Deny
+
+```json
+{
+  "deny": [
+    "Bash(rm -rf *)",
+    "Bash(sudo *)",
+    "Bash(chmod 777 *)",
+    "Bash(curl * | bash)",
+    "Bash(wget * | bash)"
+  ]
+}
+```
+
+---
+
+## Notes
+
+- Commands run with your user permissions
+- Output is captured and returned (stdout and stderr)
+- Long-running commands should use the timeout parameter
+- Commands that require user input will hang - avoid interactive commands
+- Working directory defaults to `~/.corebrain` if not specified

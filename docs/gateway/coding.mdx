@@ -1,0 +1,192 @@
+---
+title: "Coding"
+description: "Spawn and manage coding agent sessions from anywhere"
+---
+
+## Overview
+
+The Coding capability lets CORE spawn coding agents like Claude Code on your machine. Start a coding session from WhatsApp, check its progress from the web dashboard, and let it work autonomously while you're away from your computer.
+
+Sessions run in the background and persist their output, so you can resume or read results anytime.
+
+---
+
+## Supported Agents
+
+Currently supported:
+
+- **Claude Code** - Anthropic's CLI coding agent
+
+More agents coming soon. The system is extensible to support any CLI-based coding agent.
+
+---
+
+## Commands
+
+### Start a Session
+
+```bash
+corebrain coding start
+```
+
+This prompts you for:
+- Agent to use (e.g., `claude-code`)
+- Working directory
+- Initial prompt
+
+Or provide everything directly:
+
+```bash
+corebrain coding start --agent claude-code --dir /path/to/project --prompt "Fix the auth bug"
+```
+
+### List Sessions
+
+```bash
+corebrain coding list
+```
+
+Shows all sessions with their status (running, completed, closed).
+
+### Read Session Output
+
+```bash
+corebrain coding read <sessionId>
+
+# Read last 50 lines
+corebrain coding read <sessionId> --lines 50 --tail
+```
+
+### Resume a Session
+
+```bash
+corebrain coding resume <sessionId>
+```
+
+Prompts for a new message to continue the session.
+
+### Close a Session
+
+```bash
+corebrain coding close <sessionId>
+```
+
+Stops a running session.
+
+---
+
+## Gateway Tools
+
+When the gateway is running, CORE can use these coding tools:
+
+### coding_start_session
+
+Start a new coding session:
+
+```json
+{
+  "agent": "claude-code",
+  "prompt": "Fix the authentication timeout issue",
+  "dir": "/Users/me/projects/myapp"
+}
+```
+
+Optional parameters:
+- `model` - Specific model to use
+- `systemPrompt` - Custom system prompt
+
+### coding_resume_session
+
+Resume an existing session:
+
+```json
+{
+  "sessionId": "abc-123",
+  "prompt": "Now add tests for the fix"
+}
+```
+
+### coding_read_session
+
+Read session output:
+
+```json
+{
+  "sessionId": "abc-123",
+  "lines": 100,
+  "tail": true
+}
+```
+
+### coding_close_session
+
+Close a session:
+
+```json
+{
+  "sessionId": "abc-123"
+}
+```
+
+### coding_list_sessions
+
+List all sessions (no parameters).
+
+---
+
+## Session Lifecycle
+
+<Steps>
+  <Step title="Start">
+    CORE starts a session with an agent, directory, and prompt. The session gets a unique ID.
+  </Step>
+
+  <Step title="Running">
+    The agent runs in the background. Output is streamed to a session file.
+  </Step>
+
+  <Step title="Monitor">
+    CORE (or you) can read the session output at any time while it's running.
+  </Step>
+
+  <Step title="Complete">
+    The agent finishes its task. Session status changes to "completed".
+  </Step>
+
+  <Step title="Resume or Close">
+    Resume with a new prompt to continue, or close to clean up.
+  </Step>
+</Steps>
+
+---
+
+## Configuration
+
+Configure agents before first use:
+
+```bash
+corebrain coding config --agent claude-code
+```
+
+This sets up the command path and any agent-specific options.
+
+---
+
+## Use Cases
+
+**Remote bug fixing:** You're at dinner, a P0 bug comes in. Message CORE: "Fix the payment processing error in checkout.ts". CORE spawns Claude Code, provides context from memory, and works on the fix.
+
+**Async code reviews:** "Review the changes in the auth PR and suggest improvements." CORE starts a session, analyzes the code, and sends you a summary when done.
+
+**Automated refactoring:** "Migrate all API routes from Express to Hono." CORE works through the codebase file by file, and you check in periodically to see progress.
+
+**Night shifts:** Set a reminder: "At 2am, run the database migration script and report any errors." CORE handles it while you sleep.
+
+---
+
+## Notes
+
+- Sessions are stored in `~/.corebrain/sessions.json`
+- Session output is read from the agent's native session files
+- Multiple sessions can run concurrently
+- Sessions persist across gateway restarts

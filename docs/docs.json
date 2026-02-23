@@ -218,6 +218,25 @@
         ]
       },
       {
+        "tab": "Gateway",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "gateway/overview"
+            ]
+          },
+          {
+            "group": "Capabilities",
+            "pages": [
+              "gateway/browser",
+              "gateway/coding",
+              "gateway/exec"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Open Source",
         "groups": [
           {

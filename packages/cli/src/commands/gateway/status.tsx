@@ -55,7 +55,7 @@ async function runGatewayStatus(): Promise<void> {
 	if (!installed) {
 		spinner.stop(chalk.yellow('Not installed'));
 		p.log.warning('Gateway not installed.');
-		p.log.info("Start with: corebrain gateway on");
+		p.log.info("Start with: corebrain gateway start");
 		return;
 	}
 
@@ -65,7 +65,7 @@ async function runGatewayStatus(): Promise<void> {
 	if (!running) {
 		spinner.stop(chalk.yellow('Stopped'));
 		p.log.warning('Gateway installed but stopped.');
-		p.log.info("Start with: corebrain gateway on");
+		p.log.info("Start with: corebrain gateway start");
 		return;
 	}
 

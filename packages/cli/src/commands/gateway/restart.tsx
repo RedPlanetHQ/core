@@ -35,7 +35,7 @@ async function runGatewayRestart(): Promise<void> {
 
 	if (!installed) {
 		spinner.stop(chalk.yellow('Not installed'));
-		p.log.warning('Gateway not installed. Run: corebrain gateway on');
+		p.log.warning('Gateway not installed. Run: corebrain gateway start');
 		return;
 	}
 

@@ -14,6 +14,28 @@ export const LAUNCHD_SERVICE_NAME = 'dev.corebrain.gateway';
 
 const LAUNCH_AGENTS_DIR = join(homedir(), 'Library', 'LaunchAgents');
 
+/**
+ * Get the full PATH from the user's login shell.
+ * This ensures we capture paths added in .bashrc, .zshrc, etc.
+ */
+function getLoginShellPath(): string {
+	const shell = process.env.SHELL || '/bin/zsh';
+	try {
+		// Spawn a login shell to get the full PATH
+		const result = execSync(`${shell} -l -c 'echo $PATH'`, {
+			encoding: 'utf-8',
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
+		const loginPath = result.trim();
+		if (loginPath) {
+			return loginPath;
+		}
+	} catch {
+		// Fall through to process.env.PATH
+	}
+	return process.env.PATH || '/usr/bin:/bin:/usr/sbin:/sbin';
+}
+
 function getPlistPath(name: string): string {
 	return join(LAUNCH_AGENTS_DIR, `${name}.plist`);
 }
@@ -35,7 +57,8 @@ function generatePlist(config: ServiceConfig): string {
 		.map(arg => `		<string>${escapeXml(arg)}</string>`)
 		.join('\n');
 
-	const userPath = process.env.PATH;
+	// Get PATH from login shell to include paths from .bashrc/.zshrc
+	const userPath = getLoginShellPath();
 
 	return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
