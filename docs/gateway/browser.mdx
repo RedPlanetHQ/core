@@ -129,3 +129,24 @@ corebrain browser install
 ```
 
 This installs [browser-use](https://browser-use.com/) and validates the installation with `browser-use doctor`.
+
+### Recommended Browser
+
+We recommend installing [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, so it works seamlessly with browser-use, and includes built-in ad blocking and privacy features that make automation cleaner and faster.
+
+```bash
+# macOS
+brew install --cask brave-browser
+
+# Linux (Debian/Ubuntu)
+sudo apt install brave-browser
+
+# Windows
+winget install Brave.Brave
+```
+
+After installing, configure browser-use to use Brave:
+
+```bash
+browser-use config set browser brave
+```
