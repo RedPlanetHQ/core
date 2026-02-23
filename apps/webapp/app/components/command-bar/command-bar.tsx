@@ -7,6 +7,7 @@ import {
   CommandItem,
   CommandList,
   CommandEmpty,
+  Command,
 } from "../ui/command";
 
 import { useNavigate } from "@remix-run/react";
@@ -74,72 +75,84 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   };
 
   return (
-    <CommandDialog
-      open={open}
-      onOpenChange={onOpenChange}
-      commandProps={{ shouldFilter: false }}
-    >
-      <CommandInput
-        placeholder="Search documents..."
-        className="py-1"
-        value={searchQuery}
-        onValueChange={setSearchQuery}
-      />
-      <CommandList className="h-72">
-        <CommandEmpty className="text-muted-foreground p-4 text-center text-sm">
-          {debouncedQuery.length >= 2 && !isSearching && documentResults.length === 0
-            ? "No documents found."
-            : ""}
-        </CommandEmpty>
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
+      <Command shouldFilter={false}>
+        <CommandInput
+          placeholder="Search documents..."
+          className="py-1"
+          value={searchQuery}
+          onValueChange={setSearchQuery}
+        />
+        <CommandList className="h-72">
+          <CommandEmpty className="text-muted-foreground p-4 text-center text-sm">
+            {debouncedQuery.length >= 2 &&
+            !isSearching &&
+            documentResults.length === 0
+              ? "No documents found."
+              : ""}
+          </CommandEmpty>
 
-        <CommandGroup className="p-2">
-          <CommandItem
-            onSelect={handleAddDocument}
-            className="flex items-center gap-2 py-1"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            <span>Add Document</span>
-          </CommandItem>
-        </CommandGroup>
+          <CommandGroup className="p-2">
+            <CommandItem
+              onSelect={handleAddDocument}
+              className="flex items-center gap-2 py-1"
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              <span>Add Document</span>
+            </CommandItem>
+          </CommandGroup>
 
-        {/* Documents */}
-        <CommandGroup heading="Documents" className="max-w-[700px] p-2">
-          {isSearching && (
-            <div className="flex items-center justify-center py-4">
-              <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
-            </div>
-          )}
+          {/* Documents */}
+          <CommandGroup heading="Documents" className="max-w-[700px] p-2">
+            {isSearching && (
+              <div className="flex items-center justify-center py-4">
+                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+              </div>
+            )}
 
-          {!isSearching &&
-            documentResults.map((doc) => (
-              <CommandItem
-                key={doc.id}
-                value={doc.id}
-                onSelect={() => handleDocumentClick(doc.id)}
-                className="flex items-center gap-2 py-2"
-                disabled={false}
-              >
-                <File className="h-4 w-4 flex-shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm text-foreground">{doc.title}</p>
-                  <p className="text-muted-foreground text-xs">
-                    {new Date(doc.updatedAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </p>
+            {!isSearching &&
+              documentResults.map((doc) => (
+                <CommandItem
+                  key={doc.id}
+                  value={doc.id}
+                  onSelect={() => handleDocumentClick(doc.id)}
+                  className="flex items-center gap-2 py-2"
+                  onClick={() => {
+                    console.log("clickeddddd");
+                  }}
+                  disabled={false}
+                >
+                  <File className="h-4 w-4 flex-shrink-0" />
+                  <div
+                    className="min-w-0 flex-1"
+                    onClick={() => {
+                      console.log("asdfasdfasd2e423423");
+                    }}
+                  >
+                    <p className="text-foreground truncate text-sm">
+                      {doc.title}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {new Date(doc.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </CommandItem>
+              ))}
+
+            {!isSearching &&
+              documentResults.length === 0 &&
+              debouncedQuery.length < 2 && (
+                <div className="text-muted-foreground py-4 text-center text-sm">
+                  Start typing to search
                 </div>
-              </CommandItem>
-            ))}
-
-          {!isSearching && documentResults.length === 0 && debouncedQuery.length < 2 && (
-            <div className="text-muted-foreground py-4 text-center text-sm">
-              Start typing to search
-            </div>
-          )}
-        </CommandGroup>
-      </CommandList>
+              )}
+          </CommandGroup>
+        </CommandList>
+      </Command>
     </CommandDialog>
   );
 }

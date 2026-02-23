@@ -52,7 +52,9 @@ const CreatePostSchema = z.object({
 
 const UpdatePostSchema = z.object({
   post_id: z.string().describe('The ID of the post to update'),
-  updated_at: z.string().describe('Current updated_at timestamp of the post (required by Ghost API)'),
+  updated_at: z
+    .string()
+    .describe('Current updated_at timestamp of the post (required by Ghost API)'),
   title: z.string().optional().describe('New post title'),
   html: z.string().optional().describe('New post body HTML content'),
   status: z.enum(['published', 'draft', 'scheduled']).optional().describe('New post status'),
@@ -81,17 +83,15 @@ const ListPagesSchema = z.object({
 const CreatePageSchema = z.object({
   title: z.string().describe('Page title'),
   html: z.string().optional().describe('Page body HTML content'),
-  status: z
-    .enum(['published', 'draft'])
-    .optional()
-    .default('draft')
-    .describe('Page status'),
+  status: z.enum(['published', 'draft']).optional().default('draft').describe('Page status'),
   custom_excerpt: z.string().optional().describe('Short excerpt for the page'),
 });
 
 const UpdatePageSchema = z.object({
   page_id: z.string().describe('The ID of the page to update'),
-  updated_at: z.string().describe('Current updated_at timestamp of the page (required by Ghost API)'),
+  updated_at: z
+    .string()
+    .describe('Current updated_at timestamp of the page (required by Ghost API)'),
   title: z.string().optional().describe('New page title'),
   html: z.string().optional().describe('New page body HTML content'),
   status: z.enum(['published', 'draft']).optional().describe('New page status'),
@@ -202,7 +202,7 @@ export async function getTools() {
 export async function callTool(
   name: string,
   args: Record<string, any>,
-  config: Record<string, string>,
+  config: Record<string, string>
 ) {
   initializeClient(config);
 
@@ -225,7 +225,7 @@ export async function callTool(
         const list = posts
           .map(
             (p: any) =>
-              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nPublished: ${p.published_at || 'N/A'}\nURL: ${p.url}`,
+              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nPublished: ${p.published_at || 'N/A'}\nURL: ${p.url}`
           )
           .join('\n\n');
 
@@ -258,7 +258,10 @@ export async function callTool(
         const { title, html, status, tags, featured, custom_excerpt } =
           CreatePostSchema.parse(args);
         const postData: Record<string, any> = { title, status };
-        if (html) postData.html = html;
+        if (html) {
+          postData.html = html;
+          postData.source = 'html';
+        }
         if (tags) postData.tags = tags;
         if (featured !== undefined) postData.featured = featured;
         if (custom_excerpt) postData.custom_excerpt = custom_excerpt;
@@ -278,8 +281,12 @@ export async function callTool(
 
       case 'ghost_update_post': {
         const { post_id, updated_at, ...updates } = UpdatePostSchema.parse(args);
+        const postData: Record<string, any> = { ...updates, updated_at };
+        if (updates.html) {
+          postData.source = 'html';
+        }
         const response = await ghostClient.put(`/posts/${post_id}/`, {
-          posts: [{ ...updates, updated_at }],
+          posts: [postData],
         });
         const p = response.data.posts[0];
 
@@ -317,7 +324,7 @@ export async function callTool(
         const list = pages
           .map(
             (p: any) =>
-              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nURL: ${p.url}`,
+              `ID: ${p.id}\nTitle: ${p.title}\nStatus: ${p.status}\nSlug: ${p.slug}\nURL: ${p.url}`
           )
           .join('\n\n');
 
@@ -327,7 +334,10 @@ export async function callTool(
       case 'ghost_create_page': {
         const { title, html, status, custom_excerpt } = CreatePageSchema.parse(args);
         const pageData: Record<string, any> = { title, status };
-        if (html) pageData.html = html;
+        if (html) {
+          pageData.html = html;
+          pageData.source = 'html';
+        }
         if (custom_excerpt) pageData.custom_excerpt = custom_excerpt;
 
         const response = await ghostClient.post('/pages/', { pages: [pageData] });
@@ -345,8 +355,12 @@ export async function callTool(
 
       case 'ghost_update_page': {
         const { page_id, updated_at, ...updates } = UpdatePageSchema.parse(args);
+        const pageData: Record<string, any> = { ...updates, updated_at };
+        if (updates.html) {
+          pageData.source = 'html';
+        }
         const response = await ghostClient.put(`/pages/${page_id}/`, {
-          pages: [{ ...updates, updated_at }],
+          pages: [pageData],
         });
         const p = response.data.pages[0];
 
@@ -370,7 +384,10 @@ export async function callTool(
         }
 
         const list = tags
-          .map((t: any) => `ID: ${t.id}\nName: ${t.name}\nSlug: ${t.slug}\nPosts: ${t.count?.posts ?? 'N/A'}`)
+          .map(
+            (t: any) =>
+              `ID: ${t.id}\nName: ${t.name}\nSlug: ${t.slug}\nPosts: ${t.count?.posts ?? 'N/A'}`
+          )
           .join('\n\n');
 
         return { content: [{ type: 'text', text: `Found ${tags.length} tags:\n\n${list}` }] };
@@ -409,7 +426,7 @@ export async function callTool(
         const list = members
           .map(
             (m: any) =>
-              `Name: ${m.name || 'N/A'}\nEmail: ${m.email}\nStatus: ${m.status}\nCreated: ${m.created_at}`,
+              `Name: ${m.name || 'N/A'}\nEmail: ${m.email}\nStatus: ${m.status}\nCreated: ${m.created_at}`
           )
           .join('\n\n');
 
