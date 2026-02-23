@@ -83,29 +83,27 @@ export const extractCombined = (
    - Don't duplicate facts for meeting participants - "A <> B meeting" = ONE fact with user as subject
    - One fact per attribute change - extract NEW values as entity attributes, not statements
 
-4. TOPIC ANCHORS FOR TRACEABILITY
-   Create topic entities (meetings, plans, projects, evaluations) to group related information.
-   This enables queries like "who was in X meeting?" or "what does Y plan target?"
+4. TOPIC ANCHORS AND DECOMPOSITION
+   Create topic entities to group related information AND decompose them into sub-components.
 
-   Pattern: User → relates_to → Topic, then Topic → has_details → Entities
+   Two levels of extraction:
+   a) GROUPING: User → relates_to → Topic (links user to a topic)
+   b) DECOMPOSITION: Topic → has_part → Sub-component → has_detail → specifics
 
-   Example - Meeting:
-   • User → scheduled → Core Onboarding Meeting
-   • Core Onboarding Meeting → has participant → Sarah
-   Query: "Who was in core onboarding?" → finds Sarah via the meeting anchor
+   When a topic has named parts (steps, stages, components, modules, layers), create a SEPARATE ENTITY for each part and attach its details to that entity — NOT to the parent.
 
-   Example - Plan:
-   • User → leads → Migration Plan
-   • Migration Plan → targets → zero downtime
-   • Migration Plan → uses → PostgreSQL 16
-   Query: "What database for migration?" → finds PostgreSQL via the plan anchor
+   Pattern: User → relates_to → Topic, then Topic → has_part → Part, then Part → details
 
-   Without topic anchors, you can't trace "who/what belongs to this topic"
+   Without decomposition, queries about individual parts (e.g., "how does step 3 work?") will miss because everything is flattened under the parent topic.
 
 5. SPECIFICITY TEST
-   "Is this specific to THIS user or would it apply to anyone?"
+   "Is this specific to THIS user's world or is it generic knowledge?"
    - ✅ "Manoj has 31% body fat" (specific to Manoj)
-   - ❌ "Protein preserves muscle during deficit" (applies to everyone)
+   - ✅ "Search v2 uses Cohere rerank-v3.5" (specific to user's system)
+   - ✅ "The router classifies queries into 5 types" (specific to user's project architecture)
+   - ❌ "Protein preserves muscle during deficit" (generic knowledge, applies to everyone)
+   - ❌ "Cohere is a reranking service" (generic knowledge about a product)
+   Facts about the user's own projects, systems, and architecture ARE user-specific — they describe how THIS user's things work.
 </core_principles>
 
 <extraction_logic>
@@ -123,13 +121,16 @@ Before extracting explicit statements, scan the episode for facts that are IMPLI
 
 Extract these implicit facts AS WELL AS the explicit ones.
 
-STEP 2: EXTRACT EXPLICIT FACTS
+STEP 2: IDENTIFY COMPONENTS
+Before extracting individual facts, scan for any system, process, or topic that has named parts (steps, stages, components, modes, layers). Create a separate entity for each meaningful named part. Then attach facts to the sub-component entity, not the parent. Skip structural-only facts that carry no searchable content — extract what things DO, not that they exist.
+
+STEP 3: EXTRACT EXPLICIT FACTS
 For each piece of information, ask these 4 questions:
 
 1. WHO SAID this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Consider skipping.
-2. WHO/WHAT is this about? → That's your SUBJECT
+2. WHO/WHAT is this about? → That's your SUBJECT — if this fact is about a sub-component, use the sub-component as subject, not the parent.
 3. WHAT is being said about it? → That's your PREDICATE + OBJECT
-4. Is this USER-SPECIFIC? → If no, SKIP
+4. Is this USER-SPECIFIC? → Apply the specificity test from core principles. If no, SKIP.
 </extraction_logic>
 
 <subject_selection>
@@ -158,6 +159,8 @@ ALWAYS CREATE TOPIC ANCHORS when user discusses:
 • A feature being built → "Search Pipeline", "Auth Flow"
 • A system with components → "API Gateway", "Notification System"
 • An evaluation/analysis → "Reranker Evaluation", "Performance Audit"
+
+When a topic has named sub-parts (steps, stages, components), create entities for EACH sub-part and make them subjects of their own facts. Don't flatten everything under the parent.
 
 EXAMPLE - Project migration discussion should extract ALL THREE LEVELS:
 
@@ -536,8 +539,7 @@ SKIP these - they add no value:
 
 • Textbook facts: "Compound movements build muscle", "Protein preserves lean mass"
 • Generic relationships: "Strength Training uses Progressive Overload", "Recovery uses Sleep"
-• Unconfirmed assistant recommendations: If normalized text says "the assistant suggested/offered/provided X" and user did NOT confirm → SKIP
-• Assistant analysis/reasoning: "The assistant explained why X works" → SKIP (not a user fact)
+• Unconfirmed assistant suggestions/recommendations: If the assistant suggested or recommended something and the user did NOT confirm → SKIP. But factual information (true facts about systems, people, events, processes, etc.) should always be extracted as topic-level facts regardless of who stated them.
 • Session process: "sent invite", "created", "updated" - extract the RESULT (scheduled meeting, new value), not the action
 • Boilerplate: standard auth requirements, error handling, HTTP status codes, CSS classes, UI text strings
 • Redundant facts: same info for multiple participants - "A <> B meeting" = ONE fact with user as subject, NOT facts for both A and B
@@ -554,15 +556,16 @@ DETECTION PATTERNS:
 - "[UserName] asked/wants/prefers/decided/instructed X" → User's content
 
 RULES:
-1. Assistant suggestions NOT confirmed by user → SKIP (don't extract as user fact)
-2. Assistant-provided information → Extract as topic-level facts with null aspect, NOT as user Goals/Decisions/Beliefs
+1. Assistant suggestions/recommendations NOT confirmed by user → SKIP (don't extract as user fact)
+2. Factual information → ALWAYS extract as topic-level facts with null aspect, regardless of whether user or assistant stated them. Facts are true independent of the speaker.
 3. User confirmed assistant suggestion → Extract as user Decision
 4. "The assistant offered X; user did not confirm" → SKIP entirely
 
 EXAMPLES:
-- "The assistant suggested leading with cross-tool portability" → SKIP (not a user Goal)
-- "The assistant provided search results showing context anxiety" → Extract as topic fact (null aspect), NOT "User believes context anxiety is #1 issue"
-- "User decided to use PostgreSQL after assistant recommendation" → Decision (user confirmed)
+- "The assistant recommended switching to MongoDB for better scalability" → SKIP (suggestion, not confirmed)
+- "The assistant described that the API gateway handles rate limiting at 1000 req/s and uses Redis for caching" → Extract as topic facts (factual system description)
+- "The assistant provided market data showing 40% growth in Q3" → Extract as topic fact (null aspect), NOT "User believes market grew 40%"
+- "User decided to use PostgreSQL after evaluating alternatives" → Decision (user confirmed)
 </speaker_attribution>
 
 <negative_patterns>
@@ -709,6 +712,8 @@ Key points:
 • Subject is CORE (project owns its tech stack)
 • NOT "Manoj uses TypeScript for CORE" (verbose)
 • Decision aspect only for explicit choice
+
+
 </examples>`;
 
   const userIdentitySection = context.userName
