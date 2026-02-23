@@ -24,6 +24,7 @@ import {
 import { buildDecisionAgentPrompt } from "./prompts";
 import { logger } from "../logger.service";
 import { createTools } from "./core-agent";
+import { prisma } from "~/db.server";
 
 /**
  * Default action plan when Decision Agent fails or produces invalid output
@@ -158,6 +159,17 @@ export async function runDecisionAgent(
       timeStyle: "short",
     });
 
+    // Fetch skills for the workspace
+    const skills = await prisma.document.findMany({
+      where: {
+        workspaceId: context.user.workspaceId as string,
+        type: "skill",
+        deleted: null,
+      },
+      select: { id: true, title: true, metadata: true },
+      orderBy: { createdAt: "desc" },
+    });
+
     // Build prompt with trigger and context as JSON
     const triggerJson = JSON.stringify(trigger, null, 2);
     const contextJson = JSON.stringify(
@@ -177,6 +189,7 @@ export async function runDecisionAgent(
       currentTime,
       timezone,
       userPersona,
+      skills,
     );
 
     logger.info("Running Decision Agent", {
