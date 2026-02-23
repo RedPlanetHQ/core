@@ -8,6 +8,28 @@ export const SYSTEMD_SERVICE_NAME = 'corebrain-gateway';
 
 const SYSTEMD_USER_DIR = join(homedir(), '.config', 'systemd', 'user');
 
+/**
+ * Get the full PATH from the user's login shell.
+ * This ensures we capture paths added in .bashrc, .zshrc, etc.
+ */
+function getLoginShellPath(): string {
+	const shell = process.env.SHELL || '/bin/bash';
+	try {
+		// Spawn a login shell to get the full PATH
+		const result = execSync(`${shell} -l -c 'echo $PATH'`, {
+			encoding: 'utf-8',
+			stdio: ['pipe', 'pipe', 'pipe'],
+		});
+		const loginPath = result.trim();
+		if (loginPath) {
+			return loginPath;
+		}
+	} catch {
+		// Fall through to process.env.PATH
+	}
+	return process.env.PATH || '/usr/local/bin:/usr/bin:/bin';
+}
+
 function getServiceFilePath(name: string): string {
 	return join(SYSTEMD_USER_DIR, `${name}.service`);
 }
@@ -39,7 +61,7 @@ Restart=on-failure
 RestartSec=5
 StandardOutput=append:${logPath}
 StandardError=append:${errorLogPath}
-Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=PATH=${getLoginShellPath()}
 
 [Install]
 WantedBy=default.target
