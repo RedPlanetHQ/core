@@ -122,15 +122,15 @@ export function LogDetails({ document, labels }: LogDetailsProps) {
 
   return (
     <div className="episode-details flex h-full w-full flex-col items-center overflow-auto">
-      <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
+      <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
         <div>
           <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 text-xl font-medium outline-none focus-visible:ring-0"
+            className="no-scrollbar text-xl! mt-5 resize-none overflow-hidden border-0 bg-transparent px-6 py-0 font-medium outline-none focus-visible:ring-0"
           />
         </div>
-        <div className="bg-grayAlpha-100 mt-3 mb-3 flex w-full items-center rounded-xl px-3">
+        <div className="bg-grayAlpha-100 mb-3 mt-3 flex w-full items-center rounded-xl px-3">
           <div className="flex flex-1 items-center gap-1 px-2 py-1.5">
             <PropertyItem
               label="Source"
@@ -169,18 +169,20 @@ export function LogDetails({ document, labels }: LogDetailsProps) {
         </div>
 
         {/* Error Details */}
-        {document.status && document.status !== "COMPLETED" && document.error && (
-          <div className="mb-6 px-4">
-            <div className="bg-destructive/10 rounded-md p-3">
-              <div className="flex items-start gap-2 text-red-600">
-                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
-                <p className="text-sm break-words whitespace-pre-wrap">
-                  {document.error}
-                </p>
+        {document.status &&
+          document.status !== "COMPLETED" &&
+          document.error && (
+            <div className="mb-6 px-4">
+              <div className="bg-destructive/10 rounded-md p-3">
+                <div className="flex items-start gap-2 text-red-600">
+                  <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <p className="whitespace-pre-wrap break-words text-sm">
+                    {document.error}
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
         <ClientOnly
           fallback={
