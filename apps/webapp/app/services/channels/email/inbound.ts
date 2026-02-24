@@ -50,7 +50,7 @@ export async function parseInbound(
   }
 
   // Only process emails addressed to brain@getcore.me
-  if (!to || !to.includes("brain-test@getcore.me")) {
+  if (env.FROM_EMAIL && (!to || !to.includes(env.FROM_EMAIL))) {
     return null;
   }
 
