@@ -10,6 +10,7 @@ export const CreateConversationSchema = z.object({
   message: z.string(),
   title: z.string().optional(),
   conversationId: z.string().optional(),
+  source: z.string().optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
   parts: z
     .array(
@@ -36,6 +37,7 @@ export async function createConversation(
     const conversationHistory = await prisma.conversationHistory.create({
       data: {
         ...otherData,
+        source: otherData.source || "core",
         userType: otherData.userType || UserTypeEnum.User,
         ...(userId && {
           user: {
@@ -303,7 +305,9 @@ export async function getConversationsList(
  * Per WhatsApp Business API guidelines, businesses can only send
  * proactive messages within this 24-hour window.
  */
-export async function isWithinWhatsApp24hWindow(workspaceId: string): Promise<boolean> {
+export async function isWithinWhatsApp24hWindow(
+  workspaceId: string,
+): Promise<boolean> {
   try {
     const cutoffTime = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
@@ -321,14 +325,17 @@ export async function isWithinWhatsApp24hWindow(workspaceId: string): Promise<bo
     });
 
     const isWithin = recentUserMessage !== null;
-    logger.info(`WhatsApp 24h window check for workspace ${workspaceId}: ${isWithin}`, {
-      lastUserMessage: recentUserMessage?.createdAt,
-      cutoffTime,
-    });
+    logger.info(
+      `WhatsApp 24h window check for workspace ${workspaceId}: ${isWithin}`,
+      {
+        lastUserMessage: recentUserMessage?.createdAt,
+        cutoffTime,
+      },
+    );
 
     return isWithin;
   } catch (error) {
-    logger.error("Failed to check WhatsApp 24h window", {error});
+    logger.error("Failed to check WhatsApp 24h window", { error });
     // Default to false (don't send) if we can't check
     return false;
   }
