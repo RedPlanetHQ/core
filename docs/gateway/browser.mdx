@@ -130,6 +130,32 @@ corebrain browser install
 
 This installs [browser-use](https://browser-use.com/) and validates the installation with `browser-use doctor`.
 
+### Verify Before Starting Gateway
+
+**Important:** Before starting the gateway, verify that `browser-use` is accessible in your terminal:
+
+```bash
+# Check browser-use is in PATH
+browser-use --version
+
+# Run diagnostics
+browser-use doctor
+```
+
+If `browser-use` is not found, you may need to:
+
+1. **Reload your shell** to pick up PATH changes:
+   ```bash
+   source ~/.bashrc   # or ~/.zshrc for zsh
+   ```
+
+2. **Restart the gateway** after reloading:
+   ```bash
+   corebrain gateway stop && corebrain gateway start
+   ```
+
+The gateway captures your PATH at startup. If `browser-use` is installed after the gateway starts, the gateway won't have access to it until restarted.
+
 ### Recommended Browser
 
 We recommend installing [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, so it works seamlessly with browser-use, and includes built-in ad blocking and privacy features that make automation cleaner and faster.

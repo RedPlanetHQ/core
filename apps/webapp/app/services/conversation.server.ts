@@ -71,7 +71,11 @@ export async function createConversation(
         title?.substring(0, 100) ?? conversationData.message.substring(0, 100),
       ConversationHistory: {
         create: {
-          userId,
+          ...(userId && {
+            user: {
+              connect: { id: userId },
+            },
+          }),
           userType: otherData.userType || UserTypeEnum.User,
           ...otherData,
         },
