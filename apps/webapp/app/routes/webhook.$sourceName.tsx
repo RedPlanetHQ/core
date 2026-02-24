@@ -7,6 +7,8 @@ import { z } from "zod";
 import { webhookService } from "~/services/webhook.server";
 import { logger } from "~/services/logger.service";
 import { isTriggerDeployment } from "~/lib/queue-adapter.server";
+import { isSlackDMOrMention, parseSlackDMEvent } from "~/services/channels/slack/inbound";
+import { handleChannelMessage } from "~/services/channels";
 
 const ParamsSchema = z.object({
   sourceName: z.string(),
@@ -45,6 +47,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
     if (eventBody.type === "url_verification") {
       logger.log("Responding to Slack URL verification challenge");
       return json({ challenge: eventBody.challenge });
+    }
+
+    // Slack DM or @mention → route to channel handler
+    if (sourceName === "slack" && isSlackDMOrMention(eventBody)) {
+      const msg = await parseSlackDMEvent(eventBody);
+      if (msg) {
+        // Fire and forget — respond to Slack immediately
+        void handleChannelMessage("slack", msg);
+        return json({ status: "acknowledged" }, { status: 200 });
+      }
     }
 
     webhookService.handleEvents(

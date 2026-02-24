@@ -5,6 +5,7 @@ export async function integrationCreate(
   const { oauthResponse } = data;
   const integrationConfiguration = {
     access_token: oauthResponse.authed_user.access_token,
+    bot_token: oauthResponse.access_token,
     teamId: oauthResponse.team.id,
     teamName: oauthResponse.team.name,
     userId: oauthResponse.authed_user.id,

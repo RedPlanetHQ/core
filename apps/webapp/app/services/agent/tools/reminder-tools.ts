@@ -17,6 +17,7 @@ import {
   getReminderById,
   recalculateRemindersForTimezone,
 } from "~/services/reminder.server";
+import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 
@@ -93,7 +94,7 @@ function formatScheduleForUser(schedule: string, timezone: string): string {
  */
 export function getReminderTools(
   workspaceId: string,
-  channel: "whatsapp" | "slack" | "email" = "whatsapp",
+  channel: MessageChannel = "whatsapp",
   timezone: string = "UTC",
 ): Record<string, Tool> {
   return {

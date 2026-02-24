@@ -7,6 +7,7 @@
 
 import { env } from "~/env.server";
 import { logger } from "./logger.service";
+import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "../db.server";
 import { enqueueReminder } from "~/lib/queue-adapter.server";
 
@@ -63,7 +64,7 @@ export async function initializeReminderScheduler() {
             {
               reminderId: reminder.id,
               workspaceId: reminder.workspaceId,
-              channel: reminder.channel as "whatsapp" | "email",
+              channel: reminder.channel as MessageChannel,
             },
             now,
           );
@@ -72,7 +73,7 @@ export async function initializeReminderScheduler() {
             {
               reminderId: reminder.id,
               workspaceId: reminder.workspaceId,
-              channel: reminder.channel as "whatsapp" | "email",
+              channel: reminder.channel as MessageChannel,
             },
             reminder.nextRunAt,
           );

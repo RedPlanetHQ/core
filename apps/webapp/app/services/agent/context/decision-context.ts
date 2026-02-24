@@ -14,6 +14,7 @@ import {
   ReminderSummary,
   UserState,
 } from "../types/decision-agent";
+import type { MessageChannel } from "~/services/agent/types";
 import { logger } from "~/services/logger.service";
 
 /**
@@ -97,7 +98,7 @@ async function getUserState(
  */
 async function getTodayState(
   workspaceId: string,
-  channel: "whatsapp" | "email",
+  channel: MessageChannel,
 ): Promise<TodayState> {
   try {
     const startOfDay = getStartOfDay();
@@ -175,7 +176,7 @@ export function createReminderTriggerFromDb(reminder: {
     timestamp: new Date(),
     workspaceId: reminder.workspaceId,
     userId: reminder.userId,
-    channel: reminder.channel as "whatsapp" | "email",
+    channel: reminder.channel as MessageChannel,
     data: {
       reminderId: reminder.id,
       action: reminder.text,
@@ -205,7 +206,7 @@ export function createFollowUpTrigger(reminder: {
     timestamp: new Date(),
     userId: reminder.userId,
     workspaceId: reminder.workspaceId,
-    channel: reminder.channel as "whatsapp" | "email",
+    channel: reminder.channel as MessageChannel,
     data: {
       reminderId: reminder.id,
       action: reminder.text,
@@ -252,7 +253,7 @@ function getStartOfDay(): Date {
  */
 export async function hasUserRespondedRecently(
   userId: string,
-  channel: "whatsapp" | "email",
+  channel: MessageChannel,
   minutesAgo: number = 30,
 ): Promise<boolean> {
   try {
