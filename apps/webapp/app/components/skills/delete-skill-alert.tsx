@@ -23,7 +23,7 @@ export const DeleteSkillAlert = ({
   return (
     <AlertDialog>
       <AlertDialogTrigger asChild>
-        <Button variant="destructive" size="xl" disabled={isLoading}>
+        <Button variant="destructive" size="lg" disabled={isLoading}>
           Delete
         </Button>
       </AlertDialogTrigger>

@@ -50,7 +50,7 @@ export const loader = createHybridLoaderApiRoute(
 );
 
 // PATCH/DELETE - Update or delete a skill
-export const action = createHybridActionApiRoute(
+export const { action } = createHybridActionApiRoute(
   {
     allowJWT: true,
     params: SkillParamsSchema,
@@ -95,7 +95,7 @@ export const action = createHybridActionApiRoute(
           ...(validatedData.content && { content: validatedData.content }),
           ...(validatedData.metadata && {
             metadata: {
-              ...(existingSkill.metadata as Record<string, unknown> ?? {}),
+              ...((existingSkill.metadata as Record<string, unknown>) ?? {}),
               ...validatedData.metadata,
             },
           }),

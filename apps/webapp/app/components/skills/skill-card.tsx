@@ -23,15 +23,22 @@ export function SkillCard({ skill }: SkillCardProps) {
   const PREVIEW_WORD_LIMIT = 30;
   const words = skill.content.split(/\s+/);
   const isLong = words.length > PREVIEW_WORD_LIMIT;
-  const previewText = isLong
-    ? words.slice(0, PREVIEW_WORD_LIMIT).join(" ") + "..."
-    : skill.content;
+
+  const getDescription = (): string => {
+    if (skill.metadata?.shortDescription) {
+      return skill.metadata.shortDescription;
+    }
+
+    return isLong
+      ? words.slice(0, PREVIEW_WORD_LIMIT).join(" ") + "..."
+      : skill.content;
+  };
 
   return (
     <div className="flex w-full items-center">
       <div
         className={cn(
-          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2 cursor-pointer",
+          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow cursor-pointer items-start gap-2 rounded-md px-2",
         )}
         onClick={() => {
           navigate(`/home/agent/skill/${skill.id}`);
@@ -71,8 +78,8 @@ export function SkillCard({ skill }: SkillCardProps) {
               </div>
             </div>
 
-            <div className="text-muted-foreground mt-1 text-sm pl-6">
-              {previewText}
+            <div className="text-muted-foreground mt-1 pl-6 text-sm">
+              {getDescription()}
             </div>
           </div>
         </div>

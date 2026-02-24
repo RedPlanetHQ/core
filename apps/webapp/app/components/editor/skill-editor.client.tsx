@@ -25,7 +25,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   const isEditMode = !!skill;
   const [name, setName] = useState(skill?.title ?? "");
   const [shortDescription, setShortDescription] = useState(
-    (skill?.metadata?.shortDescription as string) ?? ""
+    (skill?.metadata?.shortDescription as string) ?? "",
   );
   const [isLoading, setIsLoading] = useState(false);
 
@@ -139,28 +139,32 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   return (
     <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
       <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
-        <div className="max-w-4xl min-w-[0px] md:min-w-3xl">
+        <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
           <div>
             <Input
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Skill name"
-              className="no-scrollbar mt-5 resize-none overflow-hidden border-0 bg-transparent px-4 py-0 text-xl font-medium outline-none focus-visible:ring-0"
+              className="no-scrollbar text-2xl! mt-5 resize-none overflow-hidden border-0 bg-transparent px-4 py-0 font-medium outline-none focus-visible:ring-0"
             />
           </div>
 
-          <div className="my-5">
-            <label className="px-4 text-muted-foreground/80 text-sm">Short description</label>
+          <div className="text-md my-5">
+            <label className="text-muted-foreground/80 px-4 text-sm">
+              Short description
+            </label>
             <Input
               value={shortDescription}
               onChange={(e) => setShortDescription(e.target.value)}
               placeholder="Brief description of the skill, this is used by the agent to understand the skill"
-              className="no-scrollbar resize-none overflow-hidden border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
+              className="no-scrollbar text-md! resize-none overflow-hidden border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
             />
           </div>
 
           <div>
-            <label className="px-4 text-muted-foreground/80 text-sm">Description</label>
+            <label className="text-muted-foreground/80 px-4 text-sm">
+              Description
+            </label>
             <EditorContent editor={editor} />
           </div>
         </div>
@@ -171,7 +175,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
         ) : (
           <div />
         )}
-        <div className="flex gap-2 items-center">
+        <div className="flex items-center gap-2">
           <Button
             variant="ghost"
             size="xl"
