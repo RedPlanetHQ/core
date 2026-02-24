@@ -43,6 +43,11 @@ const loader = createHybridLoaderApiRoute(
       authentication.workspaceId as string,
     );
 
+    // Don't expose skill documents through this endpoint
+    if (document?.type === "skill") {
+      throw new Response("Document not found", { status: 404 });
+    }
+
     return json({ document });
   },
 );
