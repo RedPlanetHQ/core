@@ -1,46 +1,55 @@
 ---
 title: "Browser"
-description: "Automate browsers with persistent sessions for authentication and automation"
+description: "Automate browsers with pre-configured sessions for authentication and automation"
 ---
 
 ## Overview
 
-The Browser capability lets CORE control browsers on your machine using [browser-use](https://browser-use.com/) under the hood. Each browser instance uses a **session** - a lightweight persistence layer that automatically saves and restores cookies and localStorage across browser restarts.
+The Browser capability lets CORE control browsers on your machine using [agent-browser](https://agent-browser.dev/) under the hood. Sessions are pre-configured and limited to 5 parallel instances.
 
 Login once, and CORE can access authenticated pages without re-authenticating.
 
-For the full list of available browser commands, see the [browser-use documentation](https://browser-use.com/).
+For the full list of available browser commands, see the [agent-browser documentation](https://agent-browser.dev/).
 
 ---
 
 ## Sessions
 
-Sessions are the core concept. Each session automatically persists:
+Sessions must be created before use. Each session automatically persists:
 
 - Cookies
 - localStorage
+- Authentication state
 
-Use meaningful session names for different contexts:
+Maximum **5 sessions** allowed. Default sessions created on install: `corebrain`, `personal`, `work`.
 
 ```bash
-# Open with a session name
-corebrain browser open https://github.com --session-name work
-corebrain browser open https://twitter.com --session-name personal
+# Create a new session
+corebrain browser create-session dev
 
-# List active sessions
+# List configured sessions
 corebrain browser list-sessions
-```
 
-Sessions are managed by browser-use's built-in session server, providing ~50ms command latency.
+# Delete a session
+corebrain browser delete-session dev
+```
 
 ---
 
 ## Commands
 
+### Create Session
+
+```bash
+corebrain browser create-session <name>
+```
+
+Session names must be alphanumeric with hyphens/underscores only.
+
 ### Open a URL
 
 ```bash
-# Open with default session
+# Open with default session (corebrain)
 corebrain browser open https://github.com
 
 # Open with specific session
@@ -67,7 +76,7 @@ corebrain browser command fill "#email" "user@example.com" --session-name work
 corebrain browser command screenshot --session-name work
 ```
 
-See [browser-use docs](https://browser-use.com/) for all available commands.
+See [agent-browser docs](https://agent-browser.dev/) for all available commands.
 
 ### Close Browser
 
@@ -82,15 +91,41 @@ corebrain browser close --all
 ### Manage Sessions
 
 ```bash
-# List all active sessions
+# List configured sessions
 corebrain browser list-sessions
 
-# Delete a session (closes browser)
+# Create a new session
+corebrain browser create-session <name>
+
+# Delete a session (closes browser and removes config)
 corebrain browser delete-session <name>
 
 # View status
 corebrain browser status
 ```
+
+### Set Browser
+
+Configure which browser to use for automation:
+
+```bash
+# Interactive browser selection
+corebrain browser set-browser
+
+# Use Brave (auto-detected)
+corebrain browser set-browser brave
+
+# Use Chrome (auto-detected)
+corebrain browser set-browser chrome
+
+# Use system default
+corebrain browser set-browser default
+
+# Use custom browser path
+corebrain browser set-browser custom /path/to/browser
+```
+
+The browser setting is stored in your config and applies to all sessions.
 
 ---
 
@@ -100,17 +135,19 @@ When the gateway is running, CORE can use these browser tools:
 
 | Tool | Description |
 |------|-------------|
-| `browser_open` | Open a URL with a session |
+| `browser_open` | Open a URL with a pre-configured session |
 | `browser_close` | Close a browser for a session |
 | `browser_command` | Run a browser command (click, fill, screenshot, etc.) |
-| `browser_list_sessions` | List all active sessions |
-| `browser_close_all` | Close all browser sessions at once |
+| `browser_list_sessions` | List all configured sessions |
+| `browser_close_all` | Close all browser sessions |
+| `browser_create_session` | Create a new session |
+| `browser_delete_session` | Delete a session |
 
 ---
 
 ## Use Cases
 
-**Authenticated scraping:** Open a session, login to LinkedIn manually once. Now CORE can research leads on LinkedIn anytime without re-authenticating.
+**Authenticated scraping:** Create a `linkedin` session, login once. Now CORE can research leads on LinkedIn anytime without re-authenticating.
 
 **Form automation:** CORE fills out repetitive forms - expense reports, time tracking, support tickets - using stored login sessions.
 
@@ -122,27 +159,24 @@ When the gateway is running, CORE can use these browser tools:
 
 ## Prerequisites
 
-The browser capability requires `browser-use` to be installed:
+The browser capability requires `agent-browser` to be installed:
 
 ```bash
 corebrain browser install
 ```
 
-This installs [browser-use](https://browser-use.com/) and validates the installation with `browser-use doctor`.
+This installs [agent-browser](https://agent-browser.dev/) via npm and creates default sessions: `corebrain`, `personal`, `work`.
 
 ### Verify Before Starting Gateway
 
-**Important:** Before starting the gateway, verify that `browser-use` is accessible in your terminal:
+**Important:** Before starting the gateway, verify that `agent-browser` is accessible in your terminal:
 
 ```bash
-# Check browser-use is in PATH
-browser-use --version
-
-# Run diagnostics
-browser-use doctor
+# Check agent-browser is in PATH
+agent-browser --version
 ```
 
-If `browser-use` is not found, you may need to:
+If `agent-browser` is not found, you may need to:
 
 1. **Reload your shell** to pick up PATH changes:
    ```bash
@@ -154,11 +188,11 @@ If `browser-use` is not found, you may need to:
    corebrain gateway stop && corebrain gateway start
    ```
 
-The gateway captures your PATH at startup. If `browser-use` is installed after the gateway starts, the gateway won't have access to it until restarted.
+The gateway captures your PATH at startup. If `agent-browser` is installed after the gateway starts, the gateway won't have access to it until restarted.
 
 ### Recommended Browser
 
-We recommend installing [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, so it works seamlessly with browser-use, and includes built-in ad blocking and privacy features that make automation cleaner and faster.
+We recommend installing [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, so it works seamlessly with agent-browser, and includes built-in ad blocking and privacy features that make automation cleaner and faster.
 
 ```bash
 # macOS
@@ -169,10 +203,4 @@ sudo apt install brave-browser
 
 # Windows
 winget install Brave.Brave
-```
-
-After installing, configure browser-use to use Brave:
-
-```bash
-browser-use config set browser brave
 ```

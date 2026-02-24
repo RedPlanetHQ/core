@@ -4,10 +4,11 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {
-	isBrowserUseInstalled,
+	isAgentBrowserInstalled,
 	browserGetSessions,
 	getServerStatus,
-} from '@/utils/browser-use';
+	getMaxSessions,
+} from '@/utils/agent-browser';
 
 export const options = zod.object({});
 
@@ -19,14 +20,15 @@ async function runBrowserStatus(): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start('Checking browser status...');
 
-	const installed = await isBrowserUseInstalled();
-	const sessions = installed ? await browserGetSessions() : [];
+	const installed = await isAgentBrowserInstalled();
+	const sessions = browserGetSessions();
 	const serverStatus = installed ? await getServerStatus() : null;
+	const maxSessions = getMaxSessions();
 
 	spinner.stop(chalk.green('Status retrieved'));
 
 	const lines: string[] = [
-		`${chalk.bold('browser-use:')} ${
+		`${chalk.bold('agent-browser:')} ${
 			installed ? chalk.green('installed') : chalk.red('not installed')
 		}`,
 	];
@@ -43,8 +45,8 @@ async function runBrowserStatus(): Promise<void> {
 	lines.push(
 		`${chalk.bold('Sessions:')} ${
 			sessions.length > 0
-				? chalk.green(`${sessions.length} active`)
-				: chalk.dim('none')
+				? chalk.green(`${sessions.length}/${maxSessions} configured`)
+				: chalk.dim(`0/${maxSessions}`)
 		}`,
 	);
 
@@ -57,12 +59,12 @@ async function runBrowserStatus(): Promise<void> {
 	p.note(lines.join('\n'), 'Browser Status');
 
 	if (!installed) {
-		p.log.info('Run `corebrain browser install` to install browser-use');
+		p.log.info('Run `corebrain browser install` to install agent-browser');
 	}
 
 	if (sessions.length === 0 && installed) {
 		p.log.info(
-			'Run `corebrain browser open <url> --session-name <name>` to create a session',
+			'Run `corebrain browser create-session <name>` to create a session',
 		);
 	}
 }

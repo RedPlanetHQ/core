@@ -6,7 +6,10 @@ import {
 	browserGetSessions,
 	browserCloseAll,
 	isBlockedCommand,
-} from '@/utils/browser-use';
+	getMaxSessions,
+	createSession,
+	deleteSession,
+} from '@/utils/agent-browser';
 
 // ============ Zod Schemas ============
 
@@ -15,8 +18,8 @@ export const BrowserOpenSchema = zod.object({
 	sessionName: zod
 		.string()
 		.optional()
-		.default('default')
-		.describe('Session name for persistence (default: default)'),
+		.default('corebrain')
+		.describe('Session name (must be pre-configured, default: corebrain)'),
 });
 
 export const BrowserCloseSchema = zod.object({
@@ -39,6 +42,14 @@ export const BrowserGetSessionsSchema = zod.object({});
 
 export const BrowserCloseAllSchema = zod.object({});
 
+export const BrowserCreateSessionSchema = zod.object({
+	name: zod.string().describe('Session name to create (alphanumeric, hyphens, underscores only)'),
+});
+
+export const BrowserDeleteSessionSchema = zod.object({
+	name: zod.string().describe('Session name to delete'),
+});
+
 // ============ Tool Interface ============
 
 export interface GatewayTool {
@@ -57,7 +68,7 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			sessionName: {
 				type: 'string',
 				description:
-					'Session name for persistence (default: default). Use names like "work", "personal" for different contexts.',
+					'Session name (must be pre-configured). Default: corebrain. Use browser_list_sessions to see available sessions.',
 			},
 		},
 		required: ['url'],
@@ -79,7 +90,7 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			command: {
 				type: 'string',
 				description:
-					'Command to run. Available: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload. Blocked: open, close, cookies, storage, network, download, run, session, task, tunnel',
+					'Command to run. Available: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload. Blocked: open, close, cookies, storage, network, download, run, session, task, tunnel, state',
 			},
 			args: {
 				type: 'array',
@@ -93,13 +104,33 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 		type: 'object',
 		properties: {},
 		required: [],
-		description: 'List all active browser sessions',
+		description: 'List all configured browser sessions',
 	},
 	browser_close_all: {
 		type: 'object',
 		properties: {},
 		required: [],
-		description: 'Close all active browser sessions',
+		description: 'Close all configured browser sessions',
+	},
+	browser_create_session: {
+		type: 'object',
+		properties: {
+			name: {
+				type: 'string',
+				description: 'Session name to create (alphanumeric, hyphens, underscores only)',
+			},
+		},
+		required: ['name'],
+	},
+	browser_delete_session: {
+		type: 'object',
+		properties: {
+			name: {
+				type: 'string',
+				description: 'Session name to delete',
+			},
+		},
+		required: ['name'],
 	},
 };
 
@@ -109,7 +140,7 @@ export const browserTools: GatewayTool[] = [
 	{
 		name: 'browser_open',
 		description:
-			'Open a browser with a URL using the specified session. Sessions automatically persist cookies and localStorage across restarts.',
+			'Open a browser with a URL using a pre-configured session. Sessions must be created first with browser_create_session. Use browser_list_sessions to see available sessions.',
 		inputSchema: jsonSchemas.browser_open!,
 	},
 	{
@@ -125,13 +156,23 @@ export const browserTools: GatewayTool[] = [
 	},
 	{
 		name: 'browser_list_sessions',
-		description: 'List all active browser sessions.',
+		description: `List all configured browser sessions. Maximum ${getMaxSessions()} sessions allowed.`,
 		inputSchema: jsonSchemas.browser_list_sessions!,
 	},
 	{
 		name: 'browser_close_all',
-		description: 'Close all active browser sessions at once.',
+		description: 'Close all configured browser sessions at once.',
 		inputSchema: jsonSchemas.browser_close_all!,
+	},
+	{
+		name: 'browser_create_session',
+		description: `Create a new browser session. Session names must be alphanumeric with hyphens/underscores. Maximum ${getMaxSessions()} sessions allowed.`,
+		inputSchema: jsonSchemas.browser_create_session!,
+	},
+	{
+		name: 'browser_delete_session',
+		description: 'Delete a browser session. This closes the browser and removes the session configuration.',
+		inputSchema: jsonSchemas.browser_delete_session!,
 	},
 ];
 
@@ -199,12 +240,14 @@ export async function executeBrowserTool(
 
 			case 'browser_list_sessions': {
 				BrowserGetSessionsSchema.parse(params);
-				const sessions = await browserGetSessions();
+				const sessions = browserGetSessions();
+				const maxSessions = getMaxSessions();
 				return {
 					success: true,
 					result: {
 						sessions,
 						count: sessions.length,
+						maxSessions,
 					},
 				};
 			}
@@ -220,7 +263,46 @@ export async function executeBrowserTool(
 				}
 				return {
 					success: true,
-					result: {message: 'Closed all browser sessions'},
+					result: {message: 'Closed all browser sessions', details: r.stdout},
+				};
+			}
+
+			case 'browser_create_session': {
+				const p = BrowserCreateSessionSchema.parse(params);
+				const r = createSession(p.name);
+				if (!r.success) {
+					return {success: false, error: r.error || 'Failed to create session'};
+				}
+				const sessions = browserGetSessions();
+				return {
+					success: true,
+					result: {
+						message: `Created session "${p.name}"`,
+						sessions,
+						count: sessions.length,
+						maxSessions: getMaxSessions(),
+					},
+				};
+			}
+
+			case 'browser_delete_session': {
+				const p = BrowserDeleteSessionSchema.parse(params);
+				// First close the browser
+				await browserClose(p.name);
+				// Then delete from config
+				const r = deleteSession(p.name);
+				if (!r.success) {
+					return {success: false, error: r.error || 'Failed to delete session'};
+				}
+				const sessions = browserGetSessions();
+				return {
+					success: true,
+					result: {
+						message: `Deleted session "${p.name}"`,
+						sessions,
+						count: sessions.length,
+						maxSessions: getMaxSessions(),
+					},
 				};
 			}
 

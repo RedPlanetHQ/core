@@ -23,12 +23,12 @@ export async function buildDecisionContext(
   trigger: Trigger,
   timezone: string,
 ): Promise<DecisionContext> {
-  const { userId, channel } = trigger;
+  const { userId, workspaceId, channel } = trigger;
 
   // Gather context in parallel where possible
   const [userState, todayState] = await Promise.all([
-    getUserState(userId, timezone),
-    getTodayState(userId, channel),
+    getUserState(userId, workspaceId, timezone),
+    getTodayState(workspaceId, channel),
   ]);
 
   return {
@@ -53,6 +53,7 @@ export async function buildReminderContext(
  */
 async function getUserState(
   userId: string,
+  workspaceId: string,
   timezone: string,
 ): Promise<UserState> {
   try {
@@ -73,6 +74,8 @@ async function getUserState(
     const isNightTime = hourInTimezone < 7 || hourInTimezone >= 23;
 
     return {
+      userId,
+      workspaceId,
       timezone,
       lastActiveAt: lastUserMessage?.createdAt,
       currentlyBusy: false,
@@ -81,6 +84,8 @@ async function getUserState(
   } catch (error) {
     logger.error("Failed to get user state", { userId, error });
     return {
+      userId,
+      workspaceId,
       timezone,
       currentlyBusy: false,
     };

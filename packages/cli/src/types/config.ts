@@ -65,6 +65,15 @@ export interface AppConfig {
 
 export type ServiceType = 'launchd' | 'systemd' | 'manual';
 
+// Browser executable configuration
+export type BrowserType = 'default' | 'brave' | 'chrome' | 'custom';
+
+export interface BrowserConfig {
+	browserType?: BrowserType;
+	browserExecutable?: string;
+	sessions?: string[]; // Configured session names
+}
+
 // Gateway slot configuration
 export interface GatewaySlots {
 	browser?: {
@@ -130,5 +139,6 @@ export interface UserPreferences {
 	selectedTheme?: ThemePreset;
 	gateway?: GatewayConfig;
 	coding?: CodingConfig;
+	browser?: BrowserConfig;
 	exec?: ExecConfig;
 }

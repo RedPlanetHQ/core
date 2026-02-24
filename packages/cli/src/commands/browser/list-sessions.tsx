@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { browserGetSessions, isBrowserUseInstalled } from '@/utils/browser-use';
+import {browserGetSessions, getMaxSessions} from '@/utils/agent-browser';
 
 export const options = zod.object({});
 
@@ -12,29 +12,17 @@ type Props = {
 };
 
 async function runListSessions(): Promise<void> {
-	const spinner = p.spinner();
-	spinner.start('Fetching sessions...');
-
-	const installed = await isBrowserUseInstalled();
-
-	if (!installed) {
-		spinner.stop(chalk.red('Not installed'));
-		p.log.error('browser-use is not installed. Run `corebrain browser install` first.');
-		return;
-	}
-
-	const sessions = await browserGetSessions();
-
-	spinner.stop(chalk.green('Sessions retrieved'));
+	const sessions = browserGetSessions();
+	const maxSessions = getMaxSessions();
 
 	if (sessions.length === 0) {
-		p.log.info('No active sessions found.');
-		p.log.info('Run `corebrain browser open <url> --session-name <name>` to create a session.');
+		p.log.info('No sessions configured.');
+		p.log.info('Run `corebrain browser create-session <name>` to create a session.');
 		return;
 	}
 
 	const lines: string[] = [
-		`${chalk.bold('Active Sessions:')} ${chalk.green(`${sessions.length} found`)}`,
+		`${chalk.bold('Configured Sessions:')} ${chalk.green(`${sessions.length}/${maxSessions}`)}`,
 		'',
 	];
 
@@ -46,11 +34,11 @@ async function runListSessions(): Promise<void> {
 }
 
 export default function BrowserListSessions(_props: Props) {
-	const { exit } = useApp();
+	const {exit} = useApp();
 
 	useEffect(() => {
 		runListSessions()
-			.catch((err) => {
+			.catch(err => {
 				p.log.error(err instanceof Error ? err.message : 'Unknown error');
 			})
 			.finally(() => {
