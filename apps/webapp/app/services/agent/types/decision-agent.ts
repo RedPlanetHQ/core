@@ -5,6 +5,8 @@
  * (reminders, webhooks, scheduled jobs) with intelligent reasoning.
  */
 
+import type { MessageChannel } from "~/services/agent/types";
+
 // ============================================================================
 // Trigger Types
 // ============================================================================
@@ -21,7 +23,7 @@ export interface BaseTrigger {
   timestamp: Date;
   userId: string;
   workspaceId: string;
-  channel: "whatsapp" | "email";
+  channel: MessageChannel;
 }
 
 export interface ReminderTriggerData {
@@ -115,7 +117,7 @@ export interface MessagePlan {
 export interface NewReminder {
   action: string;
   scheduledFor: Date | string; // absolute or relative like "in 30 minutes"
-  channel: "whatsapp" | "email";
+  channel: MessageChannel;
   goal?: GoalInfo;
   isFollowUp?: boolean;
   parentReminderId?: string;

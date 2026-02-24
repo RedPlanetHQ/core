@@ -6,13 +6,14 @@ import {
   removeScheduledReminder,
 } from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
+import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/trigger/utils/prisma";
 import { type Prisma } from "@prisma/client";
 
 export interface ReminderData {
   text: string;
   schedule: string; // RRule string (in user's local timezone)
-  channel: "whatsapp" | "email";
+  channel: MessageChannel;
   isActive?: boolean;
   maxOccurrences?: number | null;
   endDate?: Date | null;
@@ -23,7 +24,7 @@ export interface ReminderData {
 export interface ReminderUpdateData {
   text?: string;
   schedule?: string;
-  channel?: "whatsapp" | "email";
+  channel?: MessageChannel;
   isActive?: boolean;
   maxOccurrences?: number | null;
   endDate?: Date | null;
@@ -220,7 +221,7 @@ export async function addReminder(
         {
           reminderId: reminder.id,
           workspaceId,
-          channel: reminder.channel as "whatsapp" | "email",
+          channel: reminder.channel as MessageChannel,
         },
         nextRunAt,
       );
@@ -301,7 +302,7 @@ export async function updateReminder(
         {
           reminderId: reminder.id,
           workspaceId,
-          channel: reminder.channel as "whatsapp" | "email",
+          channel: reminder.channel as MessageChannel,
         },
         reminder.nextRunAt,
       );
@@ -446,7 +447,7 @@ export async function scheduleNextOccurrence(
       {
         reminderId,
         workspaceId: reminder.workspaceId,
-        channel: reminder.channel as "whatsapp" | "email",
+        channel: reminder.channel as MessageChannel,
       },
       nextRunAt,
     );
@@ -822,7 +823,7 @@ export async function recalculateRemindersForTimezone(
             {
               reminderId: reminder.id,
               workspaceId,
-              channel: reminder.channel as "whatsapp" | "email",
+              channel: reminder.channel as MessageChannel,
             },
             nextRunAt,
           );

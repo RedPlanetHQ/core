@@ -146,6 +146,9 @@ const EnvironmentSchema = z
     TWILIO_AUTH_TOKEN: z.string().optional(),
     TWILIO_WHATSAPP_NUMBER: z.string().optional(),
 
+    // Slack
+    SLACK_SIGNING_SECRET: z.string().optional(),
+
     // Resend
     RESEND_WEBHOOK_SECRET: z.string().optional(),
   })

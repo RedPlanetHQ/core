@@ -6,3 +6,4 @@ export type {
 
 export { getChannel, getAllChannelSlugs } from "./registry";
 export type { ChannelSlug } from "./registry";
+export { handleChannelMessage } from "./channel.service";

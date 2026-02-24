@@ -20,6 +20,7 @@ import {
   type Trigger,
 } from "~/services/agent/types/decision-agent";
 import { getChannel } from "~/services/channels";
+import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
 
@@ -152,7 +153,7 @@ async function executePlan(
       const { responseText } = await processInboundMessage({
         userId: userData.userId,
         workspaceId: userData.workspaceId,
-        channel: channel as "whatsapp" | "email",
+        channel: channel as ChannelType,
         userMessage: `[Reminder triggered] ${reminder.text}`,
         messageUserType: UserTypeEnum.System,
         actionPlan,
@@ -160,7 +161,24 @@ async function executePlan(
 
       // Send on channel
       const handler = getChannel(channel);
-      const replyTo = channel === "whatsapp" ? userData.phoneNumber : userData.email;
+      let replyTo: string | undefined;
+      if (channel === "whatsapp") {
+        replyTo = userData.phoneNumber;
+      } else if (channel === "slack") {
+        // For Slack, look up the user's Slack ID from IntegrationAccount
+        const slackAccount = await prisma.integrationAccount.findFirst({
+          where: {
+            integratedById: userData.userId,
+            integrationDefinition: { slug: "slack" },
+            isActive: true,
+            deleted: null,
+          },
+          select: { accountId: true },
+        });
+        replyTo = slackAccount?.accountId ?? undefined;
+      } else {
+        replyTo = userData.email;
+      }
       if (replyTo) {
         const metadata: Record<string, string> = { workspaceId: userData.workspaceId };
         if (channel === "email") {

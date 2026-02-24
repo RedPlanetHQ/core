@@ -114,12 +114,17 @@ export async function noStreamProcess(
     temperature: 0.5,
   });
 
-  // Create assistant message
+  // Create assistant message with UI-compatible parts
+  // (must match the format expected by convertToModelMessages on reload)
   const assistantMessageId = crypto.randomUUID();
+  const assistantParts: { type: string; text: string }[] = [];
+  if (result.text) {
+    assistantParts.push({ type: "text", text: result.text });
+  }
   const assistantMessage = {
     id: assistantMessageId,
     role: "assistant",
-    parts: result.response.messages,
+    parts: assistantParts,
   };
 
   // Save assistant message to history
@@ -145,5 +150,5 @@ export async function noStreamProcess(
     );
   }
 
-  return assistantMessage;
+  return { ...assistantMessage, text: result.text };
 }

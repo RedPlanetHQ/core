@@ -94,7 +94,7 @@ export async function processInboundMessage({
   );
 
   const responseText =
-    assistantMessage.parts?.[0]?.text || "I processed your request.";
+    assistantMessage.text || "I processed your request.";
 
   return { responseText, conversationId };
 }

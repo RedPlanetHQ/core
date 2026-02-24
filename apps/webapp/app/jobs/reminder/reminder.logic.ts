@@ -23,6 +23,7 @@ import {
   incrementOccurrenceCount,
   incrementUnrespondedCount,
 } from "~/services/reminder.server";
+import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/trigger/utils/prisma";
 
 // ============================================================================
@@ -32,13 +33,13 @@ import { prisma } from "~/trigger/utils/prisma";
 export interface ReminderJobData {
   reminderId: string;
   workspaceId: string;
-  channel: "whatsapp" | "email";
+  channel: MessageChannel;
 }
 
 export interface FollowUpJobData {
   parentReminderId: string;
   workspaceId: string;
-  channel: "whatsapp" | "email";
+  channel: MessageChannel;
   action: string;
   originalSentAt: string; // ISO timestamp
 }
