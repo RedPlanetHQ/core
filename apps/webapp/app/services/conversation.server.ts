@@ -30,14 +30,14 @@ export async function createConversation(
   userId: string,
   conversationData: CreateConversationDto,
 ) {
-  const { title, conversationId, ...otherData } = conversationData;
+  const { title, conversationId, source, ...otherData } = conversationData;
 
   if (conversationId) {
     // Add a new message to an existing conversation
     const conversationHistory = await prisma.conversationHistory.create({
       data: {
         ...otherData,
-        source: otherData.source || "core",
+        source: source || "core",
         userType: otherData.userType || UserTypeEnum.User,
         ...(userId && {
           user: {
