@@ -8,19 +8,14 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import {
-  runIntegrationExplorer,
-  runMemoryExplorer,
-  runWebExplorer,
-} from "./explorers";
+import { runIntegrationExplorer, runWebExplorer } from "./explorers";
+import { searchMemoryWithAgent } from "./memory";
 import { logger } from "../logger.service";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import {
-  type GatewayAgentInfo,
-  getGatewayAgents,
-  runGatewayExplorer,
-} from "./gateway";
+import { getGatewayAgents, runGatewayExplorer } from "./gateway";
+import { type SkillRef } from "./types";
+import { prisma } from "~/db.server";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -53,10 +48,25 @@ const getOrchestratorPrompt = (
   mode: OrchestratorMode,
   gateways: string,
   userPersona?: string,
+  skills?: SkillRef[],
 ) => {
   const personaSection = userPersona
     ? `\nUSER PERSONA (identity, preferences, directives - use this FIRST before searching memory):\n${userPersona}\n`
     : "";
+
+  const skillsSection =
+    skills && skills.length > 0
+      ? `\n<skills>
+Available user-defined skills:
+${skills.map((s, i) => {
+        const meta = s.metadata as Record<string, unknown> | null;
+        const desc = meta?.shortDescription as string | undefined;
+        return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+      }).join("\n")}
+
+When you receive a skill reference (skill name + ID) in the user message, call get_skill to load the full instructions, then follow them step-by-step using your available tools.
+</skills>\n`
+      : "";
 
   if (mode === "write") {
     return `You are an orchestrator. Execute actions on integrations or gateways.
@@ -67,10 +77,11 @@ ${integrations}
 <gateways>
 ${gateways || "No gateways connected"}
 </gateways>
-
+${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
 - integration_action: Execute an action on a connected service (create, update, delete)
+- get_skill: Load a user-defined skill's full instructions by ID. Call this when the request references a skill.
 - gateway_*: Offload tasks to connected gateways based on their description
 
 PRIORITY ORDER FOR CONTEXT:
@@ -119,11 +130,12 @@ ${integrations}
 <gateways>
 ${gateways || "No gateways connected"}
 </gateways>
-
+${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
 - integration_query: Live data from connected services (emails, calendar, issues, messages)
 - web_search: Real-time information from the web (news, current events, documentation, prices, weather, general knowledge). Also use to read/summarize URLs shared by user.
+- get_skill: Load a user-defined skill's full instructions by ID. Call this when the request references a skill.
 - gateway_*: Offload tasks to connected gateways based on their description (can gather info too)
 
 PRIORITY ORDER FOR CONTEXT:
@@ -211,6 +223,7 @@ export async function runOrchestrator(
   source: string,
   abortSignal?: AbortSignal,
   userPersona?: string,
+  skills?: SkillRef[],
 ): Promise<OrchestratorResult> {
   const startTime = Date.now();
 
@@ -252,39 +265,59 @@ export async function runOrchestrator(
     inputSchema: z.object({
       query: z
         .string()
-        .describe("What to search for - include preferences, directives, and prior context related to the request"),
+        .describe(
+          "What to search for - include preferences, directives, and prior context related to the request",
+        ),
     }),
-    execute: async function* ({ query }, { abortSignal }) {
+    execute: async ({ query }) => {
       logger.info(`Orchestrator: memory search - ${query}`);
-
-      const { stream } = await runMemoryExplorer(
-        query,
-        userId,
-        workspaceId,
-        source,
-        abortSignal,
-      );
-
-      // Stream the memory explorer's work
-      let approvalRequested = false;
-      for await (const message of readUIMessageStream({
-        stream: stream.toUIMessageStream(),
-      })) {
-        if (approvalRequested) {
-          continue;
-        }
-
-        yield message;
-
-        if (hasApprovalRequested(message)) {
-          logger.info(
-            `Orchestrator: Stopping memory_search - approval requested`,
-          );
-          approvalRequested = true;
-        }
+      try {
+        const result = await searchMemoryWithAgent(
+          query,
+          userId,
+          workspaceId,
+          source,
+          { structured: false },
+        );
+        return result || "nothing found";
+      } catch (error: any) {
+        logger.warn("Memory search failed", error);
+        return "nothing found";
       }
     },
   });
+
+  // get_skill tool - available in both modes when skills exist
+  if (skills && skills.length > 0) {
+    tools.get_skill = tool({
+      description:
+        "Load a user-defined skill's full instructions by ID. Call this when the request references a skill, then follow the instructions step-by-step.",
+      inputSchema: z.object({
+        skill_id: z
+          .string()
+          .describe("The skill ID to load"),
+      }),
+      execute: async ({ skill_id }) => {
+        logger.info(`Orchestrator: loading skill ${skill_id}`);
+        try {
+          const skill = await prisma.document.findFirst({
+            where: {
+              id: skill_id,
+              workspaceId,
+              type: "skill",
+              deleted: null,
+            },
+            select: { id: true, title: true, content: true },
+          });
+          if (!skill) return "Skill not found";
+          return `## Skill: ${skill.title}\n\n${skill.content}`;
+        } catch (error: any) {
+          logger.warn("Failed to load skill", error);
+          return "Failed to load skill";
+        }
+      },
+    });
+  }
 
   if (mode === "read") {
     tools.integration_query = tool({
@@ -473,7 +506,13 @@ export async function runOrchestrator(
 
   const stream = streamText({
     model: modelInstance as LanguageModel,
-    system: getOrchestratorPrompt(integrationsList, mode, gatewaysList, userPersona),
+    system: getOrchestratorPrompt(
+      integrationsList,
+      mode,
+      gatewaysList,
+      userPersona,
+      skills,
+    ),
     messages: [{ role: "user", content: userMessage }],
     tools,
     stopWhen: stepCountIs(10),

@@ -2,6 +2,7 @@ import { type Tool, tool, readUIMessageStream, type UIMessage } from "ai";
 import { z } from "zod";
 
 import { runOrchestrator } from "./orchestrator";
+import { type SkillRef } from "./types";
 
 import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
@@ -37,15 +38,17 @@ export const createTools = async (
   source: string,
   readOnly: boolean = false,
   persona?: string,
+  skills?: SkillRef[],
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
-      description: `Search memory, connected integrations, AND the web. This is how you access information.
+      description: `Search memory, connected integrations, the web, AND connected gateways (user's devices like Claude Code, browser, etc.). This is how you access information.
 
-      THREE DATA SOURCES:
+      FOUR DATA SOURCES:
       1. Memory: past conversations, decisions, user preferences
       2. Integrations: user's emails, calendar, issues, messages (their personal data)
       3. Web: news, current events, documentation, prices, weather, general knowledge, AND reading URLs
+      4. Gateways: user's connected devices/agents (e.g., Claude Code on their laptop, browser agent) - use for tasks on their machine
 
       WHEN TO USE:
       - Before saying "i don't know" - you might know it
@@ -53,6 +56,7 @@ export const createTools = async (
       - When user asks about live data (emails, calendar, issues, etc.)
       - When user asks about news, current events, how-tos, or general questions
       - When user shares a URL and wants you to read/summarize it
+      - When user asks to do something on their device/machine (coding tasks, file operations, browser actions)
 
       HOW TO FORM YOUR QUERY:
       Describe your INTENT clearly. Include any URLs the user shared.
@@ -64,10 +68,13 @@ export const createTools = async (
       - "What's the weather in SF" → web search
       - "Summarize this article: https://example.com/post" → web (fetches URL)
       - "User's unread emails from GitHub" → integrations (gmail)
+      - "Check the status of user's local dev server" → gateway (connected device)
 
       For URLs: include the full URL in your query.
       For GENERAL NEWS/INFO: the orchestrator will use web search.
-      For USER-SPECIFIC data: it uses integrations.`,
+      For USER-SPECIFIC data: it uses integrations.
+      For DEVICE/MACHINE tasks: it uses gateways.
+      For SKILLS: when user's request matches an available skill, include the skill name and ID in your query so the orchestrator can load and execute it. Example: "Execute skill 'Plan My Day' (skill_id: abc123)"`,
       inputSchema: z.object({
         query: z
           .string()
@@ -88,6 +95,7 @@ export const createTools = async (
           source,
           abortSignal,
           persona,
+          skills,
         );
 
         // Stream the orchestrator's work to the UI
@@ -116,10 +124,12 @@ export const createTools = async (
 
   if (!readOnly) {
     tools["take_action"] = tool({
-      description: `Execute actions on user's connected integrations.
+      description: `Execute actions on user's connected integrations AND gateways (connected devices).
       Use this to CREATE/SEND/UPDATE/DELETE: gmail filters/labels, calendar events, github issues, slack messages, notion pages.
-      Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout"
-      When user confirms they want something done, use this tool to do it.`,
+      Also use this for tasks on user's connected devices/agents: coding tasks via Claude Code, browser actions, file operations on their machine.
+      Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout", "fix the auth bug in the core repo" (gateway task)
+      When user confirms they want something done, use this tool to do it.
+      For SKILLS: when executing a skill, include the skill name and ID. Example: "Execute skill 'Plan My Day' (skill_id: abc123)"`,
       inputSchema: z.object({
         action: z
           .string()
@@ -139,6 +149,7 @@ export const createTools = async (
           source,
           abortSignal,
           persona,
+          skills,
         );
 
         // Stream the orchestrator's work to the UI
@@ -166,8 +177,9 @@ export const createTools = async (
   }
 
   // Add reminder management tools
-  // WhatsApp source → whatsapp, everything else (web/email) → email
-  const channel = source === "whatsapp" ? "whatsapp" : "email";
+  // WhatsApp/Slack source → same channel, everything else (web/email) → email
+  const channel =
+    source === "whatsapp" ? "whatsapp" : source === "slack" ? "slack" : "email";
   const reminderTools = getReminderTools(workspaceId, channel, timezone);
 
   return { ...tools, ...reminderTools };

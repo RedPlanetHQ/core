@@ -1,3 +1,5 @@
+import { type SkillRef } from "../types";
+
 /**
  * Decision Agent Prompt
  *
@@ -736,6 +738,7 @@ export function buildDecisionAgentPrompt(
   currentTime: string,
   timezone: string,
   userPersona?: string,
+  skills?: SkillRef[],
 ): string {
   const personaSection = userPersona
     ? `
@@ -750,8 +753,25 @@ ${userPersona}
 `
     : "";
 
+  const skillsSection =
+    skills && skills.length > 0
+      ? `
+## Available Skills
+
+The user has defined these skills. When a trigger matches a skill, reference it in your action plan intent so the Core brain can load and execute it.
+
+${skills.map((s, i) => {
+        const meta = s.metadata as Record<string, unknown> | null;
+        const desc = meta?.shortDescription as string | undefined;
+        return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+      }).join("\n")}
+
+---
+`
+      : "";
+
   return `${DECISION_AGENT_PROMPT}
-${personaSection}
+${personaSection}${skillsSection}
 ---
 
 ## Current Situation

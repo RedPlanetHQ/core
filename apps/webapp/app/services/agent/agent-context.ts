@@ -15,6 +15,7 @@ import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { createTools } from "~/services/agent/core-agent";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { prisma } from "~/db.server";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -42,10 +43,15 @@ export async function buildAgentContext({
   actionPlan,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations] = await Promise.all([
+  const [user, persona, connectedIntegrations, skills] = await Promise.all([
     getUserById(userId),
     getPersonaDocumentForUser(workspaceId),
     IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
+    prisma.document.findMany({
+      where: { workspaceId, type: "skill", deleted: null },
+      select: { id: true, title: true, metadata: true },
+      orderBy: { createdAt: "desc" },
+    }),
   ]);
 
   const metadata = user?.metadata as Record<string, unknown> | null;
@@ -58,6 +64,7 @@ export async function buildAgentContext({
     source,
     false,
     persona ?? undefined,
+    skills,
   );
 
   // Build system prompt
@@ -91,6 +98,25 @@ export async function buildAgentContext({
 
     IMPORTANT: Always use the Account ID when calling get_integration_actions and execute_integration_action.
     </connected_integrations>`;
+
+  // Skills context
+  if (skills.length > 0) {
+    const skillsList = skills
+      .map((s, i) => {
+        const meta = s.metadata as Record<string, unknown> | null;
+        const desc = meta?.shortDescription as string | undefined;
+        return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+      })
+      .join("\n");
+
+    systemPrompt += `
+    <skills>
+    You have access to user-defined skills. When a user's request matches a skill, use gather_context or take_action to reference the skill name and ID so the orchestrator can load and execute it.
+
+    Available skills:
+    ${skillsList}
+    </skills>`;
+  }
 
   // Datetime context
   const now = new Date();
