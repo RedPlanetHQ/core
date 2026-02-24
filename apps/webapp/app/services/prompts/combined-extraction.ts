@@ -127,7 +127,7 @@ Before extracting individual facts, scan for any system, process, or topic that 
 STEP 3: EXTRACT EXPLICIT FACTS
 For each piece of information, ask these 4 questions:
 
-1. WHO SAID this? → If "the assistant suggested/offered/provided", it's NOT a user fact. Consider skipping.
+1. Is this a suggestion or a fact? → Unconfirmed assistant suggestions → SKIP. Factual information → EXTRACT regardless of speaker.
 2. WHO/WHAT is this about? → That's your SUBJECT — if this fact is about a sub-component, use the sub-component as subject, not the parent.
 3. WHAT is being said about it? → That's your PREDICATE + OBJECT
 4. Is this USER-SPECIFIC? → Apply the specificity test from core principles. If no, SKIP.
@@ -551,15 +551,15 @@ SKIP these - they add no value:
 CRITICAL: The normalized episode distinguishes between user and assistant statements.
 
 DETECTION PATTERNS:
-- "The assistant suggested/offered/provided/reported/stated X" → Assistant's content
+- "The assistant suggested/recommended/offered X" → Assistant suggestion (may skip)
+- "The assistant created/built/described/explained/reported/stated/provided X" → Factual content (extract)
 - "User decided/instructed/stated/confirmed/asked X" → User's content
 - "[UserName] asked/wants/prefers/decided/instructed X" → User's content
 
 RULES:
 1. Assistant suggestions/recommendations NOT confirmed by user → SKIP (don't extract as user fact)
-2. Factual information → ALWAYS extract as topic-level facts with null aspect, regardless of whether user or assistant stated them. Facts are true independent of the speaker.
+2. Factual content from assistant (created, built, described, explained, reported) → ALWAYS extract as topic-level facts with null aspect. These describe real things that were done or exist.
 3. User confirmed assistant suggestion → Extract as user Decision
-4. "The assistant offered X; user did not confirm" → SKIP entirely
 
 EXAMPLES:
 - "The assistant recommended switching to MongoDB for better scalability" → SKIP (suggestion, not confirmed)

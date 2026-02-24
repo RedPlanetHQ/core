@@ -118,11 +118,12 @@ export async function buildAgentContext({
     </skills>`;
   }
 
-  // Datetime context
+  // Datetime context (use user's timezone so agent sees correct local time)
   const now = new Date();
   systemPrompt += `
     <current_datetime>
     Current date and time: ${now.toLocaleString("en-US", {
+      timeZone: timezone,
       weekday: "long",
       year: "numeric",
       month: "long",
