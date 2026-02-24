@@ -1,9 +1,9 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { browserClose, isBrowserUseInstalled } from '@/utils/browser-use';
+import {deleteSession, getConfiguredSessions, getMaxSessions, isAgentBrowserInstalled, browserClose} from '@/utils/agent-browser';
 
 export const args = zod.tuple([zod.string().describe('Session name to delete')]);
 
@@ -16,37 +16,45 @@ type Props = {
 
 async function runDeleteSession(name: string): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking browser-use...');
+	spinner.start(`Deleting session "${name}"...`);
 
-	const installed = await isBrowserUseInstalled();
-
-	if (!installed) {
-		spinner.stop(chalk.red('Not installed'));
-		p.log.error('browser-use is not installed. Run `corebrain browser install` first.');
-		return;
+	// First close the browser if it's running
+	const installed = await isAgentBrowserInstalled();
+	if (installed) {
+		await browserClose(name);
 	}
 
-	spinner.message(`Closing and removing session "${name}"...`);
+	// Then remove from config
+	const result = deleteSession(name);
 
-	// browser-use manages session cleanup when closing
-	const result = await browserClose(name);
-
-	if (result.code !== 0) {
-		spinner.stop(chalk.red('Failed to delete session'));
-		p.log.error(result.stderr || 'Failed to delete session');
+	if (!result.success) {
+		spinner.stop(chalk.red('Failed'));
+		p.log.error(result.error || 'Failed to delete session');
 		return;
 	}
 
 	spinner.stop(chalk.green(`Session "${name}" deleted`));
+
+	const sessions = getConfiguredSessions();
+	const maxSessions = getMaxSessions();
+	if (sessions.length > 0) {
+		p.log.info(`Remaining sessions: ${sessions.join(', ')} (${sessions.length}/${maxSessions})`);
+	} else {
+		p.log.info('No sessions configured. Create one with: corebrain browser create-session <name>');
+	}
 }
 
-export default function BrowserDeleteSession({ args: [name] }: Props) {
-	const { exit } = useApp();
+export default function BrowserDeleteSession({args: [name]}: Props) {
+	const {exit} = useApp();
 
 	useEffect(() => {
 		runDeleteSession(name)
-			.catch((err) => {
-				p.log.error(`Failed to delete session: ${err instanceof Error ? err.message : 'Unknown error'}`);
+			.catch(err => {
+				p.log.error(
+					`Failed to delete session: ${
+						err instanceof Error ? err.message : 'Unknown error'
+					}`,
+				);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);

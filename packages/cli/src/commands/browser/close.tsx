@@ -3,7 +3,7 @@ import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isBrowserUseInstalled, browserClose, browserCloseAll } from '@/utils/browser-use';
+import { isAgentBrowserInstalled, browserClose, browserCloseAll } from '@/utils/agent-browser';
 
 export const options = zod.object({
 	sessionName: zod.string().optional().describe('Session name to close'),
@@ -16,13 +16,13 @@ type Props = {
 
 async function runBrowserClose(sessionName: string | undefined, closeAll: boolean): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking browser-use...');
+	spinner.start('Checking agent-browser...');
 
-	const installed = await isBrowserUseInstalled();
+	const installed = await isAgentBrowserInstalled();
 
 	if (!installed) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error('browser-use is not installed. Run `corebrain browser install` first.');
+		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
 		return;
 	}
 

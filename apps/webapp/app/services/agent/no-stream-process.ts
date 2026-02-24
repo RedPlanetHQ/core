@@ -119,7 +119,7 @@ export async function noStreamProcess(
   const assistantMessage = {
     id: assistantMessageId,
     role: "assistant",
-    parts: [{ type: "text", text: result.text }],
+    parts: result.response.messages,
   };
 
   // Save assistant message to history

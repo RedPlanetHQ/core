@@ -4,10 +4,10 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {
-	isBrowserUseInstalled,
+	isAgentBrowserInstalled,
 	browserOpen,
 	browserGetSessions,
-} from '@/utils/browser-use';
+} from '@/utils/agent-browser';
 
 const DEFAULT_URL = 'https://app.getcore.me';
 
@@ -19,30 +19,27 @@ type Props = {
 
 async function runOpenHead(): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking browser-use...');
+	spinner.start('Checking agent-browser...');
 
-	const installed = await isBrowserUseInstalled();
+	const installed = await isAgentBrowserInstalled();
 
 	if (!installed) {
 		spinner.stop(chalk.red('Not installed'));
 		p.log.error(
-			'browser-use is not installed. Run `corebrain browser install` first.',
+			'agent-browser is not installed. Run `corebrain browser install` first.',
 		);
 		return;
 	}
 
 	spinner.stop(chalk.green('Ready'));
 
-	// Get available sessions
-	let sessions = await browserGetSessions();
+	// Get configured sessions
+	const sessions = browserGetSessions();
 
-	// Add default session options if no sessions exist
 	if (sessions.length === 0) {
-		sessions = ['personal', 'work'];
-	} else {
-		// Add common options if not already present
-		if (!sessions.includes('personal')) sessions.push('personal');
-		if (!sessions.includes('work')) sessions.push('work');
+		p.log.error('No sessions configured.');
+		p.log.info('Run `corebrain browser create-session <name>` to create a session first.');
+		return;
 	}
 
 	// Show session selector

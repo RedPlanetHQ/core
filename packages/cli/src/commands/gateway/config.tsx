@@ -25,7 +25,7 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import type { GatewayConfig, GatewaySlots } from '@/types/config';
-import { isBrowserUseInstalled, installBrowserUse } from '@/utils/browser-use';
+import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
 
 const execAsync = promisify(exec);
 
@@ -250,18 +250,18 @@ async function runInteractiveConfig() {
 
 	// Step 5: Browser slot
 	const browserSpinner = p.spinner();
-	browserSpinner.start('Checking for browser-use...');
-	let browserInstalled = await isBrowserUseInstalled();
+	browserSpinner.start('Checking for agent-browser...');
+	let browserInstalled = await isAgentBrowserInstalled();
 	browserSpinner.stop(browserInstalled
-		? chalk.green('browser-use installed')
-		: chalk.yellow('browser-use not found')
+		? chalk.green('agent-browser installed')
+		: chalk.yellow('agent-browser not found')
 	);
 
 	let browserEnabled = false;
 
 	if (!browserInstalled) {
 		const installBrowser = await p.confirm({
-			message: 'Install browser-use?',
+			message: 'Install agent-browser?',
 			initialValue: false,
 		});
 
@@ -272,11 +272,11 @@ async function runInteractiveConfig() {
 
 		if (installBrowser) {
 			const installSpinner = p.spinner();
-			installSpinner.start('Installing browser-use...');
+			installSpinner.start('Installing agent-browser...');
 			try {
-				const result = await installBrowserUse();
+				const result = await installAgentBrowser();
 				if (result.code === 0) {
-					installSpinner.stop(chalk.green('browser-use installed'));
+					installSpinner.stop(chalk.green('agent-browser installed'));
 					browserInstalled = true;
 					browserEnabled = true;
 				} else {

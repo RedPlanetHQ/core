@@ -3,7 +3,7 @@ import { useApp } from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isBrowserUseInstalled, browserCommand, isBlockedCommand } from '@/utils/browser-use';
+import { isAgentBrowserInstalled, browserCommand, isBlockedCommand } from '@/utils/agent-browser';
 
 export const args = zod.tuple([
 	zod.string().describe('Command to run'),
@@ -20,13 +20,13 @@ type Props = {
 
 async function runBrowserCommand(sessionName: string, command: string, commandArgs: string[]): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking browser-use...');
+	spinner.start('Checking agent-browser...');
 
-	const installed = await isBrowserUseInstalled();
+	const installed = await isAgentBrowserInstalled();
 
 	if (!installed) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error('browser-use is not installed. Run `corebrain browser install` first.');
+		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
 		return;
 	}
 

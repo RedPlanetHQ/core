@@ -69,7 +69,6 @@ const { loader, action } = createHybridActionApiRoute(
     }
 
     if (conversationHistory.length > 1 && !isAssistantApproval) {
-
       const message = body.message?.parts[0].text;
       const messageParts = body.message?.parts;
 
@@ -139,13 +138,11 @@ const { loader, action } = createHybridActionApiRoute(
 
     result.consumeStream(); // no await
 
-
     return result.toUIMessageStreamResponse({
       generateMessageId: () => crypto.randomUUID(),
       originalMessages: validatedMessages,
-      onError: (error) => {
-        console.log(error)
-        return "asdf"
+      onError: (error: any) => {
+        return error.message;
       },
       onFinish: async ({ messages }) => {
         const lastMessage = messages.pop();
@@ -175,7 +172,7 @@ const { loader, action } = createHybridActionApiRoute(
                 sessionId: body.id,
               },
               authentication.userId,
-              authentication.workspaceId || ""
+              authentication.workspaceId || "",
             );
           }
         }
@@ -189,7 +186,6 @@ const { loader, action } = createHybridActionApiRoute(
       //   );
       // },
     });
-
   },
 );
 
