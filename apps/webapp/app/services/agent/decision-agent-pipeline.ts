@@ -19,9 +19,8 @@ import {
   type ReminderTrigger,
   type Trigger,
 } from "~/services/agent/types/decision-agent";
-import { sendPlainTextEmail } from "~/services/email.server";
+import { getChannel } from "~/services/channels";
 import { logger } from "~/services/logger.service";
-import { sendWhatsAppMessage } from "~/services/whatsapp.server";
 import { prisma } from "~/trigger/utils/prisma";
 
 // ============================================================================
@@ -160,16 +159,15 @@ async function executePlan(
       });
 
       // Send on channel
-      if (channel === "whatsapp" && userData.phoneNumber) {
-        await sendWhatsAppMessage(userData.phoneNumber, responseText);
-        logger.info(`Sent WhatsApp message for ${reminder.id} to ${userData.userId}`);
-      } else if (channel === "email" && userData.email) {
-        await sendPlainTextEmail({
-          to: userData.email,
-          subject: `Reminder: ${reminder.text}`,
-          text: responseText,
-        });
-        logger.info(`Sent email for ${reminder.id} to ${userData.userId}`);
+      const handler = getChannel(channel);
+      const replyTo = channel === "whatsapp" ? userData.phoneNumber : userData.email;
+      if (replyTo) {
+        const metadata: Record<string, string> = { workspaceId: userData.workspaceId };
+        if (channel === "email") {
+          metadata.subject = `Reminder: ${reminder.text}`;
+        }
+        await handler.sendReply(replyTo, responseText, metadata);
+        logger.info(`Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
       }
     } catch (error) {
       logger.error(`Failed to execute message for ${reminder.id}`, { error });

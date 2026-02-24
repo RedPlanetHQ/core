@@ -17,7 +17,6 @@ import {
   createReminderTriggerFromDb,
 } from "~/services/agent/context/decision-context";
 import type { CASEPipelineResult } from "~/services/agent/decision-agent-pipeline";
-import { isWithinWhatsApp24hWindow } from "~/services/conversation.server";
 import { logger } from "~/services/logger.service";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import {
@@ -96,18 +95,6 @@ export async function processReminderJob(
       await deactivateReminder(reminderId);
       logger.info(`Processed follow-up reminder ${reminderId}`);
       return { success: true, isFollowUp: true };
-    }
-
-    // Check WhatsApp 24-hour window policy
-    if (channel === "whatsapp") {
-      const canSend = await isWithinWhatsApp24hWindow(workspaceId);
-      if (!canSend) {
-        logger.info(
-          `Workspace ${workspaceId} outside 24h window - skipping reminder ${reminderId}`,
-        );
-        await scheduleNextOccurrence(reminderId);
-        return { success: true };
-      }
     }
 
     // =========================================================================
