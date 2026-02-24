@@ -10,6 +10,7 @@ import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { createConversation } from "../conversation.server";
 
 interface ProcessInboundMessageParams {
   userId: string;
@@ -34,6 +35,7 @@ interface ProcessInboundMessageResult {
 async function getOrCreateDailyConversation(
   userId: string,
   workspaceId: string,
+  message: string,
   channel: string,
 ): Promise<string> {
   const todayStart = new Date();
@@ -51,15 +53,13 @@ async function getOrCreateDailyConversation(
 
   if (existing) return existing.id;
 
-  const conversation = await prisma.conversation.create({
-    data: {
-      userId,
-      workspaceId,
-      source: channel,
-    },
+  const conversation = await createConversation(workspaceId, userId, {
+    message,
+    parts: [{ text: message, type: "text" }],
+    source: channel,
   });
 
-  return conversation.id;
+  return conversation.conversationId;
 }
 
 export async function processInboundMessage({
@@ -73,6 +73,7 @@ export async function processInboundMessage({
   const conversationId = await getOrCreateDailyConversation(
     userId,
     workspaceId,
+    userMessage,
     channel,
   );
 
