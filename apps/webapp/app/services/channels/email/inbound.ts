@@ -3,7 +3,7 @@ import { getUserByEmail } from "~/models/user.server";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.service";
-import type { InboundMessage } from "../types";
+import type { InboundParseResult } from "../types";
 
 interface ResendWebhookPayload {
   type: string;
@@ -26,32 +26,31 @@ function extractEmail(from: string): string {
 }
 
 /**
- * Parse a Resend inbound-email webhook request into an InboundMessage.
- * Returns null for non-email.received events, unknown senders, or empty bodies.
+ * Parse a Resend inbound-email webhook request into an InboundParseResult.
  */
 export async function parseInbound(
   request: Request,
-): Promise<InboundMessage | null> {
+): Promise<InboundParseResult> {
   let payload: ResendWebhookPayload;
   try {
     payload = await request.json();
   } catch {
-    return null;
+    return {};
   }
 
   // Only handle email.received events
   if (payload.type !== "email.received") {
-    return null;
+    return {};
   }
 
   const { email_id, from, to, subject } = payload.data ?? {};
   if (!email_id || !from) {
-    return null;
+    return {};
   }
 
   // Only process emails addressed to brain@getcore.me
   if (env.FROM_EMAIL && (!to || !to.includes(env.FROM_EMAIL))) {
-    return null;
+    return {};
   }
 
   const senderEmail = extractEmail(from);
@@ -64,14 +63,14 @@ export async function parseInbound(
 
   if (!messageContent) {
     logger.warn("Empty email body", { emailId: email_id });
-    return null;
+    return {};
   }
 
   // Look up user by email
   const user = await getUserByEmail(senderEmail);
   if (!user) {
     logger.warn("Email from unknown sender", { from: senderEmail });
-    return null;
+    return { unknownContact: { identifier: senderEmail, channel: "email" } };
   }
 
   // Get user's workspace
@@ -81,14 +80,16 @@ export async function parseInbound(
 
   if (!userWorkspace) {
     logger.warn("User has no workspace", { userId: user.id });
-    return null;
+    return {};
   }
 
   return {
-    userId: user.id,
-    workspaceId: userWorkspace.workspaceId,
-    userMessage: messageContent,
-    replyTo: senderEmail,
-    metadata: { subject: subject ?? "" },
+    message: {
+      userId: user.id,
+      workspaceId: userWorkspace.workspaceId,
+      userMessage: messageContent,
+      replyTo: senderEmail,
+      metadata: { subject: subject ?? "" },
+    },
   };
 }

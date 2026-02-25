@@ -2,7 +2,9 @@ import { processInboundMessage } from "~/services/agent/message-processor";
 import type { ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
 import { getChannel } from "./registry";
-import type { InboundMessage } from "./types";
+import type { InboundMessage, ReplyMetadata } from "./types";
+import { createAuthorizationCode } from "../personalAccessToken.server";
+import { env } from "~/env.server";
 
 /**
  * Process an inbound message through the channel pipeline.
@@ -14,10 +16,21 @@ export async function handleChannelMessage(
 ): Promise<Response> {
   const channel = getChannel(slug);
 
-  // If input is a Request, parse it via the channel handler
-  let msg: InboundMessage | null;
+  let msg: InboundMessage | undefined;
+
   if (input instanceof Request) {
-    msg = await channel.parseInbound(input);
+    const result = await channel.parseInbound(input);
+
+    if (result.unknownContact) {
+      try {
+        await sendChannelInvite(result.unknownContact, channel.sendReply.bind(channel));
+      } catch (err) {
+        logger.error(`Failed to send invite via ${slug}`, { error: String(err) });
+      }
+      return channel.emptyResponse();
+    }
+
+    msg = result.message;
   } else {
     msg = input;
   }
@@ -58,4 +71,28 @@ export async function handleChannelMessage(
   }
 
   return channel.emptyResponse();
+}
+
+
+/**
+ * Send a signup/verification invite to an unknown user via their channel.
+ */
+export async function sendChannelInvite(
+  unknownContact: {
+    identifier: string;
+    channel: string;
+    metadata?: Record<string, string>;
+  },
+  sendReply: (to: string, text: string, metadata?: ReplyMetadata) => Promise<void>,
+): Promise<void> {
+  const authCode = await createAuthorizationCode();
+  const signupUrl = `${env.APP_ORIGIN}/account/authorization-code/${authCode.code}`;
+
+  const message = `Hey! I'm CORE, your personal assistant.\n\nTo get started, verify your account here:\n${signupUrl}`;
+
+  logger.info(`Sending invite to unknown ${unknownContact.channel} user`, {
+    identifier: unknownContact.identifier,
+  });
+
+  await sendReply(unknownContact.identifier, message, unknownContact.metadata);
 }

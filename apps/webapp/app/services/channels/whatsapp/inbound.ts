@@ -2,15 +2,14 @@ import { getUserByPhone } from "~/models/user.server";
 import { prisma } from "~/db.server";
 import { verifyTwilioSignature } from "./client";
 import { logger } from "~/services/logger.service";
-import type { InboundMessage } from "../types";
+import type { InboundParseResult } from "../types";
 
 /**
- * Parse a Twilio WhatsApp webhook request into an InboundMessage.
- * Returns null when the request is invalid, unverified, or from an unknown user.
+ * Parse a Twilio WhatsApp webhook request into an InboundParseResult.
  */
 export async function parseInbound(
   request: Request,
-): Promise<InboundMessage | null> {
+): Promise<InboundParseResult> {
   const formData = await request.formData();
   const params: Record<string, string> = {};
   for (const [key, value] of formData.entries()) {
@@ -21,7 +20,7 @@ export async function parseInbound(
   const body = params.Body ?? "";
 
   if (!from || !body) {
-    return null;
+    return {};
   }
 
   // Verify Twilio signature
@@ -31,14 +30,14 @@ export async function parseInbound(
 
   if (!verifyTwilioSignature(fullUrl, params, signature)) {
     logger.warn("Invalid Twilio signature", { from });
-    return null;
+    return {};
   }
 
   // Look up user by phone
   const user = await getUserByPhone(from);
   if (!user) {
     logger.warn("WhatsApp message from unknown phone", { from });
-    return null;
+    return { unknownContact: { identifier: from, channel: "whatsapp" } };
   }
 
   // Get user's workspace
@@ -48,13 +47,15 @@ export async function parseInbound(
 
   if (!userWorkspace) {
     logger.warn("User has no workspace", { userId: user.id });
-    return null;
+    return {};
   }
 
   return {
-    userId: user.id,
-    workspaceId: userWorkspace.workspaceId,
-    userMessage: body,
-    replyTo: from,
+    message: {
+      userId: user.id,
+      workspaceId: userWorkspace.workspaceId,
+      userMessage: body,
+      replyTo: from,
+    },
   };
 }
