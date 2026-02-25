@@ -53,16 +53,19 @@ export function ConnectedAccountSection({
           <div key={account.id} className="bg-background-3 rounded-lg p-4">
             <div className="text-sm">
               <p className="inline-flex items-center gap-2 font-medium">
-                <Check size={16} /> {account.settings?.workspace_name || account.accountId || "Account"}
+                <Check size={16} />{" "}
+                {account.settings?.workspace_name ||
+                  account.accountId ||
+                  "Account"}
               </p>
               <p className="text-muted-foreground mb-3">
-                Connected on{" "}
-                {new Date(account.createdAt).toLocaleDateString()}
+                Connected on {new Date(account.createdAt).toLocaleDateString()}
               </p>
               <div className="flex w-full justify-end">
                 <Button
                   variant="destructive"
                   size="sm"
+                  className="rounded"
                   disabled={disconnectFetcher.state === "submitting"}
                   onClick={() => handleDisconnect(account.id)}
                 >

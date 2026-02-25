@@ -58,9 +58,9 @@ export async function integrationCreate(
   const payload = {
     settings: {},
     accountId:
-      integrationConfiguration.portalId ||
+      `${integrationConfiguration.portalId}` ||
       integrationConfiguration.userEmail ||
-      integrationConfiguration.userId,
+      `${integrationConfiguration.userId}`,
     config: integrationConfiguration,
   };
 
