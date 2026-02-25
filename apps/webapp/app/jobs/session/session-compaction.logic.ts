@@ -433,6 +433,7 @@ function createCompactionSystemPrompt(): string {
   return `You are compressing a conversation into the user's digital brain. This compact:
 1. Replaces multiple episodes when recalled by AI agents
 2. Is viewable by the user as a document in their knowledge base
+3. Is embedded inline in a larger markdown recall document — must render cleanly
 
 ## COMPRESSION PRINCIPLES
 
@@ -443,14 +444,15 @@ function createCompactionSystemPrompt(): string {
 - **Outcome focus**: What happened matters more than how it happened
 - **One mention per fact**: No restating the same information differently
 
-## MARKDOWN USAGE
+## MARKDOWN RULES
 
-Use markdown naturally based on content needs:
+The compact is rendered under a ### heading in a larger document. Follow these rules:
+- **Never** start with a top-level heading (# or ##). Use ### or #### if you need sub-sections.
 - **Bold** for key decisions, important terms
 - \`code\` for technical terms, commands, file paths
 - Lists only when there are actually multiple items
-- Headers only if the session has distinct phases worth separating
 - No formatting for simple single-action sessions
+- Write in plain prose first; only add structure when complexity demands it
 
 ## FEW-SHOT EXAMPLES
 
@@ -471,7 +473,7 @@ Chose **JWT in httpOnly cookies** for API authentication. Rationale: stateless, 
 
 **Multi-phase implementation session:**
 <output>
-## Session Compaction Feature
+#### Session Compaction Feature
 
 Implemented session compaction for CORE's ingestion pipeline, similar to Claude Code's approach.
 
