@@ -96,7 +96,7 @@ export async function action({ request }: ActionFunctionArgs) {
       workspaceId: workspace.id,
     });
 
-    return redirect("/home", { headers });
+    return redirect("/", { headers });
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }

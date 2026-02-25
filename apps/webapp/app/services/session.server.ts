@@ -5,6 +5,7 @@ import { getImpersonationId } from "./impersonation.server";
 import { type Request as ERequest } from "express";
 import { prisma } from "~/db.server";
 import { getWorkspaceById } from "~/models/workspace.server";
+import { u } from "@/build/server/assets/server-build-DGNmHiPh";
 
 export async function getUserId(
   request: Request | ERequest,
@@ -41,7 +42,10 @@ export async function getUserSession(
       : request.headers["cookie"];
 
   let session = await sessionStorage.getSession(cookieHeader);
-  let user = session.get("user");
+  let user = session.get("user") as unknown as {
+    userId: string;
+    workspaceId?: string;
+  };
 
   if (!user?.userId) return undefined;
 
@@ -59,11 +63,14 @@ export async function getUserSession(
 }
 
 export async function getUser(request: Request) {
-  const userId = await getUserId(request);
-  if (userId === undefined) return null;
+  const userSession = await getUserSession(request);
+  if (userSession === undefined || userSession.userId === undefined)
+    return null;
+
+  const { userId, workspaceId } = userSession;
 
   const user = await getUserById(userId);
-  if (user) return user;
+  if (user) return { ...user, workspaceId };
 
   throw await logout(request);
 }

@@ -25,11 +25,7 @@ import {
   type ToastMessage,
 } from "./models/message.server";
 import { env } from "./env.server";
-import {
-  getUser,
-  getWorkspaceId,
-  requireUser,
-} from "./services/session.server";
+import { getUser, getWorkspaceId } from "./services/session.server";
 import { getUserWorkspaces, getWorkspaceById } from "./models/workspace.server";
 import { usePostHog } from "./hooks/usePostHog";
 import {
@@ -57,19 +53,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const posthogProjectKey = env.POSTHOG_PROJECT_KEY;
   const telemetryEnabled = env.TELEMETRY_ENABLED;
-  const user = await requireUser(request);
-  const workspaceId = (await getWorkspaceId(
-    request,
-    user?.id as string,
-    user.workspaceId,
-  )) as string;
-  const usageSummary = await getUsageSummary(workspaceId, user?.id as string);
+  const user = await getUser(request);
 
-  // Get all workspaces for the user and current workspace details
-  const workspaces = user ? await getUserWorkspaces(user.id) : [];
-  const currentWorkspace = workspaceId
-    ? await getWorkspaceById(workspaceId)
-    : null;
+  // Only fetch workspace data if user is authenticated
+  let workspaceId: string | undefined;
+  let usageSummary = null;
+  let workspaces: Awaited<ReturnType<typeof getUserWorkspaces>> = [];
+  let currentWorkspace = null;
+
+  if (user) {
+    workspaceId = await getWorkspaceId(request, user.id, user.workspaceId);
+    usageSummary = workspaceId
+      ? await getUsageSummary(workspaceId, user.id)
+      : null;
+    workspaces = await getUserWorkspaces(user.id);
+    currentWorkspace = workspaceId ? await getWorkspaceById(workspaceId) : null;
+  }
 
   return typedjson(
     {
