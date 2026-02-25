@@ -3,11 +3,13 @@ import { type UIMatch } from "@remix-run/react";
 import { type loader } from "~/root";
 import { useChanged } from "./useChanged";
 import { useTypedMatchesData } from "./useTypedMatchData";
-import { type User } from "@prisma/client";
+import { type User, type Workspace } from "@prisma/client";
 
 export interface ExtendedUser extends User {
   availableCredits: number;
   totalCredits: number;
+  workspaces: Workspace[];
+  currentWorkspace: Workspace | null;
 }
 
 export function useIsImpersonating(matches?: UIMatch[]) {
@@ -29,6 +31,8 @@ export function useOptionalUser(matches?: UIMatch[]): ExtendedUser | undefined {
         ...routeMatch?.user,
         availableCredits: routeMatch?.availableCredits,
         totalCredits: routeMatch?.totalCredits,
+        workspaces: routeMatch?.workspaces ?? [],
+        currentWorkspace: routeMatch?.currentWorkspace ?? null,
       }
     : undefined;
 }

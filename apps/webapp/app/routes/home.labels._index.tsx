@@ -12,12 +12,16 @@ import {
 import { PageHeader } from "~/components/common/page-header";
 import { withOpacity } from "~/lib/color-utils";
 import { LabelService } from "~/services/label.server";
-import { getUser, getWorkspaceId } from "~/services/session.server";
+import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { cn } from "~/lib/utils";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const user = await getUser(request);
-  const workspaceId = await getWorkspaceId(request, user?.id as string);
+  const user = await requireUser(request);
+  const workspaceId = await getWorkspaceId(
+    request,
+    user?.id as string,
+    user.workspaceId,
+  );
   const labelService = new LabelService();
 
   try {

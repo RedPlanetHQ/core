@@ -26,6 +26,7 @@ import {
 } from "./models/message.server";
 import { env } from "./env.server";
 import { getUser, getWorkspaceId } from "./services/session.server";
+import { getUserWorkspaces, getWorkspaceById } from "./models/workspace.server";
 import { usePostHog } from "./hooks/usePostHog";
 import {
   AppContainer,
@@ -53,14 +54,29 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const posthogProjectKey = env.POSTHOG_PROJECT_KEY;
   const telemetryEnabled = env.TELEMETRY_ENABLED;
   const user = await getUser(request);
-  const workspaceId = await getWorkspaceId(request, user?.id as string) as string;
-  const usageSummary = await getUsageSummary(workspaceId, user?.id as string);
+
+  // Only fetch workspace data if user is authenticated
+  let workspaceId: string | undefined;
+  let usageSummary = null;
+  let workspaces: Awaited<ReturnType<typeof getUserWorkspaces>> = [];
+  let currentWorkspace = null;
+
+  if (user) {
+    workspaceId = await getWorkspaceId(request, user.id, user.workspaceId);
+    usageSummary = workspaceId
+      ? await getUsageSummary(workspaceId, user.id)
+      : null;
+    workspaces = await getUserWorkspaces(user.id);
+    currentWorkspace = workspaceId ? await getWorkspaceById(workspaceId) : null;
+  }
 
   return typedjson(
     {
       user: user,
       availableCredits: usageSummary?.credits.available ?? 0,
       totalCredits: usageSummary?.credits.monthly ?? 0,
+      workspaces,
+      currentWorkspace,
       toastMessage,
       theme: getTheme(),
       posthogProjectKey,
@@ -85,7 +101,7 @@ export const meta: MetaFunction = ({ data }) => {
       name: "robots",
       content:
         typeof window === "undefined" ||
-          window.location.hostname !== "core.mysigma.ai"
+        window.location.hostname !== "core.mysigma.ai"
           ? "noindex, nofollow"
           : "index, follow",
     },

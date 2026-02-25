@@ -5,6 +5,7 @@ import {
   CreditCard,
   User,
   Tag,
+  Building,
 } from "lucide-react";
 
 import {
@@ -48,11 +49,14 @@ export default function Settings() {
 
   const data = {
     nav: [
-      // { name: "Workspace", icon: Building },
       { name: "Account", icon: User, path: "account" },
       { name: "Billing", icon: CreditCard, path: "billing" },
       { name: "API", icon: Code, path: "api" },
       { name: "Webhooks", icon: Webhook, path: "webhooks" },
+    ],
+    workspace: [
+      { name: "Overview", icon: Building, path: "workspace" },
+      { name: "Labels", icon: Tag, path: "labels" },
     ],
   };
   const navigate = useNavigate();
@@ -108,18 +112,20 @@ export default function Settings() {
             <SidebarGroup>
               <SidebarGroupContent>
                 <SidebarMenu className="gap-0.5">
-                  <h2 className="mb-1"> Episodes </h2>
-                  <SidebarMenuItem key="labels">
-                    <Button
-                      variant="secondary"
-                      isActive={location.pathname.includes("labels")}
-                      onClick={() => navigate(`/settings/labels`)}
-                      className={cn("flex w-fit min-w-0 justify-start gap-1")}
-                    >
-                      <Tag size={16} />
-                      <span>Labels</span>
-                    </Button>
-                  </SidebarMenuItem>
+                  <h2 className="mb-1">Workspace</h2>
+                  {data.workspace.map((item) => (
+                    <SidebarMenuItem key={item.name}>
+                      <Button
+                        variant="secondary"
+                        isActive={location.pathname.includes(item.path)}
+                        onClick={() => navigate(`/settings/${item.path}`)}
+                        className={cn("flex w-fit min-w-0 justify-start gap-1")}
+                      >
+                        <item.icon size={16} />
+                        <span>{item.name}</span>
+                      </Button>
+                    </SidebarMenuItem>
+                  ))}
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
