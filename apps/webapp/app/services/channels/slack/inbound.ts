@@ -28,7 +28,9 @@ export interface SlackEventPayload {
  * Check if a Slack event is a DM or @mention directed at CORE.
  * For DMs, verifies the channel includes the CORE bot as a member.
  */
-export async function isSlackDMOrMention(eventBody: SlackEventPayload): Promise<boolean> {
+export async function isSlackDMOrMention(
+  eventBody: SlackEventPayload,
+): Promise<boolean> {
   if (eventBody.type !== "event_callback") return false;
   const event = eventBody.event;
   if (!event) return false;
@@ -39,8 +41,8 @@ export async function isSlackDMOrMention(eventBody: SlackEventPayload): Promise<
     if (!event.user || !event.text) return false;
 
     // Verify this DM is with the CORE bot
-    if (event.channel) {
-      const botDM = await isDMWithBot(event.channel);
+    if (event.channel && event.user) {
+      const botDM = await isDMWithBot(event.channel, event.user);
       if (!botDM) return false;
     }
 
@@ -58,15 +60,19 @@ export async function isSlackDMOrMention(eventBody: SlackEventPayload): Promise<
 
 /**
  * Check if a DM channel includes the CORE bot as a member.
+ * Uses the sending user's IntegrationAccount to get a bot token for the API call.
  * Returns true if SLACK_BOT_USER_ID is not configured (skip check).
  */
-async function isDMWithBot(channelId: string): Promise<boolean> {
+async function isDMWithBot(
+  channelId: string,
+  slackUserId: string,
+): Promise<boolean> {
   const botUserId = env.SLACK_BOT_USER_ID;
   if (!botUserId) return true;
 
-  // Find any active Slack integration account to get a bot token
   const account = await prisma.integrationAccount.findFirst({
     where: {
+      accountId: slackUserId,
       integrationDefinition: { slug: "slack" },
       isActive: true,
       deleted: null,
@@ -81,12 +87,18 @@ async function isDMWithBot(channelId: string): Promise<boolean> {
   if (!botToken) return false;
 
   try {
-    const res = await fetch(`https://slack.com/api/conversations.members?channel=${channelId}`, {
-      headers: { Authorization: `Bearer ${botToken}` },
-    });
+    const res = await fetch(
+      `https://slack.com/api/conversations.members?channel=${channelId}`,
+      {
+        headers: { Authorization: `Bearer ${botToken}` },
+      },
+    );
     const data = await res.json();
     if (!data.ok) {
-      logger.warn("Failed to check DM members", { error: data.error, channelId });
+      logger.warn("Failed to check DM members", {
+        error: data.error,
+        channelId,
+      });
       return false;
     }
     return (data.members as string[]).includes(botUserId);
@@ -165,7 +177,14 @@ export async function parseInbound(
     const timestamp = request.headers.get("X-Slack-Request-Timestamp") ?? "";
     const signature = request.headers.get("X-Slack-Signature") ?? "";
 
-    if (!verifySlackSignature(env.SLACK_SIGNING_SECRET, timestamp, rawBody, signature)) {
+    if (
+      !verifySlackSignature(
+        env.SLACK_SIGNING_SECRET,
+        timestamp,
+        rawBody,
+        signature,
+      )
+    ) {
       logger.warn("Invalid Slack signature");
       return {};
     }

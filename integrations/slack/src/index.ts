@@ -88,6 +88,10 @@ class SlackCLI extends IntegrationCLI {
           ],
           scope_identifier: 'user_scope',
           scope_separator: ',',
+          authorization_params: {
+            scope:
+              'app_mentions:read,chat:write,im:history,im:read,im:write,users:read,channels:read',
+          },
         },
       },
     };
