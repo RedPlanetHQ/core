@@ -75,6 +75,7 @@ class HubSpotCLI extends IntegrationCLI {
           token_url: 'https://api.hubapi.com/oauth/v1/token',
           authorization_url: 'https://app.hubspot.com/oauth/authorize',
           scopes: [
+            'oauth',
             'crm.objects.contacts.read',
             'crm.objects.contacts.write',
             'crm.objects.companies.read',

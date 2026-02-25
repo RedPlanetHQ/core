@@ -1,5 +1,6 @@
 import { type OAuth2Params } from "@core/types";
 import * as simpleOauth2 from "simple-oauth2";
+import crypto from "crypto";
 import {
   getSimpleOAuth2ClientConfig,
   getTemplate,
@@ -14,6 +15,15 @@ import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import type { IntegrationDefinitionV2 } from "@core/database";
 import { env } from "~/env.server";
 import { scheduler } from "./scheduler";
+
+// PKCE utilities
+function generateCodeVerifier(): string {
+  return crypto.randomBytes(32).toString("base64url");
+}
+
+function generateCodeChallenge(verifier: string): string {
+  return crypto.createHash("sha256").update(verifier).digest("base64url");
+}
 
 // Use process.env for config in Remix
 const CALLBACK_URL = `${env.APP_ORIGIN}/api/v1/oauth/callback`;
@@ -47,6 +57,24 @@ export async function callbackHandler(params: CallbackParams) {
 
   if (!sessionRecord) {
     throw new Error("No session found");
+  }
+
+  // Handle OAuth errors returned by the provider
+  if (params.error) {
+    const errorMessage =
+      params.error_description || params.error || "OAuth authorization failed";
+    logger.error("OAuth provider error:", {
+      error: params.error,
+      description: params.error_description,
+    });
+    return new Response(null, {
+      status: 302,
+      headers: {
+        Location: `${sessionRecord.redirectURL}?success=false&error=${encodeURIComponent(
+          errorMessage,
+        )}`,
+      },
+    });
   }
 
   const integrationDefinition = await getIntegrationDefinitionWithId(
@@ -121,12 +149,18 @@ export async function callbackHandler(params: CallbackParams) {
       ),
     );
 
+    // Add code_verifier for PKCE if it was used during authorization
+    const pkceTokenParams = sessionRecord.codeVerifier
+      ? { code_verifier: sessionRecord.codeVerifier }
+      : {};
+
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const tokensResponse: any = await simpleOAuthClient.getToken(
       {
         code: params.code as string,
         redirect_uri: CALLBACK_URL,
         ...additionalTokenParams,
+        ...pkceTokenParams,
       },
       {
         headers,
@@ -230,12 +264,18 @@ export async function getRedirectURL(
     );
 
     const uniqueId = Date.now().toString(36);
+
+    // Generate PKCE code_verifier if PKCE is not disabled
+    const usePkce = !template.disable_pkce;
+    const codeVerifier = usePkce ? generateCodeVerifier() : undefined;
+
     session[uniqueId] = {
       integrationDefinitionId: integrationDefinition.id,
       redirectURL,
       workspaceId: workspaceId as string,
       config: externalConfig,
       userId,
+      codeVerifier,
     };
 
     const scopes = [
@@ -245,11 +285,20 @@ export async function getRedirectURL(
 
     const scopeIdentifier = externalConfig.scope_identifier ?? "scope";
 
+    // Add PKCE params to authorization URL if enabled
+    const pkceParams = codeVerifier
+      ? {
+          code_challenge: generateCodeChallenge(codeVerifier),
+          code_challenge_method: "S256",
+        }
+      : {};
+
     const authorizationUri = simpleOAuthClient.authorizeURL({
       redirect_uri: CALLBACK_URL,
       [scopeIdentifier]: scopes.join(template.scope_separator || " "),
       state: uniqueId,
       ...additionalAuthParams,
+      ...pkceParams,
     });
 
     logger.debug(

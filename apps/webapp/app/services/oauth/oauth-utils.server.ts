@@ -17,6 +17,7 @@ export interface SessionRecord {
   accountIdentifier?: string;
   integrationKeys?: string;
   userId?: string;
+  codeVerifier?: string;
 }
 
 export class OAuthBodyInterface {

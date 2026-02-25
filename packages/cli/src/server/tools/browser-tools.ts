@@ -7,8 +7,6 @@ import {
 	browserCloseAll,
 	isBlockedCommand,
 	getMaxSessions,
-	createSession,
-	deleteSession,
 } from '@/utils/agent-browser';
 
 // ============ Zod Schemas ============
@@ -41,14 +39,6 @@ export const BrowserCommandSchema = zod.object({
 export const BrowserGetSessionsSchema = zod.object({});
 
 export const BrowserCloseAllSchema = zod.object({});
-
-export const BrowserCreateSessionSchema = zod.object({
-	name: zod.string().describe('Session name to create (alphanumeric, hyphens, underscores only)'),
-});
-
-export const BrowserDeleteSessionSchema = zod.object({
-	name: zod.string().describe('Session name to delete'),
-});
 
 // ============ Tool Interface ============
 
@@ -112,26 +102,6 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 		required: [],
 		description: 'Close all configured browser sessions',
 	},
-	browser_create_session: {
-		type: 'object',
-		properties: {
-			name: {
-				type: 'string',
-				description: 'Session name to create (alphanumeric, hyphens, underscores only)',
-			},
-		},
-		required: ['name'],
-	},
-	browser_delete_session: {
-		type: 'object',
-		properties: {
-			name: {
-				type: 'string',
-				description: 'Session name to delete',
-			},
-		},
-		required: ['name'],
-	},
 };
 
 // ============ Tool Definitions ============
@@ -140,7 +110,7 @@ export const browserTools: GatewayTool[] = [
 	{
 		name: 'browser_open',
 		description:
-			'Open a browser with a URL using a pre-configured session. Sessions must be created first with browser_create_session. Use browser_list_sessions to see available sessions.',
+			'Open a browser with a URL using a pre-configured session. Use browser_list_sessions to see available sessions.',
 		inputSchema: jsonSchemas.browser_open!,
 	},
 	{
@@ -163,16 +133,6 @@ export const browserTools: GatewayTool[] = [
 		name: 'browser_close_all',
 		description: 'Close all configured browser sessions at once.',
 		inputSchema: jsonSchemas.browser_close_all!,
-	},
-	{
-		name: 'browser_create_session',
-		description: `Create a new browser session. Session names must be alphanumeric with hyphens/underscores. Maximum ${getMaxSessions()} sessions allowed.`,
-		inputSchema: jsonSchemas.browser_create_session!,
-	},
-	{
-		name: 'browser_delete_session',
-		description: 'Delete a browser session. This closes the browser and removes the session configuration.',
-		inputSchema: jsonSchemas.browser_delete_session!,
 	},
 ];
 
@@ -264,45 +224,6 @@ export async function executeBrowserTool(
 				return {
 					success: true,
 					result: {message: 'Closed all browser sessions', details: r.stdout},
-				};
-			}
-
-			case 'browser_create_session': {
-				const p = BrowserCreateSessionSchema.parse(params);
-				const r = createSession(p.name);
-				if (!r.success) {
-					return {success: false, error: r.error || 'Failed to create session'};
-				}
-				const sessions = browserGetSessions();
-				return {
-					success: true,
-					result: {
-						message: `Created session "${p.name}"`,
-						sessions,
-						count: sessions.length,
-						maxSessions: getMaxSessions(),
-					},
-				};
-			}
-
-			case 'browser_delete_session': {
-				const p = BrowserDeleteSessionSchema.parse(params);
-				// First close the browser
-				await browserClose(p.name);
-				// Then delete from config
-				const r = deleteSession(p.name);
-				if (!r.success) {
-					return {success: false, error: r.error || 'Failed to delete session'};
-				}
-				const sessions = browserGetSessions();
-				return {
-					success: true,
-					result: {
-						message: `Deleted session "${p.name}"`,
-						sessions,
-						count: sessions.length,
-						maxSessions: getMaxSessions(),
-					},
 				};
 			}
 
