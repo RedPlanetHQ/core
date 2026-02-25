@@ -41,9 +41,9 @@ export async function run(eventPayload: IntegrationEventPayload) {
   }
 }
 
-class AtlassianCLI extends IntegrationCLI {
+class JiraCLI extends IntegrationCLI {
   constructor() {
-    super('atlassian', '1.0.0');
+    super('jira', '1.0.0');
   }
 
   protected async handleEvent(
@@ -54,11 +54,11 @@ class AtlassianCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'Atlassian',
-      key: 'atlassian',
+      name: 'Jira',
+      key: 'jira',
       description:
-        'Connect your Atlassian Cloud site to manage Jira issues and Confluence pages. Search, create, and update content across both products.',
-      icon: 'atlassian',
+        'Connect your Jira Cloud to search, create, and manage issues and projects.',
+      icon: 'jira',
       mcp: {
         type: 'cli',
       },
@@ -70,10 +70,6 @@ class AtlassianCLI extends IntegrationCLI {
             'read:jira-work',
             'write:jira-work',
             'read:jira-user',
-            'read:confluence-content.all',
-            'write:confluence-content',
-            'read:confluence-space.summary',
-            'search:confluence',
             'read:me',
             'offline_access',
           ],
@@ -89,8 +85,8 @@ class AtlassianCLI extends IntegrationCLI {
 }
 
 function main() {
-  const atlassianCLI = new AtlassianCLI();
-  atlassianCLI.parse();
+  const jiraCLI = new JiraCLI();
+  jiraCLI.parse();
 }
 
 main();
