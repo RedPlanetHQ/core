@@ -1,15 +1,15 @@
 {
-  "name": "@core/atlassian",
+  "name": "@core/confluence",
   "version": "0.1.0",
-  "description": "Atlassian (Jira + Confluence) integration for Core",
+  "description": "Confluence integration for Core",
   "main": "./bin/index.cjs",
   "type": "module",
   "files": [
-    "atlassian",
+    "confluence",
     "bin"
   ],
   "bin": {
-    "atlassian": "./bin/index.cjs"
+    "confluence": "./bin/index.cjs"
   },
   "scripts": {
     "build": "rimraf dist && esbuild src/index.ts --bundle --platform=node --outfile=dist/index.cjs --format=cjs --packages=external",
