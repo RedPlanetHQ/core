@@ -49,14 +49,19 @@ export async function action({ request, params }: ActionFunctionArgs) {
       return json({ challenge: eventBody.challenge });
     }
 
-    // Slack DM or @mention → route to channel handler
-    if (sourceName === "slack" && (await isSlackDMOrMention(eventBody))) {
-      const result = await parseSlackDMEvent(eventBody);
-      if (result.message) {
-        // Fire and forget — respond to Slack immediately
-        void handleChannelMessage("slack", result.message);
-        return json({ status: "acknowledged" }, { status: 200 });
-      }
+    // Slack DM or @mention → respond immediately, process async
+    if (sourceName === "slack" && isSlackDMOrMention(eventBody)) {
+      void (async () => {
+        try {
+          const result = await parseSlackDMEvent(eventBody);
+          if (result.message) {
+            await handleChannelMessage("slack", result.message);
+          }
+        } catch (err) {
+          logger.error("Slack DM processing failed", { error: String(err) });
+        }
+      })();
+      return json({ status: "acknowledged" }, { status: 200 });
     }
 
     webhookService.handleEvents(
