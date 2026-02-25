@@ -55,7 +55,7 @@ const CreateIssueSchema = z.object({
   body: z.string().optional().describe('Issue body/description'),
   assignees: z.array(z.string()).optional().describe('Usernames to assign to the issue'),
   milestone: z.number().optional().describe('Milestone number to associate'),
-  labels: z.array(z.number()).optional().describe('Label IDs to associate with the issue'),
+  labels: z.array(z.union([z.number(), z.string()])).optional().describe('Label IDs or names to associate with the issue'),
 });
 
 const UpdateIssueSchema = z.object({
@@ -67,6 +67,23 @@ const UpdateIssueSchema = z.object({
   state: z.enum(['open', 'closed']).optional().describe('Issue state'),
   assignees: z.array(z.string()).optional().describe('Usernames to assign'),
   milestone: z.number().nullable().optional().describe('Milestone number (null to remove)'),
+  labels: z.array(z.union([z.number(), z.string()])).optional().describe('Label IDs or names to replace existing labels'),
+});
+
+// Label Schemas
+const ListLabelsSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  limit: z.number().optional().default(100).describe('Results per page'),
+  page: z.number().optional().default(1).describe('Page number'),
+});
+
+const CreateLabelSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  name: z.string().describe('Label name'),
+  color: z.string().describe('Label color (e.g., #ff0000)'),
+  description: z.string().optional().describe('Label description'),
 });
 
 // Comment Schemas
@@ -82,6 +99,35 @@ const CreateIssueCommentSchema = z.object({
   issue_number: z.number().describe('Issue number'),
   body: z.string().describe('Comment body'),
 });
+
+// Helper function to resolve label names to IDs
+async function resolveLabelIds(owner: string, repo: string, labels: (string | number)[]): Promise<number[]> {
+  const ids: number[] = [];
+  const namesToResolve: string[] = [];
+
+  for (const label of labels) {
+    if (typeof label === 'number') {
+      ids.push(label);
+    } else {
+      namesToResolve.push(label);
+    }
+  }
+
+  if (namesToResolve.length > 0) {
+    const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels?limit=1000`);
+    const allLabels = response.data;
+    
+    for (const name of namesToResolve) {
+      const found = allLabels.find((l: any) => l.name === name);
+      if (found) {
+        ids.push(found.id);
+      } else {
+        throw new Error(`Label not found: ${name}`);
+      }
+    }
+  }
+  return ids;
+}
 
 // Pull Request Schemas
 const ListPullRequestsSchema = z.object({
@@ -157,6 +203,18 @@ export async function getTools() {
       name: 'update_issue',
       description: 'Update an existing issue',
       inputSchema: zodToJsonSchema(UpdateIssueSchema),
+    },
+
+    // Label Tools
+    {
+      name: 'list_labels',
+      description: 'List labels in a repository',
+      inputSchema: zodToJsonSchema(ListLabelsSchema),
+    },
+    {
+      name: 'create_label',
+      description: 'Create a new label',
+      inputSchema: zodToJsonSchema(CreateLabelSchema),
     },
 
     // Comment Tools
@@ -299,10 +357,19 @@ URL: ${issue.html_url}`;
       }
 
       case 'create_issue': {
-        const { owner, repo, ...body } = CreateIssueSchema.parse(args);
+        const { owner, repo, labels, ...body } = CreateIssueSchema.parse(args);
+        
+        let labelIds: number[] | undefined;
+        if (labels && labels.length > 0) {
+          labelIds = await resolveLabelIds(owner, repo, labels);
+        }
+
         const response = await codebergClient.post(
           `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`,
-          body,
+          {
+            ...body,
+            labels: labelIds,
+          },
         );
         return {
           content: [
@@ -347,16 +414,65 @@ URL: ${issue.html_url}`;
       }
 
       case 'update_issue': {
-        const { owner, repo, issue_number, ...body } = UpdateIssueSchema.parse(args);
+        const { owner, repo, issue_number, labels, ...body } = UpdateIssueSchema.parse(args);
+        
+        let labelIds: number[] | undefined;
+        if (labels && labels.length > 0) {
+          labelIds = await resolveLabelIds(owner, repo, labels);
+        }
+
         const response = await codebergClient.patch(
           `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues/${issue_number}`,
-          body,
+          {
+            ...body,
+            labels: labelIds,
+          },
         );
         return {
           content: [
             {
               type: 'text',
               text: `Issue #${issue_number} updated successfully\nURL: ${response.data.html_url}`,
+            },
+          ],
+        };
+      }
+
+      // Label Handlers
+      case 'list_labels': {
+        const { owner, repo, limit, page } = ListLabelsSchema.parse(args);
+        const response = await codebergClient.get(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`,
+          { params: { limit, page } },
+        );
+
+        const formattedLabels = response.data
+          .map((label: any) => {
+            return `ID: ${label.id} | Name: ${label.name} | Color: #${label.color}\nDescription: ${label.description || 'None'}`;
+          })
+          .join('\n\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formattedLabels || 'No labels found',
+            },
+          ],
+        };
+      }
+
+      case 'create_label': {
+        const { owner, repo, ...body } = CreateLabelSchema.parse(args);
+        const response = await codebergClient.post(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels`,
+          body,
+        );
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Label created successfully: ${response.data.name} (ID: ${response.data.id})\nColor: #${response.data.color}`,
             },
           ],
         };
