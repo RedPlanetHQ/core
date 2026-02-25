@@ -12,14 +12,8 @@ const DEFAULT_SESSIONS = ['corebrain', 'personal', 'work'];
 
 // Known browser paths for auto-detection
 const BRAVE_PATHS: Record<string, string[]> = {
-	darwin: [
-		'/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-	],
-	linux: [
-		'/usr/bin/brave-browser',
-		'/usr/bin/brave',
-		'/snap/bin/brave',
-	],
+	darwin: ['/Applications/Brave Browser.app/Contents/MacOS/Brave Browser'],
+	linux: ['/usr/bin/brave-browser', '/usr/bin/brave', '/snap/bin/brave'],
 	win32: [
 		'C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
 		'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
@@ -27,13 +21,8 @@ const BRAVE_PATHS: Record<string, string[]> = {
 };
 
 const CHROME_PATHS: Record<string, string[]> = {
-	darwin: [
-		'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-	],
-	linux: [
-		'/usr/bin/google-chrome',
-		'/usr/bin/google-chrome-stable',
-	],
+	darwin: ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'],
+	linux: ['/usr/bin/google-chrome', '/usr/bin/google-chrome-stable'],
 	win32: [
 		'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
 		'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
@@ -63,10 +52,17 @@ export function isSessionConfigured(name: string): boolean {
 /**
  * Create a new session (add to preferences.browser.sessions)
  */
-export function createSession(name: string): {success: boolean; error?: string} {
+export function createSession(name: string): {
+	success: boolean;
+	error?: string;
+} {
 	// Validate name
 	if (!/^[a-zA-Z0-9_-]+$/.test(name)) {
-		return {success: false, error: 'Session name must contain only alphanumeric characters, hyphens, and underscores'};
+		return {
+			success: false,
+			error:
+				'Session name must contain only alphanumeric characters, hyphens, and underscores',
+		};
 	}
 
 	const prefs = getPreferences();
@@ -77,7 +73,12 @@ export function createSession(name: string): {success: boolean; error?: string} 
 	}
 
 	if (currentSessions.length >= MAX_SESSIONS) {
-		return {success: false, error: `Maximum ${MAX_SESSIONS} sessions allowed. Current: ${currentSessions.join(', ')}`};
+		return {
+			success: false,
+			error: `Maximum ${MAX_SESSIONS} sessions allowed. Current: ${currentSessions.join(
+				', ',
+			)}`,
+		};
 	}
 
 	updatePreferences({
@@ -93,7 +94,10 @@ export function createSession(name: string): {success: boolean; error?: string} 
 /**
  * Delete a session from preferences
  */
-export function deleteSession(name: string): {success: boolean; error?: string} {
+export function deleteSession(name: string): {
+	success: boolean;
+	error?: string;
+} {
 	const prefs = getPreferences();
 	const currentSessions = prefs.browser?.sessions || [];
 
@@ -194,7 +198,10 @@ export function getBrowserExecutable(): {type: BrowserType; path?: string} {
 /**
  * Set browser executable in preferences.browser
  */
-export function setBrowserExecutable(type: BrowserType, customPath?: string): {success: boolean; error?: string} {
+export function setBrowserExecutable(
+	type: BrowserType,
+	customPath?: string,
+): {success: boolean; error?: string} {
 	const prefs = getPreferences();
 	let browserExecutable: string | undefined;
 
@@ -204,13 +211,19 @@ export function setBrowserExecutable(type: BrowserType, customPath?: string): {s
 	} else if (type === 'brave') {
 		const bravePath = detectBravePath();
 		if (!bravePath) {
-			return {success: false, error: 'Brave browser not found. Install it or use custom path.'};
+			return {
+				success: false,
+				error: 'Brave browser not found. Install it or use custom path.',
+			};
 		}
 		browserExecutable = bravePath;
 	} else if (type === 'chrome') {
 		const chromePath = detectChromePath();
 		if (!chromePath) {
-			return {success: false, error: 'Chrome browser not found. Install it or use custom path.'};
+			return {
+				success: false,
+				error: 'Chrome browser not found. Install it or use custom path.',
+			};
 		}
 		browserExecutable = chromePath;
 	} else if (type === 'custom') {
@@ -351,7 +364,9 @@ function runShellCommand(command: string): Promise<CommandResult> {
 /**
  * Run a raw agent-browser command without session
  */
-async function runAgentBrowserRawCommand(args: string[]): Promise<CommandResult> {
+async function runAgentBrowserRawCommand(
+	args: string[],
+): Promise<CommandResult> {
 	const binaryPath = getBinaryPath();
 	if (!binaryPath) {
 		return {
@@ -364,6 +379,8 @@ async function runAgentBrowserRawCommand(args: string[]): Promise<CommandResult>
 	return new Promise(resolve => {
 		const proc = spawn(binaryPath, args, {
 			stdio: ['pipe', 'pipe', 'pipe'],
+			env: process.env,
+			detached: false,
 		});
 
 		let stdout = '';
@@ -389,11 +406,12 @@ async function runAgentBrowserRawCommand(args: string[]): Promise<CommandResult>
 
 /**
  * Run an agent-browser command with session
- * agent-browser [--executable-path <path>] --session <name> --session-name <name> <command> <args>
+ * agent-browser [--executable-path <path>] --session <name> --session-name <name> [--headed] <command> <args>
  */
 async function runAgentBrowserCommand(
 	sessionName: string,
 	args: string[],
+	headed: boolean = false,
 ): Promise<CommandResult> {
 	const fullArgs: string[] = [];
 
@@ -404,9 +422,18 @@ async function runAgentBrowserCommand(
 	}
 
 	// Use both --session and --session-name with the same value
-	fullArgs.push('--session', sessionName, '--session-name', sessionName, ...args);
+	fullArgs.push('--session', sessionName, '--session-name', sessionName);
 
-	return runAgentBrowserRawCommand(fullArgs);
+	// --headed right before command
+	if (headed) {
+		fullArgs.push('--headed');
+	}
+
+	fullArgs.push(...args);
+
+	const result = await runAgentBrowserRawCommand(fullArgs);
+
+	return result;
 }
 
 // ============ Session Management ============
@@ -493,13 +520,14 @@ export async function browserOpen(
 		}
 		return {
 			stdout: '',
-			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(', ')}. Create with: corebrain browser create-session <name>`,
+			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(
+				', ',
+			)}. Create with: corebrain browser create-session <name>`,
 			code: 1,
 		};
 	}
 
-	const args = headed ? ['--headed', 'open', url] : ['open', url];
-	return runAgentBrowserCommand(sessionName, args);
+	return runAgentBrowserCommand(sessionName, ['open', url], headed);
 }
 
 /**
@@ -513,7 +541,9 @@ export async function browserClose(
 		const configured = getConfiguredSessions();
 		return {
 			stdout: '',
-			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(', ')}`,
+			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(
+				', ',
+			)}`,
 			code: 1,
 		};
 	}
@@ -542,7 +572,11 @@ export async function browserCloseAll(): Promise<CommandResult> {
 
 	// Close each configured session
 	for (const session of configuredSessions) {
-		const result = await runAgentBrowserRawCommand(['close', '--session', session]);
+		const result = await runAgentBrowserRawCommand([
+			'close',
+			'--session',
+			session,
+		]);
 		if (result.code !== 0 && !result.stderr.includes('not running')) {
 			hasError = true;
 			results.push(`Failed to close ${session}: ${result.stderr}`);
@@ -585,8 +619,8 @@ function filterInternalArgs(args: string[]): string[] {
 		const arg = args[i];
 
 		// Check if this arg is an internal arg we should filter
-		const isInternal = INTERNAL_ARGS.some(internal =>
-			arg === internal || arg.startsWith(`${internal}=`)
+		const isInternal = INTERNAL_ARGS.some(
+			internal => arg === internal || arg.startsWith(`${internal}=`),
 		);
 
 		if (isInternal) {
@@ -618,7 +652,9 @@ export async function browserCommand(
 		const configured = getConfiguredSessions();
 		return {
 			stdout: '',
-			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(', ')}`,
+			stderr: `Session "${sessionName}" is not configured. Available sessions: ${configured.join(
+				', ',
+			)}`,
 			code: 1,
 		};
 	}

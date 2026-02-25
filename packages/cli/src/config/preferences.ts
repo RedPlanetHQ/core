@@ -53,16 +53,11 @@ function loadPreferences(): UserPreferences {
 	return (config.preferences as UserPreferences) || {};
 }
 
-let cachedPreferences: UserPreferences | null = null;
-
 /**
  * Get current user preferences
  */
 export function getPreferences(): UserPreferences {
-	if (!cachedPreferences) {
-		cachedPreferences = loadPreferences();
-	}
-	return cachedPreferences;
+	return loadPreferences();
 }
 
 /**
@@ -84,17 +79,8 @@ export function updatePreferences(newPreferences: Partial<UserPreferences>): voi
 			JSON.stringify(fullConfig, null, 2),
 			'utf-8',
 		);
-
-		// Update cache
-		cachedPreferences = updatedPreferences;
 	} catch (error) {
 		console.warn('Failed to update preferences:', error);
 	}
 }
 
-/**
- * Reload preferences from disk (useful after external changes)
- */
-export function reloadPreferences(): void {
-	cachedPreferences = loadPreferences();
-}

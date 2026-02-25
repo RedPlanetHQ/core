@@ -1,4 +1,5 @@
 import zod from 'zod';
+import fs from 'node:fs';
 import {
 	browserOpen,
 	browserClose,
@@ -18,6 +19,7 @@ export const BrowserOpenSchema = zod.object({
 		.optional()
 		.default('corebrain')
 		.describe('Session name (must be pre-configured, default: corebrain)'),
+	headed: zod.boolean().optional().default(false).describe('Headed session'),
 });
 
 export const BrowserCloseSchema = zod.object({
@@ -58,7 +60,11 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			sessionName: {
 				type: 'string',
 				description:
-					'Session name (must be pre-configured). Default: corebrain. Use browser_list_sessions to see available sessions.',
+					'Session name (must be pre-configured). Default: personal. Use browser_list_sessions to see available sessions.',
+			},
+			headed: {
+				type: 'boolean',
+				description: 'Headed session. Default: false',
 			},
 		},
 		required: ['url'],
@@ -146,14 +152,15 @@ export async function executeBrowserTool(
 		switch (toolName) {
 			case 'browser_open': {
 				const p = BrowserOpenSchema.parse(params);
-				const r = await browserOpen(p.url, p.sessionName);
+
+				const r = await browserOpen(p.url, p.sessionName, p.headed);
 				if (r.code !== 0) {
 					return {success: false, error: r.stderr || 'Failed to open browser'};
 				}
 				return {
 					success: true,
 					result: {
-						message: `Opened ${p.url} with session "${p.sessionName}"`,
+						message: `Opened ${p.url} with session "${p.sessionName} headed "${p.headed}"`,
 						sessionName: p.sessionName,
 					},
 				};

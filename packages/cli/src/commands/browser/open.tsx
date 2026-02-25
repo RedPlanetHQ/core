@@ -13,6 +13,7 @@ export const options = zod.object({
 		.optional()
 		.default('default')
 		.describe('Session name for persistence (default: default)'),
+	headed: zod.boolean().optional().default(false).describe('Headed session'),
 });
 
 type Props = {
@@ -20,7 +21,11 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-async function runBrowserOpen(url: string, sessionName: string): Promise<void> {
+async function runBrowserOpen(
+	url: string,
+	sessionName: string,
+	headed: boolean,
+): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start('Checking agent-browser...');
 
@@ -36,7 +41,7 @@ async function runBrowserOpen(url: string, sessionName: string): Promise<void> {
 
 	spinner.message(`Opening ${url} with session "${sessionName}"...`);
 
-	const result = await browserOpen(url, sessionName);
+	const result = await browserOpen(url, sessionName, headed);
 
 	if (result.code !== 0) {
 		spinner.stop(chalk.red('Failed to open URL'));
@@ -51,7 +56,7 @@ export default function BrowserOpen({args: [url], options}: Props) {
 	const {exit} = useApp();
 
 	useEffect(() => {
-		runBrowserOpen(url, options.sessionName)
+		runBrowserOpen(url, options.sessionName, options.headed)
 			.catch(err => {
 				p.log.error(
 					`Failed to open URL: ${
