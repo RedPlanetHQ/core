@@ -1,6 +1,7 @@
 export type {
   ChannelHandler,
   InboundMessage,
+  InboundParseResult,
   ReplyMetadata,
 } from "./types";
 

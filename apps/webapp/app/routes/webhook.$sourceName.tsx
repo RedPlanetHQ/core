@@ -50,11 +50,11 @@ export async function action({ request, params }: ActionFunctionArgs) {
     }
 
     // Slack DM or @mention → route to channel handler
-    if (sourceName === "slack" && isSlackDMOrMention(eventBody)) {
-      const msg = await parseSlackDMEvent(eventBody);
-      if (msg) {
+    if (sourceName === "slack" && (await isSlackDMOrMention(eventBody))) {
+      const result = await parseSlackDMEvent(eventBody);
+      if (result.message) {
         // Fire and forget — respond to Slack immediately
-        void handleChannelMessage("slack", msg);
+        void handleChannelMessage("slack", result.message);
         return json({ status: "acknowledged" }, { status: 200 });
       }
     }
