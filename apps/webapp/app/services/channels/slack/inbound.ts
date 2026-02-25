@@ -26,11 +26,9 @@ export interface SlackEventPayload {
 
 /**
  * Check if a Slack event is a DM or @mention directed at CORE.
- * For DMs, verifies the channel includes the CORE bot as a member.
+ * Synchronous — no API calls, so we can respond to Slack within 3 seconds.
  */
-export async function isSlackDMOrMention(
-  eventBody: SlackEventPayload,
-): Promise<boolean> {
+export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
   if (eventBody.type !== "event_callback") return false;
   const event = eventBody.event;
   if (!event) return false;
@@ -39,13 +37,6 @@ export async function isSlackDMOrMention(
   if (event.type === "message" && event.channel_type === "im") {
     if (event.bot_id || event.subtype) return false;
     if (!event.user || !event.text) return false;
-
-    // Verify this DM is with the CORE bot
-    if (event.channel && event.user) {
-      const botDM = await isDMWithBot(event.channel, event.user);
-      if (!botDM) return false;
-    }
-
     return true;
   }
 
@@ -122,6 +113,15 @@ export async function parseSlackDMEvent(
   const text = event.text;
 
   if (!slackUserId || !text) return {};
+
+  // For DMs, verify the channel is with the CORE bot (not some other DM)
+  if (event.channel_type === "im" && event.channel) {
+    const botDM = await isDMWithBot(event.channel, slackUserId);
+    if (!botDM) {
+      logger.info("Ignoring DM not directed at CORE bot", { channel: event.channel });
+      return {};
+    }
+  }
 
   // Look up CORE user via IntegrationAccount
   const account = await prisma.integrationAccount.findFirst({
