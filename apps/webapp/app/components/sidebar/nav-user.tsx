@@ -1,4 +1,4 @@
-import { LogOut, Settings } from "lucide-react";
+import { LogOut, Settings, ChevronRight, Check, Plus } from "lucide-react";
 import { AvatarText } from "../ui/avatar";
 import {
   DropdownMenu,
@@ -7,15 +7,27 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuPortal,
 } from "../ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuItem, useSidebar } from "../ui/sidebar";
 import { Button } from "../ui";
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useFetcher } from "@remix-run/react";
 import { type ExtendedUser } from "~/hooks/useUser";
 
 export function NavUser({ user }: { user: ExtendedUser }) {
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
+  const fetcher = useFetcher();
+
+  const handleSwitchWorkspace = (workspaceId: string) => {
+    fetcher.submit(
+      { workspaceId, redirectTo: "/" },
+      { method: "POST", action: "/api/v1/workspace/switch" },
+    );
+  };
 
   return (
     <SidebarMenu>
@@ -58,6 +70,46 @@ export function NavUser({ user }: { user: ExtendedUser }) {
               <Settings size={16} />
               Settings
             </DropdownMenuItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger className="flex gap-2">
+                <AvatarText
+                  text={user.currentWorkspace?.name as string}
+                  className="h-4 w-4 rounded text-xs"
+                />
+                Switch workspace
+              </DropdownMenuSubTrigger>
+              <DropdownMenuPortal>
+                <DropdownMenuSubContent className="min-w-[200px]">
+                  {user.workspaces?.map((workspace) => (
+                    <DropdownMenuItem
+                      key={workspace.id}
+                      className="flex items-center justify-between gap-2"
+                      onClick={() => handleSwitchWorkspace(workspace.id)}
+                      disabled={workspace.id === user.currentWorkspace?.id}
+                    >
+                      <div className="flex items-center gap-2">
+                        <AvatarText
+                          text={workspace.name}
+                          className="h-5 w-5 rounded text-xs"
+                        />
+                        <span className="truncate">{workspace.name}</span>
+                      </div>
+                      {workspace.id === user.currentWorkspace?.id && (
+                        <Check size={14} className="text-primary" />
+                      )}
+                    </DropdownMenuItem>
+                  ))}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    className="flex gap-2"
+                    onClick={() => navigate("/workspace/join")}
+                  >
+                    <Plus size={16} />
+                    Create or join a workspace
+                  </DropdownMenuItem>
+                </DropdownMenuSubContent>
+              </DropdownMenuPortal>
+            </DropdownMenuSub>
             <DropdownMenuItem
               className="flex gap-2"
               onClick={() => navigate("/logout")}

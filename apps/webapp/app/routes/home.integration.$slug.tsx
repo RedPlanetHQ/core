@@ -23,7 +23,6 @@ import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
 import { Plus } from "lucide-react";
 
-
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
@@ -31,7 +30,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const [integrationDefinitions, integrationAccounts] = await Promise.all([
     getIntegrationDefinitions(workspace?.id),
-    getIntegrationAccounts(userId),
+    getIntegrationAccounts(userId, workspace?.id as string),
   ]);
 
   // Combine fixed integrations with dynamic ones
@@ -85,7 +84,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   const [integrationDefinitions, integrationAccounts] = await Promise.all([
     getIntegrationDefinitions(workspace.id),
-    getIntegrationAccounts(userId),
+    getIntegrationAccounts(userId, workspace.id),
   ]);
 
   // Combine fixed integrations with dynamic ones

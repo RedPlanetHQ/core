@@ -135,3 +135,20 @@ export async function getWorkspacePersona(workspaceId: string) {
     },
   });
 }
+
+export async function getUserWorkspaces(userId: string) {
+  const userWorkspaces = await prisma.userWorkspace.findMany({
+    where: {
+      userId,
+      isActive: true,
+    },
+    orderBy: {
+      createdAt: "asc",
+    },
+    include: {
+      workspace: true,
+    },
+  });
+
+  return userWorkspaces.map((uw) => uw.workspace);
+}

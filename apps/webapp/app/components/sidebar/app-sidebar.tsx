@@ -78,7 +78,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         <SidebarHeader>
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">
-              <div className="mt-1 ml-1 flex w-full items-center justify-start gap-2">
+              <div className="ml-1 mt-1 flex w-full items-center justify-start gap-2">
                 <Logo size={20} />
                 C.O.R.E.
               </div>
@@ -108,7 +108,6 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
           <NavMain items={data.navMain} />
           <Agent />
           <Memory />
-
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">

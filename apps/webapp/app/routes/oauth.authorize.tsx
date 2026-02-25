@@ -4,8 +4,13 @@ import {
   redirect,
   type MetaFunction,
 } from "@remix-run/node";
-import { Form, useLoaderData } from "@remix-run/react";
-import { getUser, requireWorkpace } from "~/services/session.server";
+import { Form, useLoaderData, useFetcher } from "@remix-run/react";
+import {
+  getUser,
+  requireWorkpace,
+  getWorkspaceId,
+  requireUser,
+} from "~/services/session.server";
 import {
   oauth2Service,
   OAuth2Errors,
@@ -26,6 +31,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 import { getIconForAuthorise } from "~/components/icon-utils";
+import { getUserWorkspaces, getWorkspaceById } from "~/models/workspace.server";
+import { WorkspaceSelector } from "~/components/workspace-selector";
+import { type Workspace } from "@prisma/client";
 
 export const meta: MetaFunction = ({ matches }) => {
   const parentMeta = matches
@@ -49,7 +57,7 @@ export const meta: MetaFunction = ({ matches }) => {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   // Check if user is authenticated
-  const user = await getUser(request);
+  const user = await requireUser(request);
 
   if (!user) {
     // Redirect to login with return URL
@@ -58,6 +66,13 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     loginUrl.searchParams.set("redirectTo", url.pathname + url.search);
     return redirect(loginUrl.toString());
   }
+
+  // Get workspaces for the user
+  const workspaces = await getUserWorkspaces(user.id);
+  const workspaceId = await getWorkspaceId(request, user.id, user.workspaceId);
+  const currentWorkspace = workspaceId
+    ? await getWorkspaceById(workspaceId)
+    : workspaces[0] || null;
 
   const url = new URL(request.url);
   let scopeParam = url.searchParams.get("scope") || "mcp";
@@ -127,6 +142,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       user,
       client,
       params,
+      workspaces,
+      currentWorkspace,
     };
   } catch (error) {
     return redirect(
@@ -142,7 +159,6 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (!user || !workspace) {
     return redirect("/login");
   }
-
 
   const formData = await request.formData();
   const action = formData.get("action");
@@ -207,8 +223,22 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 };
 
 export default function OAuthAuthorize() {
-  const { user, client, params } = useLoaderData<typeof loader>();
+  const { user, client, params, workspaces, currentWorkspace } =
+    useLoaderData<typeof loader>();
   const [isRedirecting, setIsRedirecting] = useState(false);
+  const [selectedWorkspace, setSelectedWorkspace] = useState(currentWorkspace);
+  const fetcher = useFetcher();
+
+  const hasMultipleWorkspaces = workspaces && workspaces.length > 1;
+
+  const handleWorkspaceChange = (workspace: Workspace) => {
+    setSelectedWorkspace(workspace);
+    // Switch workspace in the background
+    fetcher.submit(
+      { workspaceId: workspace.id },
+      { method: "POST", action: "/api/v1/workspace/switch" },
+    );
+  };
 
   const getScopeIcon = (scope: string) => {
     switch (scope) {
@@ -262,7 +292,7 @@ export default function OAuthAuthorize() {
           <div className="mt-4 space-y-4 sm:mt-6 sm:space-y-6">
             <div className="flex items-center justify-center px-2 text-center">
               <div>
-                <p className="text-base leading-tight font-normal sm:text-lg md:text-xl">
+                <p className="text-base font-normal leading-tight sm:text-lg md:text-xl">
                   {client.name} is requesting access
                 </p>
                 <p className="text-muted-foreground mt-2 text-sm leading-relaxed sm:text-base">
@@ -270,6 +300,14 @@ export default function OAuthAuthorize() {
                 </p>
               </div>
             </div>
+
+            {hasMultipleWorkspaces && selectedWorkspace && (
+              <WorkspaceSelector
+                workspaces={workspaces}
+                selectedWorkspace={selectedWorkspace}
+                onWorkspaceChange={handleWorkspaceChange}
+              />
+            )}
 
             <div>
               <p className="text-muted-foreground mb-2 text-sm font-medium sm:mb-3 sm:text-base">
@@ -283,7 +321,7 @@ export default function OAuthAuthorize() {
                   return (
                     <li
                       key={index}
-                      className={`flex items-start gap-2 border-x border-t border-gray-300 p-2 sm:gap-3 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-br-md rounded-bl-md" : ""} `}
+                      className={`flex items-start gap-2 border-x border-t border-gray-300 p-2 sm:gap-3 ${isLast ? "border-b" : ""} ${isFirst ? "rounded-tl-md rounded-tr-md" : ""} ${isLast ? "rounded-bl-md rounded-br-md" : ""} `}
                     >
                       <div className="mt-0.5 shrink-0">
                         {getScopeIcon(trimmedScope)}

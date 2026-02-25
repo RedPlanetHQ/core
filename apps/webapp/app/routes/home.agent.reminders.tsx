@@ -1,7 +1,20 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
+import {
+  json,
+  type LoaderFunctionArgs,
+  type ActionFunctionArgs,
+} from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import { useRef, useCallback, useEffect, useState } from "react";
-import { Bell, Clock, Mail, MessageSquare, MoreVertical, Pause, Play, Trash2 } from "lucide-react";
+import {
+  Bell,
+  Clock,
+  Mail,
+  MessageSquare,
+  MoreVertical,
+  Pause,
+  Play,
+  Trash2,
+} from "lucide-react";
 import {
   AutoSizer,
   CellMeasurer,
@@ -11,7 +24,11 @@ import {
 } from "react-virtualized";
 import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
-import { getUser, getWorkspaceId } from "~/services/session.server";
+import {
+  getUser,
+  getWorkspaceId,
+  requireUser,
+} from "~/services/session.server";
 import { cn } from "~/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { updateReminder, deleteReminder } from "~/services/reminder.server";
@@ -25,8 +42,12 @@ import {
 } from "~/components/ui/dropdown-menu";
 
 export async function loader({ request }: LoaderFunctionArgs) {
-  const user = await getUser(request);
-  const workspaceId = await getWorkspaceId(request, user?.id as string);
+  const user = await requireUser(request);
+  const workspaceId = await getWorkspaceId(
+    request,
+    user?.id as string,
+    user?.workspaceId,
+  );
 
   const url = new URL(request.url);
   const cursor = url.searchParams.get("cursor");
@@ -114,7 +135,10 @@ interface ReminderItem {
   createdAt: string;
 }
 
-function formatSchedule(schedule: string, maxOccurrences: number | null): string {
+function formatSchedule(
+  schedule: string,
+  maxOccurrences: number | null,
+): string {
   const freqMatch = schedule.match(/FREQ=(\w+)/);
   const hourMatch = schedule.match(/BYHOUR=(\d+)/);
   const minuteMatch = schedule.match(/BYMINUTE=(\d+)/);
@@ -141,7 +165,10 @@ function formatSchedule(schedule: string, maxOccurrences: number | null): string
   if (hour !== null) {
     const ampm = hour >= 12 ? "PM" : "AM";
     const hour12 = hour % 12 || 12;
-    timeStr = minute > 0 ? `${hour12}:${minute.toString().padStart(2, "0")}${ampm}` : `${hour12}${ampm}`;
+    timeStr =
+      minute > 0
+        ? `${hour12}:${minute.toString().padStart(2, "0")}${ampm}`
+        : `${hour12}${ampm}`;
   }
 
   // One-time reminder
@@ -205,24 +232,27 @@ function ReminderRow({ reminder, onToggle, onDelete }: ReminderRowProps) {
       >
         <Bell
           size={16}
-          className={reminder.isActive ? "text-primary" : "text-muted-foreground"}
+          className={
+            reminder.isActive ? "text-primary" : "text-muted-foreground"
+          }
         />
       </div>
 
       {/* Content */}
-      <div className="min-w-0 flex-1 flex flex-col gap-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0 flex-1">
             <p className="line-clamp-2 font-medium">{reminder.text}</p>
           </div>
-
         </div>
 
         <div className="text-muted-foreground flex flex-wrap items-center gap-3 text-xs">
           {/* Schedule */}
           <div className="flex items-center gap-1">
             <Clock size={12} />
-            <span>{formatSchedule(reminder.schedule, reminder.maxOccurrences)}</span>
+            <span>
+              {formatSchedule(reminder.schedule, reminder.maxOccurrences)}
+            </span>
           </div>
 
           {/* Channel */}
@@ -409,7 +439,15 @@ export default function Reminders() {
         </CellMeasurer>
       );
     },
-    [reminders, hasMore, isLoading, loadMore, cache, handleToggle, handleDelete],
+    [
+      reminders,
+      hasMore,
+      isLoading,
+      loadMore,
+      cache,
+      handleToggle,
+      handleDelete,
+    ],
   );
 
   return (
@@ -424,8 +462,8 @@ export default function Reminders() {
             </div>
             <h3 className="text-lg font-medium">No reminders yet</h3>
             <p className="text-muted-foreground mt-1 max-w-md text-center text-sm">
-              Reminders will appear here when you create them through your
-              agent conversations.
+              Reminders will appear here when you create them through your agent
+              conversations.
             </p>
           </div>
         ) : (

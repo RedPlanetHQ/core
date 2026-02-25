@@ -14,9 +14,7 @@ import { requireUserId, requireWorkpace } from "~/services/session.server";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { IntegrationGrid } from "~/components/integrations/integration-grid";
-import {
-  CustomMcpGrid,
-} from "~/components/integrations/custom-mcp-grid";
+import { CustomMcpGrid } from "~/components/integrations/custom-mcp-grid";
 import { type McpIntegration } from "~/components/integrations/custom-mcp-card";
 import { PageHeader } from "~/components/common/page-header";
 import { Plus } from "lucide-react";
@@ -42,8 +40,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const metadata = (user?.metadata as any) || {};
-  const mcpIntegrations = (metadata?.mcpIntegrations ||
-    []) as McpIntegration[];
+  const mcpIntegrations = (metadata?.mcpIntegrations || []) as McpIntegration[];
 
   if (!workspace) {
     return json({
@@ -56,7 +53,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const [integrationDefinitions, integrationAccounts] = await Promise.all([
     getIntegrationDefinitions(workspace.id),
-    getIntegrationAccounts(userId as string),
+    getIntegrationAccounts(userId as string, workspace.id),
   ]);
 
   const allIntegrations = [...integrationDefinitions];
@@ -96,7 +93,7 @@ export async function action({ request }: ActionFunctionArgs) {
         if (!name || !serverUrl) {
           return json(
             { error: "Name and Server URL are required" },
-            { status: 400 }
+            { status: 400 },
           );
         }
 
@@ -133,7 +130,7 @@ export async function action({ request }: ActionFunctionArgs) {
         }
 
         const updatedIntegrations = currentIntegrations.filter(
-          (_, i) => i !== index
+          (_, i) => i !== index,
         );
 
         await updateUser({
@@ -154,7 +151,7 @@ export async function action({ request }: ActionFunctionArgs) {
   } catch (error) {
     return json(
       { error: error instanceof Error ? error.message : "An error occurred" },
-      { status: 400 }
+      { status: 400 },
     );
   }
 }
@@ -327,9 +324,9 @@ export default function Integrations() {
       new Set(
         integrationAccounts
           .filter((acc) => acc.isActive)
-          .map((acc) => acc.integrationDefinitionId)
+          .map((acc) => acc.integrationDefinitionId),
       ),
-    [integrationAccounts]
+    [integrationAccounts],
   );
 
   return (

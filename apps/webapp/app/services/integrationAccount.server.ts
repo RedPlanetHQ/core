@@ -24,11 +24,15 @@ export const getIntegrationAccountForId = async (id: string) => {
   });
 };
 
-export const getIntegrationAccounts = async (userId: string) => {
+export const getIntegrationAccounts = async (
+  userId: string,
+  workspaceId: string,
+) => {
   return prisma.integrationAccount.findMany({
     where: {
       integratedById: userId,
       isActive: true,
+      workspaceId,
     },
     include: {
       integrationDefinition: true,
