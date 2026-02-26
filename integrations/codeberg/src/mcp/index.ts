@@ -896,6 +896,10 @@ URL: ${pr.html_url}`;
           { params: { ref } }
         );
 
+        if (!response.data.content) {
+          throw new Error('File content is empty or not found in response');
+        }
+
         // Codeberg returns base64 content
         const content = Buffer.from(response.data.content, "base64").toString("utf8");
 
