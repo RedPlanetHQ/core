@@ -25,6 +25,7 @@ import {
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/trigger/utils/prisma";
+import axios from "axios";
 
 // ============================================================================
 // Types
@@ -139,13 +140,9 @@ export async function processReminderJob(
       returnDecrypted: true,
     });
 
-    const response = await fetch(`${env.APP_ORIGIN}/api/v1/decision-agent`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
+    const response = await axios.post(
+      `${env.APP_ORIGIN}/api/v1/decision-agent`,
+      {
         trigger,
         context,
         userPersona: userPersona?.content,
@@ -158,10 +155,17 @@ export async function processReminderJob(
         reminderText: reminder.text,
         reminderId: reminder.id,
         timezone,
-      }),
-    });
+      },
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        timeout: 600000,
+      },
+    );
 
-    const result: CASEPipelineResult = await response.json();
+    const result: CASEPipelineResult = await response.data;
 
     if (!result.success) {
       return { success: false, error: result.error };
