@@ -1,6 +1,6 @@
 {
   "name": "@core/codeberg",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Codeberg extension for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",
