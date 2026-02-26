@@ -56,6 +56,10 @@ export async function parseInbound(
       workspaceId: userWorkspace.workspaceId,
       userMessage: body,
       replyTo: from,
+      metadata: {
+        channel: "whatsapp",
+        ...(params.MessageSid ? { messageSid: params.MessageSid } : {}),
+      },
     },
   };
 }

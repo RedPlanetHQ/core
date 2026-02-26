@@ -4,7 +4,12 @@ import {
   upsertConversationHistory,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
-import { generateId, generateText, type LanguageModel, stepCountIs } from "ai";
+import {
+  generateId,
+  generateText,
+  type LanguageModel,
+  stepCountIs,
+} from "ai";
 import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
@@ -28,6 +33,10 @@ interface NoStreamProcessBody {
   messageUserType?: UserTypeEnum;
   /** Action plan from Decision Agent — passed to buildAgentContext for system prompt injection */
   actionPlan?: MessagePlan;
+  /** Optional callback for channels to send intermediate messages (acks) */
+  onMessage?: (message: string) => Promise<void>;
+  /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
+  channelMetadata?: Record<string, string>;
 }
 
 export async function noStreamProcess(
@@ -97,6 +106,8 @@ export async function noStreamProcess(
     source: body.source as any,
     finalMessages,
     actionPlan: body.actionPlan,
+    onMessage: body.onMessage,
+    channelMetadata: body.channelMetadata,
   });
 
   // Generate response using generateText (non-streaming)
@@ -121,6 +132,7 @@ export async function noStreamProcess(
   if (result.text) {
     assistantParts.push({ type: "text", text: result.text });
   }
+
   const assistantMessage = {
     id: assistantMessageId,
     role: "assistant",

@@ -142,11 +142,21 @@ export async function parseSlackDMEvent(
     return {};
   }
 
-  // For app_mention, include channel and thread_ts so reply goes to the thread
-  const metadata: Record<string, string> = {};
+  // Include channel context for typing indicators and integration queries
+  const metadata: Record<string, string> = {
+    channel: "slack",
+    slackUserId,
+  };
+  // Always capture the Slack channel ID (DM or channel) and message timestamp
+  if (event.channel) {
+    metadata.eventChannel = event.channel;
+  }
+  if (event.ts) {
+    metadata.messageTs = event.ts;
+  }
   if (event.type === "app_mention" && event.channel) {
+    // For @mentions, also set slackChannel + threadTs for reply routing
     metadata.slackChannel = event.channel;
-    // Use thread_ts if mention is inside a thread, otherwise ts to start a new thread
     const threadTs = event.thread_ts ?? event.ts;
     if (threadTs) {
       metadata.threadTs = threadTs;

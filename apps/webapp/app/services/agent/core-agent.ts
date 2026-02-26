@@ -39,6 +39,8 @@ export const createTools = async (
   readOnly: boolean = false,
   persona?: string,
   skills?: SkillRef[],
+  /** Optional callback for channels to send intermediate messages (acks) */
+  onMessage?: (message: string) => Promise<void>,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -172,6 +174,26 @@ export const createTools = async (
             approvalRequested = true;
           }
         }
+      },
+    });
+  }
+
+  // Add acknowledge tool for channels with intermediate message support
+  if (onMessage) {
+    tools["acknowledge"] = tool({
+      description:
+        "Send a quick ack ONLY when you're about to call gather_context or take_action. Do NOT call this for simple greetings, thanks, or conversational messages - just respond directly for those.",
+      inputSchema: z.object({
+        message: z
+          .string()
+          .describe(
+            'Brief ack referencing what you\'re about to look up. "checking your calendar." "pulling up your emails." "looking at your PRs." "on it." Keep it contextual.',
+          ),
+      }),
+      execute: async ({ message }) => {
+        logger.info(`Core brain: Acknowledging: ${message}`);
+        await onMessage(message);
+        return "acknowledged";
       },
     });
   }

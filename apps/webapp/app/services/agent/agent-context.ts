@@ -25,6 +25,10 @@ interface BuildAgentContextParams {
   finalMessages: any[];
   /** Action plan from Decision Agent — injected into system prompt for reminder execution */
   actionPlan?: MessagePlan;
+  /** Optional callback for channels to send intermediate messages (acks) */
+  onMessage?: (message: string) => Promise<void>;
+  /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
+  channelMetadata?: Record<string, string>;
 }
 
 interface AgentContext {
@@ -41,6 +45,8 @@ export async function buildAgentContext({
   source,
   finalMessages,
   actionPlan,
+  onMessage,
+  channelMetadata,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills] = await Promise.all([
@@ -65,6 +71,7 @@ export async function buildAgentContext({
     false,
     persona ?? undefined,
     skills,
+    onMessage,
   );
 
   // Build system prompt
@@ -133,6 +140,18 @@ export async function buildAgentContext({
       timeZoneName: "short",
     })}
     </current_datetime>`;
+
+  // Channel metadata context
+  if (channelMetadata && Object.keys(channelMetadata).length > 0) {
+    const metadataEntries = Object.entries(channelMetadata)
+      .map(([k, v]) => `- ${k}: ${v}`)
+      .join("\n");
+    systemPrompt += `
+    <channel_context>
+    This message arrived from an external channel. Metadata:
+    ${metadataEntries}
+    </channel_context>`;
+  }
 
   // Action plan from Decision Agent (reminder/webhook triggered)
   if (actionPlan) {

@@ -15,12 +15,22 @@ export interface InboundParseResult {
   };
 }
 
+export interface ChannelCapabilities {
+  /** Whether the agent should send an intermediate ack message before long operations */
+  sendAcknowledgeMessage: boolean;
+  /** Whether the channel supports a typing/processing indicator */
+  sendTypingIndicator: boolean;
+}
+
 export interface ChannelHandler {
   slug: string;
+  capabilities: ChannelCapabilities;
   parseInbound(request: Request): Promise<InboundParseResult>;
   sendReply(to: string, text: string, metadata?: ReplyMetadata): Promise<void>;
   getFormat(): string;
   emptyResponse(): Response;
+  /** Send a typing/processing indicator. Only called if capabilities.sendTypingIndicator is true. */
+  sendTypingIndicator?(metadata?: Record<string, string>): Promise<void>;
 }
 
 export interface InboundMessage {
