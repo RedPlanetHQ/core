@@ -101,8 +101,7 @@ export async function processInboundMessage({
     workspaceId,
   );
 
-  const responseText =
-    assistantMessage.text || "I processed your request.";
+  const responseText = assistantMessage.text || "I processed your request.";
 
   return { responseText, conversationId };
 }

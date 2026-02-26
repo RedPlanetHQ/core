@@ -4,12 +4,7 @@ import {
   upsertConversationHistory,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
-import {
-  generateId,
-  generateText,
-  type LanguageModel,
-  stepCountIs,
-} from "ai";
+import { generateId, generateText, type LanguageModel, stepCountIs } from "ai";
 import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
@@ -142,7 +137,7 @@ export async function noStreamProcess(
   // Save assistant message to history
   await upsertConversationHistory(
     assistantMessageId,
-    assistantMessage.parts,
+    result.response.messages,
     body.id,
     UserTypeEnum.Agent,
   );
