@@ -317,7 +317,7 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	};
 }
 
-function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
+async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// First check stored session exists
 	const session = getSession(params.sessionId);
 	if (!session) {
@@ -332,12 +332,14 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 
 	// Read from agent's session file using the appropriate reader
 	const {
-		output,
+		entries,
 		totalLines,
 		returnedLines,
 		fileExists,
+		fileSizeBytes,
+		fileSizeHuman,
 		error: readError,
-	} = readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
+	} = await readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
 		lines: params.lines,
 		offset: params.offset,
 		tail: params.tail,
@@ -364,7 +366,7 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			dir: session.dir,
 			status,
 			running,
-			output,
+			entries,
 			error: readError || session.error,
 			exitCode: null,
 			startedAt: session.startedAt,
@@ -372,6 +374,8 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			totalLines,
 			returnedLines,
 			fileExists,
+			fileSizeBytes,
+			fileSizeHuman,
 		},
 	};
 }
@@ -418,7 +422,7 @@ export async function executeCodingTool(
 				return handleCloseSession(CloseSessionSchema.parse(params));
 
 			case 'coding_read_session':
-				return handleReadSession(ReadSessionSchema.parse(params));
+				return await handleReadSession(ReadSessionSchema.parse(params));
 
 			case 'coding_list_sessions':
 				ListSessionsSchema.parse(params);
