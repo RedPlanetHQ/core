@@ -195,6 +195,33 @@ const DeleteFileSchema = z.object({
   sha: z.string().describe('The blob SHA of the file being deleted'),
 });
 
+// Issue Template Schemas
+const ListIssueTemplatesSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+});
+
+const GetIssueTemplateSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  filename: z.string().describe('Template filename'),
+});
+
+const CreateIssueFromTemplateSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+  filename: z.string().describe('Template filename'),
+  field_values: z.record(z.string(), z.any()).describe('Values for template fields'),
+  title_override: z.string().optional().describe('Override the issue title'),
+  labels_override: z.array(z.string()).optional().describe('Override/add labels'),
+});
+
+// Project Schemas (Placeholder for parity)
+const ListProjectsSchema = z.object({
+  owner: z.string().describe('Repository owner'),
+  repo: z.string().describe('Repository name'),
+});
+
 // Search Schema
 const SearchRepositoriesSchema = z.object({
   q: z.string().describe('Keyword to search'),
@@ -305,15 +332,29 @@ export async function getTools() {
       description: 'Create a new label',
       inputSchema: zodToJsonSchema(CreateLabelSchema),
     },
+
+    // Project Tools
     {
-      name: 'update_label',
-      description: 'Update an existing label',
-      inputSchema: zodToJsonSchema(UpdateLabelSchema),
+      name: 'list_projects',
+      description: 'List projects in a repository',
+      inputSchema: zodToJsonSchema(ListProjectsSchema),
+    },
+
+    // Issue Template Tools
+    {
+      name: 'list_issue_templates',
+      description: 'Discover issue templates in a repository (.forgejo/ISSUE_TEMPLATE)',
+      inputSchema: zodToJsonSchema(ListIssueTemplatesSchema),
     },
     {
-      name: 'delete_label',
-      description: 'Delete a label',
-      inputSchema: zodToJsonSchema(DeleteLabelSchema),
+      name: 'get_issue_template',
+      description: 'Get and parse a specific issue template',
+      inputSchema: zodToJsonSchema(GetIssueTemplateSchema),
+    },
+    {
+      name: 'create_issue_from_template',
+      description: 'Create an issue using a template with field values',
+      inputSchema: zodToJsonSchema(CreateIssueFromTemplateSchema),
     },
 
     // Comment Tools
@@ -670,6 +711,108 @@ URL: ${issue.html_url}`;
               text: `Label ID ${label_id} deleted successfully.`,
             },
           ],
+        };
+      }
+
+      // Project Handlers
+      case 'list_projects': {
+        const { owner, repo } = ListProjectsSchema.parse(args);
+        const response = await codebergClient.get(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/projects`,
+        );
+
+        const formattedProjects = response.data
+          .map((p: any) => {
+            return `ID: ${p.id} | Name: ${p.title}\nDescription: ${p.description || 'None'}\nURL: ${p.html_url}`;
+          })
+          .join('\n\n');
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: formattedProjects || 'No projects found',
+            },
+          ],
+        };
+      }
+
+      // Issue Template Handlers
+      case 'list_issue_templates': {
+        const { owner, repo } = ListIssueTemplatesSchema.parse(args);
+        // Codeberg/Forgejo looks in .forgejo/ISSUE_TEMPLATE
+        try {
+          const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE`);
+          const files = response.data || [];
+          
+          const templates = files
+            .filter((f: any) => f.name.endsWith('.yml') || f.name.endsWith('.yaml') || f.name.endsWith('.md'))
+            .map((f: any) => `- ${f.name} (Type: ${f.name.endsWith('.md') ? 'Markdown' : 'YAML'})`)
+            .join('\n');
+
+          return {
+            content: [{ type: 'text', text: `Issue templates in ${owner}/${repo}:\n\n${templates || 'No templates found.'}` }],
+          };
+        } catch (error: any) {
+          if (error.response?.status === 404) {
+            return { content: [{ type: 'text', text: 'No issue templates found in .forgejo/ISSUE_TEMPLATE.' }] };
+          }
+          throw error;
+        }
+      }
+
+      case 'get_issue_template': {
+        const { owner, repo, filename } = GetIssueTemplateSchema.parse(args);
+        const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE/${filename}`);
+        const content = Buffer.from(response.data.content, 'base64').toString('utf8');
+
+        return {
+          content: [{ type: 'text', text: `Template: ${filename}\n\n\`\`\`\n${content}\n\`\`\`` }],
+        };
+      }
+
+      case 'create_issue_from_template': {
+        const { owner, repo, filename, field_values, title_override, labels_override } = CreateIssueFromTemplateSchema.parse(args);
+        
+        // 1. Get the template to parse metadata
+        const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE/${filename}`);
+        const rawContent = Buffer.from(response.data.content, 'base64').toString('utf8');
+
+        // Simple YAML/Metadata extraction
+        const labels: string[] = [...(labels_override || [])];
+        let title = title_override || 'Issue from template';
+        
+        if (filename.endsWith('.yml') || filename.endsWith('.yaml')) {
+          const labelMatch = rawContent.match(/labels:\s*\[(.*?)\]/);
+          if (labelMatch) {
+            const templateLabels = labelMatch[1].split(',').map(l => l.trim().replace(/['"]/g, ''));
+            labels.push(...templateLabels);
+          }
+          const nameMatch = rawContent.match(/^name:\s*(.*)$/m);
+          if (nameMatch && !title_override) title = nameMatch[1].trim().replace(/['"]/g, '');
+        }
+
+        // 2. Resolve label names to IDs
+        let labelIds: number[] | undefined;
+        if (labels.length > 0) {
+          labelIds = await resolveLabelIds(owner, repo, labels);
+        }
+
+        // 3. Construct body from field values
+        let body = `### Generated from template: ${filename}\n\n`;
+        for (const [key, value] of Object.entries(field_values)) {
+          body += `#### ${key}\n${value}\n\n`;
+        }
+
+        // 4. Create the issue
+        const createResponse = await codebergClient.post(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`, {
+          title,
+          body,
+          labels: labelIds,
+        });
+
+        return {
+          content: [{ type: 'text', text: `Issue created successfully from template: #${createResponse.data.number}\nURL: ${createResponse.data.html_url}` }],
         };
       }
 
