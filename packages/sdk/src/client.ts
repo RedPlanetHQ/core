@@ -15,6 +15,12 @@ import type {
   GetDocumentsResponse,
   GetDocumentInput,
   GetDocumentResponse,
+  GetGatewaysResponse,
+  ExecuteGatewayInput,
+  ExecuteGatewayToolInput,
+  ExecuteGatewayResponse,
+  IntegrationExplorerInput,
+  IntegrationExplorerResponse,
   AuthorizationCodeResponse,
   TokenExchangeInput,
   TokenExchangeResponse,
@@ -225,6 +231,56 @@ export class CoreClient {
     return this.request<GetDocumentResponse>(
       "GET",
       `/api/v1/documents/${params.documentId}`,
+    );
+  }
+
+  /**
+   * List all connected gateways for the workspace.
+   * GET /api/v1/gateways
+   */
+  async getGateways(): Promise<GetGatewaysResponse> {
+    return this.request<GetGatewaysResponse>("GET", "/api/v1/gateways");
+  }
+
+  /**
+   * Run a gateway sub-agent with an intent and return the final text result.
+   * POST /api/v1/gateways/:gatewayId/execute
+   */
+  async executeGateway(
+    params: ExecuteGatewayInput,
+  ): Promise<ExecuteGatewayResponse> {
+    return this.request<ExecuteGatewayResponse>(
+      "POST",
+      `/api/v1/gateways/${params.gatewayId}/execute`,
+      { body: { intent: params.intent } },
+    );
+  }
+
+  /**
+   * Proxy a single tool call to a gateway via server websocket.
+   * POST /api/v1/gateways/:gatewayId/execute  (mode: "tool")
+   */
+  async executeGatewayTool(
+    params: ExecuteGatewayToolInput,
+  ): Promise<ExecuteGatewayResponse> {
+    return this.request<ExecuteGatewayResponse>(
+      "POST",
+      `/api/v1/gateways/${params.gatewayId}/execute`,
+      { body: { mode: "tool", toolName: params.toolName, params: params.params } },
+    );
+  }
+
+  /**
+   * Run the integration explorer for a query and return the final text result.
+   * POST /api/v1/integration-explorer
+   */
+  async runIntegrationExplorer(
+    params: IntegrationExplorerInput,
+  ): Promise<IntegrationExplorerResponse> {
+    return this.request<IntegrationExplorerResponse>(
+      "POST",
+      "/api/v1/integration-explorer",
+      { body: params },
     );
   }
 
