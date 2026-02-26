@@ -5,6 +5,10 @@ import { SLACK_FORMAT } from "./format";
 
 export const slackChannel: ChannelHandler = {
   slug: "slack",
+  capabilities: {
+    sendAcknowledgeMessage: true,
+    sendTypingIndicator: false,
+  },
   parseInbound,
   sendReply,
   getFormat: () => SLACK_FORMAT,

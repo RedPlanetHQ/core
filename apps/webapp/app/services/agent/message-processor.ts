@@ -21,6 +21,10 @@ interface ProcessInboundMessageParams {
   messageUserType?: UserTypeEnum;
   /** Action plan from Decision Agent — injected into core brain system prompt */
   actionPlan?: MessagePlan;
+  /** Optional callback for channels to send intermediate messages (acks) */
+  onMessage?: (message: string) => Promise<void>;
+  /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
+  channelMetadata?: Record<string, string>;
 }
 
 interface ProcessInboundMessageResult {
@@ -69,6 +73,8 @@ export async function processInboundMessage({
   userMessage,
   messageUserType,
   actionPlan,
+  onMessage,
+  channelMetadata,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId = await getOrCreateDailyConversation(
     userId,
@@ -88,6 +94,8 @@ export async function processInboundMessage({
       source: channel,
       messageUserType,
       actionPlan,
+      onMessage,
+      channelMetadata,
     },
     userId,
     workspaceId,

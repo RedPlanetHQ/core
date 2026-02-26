@@ -45,11 +45,30 @@ export async function handleChannelMessage(
       workspaceId: msg.workspaceId,
     });
 
+    // Send typing indicator immediately (non-blocking) so user knows we're processing
+    if (channel.capabilities.sendTypingIndicator && channel.sendTypingIndicator) {
+      channel.sendTypingIndicator(msg.metadata).catch((err) => {
+        logger.warn(`[${slug}] Typing indicator failed`, { error: String(err) });
+      });
+    }
+
+    // Build onMessage callback for intermediate ack messages (channel-configurable)
+    const onMessage = channel.capabilities.sendAcknowledgeMessage
+      ? async (ackMessage: string) => {
+          await channel.sendReply(msg!.replyTo, ackMessage, {
+            ...msg!.metadata,
+            workspaceId: msg!.workspaceId,
+          });
+        }
+      : undefined;
+
     const { responseText } = await processInboundMessage({
       userId: msg.userId,
       workspaceId: msg.workspaceId,
       channel: slug as ChannelType,
       userMessage: msg.userMessage,
+      onMessage,
+      channelMetadata: msg.metadata,
     });
 
     logger.info(`[${slug}] Got response, sending reply to ${msg.replyTo}`, {

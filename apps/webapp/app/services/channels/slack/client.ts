@@ -64,6 +64,62 @@ export async function sendSlackMessage(
 }
 
 /**
+ * Add a reaction to a Slack message.
+ * Used as a "typing indicator" — e.g. :eyes: while processing.
+ */
+export async function addSlackReaction(
+  accessToken: string,
+  channel: string,
+  timestamp: string,
+  emoji: string = "eyes",
+): Promise<void> {
+  try {
+    const res = await fetch("https://slack.com/api/reactions.add", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ channel, timestamp, name: emoji }),
+    });
+    const data = await res.json();
+    if (!data.ok && data.error !== "already_reacted") {
+      logger.warn("Failed to add Slack reaction", { error: data.error });
+    }
+  } catch (error) {
+    // Non-critical — don't let reaction failures break the flow
+    logger.warn("Failed to add Slack reaction", { error: String(error) });
+  }
+}
+
+/**
+ * Remove a reaction from a Slack message.
+ */
+export async function removeSlackReaction(
+  accessToken: string,
+  channel: string,
+  timestamp: string,
+  emoji: string = "eyes",
+): Promise<void> {
+  try {
+    const res = await fetch("https://slack.com/api/reactions.remove", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ channel, timestamp, name: emoji }),
+    });
+    const data = await res.json();
+    if (!data.ok && data.error !== "no_reaction") {
+      logger.warn("Failed to remove Slack reaction", { error: data.error });
+    }
+  } catch (error) {
+    logger.warn("Failed to remove Slack reaction", { error: String(error) });
+  }
+}
+
+/**
  * Send a DM to a Slack user.
  * Opens a conversation first, then posts a message.
  */

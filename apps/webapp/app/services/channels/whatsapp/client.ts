@@ -88,6 +88,37 @@ export async function sendWhatsAppMessage(
 }
 
 /**
+ * Send a typing indicator via the Twilio Messaging API.
+ * Requires the incoming MessageSid so Twilio knows which conversation.
+ */
+export async function sendWhatsAppTypingIndicator(
+  messageSid: string,
+): Promise<void> {
+  try {
+    const auth = Buffer.from(
+      `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`,
+    ).toString("base64");
+
+    await fetch("https://messaging.twilio.com/v2/Indicators/Typing.json", {
+      method: "POST",
+      headers: {
+        Authorization: `Basic ${auth}`,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        messageId: messageSid,
+        channel: "whatsapp",
+      }),
+    });
+  } catch (error) {
+    // Non-critical — don't let typing indicator failures break the flow
+    logger.warn("Failed to send WhatsApp typing indicator", {
+      error: String(error),
+    });
+  }
+}
+
+/**
  * Verify Twilio webhook signature
  */
 export function verifyTwilioSignature(

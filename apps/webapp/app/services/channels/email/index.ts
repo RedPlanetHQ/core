@@ -5,6 +5,10 @@ import { EMAIL_FORMAT } from "./format";
 
 export const emailChannel: ChannelHandler = {
   slug: "email",
+  capabilities: {
+    sendAcknowledgeMessage: false,
+    sendTypingIndicator: false,
+  },
   parseInbound,
   sendReply,
   getFormat: () => EMAIL_FORMAT,
