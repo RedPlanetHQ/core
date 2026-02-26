@@ -157,6 +157,26 @@ Session management (`create-session`, `delete-session`, `set-browser`) is done v
 
 ---
 
+## Headed Mode (Manual Handoff)
+
+By default, browsers run in headless mode (no visible window). When you need to take manual control or watch what CORE is doing, ask it to open the browser in **headed mode**.
+
+**Example prompts:**
+- "Open LinkedIn in headed mode so I can take over"
+- "Start a headed browser session for the checkout flow"
+- "I need to intervene - open this in headed mode"
+
+<Info>
+**Troubleshooting headed mode:** If the browser doesn't appear in headed mode, close all sessions first and then ask CORE to open a new headed session:
+
+1. Ask: "Close all browser sessions"
+2. Then: "Open [URL] in headed mode with session [name]"
+
+This ensures no existing headless session interferes with the headed request.
+</Info>
+
+---
+
 ## Prerequisites
 
 The browser capability requires `agent-browser` to be installed:

@@ -87,6 +87,12 @@ ${programArgs}
 	<dict>
 		<key>PATH</key>
 		<string>${userPath}</string>
+		<key>HOME</key>
+		<string>${homedir()}</string>
+		<key>USER</key>
+		<string>${process.env.USER || ''}</string>
+		<key>DISPLAY</key>
+		<string>:0</string>
 	</dict>
 </dict>
 </plist>
