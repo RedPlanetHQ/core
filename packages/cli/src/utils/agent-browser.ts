@@ -6,7 +6,7 @@ import type {BrowserType} from '@/types/config';
 // Constants
 const BINARY_NAME = 'agent-browser';
 const MAX_SESSIONS = 5;
-const DEFAULT_SESSIONS = ['corebrain', 'personal', 'work'];
+const DEFAULT_SESSIONS = ['personal', 'work', 'misc'];
 
 // ============ Browser Executable Paths ============
 

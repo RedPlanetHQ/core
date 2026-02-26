@@ -1,11 +1,26 @@
 /**
+ * A single JSONL entry from a session
+ */
+export interface SessionEntry {
+	type: string;
+	message?: {
+		role: string;
+		content: string | Array<{type: string; text?: string}>;
+	};
+	timestamp?: string;
+	[key: string]: unknown;
+}
+
+/**
  * Result from reading agent session output
  */
 export interface AgentReadResult {
-	output: string;
+	entries: SessionEntry[];
 	totalLines: number;
 	returnedLines: number;
 	fileExists: boolean;
+	fileSizeBytes: number;
+	fileSizeHuman: string;
 	error?: string;
 }
 
@@ -29,7 +44,7 @@ export interface AgentReader {
 		dir: string,
 		sessionId: string,
 		options?: AgentReadOptions,
-	): AgentReadResult;
+	): Promise<AgentReadResult>;
 
 	/**
 	 * Check if this agent's session file exists
