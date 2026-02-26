@@ -7,6 +7,7 @@ import {
   handleExecuteIntegrationAction,
   handleGetIntegrationActions,
 } from "~/utils/mcp/integration-operations";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 export interface Integration {
   slug: string;
@@ -137,6 +138,7 @@ export async function runIntegrationExplorer(
   source: string,
   userId: string,
   abortSignal?: AbortSignal,
+  executorTools?: OrchestratorTools,
 ): Promise<IntegrationExplorerResult> {
   const startTime = Date.now();
 
@@ -172,12 +174,9 @@ export async function runIntegrationExplorer(
       }),
       execute: async ({ accountId, query }) => {
         try {
-          const actions = await handleGetIntegrationActions({
-            accountId,
-            query,
-            userId,
-          });
-          // Return full action details including schema
+          const actions = executorTools
+            ? await executorTools.getIntegrationActions(accountId, query, userId)
+            : await handleGetIntegrationActions({ accountId, query, userId });
           return JSON.stringify(actions, null, 2);
         } catch (error) {
           logger.warn(`Failed to get actions for ${accountId}: ${error}`);
@@ -202,13 +201,9 @@ export async function runIntegrationExplorer(
           logger.info(
             `IntegrationExplorer: Executing ${accountId}/${action} with params: ${JSON.stringify(parsedParams)}`,
           );
-          const result = await handleExecuteIntegrationAction({
-            accountId,
-            action,
-            parameters: parsedParams,
-            source,
-            userId,
-          });
+          const result = executorTools
+            ? await executorTools.executeIntegrationAction(accountId, action, parsedParams, userId, source)
+            : await handleExecuteIntegrationAction({ accountId, action, parameters: parsedParams, source, userId });
           return JSON.stringify(result);
         } catch (error: any) {
           const errorMessage =
@@ -217,7 +212,6 @@ export async function runIntegrationExplorer(
             `Integration action failed: ${accountId}/${action}`,
             error,
           );
-          // Return error details so LLM can retry with corrected parameters
           return `ERROR: ${errorMessage}. Check the inputSchema and retry with corrected parameters.`;
         }
       },

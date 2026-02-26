@@ -23,6 +23,7 @@ import { getChannel } from "~/services/channels";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/trigger/utils/prisma";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // ============================================================================
 // Types
@@ -43,6 +44,8 @@ export interface CASEPipelineInput {
   /** ID for logging and state updates */
   reminderId: string;
   timezone: string;
+  /** Optional tool executor — defaults to DirectOrchestratorTools (direct DB calls) */
+  executorTools?: OrchestratorTools;
 }
 
 export interface CASEPipelineResult {
@@ -71,7 +74,7 @@ export interface CASEPipelineResult {
 export async function runCASEPipeline(
   input: CASEPipelineInput,
 ): Promise<CASEPipelineResult> {
-  const { trigger, context, userPersona, userData, reminderText, reminderId, timezone } = input;
+  const { trigger, context, userPersona, userData, reminderText, reminderId, timezone, executorTools } = input;
 
   try {
     // =========================================================================
@@ -95,7 +98,7 @@ export async function runCASEPipeline(
     // =========================================================================
     // Step 2: Execute the plan
     // =========================================================================
-    await executePlan(plan, trigger, userData, { id: reminderId, text: reminderText }, timezone, userPersona);
+    await executePlan(plan, trigger, userData, { id: reminderId, text: reminderText }, timezone, userPersona, executorTools);
 
     logger.info(`[CASE pipeline] Successfully processed ${reminderId}`);
 
@@ -140,6 +143,7 @@ async function executePlan(
   reminder: { id: string; text: string },
   timezone: string,
   userPersona?: string,
+  executorTools?: OrchestratorTools,
 ) {
   const { channel } = trigger;
 
@@ -219,6 +223,7 @@ async function executePlan(
             trigger.channel,
             timezone,
             userPersona,
+            executorTools,
           );
           break;
         default:
@@ -332,6 +337,7 @@ async function executeIntegrationAction(
   channel: string,
   timezone: string,
   userPersona?: string,
+  executorTools?: OrchestratorTools,
 ) {
   const data = action.data || {};
   const query = (data.query as string) || action.description;
@@ -350,6 +356,8 @@ async function executeIntegrationAction(
     channel,
     undefined,
     userPersona,
+    undefined,
+    executorTools,
   );
 
   // Consume the stream to completion (silent — no UI)

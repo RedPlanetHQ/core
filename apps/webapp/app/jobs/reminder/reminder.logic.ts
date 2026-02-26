@@ -16,7 +16,10 @@ import {
   buildReminderContext,
   createReminderTriggerFromDb,
 } from "~/services/agent/context/decision-context";
-import type { CASEPipelineResult } from "~/services/agent/decision-agent-pipeline";
+import {
+  runCASEPipeline,
+  type CASEPipelineResult,
+} from "~/services/agent/decision-agent-pipeline";
 import { logger } from "~/services/logger.service";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import {
@@ -25,7 +28,8 @@ import {
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/trigger/utils/prisma";
-import axios from "axios";
+import { CoreClient } from "@redplanethq/sdk";
+import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 
 // ============================================================================
 // Types
@@ -131,7 +135,7 @@ export async function processReminderJob(
     ]);
 
     // =========================================================================
-    // Call decision agent API (run CASE → execute plan)
+    // Run CASE pipeline directly (no HTTP round-trip)
     // =========================================================================
     const { token } = await getOrCreatePersonalAccessToken({
       name: "case-internal",
@@ -140,32 +144,24 @@ export async function processReminderJob(
       returnDecrypted: true,
     });
 
-    const response = await axios.post(
-      `${env.APP_ORIGIN}/api/v1/decision-agent`,
-      {
-        trigger,
-        context,
-        userPersona: userPersona?.content,
-        userData: {
-          userId: user?.id as string,
-          email: user?.email as string,
-          phoneNumber: user?.phoneNumber ?? undefined,
-          workspaceId,
-        },
-        reminderText: reminder.text,
-        reminderId: reminder.id,
-        timezone,
-      },
-      {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        timeout: 600000,
-      },
-    );
+    const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
+    const executorTools = new HttpOrchestratorTools(client);
 
-    const result: CASEPipelineResult = await response.data;
+    const result: CASEPipelineResult = await runCASEPipeline({
+      trigger,
+      context,
+      userPersona: userPersona?.content,
+      userData: {
+        userId: user?.id as string,
+        email: user?.email as string,
+        phoneNumber: user?.phoneNumber ?? undefined,
+        workspaceId,
+      },
+      reminderText: reminder.text,
+      reminderId: reminder.id,
+      timezone,
+      executorTools,
+    });
 
     if (!result.success) {
       return { success: false, error: result.error };
