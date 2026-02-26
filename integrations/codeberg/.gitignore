@@ -4,3 +4,6 @@ build
 .turbo
 .DS_Store
 coverage
+
+
+bin
