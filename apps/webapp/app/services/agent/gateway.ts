@@ -11,6 +11,7 @@ import { logger } from "~/services/logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { getConnectedGateways, getGateway } from "~/services/gateway.server";
 import { callGatewayTool } from "../../../websocket";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -85,6 +86,7 @@ function gatewayToolToZodSchema(
 function createDirectGatewayTools(
   gatewayId: string,
   gatewayTools: GatewayTool[],
+  executorTools?: OrchestratorTools,
 ) {
   const tools: Record<string, any> = {};
 
@@ -100,12 +102,9 @@ function createDirectGatewayTools(
             `GatewayExplorer: Executing ${gatewayId}/${gatewayTool.name} with params: ${JSON.stringify(params)}`,
           );
 
-          const result = await callGatewayTool(
-            gatewayId,
-            gatewayTool.name,
-            params as Record<string, unknown>,
-            60000, // 60s timeout
-          );
+          const result = executorTools
+            ? await executorTools.executeGatewayTool(gatewayId, gatewayTool.name, params as Record<string, unknown>)
+            : await callGatewayTool(gatewayId, gatewayTool.name, params as Record<string, unknown>, 60000);
 
           return JSON.stringify(result, null, 2);
         } catch (error: unknown) {
@@ -173,6 +172,7 @@ export async function runGatewayExplorer(
   gatewayId: string,
   intent: string,
   abortSignal?: AbortSignal,
+  executorTools?: OrchestratorTools,
 ): Promise<GatewayExplorerResult> {
   const startTime = Date.now();
 
@@ -191,7 +191,7 @@ export async function runGatewayExplorer(
 
   // Create direct tools from the gateway's tool definitions
   // Each gateway tool becomes a real Zod-typed tool the sub-agent can call directly
-  const tools = createDirectGatewayTools(gatewayId, gatewayTools);
+  const tools = createDirectGatewayTools(gatewayId, gatewayTools, executorTools);
 
   const model = getModelForTask("high");
   const modelInstance = getModel(model);
@@ -222,15 +222,7 @@ export async function runGatewayExplorer(
 
 // === Get Gateway Agents (for core-agent tools) ===
 
-export interface GatewayAgentInfo {
-  id: string;
-  name: string;
-  description: string;
-  tools: string[]; // Tool names for display
-  platform: string | null;
-  hostname: string | null;
-  status: "CONNECTED" | "DISCONNECTED";
-}
+export type { GatewayAgentInfo } from "~/services/agent/orchestrator-tools";
 
 /**
  * Get all gateways as agent info for the workspace

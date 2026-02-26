@@ -8,14 +8,13 @@ import {
 } from "ai";
 import { z } from "zod";
 
-import { runIntegrationExplorer, runWebExplorer } from "./explorers";
-import { searchMemoryWithAgent } from "./memory";
+import { runWebExplorer } from "./explorers";
+import { runIntegrationExplorer } from "./explorers/integration-explorer";
+import { runGatewayExplorer } from "./gateway";
 import { logger } from "../logger.service";
-import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import { getGatewayAgents, runGatewayExplorer } from "./gateway";
 import { type SkillRef } from "./types";
-import { prisma } from "~/db.server";
+import { OrchestratorTools, DirectOrchestratorTools } from "./orchestrator-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -224,15 +223,13 @@ export async function runOrchestrator(
   abortSignal?: AbortSignal,
   userPersona?: string,
   skills?: SkillRef[],
+  executorTools?: OrchestratorTools,
 ): Promise<OrchestratorResult> {
   const startTime = Date.now();
+  const executor = executorTools ?? new DirectOrchestratorTools();
 
   // Get user's connected integrations
-  const connectedIntegrations =
-    await IntegrationLoader.getConnectedIntegrationAccounts(
-      userId,
-      workspaceId,
-    );
+  const connectedIntegrations = await executor.getIntegrations(userId, workspaceId);
 
   const integrationsList = connectedIntegrations
     .map(
@@ -242,7 +239,7 @@ export async function runOrchestrator(
     .join("\n");
 
   // Get connected gateways
-  const gateways = await getGatewayAgents(workspaceId);
+  const gateways = await executor.getGateways(workspaceId);
   const gatewaysList = gateways
     .map(
       (gw, index) =>
@@ -271,19 +268,7 @@ export async function runOrchestrator(
     }),
     execute: async ({ query }) => {
       logger.info(`Orchestrator: memory search - ${query}`);
-      try {
-        const result = await searchMemoryWithAgent(
-          query,
-          userId,
-          workspaceId,
-          source,
-          { structured: false },
-        );
-        return result || "nothing found";
-      } catch (error: any) {
-        logger.warn("Memory search failed", error);
-        return "nothing found";
-      }
+      return executor.searchMemory(query, userId, workspaceId, source);
     },
   });
 
@@ -299,22 +284,7 @@ export async function runOrchestrator(
       }),
       execute: async ({ skill_id }) => {
         logger.info(`Orchestrator: loading skill ${skill_id}`);
-        try {
-          const skill = await prisma.document.findFirst({
-            where: {
-              id: skill_id,
-              workspaceId,
-              type: "skill",
-              deleted: null,
-            },
-            select: { id: true, title: true, content: true },
-          });
-          if (!skill) return "Skill not found";
-          return `## Skill: ${skill.title}\n\n${skill.content}`;
-        } catch (error: any) {
-          logger.warn("Failed to load skill", error);
-          return "Failed to load skill";
-        }
+        return executor.getSkill(skill_id, workspaceId);
       },
     });
   }
@@ -343,6 +313,7 @@ export async function runOrchestrator(
           source,
           userId,
           abortSignal,
+          executor,
         );
 
         if (!hasIntegrations) {
@@ -413,6 +384,7 @@ export async function runOrchestrator(
           source,
           userId,
           abortSignal,
+          executor,
         );
 
         if (!hasIntegrations) {
@@ -466,6 +438,7 @@ export async function runOrchestrator(
           gateway.id,
           intent,
           abortSignal,
+          executor,
         );
 
         if (!gatewayConnected || !stream) {
