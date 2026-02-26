@@ -24436,6 +24436,27 @@ var DeleteFileSchema = external_exports.object({
   branch: external_exports.string().optional().describe("Branch name"),
   sha: external_exports.string().describe("The blob SHA of the file being deleted")
 });
+var ListIssueTemplatesSchema = external_exports.object({
+  owner: external_exports.string().describe("Repository owner"),
+  repo: external_exports.string().describe("Repository name")
+});
+var GetIssueTemplateSchema = external_exports.object({
+  owner: external_exports.string().describe("Repository owner"),
+  repo: external_exports.string().describe("Repository name"),
+  filename: external_exports.string().describe("Template filename")
+});
+var CreateIssueFromTemplateSchema = external_exports.object({
+  owner: external_exports.string().describe("Repository owner"),
+  repo: external_exports.string().describe("Repository name"),
+  filename: external_exports.string().describe("Template filename"),
+  field_values: external_exports.record(external_exports.string(), external_exports.any()).describe("Values for template fields"),
+  title_override: external_exports.string().optional().describe("Override the issue title"),
+  labels_override: external_exports.array(external_exports.string()).optional().describe("Override/add labels")
+});
+var ListProjectsSchema = external_exports.object({
+  owner: external_exports.string().describe("Repository owner"),
+  repo: external_exports.string().describe("Repository name")
+});
 var SearchRepositoriesSchema = external_exports.object({
   q: external_exports.string().describe("Keyword to search"),
   limit: external_exports.number().optional().default(30).describe("Results per page"),
@@ -24527,15 +24548,27 @@ async function getTools() {
       description: "Create a new label",
       inputSchema: zodToJsonSchema(CreateLabelSchema)
     },
+    // Project Tools
     {
-      name: "update_label",
-      description: "Update an existing label",
-      inputSchema: zodToJsonSchema(UpdateLabelSchema)
+      name: "list_projects",
+      description: "List projects in a repository",
+      inputSchema: zodToJsonSchema(ListProjectsSchema)
+    },
+    // Issue Template Tools
+    {
+      name: "list_issue_templates",
+      description: "Discover issue templates in a repository (.forgejo/ISSUE_TEMPLATE)",
+      inputSchema: zodToJsonSchema(ListIssueTemplatesSchema)
     },
     {
-      name: "delete_label",
-      description: "Delete a label",
-      inputSchema: zodToJsonSchema(DeleteLabelSchema)
+      name: "get_issue_template",
+      description: "Get and parse a specific issue template",
+      inputSchema: zodToJsonSchema(GetIssueTemplateSchema)
+    },
+    {
+      name: "create_issue_from_template",
+      description: "Create an issue using a template with field values",
+      inputSchema: zodToJsonSchema(CreateIssueFromTemplateSchema)
     },
     // Comment Tools
     {
@@ -24594,7 +24627,7 @@ async function getTools() {
   return tools;
 }
 async function callTool(name, args, config) {
-  var _a5, _b, _c, _d, _e, _f, _g, _h, _i;
+  var _a5, _b, _c, _d, _e, _f, _g, _h, _i, _j;
   await initializeCodebergClient(config.access_token);
   try {
     switch (name) {
@@ -24854,6 +24887,95 @@ Color: #${response.data.color}`
           ]
         };
       }
+      // Project Handlers
+      case "list_projects": {
+        const { owner, repo } = ListProjectsSchema.parse(args);
+        const response = await codebergClient.get(
+          `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/projects`
+        );
+        const formattedProjects = response.data.map((p) => {
+          return `ID: ${p.id} | Name: ${p.title}
+Description: ${p.description || "None"}
+URL: ${p.html_url}`;
+        }).join("\n\n");
+        return {
+          content: [
+            {
+              type: "text",
+              text: formattedProjects || "No projects found"
+            }
+          ]
+        };
+      }
+      // Issue Template Handlers
+      case "list_issue_templates": {
+        const { owner, repo } = ListIssueTemplatesSchema.parse(args);
+        try {
+          const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE`);
+          const files = response.data || [];
+          const templates = files.filter((f) => f.name.endsWith(".yml") || f.name.endsWith(".yaml") || f.name.endsWith(".md")).map((f) => `- ${f.name} (Type: ${f.name.endsWith(".md") ? "Markdown" : "YAML"})`).join("\n");
+          return {
+            content: [{ type: "text", text: `Issue templates in ${owner}/${repo}:
+
+${templates || "No templates found."}` }]
+          };
+        } catch (error) {
+          if (((_d = error.response) == null ? void 0 : _d.status) === 404) {
+            return { content: [{ type: "text", text: "No issue templates found in .forgejo/ISSUE_TEMPLATE." }] };
+          }
+          throw error;
+        }
+      }
+      case "get_issue_template": {
+        const { owner, repo, filename } = GetIssueTemplateSchema.parse(args);
+        const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE/${filename}`);
+        const content = Buffer.from(response.data.content, "base64").toString("utf8");
+        return {
+          content: [{ type: "text", text: `Template: ${filename}
+
+\`\`\`
+${content}
+\`\`\`` }]
+        };
+      }
+      case "create_issue_from_template": {
+        const { owner, repo, filename, field_values, title_override, labels_override } = CreateIssueFromTemplateSchema.parse(args);
+        const response = await codebergClient.get(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/.forgejo/ISSUE_TEMPLATE/${filename}`);
+        const rawContent = Buffer.from(response.data.content, "base64").toString("utf8");
+        const labels = [...labels_override || []];
+        let title = title_override || "Issue from template";
+        if (filename.endsWith(".yml") || filename.endsWith(".yaml")) {
+          const labelMatch = rawContent.match(/labels:\s*\[(.*?)\]/);
+          if (labelMatch) {
+            const templateLabels = labelMatch[1].split(",").map((l) => l.trim().replace(/['"]/g, ""));
+            labels.push(...templateLabels);
+          }
+          const nameMatch = rawContent.match(/^name:\s*(.*)$/m);
+          if (nameMatch && !title_override) title = nameMatch[1].trim().replace(/['"]/g, "");
+        }
+        let labelIds;
+        if (labels.length > 0) {
+          labelIds = await resolveLabelIds(owner, repo, labels);
+        }
+        let body = `### Generated from template: ${filename}
+
+`;
+        for (const [key, value] of Object.entries(field_values)) {
+          body += `#### ${key}
+${value}
+
+`;
+        }
+        const createResponse = await codebergClient.post(`/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/issues`, {
+          title,
+          body,
+          labels: labelIds
+        });
+        return {
+          content: [{ type: "text", text: `Issue created successfully from template: #${createResponse.data.number}
+URL: ${createResponse.data.html_url}` }]
+        };
+      }
       // Comment Handlers
       case "list_issue_comments": {
         const { owner, repo, issue_number } = ListIssueCommentsSchema.parse(args);
@@ -24924,8 +25046,8 @@ URL: ${pr.html_url}`;
         const mergeable = pr.mergeable ? "\u2705 Mergeable" : "\u274C Conflicts";
         const formatted = `#${pr.number}: ${pr.title}
 
-State: ${pr.state} | ${mergeable} | Author: ${(_d = pr.user) == null ? void 0 : _d.login}
-Branch: ${(_e = pr.head) == null ? void 0 : _e.ref} \u2192 ${(_f = pr.base) == null ? void 0 : _f.ref}
+State: ${pr.state} | ${mergeable} | Author: ${(_e = pr.user) == null ? void 0 : _e.login}
+Branch: ${(_f = pr.head) == null ? void 0 : _f.ref} \u2192 ${(_g = pr.base) == null ? void 0 : _g.ref}
 Created: ${pr.created_at} | Updated: ${pr.updated_at}
 
 ${pr.body || "No description"}
@@ -24994,6 +25116,9 @@ URL: ${response.data.html_url}`
           `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${encodeURIComponent(path)}`,
           { params: { ref } }
         );
+        if (!response.data.content) {
+          throw new Error("File content is empty or not found in response");
+        }
         const content = Buffer.from(response.data.content, "base64").toString("utf8");
         return {
           content: [
@@ -25044,7 +25169,7 @@ URL: ${response.data.html_url}`
         const response = await codebergClient.get("/repos/search", {
           params: { q, limit, page }
         });
-        const formattedRepos = (_g = response.data.data) == null ? void 0 : _g.map((repo) => {
+        const formattedRepos = (_h = response.data.data) == null ? void 0 : _h.map((repo) => {
           return `${repo.full_name}
 Description: ${repo.description || "No description"}
 \u2B50 ${repo.stars_count} | URL: ${repo.html_url}`;
@@ -25064,7 +25189,7 @@ ${formattedRepos || "No repositories found"}`
         throw new Error(`Unknown tool: ${name}`);
     }
   } catch (error) {
-    const errorMessage = ((_i = (_h = error.response) == null ? void 0 : _h.data) == null ? void 0 : _i.message) || error.message;
+    const errorMessage = ((_j = (_i = error.response) == null ? void 0 : _i.data) == null ? void 0 : _j.message) || error.message;
     throw new Error(`Codeberg API Error: ${errorMessage}`);
   }
 }
