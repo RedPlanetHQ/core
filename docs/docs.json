@@ -134,6 +134,12 @@
               "opensource/contributing",
               "opensource/changelog"
             ]
+          },
+          {
+            "group": "Blog",
+            "pages": [
+              "blog/cowork-plugins-tier-list"
+            ]
           }
         ]
       },

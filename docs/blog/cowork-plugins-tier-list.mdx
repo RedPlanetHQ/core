@@ -1,0 +1,285 @@
+---
+title: "I Tested All 21 Claude Cowork Plugins — Here's the Tier List Nobody's Publishing"
+description: "A comprehensive ranking of every Claude Cowork plugin after four weeks of daily use with real client deliverables — from S-tier essentials to C-tier works-in-progress."
+author: "Nav Toor"
+date: "2026-02-27"
+---
+
+Anthropic just shipped 21 plugins for Claude Cowork. The original 11 launched January 30. Ten more dropped February 24.
+
+Between those two dates, **$285 billion in software stock value evaporated**. Thomson Reuters fell 18%. LegalZoom crashed 20%. Jefferies traders started calling it the *SaaSpocalypse*. All because of a GitHub repo and a blog post.
+
+But here's the thing almost nobody is talking about: some of these plugins are genuinely transformative, and some are barely useful out of the box.
+
+I've been using Cowork since the week it launched. I've installed every plugin. Tested every slash command. Run real work through each one — client proposals, financial models, content calendars, contract reviews, dataset explorations. Not demos. Not test prompts. Actual deliverables I was getting paid to produce.
+
+Nobody else is publishing an honest ranking. Anthropic won't rank their own products. Tech reviewers tested them for an afternoon and wrote "they look promising."
+
+**This is the tier list I wish existed three weeks ago.**
+
+Save this. Install the S-tier plugins today. Skip the ones that need work. And stop wasting usage credits on plugins that aren't ready yet.
+
+---
+
+## What Plugins Actually Are (And Why Most People Get Them Wrong)
+
+Most people think plugins are just better prompts. They're not.
+
+A plugin is a folder containing four things:
+
+1. **Skills** — domain expertise Claude draws on automatically
+2. **Slash commands** — structured workflows you trigger explicitly
+3. **Connectors** — live integrations with external tools via MCP
+4. **Sub-agents** — parallel workers Claude can spin up for complex tasks
+
+When you install the Sales plugin, you're not just getting a "write me a sales email" prompt. You're loading an entire sales methodology into Claude's working memory. It knows what a good call prep looks like. It knows how to structure a competitive battlecard. It knows to ask about deal stage before drafting outreach.
+
+> The difference between a generic Cowork prompt and a plugin-powered prompt is the difference between asking a smart generalist and asking someone who's done your specific job for five years.
+
+That said — not all plugins deliver on this promise equally. Here's my ranking after four weeks of daily use.
+
+---
+
+## S-Tier: Install These Immediately
+
+These plugins changed how I work within the first session.
+
+### 1. Data Analysis
+
+This is the single most impressive plugin in the entire library.
+
+Drop a CSV into your Cowork folder. Type `/data:explore`. Claude reads the full dataset, summarizes every column, flags anomalies, detects data quality issues, and suggests three analyses worth running — all before you've told it what you're looking for.
+
+Then type `/data:write-query` and describe what you want in plain English. It writes the SQL. It validates the query. It explains what it's doing and why. If you connect it to Snowflake, Databricks, or BigQuery through the connectors, it runs queries against live data.
+
+I ran a client's quarterly revenue data through it — 45,000 rows across three product lines. Within eight minutes, Claude had identified a pricing anomaly in their mid-tier plan that was costing them roughly **$14,000 per month** in undercharged renewals. The client's own data team had missed it for two quarters.
+
+**Connectors:** Snowflake, Databricks, BigQuery, Hex, Amplitude, Jira
+
+For anyone who works with data but isn't a data engineer, this plugin alone justifies the $20/month Pro subscription.
+
+### 2. Productivity
+
+This is the plugin everyone should install first, regardless of their role.
+
+It manages tasks, calendars, daily workflows, and personal context. Type `/productivity:start` and Claude reviews your day, organizes priorities, and sets up your task list.
+
+What makes it S-tier isn't any single feature. It's that it **compounds**. After a week of use, the Productivity plugin paired with good context files and global instructions makes Claude feel like a chief of staff who actually knows your schedule, your priorities, and your working style.
+
+I start every day with it now. Before email. Before Notion. It's the first thing I open.
+
+**Connectors:** Slack, Notion, Asana, Linear, Jira, Monday, ClickUp, Microsoft 365
+
+### 3. Sales
+
+If you do any prospecting, account management, or outreach, this plugin is absurdly good.
+
+`/sales:call-prep` pulls context from your CRM (via HubSpot, Close, or Clay connectors), researches the prospect's company, identifies recent news and triggers, and produces a structured briefing doc. The output includes talking points, potential objections, competitive positioning, and suggested next steps.
+
+The battlecard command (`/sales:battlecard`) is particularly strong. Feed it your product info and a competitor, and it builds a side-by-side comparison with specific rebuttal language. Not generic "we're better because" talking points — actual responses mapped to specific competitor claims.
+
+One sales manager I shared this with told me it replaced what used to take his team 90 minutes of pre-call prep. He now does it in under 10.
+
+**Connectors:** Slack, HubSpot, Close, Clay, ZoomInfo, Notion, Jira, Fireflies, Microsoft 365
+
+---
+
+## A-Tier: Genuinely Useful — Worth Installing for Your Role
+
+These plugins deliver strong results but are more role-specific. Install the ones that match your job function.
+
+### 4. Legal
+
+This is the plugin that crashed $285 billion in market value. And honestly? It's earned the panic.
+
+The Legal plugin automates contract review, NDA triage, compliance workflows, legal briefings, and templated responses. It doesn't replace lawyers. But it does the 60% of legal work that used to get delegated to junior associates and paralegals.
+
+Thomson Reuters shares fell 18% when this launched — their worst day on record. RELX, which owns LexisNexis, dropped 14%, its steepest single-day decline since 1988. Wolters Kluwer fell 13%. LegalZoom plunged 20%. Morningstar's analysts noted that Thomson is most at risk, with 45% of EBIT coming from legal.
+
+Within three weeks, LexisNexis announced it was integrating Anthropic's legal plugin into its Protege platform. One law firm user described the shift as *"going from a horse and buggy to a Maserati."*
+
+It's A-tier and not S-tier because it requires significant customization to match your organization's specific playbook and risk tolerances. Out of the box, it's powerful. Customized, it's devastating.
+
+**Connectors:** Slack, Box, Egnyte, Jira, Microsoft 365. Harvey connector added February 24.
+
+### 5. Product Management
+
+This is the plugin I didn't expect to love.
+
+`/product-management:write-spec` takes a vague product idea and turns it into a structured specification with user stories, acceptance criteria, and technical requirements. It asks clarifying questions first (using AskUserQuestion), which means the output is grounded in your actual constraints, not generic templates.
+
+The roadmap command synthesizes your backlog, stakeholder input, and competitive context into a prioritized roadmap. The competitive analysis feature pulls from connected tools and produces a structured brief that would take a PM two to three hours to assemble manually.
+
+**Connectors:** Slack, Linear, Asana, Monday, ClickUp, Jira, Notion, Figma, Amplitude, Pendo, Intercom, Fireflies
+
+### 6. Marketing
+
+Content drafting, campaign planning, brand voice enforcement, competitor briefings, and performance reporting. The Marketing plugin covers the full content lifecycle.
+
+`/marketing:draft-content` is the standout command. Point it at your `brand-voice.md` file (from your context folder), specify audience and goal, and it produces content that actually sounds like your brand. Not "AI voice." Your voice.
+
+The campaign planning workflow is solid too — it helps you build multi-channel plans with specific messaging, timing, and metrics for each channel. The competitive briefing command pulls insights from connected tools and structures them for quick decision-making.
+
+**Connectors:** Slack, Canva, Figma, HubSpot, Amplitude, Notion, Ahrefs, SimilarWeb, Klaviyo
+
+### 7. Finance
+
+PwC partnered with Anthropic specifically around this plugin category. That tells you something about the potential.
+
+The Finance plugin handles journal entries, account reconciliation, financial statement generation, variance analysis, close management, and audit support. The new Financial Analysis plugin (added February 24) covers market research, competitive analysis, financial modeling, and PowerPoint template creation and quality checking.
+
+Where it shines: the cross-app workflow between Excel and PowerPoint. Claude can now analyze data in Excel and pass that context directly into a PowerPoint presentation — formatted, branded, and ready for stakeholders. This is the first time an AI tool has worked across Microsoft Office apps in a way that actually feels seamless.
+
+**Connectors:** Snowflake, Databricks, BigQuery, Slack, Microsoft 365. New connectors: FactSet, MSCI.
+
+---
+
+## B-Tier: Solid Foundation, But Needs Your Customization to Shine
+
+These plugins work. They produce useful output. But they feel more like starting templates than finished products. Budget 30-60 minutes to customize them for your specific workflows.
+
+### 8. Customer Support
+
+Ticket triage, response drafting, escalation packaging, customer context research, and knowledge base article creation. The loop from "resolved ticket" to "published KB article" is particularly smart — it identifies patterns in resolved issues and suggests documentation.
+
+**Why B-tier:** the default response templates are too generic. You need to feed it your company's tone, your escalation criteria, and your specific SLA structure. Once you do, it's very strong. Without that customization, outputs feel boilerplate.
+
+**Connectors:** Slack, Intercom, HubSpot, Guru, Jira, Notion, Microsoft 365
+
+### 9. HR (New — February 24)
+
+Offer letter drafting, onboarding plans, performance reviews, and compensation analyses. This plugin covers the full employee lifecycle and is more opinionated than I expected.
+
+The performance review workflow is notably good — it structures feedback around specific, observable behaviors rather than vague personality assessments. The compensation analysis feature needs your company's bands and market data to be useful, but once configured, it can flag equity gaps across teams.
+
+B-tier because it requires substantial company-specific input to produce outputs worth using. But the framework underneath is excellent.
+
+### 10. Engineering (New — February 24)
+
+Standup summaries, incident response coordination, deploy checklists, and postmortem drafting. If your engineering team uses Claude Code, this plugin extends that agentic capability to the non-coding work that eats up engineering managers' days.
+
+The postmortem template is surprisingly thorough — it prompts for timeline, root cause, contributing factors, customer impact, and action items with owners and deadlines. It's better than most internal templates I've seen.
+
+Needs customization to match your team's specific incident severity levels and communication protocols.
+
+### 11. Operations (New — February 24)
+
+Process documentation, vendor evaluations, change request tracking, and runbook creation. This is the unsexy plugin that will quietly save operations teams hours every week.
+
+The vendor evaluation workflow is the highlight — it structures comparisons across defined criteria and produces a decision matrix. The runbook creation command takes verbal descriptions of processes and turns them into step-by-step documentation that's actually followable.
+
+B-tier because operations workflows vary enormously between companies. The plugin gives you the scaffolding. You supply the specifics.
+
+### 12. Design (New — February 24)
+
+Critique frameworks, UX copy drafting, accessibility audits, and user research plan structuring. This is aimed at design teams, not graphic design — it won't generate images.
+
+The accessibility audit workflow is surprisingly rigorous. Feed it your design specs or screenshots and it flags WCAG compliance issues with specific remediation suggestions. The UX copy drafting is good but depends heavily on your `brand-voice.md` file being well-written.
+
+Solid starting point. Customize the critique frameworks to match your team's design principles and review process.
+
+---
+
+## C-Tier: Promising Concept, Limited Out-of-Box Value
+
+These plugins have clear potential but aren't delivering consistently yet. Install them if your role demands it, but lower your expectations.
+
+### 13. Enterprise Search
+
+The concept is powerful: one query across email, chat, docs, and wikis. Find anything across all your company's tools in a single search.
+
+In practice, search quality depends entirely on how many connectors you've set up and how well-structured your company's documentation is. If your Notion is a mess, Enterprise Search reflects that mess back at you — just faster.
+
+**Connectors:** Slack, Notion, Guru, Jira, Asana, Microsoft 365
+
+### 14. Bio Research
+
+For life sciences researchers doing literature reviews, genomics analysis, or target prioritization, this has genuine potential. Anthropic's recent partnerships with the Allen Institute and HHMI signal they're serious about this space.
+
+C-tier because the user base is narrow and the workflows are highly specialized. If you're in biotech R&D, try it. Otherwise, skip.
+
+**Connectors:** PubMed, BioRender, bioRxiv, ClinicalTrials.gov, ChEMBL, Synapse, Wiley, Owkin, Open Targets, Benchling
+
+### 15. Cowork Plugin Management
+
+This is the meta-plugin: it helps you create and customize other plugins. It's essential for teams building custom plugins, but irrelevant for individual users who just want to install and use existing ones.
+
+If you're an admin setting up Cowork for your team, this moves to A-tier. For everyone else, you probably never need to touch it.
+
+---
+
+## The February 24 Financial Services Wave: Early Assessment
+
+Anthropic dropped four finance-specific plugins on February 24. These are brand new. Here's my initial assessment.
+
+### 16. Financial Analysis — B-Tier
+
+Market research, competitive analysis, financial modeling, and PowerPoint creation and quality checking. This is the generalist finance plugin — useful across roles. The cross-app Excel-to-PowerPoint workflow is the standout feature. Needs company-specific templates and data sources to reach its potential.
+
+### 17. Investment Banking — B-Tier
+
+Transaction document review, comparable company analyses, and pitch material preparation. Strong framework for deal workflows. Needs your firm's specific formatting standards, precedent transactions database, and sector coverage to be genuinely useful.
+
+### 18. Equity Research — B-Tier
+
+Earnings transcript parsing, financial model updates with new guidance, and research note drafting. The transcript parsing is immediately useful — it extracts key metrics, management commentary, and guidance changes. Research note drafting needs heavy customization to match your publishing standards.
+
+### 19. Private Equity — B-Tier
+
+Deal sourcing support, large document set review, standardized financial data extraction, scenario modeling, and opportunity scoring against investment criteria. The document review capability is the most immediately valuable. Scoring frameworks need your fund's specific criteria and weighting.
+
+### 20. Wealth Management — C-Tier
+
+Portfolio analysis, drift and tax exposure identification, and rebalancing recommendations at scale. Conceptually strong, but heavily dependent on data connectors that most wealth advisors won't have configured on day one. Needs FactSet and MSCI connectors properly set up to deliver real value.
+
+### 21. Brand Voice (by Tribe AI) — B-Tier
+
+This is a partner-built plugin, not Anthropic's own. It analyzes your existing documents, marketing materials, and conversations to distill your brand's voice into clear, enforceable guidelines.
+
+Clever concept. Give it 10-20 examples of your writing and it produces a brand voice guide that other plugins can reference. Useful for teams standardizing their voice across multiple writers. Needs enough input material to work well.
+
+---
+
+## The Pattern Nobody's Seeing
+
+Step back from the individual rankings. Here's what this plugin library actually reveals about Anthropic's strategy.
+
+The **first wave** (January 30) targeted horizontal functions: productivity, sales, marketing, data, legal, finance. Things every company needs. That's the wave that triggered the SaaSpocalypse.
+
+The **second wave** (February 24) went vertical: investment banking, private equity, equity research, wealth management, HR, engineering, design, operations. Industry-specific. Role-specific. The kind of depth that signals Anthropic isn't just testing the waters. They're building a platform.
+
+And here's the part that should make every SaaS CEO lose sleep: **these plugins are just markdown files**. The open-source repo has 2,000 stars on GitHub already. Anthropic is inviting every company to build their own. Private plugin marketplaces are now available for enterprise teams. PwC is building industry-specific plugins for regulated sectors.
+
+The mechanism is clear:
+
+- Anthropic provides the model
+- The MCP protocol provides the connections
+- The plugins provide the domain expertise
+
+And because plugins are just text files — no code, no infrastructure, no build steps — the barrier to creating new ones is essentially zero for anyone who can write clear instructions.
+
+> This is how you go from "AI chatbot" to "AI operating system for work." Not through a single killer feature. Through an ecosystem that compounds.
+
+Kate Jensen, Anthropic's head of Americas, said it directly at the February 24 briefing: *"We expect that every knowledge worker will feel about Cowork the way engineers already feel about Claude Code — like a tool they couldn't live without."*
+
+JPMorgan analyst Toby Ogg put the market impact in perspective when he said that software companies right now aren't just presumed guilty until proven innocent — they're being sentenced before trial. And the evidence? **A $20/month subscription doing 40% of what $150/month enterprise seats do.**
+
+The S-tier plugins already work. The A-tier plugins work with moderate setup. The B-tier plugins are frameworks waiting for your company's context. And the rate of improvement is what should concern every incumbent: **Anthropic shipped 10 new plugins in 25 days**. They'll ship more next month.
+
+The question isn't whether these plugins will get better. It's whether the software companies they're replacing will adapt faster than Anthropic can iterate.
+
+Based on what I've seen in four weeks: they won't.
+
+---
+
+## What to Do Right Now
+
+1. **Open Cowork.** Install the **Data Analysis**, **Productivity**, and **Sales** plugins. They work immediately.
+
+2. **Pick the plugin that matches your role** — Legal, Finance, Marketing, Product Management — and spend 30 minutes customizing its skills with your company's context. That one session will show you the gap between a generic AI tool and a specialized one.
+
+3. **Watch for the next plugin wave.** Anthropic is adding new connectors and department-specific plugins monthly. The plugin marketplace will look very different by April.
+
+4. **Track one metric:** time from "I have a task" to "I have a finished deliverable." If that number isn't dropping every week, your setup needs work. If it is dropping, you're seeing what the market already priced in at $285 billion.
+
+> The SaaSpocalypse wasn't panic. It was price discovery. And it's just getting started.
