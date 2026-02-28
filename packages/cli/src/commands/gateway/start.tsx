@@ -18,6 +18,7 @@ import {
 	getServicePid,
 } from '@/utils/service-manager';
 import type { ServiceConfig } from '@/utils/service-manager';
+import { initializeDefaultSessions } from '@/utils/agent-browser';
 
 export const options = zod.object({});
 
@@ -93,6 +94,9 @@ async function runGatewayStart(): Promise<void> {
 	// Start the service
 	spinner.message('Starting gateway service...');
 	await startService(serviceName);
+
+	// Initialize default browser sessions if not already configured
+	initializeDefaultSessions();
 
 	// Wait a moment for the service to start and get the PID
 	await new Promise(resolve => setTimeout(resolve, 500));
