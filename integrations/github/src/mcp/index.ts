@@ -1,5 +1,5 @@
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
-import { SSEClientTransport } from '@modelcontextprotocol/sdk/client/sse.js';
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
@@ -46,8 +46,8 @@ async function createMCPClient(accessToken: string): Promise<Client> {
     version: '1.0.0',
   });
 
-  const transport = new SSEClientTransport(new URL(GITHUB_MCP_URL), {
-    eventSourceInit: {
+  const transport = new StreamableHTTPClientTransport(new URL(GITHUB_MCP_URL), {
+    requestInit: {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -110,35 +110,6 @@ const DeleteMilestoneSchema = z.object({
   milestone_number: z.number().describe('Milestone number to delete'),
 });
 
-// Projects v2 Schemas
-const ListProjectsSchema = z.object({
-  owner: z.string().describe('Organization or user login'),
-  owner_type: z.enum(['org', 'user']).optional().default('org').describe('Type of owner'),
-});
-
-const GetProjectSchema = z.object({
-  owner: z.string().describe('Organization or user login'),
-  owner_type: z.enum(['org', 'user']).optional().default('org').describe('Type of owner'),
-  project_number: z.number().describe('Project number'),
-});
-
-const AddProjectItemSchema = z.object({
-  project_id: z.string().describe('The node ID of the project'),
-  content_id: z.string().describe('The node ID of the issue or pull request to add'),
-});
-
-const UpdateProjectFieldValueSchema = z.object({
-  project_id: z.string().describe('The node ID of the project'),
-  item_id: z.string().describe('The node ID of the project item'),
-  field_id: z.string().describe('The node ID of the field'),
-  value: z.union([z.string(), z.number(), z.boolean()]).describe('The value to set (string for single select/text, number for number, boolean for checkbox)'),
-});
-
-const DeleteProjectItemSchema = z.object({
-  project_id: z.string().describe('The node ID of the project'),
-  item_id: z.string().describe('The node ID of the item to delete'),
-});
-
 // Issue Template Schemas
 const ListIssueTemplatesSchema = z.object({
   owner: z.string().describe('Repository owner'),
@@ -199,36 +170,6 @@ const customTools: MCPTool[] = [
     annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
   },
   {
-    name: 'github_list_projects',
-    description: 'List Projects v2 for an organization or user',
-    inputSchema: zodToJsonSchema(ListProjectsSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-  },
-  {
-    name: 'github_get_project',
-    description: 'Get details of a specific Project v2 including its fields',
-    inputSchema: zodToJsonSchema(GetProjectSchema),
-    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-  },
-  {
-    name: 'github_add_project_item',
-    description: 'Add an issue or pull request to a Project v2',
-    inputSchema: zodToJsonSchema(AddProjectItemSchema),
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
-  },
-  {
-    name: 'github_update_project_field_value',
-    description: 'Update a field value for an item in a Project v2 (e.g., change Status)',
-    inputSchema: zodToJsonSchema(UpdateProjectFieldValueSchema),
-    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
-  },
-  {
-    name: 'github_delete_project_item',
-    description: 'Remove an item from a Project v2',
-    inputSchema: zodToJsonSchema(DeleteProjectItemSchema),
-    annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
-  },
-  {
     name: 'github_list_issue_templates',
     description: 'Discover issue templates in a repository (.github/ISSUE_TEMPLATE)',
     inputSchema: zodToJsonSchema(ListIssueTemplatesSchema),
@@ -263,19 +204,6 @@ async function handleCustomToolCall(
 
   try {
     switch (name) {
-      case 'github_get_me': {
-        const response = await githubClient.get('/user');
-        const u = response.data;
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Username: ${u.login}\nID: ${u.id}\nURL: ${u.html_url}`,
-            },
-          ],
-        };
-      }
-
       case 'github_list_milestones': {
         const validatedArgs = ListMilestonesSchema.parse(args);
         const { owner, repo, ...params } = validatedArgs;
@@ -371,198 +299,38 @@ async function handleCustomToolCall(
         };
       }
 
-      case 'github_list_projects': {
-        const { owner, owner_type } = ListProjectsSchema.parse(args);
-        const query = `
-          query($login: String!) {
-            ${owner_type}(login: $login) {
-              projectsV2(first: 20) {
-                nodes {
-                  id
-                  number
-                  title
-                  url
-                  closed
-                }
-              }
-            }
-          }
-        `;
-        const response = await githubClient.post('/graphql', { query, variables: { login: owner } });
-        const projects = response.data.data[owner_type]?.projectsV2.nodes || [];
-
-        if (projects.length === 0) {
-          return { content: [{ type: 'text', text: `No Projects v2 found for ${owner}.` }] };
-        }
-
-        const formatted = projects
-          .map((p: any) => `[${p.number}] ${p.title}\nID: ${p.id}\nState: ${p.closed ? 'Closed' : 'Open'}\nURL: ${p.url}`)
-          .join('\n\n');
-
-        return {
-          content: [{ type: 'text', text: `Projects for ${owner}:\n\n${formatted}` }],
-        };
-      }
-
-      case 'github_get_project': {
-        const { owner, owner_type, project_number } = GetProjectSchema.parse(args);
-        const query = `
-          query($login: String!, $number: Int!) {
-            ${owner_type}(login: $login) {
-              projectV2(number: $number) {
-                id
-                title
-                shortDescription
-                fields(first: 50) {
-                  nodes {
-                    ... on ProjectV2Field { id name dataType }
-                    ... on ProjectV2IterationField { id name dataType }
-                    ... on ProjectV2SingleSelectField {
-                      id
-                      name
-                      dataType
-                      options { id name }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        `;
-        const response = await githubClient.post('/graphql', {
-          query,
-          variables: { login: owner, number: project_number },
-        });
-        const p = response.data.data[owner_type]?.projectV2;
-
-        if (!p) {
-          return { content: [{ type: 'text', text: `Project #${project_number} not found.` }] };
-        }
-
-        const fields = p.fields.nodes
-          .map((f: any) => {
-            let out = `- ${f.name} (ID: ${f.id}, Type: ${f.dataType})`;
-            if (f.options) {
-              const opts = f.options.map((o: any) => `  - ${o.name} (ID: ${o.id})`).join('\n');
-              out += `\n${opts}`;
-            }
-            return out;
-          })
-          .join('\n');
-
-        return {
-          content: [
-            {
-              type: 'text',
-              text: `Project: ${p.title} (ID: ${p.id})\nDescription: ${p.shortDescription || 'None'}\n\nFields:\n${fields}`,
-            },
-          ],
-        };
-      }
-
-      case 'github_add_project_item': {
-        const { project_id, content_id } = AddProjectItemSchema.parse(args);
-        const query = `
-          mutation($projectId: ID!, $contentId: ID!) {
-            addProjectV2ItemById(input: {projectId: $projectId, contentId: $contentId}) {
-              item { id }
-            }
-          }
-        `;
-        const response = await githubClient.post('/graphql', {
-          query,
-          variables: { projectId: project_id, contentId: content_id },
-        });
-        const itemId = response.data.data.addProjectV2ItemById.item.id;
-
-        return {
-          content: [{ type: 'text', text: `Item added to project successfully. Item ID: ${itemId}` }],
-        };
-      }
-
-      case 'github_update_project_field_value': {
-        const { project_id, item_id, field_id, value } = UpdateProjectFieldValueSchema.parse(args);
-
-        let valueInput: any = {};
-        if (typeof value === 'string') {
-          // Check if it's a single select option ID or plain text
-          if (value.startsWith('fv_')) {
-            // Likely an option ID (though prefixes can vary, usually they are base64-like)
-            // We'll treat all strings as potential option IDs for SingleSelect fields
-            valueInput = { singleSelectOptionId: value };
-          } else {
-            valueInput = { text: value };
-          }
-        } else if (typeof value === 'number') {
-          valueInput = { number: value };
-        } else if (typeof value === 'boolean') {
-          valueInput = { boolean: value };
-        }
-
-        const query = `
-          mutation($projectId: ID!, $itemId: ID!, $fieldId: ID!, $value: ProjectV2FieldValue!) {
-            updateProjectV2ItemFieldValue(input: {
-              projectId: $projectId,
-              itemId: $itemId,
-              fieldId: $fieldId,
-              value: $value
-            }) {
-              projectV2Item { id }
-            }
-          }
-        `;
-        await githubClient.post('/graphql', {
-          query,
-          variables: {
-            projectId: project_id,
-            itemId: item_id,
-            fieldId: field_id,
-            value: valueInput,
-          },
-        });
-
-        return {
-          content: [{ type: 'text', text: 'Project field value updated successfully.' }],
-        };
-      }
-
-      case 'github_delete_project_item': {
-        const { project_id, item_id } = DeleteProjectItemSchema.parse(args);
-        const query = `
-          mutation($projectId: ID!, $itemId: ID!) {
-            deleteProjectV2Item(input: {projectId: $projectId, itemId: $itemId}) {
-              deletedItemId
-            }
-          }
-        `;
-        await githubClient.post('/graphql', {
-          query,
-          variables: { projectId: project_id, itemId: item_id },
-        });
-
-        return {
-          content: [{ type: 'text', text: `Item ${item_id} removed from project.` }],
-        };
-      }
-
       case 'github_list_issue_templates': {
         const { owner, repo } = ListIssueTemplatesSchema.parse(args);
         // Look in .github/ISSUE_TEMPLATE
         try {
-          const response = await githubClient.get(`/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE`);
+          const response = await githubClient.get(
+            `/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE`,
+          );
           const files = response.data || [];
-          
+
           const templates = files
-            .filter((f: any) => f.name.endsWith('.yml') || f.name.endsWith('.yaml') || f.name.endsWith('.md'))
+            .filter(
+              (f: any) =>
+                f.name.endsWith('.yml') || f.name.endsWith('.yaml') || f.name.endsWith('.md'),
+            )
             .map((f: any) => `- ${f.name} (Type: ${f.name.endsWith('.md') ? 'Markdown' : 'YAML'})`)
             .join('\n');
 
           return {
-            content: [{ type: 'text', text: `Issue templates in ${owner}/${repo}:\n\n${templates || 'No templates found.'}` }],
+            content: [
+              {
+                type: 'text',
+                text: `Issue templates in ${owner}/${repo}:\n\n${templates || 'No templates found.'}`,
+              },
+            ],
           };
         } catch (error: any) {
           if (error.response?.status === 404) {
-            return { content: [{ type: 'text', text: 'No issue templates found in .github/ISSUE_TEMPLATE.' }] };
+            return {
+              content: [
+                { type: 'text', text: 'No issue templates found in .github/ISSUE_TEMPLATE.' },
+              ],
+            };
           }
           throw error;
         }
@@ -570,7 +338,9 @@ async function handleCustomToolCall(
 
       case 'github_get_issue_template': {
         const { owner, repo, filename } = GetIssueTemplateSchema.parse(args);
-        const response = await githubClient.get(`/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE/${filename}`);
+        const response = await githubClient.get(
+          `/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE/${filename}`,
+        );
         const content = Buffer.from(response.data.content, 'base64').toString('utf8');
 
         return {
@@ -579,21 +349,26 @@ async function handleCustomToolCall(
       }
 
       case 'github_create_issue_from_template': {
-        const { owner, repo, filename, field_values, title_override, labels_override } = CreateIssueFromTemplateSchema.parse(args);
-        
+        const { owner, repo, filename, field_values, title_override, labels_override } =
+          CreateIssueFromTemplateSchema.parse(args);
+
         // 1. Get the template to parse metadata
-        const response = await githubClient.get(`/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE/${filename}`);
+        const response = await githubClient.get(
+          `/repos/${owner}/${repo}/contents/.github/ISSUE_TEMPLATE/${filename}`,
+        );
         const rawContent = Buffer.from(response.data.content, 'base64').toString('utf8');
 
         // Simple YAML/Metadata extraction (for labels/assignees/title)
         const labels: string[] = [...(labels_override || [])];
         let title = title_override || 'Issue from template';
-        
+
         if (filename.endsWith('.yml') || filename.endsWith('.yaml')) {
           // Parse labels from YAML (very simple regex-based for now)
           const labelMatch = rawContent.match(/labels:\s*\[(.*?)\]/);
           if (labelMatch) {
-            const templateLabels = labelMatch[1].split(',').map(l => l.trim().replace(/['"]/g, ''));
+            const templateLabels = labelMatch[1]
+              .split(',')
+              .map((l) => l.trim().replace(/['"]/g, ''));
             labels.push(...templateLabels);
           }
           const nameMatch = rawContent.match(/^name:\s*(.*)$/m);
@@ -614,7 +389,12 @@ async function handleCustomToolCall(
         });
 
         return {
-          content: [{ type: 'text', text: `Issue created successfully from template: #${createResponse.data.number}\nURL: ${createResponse.data.html_url}` }],
+          content: [
+            {
+              type: 'text',
+              text: `Issue created successfully from template: #${createResponse.data.number}\nURL: ${createResponse.data.html_url}`,
+            },
+          ],
         };
       }
 
