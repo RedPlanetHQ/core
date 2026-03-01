@@ -229,26 +229,6 @@ export const ExecuteGatewayResponseSchema = z.object({
 export type ExecuteGatewayResponse = z.infer<typeof ExecuteGatewayResponseSchema>;
 
 // ---------------------------------------------------------------------------
-// Integration Explorer (internal async use)
-// ---------------------------------------------------------------------------
-
-export const IntegrationExplorerInputSchema = z.object({
-  query: z.string(),
-  integrationsList: z.string(),
-  mode: z.enum(["read", "write"]),
-  timezone: z.string().optional(),
-  source: z.string(),
-});
-
-export type IntegrationExplorerInput = z.infer<typeof IntegrationExplorerInputSchema>;
-
-export const IntegrationExplorerResponseSchema = z.object({
-  result: z.string(),
-});
-
-export type IntegrationExplorerResponse = z.infer<typeof IntegrationExplorerResponseSchema>;
-
-// ---------------------------------------------------------------------------
 // Auth – Authorization Code
 // ---------------------------------------------------------------------------
 

@@ -1,10 +1,11 @@
 import { IngestionStatus } from "@prisma/client";
 import { type z } from "zod";
 import { type IngestBodyRequest } from "../ingest/ingest";
-import { prisma } from "./prisma";
+
 import { hasCredits } from "./utils";
 import { preprocessTask } from "../ingest/preprocess-episode";
 import { LabelService } from "~/services/label.server";
+import { prisma } from "~/db.server";
 
 // Used in the trigger
 export const addToQueue = async (
@@ -53,7 +54,7 @@ export const addToQueue = async (
     const labelService = new LabelService();
     const hasAccess = await labelService.validateLabelAccess(
       body.labelIds,
-      workspaceId
+      workspaceId,
     );
 
     if (!hasAccess) {

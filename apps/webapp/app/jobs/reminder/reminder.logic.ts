@@ -16,7 +16,10 @@ import {
   buildReminderContext,
   createReminderTriggerFromDb,
 } from "~/services/agent/context/decision-context";
-import { runCASEPipeline, type CASEPipelineResult } from "~/services/agent/decision-agent-pipeline";
+import {
+  runCASEPipeline,
+  type CASEPipelineResult,
+} from "~/services/agent/decision-agent-pipeline";
 import { logger } from "~/services/logger.service";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import {
@@ -24,7 +27,7 @@ import {
   incrementUnrespondedCount,
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 

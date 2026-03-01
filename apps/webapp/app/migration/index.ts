@@ -1,5 +1,5 @@
 import { ProviderFactory } from "@core/providers";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 const MIGRATION_KEY = "userWorkspaceMigrationCompleted";
 

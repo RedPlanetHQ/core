@@ -5,7 +5,7 @@ import {
   type WebhookEventType,
   type WebhookTarget,
 } from "./webhook-delivery-utils";
-import { prisma } from "../utils/prisma";
+import { prisma } from "~/db.server";
 
 const integrationWebhookQueue = queue({
   name: "integration-webhook-queue",

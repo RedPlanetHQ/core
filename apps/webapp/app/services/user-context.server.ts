@@ -1,5 +1,5 @@
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { ProviderFactory } from "@core/providers";
 
 export interface UserContext {
@@ -16,12 +16,15 @@ export interface UserContext {
 
 // Lazy proxy to avoid initialization order issues
 // ProviderFactory is initialized in startup.ts, but this module may be imported before that
-const graphProvider = new Proxy({} as ReturnType<typeof ProviderFactory.getGraphProvider>, {
-  get(_target, prop) {
-    const provider = ProviderFactory.getGraphProvider();
-    return provider[prop as keyof typeof provider];
-  }
-})
+const graphProvider = new Proxy(
+  {} as ReturnType<typeof ProviderFactory.getGraphProvider>,
+  {
+    get(_target, prop) {
+      const provider = ProviderFactory.getGraphProvider();
+      return provider[prop as keyof typeof provider];
+    },
+  },
+);
 
 /**
  * Get user context with 3-tier fallback:
@@ -29,7 +32,10 @@ const graphProvider = new Proxy({} as ReturnType<typeof ProviderFactory.getGraph
  * 2. Inferred from episodes
  * 3. Generic (no context)
  */
-export async function getUserContext(userId: string, workspaceId?: string): Promise<UserContext> {
+export async function getUserContext(
+  userId: string,
+  workspaceId?: string,
+): Promise<UserContext> {
   // Fetch user identity from database
   const user = await prisma.user.findUnique({
     where: { id: userId },
@@ -65,13 +71,19 @@ export async function getUserContext(userId: string, workspaceId?: string): Prom
  * Query Neo4j for onboarding statements
  * Looks for IS_A (role), WANTS_TO (goal), USES (tools) predicates
  */
-async function getOnboardingContext(userId: string, workspaceId?: string): Promise<{
+async function getOnboardingContext(
+  userId: string,
+  workspaceId?: string,
+): Promise<{
   role?: string;
   goal?: string;
   tools?: string[];
 }> {
   try {
-    const result = await graphProvider.getOnboardingEntities(userId, workspaceId ?? "");
+    const result = await graphProvider.getOnboardingEntities(
+      userId,
+      workspaceId ?? "",
+    );
 
     let role: string | undefined;
     let goal: string | undefined;
@@ -111,12 +123,21 @@ async function getOnboardingContext(userId: string, workspaceId?: string): Promi
  * Infer user context from episode patterns
  * Uses pattern matching to detect likely role and tools
  */
-async function inferContextFromEpisodes(userId: string, workspaceId?: string): Promise<{
+async function inferContextFromEpisodes(
+  userId: string,
+  workspaceId?: string,
+): Promise<{
   role?: string;
   tools?: string[];
 }> {
   try {
-    const episodes = await graphProvider.getEpisodesByUser(userId, "createdAt", 100, true, workspaceId);
+    const episodes = await graphProvider.getEpisodesByUser(
+      userId,
+      "createdAt",
+      100,
+      true,
+      workspaceId,
+    );
 
     // Combine all episode content for pattern analysis
     const allContent = episodes

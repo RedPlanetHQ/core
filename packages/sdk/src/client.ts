@@ -19,8 +19,6 @@ import type {
   ExecuteGatewayInput,
   ExecuteGatewayToolInput,
   ExecuteGatewayResponse,
-  IntegrationExplorerInput,
-  IntegrationExplorerResponse,
   AuthorizationCodeResponse,
   TokenExchangeInput,
   TokenExchangeResponse,
@@ -267,20 +265,6 @@ export class CoreClient {
       "POST",
       `/api/v1/gateways/${params.gatewayId}/execute`,
       { body: { mode: "tool", toolName: params.toolName, params: params.params } },
-    );
-  }
-
-  /**
-   * Run the integration explorer for a query and return the final text result.
-   * POST /api/v1/integration-explorer
-   */
-  async runIntegrationExplorer(
-    params: IntegrationExplorerInput,
-  ): Promise<IntegrationExplorerResponse> {
-    return this.request<IntegrationExplorerResponse>(
-      "POST",
-      "/api/v1/integration-explorer",
-      { body: params },
     );
   }
 

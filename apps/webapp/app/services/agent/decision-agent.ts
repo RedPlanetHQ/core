@@ -210,6 +210,10 @@ export async function runDecisionAgent(
       trigger.channel,
       true,
       userPersona,
+      undefined, // skills
+      undefined, // onMessage
+      context.user.defaultChannel,
+      context.user.availableChannels,
     );
 
     const { text } = await generateText({

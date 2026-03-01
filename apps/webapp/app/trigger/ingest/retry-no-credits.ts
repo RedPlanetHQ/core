@@ -2,11 +2,12 @@ import { task } from "@trigger.dev/sdk";
 import { z } from "zod";
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
-import { prisma } from "../utils/prisma";
+
 import { type IngestBodyRequest, ingestTask } from "./ingest";
 
 import { countTokens } from "~/services/search/tokenBudget";
 import { estimateCreditsFromTokens, reserveCredits } from "~/jobs/credit_utils";
+import { prisma } from "~/db.server";
 
 export const RetryNoCreditBodyRequest = z.object({
   workspaceId: z.string(),

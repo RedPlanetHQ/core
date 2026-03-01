@@ -1,7 +1,7 @@
 import { type Prisma, type Document } from "@prisma/client";
 
 import { addToQueue } from "~/lib/ingest.server";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 export interface DocumentSearchParams {
   query?: string;

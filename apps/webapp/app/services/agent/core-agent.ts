@@ -41,6 +41,10 @@ export const createTools = async (
   skills?: SkillRef[],
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>,
+  /** Default channel for reminders when source is not whatsapp/slack */
+  defaultChannel?: "whatsapp" | "slack" | "email",
+  /** Available channels for reminders */
+  availableChannels?: Array<"whatsapp" | "slack" | "email">,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -199,10 +203,19 @@ export const createTools = async (
   }
 
   // Add reminder management tools
-  // WhatsApp/Slack source → same channel, everything else (web/email) → email
+  // WhatsApp/Slack source → same channel, everything else → use defaultChannel or email
   const channel =
-    source === "whatsapp" ? "whatsapp" : source === "slack" ? "slack" : "email";
-  const reminderTools = getReminderTools(workspaceId, channel, timezone);
+    source === "whatsapp"
+      ? "whatsapp"
+      : source === "slack"
+        ? "slack"
+        : defaultChannel || "email";
+  const reminderTools = getReminderTools(
+    workspaceId,
+    channel,
+    timezone,
+    availableChannels || ["email"]
+  );
 
   return { ...tools, ...reminderTools };
 };
