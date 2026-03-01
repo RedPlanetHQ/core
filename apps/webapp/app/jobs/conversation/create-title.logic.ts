@@ -1,5 +1,5 @@
 import { conversationTitlePrompt } from "~/trigger/conversation/prompt";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { generateText, type LanguageModel } from "ai";
 import { getModel } from "~/lib/model.server";

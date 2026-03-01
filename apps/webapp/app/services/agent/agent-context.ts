@@ -62,6 +62,20 @@ export async function buildAgentContext({
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
+  const defaultChannel =
+    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
+    "email";
+
+  // Determine available messaging channels
+  const hasWhatsapp = !!user?.phoneNumber;
+  const hasSlack = connectedIntegrations.some(
+    (int) => int.integrationDefinition.slug === "slack",
+  );
+  const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
+    "email", // always available
+    ...(hasWhatsapp ? (["whatsapp"] as const) : []),
+    ...(hasSlack ? (["slack"] as const) : []),
+  ];
 
   const tools = await createTools(
     userId,
@@ -72,6 +86,8 @@ export async function buildAgentContext({
     persona ?? undefined,
     skills,
     onMessage,
+    defaultChannel,
+    availableChannels,
   );
 
   // Build system prompt
@@ -105,6 +121,15 @@ export async function buildAgentContext({
 
     IMPORTANT: Always use the Account ID when calling get_integration_actions and execute_integration_action.
     </connected_integrations>`;
+
+  // Messaging channels context
+  systemPrompt += `
+    <messaging_channels>
+    Available channels for reminders: ${availableChannels.join(", ")}
+    Default channel: ${defaultChannel}
+
+    When creating reminders, they will be sent via the default channel (${defaultChannel}) unless the user specifies otherwise.
+    </messaging_channels>`;
 
   // Skills context
   if (skills.length > 0) {

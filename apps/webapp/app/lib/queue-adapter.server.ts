@@ -22,6 +22,7 @@ import type {
   ReminderJobData,
   FollowUpJobData,
 } from "~/jobs/reminder/reminder.logic";
+import type { BackgroundTaskPayload } from "~/jobs/background-task/background-task.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -449,3 +450,71 @@ export async function cancelFollowUpsForReminder(
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
+
+/**
+ * Enqueue background task job
+ */
+export async function enqueueBackgroundTask(
+  payload: BackgroundTaskPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { backgroundTaskRunner } =
+      await import("~/trigger/background-task/background-task");
+    const handler = await backgroundTaskRunner.trigger(payload, {
+      queue: "background-task-queue",
+      concurrencyKey: payload.workspaceId,
+      tags: [`background-task:${payload.taskId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { backgroundTaskQueue } = await import("~/bullmq/queues");
+    const job = await backgroundTaskQueue.add("background-task", payload, {
+      jobId: `background-task-${payload.taskId}`,
+      attempts: 1, // No retries - task handles its own state
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Cancel a background task job
+ */
+export async function cancelBackgroundTaskJob(
+  taskId: string,
+): Promise<boolean> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`background-task:${taskId}`],
+        status: ["QUEUED", "DELAYED", "EXECUTING"],
+      });
+
+      let cancelled = false;
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+        cancelled = true;
+      }
+      return cancelled;
+    } catch (error) {
+      return false;
+    }
+  } else {
+    // BullMQ
+    const { backgroundTaskQueue } = await import("~/bullmq/queues");
+    const jobId = `background-task-${taskId}`;
+
+    // Try to remove from waiting/delayed
+    const job = await backgroundTaskQueue.getJob(jobId);
+    if (job) {
+      await job.remove();
+      return true;
+    }
+
+    return false;
+  }
+}

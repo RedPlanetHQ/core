@@ -22,7 +22,8 @@ import {
 import { getChannel } from "~/services/channels";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // ============================================================================
 // Types
@@ -43,6 +44,8 @@ export interface CASEPipelineInput {
   /** ID for logging and state updates */
   reminderId: string;
   timezone: string;
+  /** Optional tool executor — defaults to DirectOrchestratorTools (direct DB calls) */
+  executorTools?: OrchestratorTools;
 }
 
 export interface CASEPipelineResult {
@@ -71,7 +74,16 @@ export interface CASEPipelineResult {
 export async function runCASEPipeline(
   input: CASEPipelineInput,
 ): Promise<CASEPipelineResult> {
-  const { trigger, context, userPersona, userData, reminderText, reminderId, timezone } = input;
+  const {
+    trigger,
+    context,
+    userPersona,
+    userData,
+    reminderText,
+    reminderId,
+    timezone,
+    executorTools,
+  } = input;
 
   try {
     // =========================================================================
@@ -95,7 +107,15 @@ export async function runCASEPipeline(
     // =========================================================================
     // Step 2: Execute the plan
     // =========================================================================
-    await executePlan(plan, trigger, userData, { id: reminderId, text: reminderText }, timezone, userPersona);
+    await executePlan(
+      plan,
+      trigger,
+      userData,
+      { id: reminderId, text: reminderText },
+      timezone,
+      userPersona,
+      executorTools,
+    );
 
     logger.info(`[CASE pipeline] Successfully processed ${reminderId}`);
 
@@ -140,6 +160,7 @@ async function executePlan(
   reminder: { id: string; text: string },
   timezone: string,
   userPersona?: string,
+  executorTools?: OrchestratorTools,
 ) {
   const { channel } = trigger;
 
@@ -180,12 +201,16 @@ async function executePlan(
         replyTo = userData.email;
       }
       if (replyTo) {
-        const metadata: Record<string, string> = { workspaceId: userData.workspaceId };
+        const metadata: Record<string, string> = {
+          workspaceId: userData.workspaceId,
+        };
         if (channel === "email") {
           metadata.subject = `Reminder: ${reminder.text}`;
         }
         await handler.sendReply(replyTo, responseText, metadata);
-        logger.info(`Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
+        logger.info(
+          `Sent ${channel} message for ${reminder.id} to ${userData.userId}`,
+        );
       }
     } catch (error) {
       logger.error(`Failed to execute message for ${reminder.id}`, { error });
@@ -219,6 +244,7 @@ async function executePlan(
             trigger.channel,
             timezone,
             userPersona,
+            executorTools,
           );
           break;
         default:
@@ -242,15 +268,17 @@ function buildActionPlanForAgent(
   trigger: Trigger,
 ): MessagePlan {
   // askAboutKeeping only applies to reminder triggers
-  if (trigger.type !== "reminder_fired" && trigger.type !== "reminder_followup") {
+  if (
+    trigger.type !== "reminder_fired" &&
+    trigger.type !== "reminder_followup"
+  ) {
     return message;
   }
 
   const UNRESPONDED_THRESHOLD = 5;
   const data = (trigger as ReminderTrigger).data;
   const shouldAsk =
-    !data.confirmedActive &&
-    data.unrespondedCount >= UNRESPONDED_THRESHOLD;
+    !data.confirmedActive && data.unrespondedCount >= UNRESPONDED_THRESHOLD;
 
   if (message.context.askAboutKeeping || shouldAsk) {
     return {
@@ -275,7 +303,8 @@ async function executeStateUpdate(
   defaultReminderId: string,
 ) {
   const data = action.data || {};
-  const targetReminderId = (data.targetReminderId as string) || defaultReminderId;
+  const targetReminderId =
+    (data.targetReminderId as string) || defaultReminderId;
 
   logger.info(`[CASE silent] State update: ${action.description}`, {
     userId,
@@ -290,7 +319,8 @@ async function executeStateUpdate(
       where: { id: targetReminderId },
       select: { metadata: true },
     });
-    const existingMetadata = (existing?.metadata as Record<string, unknown>) || {};
+    const existingMetadata =
+      (existing?.metadata as Record<string, unknown>) || {};
     updateData.metadata = {
       ...existingMetadata,
       ...(data.metadata as Record<string, unknown>),
@@ -332,14 +362,18 @@ async function executeIntegrationAction(
   channel: string,
   timezone: string,
   userPersona?: string,
+  executorTools?: OrchestratorTools,
 ) {
   const data = action.data || {};
   const query = (data.query as string) || action.description;
 
-  logger.info(`[CASE silent] Executing integration action: ${action.description}`, {
-    userId,
-    query,
-  });
+  logger.info(
+    `[CASE silent] Executing integration action: ${action.description}`,
+    {
+      userId,
+      query,
+    },
+  );
 
   const { stream } = await runOrchestrator(
     userId,
@@ -350,6 +384,8 @@ async function executeIntegrationAction(
     channel,
     undefined,
     userPersona,
+    undefined,
+    executorTools,
   );
 
   // Consume the stream to completion (silent — no UI)

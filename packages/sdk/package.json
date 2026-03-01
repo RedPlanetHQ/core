@@ -25,6 +25,7 @@
   "scripts": {
     "clean": "rimraf dist",
     "build": "npm run clean && npm run build:tsup",
+    "dev": "npm run clean && tsup --dts-resolve --watch",
     "build:tsup": "tsup --dts-resolve",
     "typecheck": "tsc --noEmit"
   },

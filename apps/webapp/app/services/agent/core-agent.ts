@@ -6,6 +6,7 @@ import { type SkillRef } from "./types";
 
 import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
+import { getBackgroundTaskTools } from "./tools/background-task-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -41,6 +42,14 @@ export const createTools = async (
   skills?: SkillRef[],
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>,
+  /** Default channel for reminders when source is not whatsapp/slack */
+  defaultChannel?: "whatsapp" | "slack" | "email",
+  /** Available channels for reminders */
+  availableChannels?: Array<"whatsapp" | "slack" | "email">,
+  /** Conversation ID for web channel callbacks */
+  conversationId?: string,
+  /** Additional channel metadata for callbacks */
+  channelMetadata?: Record<string, unknown>,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -199,10 +208,30 @@ export const createTools = async (
   }
 
   // Add reminder management tools
-  // WhatsApp/Slack source → same channel, everything else (web/email) → email
+  // WhatsApp/Slack source → same channel, everything else → use defaultChannel or email
   const channel =
-    source === "whatsapp" ? "whatsapp" : source === "slack" ? "slack" : "email";
-  const reminderTools = getReminderTools(workspaceId, channel, timezone);
+    source === "whatsapp"
+      ? "whatsapp"
+      : source === "slack"
+        ? "slack"
+        : defaultChannel || "email";
+  const reminderTools = getReminderTools(
+    workspaceId,
+    channel,
+    timezone,
+    availableChannels || ["email"],
+  );
 
-  return { ...tools, ...reminderTools };
+  // Add background task tools (not in readOnly mode)
+  const backgroundTaskTools = readOnly
+    ? {}
+    : getBackgroundTaskTools(
+        workspaceId,
+        userId,
+        source === "web" ? "web" : channel,
+        conversationId,
+        channelMetadata,
+      );
+
+  return { ...tools, ...reminderTools, ...backgroundTaskTools };
 };

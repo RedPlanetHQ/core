@@ -7,7 +7,7 @@ import {
 } from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
 import type { MessageChannel } from "~/services/agent/types";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { type Prisma } from "@prisma/client";
 
 export interface ReminderData {

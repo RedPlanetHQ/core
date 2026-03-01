@@ -6,8 +6,9 @@ import {
 
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
-import { prisma } from "./prisma";
+
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
+import { prisma } from "~/db.server";
 
 // Token generation utilities
 const tokenValueLength = 40;

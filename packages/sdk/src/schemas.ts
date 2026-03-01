@@ -186,6 +186,49 @@ export type GetDocumentResponse = z.infer<
 >;
 
 // ---------------------------------------------------------------------------
+// Gateways
+// ---------------------------------------------------------------------------
+
+export const GatewayAgentInfoSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  tools: z.array(z.string()),
+  platform: z.string().nullable(),
+  hostname: z.string().nullable(),
+  status: z.enum(["CONNECTED", "DISCONNECTED"]),
+});
+
+export type GatewayAgentInfo = z.infer<typeof GatewayAgentInfoSchema>;
+
+export const GetGatewaysResponseSchema = z.object({
+  gateways: z.array(GatewayAgentInfoSchema),
+});
+
+export type GetGatewaysResponse = z.infer<typeof GetGatewaysResponseSchema>;
+
+export const ExecuteGatewayInputSchema = z.object({
+  gatewayId: z.string(),
+  intent: z.string(),
+});
+
+export type ExecuteGatewayInput = z.infer<typeof ExecuteGatewayInputSchema>;
+
+export const ExecuteGatewayToolInputSchema = z.object({
+  gatewayId: z.string(),
+  toolName: z.string(),
+  params: z.record(z.unknown()),
+});
+
+export type ExecuteGatewayToolInput = z.infer<typeof ExecuteGatewayToolInputSchema>;
+
+export const ExecuteGatewayResponseSchema = z.object({
+  result: z.unknown(),
+});
+
+export type ExecuteGatewayResponse = z.infer<typeof ExecuteGatewayResponseSchema>;
+
+// ---------------------------------------------------------------------------
 // Auth – Authorization Code
 // ---------------------------------------------------------------------------
 

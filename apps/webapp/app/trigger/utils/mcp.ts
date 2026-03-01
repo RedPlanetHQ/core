@@ -3,8 +3,7 @@ import { logger } from "@trigger.dev/sdk/v3";
 
 import * as fs from "fs";
 import * as path from "path";
-
-import { prisma } from "./prisma";
+import { prisma } from "~/db.server";
 
 export const fetchAndSaveIntegrations = async () => {
   try {

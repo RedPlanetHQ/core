@@ -150,7 +150,7 @@ export const PrismaErrorSchema = z.object({
 
 function getDatabaseSchema() {
   if (!isValidDatabaseUrl(env.DATABASE_URL)) {
-    throw new Error("Invalid Database URL");
+    return "public";
   }
 
   const databaseUrl = new URL(env.DATABASE_URL);
