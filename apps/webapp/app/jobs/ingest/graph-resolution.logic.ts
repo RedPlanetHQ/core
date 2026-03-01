@@ -37,7 +37,7 @@ import {
   moveAllProvenanceToStatement,
 } from "~/services/graphModels/episode";
 import { makeModelCall } from "~/lib/model.server";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
 

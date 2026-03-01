@@ -9,7 +9,6 @@ import {
 import { z } from "zod";
 
 import { runWebExplorer } from "./explorers";
-import { runIntegrationExplorer } from "./explorers/integration-explorer";
 import { runGatewayExplorer } from "./gateway";
 import { logger } from "../logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
@@ -42,10 +41,33 @@ const hasApprovalRequested = (message: UIMessage): boolean => {
 
 export type OrchestratorMode = "read" | "write";
 
+/**
+ * Get date in user's timezone formatted as YYYY-MM-DD
+ */
+function getDateInTimezone(date: Date, timezone: string): string {
+  return date.toLocaleDateString("en-CA", { timeZone: timezone });
+}
+
+/**
+ * Get datetime in user's timezone formatted as YYYY-MM-DD HH:MM:SS
+ */
+function getDateTimeInTimezone(date: Date, timezone: string): string {
+  const dateStr = date.toLocaleDateString("en-CA", { timeZone: timezone });
+  const timeStr = date.toLocaleTimeString("en-GB", {
+    timeZone: timezone,
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  });
+  return `${dateStr} ${timeStr}`;
+}
+
 const getOrchestratorPrompt = (
   integrations: string,
   mode: OrchestratorMode,
   gateways: string,
+  timezone: string = "UTC",
   userPersona?: string,
   skills?: SkillRef[],
 ) => {
@@ -67,9 +89,49 @@ When you receive a skill reference (skill name + ID) in the user message, call g
 </skills>\n`
       : "";
 
+  // Get current date and time in user's timezone
+  const now = new Date();
+  const today = getDateInTimezone(now, timezone);
+  const currentDateTime = getDateTimeInTimezone(now, timezone);
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayDate = getDateInTimezone(yesterday, timezone);
+
+  const dateTimeSection = `
+NOW: ${currentDateTime} (${timezone})
+TODAY: ${today}
+YESTERDAY: ${yesterdayDate}
+`;
+
+  const integrationInstructions = `
+INTEGRATION WORKFLOW:
+1. Call get_integration_actions with the accountId and describe what you want to do
+2. Review the returned actions and their inputSchema
+3. Call execute_integration_action with exact parameters matching the schema
+4. If you need more detail (e.g., full email body), call get_integration_actions again to find the "get by id" action
+
+⚠️ DATE/TIME QUERIES: Be cautious with datetime filters - each integration has different date formats and query syntax. Check the inputSchema carefully. Relative terms like "newer_than:1d" can be unreliable. Prefer explicit date ranges when available.
+
+MULTI-STEP INTEGRATION FLOWS:
+- Search/list actions return metadata only (id, title, subject). Use the ID to fetch full content.
+- After search: call get_integration_actions with "get by id" or "read" query, then execute with the ID.
+- Fetch full content when user asks what something says, contains, or asks for details.
+
+Multi-step examples:
+- "what does the email from John say" → search emails from John → get id → fetch email by id → return body
+- "summarize the PR for auth fix" → search PRs for auth → get PR number → fetch PR details → return description/diff
+- "what's in the Linear issue about onboarding" → search issues → get issue id → fetch issue details → return full description
+
+PARAMETER FORMATTING:
+- Follow the inputSchema exactly - use the field names, types, and formats it specifies
+- ISO 8601 timestamps MUST include timezone: 2025-01-01T00:00:00Z (not 2025-01-01T00:00:00)
+- Check required vs optional fields
+- If action fails, check the error and retry with corrected parameters
+`;
+
   if (mode === "write") {
     return `You are an orchestrator. Execute actions on integrations or gateways.
-${personaSection}
+${personaSection}${dateTimeSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
 
@@ -78,34 +140,44 @@ ${gateways || "No gateways connected"}
 </gateways>
 ${skillsSection}
 TOOLS:
-- memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
-- integration_action: Execute an action on a connected service (create, update, delete)
-- get_skill: Load a user-defined skill's full instructions by ID. Call this when the request references a skill.
+- memory_search: Search for prior context not covered by the user persona above
+- get_integration_actions: Discover available actions for an integration
+- execute_integration_action: Execute an action on a connected service (create, update, delete)
+- get_skill: Load a user-defined skill's full instructions by ID
 - gateway_*: Offload tasks to connected gateways based on their description
-
+${integrationInstructions}
 PRIORITY ORDER FOR CONTEXT:
-1. User persona above — check here FIRST for preferences, directives, identity, account details (usernames, etc.)
-2. memory_search — ONLY if persona doesn't have what you need (prior conversations, specific history, details not in persona)
-3. NEVER ask the user for information that's in persona or memory.
+1. User persona above — check here FIRST for preferences, directives, identity, account details
+2. memory_search — ONLY if persona doesn't have what you need
+3. NEVER ask the user for information that's in persona or memory
 
-If the persona already has the info you need (e.g., github username, preferred channels), skip memory_search and go straight to the action.
+CRITICAL FOR memory_search - describe your INTENT, not keywords:
+
+BAD (keyword soup - will fail):
+- "slack message preferences channels"
+- "github issue labels templates core"
+- "user email formatting"
+
+GOOD (clear intent):
+- "User's preferences for slack messages - preferred channels, formatting, any standing directives about team communication"
+- "User's preferences for github issues - preferred repos, labels, templates, any directives about issue creation"
+- "Find user preferences and past discussions about email formatting and signature preferences"
 
 EXAMPLES:
 
 Action: "send a slack message to #general saying standup in 5"
-Step 1: memory_search("user's preferences for slack messages - preferred channels, formatting, any standing directives about team communication")
-Step 2: integration_action({ integration: "slack", action: "send message to #general: standup in 5" })
+Step 1: memory_search("user's preferences for slack messages")
+Step 2: get_integration_actions(slack accountId, "send message")
+Step 3: execute_integration_action(slack accountId, "send_message", { channel: "#general", text: "standup in 5" })
 
 Action: "create a github issue for auth bug in core repo"
-Step 1: memory_search("user's preferences for github issues - preferred repos, labels, templates, any directives about issue creation")
-Step 2: integration_action({ integration: "github", action: "create issue titled auth bug in core repo" })
+Step 1: get_integration_actions(github accountId, "create issue")
+Step 2: execute_integration_action(github accountId, "create_issue", { repo: "core", title: "auth bug", ... })
 
-Action: "fix the auth bug in core repo" (gateway description: "personal coding tasks")
+Action: "fix the auth bug in core repo" (gateway task)
 Execute: gateway_harshith_mac({ intent: "fix the auth bug in core repo" })
 
 RULES:
-- ALWAYS search memory first (unless persona already has the info), then execute the action.
-- Use memory context to inform how you execute (formatting, recipients, channels, etc.).
 - Execute the action. No personality.
 - Return result of action (success/failure and details).
 - If integration/gateway not connected, say so.
@@ -113,16 +185,11 @@ RULES:
 
 CRITICAL - FINAL SUMMARY:
 When you have completed the action, write a clear, concise summary as your final response.
-This summary will be returned to the parent agent, so include:
-- What action was performed
-- The result (success/failure)
-- Any relevant details (IDs, URLs, error messages)
-
-Example final summary: "Created GitHub issue #123 'Fix auth bug' in core repo. URL: https://github.com/org/core/issues/123"`;
+Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`;
   }
 
   return `You are an orchestrator. Gather information based on the intent.
-${personaSection}
+${personaSection}${dateTimeSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
 
@@ -131,79 +198,57 @@ ${gateways || "No gateways connected"}
 </gateways>
 ${skillsSection}
 TOOLS:
-- memory_search: Search for prior context not covered by the user persona above. CORE handles query understanding internally.
-- integration_query: Live data from connected services (emails, calendar, issues, messages)
-- web_search: Real-time information from the web (news, current events, documentation, prices, weather, general knowledge). Also use to read/summarize URLs shared by user.
-- get_skill: Load a user-defined skill's full instructions by ID. Call this when the request references a skill.
-- gateway_*: Offload tasks to connected gateways based on their description (can gather info too)
-
+- memory_search: Search for prior context not covered by the user persona above
+- get_integration_actions: Discover available actions for an integration
+- execute_integration_action: Query data from a connected service (read operations)
+- web_search: Real-time information from the web (news, docs, prices, weather). Also reads URLs.
+- get_skill: Load a user-defined skill's full instructions by ID
+- gateway_*: Offload tasks to connected gateways based on their description
+${integrationInstructions}
 PRIORITY ORDER FOR CONTEXT:
-1. User persona above — check here FIRST for preferences, directives, identity, account details (usernames, etc.)
-2. memory_search — if persona doesn't have what you need (prior conversations, specific history, details not in persona)
-3. integration_query / web_search — for live data or real-time info
-4. NEVER ask the user for information that's in persona or memory.
+1. User persona above — check here FIRST for preferences, directives, identity
+2. memory_search — if persona doesn't have what you need
+3. Integrations / web_search — for live data or real-time info
+4. NEVER ask the user for information that's in persona or memory
 
-YOUR JOB:
-1. FIRST: Check the user persona above for relevant preferences, directives, and identity info.
-2. THEN: If you need prior context not in persona, call memory_search.
-3. THEN: Based on the intent AND context, gather from the right source:
-   - Integrations: live/current data from external services (user's emails, calendar, issues)
-   - Web: real-time info not in memory or integrations (news, weather, docs, how-tos, current events, general questions)
-   - Multiple: when you need info from several sources
-
-CRITICAL FOR memory_search:
-- Describe your INTENT - what you need from memory and why.
-- Always include: preferences, directives, and prior context related to the request.
-- Write it like asking a colleague to find something.
-- CORE has agentic search that understands natural language.
+CRITICAL FOR memory_search - describe your INTENT, not keywords:
 
 BAD (keyword soup - will fail):
-- "rerank evaluation metrics NDCG MRR pairwise pointwise"
-- "Manoj Sol rerank evaluation dataset methodology"
+- "rerank evaluation metrics NDCG MRR pairwise"
+- "deployment plan blockers timeline"
+- "calendar meetings scheduling preferences"
 
 GOOD (clear intent):
 - "Find user preferences, directives, and past discussions about rerank evaluation - what approach was decided, any metrics discussed, next steps"
-- "What has user said about their morning routine preferences and productivity habits"
-- "User's preferences and previous conversations about the deployment plan and any blockers mentioned"
+- "User's preferences and previous conversations about the deployment plan - decisions made, timeline, blockers mentioned"
+- "What has user said about their calendar preferences, meeting scheduling habits, and any directives about availability"
 
 EXAMPLES:
 
-Intent: "What did we discuss about the marketing strategy"
-Step 1: memory_search("User preferences, directives, and past discussions about marketing strategy - decisions made, timeline, who's involved")
-
 Intent: "Show me my upcoming meetings this week"
-Step 1: memory_search("User's preferences and directives about calendar, meetings, and scheduling")
-Step 2: integration_query: google-calendar (live data)
+Step 1: get_integration_actions(google-calendar accountId, "list events this week")
+Step 2: execute_integration_action(google-calendar accountId, "list_events", { timeMin: "...", timeMax: "..." })
 
-Intent: "Status of the deployment - what we planned vs current blockers"
-Step 1: memory_search("User preferences, directives, and previous discussions about deployment planning and decisions")
-Step 2: integration_query: github/linear
+Intent: "What's in the email from John"
+Step 1: get_integration_actions(gmail accountId, "search emails from John")
+Step 2: execute_integration_action(gmail accountId, "search_emails", { query: "from:john" })
+Step 3: get_integration_actions(gmail accountId, "get email by id")
+Step 4: execute_integration_action(gmail accountId, "get_email", { id: "..." })
 
-Intent: "What's the weather in San Francisco"
-Step 1: memory_search("User's location preferences, directives about weather updates")
-Step 2: web_search (real-time data)
-
-Intent: "Latest news about AI regulation"
-Step 1: memory_search("User's interests and directives about AI news and regulation topics")
-Step 2: web_search (current events)
-
-Intent: "What newsletters came in today" / "my GitHub notifications"
-Step 1: memory_search("User's preferences for email filtering, notification priorities, and directives about newsletters")
-Step 2: integration_query: gmail (user's personal inbox)
+Intent: "What's the weather in SF"
+→ web_search (real-time data)
 
 Intent: "summarize this: https://example.com/article"
-→ web_search (reads the URL content) — no memory search needed for pure URL fetching
+→ web_search (reads the URL content)
 
 BE PROACTIVE:
 - If a specific query returns empty, try a broader one to validate data exists.
-- If memory returns nothing on a specific topic, try related topics before reporting empty.
-- If integration returns empty, confirm the resource exists (repo, channel, calendar) before saying "nothing found".
+- If integration returns empty, confirm the resource exists before saying "nothing found".
 
 RULES:
 - Check user persona FIRST — it has identity, preferences, directives.
 - Call memory_search for anything not in persona (prior conversations, specific history).
 - NEVER ask the user for info that's already in persona or memory.
-- After getting context, proceed with other tools as needed.
 - Call multiple tools in parallel when data could be in multiple places.
 - No personality. Return raw facts.`;
 };
@@ -289,61 +334,64 @@ export async function runOrchestrator(
     });
   }
 
-  if (mode === "read") {
-    tools.integration_query = tool({
-      description: "Query a connected integration for current data",
-      inputSchema: z.object({
-        integration: z
-          .string()
-          .describe(
-            "Which integration to query (e.g., github, slack, notion, google-calendar, gmail)",
-          ),
-        query: z.string().describe("What data to get"),
-      }),
-      execute: async function* ({ integration, query }, { abortSignal }) {
+  // Integration tools - available in both modes
+  tools.get_integration_actions = tool({
+    description:
+      "Discover available actions for a connected integration. Returns action names with their inputSchema. Call this first to understand what parameters are needed.",
+    inputSchema: z.object({
+      accountId: z
+        .string()
+        .describe("Integration account ID from the connected integrations list"),
+      query: z
+        .string()
+        .describe("What you want to do (e.g., 'search emails', 'create issue', 'list events')"),
+    }),
+    execute: async ({ accountId, query }) => {
+      try {
+        logger.info(`Orchestrator: get_integration_actions - ${accountId}: ${query}`);
+        const actions = await executor.getIntegrationActions(accountId, query, userId);
+        return JSON.stringify(actions, null, 2);
+      } catch (error) {
+        logger.warn(`Failed to get actions for ${accountId}: ${error}`);
+        return "[]";
+      }
+    },
+  });
+
+  tools.execute_integration_action = tool({
+    description:
+      "Execute an action on a connected integration. Use the inputSchema from get_integration_actions to know what parameters to pass. If this fails, check the error and retry with corrected parameters.",
+    inputSchema: z.object({
+      accountId: z.string().describe("Integration account ID"),
+      action: z.string().describe("Action name from get_integration_actions"),
+      parameters: z
+        .string()
+        .describe("Action parameters as JSON string, matching the inputSchema exactly"),
+    }),
+    execute: async ({ accountId, action, parameters }) => {
+      try {
+        const parsedParams = JSON.parse(parameters);
         logger.info(
-          `Orchestrator: integration query - ${integration}: ${query}`,
+          `Orchestrator: execute_integration_action - ${accountId}/${action} with params: ${JSON.stringify(parsedParams)}`,
         );
-
-        const { stream, hasIntegrations } = await runIntegrationExplorer(
-          `${query} from ${integration}`,
-          integrationsList,
-          "read",
-          timezone,
-          source,
+        const result = await executor.executeIntegrationAction(
+          accountId,
+          action,
+          parsedParams,
           userId,
-          abortSignal,
-          executor,
+          source,
         );
+        return JSON.stringify(result);
+      } catch (error: any) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        logger.warn(`Integration action failed: ${accountId}/${action}`, error);
+        return `ERROR: ${errorMessage}. Check the inputSchema and retry with corrected parameters.`;
+      }
+    },
+  });
 
-        if (!hasIntegrations) {
-          yield {
-            parts: [{ type: "text", text: "No integrations connected" }],
-          };
-          return;
-        }
-
-        // Stream the integration explorer's work
-        let approvalRequested = false;
-        for await (const message of readUIMessageStream({
-          stream: stream.toUIMessageStream(),
-        })) {
-          if (approvalRequested) {
-            continue;
-          }
-
-          yield message;
-
-          if (hasApprovalRequested(message)) {
-            logger.info(
-              `Orchestrator: Stopping integration_query - approval requested`,
-            );
-            approvalRequested = true;
-          }
-        }
-      },
-    });
-
+  // Web search - only in read mode
+  if (mode === "read") {
     tools.web_search = tool({
       description:
         "Search the web for real-time information: news, current events, documentation, prices, weather, general knowledge. Use when info is not in memory or integrations.",
@@ -356,62 +404,6 @@ export async function runOrchestrator(
         logger.info(`Orchestrator: web search - ${query}`);
         const result = await runWebExplorer(query, timezone);
         return result.success ? result.data : "web search unavailable";
-      },
-    });
-  } else {
-    // Write mode - action tool
-    tools.integration_action = tool({
-      description:
-        "Execute an action on a connected integration (create, send, update, delete)",
-      inputSchema: z.object({
-        integration: z
-          .string()
-          .describe(
-            "Which integration to use (e.g., github, slack, notion, google-calendar, gmail)",
-          ),
-        action: z.string().describe("What action to perform, be specific"),
-      }),
-      execute: async function* ({ integration, action }, { abortSignal }) {
-        logger.info(
-          `Orchestrator: integration action - ${integration}: ${action}`,
-        );
-
-        const { stream, hasIntegrations } = await runIntegrationExplorer(
-          `${action} on ${integration}`,
-          integrationsList,
-          "write",
-          timezone,
-          source,
-          userId,
-          abortSignal,
-          executor,
-        );
-
-        if (!hasIntegrations) {
-          yield {
-            parts: [{ type: "text", text: "No integrations connected" }],
-          };
-          return;
-        }
-
-        // Stream the integration explorer's work
-        let approvalRequested = false;
-        for await (const message of readUIMessageStream({
-          stream: stream.toUIMessageStream(),
-        })) {
-          if (approvalRequested) {
-            continue;
-          }
-
-          yield message;
-
-          if (hasApprovalRequested(message)) {
-            logger.info(
-              `Orchestrator: Stopping integration_action - approval requested`,
-            );
-            approvalRequested = true;
-          }
-        }
       },
     });
   }
@@ -483,6 +475,7 @@ export async function runOrchestrator(
       integrationsList,
       mode,
       gatewaysList,
+      timezone,
       userPersona,
       skills,
     ),

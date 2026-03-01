@@ -1,7 +1,7 @@
 import { logger } from "~/services/logger.service";
 import { type z } from "zod";
 
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { checkPersonaUpdateThreshold } from "./persona-trigger.logic";
 import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 

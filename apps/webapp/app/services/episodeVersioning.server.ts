@@ -3,7 +3,7 @@ import { logger } from "./logger.service";
 import { EpisodeChunker } from "./episodeChunker.server";
 
 import { type Document } from "@prisma/client";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 /**
  * Version information for an episode session

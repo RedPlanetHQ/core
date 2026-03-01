@@ -27,7 +27,7 @@ import {
   incrementUnrespondedCount,
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 

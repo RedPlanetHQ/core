@@ -165,8 +165,8 @@ export interface GatewayExplorerResult {
 }
 
 /**
- * Run a sub-agent for a specific gateway
- * Similar to integration-explorer but for gateway tools
+ * Run a sub-agent for a specific gateway.
+ * Spawns an LLM agent with the gateway's available tools.
  */
 export async function runGatewayExplorer(
   gatewayId: string,

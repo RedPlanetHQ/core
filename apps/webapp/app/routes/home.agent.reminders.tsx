@@ -24,11 +24,7 @@ import {
 } from "react-virtualized";
 import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
-import {
-  getUser,
-  getWorkspaceId,
-  requireUser,
-} from "~/services/session.server";
+import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { cn } from "~/lib/utils";
 import { formatDistanceToNow } from "date-fns";
 import { updateReminder, deleteReminder } from "~/services/reminder.server";
@@ -38,8 +34,13 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "~/components/ui/dropdown-menu";
+import { RiWhatsappFill } from "@remixicon/react";
+import { SlackIcon } from "~/components/icons";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -63,7 +64,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     };
   }
 
-  const [reminders, totalCount] = await Promise.all([
+  const [reminders, totalCount, fullUser, slackAccount] = await Promise.all([
     prisma.reminder.findMany({
       where: whereClause,
       orderBy: {
@@ -74,7 +75,26 @@ export async function loader({ request }: LoaderFunctionArgs) {
     prisma.reminder.count({
       where: { workspaceId: workspaceId as string },
     }),
+    prisma.user.findUnique({
+      where: { id: user.id },
+      select: { phoneNumber: true },
+    }),
+    prisma.integrationAccount.findFirst({
+      where: {
+        workspaceId: workspaceId as string,
+        integrationDefinition: { slug: "slack" },
+      },
+    }),
   ]);
+
+  // Determine available channels
+  const availableChannels: Array<"email" | "whatsapp" | "slack"> = ["email"];
+  if (fullUser?.phoneNumber) {
+    availableChannels.push("whatsapp");
+  }
+  if (slackAccount) {
+    availableChannels.push("slack");
+  }
 
   const hasMore = reminders.length === limit && totalCount > limit;
   const nextCursor =
@@ -87,24 +107,31 @@ export async function loader({ request }: LoaderFunctionArgs) {
     hasMore,
     nextCursor,
     totalCount,
+    availableChannels,
   });
 }
 
 const ActionSchema = z.object({
-  intent: z.enum(["toggle", "delete"]),
+  intent: z.enum(["toggle", "delete", "change-channel"]),
   reminderId: z.string(),
-  isActive: z.string().optional(),
+  isActive: z.string().nullish(),
+  channel: z.enum(["whatsapp", "slack", "email"]).nullish(),
 });
 
 export async function action({ request }: ActionFunctionArgs) {
-  const user = await getUser(request);
-  const workspaceId = await getWorkspaceId(request, user?.id as string);
+  const user = await requireUser(request);
+  const workspaceId = await getWorkspaceId(
+    request,
+    user?.id as string,
+    user?.workspaceId,
+  );
 
   const formData = await request.formData();
   const data = ActionSchema.parse({
     intent: formData.get("intent"),
     reminderId: formData.get("reminderId"),
     isActive: formData.get("isActive"),
+    channel: formData.get("channel"),
   });
 
   if (data.intent === "toggle") {
@@ -118,6 +145,38 @@ export async function action({ request }: ActionFunctionArgs) {
   if (data.intent === "delete") {
     await deleteReminder(data.reminderId, workspaceId as string);
     return json({ success: true, action: "deleted" });
+  }
+
+  if (data.intent === "change-channel" && data.channel) {
+    // Validate channel is available
+    const [fullUser, slackAccount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: user.id },
+        select: { phoneNumber: true },
+      }),
+      prisma.integrationAccount.findFirst({
+        where: {
+          workspaceId: workspaceId as string,
+          integrationDefinition: { slug: "slack" },
+        },
+      }),
+    ]);
+
+    const availableChannels: string[] = ["email"];
+    if (fullUser?.phoneNumber) availableChannels.push("whatsapp");
+    if (slackAccount) availableChannels.push("slack");
+
+    if (!availableChannels.includes(data.channel)) {
+      return json(
+        { success: false, error: `Channel ${data.channel} is not available` },
+        { status: 400 }
+      );
+    }
+
+    await updateReminder(data.reminderId, workspaceId as string, {
+      channel: data.channel,
+    });
+    return json({ success: true, action: "channel-changed" });
   }
 
   return json({ success: false });
@@ -210,10 +269,31 @@ interface ReminderRowProps {
   reminder: ReminderItem;
   onToggle: (id: string, isActive: boolean) => void;
   onDelete: (id: string) => void;
+  onChangeChannel: (
+    id: string,
+    channel: "whatsapp" | "slack" | "email",
+  ) => void;
+  availableChannels: Array<"email" | "whatsapp" | "slack">;
 }
 
-function ReminderRow({ reminder, onToggle, onDelete }: ReminderRowProps) {
-  const ChannelIcon = reminder.channel === "email" ? Mail : MessageSquare;
+function ReminderRow({
+  reminder,
+  onToggle,
+  onDelete,
+  onChangeChannel,
+  availableChannels,
+}: ReminderRowProps) {
+  const getChannelIcon = (channel: string) => {
+    switch (channel) {
+      case "whatsapp":
+        return RiWhatsappFill;
+      case "slack":
+        return SlackIcon;
+      default:
+        return Mail;
+    }
+  };
+  const ChannelIcon = getChannelIcon(reminder.channel);
 
   return (
     <div
@@ -309,9 +389,56 @@ function ReminderRow({ reminder, onToggle, onDelete }: ReminderRowProps) {
               </>
             )}
           </DropdownMenuItem>
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger className="rounded">
+              <MessageSquare size={14} className="mr-2" />
+              Change Channel
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent>
+              {availableChannels.includes("email") && (
+                <DropdownMenuItem
+                  onClick={() => onChangeChannel(reminder.id, "email")}
+                  className={
+                    reminder.channel === "email"
+                      ? "bg-accent mb-1 rounded"
+                      : "mb-1 rounded"
+                  }
+                >
+                  <Mail size={14} className="mr-2" />
+                  Email
+                </DropdownMenuItem>
+              )}
+              {availableChannels.includes("whatsapp") && (
+                <DropdownMenuItem
+                  onClick={() => onChangeChannel(reminder.id, "whatsapp")}
+                  className={
+                    reminder.channel === "whatsapp"
+                      ? "bg-accent mb-1 rounded"
+                      : "mb-1 rounded"
+                  }
+                >
+                  <RiWhatsappFill size={14} className="mr-2" />
+                  WhatsApp
+                </DropdownMenuItem>
+              )}
+              {availableChannels.includes("slack") && (
+                <DropdownMenuItem
+                  onClick={() => onChangeChannel(reminder.id, "slack")}
+                  className={
+                    reminder.channel === "slack"
+                      ? "bg-accent mb-1 rounded"
+                      : "mb-1 rounded"
+                  }
+                >
+                  <SlackIcon size={14} className="mr-2" />
+                  Slack
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
           <DropdownMenuItem
             onClick={() => onDelete(reminder.id)}
-            className="text-red-600 focus:text-red-600"
+            className="rounded text-red-600 focus:text-red-600"
           >
             <Trash2 size={14} className="mr-2" />
             Delete
@@ -376,6 +503,22 @@ export default function Reminders() {
     [actionFetcher, cache],
   );
 
+  // Handle channel change
+  const handleChangeChannel = useCallback(
+    (reminderId: string, channel: "whatsapp" | "slack" | "email") => {
+      // Optimistic update
+      setReminders((prev) =>
+        prev.map((r) => (r.id === reminderId ? { ...r, channel } : r)),
+      );
+
+      actionFetcher.submit(
+        { intent: "change-channel", reminderId, channel },
+        { method: "POST" },
+      );
+    },
+    [actionFetcher],
+  );
+
   // Load more reminders
   const loadMore = useCallback(() => {
     if (!hasMore || isLoading || !cursor) return;
@@ -434,6 +577,8 @@ export default function Reminders() {
               reminder={reminder}
               onToggle={handleToggle}
               onDelete={handleDelete}
+              onChangeChannel={handleChangeChannel}
+              availableChannels={initialData.availableChannels}
             />
           </div>
         </CellMeasurer>
@@ -447,6 +592,7 @@ export default function Reminders() {
       cache,
       handleToggle,
       handleDelete,
+      handleChangeChannel,
     ],
   );
 

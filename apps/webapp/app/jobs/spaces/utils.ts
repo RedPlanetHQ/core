@@ -1,4 +1,4 @@
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 /**
  * Save or update the persona document directly in the Document table.

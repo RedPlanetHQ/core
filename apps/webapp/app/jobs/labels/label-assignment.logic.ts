@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { makeStructuredModelCall, getEmbedding } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { LabelService } from "~/services/label.server";
 import { updateEpisodeLabels } from "~/services/graphModels/episode";
 import { generateOklchColor } from "~/components/ui/color-utils";

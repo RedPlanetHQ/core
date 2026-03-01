@@ -1,13 +1,13 @@
 /**
  * OrchestratorTools abstraction
  *
- * Allows the orchestrator (and its sub-explorers) to run in two contexts:
+ * Allows the orchestrator to run in two contexts:
  * - Server (web chat): DirectOrchestratorTools — calls functions directly (DB/websocket)
  * - Trigger/BullMQ jobs: HttpOrchestratorTools — calls via CoreClient HTTP
  *
  * Only leaf operations that touch DB/websocket are abstracted here.
- * The LLM-level explorers (integration-explorer, gateway-explorer) stay as-is
- * and delegate their DB calls through these methods.
+ * The orchestrator calls these methods directly for integrations,
+ * and delegates to gateway-explorer for gateway operations.
  */
 
 import { searchMemoryWithAgent } from "./memory";

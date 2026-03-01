@@ -6,7 +6,7 @@
 
 import { makeModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { EpisodeType } from "@core/types";
 
 export interface TitleGenerationPayload {

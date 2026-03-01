@@ -1,5 +1,5 @@
 import { schedules } from "@trigger.dev/sdk";
-import { prisma } from "./utils/prisma";
+import { prisma } from "~/db.server";
 import { resetMonthlyCredits } from "./utils/utils";
 
 // reset credits for all users
