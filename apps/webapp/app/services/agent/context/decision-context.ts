@@ -5,7 +5,7 @@
  * Each trigger type has specific context requirements.
  */
 
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import {
   Trigger,
   ReminderTrigger,
@@ -58,15 +58,39 @@ async function getUserState(
   timezone: string,
 ): Promise<UserState> {
   try {
-    // Get last user activity from conversation messages
-    const lastUserMessage = await prisma.conversationHistory.findFirst({
-      where: {
-        conversation: { userId },
-        userType: "User",
-      },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true },
-    });
+    // Get user, last activity, and slack integration in parallel
+    const [user, lastUserMessage, slackAccount] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: userId },
+        select: { metadata: true, phoneNumber: true },
+      }),
+      prisma.conversationHistory.findFirst({
+        where: {
+          conversation: { userId },
+          userType: "User",
+        },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true },
+      }),
+      prisma.integrationAccount.findFirst({
+        where: {
+          workspaceId,
+          integrationDefinition: { slug: "slack" },
+        },
+      }),
+    ]);
+
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const defaultChannel = (metadata?.defaultChannel as
+      | "whatsapp"
+      | "slack"
+      | "email"
+      | undefined) ?? "email";
+
+    // Determine available channels
+    const availableChannels: Array<"whatsapp" | "slack" | "email"> = ["email"];
+    if (user?.phoneNumber) availableChannels.push("whatsapp");
+    if (slackAccount) availableChannels.push("slack");
 
     // Simple busy check based on time of day
     // In future, this could check calendar integration
@@ -80,6 +104,8 @@ async function getUserState(
       timezone,
       lastActiveAt: lastUserMessage?.createdAt,
       currentlyBusy: false,
+      defaultChannel,
+      availableChannels,
       // currentlyBusy: isNightTime, // Simple heuristic for now
     };
   } catch (error) {

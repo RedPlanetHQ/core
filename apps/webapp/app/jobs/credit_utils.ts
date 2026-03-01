@@ -1,5 +1,6 @@
 import { isBillingEnabled } from "~/config/billing.server";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
+
 import { type CreditOperation } from "~/trigger/utils/utils";
 
 /**

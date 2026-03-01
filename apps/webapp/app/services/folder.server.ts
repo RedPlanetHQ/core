@@ -1,8 +1,8 @@
 import { logger } from "./logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 export interface FavoriteItem {
-  type: 'episode' | 'session' | 'document';
+  type: "episode" | "session" | "document";
   id: string;
   addedAt: string;
 }
@@ -37,7 +37,10 @@ export class FolderService {
   /**
    * Update entire folder structure for a user
    */
-  async updateFolders(userId: string, folderStructure: FolderStructure): Promise<FolderStructure> {
+  async updateFolders(
+    userId: string,
+    folderStructure: FolderStructure,
+  ): Promise<FolderStructure> {
     logger.info(`Updating folders for user ${userId}`);
 
     // Validate structure

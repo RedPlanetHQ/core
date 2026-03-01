@@ -5,7 +5,7 @@ import {
   deliverWebhook,
   prepareWebhookTargets,
 } from "./webhook-delivery-utils";
-import { prisma } from "../utils/prisma";
+import { prisma } from "~/db.server";
 
 const webhookQueue = queue({
   name: "webhook-delivery-queue",

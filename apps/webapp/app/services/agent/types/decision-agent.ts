@@ -157,6 +157,8 @@ export interface UserState {
   workspaceId?: string;
   lastActiveAt?: Date;
   currentlyBusy: boolean;
+  defaultChannel?: "whatsapp" | "slack" | "email";
+  availableChannels?: Array<"whatsapp" | "slack" | "email">;
 }
 
 export interface ReminderSummary {

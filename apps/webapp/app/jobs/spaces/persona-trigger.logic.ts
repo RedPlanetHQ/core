@@ -1,7 +1,7 @@
 import { logger } from "~/services/logger.service";
 
 import { LabelService } from "~/services/label.server";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { type StatementAspect } from "@core/types";
 import { getStatementsForEpisodeByAspects } from "~/services/graphModels/statement";
 import { getWorkspacePersona } from "~/models/workspace.server";
@@ -131,15 +131,12 @@ export async function checkPersonaUpdateThreshold(
     });
 
     if (personaStatements.length > 0) {
-      logger.info(
-        "Episode has persona-relevant statements, triggering regen",
-        {
-          userId,
-          episodeUuid,
-          personaStatementCount: personaStatements.length,
-          statementAspects: personaStatements.map((s) => s.aspect),
-        },
-      );
+      logger.info("Episode has persona-relevant statements, triggering regen", {
+        userId,
+        episodeUuid,
+        personaStatementCount: personaStatements.length,
+        statementAspects: personaStatements.map((s) => s.aspect),
+      });
 
       return {
         shouldGenerate: true,

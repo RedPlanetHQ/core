@@ -96,6 +96,7 @@ export function getReminderTools(
   workspaceId: string,
   channel: MessageChannel = "whatsapp",
   timezone: string = "UTC",
+  availableChannels: MessageChannel[] = ["email"],
 ): Record<string, Tool> {
   return {
     add_reminder: tool({
@@ -149,6 +150,12 @@ FOLLOW-UP REMINDERS:
           .describe(
             "RRule schedule string (e.g., 'FREQ=DAILY;BYHOUR=9' for 9am daily)",
           ),
+        channel: z
+          .enum(["whatsapp", "slack", "email"])
+          .optional()
+          .describe(
+            "Channel to send the reminder on. Defaults to user's default channel if not specified.",
+          ),
         startDate: z
           .string()
           .optional()
@@ -179,6 +186,7 @@ FOLLOW-UP REMINDERS:
       execute: async ({
         text,
         schedule,
+        channel: reminderChannel,
         startDate,
         maxOccurrences,
         endDate,
@@ -209,8 +217,16 @@ FOLLOW-UP REMINDERS:
               ? maxOccurrences
               : null;
 
+          // Use specified channel or fall back to default
+          const targetChannel = reminderChannel || channel;
+
+          // Validate channel is available
+          if (!availableChannels.includes(targetChannel)) {
+            return `Channel "${targetChannel}" is not available. Available channels: ${availableChannels.join(", ")}`;
+          }
+
           logger.info(
-            `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${channel}`,
+            `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${targetChannel}`,
           );
 
           // Build metadata for follow-ups
@@ -226,7 +242,7 @@ FOLLOW-UP REMINDERS:
           const reminder = await addReminder(workspaceId, {
             text,
             schedule,
-            channel,
+            channel: targetChannel,
             maxOccurrences: maxOcc,
             endDate: endDate ? new Date(endDate) : null,
             startDate: startDate ? new Date(startDate) : null,

@@ -1,6 +1,6 @@
 import { logger } from "./logger.service";
 import { type Label } from "@prisma/client";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 
 export interface CreateLabelParams {
   name: string;

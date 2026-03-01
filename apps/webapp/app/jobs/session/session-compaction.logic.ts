@@ -6,7 +6,7 @@ import {
   getSessionEpisodes,
 } from "~/services/graphModels/compactedSession";
 import { type EpisodicNode } from "@core/types";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { type Document } from "@prisma/client";
 
 import { processTitleGeneration } from "~/jobs/titles/title-generation.logic";
