@@ -932,7 +932,7 @@ model Workspace {
   version  WorkspaceVersion @default(V3)
   metadata Json             @default("{}")
 
-  // deprecated but keep until we move them 
+  // deprecated but keep until we move them
   userId String? @unique
 
   integrations String[]
@@ -961,6 +961,46 @@ model Workspace {
   entityEmbeddings        EntityEmbedding[]
   gateways                Gateway[]
   reminders               Reminder[]
+  backgroundTasks         BackgroundTask[]
+}
+
+model BackgroundTask {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Task definition
+  intent    String // User's original intent/request
+  status    String @default("pending") // pending, running, completed, failed, timeout, cancelled
+
+  // Execution
+  timeoutMs   Int       @default(1800000) // 30 min default
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  // Result
+  result String? // Final result text
+  error  String? // Error message if failed
+
+  // Callback channel (where to notify user)
+  callbackChannel        String  // whatsapp | email | slack | web
+  callbackConversationId String? // For web channel
+  callbackMetadata       Json?   // Channel-specific (slackUserId, threadTs, etc.)
+
+  // User/workspace
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspaceId String
+  userId      String
+
+  // Queue job tracking (works with both Trigger.dev and BullMQ)
+  jobId String?
+
+  // Flexible metadata
+  metadata Json? @default("{}")
+
+  @@index([workspaceId])
+  @@index([workspaceId, status])
+  @@index([userId, status])
 }
 
 enum PlanType {

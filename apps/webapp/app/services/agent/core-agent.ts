@@ -6,6 +6,7 @@ import { type SkillRef } from "./types";
 
 import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
+import { getBackgroundTaskTools } from "./tools/background-task-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -45,6 +46,10 @@ export const createTools = async (
   defaultChannel?: "whatsapp" | "slack" | "email",
   /** Available channels for reminders */
   availableChannels?: Array<"whatsapp" | "slack" | "email">,
+  /** Conversation ID for web channel callbacks */
+  conversationId?: string,
+  /** Additional channel metadata for callbacks */
+  channelMetadata?: Record<string, unknown>,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -214,8 +219,19 @@ export const createTools = async (
     workspaceId,
     channel,
     timezone,
-    availableChannels || ["email"]
+    availableChannels || ["email"],
   );
 
-  return { ...tools, ...reminderTools };
+  // Add background task tools (not in readOnly mode)
+  const backgroundTaskTools = readOnly
+    ? {}
+    : getBackgroundTaskTools(
+        workspaceId,
+        userId,
+        source === "web" ? "web" : channel,
+        conversationId,
+        channelMetadata,
+      );
+
+  return { ...tools, ...reminderTools, ...backgroundTaskTools };
 };
