@@ -98,62 +98,18 @@ Confirm the path with user before creating.
 
 ### Step 6: Generate Context Files
 ```
-Using gathered information, generate three files:
+Using gathered information, generate three files by populating the templates
+in skills/templates/context/ with the user's responses:
 
-1. context/about-me.md
-   ─────────────────────
-   # About Me
+1. context/about-me.md    — use template: skills/templates/context/about-me.md
+   Replace bracket placeholders with gathered profile data from Step 2.
 
-   ## Role & Responsibilities
-   - {name}, {title} at {company}
-   - {day-to-day responsibilities}
-   - Key stakeholders: {stakeholders}
-   - Success metric: {what success looks like}
+2. context/brand-voice.md — use template: skills/templates/context/brand-voice.md
+   Replace bracket placeholders with communication style from Step 3.
 
-   ## Domain Context
-   - Industry: {industry}
-   - Key terminology: {terminology}
-   - Tools: {tools and platforms}
-
-   ## Example Work
-   {Paste user-provided examples, or note: "Add 1-2 examples of output
-   you're proud of — reports, emails, analyses."}
-
-2. context/brand-voice.md
-   ────────────────────────
-   # Communication Style
-
-   ## Tone
-   - {tone description}
-   - Phrases I use: {natural phrases}
-   - Phrases to avoid: {anti-patterns}
-
-   ## Writing Samples
-   {User-provided samples, or note: "Add 2-3 short examples of your
-   actual writing — emails, posts, docs."}
-
-   ## Anti-patterns
-   {List each anti-pattern as a bullet}
-
-3. context/working-preferences.md
-   ────────────────────────────────
-   # How I Want Claude to Work
-
-   ## Process
-   - {clarifying questions preference}
-   - {plan-before-executing preference}
-   - Save outputs as {preferred format}
-
-   ## Output Style
-   - {short vs. detailed}
-   - {formatting conventions}
-   - {file naming conventions}
-
-   ## Guardrails
-   - Never delete files without explicit confirmation
-   - Never modify files outside the designated output folder
-   - Flag assumptions explicitly before acting on them
-   {Additional custom guardrails}
+3. context/working-preferences.md — use template: skills/templates/context/working-preferences.md
+   Replace bracket placeholders with working preferences from Step 4.
+   Append any custom guardrails the user specified.
 ```
 
 ### Step 7: Generate Global Instructions
@@ -175,6 +131,8 @@ Present to user for review. This goes into Settings > Cowork > Global Instructio
 ### Step 8: Recommend Plugins
 ```
 Based on the user's role, recommend plugins to install:
+
+Available plugins (as of February 2026):
 
 ALWAYS RECOMMEND:
 - Productivity (useful for every role)
@@ -266,44 +224,10 @@ At the end of setup:
 
 ## Output Format
 
-Present the setup progress as:
-
-```markdown
-# Cowork Setup Progress
-
-## ✅ Completed Steps
-- [x] User profile gathered
-- [x] Communication style captured
-- [x] Working preferences set
-- [x] Workspace structure created
-- [x] Context files generated
-- [x] Global instructions composed
-- [x] Plugins recommended
-- [x] Connectors recommended
-
-## 📁 Files Created
-- ~/Claude-Workspace/context/about-me.md
-- ~/Claude-Workspace/context/brand-voice.md
-- ~/Claude-Workspace/context/working-preferences.md
-
-## 🔧 Global Instructions
-[Show the composed instructions block]
-
-## 🔌 Recommended Plugins
-1. Productivity (install first)
-2. {Role-specific plugin}
-
-## 🔗 Recommended Connectors
-1. {Highest-priority connector}
-2. {Second connector}
-
-## ✅ Next Steps
-1. Copy global instructions into Settings > Cowork > Global Instructions
-2. Install recommended plugins via Customise > Browse plugins
-3. Connect tools via Settings > Connectors
-4. Run the verification prompt to confirm setup
-5. Start with a task you already know how to do well — so you can evaluate the output
-```
+Present a progress summary after setup showing: completed steps checklist,
+files created (with paths), the composed global instructions block,
+recommended plugins and connectors, and next steps for the user
+(copy instructions, install plugins, connect tools, run verification prompt).
 
 ## Safety Reminders
 
@@ -333,22 +257,8 @@ If user wants to update existing setup:
 - Update only the relevant files
 - Re-run the verification prompt
 
-## Customization
+## Notes
 
-User can modify:
-- Workspace root path (default: ~/Claude-Workspace/)
-- Number and type of context files
-- Safety guardrail strictness
-- Plugin and connector recommendations
-- Output format preferences
-
-## Success Criteria
-
-Skill is successful if:
-1. All three context files are created and populated with user-specific information
-2. Global instructions are composed and ready for copy-paste
-3. Plugin recommendations match user's role
-4. Connector recommendations match user's existing tools
-5. Verification prompt confirms setup is working
-6. User understands safety defaults and has them configured
-7. Setup preferences are stored in CORE Memory for future reference
+- All context files can be updated after setup — they compound over time
+- Workspace root path defaults to ~/Claude-Workspace/ but can be changed in Step 5
+- Plugin and connector lists reflect the catalog as of February 2026 and may change

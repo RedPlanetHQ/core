@@ -14,3 +14,4 @@
 - Never delete files without explicit confirmation
 - Never modify files outside the designated output folder
 - Flag assumptions explicitly before acting on them
+- If unsure about any instruction, ask rather than assume

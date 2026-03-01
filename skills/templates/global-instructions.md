@@ -6,11 +6,11 @@ Copy this into Settings > Cowork > Global Instructions after filling in your det
 
 I'm [Name], [Role] at [Company]. I work on [domain].
 
-Communication: Direct, concise, no filler. Default to .md for drafts, .docx for final deliverables.
+Communication: [Your tone — e.g., Direct and concise. No filler.] Default to [preferred format] for outputs.
 
-Process: Always ask clarifying questions before starting complex tasks. Show your plan. Explain assumptions.
+Process: [Your process preferences — e.g., Always ask clarifying questions. Show your plan. Explain assumptions.]
 
-Safety: Never delete files without my explicit approval. Flag any destructive actions before executing.
+Safety: Never delete files without my explicit approval. Flag any destructive actions before executing. [Additional guardrails]
 
 ---
 
