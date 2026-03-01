@@ -62,16 +62,14 @@ export async function buildAgentContext({
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
-  const defaultChannel = (metadata?.defaultChannel as
-    | "whatsapp"
-    | "slack"
-    | "email"
-    | undefined) ?? "email";
+  const defaultChannel =
+    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
+    "email";
 
   // Determine available messaging channels
   const hasWhatsapp = !!user?.phoneNumber;
   const hasSlack = connectedIntegrations.some(
-    (int) => int.integrationDefinition.slug === "slack"
+    (int) => int.integrationDefinition.slug === "slack",
   );
   const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
     "email", // always available
