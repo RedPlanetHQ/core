@@ -736,38 +736,24 @@ async function replaceWithCompacts(
 }
 
 /**
- * Extract invalidated statements for the given episodes
- * Returns facts that have invalidAt set (no longer valid)
+ * Extract invalidated statements for the given episodes.
+ *
+ * Disabled: returning invalidated facts wastes LLM context-window tokens on
+ * information that is explicitly *no longer true*.  The original implementation
+ * also suffered from an N-duplication bug (one row per episode×statement pair
+ * via HAS_PROVENANCE) which amplified the waste.  Skipping the query entirely
+ * saves a Neo4j round-trip per search and keeps the recall payload focused on
+ * current, valid knowledge.
+ *
+ * If invalidated-fact support is re-enabled in the future, the query in
+ * getEpisodesInvalidFacts() should use DISTINCT on statementUuid to avoid
+ * returning the same fact once per linked episode.
  */
 async function extractInvalidatedFacts(
-  episodes: EpisodicNode[],
-  ctx: HandlerContext
+  _episodes: EpisodicNode[],
+  _ctx: HandlerContext
 ): Promise<RecallInvalidatedFact[]> {
-  if (episodes.length === 0) return [];
-
-  const graphProvider = ProviderFactory.getGraphProvider();
-  const episodeUuids = episodes.map((ep) => ep.uuid);
-
-  logger.info(
-    `[extractInvalidatedFacts] Fetching invalidated statements for ${episodeUuids.length} episodes`
-  );
-
-  // Get all statements for these episodes
-  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId, ctx.workspaceId);
-
-  // Filter for invalidated statements only
-  const invalidatedFacts = invalidFacts.map((stmt) => ({
-    fact: stmt.fact,
-    validAt: stmt.validAt,
-    invalidAt: stmt.invalidAt,
-    relevantScore: 0, // No score for invalidated facts
-  }));
-
-  logger.info(
-    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} invalidated facts`
-  );
-
-  return invalidatedFacts;
+  return [];
 }
 
 /**
