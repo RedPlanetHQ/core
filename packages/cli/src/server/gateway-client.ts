@@ -3,6 +3,7 @@ import {hostname} from 'node:os';
 import {browserTools, executeBrowserTool} from '@/server/tools/browser-tools';
 import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
 import {execTools, executeExecTool} from '@/server/tools/exec-tools';
+import {utilsTools, executeUtilsTool} from '@/server/tools/utils-tools';
 import {browserCloseAll} from '@/utils/agent-browser';
 import {getPreferences} from '@/config/preferences';
 import type {GatewayTool} from '@/server/tools/browser-tools';
@@ -97,6 +98,9 @@ export class GatewayClient {
 		const prefs = getPreferences();
 		const slots = prefs.gateway?.slots;
 		const tools: GatewayTool[] = [];
+
+		// Utils tools (sleep, etc.) are always available
+		tools.push(...utilsTools);
 
 		if (slots?.browser?.enabled) {
 			tools.push(...browserTools);
@@ -228,7 +232,9 @@ export class GatewayClient {
 					const slots = prefs.gateway?.slots;
 
 					// Route to appropriate executor based on tool prefix (with slot check)
-					if (toolCall.tool.startsWith('browser_')) {
+					if (toolCall.tool === 'sleep') {
+						result = await executeUtilsTool(toolCall.tool, toolCall.params);
+					} else if (toolCall.tool.startsWith('browser_')) {
 						if (!slots?.browser?.enabled) {
 							result = {success: false, error: 'Browser slot is not enabled'};
 						} else {

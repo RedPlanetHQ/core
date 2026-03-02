@@ -139,7 +139,7 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_start_session',
 		description:
-			'Start a new coding session with the specified agent (runs in background)',
+			'Start a new coding session with the specified agent (runs in background). After starting, the first coding_read_session call may return status="initializing" — this is normal while the agent boots. Wait a few seconds and retry before concluding failure.',
 		inputSchema: jsonSchemas.coding_start_session!,
 	},
 	{
@@ -347,7 +347,13 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 
 	// Determine status
 	let status = session.status;
-	if (running) {
+	let statusMessage: string | undefined;
+	if (running && !fileExists) {
+		// Process is alive but hasn't written its session file yet — still booting
+		status = 'initializing';
+		statusMessage =
+			'Session is starting up. The agent has not written output yet. Wait a few seconds and read again.';
+	} else if (running) {
 		status = 'running';
 	} else if (fileExists && status === 'running') {
 		// Process finished, update status
@@ -365,6 +371,7 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			prompt: session.prompt,
 			dir: session.dir,
 			status,
+			...(statusMessage ? {statusMessage} : {}),
 			running,
 			entries,
 			error: readError || session.error,

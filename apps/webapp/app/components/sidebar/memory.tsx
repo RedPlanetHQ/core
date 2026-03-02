@@ -1,21 +1,26 @@
 import { Button } from "../ui";
 import { useLocation, useNavigate } from "@remix-run/react";
-import { ChevronRight, Inbox, Network, Tag } from "lucide-react";
+import { ChevronRight, Inbox, Network, Tag, UserRound } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../ui/collapsible";
+import { useUser } from "~/hooks/useUser";
 
 export const Memory = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const user = useUser();
 
   return (
-    <Collapsible defaultOpen className="px-2 mt-2">
+    <Collapsible defaultOpen className="mt-2 px-2">
       <CollapsibleTrigger className="flex w-full items-center gap-2 py-1 [&[data-state=open]>svg]:rotate-90">
         <h2 className="text-muted-foreground text-sm">Memory</h2>
-        <ChevronRight size={16} className="text-muted-foreground transition-transform" />
+        <ChevronRight
+          size={16}
+          className="text-muted-foreground transition-transform"
+        />
       </CollapsibleTrigger>
       <CollapsibleContent>
         <div className="text-foreground flex flex-col gap-0.5">
@@ -23,7 +28,13 @@ export const Memory = () => {
             <Button
               variant="secondary"
               className="gap-2"
-              isActive={location.pathname.includes("/home/episode")}
+              isActive={
+                location.pathname.includes("/home/episode") &&
+                !(
+                  user?.userPersonaDocumentId &&
+                  location.pathname.includes(user.userPersonaDocumentId)
+                )
+              }
               onClick={() => {
                 navigate(`/home/episodes`);
               }}
@@ -58,6 +69,23 @@ export const Memory = () => {
               Labels
             </Button>
           </div>
+          {user.userPersonaDocumentId && (
+            <div>
+              <Button
+                variant="secondary"
+                className="gap-2"
+                isActive={location.pathname.includes(
+                  user.userPersonaDocumentId,
+                )}
+                onClick={() => {
+                  navigate(`/home/episode/${user.userPersonaDocumentId}`);
+                }}
+              >
+                <UserRound size={16} />
+                Persona
+              </Button>
+            </div>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>
