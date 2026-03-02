@@ -13,6 +13,7 @@ import { getPersonaDocumentForUser } from "~/services/document.server";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
+import { type PersonalityType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
 import { prisma } from "~/db.server";
@@ -62,6 +63,7 @@ export async function buildAgentContext({
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
+  const personality = (metadata?.personality as PersonalityType) ?? "tars";
   const defaultChannel =
     (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
     "email";
@@ -98,6 +100,7 @@ export async function buildAgentContext({
       email: user?.email ?? "",
       timezone,
       phoneNumber: user?.phoneNumber ?? undefined,
+      personality,
     },
     persona ?? "",
   );
