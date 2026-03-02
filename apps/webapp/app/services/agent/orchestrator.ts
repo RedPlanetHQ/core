@@ -13,7 +13,10 @@ import { runGatewayExplorer } from "./gateway";
 import { logger } from "../logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { type SkillRef } from "./types";
-import { OrchestratorTools, DirectOrchestratorTools } from "./orchestrator-tools";
+import {
+  type OrchestratorTools,
+  DirectOrchestratorTools,
+} from "./orchestrator-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -79,11 +82,13 @@ const getOrchestratorPrompt = (
     skills && skills.length > 0
       ? `\n<skills>
 Available user-defined skills:
-${skills.map((s, i) => {
-        const meta = s.metadata as Record<string, unknown> | null;
-        const desc = meta?.shortDescription as string | undefined;
-        return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
-      }).join("\n")}
+${skills
+  .map((s, i) => {
+    const meta = s.metadata as Record<string, unknown> | null;
+    const desc = meta?.shortDescription as string | undefined;
+    return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+  })
+  .join("\n")}
 
 When you receive a skill reference (skill name + ID) in the user message, call get_skill to load the full instructions, then follow them step-by-step using your available tools.
 </skills>\n`
@@ -274,7 +279,10 @@ export async function runOrchestrator(
   const executor = executorTools ?? new DirectOrchestratorTools();
 
   // Get user's connected integrations
-  const connectedIntegrations = await executor.getIntegrations(userId, workspaceId);
+  const connectedIntegrations = await executor.getIntegrations(
+    userId,
+    workspaceId,
+  );
 
   const integrationsList = connectedIntegrations
     .map(
@@ -323,9 +331,7 @@ export async function runOrchestrator(
       description:
         "Load a user-defined skill's full instructions by ID. Call this when the request references a skill, then follow the instructions step-by-step.",
       inputSchema: z.object({
-        skill_id: z
-          .string()
-          .describe("The skill ID to load"),
+        skill_id: z.string().describe("The skill ID to load"),
       }),
       execute: async ({ skill_id }) => {
         logger.info(`Orchestrator: loading skill ${skill_id}`);
@@ -341,15 +347,25 @@ export async function runOrchestrator(
     inputSchema: z.object({
       accountId: z
         .string()
-        .describe("Integration account ID from the connected integrations list"),
+        .describe(
+          "Integration account ID from the connected integrations list",
+        ),
       query: z
         .string()
-        .describe("What you want to do (e.g., 'search emails', 'create issue', 'list events')"),
+        .describe(
+          "What you want to do (e.g., 'search emails', 'create issue', 'list events')",
+        ),
     }),
     execute: async ({ accountId, query }) => {
       try {
-        logger.info(`Orchestrator: get_integration_actions - ${accountId}: ${query}`);
-        const actions = await executor.getIntegrationActions(accountId, query, userId);
+        logger.info(
+          `Orchestrator: get_integration_actions - ${accountId}: ${query}`,
+        );
+        const actions = await executor.getIntegrationActions(
+          accountId,
+          query,
+          userId,
+        );
         return JSON.stringify(actions, null, 2);
       } catch (error) {
         logger.warn(`Failed to get actions for ${accountId}: ${error}`);
@@ -366,7 +382,9 @@ export async function runOrchestrator(
       action: z.string().describe("Action name from get_integration_actions"),
       parameters: z
         .string()
-        .describe("Action parameters as JSON string, matching the inputSchema exactly"),
+        .describe(
+          "Action parameters as JSON string, matching the inputSchema exactly",
+        ),
     }),
     execute: async ({ accountId, action, parameters }) => {
       try {
@@ -383,7 +401,8 @@ export async function runOrchestrator(
         );
         return JSON.stringify(result);
       } catch (error: any) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
         logger.warn(`Integration action failed: ${accountId}/${action}`, error);
         return `ERROR: ${errorMessage}. Check the inputSchema and retry with corrected parameters.`;
       }
