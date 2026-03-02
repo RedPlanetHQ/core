@@ -59,7 +59,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const {id: userId, workspaceId} = await requireUser(request);
+  const { id: userId, workspaceId } = await requireUser(request);
   const formData = await request.formData();
   const summary = formData.get("summary") as string;
 
@@ -83,13 +83,13 @@ export async function action({ request }: ActionFunctionArgs) {
           type: EpisodeType.CONVERSATION,
         },
         userId,
-        workspaceId as string
+        workspaceId as string,
       );
     }
 
     // Redirect to integrations if summary exists (normal flow)
-    // or to episodes if skipped (no summary)
-    return redirect(summary ? "/home/integrations" : "/home/episodes");
+    // or to documents if skipped (no summary)
+    return redirect(summary ? "/home/integrations" : "/home/documents");
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }
@@ -119,18 +119,12 @@ export default function Onboarding() {
 
   const handleStep2Complete = () => {
     setRedirectTo("/home/integrations");
-    fetcher.submit(
-      { summary },
-      { method: "POST", action: "/onboarding" }
-    );
+    fetcher.submit({ summary }, { method: "POST", action: "/onboarding" });
   };
 
   const handleSkip = () => {
-    setRedirectTo("/home/episodes");
-    fetcher.submit(
-      { summary: "" },
-      { method: "POST", action: "/onboarding" }
-    );
+    setRedirectTo("/home/documents");
+    fetcher.submit({ summary: "" }, { method: "POST", action: "/onboarding" });
   };
 
   // Handle navigation after successful submission
@@ -153,7 +147,10 @@ export default function Onboarding() {
         </div>
 
         <div className="flex items-center">
-          <Button variant="secondary" onClick={handleSkip}> skip </Button>
+          <Button variant="secondary" onClick={handleSkip}>
+            {" "}
+            skip{" "}
+          </Button>
         </div>
       </div>
 
@@ -209,13 +206,11 @@ export default function Onboarding() {
             )}
 
             {step === "step2" && (
-
               <OnboardingStep2
                 summary={summary}
                 onComplete={handleStep2Complete}
                 isCompleting={fetcher.state !== "idle"}
               />
-
             )}
           </>
         )}

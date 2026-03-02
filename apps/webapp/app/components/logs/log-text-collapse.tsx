@@ -72,7 +72,7 @@ export function LogTextCollapse({
           logId === document.id && "bg-grayAlpha-200",
         )}
         onClick={() => {
-          navigate(`/home/episode/${document.id}`);
+          navigate(`/home/document/${document.id}`);
         }}
       >
         <div className="border-border flex w-full min-w-[0px] shrink flex-col gap-1 border-b py-2">

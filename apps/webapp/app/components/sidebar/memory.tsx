@@ -29,14 +29,14 @@ export const Memory = () => {
               variant="secondary"
               className="gap-2"
               isActive={
-                location.pathname.includes("/home/episode") &&
+                location.pathname.includes("/home/document") &&
                 !(
                   user?.userPersonaDocumentId &&
                   location.pathname.includes(user.userPersonaDocumentId)
                 )
               }
               onClick={() => {
-                navigate(`/home/episodes`);
+                navigate(`/home/documents`);
               }}
             >
               <Inbox size={16} />
@@ -78,7 +78,7 @@ export const Memory = () => {
                   user.userPersonaDocumentId,
                 )}
                 onClick={() => {
-                  navigate(`/home/episode/${user.userPersonaDocumentId}`);
+                  navigate(`/home/document/${user.userPersonaDocumentId}`);
                 }}
               >
                 <UserRound size={16} />

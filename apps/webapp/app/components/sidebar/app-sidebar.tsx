@@ -96,7 +96,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
                   variant="secondary"
                   size="sm"
                   className="rounded"
-                  onClick={() => navigate(`/home/episode`)}
+                  onClick={() => navigate(`/home/document`)}
                 >
                   <Plus size={16} />
                 </Button>

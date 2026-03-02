@@ -14,8 +14,8 @@ export function graphPath() {
   return `/home/graph`;
 }
 
-export function episodesPath() {
-  return `/home/episodes`;
+export function documentsPath() {
+  return `/home/documents`;
 }
 
 export function conversationPath() {

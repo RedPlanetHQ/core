@@ -17,9 +17,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const labelService = new LabelService();
 
   try {
-    const labels = await labelService.getWorkspaceLabels(
-      workspaceId as string,
-    );
+    const labels = await labelService.getWorkspaceLabels(workspaceId as string);
     return json({ labels });
   } catch (e) {
     return json({ labels: [] });
@@ -72,7 +70,7 @@ export default function LogsAll() {
             {
               label: "Add document",
               icon: <Plus size={14} />,
-              onClick: () => navigate(`/home/episode?labelId=${labelId}`),
+              onClick: () => navigate(`/home/document?labelId=${labelId}`),
               variant: "secondary",
             },
           ]}
