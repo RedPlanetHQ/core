@@ -9,6 +9,7 @@ import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { deductCredits } from "~/trigger/utils/utils";
 
 interface NoStreamProcessBody {
   id: string;
@@ -156,6 +157,8 @@ export async function noStreamProcess(
       workspaceId,
     );
   }
+
+  await deductCredits(workspaceId, userId, "chatMessage", 1);
 
   return { ...assistantMessage, text: result.text };
 }
