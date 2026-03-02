@@ -21,10 +21,28 @@ Sessions must be created before use. Each session automatically persists:
 - localStorage
 - Authentication state
 
-Maximum **5 sessions** allowed. Default sessions created on install: `corebrain`, `personal`, `work`.
+Maximum **5 sessions** allowed.
+
+### Default Sessions
+
+Three sessions are pre-configured and ready to use immediately after install — no setup required:
+
+| Session | Purpose |
+|---------|---------|
+| `work` | Work-related browsing — company tools, work accounts, internal dashboards |
+| `personal` | Personal browsing — personal accounts, social media, personal email |
+| `misc` | Miscellaneous tasks — one-off automation, testing, anything that doesn't fit work or personal |
+
+You can start using these immediately:
 
 ```bash
-# Create a new session
+corebrain browser open https://github.com --session-name work
+corebrain browser open https://gmail.com --session-name personal
+corebrain browser open https://example.com --session-name misc
+```
+
+```bash
+# Create an additional session
 corebrain browser create-session dev
 
 # List configured sessions
@@ -185,7 +203,7 @@ The browser capability requires `agent-browser` to be installed:
 corebrain browser install
 ```
 
-This installs [agent-browser](https://agent-browser.dev/) via npm and creates default sessions: `corebrain`, `personal`, `work`.
+This installs [agent-browser](https://agent-browser.dev/) via npm and creates default sessions: `work`, `personal`, `misc`.
 
 ### Verify Before Starting Gateway
 

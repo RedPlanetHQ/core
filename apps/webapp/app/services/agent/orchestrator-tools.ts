@@ -20,6 +20,9 @@ import {
 import { callGatewayTool } from "../../../websocket";
 import { prisma } from "~/db.server";
 import { logger } from "../logger.service";
+import { getChannel } from "~/services/channels";
+import { UserTypeEnum } from "@core/types";
+import type { MessageChannel } from "./types";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -43,6 +46,20 @@ export interface GatewayAgentInfo {
   platform: string | null;
   hostname: string | null;
   status: "CONNECTED" | "DISCONNECTED";
+}
+
+export interface SendChannelMessageParams {
+  channel: MessageChannel | "web";
+  message: string;
+  userId: string;
+  workspaceId: string;
+  conversationId?: string;
+  channelMetadata?: Record<string, unknown>;
+}
+
+export interface SendChannelMessageResult {
+  success: boolean;
+  error?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +109,11 @@ export abstract class OrchestratorTools {
 
   /** Load a skill's full content by ID. */
   abstract getSkill(skillId: string, workspaceId: string): Promise<string>;
+
+  /** Send a message to a channel and save to conversation. */
+  abstract sendChannelMessage(
+    params: SendChannelMessageParams,
+  ): Promise<SendChannelMessageResult>;
 }
 
 // ---------------------------------------------------------------------------
@@ -106,9 +128,15 @@ export class DirectOrchestratorTools extends OrchestratorTools {
     source: string,
   ): Promise<string> {
     try {
-      const result = await searchMemoryWithAgent(query, userId, workspaceId, source, {
-        structured: false,
-      });
+      const result = await searchMemoryWithAgent(
+        query,
+        userId,
+        workspaceId,
+        source,
+        {
+          structured: false,
+        },
+      );
       if (result && typeof result === "object" && "content" in result) {
         const content = (result as any).content;
         if (Array.isArray(content) && content.length > 0) {
@@ -200,6 +228,104 @@ export class DirectOrchestratorTools extends OrchestratorTools {
     } catch (error) {
       logger.warn("DirectOrchestratorTools: failed to load skill", { error });
       return "Failed to load skill";
+    }
+  }
+
+  async sendChannelMessage(
+    params: SendChannelMessageParams,
+  ): Promise<SendChannelMessageResult> {
+    const {
+      channel,
+      message,
+      userId,
+      workspaceId,
+      conversationId,
+      channelMetadata,
+    } = params;
+
+    try {
+      // 1. Add assistant message to conversation if conversationId provided
+      if (conversationId) {
+        await prisma.conversationHistory.create({
+          data: {
+            conversationId,
+            message,
+            parts: [{ type: "text", text: message }],
+            userType: UserTypeEnum.Agent,
+          },
+        });
+        logger.info(
+          `Added assistant message to conversation ${conversationId}`,
+        );
+      }
+
+      // 2. Send to channel (skip for web - web uses websocket)
+      if (channel !== "web") {
+        const handler = getChannel(channel);
+
+        // Determine recipient based on channel
+        let replyTo: string | undefined;
+        const metadata: Record<string, string> = {
+          workspaceId,
+        };
+
+        if (channel === "whatsapp") {
+          // Get user's phone number
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { phoneNumber: true },
+          });
+          replyTo = user?.phoneNumber ?? undefined;
+        } else if (channel === "slack") {
+          // Get user's Slack ID from integration account
+          const slackAccount = await prisma.integrationAccount.findFirst({
+            where: {
+              integratedById: userId,
+              integrationDefinition: { slug: "slack" },
+              isActive: true,
+              deleted: null,
+            },
+            select: { accountId: true },
+          });
+          replyTo = slackAccount?.accountId ?? undefined;
+
+          // Add thread context if available
+          if (channelMetadata?.slackChannel) {
+            metadata.slackChannel = channelMetadata.slackChannel as string;
+          }
+          if (channelMetadata?.threadTs) {
+            metadata.threadTs = channelMetadata.threadTs as string;
+          }
+        } else if (channel === "email") {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+          replyTo = user?.email ?? undefined;
+          metadata.subject = "Update from background task";
+        }
+
+        if (replyTo) {
+          await handler.sendReply(replyTo, message, metadata);
+          logger.info(`Sent ${channel} message to user ${userId}`);
+        } else {
+          logger.warn(`No recipient found for channel ${channel}`, { userId });
+          return {
+            success: false,
+            error: `No recipient found for channel ${channel}`,
+          };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      logger.error("Failed to send channel message", {
+        error,
+        channel,
+        userId,
+      });
+      return { success: false, error: errorMsg };
     }
   }
 }
