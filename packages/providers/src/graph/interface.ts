@@ -394,7 +394,7 @@ export interface IGraphProvider {
     userId: string,
     workspaceId?: string
   ): Promise<
-    { episodeUuid: string; statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]
+    { statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]
   >;
 
   // ===== STATEMENTS =====
