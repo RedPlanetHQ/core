@@ -10,6 +10,7 @@ export interface ExtendedUser extends User {
   totalCredits: number;
   workspaces: Workspace[];
   currentWorkspace: Workspace | null;
+  userPersonaDocumentId?: string | null;
 }
 
 export function useIsImpersonating(matches?: UIMatch[]) {
@@ -29,6 +30,7 @@ export function useOptionalUser(matches?: UIMatch[]): ExtendedUser | undefined {
   return routeMatch?.user
     ? {
         ...routeMatch?.user,
+        userPersonaDocumentId: routeMatch?.userPersonaDocumentId,
         availableCredits: routeMatch?.availableCredits,
         totalCredits: routeMatch?.totalCredits,
         workspaces: routeMatch?.workspaces ?? [],
