@@ -105,6 +105,7 @@ export async function requireUser(request: Request) {
       admin: user.admin,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
+      metadata: user.metadata,
       confirmedBasicDetails: user.confirmedBasicDetails,
       onboardingComplete: user.onboardingComplete,
       isImpersonating: !!impersonationId,
