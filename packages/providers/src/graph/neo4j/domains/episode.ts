@@ -957,7 +957,8 @@ export function createEpisodeMethods(core: Neo4jCore) {
         WHERE e.uuid IN $episodeUuids
         MATCH (e)-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
         WHERE s.invalidAt IS NOT NULL
-        RETURN e.uuid as episodeUuid, s.uuid as statementUuid, s.fact as fact, s.validAt as validAt, s.invalidAt as invalidAt
+        WITH DISTINCT s
+        RETURN s.uuid as statementUuid, s.fact as fact, s.validAt as validAt, s.invalidAt as invalidAt
       `;
       const records = await core.runQuery(cypher, {
         episodeUuids,
@@ -965,7 +966,6 @@ export function createEpisodeMethods(core: Neo4jCore) {
         ...(workspaceId && { workspaceId }),
       });
       return records.map((record) => ({
-        episodeUuid: record.get("episodeUuid"),
         statementUuid: record.get("statementUuid"),
         fact: record.get("fact"),
         validAt: record.get("validAt"),
