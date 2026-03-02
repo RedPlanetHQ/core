@@ -65,12 +65,12 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   }, [debouncedQuery]);
 
   const handleAddDocument = () => {
-    navigate(`/home/episode`);
+    navigate(`/home/document`);
     onOpenChange(false);
   };
 
   const handleDocumentClick = (documentId: string) => {
-    navigate(`/home/episode/${documentId}`);
+    navigate(`/home/documents/${documentId}`);
     onOpenChange(false);
   };
 

@@ -5,7 +5,7 @@ import { useDocuments } from "~/hooks/use-documents";
 import { LogsFilters } from "~/components/logs/logs-filters";
 import { VirtualLogsList } from "~/components/logs/virtual-logs-list";
 import { Card, CardContent } from "~/components/ui/card";
-import { FileText, LoaderCircle, Plus } from "lucide-react";
+import { Download, FileText, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { OnboardingModal } from "~/components/onboarding";
 import { LabelService } from "~/services/label.server";
@@ -17,9 +17,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const workspaceId = await getWorkspaceId(request, user?.id as string);
 
   try {
-    const labels = await labelService.getWorkspaceLabels(
-      workspaceId as string,
-    );
+    const labels = await labelService.getWorkspaceLabels(workspaceId as string);
     return json({ labels });
   } catch (e) {
     return json({ labels: [] });
@@ -70,9 +68,17 @@ export default function LogsAll() {
           title="Documents"
           actions={[
             {
+              label: "Export",
+              icon: <Download size={14} />,
+              onClick: () => {
+                window.location.href = "/api/v1/documents/export";
+              },
+              variant: "secondary",
+            },
+            {
               label: "Add document",
               icon: <Plus size={14} />,
-              onClick: () => navigate(`/home/episode`),
+              onClick: () => navigate(`/home/document`),
               variant: "secondary",
             },
           ]}
@@ -110,9 +116,9 @@ export default function LogsAll() {
                         </h3>
                         <p className="text-muted-foreground">
                           {selectedSource ||
-                            selectedStatus ||
-                            selectedType ||
-                            selectedLabel
+                          selectedStatus ||
+                          selectedType ||
+                          selectedLabel
                             ? "Try adjusting your filters to see more results."
                             : "No documents are available yet."}
                         </p>
