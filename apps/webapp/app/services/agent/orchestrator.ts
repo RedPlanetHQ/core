@@ -17,6 +17,23 @@ import {
   type OrchestratorTools,
   DirectOrchestratorTools,
 } from "./orchestrator-tools";
+import type { MessageChannel } from "./types";
+import {
+  type PersonalityType,
+  PERSONALITY,
+} from "./prompts/personality";
+
+/**
+ * Context for background task orchestrator to send messages directly to channels
+ */
+export interface BackgroundTaskContext {
+  taskId: string;
+  callbackChannel: MessageChannel | "web";
+  callbackConversationId?: string;
+  callbackMetadata?: Record<string, unknown>;
+  personalityType?: PersonalityType;
+  userName?: string;
+}
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -73,6 +90,8 @@ const getOrchestratorPrompt = (
   timezone: string = "UTC",
   userPersona?: string,
   skills?: SkillRef[],
+  isBackgroundTask?: boolean,
+  backgroundTaskPersonality?: { type: PersonalityType; userName: string },
 ) => {
   const personaSection = userPersona
     ? `\nUSER PERSONA (identity, preferences, directives - use this FIRST before searching memory):\n${userPersona}\n`
@@ -187,10 +206,22 @@ RULES:
 - Return result of action (success/failure and details).
 - If integration/gateway not connected, say so.
 - Match tasks to gateways based on their descriptions.
+${
+  isBackgroundTask
+    ? `
+BACKGROUND TASK MODE:
+You are running as a background task. The user is not watching this conversation in real-time.
+- You have access to send_channel_message tool to send messages directly to the user
+- Use send_channel_message for progress updates on long-running tasks
+- CRITICAL: You MUST call send_channel_message at the end with your final result/summary
+- The user will only see what you send via send_channel_message
 
+${backgroundTaskPersonality ? PERSONALITY(backgroundTaskPersonality.userName, backgroundTaskPersonality.type) : ""}`
+    : `
 CRITICAL - FINAL SUMMARY:
 When you have completed the action, write a clear, concise summary as your final response.
-Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`;
+Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`
+}`;
   }
 
   return `You are an orchestrator. Gather information based on the intent.
@@ -274,6 +305,7 @@ export async function runOrchestrator(
   userPersona?: string,
   skills?: SkillRef[],
   executorTools?: OrchestratorTools,
+  backgroundTaskContext?: BackgroundTaskContext,
 ): Promise<OrchestratorResult> {
   const startTime = Date.now();
   const executor = executorTools ?? new DirectOrchestratorTools();
@@ -485,8 +517,53 @@ export async function runOrchestrator(
     });
   }
 
+  // Add send_channel_message tool for background tasks
+  if (source === "background-task" && backgroundTaskContext) {
+    tools.send_channel_message = tool({
+      description: `Send a message directly to the user on the callback channel (${backgroundTaskContext.callbackChannel}). Use this to:
+- Send progress updates during long-running tasks
+- Report intermediate results
+- Notify the user when something important happens
+- Send the final result when the task is complete
+
+The message will be saved to the conversation and sent to the user's channel.`,
+      inputSchema: z.object({
+        message: z
+          .string()
+          .describe(
+            "The message to send to the user. Be clear and concise.",
+          ),
+      }),
+      execute: async ({ message }) => {
+        logger.info(
+          `Background task ${backgroundTaskContext.taskId}: sending channel message`,
+        );
+        const result = await executor.sendChannelMessage({
+          channel: backgroundTaskContext.callbackChannel,
+          message,
+          userId,
+          workspaceId,
+          conversationId: backgroundTaskContext.callbackConversationId,
+          channelMetadata: backgroundTaskContext.callbackMetadata,
+        });
+
+        if (result.success) {
+          return "Message sent successfully";
+        } else {
+          return `Failed to send message: ${result.error}`;
+        }
+      },
+    });
+  }
+
   const model = getModelForTask("high");
   const modelInstance = getModel(model);
+
+  const isBackgroundTask = source === "background-task" && !!backgroundTaskContext;
+  const backgroundTaskPersonality =
+    isBackgroundTask && backgroundTaskContext?.personalityType && backgroundTaskContext?.userName
+      ? { type: backgroundTaskContext.personalityType, userName: backgroundTaskContext.userName }
+      : undefined;
 
   const stream = streamText({
     model: modelInstance as LanguageModel,
@@ -497,6 +574,8 @@ export async function runOrchestrator(
       timezone,
       userPersona,
       skills,
+      isBackgroundTask,
+      backgroundTaskPersonality,
     ),
     messages: [{ role: "user", content: userMessage }],
     tools,

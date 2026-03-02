@@ -1,11 +1,8 @@
 /**
  * Background Task Processing Logic
  *
- * Runs the existing orchestrator with the user's intent, plus special tools:
- * - sleep: Durable wait between periodic checks
- * - complete_task: Signal task completion
- *
- * On completion/failure/timeout, triggers decision agent for user notification.
+ * Runs the orchestrator with the user's intent and a send_channel_message tool
+ * that allows the agent to send messages directly to the callback channel.
  */
 
 import { env } from "~/env.server";
@@ -18,17 +15,14 @@ import {
   getBackgroundTaskById,
 } from "~/services/background-task.server";
 import { getWorkspacePersona } from "~/models/workspace.server";
-import { runOrchestrator } from "~/services/agent/orchestrator";
-import { runCASEPipeline } from "~/services/agent/decision-agent-pipeline";
 import {
-  buildBackgroundTaskContext,
-  createBackgroundTaskTrigger,
-} from "./background-task-context";
+  runOrchestrator,
+  type BackgroundTaskContext,
+} from "~/services/agent/orchestrator";
 import { logger } from "~/services/logger.service";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
-import type { OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // ============================================================================
 // Types
@@ -70,15 +64,15 @@ export async function processBackgroundTask(
     // Mark task as started
     await markBackgroundTaskStarted(taskId);
 
-    // Get workspace/user info
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { UserWorkspace: { include: { user: true } } },
+    // Get user info (timezone, personality, name)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true, name: true },
     });
-
-    const user = workspace?.UserWorkspace?.[0]?.user;
     const userMetadata = user?.metadata as Record<string, unknown> | null;
     const timezone = (userMetadata?.timezone as string) || "UTC";
+    const personalityType = (userMetadata?.personality as "tars" | "butler" | "warm") || "tars";
+    const userName = user?.name || "User";
 
     // Create HTTP tools for orchestrator
     const { token } = await getOrCreatePersonalAccessToken({
@@ -92,6 +86,22 @@ export async function processBackgroundTask(
 
     // Get user persona
     const userPersona = await getWorkspacePersona(workspaceId);
+
+    // Get the task to retrieve callback context
+    const task = await getBackgroundTaskById(taskId);
+    if (!task) {
+      throw new Error(`Background task ${taskId} not found`);
+    }
+
+    // Build background task context for the orchestrator
+    const backgroundTaskContext: BackgroundTaskContext = {
+      taskId,
+      callbackChannel: task.callbackChannel as BackgroundTaskContext["callbackChannel"],
+      callbackConversationId: task.callbackConversationId ?? undefined,
+      callbackMetadata: task.callbackMetadata as Record<string, unknown> | undefined,
+      personalityType,
+      userName,
+    };
 
     // Create abort controller for timeout
     const abortController = new AbortController();
@@ -112,6 +122,7 @@ export async function processBackgroundTask(
         userPersona?.content,
         undefined, // No skills for background tasks
         executorTools,
+        backgroundTaskContext,
       );
 
       // Consume stream and get result
@@ -122,17 +133,7 @@ export async function processBackgroundTask(
       // Mark as completed
       await markBackgroundTaskCompleted(taskId, result || "Task completed");
 
-      // Trigger callback to notify user
-      await triggerCallback(
-        taskId,
-        "completed",
-        workspaceId,
-        userId,
-        timezone,
-        executorTools,
-        user,
-        result || "Task completed",
-      );
+      logger.info(`Background task ${taskId} completed`);
 
       return {
         success: true,
@@ -146,17 +147,6 @@ export async function processBackgroundTask(
       if (abortController.signal.aborted) {
         logger.info(`Background task ${taskId} timed out`);
         await markBackgroundTaskTimeout(taskId);
-
-        await triggerCallback(
-          taskId,
-          "timeout",
-          workspaceId,
-          userId,
-          timezone,
-          executorTools,
-          user,
-          "Task timed out before completion",
-        );
 
         return {
           success: false,
@@ -183,99 +173,10 @@ export async function processBackgroundTask(
 
     await markBackgroundTaskFailed(taskId, errorMsg);
 
-    // Try to get user info for callback
-    try {
-      const workspace = await prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        include: { UserWorkspace: { include: { user: true } } },
-      });
-      const user = workspace?.UserWorkspace?.[0]?.user;
-      const userMetadata = user?.metadata as Record<string, unknown> | null;
-      const timezone = (userMetadata?.timezone as string) || "UTC";
-
-      const { token } = await getOrCreatePersonalAccessToken({
-        name: "background-task-internal",
-        userId,
-        workspaceId,
-        returnDecrypted: true,
-      });
-      const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
-      const executorTools = new HttpOrchestratorTools(client);
-
-      await triggerCallback(
-        taskId,
-        "failed",
-        workspaceId,
-        userId,
-        timezone,
-        executorTools,
-        user,
-        undefined,
-        errorMsg,
-      );
-    } catch (callbackError) {
-      logger.error(`Failed to send failure callback for task ${taskId}`, {
-        callbackError,
-      });
-    }
-
     return {
       success: false,
       status: "failed",
       error: errorMsg,
     };
-  }
-}
-
-// ============================================================================
-// Callback to Decision Agent
-// ============================================================================
-
-/**
- * Trigger decision agent to notify user about task completion
- */
-async function triggerCallback(
-  taskId: string,
-  status: "completed" | "failed" | "timeout",
-  workspaceId: string,
-  userId: string,
-  timezone: string,
-  executorTools: OrchestratorTools,
-  user: any,
-  result?: string,
-  error?: string,
-): Promise<void> {
-  try {
-    const task = await getBackgroundTaskById(taskId);
-    if (!task) {
-      logger.error(`Cannot trigger callback: task ${taskId} not found`);
-      return;
-    }
-
-    // Build trigger and context for decision agent
-    const trigger = createBackgroundTaskTrigger(task, status, result, error);
-    const context = await buildBackgroundTaskContext(trigger, timezone);
-    const userPersona = await getWorkspacePersona(workspaceId);
-
-    // Run CASE pipeline to notify user
-    await runCASEPipeline({
-      trigger,
-      context,
-      userPersona: userPersona?.content,
-      userData: {
-        userId,
-        email: user?.email || "",
-        phoneNumber: user?.phoneNumber ?? undefined,
-        workspaceId,
-      },
-      reminderText: `Background task ${status}: ${task.intent}`,
-      reminderId: taskId, // Use taskId for logging
-      timezone,
-      executorTools,
-    });
-
-    logger.info(`Background task ${taskId} callback sent via decision agent`);
-  } catch (error) {
-    logger.error(`Failed to trigger callback for task ${taskId}`, { error });
   }
 }

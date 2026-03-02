@@ -9,8 +9,17 @@
  */
 
 import { CoreClient } from "@redplanethq/sdk";
-import { OrchestratorTools, type ConnectedIntegration, type GatewayAgentInfo } from "./orchestrator-tools";
+import { UserTypeEnum } from "@core/types";
+import {
+  OrchestratorTools,
+  type ConnectedIntegration,
+  type GatewayAgentInfo,
+  type SendChannelMessageParams,
+  type SendChannelMessageResult,
+} from "./orchestrator-tools";
 import { logger } from "../logger.service";
+import { getChannel } from "~/services/channels";
+import { prisma } from "~/db.server";
 
 export class HttpOrchestratorTools extends OrchestratorTools {
   constructor(private client: CoreClient) {
@@ -101,6 +110,101 @@ export class HttpOrchestratorTools extends OrchestratorTools {
     } catch (error) {
       logger.warn("HttpOrchestratorTools: failed to load skill", { error });
       return "Failed to load skill";
+    }
+  }
+
+  async sendChannelMessage(
+    params: SendChannelMessageParams,
+  ): Promise<SendChannelMessageResult> {
+    const {
+      channel,
+      message,
+      userId,
+      workspaceId,
+      conversationId,
+      channelMetadata,
+    } = params;
+
+    try {
+      // 1. Add assistant message to conversation if conversationId provided
+      if (conversationId) {
+        await prisma.conversationHistory.create({
+          data: {
+            conversationId,
+            message,
+            parts: [{ type: "text", text: message }],
+            userType: UserTypeEnum.Assistant,
+          },
+        });
+        logger.info(
+          `Added assistant message to conversation ${conversationId}`,
+        );
+      }
+
+      // 2. Send to channel (skip for web - web uses websocket)
+      if (channel !== "web") {
+        const handler = getChannel(channel);
+
+        // Determine recipient based on channel
+        let replyTo: string | undefined;
+        const metadata: Record<string, string> = {
+          workspaceId,
+        };
+
+        if (channel === "whatsapp") {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { phoneNumber: true },
+          });
+          replyTo = user?.phoneNumber ?? undefined;
+        } else if (channel === "slack") {
+          const slackAccount = await prisma.integrationAccount.findFirst({
+            where: {
+              integratedById: userId,
+              integrationDefinition: { slug: "slack" },
+              isActive: true,
+              deleted: null,
+            },
+            select: { accountId: true },
+          });
+          replyTo = slackAccount?.accountId ?? undefined;
+
+          if (channelMetadata?.slackChannel) {
+            metadata.slackChannel = channelMetadata.slackChannel as string;
+          }
+          if (channelMetadata?.threadTs) {
+            metadata.threadTs = channelMetadata.threadTs as string;
+          }
+        } else if (channel === "email") {
+          const user = await prisma.user.findUnique({
+            where: { id: userId },
+            select: { email: true },
+          });
+          replyTo = user?.email ?? undefined;
+          metadata.subject = "Update from background task";
+        }
+
+        if (replyTo) {
+          await handler.sendReply(replyTo, message, metadata);
+          logger.info(`Sent ${channel} message to user ${userId}`);
+        } else {
+          logger.warn(`No recipient found for channel ${channel}`, { userId });
+          return {
+            success: false,
+            error: `No recipient found for channel ${channel}`,
+          };
+        }
+      }
+
+      return { success: true };
+    } catch (error) {
+      const errorMsg = error instanceof Error ? error.message : "Unknown error";
+      logger.error("HttpOrchestratorTools: failed to send channel message", {
+        error,
+        channel,
+        userId,
+      });
+      return { success: false, error: errorMsg };
     }
   }
 }

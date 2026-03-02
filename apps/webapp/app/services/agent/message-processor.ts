@@ -5,7 +5,7 @@
  * (same flow as web chat).
  */
 
-import { UserTypeEnum } from "@core/types";
+import { type UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
