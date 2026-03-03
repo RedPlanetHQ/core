@@ -1,5 +1,6 @@
-import {useEffect} from 'react';
-import {useApp} from 'ink';
+import React, {useState, useEffect, useMemo} from 'react';
+import {Box, Text, useInput, useApp} from 'ink';
+import TextInput from 'ink-text-input';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
@@ -7,6 +8,7 @@ import {CoreClient} from '@redplanethq/sdk';
 import {getConfig} from '@/config/index';
 
 const BASE_URL = 'https://app.getcore.me';
+const FETCH_MORE = '__fetch_more__';
 
 export const options = zod.object({});
 
@@ -27,6 +29,10 @@ interface SearchResult {
 	nextCursor?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
 function extractActionText(result: unknown): string {
 	const r = result as any;
 	if (r?.content?.[0]?.text) return r.content[0].text as string;
@@ -39,20 +45,19 @@ function parseSearchResult(text: string): SearchResult {
 
 	const pages: NotionPage[] = [];
 	let nextCursor: string | undefined;
-	const blocks = text.split('\n\n').filter(Boolean);
 
-	for (const block of blocks) {
+	for (const block of text.split('\n\n').filter(Boolean)) {
 		if (block.startsWith('Found ')) continue;
 		if (block.startsWith('next_cursor: ')) {
 			nextCursor = block.slice('next_cursor: '.length).trim();
 			continue;
 		}
 		const lines = block.split('\n');
-		const idLine = lines.find(l => l.startsWith('ID: '));
-		const titleLine = lines.find(l => l.startsWith('Title: '));
-		const urlLine = lines.find(l => l.startsWith('URL: '));
-		const createdLine = lines.find(l => l.startsWith('Created: '));
-		const lastEditedLine = lines.find(l => l.startsWith('Last edited: '));
+		const idLine = lines.find((l) => l.startsWith('ID: '));
+		const titleLine = lines.find((l) => l.startsWith('Title: '));
+		const urlLine = lines.find((l) => l.startsWith('URL: '));
+		const createdLine = lines.find((l) => l.startsWith('Created: '));
+		const lastEditedLine = lines.find((l) => l.startsWith('Last edited: '));
 		if (!idLine) continue;
 		pages.push({
 			id: idLine.slice(4).trim(),
@@ -71,12 +76,14 @@ async function fetchPagesViaAction(
 	client: CoreClient,
 	accountId: string,
 	cursor?: string,
+	query?: string,
 ): Promise<SearchResult> {
 	const parameters: Record<string, any> = {
 		filter: {value: 'page', property: 'object'},
 		page_size: 10,
 	};
 	if (cursor) parameters.start_cursor = cursor;
+	if (query) parameters.query = query;
 
 	const {result} = await client.executeIntegrationAction({
 		accountId,
@@ -107,7 +114,301 @@ async function fetchPageContentViaAction(
 	}
 }
 
-async function runNotionLoad(): Promise<void> {
+// ---------------------------------------------------------------------------
+// BrowseMode component — search box + page list rendered simultaneously
+// ---------------------------------------------------------------------------
+
+type BrowsePhase = 'browse' | 'ingesting' | 'post-ingest';
+
+interface IngestStats {
+	success: number;
+	fail: number;
+}
+
+function BrowseMode({
+	notionAccountId,
+	client,
+	onDone,
+}: {
+	notionAccountId: string;
+	client: CoreClient;
+	onDone: () => void;
+}) {
+	const [pages, setPages] = useState<NotionPage[]>([]);
+	const [nextCursor, setNextCursor] = useState<string | undefined>();
+	const [searchQuery, setSearchQuery] = useState('');
+	const [submittedQuery, setSubmittedQuery] = useState('');
+	const [loading, setLoading] = useState(false);
+	const [loadingMsg, setLoadingMsg] = useState('Fetching pages...');
+	const [selected, setSelected] = useState<Set<string>>(new Set());
+	const [listCursor, setListCursor] = useState(0);
+	const [focus, setFocus] = useState<'search' | 'list'>('search');
+	const [phase, setPhase] = useState<BrowsePhase>('browse');
+	const [menuCursor, setMenuCursor] = useState(0);
+	const [stats, setStats] = useState<IngestStats>({success: 0, fail: 0});
+	const [ingestingMsg, setIngestingMsg] = useState('');
+
+	const listItems = useMemo(
+		() => [
+			...pages,
+			...(nextCursor
+				? [
+						{
+							id: FETCH_MORE,
+							title: '↓ Fetch more pages',
+							url: '',
+							createdAt: '',
+							lastEditedAt: '',
+						},
+					]
+				: []),
+		],
+		[pages, nextCursor],
+	);
+
+	// Initial fetch
+	useEffect(() => {
+		void doLoad(undefined, '');
+	}, []);
+
+	async function doLoad(cursor?: string, query?: string) {
+		setLoading(true);
+		setLoadingMsg(cursor ? 'Fetching more...' : 'Fetching pages...');
+		try {
+			const res = await fetchPagesViaAction(
+				client,
+				notionAccountId,
+				cursor,
+				query,
+			);
+			if (cursor) {
+				setPages((prev) => [...prev, ...res.pages]);
+			} else {
+				setPages(res.pages);
+				setListCursor(0);
+			}
+			setNextCursor(res.nextCursor);
+		} finally {
+			setLoading(false);
+			setLoadingMsg('');
+		}
+	}
+
+	async function handleIngest() {
+		const toIngest = pages.filter((p) => selected.has(p.id));
+		if (toIngest.length === 0) return;
+
+		setPhase('ingesting');
+		let success = 0;
+		let fail = 0;
+
+		for (const page of toIngest) {
+			setIngestingMsg(`Loading "${page.title}"...`);
+			try {
+				const content = await fetchPageContentViaAction(
+					client,
+					notionAccountId,
+					page.id,
+				);
+				await client.ingest({
+					episodeBody: content || `Notion page: ${page.title}`,
+					source: 'notion',
+					referenceTime: page.lastEditedAt,
+					sessionId: page.id,
+					title: page.title,
+					type: 'DOCUMENT',
+					metadata: {url: page.url},
+				});
+				success++;
+			} catch {
+				fail++;
+			}
+		}
+
+		setSelected(new Set());
+		setStats({success, fail});
+		setPhase('post-ingest');
+		setMenuCursor(0);
+	}
+
+	const postIngestMenu = ['Continue loading', 'Remove all (reset)', 'Exit'];
+
+	useInput((_input, key) => {
+		if (phase === 'ingesting') return;
+
+		if (phase === 'post-ingest') {
+			if (key.upArrow) setMenuCursor((c) => Math.max(0, c - 1));
+			else if (key.downArrow)
+				setMenuCursor((c) => Math.min(postIngestMenu.length - 1, c + 1));
+			else if (key.return) {
+				if (menuCursor === 0) {
+					setPhase('browse');
+					setFocus('search');
+				} else if (menuCursor === 1) {
+					setPages([]);
+					setNextCursor(undefined);
+					setSelected(new Set());
+					setPhase('browse');
+					setFocus('search');
+					void doLoad(undefined, '');
+				} else {
+					onDone();
+				}
+			}
+			return;
+		}
+
+		// browse phase
+		if (focus === 'search') {
+			if (key.escape) {
+				onDone();
+				return;
+			}
+			if (key.tab || key.downArrow) {
+				setFocus('list');
+			}
+			return;
+		}
+
+		// list focus
+		if (key.upArrow) {
+			if (listCursor === 0) setFocus('search');
+			else setListCursor((c) => c - 1);
+		} else if (key.downArrow) {
+			setListCursor((c) => Math.min(listItems.length - 1, c + 1));
+		} else if (_input === ' ') {
+			const item = listItems[listCursor];
+			if (!item || item.id === FETCH_MORE) return;
+			setSelected((prev) => {
+				const next = new Set(prev);
+				if (next.has(item.id)) next.delete(item.id);
+				else next.add(item.id);
+				return next;
+			});
+		} else if (key.return) {
+			const item = listItems[listCursor];
+			if (!item) return;
+			if (item.id === FETCH_MORE) {
+				if (!loading) void doLoad(nextCursor, submittedQuery);
+			} else if (selected.size > 0 && !loading) {
+				void handleIngest();
+			}
+		} else if (key.escape) {
+			onDone();
+		}
+	});
+
+	// Post-ingest menu
+	if (phase === 'post-ingest') {
+		return (
+			<Box flexDirection="column" gap={1} paddingX={2} paddingY={1}>
+				<Text color={stats.fail === 0 ? 'green' : 'yellow'}>
+					{`✓ Loaded ${stats.success} page(s)${stats.fail > 0 ? `, ${stats.fail} failed` : ''}`}
+				</Text>
+				<Box flexDirection="column">
+					{postIngestMenu.map((item, i) => (
+						<Text
+							key={item}
+							color={i === menuCursor ? 'cyan' : undefined}
+							dimColor={i !== menuCursor}
+						>
+							{i === menuCursor ? '❯ ' : '  '}
+							{item}
+						</Text>
+					))}
+				</Box>
+			</Box>
+		);
+	}
+
+	// Ingesting
+	if (phase === 'ingesting') {
+		return (
+			<Box paddingX={2}>
+				<Text color="yellow">⠋ {ingestingMsg}</Text>
+			</Box>
+		);
+	}
+
+	// Browse
+	return (
+		<Box flexDirection="column" gap={1} paddingX={1}>
+			{/* Search box */}
+			<Box
+				borderStyle="round"
+				borderColor={focus === 'search' ? 'cyan' : 'gray'}
+				paddingX={1}
+			>
+				<Text color="cyan">Search </Text>
+				<TextInput
+					value={searchQuery}
+					onChange={setSearchQuery}
+					onSubmit={(q) => {
+						setSubmittedQuery(q);
+						void doLoad(undefined, q);
+						setFocus('list');
+					}}
+					focus={focus === 'search'}
+					placeholder="Type to search, Enter to fetch..."
+				/>
+			</Box>
+
+			{/* Page list */}
+			<Box flexDirection="column">
+				{loading ? (
+					<Text color="yellow">{'  '}⠋ {loadingMsg}</Text>
+				) : listItems.length === 0 ? (
+					<Text dimColor>{'  '}No pages found</Text>
+				) : (
+					listItems.map((item, i) => {
+						const isActive = focus === 'list' && i === listCursor;
+						const isSelected = selected.has(item.id);
+						const isFetchMore = item.id === FETCH_MORE;
+						return (
+							<Box key={item.id}>
+								<Text
+									color={
+										isActive ? 'cyan' : isFetchMore ? 'yellow' : undefined
+									}
+									bold={isActive}
+									dimColor={!isActive && !isFetchMore}
+								>
+									{`  ${isActive ? '❯' : ' '} ${isFetchMore ? '  ' : isSelected ? '◉ ' : '○ '}${item.title}`}
+								</Text>
+							</Box>
+						);
+					})
+				)}
+			</Box>
+
+			{/* Status bar */}
+			<Box>
+				{selected.size > 0 ? (
+					<Text color="green">{selected.size} selected — Enter to ingest</Text>
+				) : (
+					<Text dimColor>
+						{focus === 'search'
+							? 'Enter to search • Tab/↓ to list'
+							: '↑↓ navigate • Space select • Enter ingest/fetch • Esc exit'}
+					</Text>
+				)}
+			</Box>
+		</Box>
+	);
+}
+
+// ---------------------------------------------------------------------------
+// Init flow (clack prompts) + entry component
+// ---------------------------------------------------------------------------
+
+type AppPhase =
+	| {type: 'init'}
+	| {type: 'browse'; notionAccountId: string; client: CoreClient}
+	| {type: 'done'};
+
+// Returns true when the process should exit (error / cancelled / all-mode done).
+// Returns false when browse mode took over (Ink component handles the rest).
+async function runInit(setPhase: (p: AppPhase) => void): Promise<boolean> {
 	p.intro(chalk.bgCyan(chalk.black(' Load Notion ')));
 
 	const config = getConfig();
@@ -116,13 +417,13 @@ async function runNotionLoad(): Promise<void> {
 
 	if (!apiKey) {
 		p.log.error('Not authenticated. Run `corebrain login` first.');
-		return;
+		return true;
 	}
 
 	const client = new CoreClient({baseUrl, token: apiKey});
 	const spinner = p.spinner();
 
-	// 1. Check Notion connection
+	// Check connection
 	spinner.start('Checking Notion connection...');
 	let notionAccountId: string;
 	try {
@@ -130,228 +431,81 @@ async function runNotionLoad(): Promise<void> {
 		const notionAccount = (res.accounts ?? []).find(
 			(a: any) => a.integrationDefinition?.slug === 'notion',
 		);
-
 		if (!notionAccount) {
 			spinner.stop(chalk.red('Notion not connected'));
 			p.log.error(
 				'Notion is not connected. Please connect it at ' +
 					chalk.cyan(`${baseUrl}/home/integrations`),
 			);
-			return;
+			return true;
 		}
-
 		notionAccountId = notionAccount.id;
 		spinner.stop(chalk.green('Notion connected'));
 	} catch (err) {
 		spinner.stop(chalk.red('Failed to fetch integrations'));
 		p.log.error(err instanceof Error ? err.message : 'Unknown error');
-		return;
+		return true;
 	}
 
-	// 2. Choose load mode
+	// Mode selection
 	const loadMode = await p.select({
 		message: 'How would you like to load Notion pages?',
 		options: [
 			{
 				value: 'select',
-				label: 'Select pages',
-				hint: 'Fetch pages first, then choose which to load',
+				label: 'Browse & select',
+				hint: 'Search and select pages interactively',
 			},
 			{
-				value: 'all',
-				label: 'Load all pages',
-				hint: 'Load every page in your workspace',
+				value: 'exit',
+				label: 'Exit',
 			},
 		],
 	});
 
-	if (p.isCancel(loadMode)) {
+	if (p.isCancel(loadMode) || loadMode === 'exit') {
 		p.cancel('Cancelled');
-		return;
+		return true;
 	}
 
-	let pagesToLoad: NotionPage[] = [];
-
-	const FETCH_MORE = '__fetch_more__';
-
-	if (loadMode === 'all') {
-		const confirmed = await p.confirm({
-			message: chalk.yellow(
-				'Loading all pages will consume a significant amount of credits. Continue?',
-			),
-			initialValue: false,
-		});
-
-		if (p.isCancel(confirmed) || !confirmed) {
-			p.cancel('Cancelled');
-			return;
-		}
-
-		spinner.start('Fetching Notion pages...');
-		let cursor: string | undefined;
-		try {
-			do {
-				const batch = await fetchPagesViaAction(
-					client,
-					notionAccountId,
-					cursor,
-				);
-				pagesToLoad.push(...batch.pages);
-				cursor = batch.nextCursor;
-				if (cursor) {
-					spinner.message(
-						`Fetching more pages (${pagesToLoad.length} so far)...`,
-					);
-				}
-			} while (cursor);
-
-			spinner.stop(chalk.green(`Found ${pagesToLoad.length} pages`));
-		} catch (err) {
-			spinner.stop(chalk.red('Failed to fetch pages'));
-			p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			return;
-		}
-	} else {
-		// Fetch first batch
-		spinner.start('Fetching Notion pages...');
-		let allFetched: NotionPage[] = [];
-		let nextCursor: string | undefined;
-		try {
-			const first = await fetchPagesViaAction(client, notionAccountId);
-			allFetched = first.pages;
-			nextCursor = first.nextCursor;
-			spinner.stop(chalk.green(`Fetched ${allFetched.length} pages`));
-		} catch (err) {
-			spinner.stop(chalk.red('Failed to fetch pages'));
-			p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			return;
-		}
-
-		if (allFetched.length === 0) {
-			p.log.warn('No pages found in your Notion workspace.');
-			return;
-		}
-
-		let currentSelections: string[] = [];
-
-		while (true) {
-			const selectOptions = allFetched.map(page => ({
-				value: page.id,
-				label: page.title,
-				hint: page.url,
-			}));
-
-			if (nextCursor) {
-				selectOptions.push({
-					value: FETCH_MORE,
-					label: '↓ Fetch more pages',
-					hint: 'Load the next 10 pages',
-				});
-			}
-
-			const selected = await p.multiselect({
-				message: `Select pages to load (${allFetched.length} fetched)`,
-				options: selectOptions,
-				initialValues: currentSelections,
-				required: false,
-			});
-
-			if (p.isCancel(selected)) {
-				p.cancel('Cancelled');
-				return;
-			}
-
-			const selectedArr = selected as string[];
-
-			if (selectedArr.includes(FETCH_MORE)) {
-				currentSelections = selectedArr.filter(id => id !== FETCH_MORE);
-				spinner.start('Fetching more pages...');
-				try {
-					const more = await fetchPagesViaAction(
-						client,
-						notionAccountId,
-						nextCursor,
-					);
-					allFetched = [...allFetched, ...more.pages];
-					nextCursor = more.nextCursor;
-					spinner.stop(chalk.green(`Fetched ${allFetched.length} pages total`));
-				} catch (err) {
-					spinner.stop(chalk.red('Failed to fetch more pages'));
-					p.log.error(err instanceof Error ? err.message : 'Unknown error');
-					return;
-				}
-			} else {
-				pagesToLoad = allFetched.filter(page => selectedArr.includes(page.id));
-				break;
-			}
-		}
-	}
-
-	if (pagesToLoad.length === 0) {
-		p.log.warn('No pages selected.');
-		return;
-	}
-
-	// 3. Ingest pages
-	p.log.info(`Ingesting ${pagesToLoad.length} page(s) into Core...`);
-
-	let successCount = 0;
-	let failCount = 0;
-
-	for (const page of pagesToLoad) {
-		spinner.start(`Loading "${page.title}"...`);
-		try {
-			const content = await fetchPageContentViaAction(
-				client,
-				notionAccountId,
-				page.id,
-			);
-
-			await client.ingest({
-				episodeBody: content || `Notion page: ${page.title}`,
-				source: 'notion',
-				referenceTime: page.lastEditedAt,
-				sessionId: page.id,
-				title: page.title,
-				type: 'DOCUMENT',
-				metadata: {
-					url: page.url,
-				},
-			});
-
-			spinner.stop(chalk.green(`✓ ${page.title}`));
-			successCount++;
-		} catch (err) {
-			spinner.stop(
-				chalk.red(
-					`✗ ${page.title}: ${
-						err instanceof Error ? err.message : 'Unknown error'
-					}`,
-				),
-			);
-			failCount++;
-		}
-	}
-
-	p.outro(
-		failCount === 0
-			? chalk.green(`Successfully loaded ${successCount} page(s) into Core.`)
-			: chalk.yellow(`Loaded ${successCount} page(s), ${failCount} failed.`),
-	);
+	// Browse mode — hand off to Ink component
+	setPhase({type: 'browse', notionAccountId, client});
+	return false;
 }
 
 export default function LoadNotion(_props: Props) {
 	const {exit} = useApp();
+	const [phase, setPhase] = useState<AppPhase>({type: 'init'});
 
 	useEffect(() => {
-		runNotionLoad()
-			.catch(err => {
+		if (phase.type !== 'init') return;
+		runInit(setPhase)
+			.catch((err) => {
 				p.log.error(err instanceof Error ? err.message : 'Unknown error');
+				return true;
 			})
-			.finally(() => {
-				setTimeout(() => exit(), 100);
+			.then((shouldExit) => {
+				if (shouldExit) {
+					// All-pages mode or error — exit after clack is done
+					setTimeout(() => exit(), 100);
+				}
 			});
-	}, [exit]);
+	}, []);
 
-	return null;
+	useEffect(() => {
+		if (phase.type === 'done') {
+			p.outro(chalk.green('Done.'));
+			setTimeout(() => exit(), 100);
+		}
+	}, [phase]);
+
+	if (phase.type !== 'browse') return null;
+
+	return (
+		<BrowseMode
+			notionAccountId={phase.notionAccountId}
+			client={phase.client}
+			onDone={() => setPhase({type: 'done'})}
+		/>
+	);
 }
