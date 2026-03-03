@@ -1,6 +1,22 @@
 import { callTelegramApi, formatUser } from './utils';
 import { extractMedia, downloadTelegramFile, extractUrls, classifyUrl, getStorageStats } from './media';
-import { chat, clearSession, getSessionInfo, getProviderName } from './chat';
+import { chat, clearSession, getSessionInfo, getProviderName, generatePromo } from './chat';
+import { scrapeUrl } from './scraper';
+
+// --- Pending promo drafts (per chat) ---
+interface PendingPromo {
+  draft: string;
+  scrapedContent: string;
+  sourceUrl: string;
+  platform: string;
+  messageId: number; // the message with inline buttons
+  createdAt: number;
+}
+
+const pendingPromos = new Map<number, PendingPromo>();
+
+// --- Chats waiting for edit feedback ---
+const awaitingFeedback = new Set<number>();
 
 async function handleMessage(botToken: string, message: any) {
   const chatId = message.chat.id;
@@ -16,8 +32,10 @@ async function handleMessage(botToken: string, message: any) {
       text: [
         `Hey ${message.from?.first_name ?? 'there'}! Ich bin M0Claw.`,
         '',
-        'Schreib mir einfach — ich antworte wie ein AI-Chat.',
-        'Schick mir Medien, Links, Dateien — ich verarbeite alles.',
+        'Schick mir einen Link — ich erstelle sofort einen Promo-Post.',
+        'Du kannst ihn dann freigeben, bearbeiten oder verwerfen.',
+        '',
+        'Oder schreib mir einfach — ich antworte wie ein AI-Chat.',
         '',
         'Befehle:',
         '/start  — Diese Hilfe',
@@ -31,6 +49,8 @@ async function handleMessage(botToken: string, message: any) {
 
   if (text === '/clear') {
     clearSession(chatId);
+    pendingPromos.delete(chatId);
+    awaitingFeedback.delete(chatId);
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
       text: 'Chat-Verlauf gelöscht. Neuer Chat gestartet.',
@@ -44,6 +64,7 @@ async function handleMessage(botToken: string, message: any) {
     const m = Math.floor((uptime % 3600) / 60);
     const stats = getStorageStats();
     const session = getSessionInfo(chatId);
+    const hasPending = pendingPromos.has(chatId);
     const typeLines = Object.entries(stats.byType)
       .map(([k, v]) => `  ${k}: ${v}`)
       .join('\n');
@@ -56,6 +77,7 @@ async function handleMessage(botToken: string, message: any) {
         `AI: ${getProviderName()}`,
         `Chat-Nachrichten: ${session.messageCount}`,
         `Dateien: ${stats.totalFiles} (${stats.totalSizeMB} MB)`,
+        hasPending ? '\nPromo-Entwurf: ausstehend' : '',
         typeLines ? `\nNach Typ:\n${typeLines}` : '',
       ].join('\n'),
     });
@@ -68,6 +90,30 @@ async function handleMessage(botToken: string, message: any) {
       text: 'Pong!',
     });
     return;
+  }
+
+  // --- If awaiting edit feedback for a pending promo ---
+  if (awaitingFeedback.has(chatId) && text) {
+    const pending = pendingPromos.get(chatId);
+    if (pending) {
+      awaitingFeedback.delete(chatId);
+
+      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+      const revisedDraft = await generatePromo(
+        pending.scrapedContent + `\n\nVorheriger Entwurf:\n${pending.draft}`,
+        text,
+      );
+
+      pending.draft = revisedDraft;
+
+      // Send revised draft with buttons
+      const sent = await sendPromoPreview(botToken, chatId, revisedDraft, pending.sourceUrl);
+      pending.messageId = sent.message_id;
+
+      return;
+    }
+    awaitingFeedback.delete(chatId);
   }
 
   // --- Media handling ---
@@ -100,10 +146,10 @@ async function handleMessage(botToken: string, message: any) {
       });
     }
 
-    // Also check caption for URLs
+    // Also check caption for URLs → trigger promo flow
     const urls = extractUrls(message);
     if (urls.length > 0) {
-      await handleUrls(botToken, chatId, urls);
+      await handleUrlsWithPromo(botToken, chatId, urls);
     }
     return;
   }
@@ -133,20 +179,19 @@ async function handleMessage(botToken: string, message: any) {
     return;
   }
 
-  // --- URL handling + AI Chat ---
+  // --- URL handling → Promo flow ---
   const urls = extractUrls(message);
   if (urls.length > 0) {
-    await handleUrls(botToken, chatId, urls);
+    await handleUrlsWithPromo(botToken, chatId, urls);
+    return;
   }
 
-  // --- Plain text → AI Chat (also processes messages that contain URLs) ---
+  // --- Plain text → AI Chat ---
   if (text) {
-    // Send typing indicator
     await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
 
     const reply = await chat(chatId, text);
 
-    // Telegram message limit is 4096 chars — split if needed
     const chunks = splitMessage(reply, 4000);
     for (const chunk of chunks) {
       await callTelegramApi(botToken, 'sendMessage', {
@@ -165,21 +210,225 @@ async function handleMessage(botToken: string, message: any) {
   });
 }
 
-async function handleUrls(botToken: string, chatId: number, urls: string[]) {
-  const lines: string[] = ['Links erkannt:'];
-
-  for (const url of urls) {
-    const info = classifyUrl(url);
-    lines.push(`  ${platformEmoji(info.platform)} ${info.platform} (${info.type}): ${url}`);
-  }
-
-  lines.push('', 'Links werden zur Verarbeitung vorgemerkt.');
+// --- Promo flow: scrape → generate → preview with buttons ---
+async function handleUrlsWithPromo(botToken: string, chatId: number, urls: string[]) {
+  // Process the first URL for promo (can be extended for multiple)
+  const url = urls[0];
+  const info = classifyUrl(url);
 
   await callTelegramApi(botToken, 'sendMessage', {
     chat_id: chatId,
-    text: lines.join('\n'),
+    text: `${platformEmoji(info.platform)} ${info.platform} Link erkannt — lade Inhalt...`,
     disable_web_page_preview: true,
   });
+
+  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+  // Scrape the URL
+  const scraped = await scrapeUrl(url, info.platform);
+
+  if (scraped.error && !scraped.text) {
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `Fehler beim Laden: ${scraped.error}\n\nSchick mir den Inhalt manuell, dann erstelle ich den Promo daraus.`,
+    });
+    return;
+  }
+
+  // Show what was scraped
+  const scrapedPreview = scraped.text.substring(0, 500) + (scraped.text.length > 500 ? '...' : '');
+  await callTelegramApi(botToken, 'sendMessage', {
+    chat_id: chatId,
+    text: `Inhalt geladen:\n\n${scrapedPreview}`,
+    disable_web_page_preview: true,
+  });
+
+  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+  // Generate promo
+  const draft = await generatePromo(scraped.text);
+
+  // Store pending promo
+  const sent = await sendPromoPreview(botToken, chatId, draft, url);
+
+  pendingPromos.set(chatId, {
+    draft,
+    scrapedContent: scraped.text,
+    sourceUrl: url,
+    platform: info.platform,
+    messageId: sent.message_id,
+    createdAt: Date.now(),
+  });
+
+  // If there are more URLs, mention them
+  if (urls.length > 1) {
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `(${urls.length - 1} weitere Links erkannt — schick sie einzeln für separate Promos)`,
+    });
+  }
+}
+
+// --- Send promo preview with inline keyboard ---
+async function sendPromoPreview(botToken: string, chatId: number, draft: string, sourceUrl: string) {
+  return await callTelegramApi(botToken, 'sendMessage', {
+    chat_id: chatId,
+    text: [
+      '--- PROMO ENTWURF ---',
+      '',
+      draft,
+      '',
+      '--- ENDE ---',
+      '',
+      `Quelle: ${sourceUrl}`,
+    ].join('\n'),
+    disable_web_page_preview: true,
+    reply_markup: {
+      inline_keyboard: [
+        [
+          { text: 'Freigeben', callback_data: 'promo_approve' },
+          { text: 'Bearbeiten', callback_data: 'promo_edit' },
+          { text: 'Verwerfen', callback_data: 'promo_discard' },
+        ],
+        [
+          { text: 'Neu generieren', callback_data: 'promo_regenerate' },
+        ],
+      ],
+    },
+  });
+}
+
+// --- Handle callback queries (button clicks) ---
+async function handleCallbackQuery(botToken: string, query: any) {
+  const chatId = query.message?.chat?.id;
+  const data = query.data;
+  const callbackId = query.id;
+
+  if (!chatId || !data) {
+    await callTelegramApi(botToken, 'answerCallbackQuery', { callback_query_id: callbackId });
+    return;
+  }
+
+  const pending = pendingPromos.get(chatId);
+
+  if (!pending) {
+    await callTelegramApi(botToken, 'answerCallbackQuery', {
+      callback_query_id: callbackId,
+      text: 'Kein Entwurf vorhanden.',
+      show_alert: true,
+    });
+    return;
+  }
+
+  switch (data) {
+    case 'promo_approve': {
+      await callTelegramApi(botToken, 'answerCallbackQuery', {
+        callback_query_id: callbackId,
+        text: 'Freigegeben!',
+      });
+
+      // Remove inline buttons from the preview message
+      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: pending.messageId,
+        reply_markup: { inline_keyboard: [] },
+      }).catch(() => {}); // ignore if message can't be edited
+
+      // Send final approved post
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'FREIGEGEBEN — Fertiger Post:',
+          '',
+          pending.draft,
+          '',
+          `Kopiere den Text oben und poste ihn direkt.`,
+        ].join('\n'),
+        disable_web_page_preview: true,
+      });
+
+      pendingPromos.delete(chatId);
+      awaitingFeedback.delete(chatId);
+
+      console.log(`[PROMO] Approved for chat ${chatId}: ${pending.sourceUrl}`);
+      break;
+    }
+
+    case 'promo_edit': {
+      await callTelegramApi(botToken, 'answerCallbackQuery', {
+        callback_query_id: callbackId,
+      });
+
+      awaitingFeedback.add(chatId);
+
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'Was soll ich aendern?',
+          '',
+          'Schreib mir dein Feedback, z.B.:',
+          '- "Kuerzer"',
+          '- "Mehr Emojis"',
+          '- "Auf Englisch"',
+          '- "Fuer LinkedIn statt Twitter"',
+          '- "Aggressiver / mehr Hype"',
+        ].join('\n'),
+      });
+      break;
+    }
+
+    case 'promo_discard': {
+      await callTelegramApi(botToken, 'answerCallbackQuery', {
+        callback_query_id: callbackId,
+        text: 'Verworfen.',
+      });
+
+      // Remove inline buttons
+      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: pending.messageId,
+        reply_markup: { inline_keyboard: [] },
+      }).catch(() => {});
+
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: 'Entwurf verworfen. Schick mir einen neuen Link wenn du willst.',
+      });
+
+      pendingPromos.delete(chatId);
+      awaitingFeedback.delete(chatId);
+      break;
+    }
+
+    case 'promo_regenerate': {
+      await callTelegramApi(botToken, 'answerCallbackQuery', {
+        callback_query_id: callbackId,
+        text: 'Wird neu generiert...',
+      });
+
+      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+      const newDraft = await generatePromo(pending.scrapedContent);
+      pending.draft = newDraft;
+
+      // Remove old buttons
+      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
+        chat_id: chatId,
+        message_id: pending.messageId,
+        reply_markup: { inline_keyboard: [] },
+      }).catch(() => {});
+
+      // Send new preview
+      const sent = await sendPromoPreview(botToken, chatId, newDraft, pending.sourceUrl);
+      pending.messageId = sent.message_id;
+
+      break;
+    }
+
+    default: {
+      await callTelegramApi(botToken, 'answerCallbackQuery', { callback_query_id: callbackId });
+    }
+  }
 }
 
 function mediaEmoji(type: string): string {
@@ -233,7 +482,6 @@ function splitMessage(text: string, maxLen: number): string[] {
       chunks.push(remaining);
       break;
     }
-    // Try to split at newline
     let splitAt = remaining.lastIndexOf('\n', maxLen);
     if (splitAt < maxLen * 0.5) splitAt = remaining.lastIndexOf(' ', maxLen);
     if (splitAt < maxLen * 0.3) splitAt = maxLen;
@@ -263,12 +511,19 @@ async function pollUpdates(botToken: string) {
         offset,
         limit: 100,
         timeout: 30,
-        allowed_updates: ['message'],
+        allowed_updates: ['message', 'callback_query'],
       });
 
       for (const update of updates) {
         offset = update.update_id + 1;
-        if (update.message) {
+
+        if (update.callback_query) {
+          try {
+            await handleCallbackQuery(botToken, update.callback_query);
+          } catch (err: any) {
+            console.error(`Error handling callback ${update.update_id}:`, err.message);
+          }
+        } else if (update.message) {
           try {
             await handleMessage(botToken, update.message);
           } catch (err: any) {

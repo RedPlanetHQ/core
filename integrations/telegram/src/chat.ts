@@ -29,6 +29,20 @@ Du bist direkt, kompakt und hilfreich. Kein unnötiges Gelaber.
 Du kannst über alles reden — Code, Technik, Alltag, Ideen, Projekte.
 Halte Antworten kurz wenn möglich, ausführlich wenn nötig.`;
 
+const PROMO_SYSTEM_PROMPT = `Du bist M0Claw, ein Content-Creator-Assistent.
+Deine Aufgabe: Aus dem gegebenen Inhalt einen fertigen Promo-Post erstellen.
+
+Regeln:
+- Schreibe einen knackigen, aufmerksamkeitsstarken Post
+- Passend für Social Media (Twitter/X, Instagram, LinkedIn — je nach Kontext)
+- Nutze den Kern-Inhalt, nicht 1:1 kopieren
+- Baue einen eigenen Spin/Mehrwert ein
+- Halte es kurz: max 280 Zeichen für X, etwas länger für andere Plattformen
+- Füge passende Hashtags hinzu (2-4)
+- Wenn es ein Thread sein soll, nummeriere die Teile
+- Schreibe auf Deutsch, es sei denn der Originalinhalt ist auf Englisch
+- Gib NUR den fertigen Post-Text aus, keine Erklärungen drumrum`;
+
 function getSession(chatId: number): ChatSession {
   let session = sessions.get(chatId);
 
@@ -224,5 +238,46 @@ export async function chat(chatId: number, userMessage: string): Promise<string>
     if (status === 503) return 'AI-Service gerade nicht erreichbar — bitte gleich nochmal.';
 
     return `AI-Fehler (${provider.name}): ${errMsg}`;
+  }
+}
+
+/**
+ * Generate a promo post from scraped content.
+ * Uses a dedicated system prompt for content creation.
+ * Optional feedback for revisions.
+ */
+export async function generatePromo(scrapedContent: string, feedback?: string): Promise<string> {
+  const provider = detectProvider();
+
+  if (!provider) {
+    return 'AI nicht verfügbar — kann keinen Promo erstellen. Bitte API-Key konfigurieren.';
+  }
+
+  const messages: ChatMessage[] = [
+    { role: 'system', content: PROMO_SYSTEM_PROMPT },
+    { role: 'user', content: `Erstelle einen Promo-Post basierend auf diesem Inhalt:\n\n${scrapedContent}` },
+  ];
+
+  if (feedback) {
+    messages.push(
+      { role: 'assistant', content: '[vorheriger Entwurf wurde abgelehnt]' },
+      { role: 'user', content: `Überarbeite den Promo-Post mit diesem Feedback: ${feedback}` },
+    );
+  }
+
+  try {
+    let reply: string;
+
+    if (provider.name === 'anthropic') {
+      reply = await callAnthropic(provider, messages);
+    } else {
+      reply = await callOpenAI(provider, messages);
+    }
+
+    return reply || 'Konnte keinen Promo-Post generieren.';
+  } catch (err: any) {
+    const errMsg = err.response?.data?.error?.message ?? err.message;
+    console.error(`[AI/Promo] Error: ${errMsg}`);
+    return `Fehler bei Promo-Erstellung: ${errMsg}`;
   }
 }
