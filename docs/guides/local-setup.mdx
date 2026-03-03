@@ -18,7 +18,7 @@
 5. Start docker services
     ```bash
     cd hosting/docker
-    docker-compose up -d core-postgres core-redis core-neo4j
+    docker-compose up -d postgres redis neo4j
     cd ../..
     ```
 6. Start the server
@@ -26,5 +26,3 @@
     pnpm dev
     ```
 The application will be running at ```http//:localhost:3033```
-
-
