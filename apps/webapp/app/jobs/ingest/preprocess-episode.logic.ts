@@ -576,6 +576,17 @@ export async function processEpisodePreprocessing(
       `Error preprocessing episode for user ${payload.userId}:`,
       err,
     );
+    try {
+      await prisma.ingestionQueue.update({
+        where: { id: payload.queueId },
+        data: {
+          status: "FAILED",
+          error: err instanceof Error ? err.message : String(err),
+        },
+      });
+    } catch {
+      // Ignore DB update errors (e.g., record deleted)
+    }
     return {
       success: false,
       error: err.message,
