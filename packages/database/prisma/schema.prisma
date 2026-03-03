@@ -91,7 +91,7 @@ model Conversation {
   unread Boolean @default(false)
   source String  @default("core")
 
-  backgroundTaskId String?
+  asyncJobId String?
 
   title  String?
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)

@@ -12,7 +12,7 @@ export const CreateConversationSchema = z.object({
   conversationId: z.string().optional(),
   source: z.string().optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
-  backgroundTaskId: z.string().optional(),
+  asyncJobId: z.string().optional(),
   parts: z
     .array(
       z.object({
