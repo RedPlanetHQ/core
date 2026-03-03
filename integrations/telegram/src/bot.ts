@@ -186,6 +186,19 @@ async function handleMessage(botToken: string, message: any) {
     return;
   }
 
+  // --- Forwarded messages (no URLs) → Promo flow ---
+  const isForwarded = !!(message.forward_date || message.forward_from || message.forward_from_chat || message.forward_origin);
+  if (isForwarded && text && text.length > 20) {
+    await handleContentAsPromo(botToken, chatId, text, 'forwarded');
+    return;
+  }
+
+  // --- Long pasted text (likely a copied post) → Promo flow ---
+  if (text && text.length > 100 && !text.endsWith('?')) {
+    await handleContentAsPromo(botToken, chatId, text, 'pasted');
+    return;
+  }
+
   // --- Plain text → AI Chat ---
   if (text) {
     await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
@@ -269,6 +282,30 @@ async function handleUrlsWithPromo(botToken: string, chatId: number, urls: strin
   }
 }
 
+// --- Handle pasted/forwarded content as promo source ---
+async function handleContentAsPromo(botToken: string, chatId: number, content: string, source: string) {
+  const sourceLabel = source === 'forwarded' ? 'Weitergeleiteter Post' : 'Kopierter Text';
+
+  await callTelegramApi(botToken, 'sendMessage', {
+    chat_id: chatId,
+    text: `${sourceLabel} erkannt — erstelle Promo-Post...`,
+  });
+
+  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+  const draft = await generatePromo(content);
+  const sent = await sendPromoPreview(botToken, chatId, draft, `[${sourceLabel}]`);
+
+  pendingPromos.set(chatId, {
+    draft,
+    scrapedContent: content,
+    sourceUrl: `[${sourceLabel}]`,
+    platform: 'text',
+    messageId: sent.message_id,
+    createdAt: Date.now(),
+  });
+}
+
 // --- Send promo preview with inline keyboard ---
 async function sendPromoPreview(botToken: string, chatId: number, draft: string, sourceUrl: string) {
   return await callTelegramApi(botToken, 'sendMessage', {
@@ -334,18 +371,51 @@ async function handleCallbackQuery(botToken: string, query: any) {
         reply_markup: { inline_keyboard: [] },
       }).catch(() => {}); // ignore if message can't be edited
 
-      // Send final approved post
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: [
-          'FREIGEGEBEN — Fertiger Post:',
-          '',
-          pending.draft,
-          '',
-          `Kopiere den Text oben und poste ihn direkt.`,
-        ].join('\n'),
-        disable_web_page_preview: true,
-      });
+      // Post to target channel if configured
+      const targetChannel = process.env.TELEGRAM_TARGET_CHANNEL;
+      if (targetChannel) {
+        try {
+          await callTelegramApi(botToken, 'sendMessage', {
+            chat_id: targetChannel,
+            text: pending.draft,
+            disable_web_page_preview: false,
+          });
+
+          await callTelegramApi(botToken, 'sendMessage', {
+            chat_id: chatId,
+            text: 'GEPOSTET — Der Promo-Post wurde im Kanal veroeffentlicht.',
+            disable_web_page_preview: true,
+          });
+        } catch (err: any) {
+          console.error(`[PROMO] Failed to post to channel ${targetChannel}:`, err.message);
+          await callTelegramApi(botToken, 'sendMessage', {
+            chat_id: chatId,
+            text: [
+              `Fehler beim Posten im Kanal: ${err.message}`,
+              '',
+              'Fertiger Post zum manuellen Kopieren:',
+              '',
+              pending.draft,
+            ].join('\n'),
+            disable_web_page_preview: true,
+          });
+        }
+      } else {
+        // No target channel — send text for manual copy
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: [
+            'FREIGEGEBEN — Fertiger Post:',
+            '',
+            pending.draft,
+            '',
+            'Kopiere den Text oben und poste ihn direkt.',
+            '',
+            'Tipp: Setze TELEGRAM_TARGET_CHANNEL in .env fuer automatisches Posten.',
+          ].join('\n'),
+          disable_web_page_preview: true,
+        });
+      }
 
       pendingPromos.delete(chatId);
       awaitingFeedback.delete(chatId);
