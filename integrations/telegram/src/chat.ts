@@ -60,9 +60,21 @@ export function getSessionInfo(chatId: number): { messageCount: number; active: 
 function detectProvider(): AIProvider | null {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
+  const ollamaBase = process.env.OLLAMA_BASE_URL;
   const model = process.env.AI_MODEL;
 
-  // OpenAI (check first — most common setup)
+  // Ollama (local, free, no API key needed)
+  if (ollamaBase) {
+    return {
+      name: 'ollama',
+      apiBase: ollamaBase,
+      apiKey: 'ollama',
+      model: model ?? 'llama3.2',
+      maxTokensKey: 'max_tokens',
+    };
+  }
+
+  // OpenAI
   if (openaiKey) {
     const base = process.env.AI_API_BASE ?? 'https://api.openai.com/v1';
     return {
@@ -138,6 +150,7 @@ async function callAnthropic(provider: AIProvider, messages: ChatMessage[]): Pro
  * Call OpenAI-compatible Chat Completions API
  */
 async function callOpenAI(provider: AIProvider, messages: ChatMessage[]): Promise<string> {
+  const isLocal = provider.name === 'ollama';
   const response = await axios.post(
     `${provider.apiBase}/chat/completions`,
     {
@@ -151,7 +164,7 @@ async function callOpenAI(provider: AIProvider, messages: ChatMessage[]): Promis
         Authorization: `Bearer ${provider.apiKey}`,
         'Content-Type': 'application/json',
       },
-      timeout: 60000,
+      timeout: isLocal ? 120000 : 60000,
     },
   );
 
@@ -168,10 +181,10 @@ export async function chat(chatId: number, userMessage: string): Promise<string>
     return [
       'AI-Chat nicht verfügbar.',
       '',
-      'Setze einen API-Key in .env:',
-      '  ANTHROPIC_API_KEY=sk-ant-...',
-      '  oder',
-      '  OPENAI_API_KEY=sk-...',
+      'Setze in .env:',
+      '  OLLAMA_BASE_URL=http://localhost:11434/v1 (kostenlos, lokal)',
+      '  oder OPENAI_API_KEY=sk-...',
+      '  oder ANTHROPIC_API_KEY=sk-ant-...',
     ].join('\n');
   }
 
@@ -190,6 +203,7 @@ export async function chat(chatId: number, userMessage: string): Promise<string>
     if (provider.name === 'anthropic') {
       reply = await callAnthropic(provider, session.messages);
     } else {
+      // OpenAI and Ollama both use the OpenAI-compatible API
       reply = await callOpenAI(provider, session.messages);
     }
 
