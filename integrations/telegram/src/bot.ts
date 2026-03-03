@@ -1,5 +1,6 @@
 import { callTelegramApi, formatUser } from './utils';
 import { extractMedia, downloadTelegramFile, extractUrls, classifyUrl, getStorageStats } from './media';
+import { chat, clearSession, getSessionInfo } from './chat';
 
 async function handleMessage(botToken: string, message: any) {
   const chatId = message.chat.id;
@@ -15,16 +16,24 @@ async function handleMessage(botToken: string, message: any) {
       text: [
         `Hey ${message.from?.first_name ?? 'there'}! Ich bin M0Claw.`,
         '',
-        'Schick mir alles — ich verarbeite es:',
-        '  Fotos, Videos, Dokumente, Audio, Sprachnachrichten',
-        '  Links (Instagram, YouTube, TikTok, X, ...)',
-        '  Dateien jeder Art',
+        'Schreib mir einfach — ich antworte wie ein AI-Chat.',
+        'Schick mir Medien, Links, Dateien — ich verarbeite alles.',
         '',
         'Befehle:',
         '/start  — Diese Hilfe',
+        '/clear  — Chat-Verlauf löschen',
         '/status — Bot-Status & Speicher',
         '/ping   — Pong!',
       ].join('\n'),
+    });
+    return;
+  }
+
+  if (text === '/clear') {
+    clearSession(chatId);
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: 'Chat-Verlauf gelöscht. Neuer Chat gestartet.',
     });
     return;
   }
@@ -34,6 +43,7 @@ async function handleMessage(botToken: string, message: any) {
     const h = Math.floor(uptime / 3600);
     const m = Math.floor((uptime % 3600) / 60);
     const stats = getStorageStats();
+    const session = getSessionInfo(chatId);
     const typeLines = Object.entries(stats.byType)
       .map(([k, v]) => `  ${k}: ${v}`)
       .join('\n');
@@ -43,6 +53,8 @@ async function handleMessage(botToken: string, message: any) {
       text: [
         `Status: Online`,
         `Uptime: ${h}h ${m}m`,
+        `AI-Model: ${process.env.AI_MODEL ?? 'gpt-4.1-mini'}`,
+        `Chat-Nachrichten: ${session.messageCount}`,
         `Dateien: ${stats.totalFiles} (${stats.totalSizeMB} MB)`,
         typeLines ? `\nNach Typ:\n${typeLines}` : '',
       ].join('\n'),
@@ -128,12 +140,22 @@ async function handleMessage(botToken: string, message: any) {
     return;
   }
 
-  // --- Plain text ---
+  // --- Plain text → AI Chat ---
   if (text) {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Nachricht erhalten: "${text.substring(0, 500)}"`,
-    });
+    // Send typing indicator
+    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+    const reply = await chat(chatId, text);
+
+    // Telegram message limit is 4096 chars — split if needed
+    const chunks = splitMessage(reply, 4000);
+    for (const chunk of chunks) {
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: chunk,
+        disable_web_page_preview: true,
+      });
+    }
     return;
   }
 
@@ -201,6 +223,25 @@ function platformEmoji(platform: string): string {
     web: '[WEB]',
   };
   return map[platform] ?? '[?]';
+}
+
+function splitMessage(text: string, maxLen: number): string[] {
+  if (text.length <= maxLen) return [text];
+  const chunks: string[] = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    if (remaining.length <= maxLen) {
+      chunks.push(remaining);
+      break;
+    }
+    // Try to split at newline
+    let splitAt = remaining.lastIndexOf('\n', maxLen);
+    if (splitAt < maxLen * 0.5) splitAt = remaining.lastIndexOf(' ', maxLen);
+    if (splitAt < maxLen * 0.3) splitAt = maxLen;
+    chunks.push(remaining.substring(0, splitAt));
+    remaining = remaining.substring(splitAt).trimStart();
+  }
+  return chunks;
 }
 
 // --- Polling loop ---
