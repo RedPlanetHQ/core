@@ -210,7 +210,7 @@ export async function runDecisionAgent(
       trigger.channel,
       true,
       userPersona,
-      undefined, // skills
+      skills,
       undefined, // onMessage
       context.user.defaultChannel,
       context.user.availableChannels,

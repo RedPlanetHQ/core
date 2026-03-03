@@ -129,10 +129,35 @@ export async function noStreamProcess(
 
   // Create assistant message with UI-compatible parts
   // (must match the format expected by convertToModelMessages on reload)
+  // Build parts from result.steps so tool calls are preserved (not just result.text)
   const assistantMessageId = crypto.randomUUID();
-  const assistantParts: { type: string; text: string }[] = [];
-  if (result.text) {
-    assistantParts.push({ type: "text", text: result.text });
+  const assistantParts: any[] = [];
+
+  for (const step of result.steps) {
+    // Add step-start marker for multi-step flows (matches streaming format)
+    if (result.steps.length > 1 && step !== result.steps[0]) {
+      assistantParts.push({ type: "step-start" });
+    }
+
+    // Add tool invocation parts (matching the UIMessage format from streamText)
+    for (const toolCall of step.toolCalls) {
+      const toolResult = step.toolResults.find(
+        (r: any) => r.toolCallId === toolCall.toolCallId,
+      );
+      assistantParts.push({
+        type: `tool-${toolCall.toolName}`,
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        state: "output-available",
+        input: toolCall.input,
+        output: toolResult?.output,
+      });
+    }
+
+    // Add text part if this step produced text
+    if (step.text) {
+      assistantParts.push({ type: "text", text: step.text });
+    }
   }
 
   const assistantMessage = {

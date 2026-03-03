@@ -340,14 +340,35 @@ export async function getOrCreatePersonalAccessToken({
   });
 
   if (existing) {
-    return {
-      id: existing.id,
-      name: existing.name,
-      userId: existing.userId,
-      workspaceId: existing.workspaceId,
-      obfuscatedToken: existing.obfuscatedToken,
-      token: returnDecrypted ? decryptPersonalAccessToken(existing) : undefined,
-    };
+    if (returnDecrypted) {
+      try {
+        return {
+          id: existing.id,
+          name: existing.name,
+          userId: existing.userId,
+          workspaceId: existing.workspaceId,
+          obfuscatedToken: existing.obfuscatedToken,
+          token: decryptPersonalAccessToken(existing),
+        };
+      } catch {
+        // Decryption failed — delete stale token and create a fresh one below
+        logger.warn(
+          `Decryption failed for PAT ${existing.id}, recreating`,
+        );
+        await prisma.personalAccessToken.delete({
+          where: { id: existing.id },
+        });
+      }
+    } else {
+      return {
+        id: existing.id,
+        name: existing.name,
+        userId: existing.userId,
+        workspaceId: existing.workspaceId,
+        obfuscatedToken: existing.obfuscatedToken,
+        token: undefined,
+      };
+    }
   }
 
   // Create a new token

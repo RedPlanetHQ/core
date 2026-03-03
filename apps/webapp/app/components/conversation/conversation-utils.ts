@@ -14,6 +14,8 @@ export const getToolDisplayName = (toolType: string): string => {
     memory_search: "Memory explorer",
     execute_integration_action: "Execute integration action",
     get_integration_actions: "Get integration actions",
+    decision: "Decision",
+    silent_action: "Background action",
   };
 
   // Check for exact match

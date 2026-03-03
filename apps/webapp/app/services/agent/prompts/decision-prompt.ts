@@ -27,6 +27,8 @@ Query memory, integrations, or web for information:
 - **Integrations**: Calendar events, emails, GitHub issues, Slack messages
 - **Web**: Current information, news, documentation
 
+**IMPORTANT: One integration per call.** Each gather_context call can only query ONE data source effectively. If you need data from multiple integrations, make SEPARATE gather_context calls for each.
+
 **When to use:**
 - Reminder mentions "sync", "check", "summary", "daily", "weekly" → gather relevant data
 - Reminder references specific integrations (gmail, calendar, github) → query them
@@ -37,8 +39,16 @@ Query memory, integrations, or web for information:
 - You already have sufficient context in the provided data
 
 **Examples:**
-- "daily sync: check gmail and calendar" → gather_context("today's calendar events and any urgent unread emails")
+- "daily sync: check gmail and calendar" → TWO calls:
+  - gather_context("today's calendar events")
+  - gather_context("urgent unread emails from today")
 - "water reminder, goal: 3L" → gather_context("user's water intake responses today")
+
+### get_skill
+Load a skill's full instructions by ID. Use when a skill is attached to the trigger (check for \`skillId\` in trigger data).
+
+**When to use:**
+- Trigger data has \`skillId\` → call get_skill to understand what the skill needs before gathering data
 
 ### add_reminder
 Create new reminders for follow-ups, event alerts, deadlines, etc.
@@ -119,7 +129,9 @@ For every trigger, work through this framework:
 
 5. **Silent actions matter**: Sometimes the right action is to log, update state, or reschedule - without messaging.
 
-6. **Follow-up timing is contextual** (max 1 follow-up per reminder):
+6. **Messaging goes through channels, not integrations**: When the reminder says "ping me", "notify me", "message me", or "tell me" — use \`shouldMessage: true\` so the message is delivered through the reminder's configured channel. Do NOT create integration_action silent actions to send messages (e.g., send_slack_message, send_email). Integration actions are for non-messaging operations (create issue, update PR, search data). Exception: if the user explicitly specified a different destination (e.g., "ping me in #team-channel" or "email my manager"), use an integration_action for that specific delivery.
+
+7. **Follow-up timing is contextual** (max 1 follow-up per reminder):
    - Quick actions (drink water, stretch): ~15 min
    - Medium actions (take medication, quick task): ~30 min
    - Longer actions (gym, errands, call someone): ~1 hour
@@ -145,13 +157,13 @@ Decision approach:
 **Always gather data** - this is an intelligence briefing
 
 Decision approach:
-- Call gather_context for calendar, emails, relevant integrations
+- Call gather_context SEPARATELY for each integration (calendar, emails, etc.)
 - Summarize what matters: urgent items, upcoming events, action items
 - Create reminders for time-sensitive events (meeting in 30 min, bill due today)
 - Tone: neutral, informative
 
 **Example**: "daily sync: check gmail and calendar"
-→ gather_context("today's calendar events and urgent unread emails")
+→ gather_context("today's calendar events") + gather_context("urgent unread emails from today")
 → message with events/emails in context
 → create reminders for upcoming meetings
 
@@ -451,8 +463,9 @@ Decision:
 Trigger: reminder_fired for "daily sync: check gmail and calendar"
 Context: Morning, user just woke up (inferred from time)
 
-**Step 1 - Call gather_context**:
-gather_context("today's calendar events and any urgent unread emails from the past 12 hours")
+**Step 1 - Call gather_context** (separate calls per integration):
+gather_context("today's calendar events")
+gather_context("urgent unread emails from the past 12 hours")
 
 **Step 2 - Create reminders for upcoming events** (gathered data shows meeting at 10am):
 add_reminder(text="1:1 with Sarah starts in 5 minutes", schedule="FREQ=DAILY;BYHOUR=9;BYMINUTE=55", maxOccurrences=1)
@@ -758,7 +771,25 @@ ${userPersona}
       ? `
 ## Available Skills
 
-The user has defined these skills. When a trigger matches a skill, reference it in your action plan intent so the Core brain can load and execute it.
+The user has defined these skills. A reminder may have a skill attached (look for \`skillId\` and \`skillName\` in the trigger data). When a skill is attached, you MUST include it in your action plan.
+
+**How to reference a skill in your action plan:**
+- Add \`skillId\` and \`skillName\` to the context object (copy from trigger data)
+- The intent should describe what the reminder is about naturally
+- The Core brain will load the full skill instructions and follow them
+
+**Example with attached skill:**
+Trigger data has: \`"skillId": "abc123", "skillName": "Morning Brief"\`
+\`\`\`json
+{
+  "shouldMessage": true,
+  "message": {
+    "intent": "Run morning brief — check gmail, calendar, github, and AI news",
+    "context": { "skillId": "abc123", "skillName": "Morning Brief" },
+    "tone": "neutral"
+  }
+}
+\`\`\`
 
 ${skills.map((s, i) => {
         const meta = s.metadata as Record<string, unknown> | null;

@@ -171,7 +171,7 @@ export class DirectOrchestratorTools extends OrchestratorTools {
 
   async getGateways(workspaceId: string): Promise<GatewayAgentInfo[]> {
     const gateways = await getConnectedGateways(workspaceId);
-    return gateways.map((gw) => {
+    return gateways.map((gw: GatewayAgentInfo) => {
       const tools = (gw.tools || []) as any as { name: string }[];
       return {
         id: gw.id,

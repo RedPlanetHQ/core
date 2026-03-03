@@ -24,6 +24,8 @@ import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import { upsertConversationHistory } from "~/services/conversation.server";
+import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 
 // ============================================================================
 // Types
@@ -164,6 +166,59 @@ async function executePlan(
 ) {
   const { channel } = trigger;
 
+  // Fetch skills once for use in silent actions (orchestrator needs them for get_skill tool)
+  const skills = await prisma.document.findMany({
+    where: {
+      workspaceId: userData.workspaceId,
+      type: "skill",
+      deleted: null,
+    },
+    select: { id: true, title: true, metadata: true },
+    orderBy: { createdAt: "desc" },
+  });
+
+  // =========================================================================
+  // Get or create conversation for this async job (reuse until 100 messages)
+  // =========================================================================
+  // Derive source from trigger type
+  const conversationSource =
+    trigger.type === "integration_webhook"
+      ? (trigger.data as any).integration ?? "integration"
+      : "reminder";
+
+  const conversationId = await getOrCreateAsyncConversation(
+    userData.workspaceId,
+    userData.userId,
+    reminder.id,
+    conversationSource,
+    `[${conversationSource} triggered] ${reminder.text}`,
+  );
+
+  // Store CASE decision as a tool-style part (matches UI format)
+  const caseToolCallId = `case_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+  await upsertConversationHistory(
+    crypto.randomUUID(),
+    [
+      {
+        type: "tool-decision",
+        toolCallId: caseToolCallId,
+        toolName: "decision",
+        state: "output-available",
+        input: { trigger: reminder.text },
+        output: {
+          reasoning: plan.reasoning,
+          shouldMessage: plan.shouldMessage,
+          silentActions: plan.silentActions.length,
+          intent: plan.message?.intent,
+          tone: plan.message?.tone,
+          context: plan.message?.context,
+        },
+      },
+    ],
+    conversationId,
+    UserTypeEnum.Agent,
+  );
+
   // =========================================================================
   // shouldMessage — run Sol with action plan injected
   // =========================================================================
@@ -176,6 +231,8 @@ async function executePlan(
         workspaceId: userData.workspaceId,
         channel: channel as ChannelType,
         userMessage: `[Reminder triggered] ${reminder.text}`,
+        conversationId,
+        skipUserMessage: true,
         messageUserType: UserTypeEnum.System,
         actionPlan,
       });
@@ -224,18 +281,62 @@ async function executePlan(
   // =========================================================================
   // Execute silentActions
   // =========================================================================
+  const actionSummaries: string[] = [];
+
   for (const action of plan.silentActions) {
     try {
       switch (action.type) {
-        case "log":
+        case "log": {
           logger.info(`[CASE silent] ${action.description}`, {
             reminderId: reminder.id,
             data: action.data,
           });
+          // Store log action in conversation
+          if (!plan.shouldMessage) {
+            const logToolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+            await upsertConversationHistory(
+              crypto.randomUUID(),
+              [
+                {
+                  type: "tool-silent_action",
+                  toolCallId: logToolCallId,
+                  toolName: "silent_action",
+                  state: "output-available",
+                  input: { action: action.description, type: "log" },
+                  output: action.data ?? "logged",
+                },
+              ],
+              conversationId,
+              UserTypeEnum.Agent,
+            );
+            actionSummaries.push(action.description);
+          }
           break;
-        case "update_state":
+        }
+        case "update_state": {
           await executeStateUpdate(action, trigger.userId, reminder.id);
+          // Store state update in conversation
+          if (!plan.shouldMessage) {
+            const stateToolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+            await upsertConversationHistory(
+              crypto.randomUUID(),
+              [
+                {
+                  type: "tool-silent_action",
+                  toolCallId: stateToolCallId,
+                  toolName: "silent_action",
+                  state: "output-available",
+                  input: { action: action.description, type: "update_state", data: action.data },
+                  output: "state updated",
+                },
+              ],
+              conversationId,
+              UserTypeEnum.Agent,
+            );
+            actionSummaries.push(action.description);
+          }
           break;
+        }
         case "integration_action":
           await executeIntegrationAction(
             action,
@@ -243,9 +344,12 @@ async function executePlan(
             userData.workspaceId,
             trigger.channel,
             timezone,
+            conversationId,
             userPersona,
             executorTools,
+            skills,
           );
+          actionSummaries.push(action.description);
           break;
         default:
           logger.warn(`Unknown silent action type: ${action.type}`);
@@ -255,7 +359,21 @@ async function executePlan(
         reminderId: reminder.id,
         error,
       });
+      actionSummaries.push(`${action.description} (failed)`);
     }
+  }
+
+  // =========================================================================
+  // Store final summary text so the conversation looks complete on UI
+  // =========================================================================
+  if (actionSummaries.length > 0 && !plan.shouldMessage) {
+    const summary = actionSummaries.join(". ") + ".";
+    await upsertConversationHistory(
+      crypto.randomUUID(),
+      [{ type: "text", text: summary }],
+      conversationId,
+      UserTypeEnum.Agent,
+    );
   }
 }
 
@@ -361,8 +479,10 @@ async function executeIntegrationAction(
   workspaceId: string,
   channel: string,
   timezone: string,
+  conversationId: string,
   userPersona?: string,
   executorTools?: OrchestratorTools,
+  skills?: Array<{ id: string; title: string; metadata: unknown }>,
 ) {
   const data = action.data || {};
   const query = (data.query as string) || action.description;
@@ -384,7 +504,7 @@ async function executeIntegrationAction(
     channel,
     undefined,
     userPersona,
-    undefined,
+    skills,
     executorTools,
   );
 
@@ -394,4 +514,22 @@ async function executeIntegrationAction(
     userId,
     text: resultText?.slice(0, 200),
   });
+
+  // Store silent action result in conversation
+  const toolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
+  await upsertConversationHistory(
+    crypto.randomUUID(),
+    [
+      {
+        type: "tool-silent_action",
+        toolCallId,
+        toolName: "silent_action",
+        state: "output-available",
+        input: { action: action.description, query },
+        output: resultText?.slice(0, 500) ?? "completed",
+      },
+    ],
+    conversationId,
+    UserTypeEnum.Agent,
+  );
 }

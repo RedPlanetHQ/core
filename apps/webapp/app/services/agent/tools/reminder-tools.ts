@@ -112,6 +112,7 @@ Complex reminders (check + act):
 
 REMINDER TEXT GUIDELINES:
 - Describe WHAT to do, not HOW or WHERE to find information.
+- Do NOT include channel delivery instructions like "send on slack", "send on whatsapp", "send to user" — the channel is already set separately via the channel parameter. The reminder will be delivered on the configured channel automatically.
 - Do NOT name specific websites, APIs, or data sources unless the user explicitly mentioned them.
 
 Schedule uses RRule format (times are in user's local timezone):
@@ -182,6 +183,18 @@ FOLLOW-UP REMINDERS:
           .describe(
             "ID of the parent reminder. Required if isFollowUp is true.",
           ),
+        skillId: z
+          .string()
+          .optional()
+          .describe(
+            "ID of a skill to attach to this reminder. When the reminder fires, the skill's instructions will be loaded and executed.",
+          ),
+        skillName: z
+          .string()
+          .optional()
+          .describe(
+            "Name of the attached skill.",
+          ),
       }),
       execute: async ({
         text,
@@ -192,6 +205,8 @@ FOLLOW-UP REMINDERS:
         endDate,
         isFollowUp,
         parentReminderId,
+        skillId,
+        skillName,
       }) => {
         try {
           // Enforce max 1 follow-up per reminder
@@ -229,15 +244,18 @@ FOLLOW-UP REMINDERS:
             `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${targetChannel}`,
           );
 
-          // Build metadata for follow-ups
-          const metadata = isFollowUp
-            ? {
-                isFollowUp: true,
-                parentReminderId: parentReminderId || null,
-                originalSentAt: new Date().toISOString(),
-                followUpAction: text,
-              }
-            : undefined;
+          // Build metadata for follow-ups and skill attachments
+          const metadata: Record<string, unknown> = {};
+          if (isFollowUp) {
+            metadata.isFollowUp = true;
+            metadata.parentReminderId = parentReminderId || null;
+            metadata.originalSentAt = new Date().toISOString();
+            metadata.followUpAction = text;
+          }
+          if (skillId) {
+            metadata.skillId = skillId;
+            metadata.skillName = skillName || null;
+          }
 
           const reminder = await addReminder(workspaceId, {
             text,
@@ -246,7 +264,7 @@ FOLLOW-UP REMINDERS:
             maxOccurrences: maxOcc,
             endDate: endDate ? new Date(endDate) : null,
             startDate: startDate ? new Date(startDate) : null,
-            metadata,
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
           });
 
           let limitInfo = "";
@@ -355,7 +373,7 @@ FOLLOW-UP REMINDERS:
           }
 
           const reminderList = reminders
-            .map((r, i) => {
+            .map((r: any, i: number) => {
               const scheduleStr = formatScheduleForUser(r.schedule, timezone);
 
               let limitInfo = "";

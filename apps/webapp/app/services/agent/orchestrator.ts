@@ -187,6 +187,7 @@ RULES:
 - Return result of action (success/failure and details).
 - If integration/gateway not connected, say so.
 - Match tasks to gateways based on their descriptions.
+- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
 
 CRITICAL - FINAL SUMMARY:
 When you have completed the action, write a clear, concise summary as your final response.
@@ -255,7 +256,8 @@ RULES:
 - Call memory_search for anything not in persona (prior conversations, specific history).
 - NEVER ask the user for info that's already in persona or memory.
 - Call multiple tools in parallel when data could be in multiple places.
-- No personality. Return raw facts.`;
+- No personality. Return raw facts.
+- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.`;
 };
 
 export interface OrchestratorResult {

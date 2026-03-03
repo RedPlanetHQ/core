@@ -150,11 +150,11 @@ export async function handleBackgroundMessage(
       channelMetadata: metadata,
     });
 
-    if (responseText) {
+    if (responseText && task.callbackConversationId) {
       await upsertConversationHistory(
         crypto.randomUUID(),
         [{ text: responseText, type: "text" }],
-        task.callbackConversationId as string,
+        task.callbackConversationId,
         UserTypeEnum.Agent,
       );
     }

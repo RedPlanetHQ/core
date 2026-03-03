@@ -16,6 +16,11 @@ import {
 } from "../types/decision-agent";
 import type { MessageChannel } from "~/services/agent/types";
 import { logger } from "~/services/logger.service";
+import { UserTypeEnum } from "@core/types";
+import {
+  createConversation,
+  upsertConversationHistory,
+} from "~/services/conversation.server";
 
 /**
  * Build full decision context for a trigger
@@ -145,7 +150,7 @@ async function getTodayState(
     });
 
     // Convert to ReminderSummary format
-    const remindersSent: ReminderSummary[] = remindersSentToday.map((r) => ({
+    const remindersSent: ReminderSummary[] = remindersSentToday.map((r: any) => ({
       id: r.id,
       action: r.text,
       sentAt: r.lastSentAt!,
@@ -196,21 +201,31 @@ export function createReminderTriggerFromDb(reminder: {
   unrespondedCount: number;
   confirmedActive: boolean;
   occurrenceCount: number;
+  metadata?: Record<string, unknown> | null;
 }): ReminderTrigger {
+  const meta = reminder.metadata;
+  const data: ReminderTrigger["data"] = {
+    reminderId: reminder.id,
+    action: reminder.text,
+    occurrenceNumber: reminder.occurrenceCount + 1,
+    previousResponses: [], // Would need response tracking to populate
+    unrespondedCount: reminder.unrespondedCount,
+    confirmedActive: reminder.confirmedActive,
+  };
+
+  // Attach skill reference if present in reminder metadata
+  if (meta?.skillId) {
+    (data as any).skillId = meta.skillId;
+    (data as any).skillName = meta.skillName || null;
+  }
+
   return {
     type: "reminder_fired",
     timestamp: new Date(),
     workspaceId: reminder.workspaceId,
     userId: reminder.userId,
     channel: reminder.channel as MessageChannel,
-    data: {
-      reminderId: reminder.id,
-      action: reminder.text,
-      occurrenceNumber: reminder.occurrenceCount + 1,
-      previousResponses: [], // Would need response tracking to populate
-      unrespondedCount: reminder.unrespondedCount,
-      confirmedActive: reminder.confirmedActive,
-    },
+    data,
   };
 }
 
@@ -242,6 +257,65 @@ export function createFollowUpTrigger(reminder: {
       confirmedActive: reminder.confirmedActive,
     },
   };
+}
+
+// ============================================================================
+// Conversation Management
+// ============================================================================
+
+const MAX_MESSAGES_PER_CONVERSATION = 100;
+
+/**
+ * Get or create a conversation for an async job (reminder, integration webhook, etc.).
+ * Reuses the existing conversation (looked up by asyncJobId) until it hits
+ * MAX_MESSAGES_PER_CONVERSATION, then creates a new one.
+ *
+ * Usage:
+ * - Reminder: source="reminder", asyncJobId=reminderId
+ * - Integration webhook: source=integrationSlug, asyncJobId=integrationAccountId
+ * - Background task: source="background-task", asyncJobId=taskId
+ */
+export async function getOrCreateAsyncConversation(
+  workspaceId: string,
+  userId: string,
+  asyncJobId: string,
+  source: string,
+  message: string,
+): Promise<string> {
+  // Look for existing conversation for this async job
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      asyncJobId,
+      userId,
+      deleted: null,
+    },
+    include: {
+      _count: { select: { ConversationHistory: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  if (existing && existing._count.ConversationHistory < MAX_MESSAGES_PER_CONVERSATION) {
+    // Add trigger message to existing conversation
+    await upsertConversationHistory(
+      crypto.randomUUID(),
+      [{ text: message, type: "text" }],
+      existing.id,
+      UserTypeEnum.System,
+    );
+    return existing.id;
+  }
+
+  // Create new conversation (first run or existing one is full)
+  const conversation = await createConversation(workspaceId, userId, {
+    message,
+    parts: [{ text: message, type: "text" }],
+    source,
+    asyncJobId,
+    userType: UserTypeEnum.System,
+  });
+
+  return conversation.conversationId;
 }
 
 // ============================================================================
