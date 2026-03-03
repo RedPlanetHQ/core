@@ -15,7 +15,7 @@ export const getToolDisplayName = (toolType: string): string => {
     execute_integration_action: "Execute integration action",
     get_integration_actions: "Get integration actions",
     decision: "Decision",
-    silent_action: "Background action",
+    silent_action: "Silent action",
   };
 
   // Check for exact match
