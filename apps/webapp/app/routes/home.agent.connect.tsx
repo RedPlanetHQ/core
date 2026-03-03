@@ -148,6 +148,13 @@ const DIRECT_CHANNELS = [
     icon: Mail,
     status: "available" as const,
   },
+  {
+    id: "imessage",
+    name: "iMessage",
+    description: "Chat with Core via Apple iMessage",
+    icon: MessageCircle,
+    status: "waitlist" as const,
+  },
 ];
 
 function DirectChannelCard({
@@ -350,11 +357,20 @@ export default function Connect() {
     if (channelId === "email") {
       setIsEmailModalOpen(true);
     }
+    if (channelId === "slack") {
+      navigate("/home/integrations/slack");
+    }
   };
 
   const handleJoinWaitlist = (channelId: string) => {
     if (channelId === "whatsapp") {
       fetcher.submit({ intent: "whatsapp-waitlist" }, { method: "post" });
+    }
+    if (channelId === "imessage") {
+      imessageFetcher.submit(
+        { intent: "imessage-waitlist" },
+        { method: "post" },
+      );
     }
   };
 
@@ -387,9 +403,15 @@ export default function Connect() {
                 key={channel.id}
                 channel={channel}
                 onClick={() => handleDirectChannelClick(channel.id)}
-                isOptedIn={channel.id === "whatsapp" ? hasJoined : undefined}
-                onJoinWaitlist={
+                isOptedIn={
                   channel.id === "whatsapp"
+                    ? hasJoined
+                    : channel.id === "imessage"
+                      ? hasJoinedImessage
+                      : undefined
+                }
+                onJoinWaitlist={
+                  channel.id === "whatsapp" || channel.id === "imessage"
                     ? () => handleJoinWaitlist(channel.id)
                     : undefined
                 }
