@@ -10,6 +10,14 @@ interface ChatSession {
   lastActive: number;
 }
 
+interface AIProvider {
+  name: string;
+  apiBase: string;
+  apiKey: string;
+  model: string;
+  maxTokensKey: string; // 'max_tokens' for both, but Anthropic also needs other fields
+}
+
 const MAX_HISTORY = 30;
 const SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 min
 
@@ -43,51 +51,147 @@ export function clearSession(chatId: number) {
 export function getSessionInfo(chatId: number): { messageCount: number; active: boolean } {
   const session = sessions.get(chatId);
   if (!session) return { messageCount: 0, active: false };
-  // -1 for system message
   return { messageCount: Math.max(0, session.messages.length - 1), active: true };
 }
 
 /**
- * Send user message and get AI response via OpenAI-compatible API
+ * Detect which AI provider is available
+ */
+function detectProvider(): AIProvider | null {
+  const anthropicKey = process.env.ANTHROPIC_API_KEY;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const model = process.env.AI_MODEL;
+
+  // Anthropic
+  if (anthropicKey) {
+    const base = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com';
+    return {
+      name: 'anthropic',
+      apiBase: base,
+      apiKey: anthropicKey,
+      model: model ?? 'claude-sonnet-4-20250514',
+      maxTokensKey: 'max_tokens',
+    };
+  }
+
+  // OpenAI
+  if (openaiKey) {
+    const base = process.env.AI_API_BASE ?? 'https://api.openai.com/v1';
+    return {
+      name: 'openai',
+      apiBase: base,
+      apiKey: openaiKey,
+      model: model ?? 'gpt-4.1-mini',
+      maxTokensKey: 'max_tokens',
+    };
+  }
+
+  return null;
+}
+
+/** Currently active provider name for /status */
+export function getProviderName(): string {
+  const p = detectProvider();
+  if (!p) return 'keiner (kein API-Key)';
+  return `${p.name} / ${p.model}`;
+}
+
+/**
+ * Call Anthropic Messages API
+ */
+async function callAnthropic(provider: AIProvider, messages: ChatMessage[]): Promise<string> {
+  // Anthropic wants system as a top-level param, not in messages
+  const system = messages.find((m) => m.role === 'system')?.content ?? '';
+  const chatMessages = messages.filter((m) => m.role !== 'system');
+
+  const response = await axios.post(
+    `${provider.apiBase}/v1/messages`,
+    {
+      model: provider.model,
+      max_tokens: 2048,
+      system,
+      messages: chatMessages.map((m) => ({ role: m.role, content: m.content })),
+    },
+    {
+      headers: {
+        'x-api-key': provider.apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json',
+      },
+      timeout: 60000,
+    },
+  );
+
+  const content = response.data.content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b: any) => b.type === 'text')
+      .map((b: any) => b.text)
+      .join('')
+      .trim();
+  }
+
+  return '';
+}
+
+/**
+ * Call OpenAI-compatible Chat Completions API
+ */
+async function callOpenAI(provider: AIProvider, messages: ChatMessage[]): Promise<string> {
+  const response = await axios.post(
+    `${provider.apiBase}/chat/completions`,
+    {
+      model: provider.model,
+      messages,
+      max_tokens: 2048,
+      temperature: 0.7,
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${provider.apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      timeout: 60000,
+    },
+  );
+
+  return response.data.choices?.[0]?.message?.content?.trim() ?? '';
+}
+
+/**
+ * Send user message and get AI response
  */
 export async function chat(chatId: number, userMessage: string): Promise<string> {
-  const apiKey = process.env.OPENAI_API_KEY;
-  const apiBase = process.env.AI_API_BASE ?? 'https://api.openai.com/v1';
-  const model = process.env.AI_MODEL ?? 'gpt-4.1-mini';
+  const provider = detectProvider();
 
-  if (!apiKey) {
-    return 'AI-Chat nicht verfügbar — OPENAI_API_KEY fehlt in .env';
+  if (!provider) {
+    return [
+      'AI-Chat nicht verfügbar.',
+      '',
+      'Setze einen API-Key in .env:',
+      '  ANTHROPIC_API_KEY=sk-ant-...',
+      '  oder',
+      '  OPENAI_API_KEY=sk-...',
+    ].join('\n');
   }
 
   const session = getSession(chatId);
-
   session.messages.push({ role: 'user', content: userMessage });
 
   // Trim history if too long (keep system + last N messages)
   if (session.messages.length > MAX_HISTORY + 1) {
     const system = session.messages[0];
-    session.messages = [system, ...session.messages.slice(-(MAX_HISTORY))];
+    session.messages = [system, ...session.messages.slice(-MAX_HISTORY)];
   }
 
   try {
-    const response = await axios.post(
-      `${apiBase}/chat/completions`,
-      {
-        model,
-        messages: session.messages,
-        max_tokens: 2048,
-        temperature: 0.7,
-      },
-      {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        timeout: 60000,
-      },
-    );
+    let reply: string;
 
-    const reply = response.data.choices?.[0]?.message?.content?.trim();
+    if (provider.name === 'anthropic') {
+      reply = await callAnthropic(provider, session.messages);
+    } else {
+      reply = await callOpenAI(provider, session.messages);
+    }
 
     if (!reply) {
       return 'Keine Antwort vom AI-Modell erhalten.';
@@ -99,12 +203,12 @@ export async function chat(chatId: number, userMessage: string): Promise<string>
     const status = err.response?.status;
     const errMsg = err.response?.data?.error?.message ?? err.message;
 
-    console.error(`[AI] Error (${status}): ${errMsg}`);
+    console.error(`[AI/${provider.name}] Error (${status}): ${errMsg}`);
 
-    if (status === 401) return 'API-Key ungültig. Bitte OPENAI_API_KEY prüfen.';
+    if (status === 401) return `API-Key ungültig. Bitte ${provider.name === 'anthropic' ? 'ANTHROPIC_API_KEY' : 'OPENAI_API_KEY'} prüfen.`;
     if (status === 429) return 'Rate Limit erreicht — bitte kurz warten.';
     if (status === 503) return 'AI-Service gerade nicht erreichbar — bitte gleich nochmal.';
 
-    return `AI-Fehler: ${errMsg}`;
+    return `AI-Fehler (${provider.name}): ${errMsg}`;
   }
 }

@@ -1,6 +1,6 @@
 import { callTelegramApi, formatUser } from './utils';
 import { extractMedia, downloadTelegramFile, extractUrls, classifyUrl, getStorageStats } from './media';
-import { chat, clearSession, getSessionInfo } from './chat';
+import { chat, clearSession, getSessionInfo, getProviderName } from './chat';
 
 async function handleMessage(botToken: string, message: any) {
   const chatId = message.chat.id;
@@ -53,7 +53,7 @@ async function handleMessage(botToken: string, message: any) {
       text: [
         `Status: Online`,
         `Uptime: ${h}h ${m}m`,
-        `AI-Model: ${process.env.AI_MODEL ?? 'gpt-4.1-mini'}`,
+        `AI: ${getProviderName()}`,
         `Chat-Nachrichten: ${session.messageCount}`,
         `Dateien: ${stats.totalFiles} (${stats.totalSizeMB} MB)`,
         typeLines ? `\nNach Typ:\n${typeLines}` : '',
