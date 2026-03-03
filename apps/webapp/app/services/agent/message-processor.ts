@@ -17,6 +17,10 @@ interface ProcessInboundMessageParams {
   workspaceId: string;
   channel: ChannelType;
   userMessage: string;
+  /** If provided, use this conversation instead of creating/finding a daily one */
+  conversationId?: string;
+  /** If true, the userMessage won't be saved to conversation history (still used as AI context) */
+  skipUserMessage?: boolean;
   /** Override message type (e.g. System for reminders). Defaults to User. */
   messageUserType?: UserTypeEnum;
   /** Action plan from Decision Agent — injected into core brain system prompt */
@@ -71,17 +75,16 @@ export async function processInboundMessage({
   workspaceId,
   channel,
   userMessage,
+  conversationId: existingConversationId,
+  skipUserMessage,
   messageUserType,
   actionPlan,
   onMessage,
   channelMetadata,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
-  const conversationId = await getOrCreateDailyConversation(
-    userId,
-    workspaceId,
-    userMessage,
-    channel,
-  );
+  const conversationId =
+    existingConversationId ??
+    (await getOrCreateDailyConversation(userId, workspaceId, userMessage, channel));
 
   // Call the same flow as web chat no_stream
   const assistantMessage = await noStreamProcess(
@@ -92,6 +95,7 @@ export async function processInboundMessage({
         role: "user",
       },
       source: channel,
+      skipUserMessage,
       messageUserType,
       actionPlan,
       onMessage,

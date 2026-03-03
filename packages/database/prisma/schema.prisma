@@ -91,6 +91,8 @@ model Conversation {
   unread Boolean @default(false)
   source String  @default("core")
 
+  backgroundTaskId String?
+
   title  String?
   user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   userId String
@@ -970,8 +972,8 @@ model BackgroundTask {
   updatedAt DateTime @updatedAt
 
   // Task definition
-  intent    String // User's original intent/request
-  status    String @default("pending") // pending, running, completed, failed, timeout, cancelled
+  intent String // User's original intent/request
+  status String @default("pending") // pending, running, completed, failed, timeout, cancelled
 
   // Execution
   timeoutMs   Int       @default(1800000) // 30 min default
@@ -983,9 +985,9 @@ model BackgroundTask {
   error  String? // Error message if failed
 
   // Callback channel (where to notify user)
-  callbackChannel        String  // whatsapp | email | slack | web
+  callbackChannel        String // whatsapp | email | slack | web
   callbackConversationId String? // For web channel
-  callbackMetadata       Json?   // Channel-specific (slackUserId, threadTs, etc.)
+  callbackMetadata       Json? // Channel-specific (slackUserId, threadTs, etc.)
 
   // User/workspace
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
