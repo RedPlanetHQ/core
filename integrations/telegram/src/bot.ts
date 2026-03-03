@@ -133,14 +133,13 @@ async function handleMessage(botToken: string, message: any) {
     return;
   }
 
-  // --- URL handling ---
+  // --- URL handling + AI Chat ---
   const urls = extractUrls(message);
   if (urls.length > 0) {
     await handleUrls(botToken, chatId, urls);
-    return;
   }
 
-  // --- Plain text → AI Chat ---
+  // --- Plain text → AI Chat (also processes messages that contain URLs) ---
   if (text) {
     // Send typing indicator
     await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
