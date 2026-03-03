@@ -62,6 +62,18 @@ function detectProvider(): AIProvider | null {
   const openaiKey = process.env.OPENAI_API_KEY;
   const model = process.env.AI_MODEL;
 
+  // OpenAI (check first — most common setup)
+  if (openaiKey) {
+    const base = process.env.AI_API_BASE ?? 'https://api.openai.com/v1';
+    return {
+      name: 'openai',
+      apiBase: base,
+      apiKey: openaiKey,
+      model: model ?? 'gpt-4.1-mini',
+      maxTokensKey: 'max_tokens',
+    };
+  }
+
   // Anthropic
   if (anthropicKey) {
     const base = process.env.ANTHROPIC_BASE_URL ?? 'https://api.anthropic.com';
@@ -70,18 +82,6 @@ function detectProvider(): AIProvider | null {
       apiBase: base,
       apiKey: anthropicKey,
       model: model ?? 'claude-sonnet-4-20250514',
-      maxTokensKey: 'max_tokens',
-    };
-  }
-
-  // OpenAI
-  if (openaiKey) {
-    const base = process.env.AI_API_BASE ?? 'https://api.openai.com/v1';
-    return {
-      name: 'openai',
-      apiBase: base,
-      apiKey: openaiKey,
-      model: model ?? 'gpt-4.1-mini',
       maxTokensKey: 'max_tokens',
     };
   }
