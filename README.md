@@ -226,7 +226,8 @@ Sync your ChatGPT and Gemini conversations into CORE via browser extension. Sear
 ```bash
 git clone https://github.com/RedPlanetHQ/core.git
 cd core
-# Configure OPENAI_API_KEY in core/.env
+# Configure AI provider settings in `core/hosting/docker/.env` (at minimum `OPENAI_API_KEY`).
+# If using an OpenAI-compatible proxy, also set `OPENAI_BASE_URL` and `OPENAI_API_MODE=chat_completions`.
 docker-compose up -d
 ```
 

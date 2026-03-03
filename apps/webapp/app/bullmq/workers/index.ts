@@ -90,13 +90,17 @@ export const preprocessWorker = new Worker(
   async (job) => {
     const payload = job.data as IngestEpisodePayload;
 
-    return await processEpisodePreprocessing(
+    const result = await processEpisodePreprocessing(
       payload,
       // Callback to enqueue individual chunk ingestion jobs
       enqueueIngestEpisode,
       // Callback to enqueue session compaction for conversations
       enqueueSessionCompaction,
     );
+    if (!result?.success) {
+      throw new Error(result?.error || "Episode preprocessing failed");
+    }
+    return result;
   },
   {
     connection: getRedisConnection(),
@@ -117,7 +121,7 @@ export const ingestWorker = new Worker(
   async (job) => {
     const payload = job.data as IngestEpisodePayload;
 
-    return await processEpisodeIngestion(
+    const result = await processEpisodeIngestion(
       payload,
       // Callbacks to enqueue follow-up jobs
       enqueueLabelAssignment,
@@ -125,6 +129,10 @@ export const ingestWorker = new Worker(
       enqueuePersonaGeneration,
       enqueueGraphResolution,
     );
+    if (!result?.success) {
+      throw new Error(result?.error || "Episode ingestion failed");
+    }
+    return result;
   },
   {
     connection: getRedisConnection(),

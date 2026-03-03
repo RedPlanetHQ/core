@@ -218,6 +218,12 @@ export class PgVectorProvider implements IVectorProvider {
     metadata?: Record<string, any>;
     namespace?: string;
   }): Promise<void> {
+    if (!params.vector || params.vector.length === 0) {
+      throw new Error(
+        `Refusing to upsert empty vector for id=${params.id} (namespace=${params.namespace || "default"})`,
+      );
+    }
+
     const tableName = this.getTableName(params.namespace);
     const contentName = this.getContentName(params.namespace);
 
@@ -404,6 +410,9 @@ export class PgVectorProvider implements IVectorProvider {
     const vectorLiteral = Prisma.raw(`'[${params.vector.join(",")}]'::vector(${this.dimensions})`);
     const vectorCast = Prisma.raw(`vector::vector(${this.dimensions})`);
 
+    // NOTE: Degenerate vectors (e.g. all-zeros) can yield NaN similarity for cosine distance.
+    // Postgres NaN comparisons can behave unexpectedly (e.g. NaN >= threshold), so we must exclude it.
+
     // For label namespace, filter by workspaceId instead of userId
     if (params.namespace === "label") {
       if (!workspaceId) {
@@ -429,6 +438,7 @@ export class PgVectorProvider implements IVectorProvider {
         )
         SELECT * FROM candidates
         WHERE score >= ${threshold}
+          AND score != 'NaN'::float8
         ORDER BY score DESC
         LIMIT ${limit}
       `;
@@ -494,6 +504,7 @@ export class PgVectorProvider implements IVectorProvider {
       )
       SELECT * FROM candidates
       WHERE score >= ${threshold}
+        AND score != 'NaN'::float8
       ORDER BY score DESC
       LIMIT ${limit}
     `;

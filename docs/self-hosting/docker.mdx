@@ -46,7 +46,7 @@ Railway will automatically set up all required services and handle the infrastru
 
 > **Prerequisites:**
 > Before starting any deployment, ensure you have your `OPENAI_API_KEY` ready. This is required for AI functionality in CORE.
-> You must add your `OPENAI_API_KEY` to the `core/hosting/docker/.env` file before starting the services.
+> If you use an OpenAI-compatible proxy, `OPENAI_API_KEY` can typically be any non-empty value, and you can also set `OPENAI_BASE_URL`.
 
 ### Combined Setup
 
@@ -60,6 +60,11 @@ For self deployment:
    ```
 
 2. Start the services:
+   > **Using an OpenAI-compatible proxy and/or Ollama?**
+   > CORE supports OpenAI-compatible proxies via `OPENAI_BASE_URL` and optional Ollama (chat and/or embeddings) via `OLLAMA_URL`.
+   > Configure these in `.env`, then (optionally) uncomment the `ollama` service in `docker-compose.yaml`.
+   > After changing env vars, restart the services for changes to take effect.
+
    ```bash
    docker compose up -d
    ```
@@ -88,5 +93,3 @@ Once deployed, you can:
 - Set up integrations (Slack, GitHub, Gmail)
 - Start building your memory graph
 - Explore the CORE API and SDK
-
-

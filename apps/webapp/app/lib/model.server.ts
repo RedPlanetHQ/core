@@ -20,6 +20,57 @@ import { google } from "@ai-sdk/google";
 export type ModelComplexity = "high" | "low";
 
 /**
+ * Provider compatibility notes:
+ * - Default behavior is unchanged: OpenAI via the Responses API.
+ * - OpenAI-compatible proxies can opt in via `OPENAI_BASE_URL` + `OPENAI_API_MODE=chat_completions`.
+ * - Optional self-hosted models can be enabled via `OLLAMA_URL` with `CHAT_PROVIDER=ollama`
+ *   and/or `EMBEDDINGS_PROVIDER=ollama`.
+ */
+
+function getChatProvider(): "openai" | "ollama" {
+  // Unset defaults to OpenAI to preserve upstream behavior.
+  // Set CHAT_PROVIDER=ollama to route chat to a local Ollama server.
+  const raw = (process.env.CHAT_PROVIDER || "").trim().toLowerCase();
+  return raw === "ollama" ? "ollama" : "openai";
+}
+
+function getEmbeddingsProvider(): "openai" | "ollama" | undefined {
+  const raw = (process.env.EMBEDDINGS_PROVIDER || process.env.EMBEDDING_PROVIDER)
+    ?.trim()
+    .toLowerCase();
+  if (!raw) return undefined;
+  if (raw === "openai" || raw === "ollama") return raw;
+  return undefined;
+}
+
+function getOpenAIAPIMode(): "responses" | "chat_completions" {
+  const explicit = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
+  if (explicit === "chat_completions" || explicit === "chat") {
+    return "chat_completions";
+  }
+  if (explicit === "responses") {
+    return "responses";
+  }
+
+  return "responses";
+}
+
+function shouldUseOllamaForEmbeddings(args: {
+  embeddingsProvider?: "openai" | "ollama";
+  embeddingModel: string;
+}): boolean {
+  const { embeddingsProvider, embeddingModel } = args;
+  if (embeddingsProvider === "ollama") return true;
+  if (embeddingsProvider === "openai") return false;
+  // Backwards compatible behavior: assume OpenAI for known OpenAI embedding model ids/patterns.
+  // Anything else is assumed to be served by a local/self-hosted embedding provider (e.g. Ollama).
+  const normalized = embeddingModel.trim();
+  const isOpenAIEmbeddingModel =
+    normalized.startsWith("text-embedding-") || normalized === "text-embedding-ada-002";
+  return !isOpenAIEmbeddingModel;
+}
+
+/**
  * Get the appropriate model for a given complexity level.
  * HIGH complexity uses the configured MODEL.
  * LOW complexity automatically downgrades to cheaper variants if possible.
@@ -79,42 +130,77 @@ export const getModel = (takeModel?: string) => {
   const anthropicKey = process.env.ANTHROPIC_API_KEY;
   const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
   const openaiKey = process.env.OPENAI_API_KEY;
-  let ollamaUrl = process.env.OLLAMA_URL;
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL;
+  const ollamaUrl = process.env.OLLAMA_URL;
+  const chatProvider = getChatProvider();
+  const openaiApiMode = getOpenAIAPIMode();
   model = model || process.env.MODEL || "gpt-4.1-2025-04-14";
 
   let modelInstance;
   let modelTemperature = Number(process.env.MODEL_TEMPERATURE) || 1;
-  ollamaUrl = undefined;
+  // Keep OLLAMA_URL if provided (used for self-hosted/local models)
 
-  // First check if Ollama URL exists and use Ollama
-  if (ollamaUrl) {
-    const ollama = createOllama({
-      baseURL: ollamaUrl,
-    });
-    modelInstance = ollama(model || "llama2"); // Default to llama2 if no model specified
-  } else {
-    // If no Ollama, check other models
+  const useOllamaForChat = chatProvider === "ollama";
 
-    if (model.includes("claude")) {
-      if (!anthropicKey) {
-        throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
-      }
-      modelInstance = anthropic(model);
-      modelTemperature = 0.5;
-    } else if (model.includes("gemini")) {
-      if (!googleKey) {
-        throw new Error("No Google API key found. Set GOOGLE_API_KEY");
-      }
-      modelInstance = google(model);
-    } else {
-      if (!openaiKey) {
-        throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
-      }
-      modelInstance = openai.responses(model);
+  // First check if Ollama URL exists and use Ollama (env-gated).
+  if (useOllamaForChat) {
+    if (!ollamaUrl) {
+      throw new Error(
+        "CHAT_PROVIDER is set to ollama but OLLAMA_URL is not set",
+      );
     }
-
-    return modelInstance;
+    const ollamaModel =
+      (process.env.OLLAMA_MODEL || model || "").toString().trim();
+    if (!ollamaModel) {
+      throw new Error(
+        "No chat model configured for Ollama. Set OLLAMA_MODEL or MODEL.",
+      );
+    }
+    if (!process.env.OLLAMA_MODEL && /^gpt-/.test(ollamaModel)) {
+      logger.warn(
+        `Using Ollama with MODEL=${ollamaModel}. If this is an OpenAI model id, set OLLAMA_MODEL to a local Ollama model (e.g. llama3.2:1b).`,
+      );
+    }
+    const ollama = createOllama({ baseURL: ollamaUrl });
+    modelInstance = ollama(ollamaModel);
+  } else if (model.includes("claude")) {
+    if (!anthropicKey) {
+      throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
+    }
+    modelInstance = anthropic(model);
+    modelTemperature = 0.5;
+  } else if (model.includes("gemini")) {
+    if (!googleKey) {
+      throw new Error(
+        "No Google API key found. Set GOOGLE_GENERATIVE_AI_API_KEY",
+      );
+    }
+    modelInstance = google(model);
+  } else {
+    if (!openaiKey && !openaiBaseUrl) {
+      throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
+    }
+    if (openaiBaseUrl && !openaiKey) {
+      // Many OpenAI-compatible proxies accept any non-empty value, but the SDK expects a key.
+      // Keep config explicit: require OPENAI_API_KEY even when using OPENAI_BASE_URL.
+      throw new Error(
+        "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
+      );
+    }
+    const openaiClient = openaiBaseUrl
+      ? createOpenAI({
+          baseURL: openaiBaseUrl,
+          apiKey: openaiKey,
+        })
+      : openai;
+    // `responses`: preferred when calling native OpenAI (supports prompt caching, stored items, etc.).
+    // `chat_completions`: preferred for many OpenAI-compatible proxies (more widely supported, stateless).
+    modelInstance = openaiApiMode === "chat_completions"
+      ? openaiClient.chat(model)
+      : openaiClient.responses(model);
   }
+
+  return modelInstance;
 };
 
 export interface TokenUsage {
@@ -139,8 +225,17 @@ export async function makeModelCall(
   const modelInstance = getModel(model);
   const generateTextOptions: any = {};
 
-  // Add OpenAI provider options for prompt caching and disable web search
-  if (model.includes("gpt")) {
+  const chatProvider = getChatProvider();
+  const openaiApiMode = getOpenAIAPIMode();
+  const useOllamaForChat = chatProvider === "ollama";
+
+  // Add OpenAI provider options for prompt caching (Responses API only).
+  // Why: many OpenAI-compatible proxies reject these parameters on `/chat/completions`.
+  if (
+    model.includes("gpt") &&
+    openaiApiMode === "responses" &&
+    !useOllamaForChat
+  ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `ingestion-${complexity}`,
     };
@@ -235,13 +330,20 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
   const modelInstance = getModel(model);
   const generateObjectOptions: any = {};
+  const chatProvider = getChatProvider();
+  const openaiApiMode = getOpenAIAPIMode();
+  const useOllamaForChat = chatProvider === "ollama";
 
   if (temperature !== undefined) {
     generateObjectOptions.temperature = temperature;
   }
 
   // Add OpenAI provider options for prompt caching
-  if (model.includes("gpt")) {
+  if (
+    model.includes("gpt") &&
+    openaiApiMode === "responses" &&
+    !useOllamaForChat
+  ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `structured-${complexity}`,
       strictJsonSchema: false,
@@ -315,39 +417,110 @@ export function isProprietaryModel(
 export async function getEmbedding(text: string) {
   const ollamaUrl = process.env.OLLAMA_URL;
   const model = process.env.EMBEDDING_MODEL;
+  const openaiBaseUrl = process.env.OPENAI_BASE_URL;
+  const openaiKey = process.env.OPENAI_API_KEY;
+  const embeddingsProvider = getEmbeddingsProvider();
+  const targetDimRaw = process.env.EMBEDDING_MODEL_SIZE;
+  const targetDim =
+    targetDimRaw && Number.isFinite(Number(targetDimRaw))
+      ? Number(targetDimRaw)
+      : undefined;
   const maxRetries = 3;
   let lastEmbedding: number[] = [];
+  let textForEmbedding = (text ?? "").toString();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (model === "text-embedding-3-small") {
-        // Use OpenAI embedding model when explicitly requested
-        const { embedding } = await embed({
-          model: openai.embedding("text-embedding-3-small"),
-          value: text,
+      const embeddingModel = model || "text-embedding-3-small";
+
+      const useOllamaEmbeddings = shouldUseOllamaForEmbeddings({
+        embeddingsProvider,
+        embeddingModel,
+      });
+
+      if (useOllamaEmbeddings) {
+        if (!ollamaUrl) {
+          throw new Error(
+            "Ollama embeddings selected but OLLAMA_URL is not set. Set OLLAMA_URL or set EMBEDDINGS_PROVIDER=openai.",
+          );
+        }
+        const ollamaEmbeddingModel =
+          (process.env.OLLAMA_EMBEDDING_MODEL || embeddingModel).toString().trim();
+        // Ollama's stable embeddings endpoint is /api/embeddings (not always available on /v1/embeddings).
+        // Why: some Ollama versions expose embeddings only on `/api/embeddings`, while `/v1/embeddings`
+        // may be missing or behave differently.
+        const baseUrl = ollamaUrl.replace(/\/+$/, "");
+        const response = await fetch(`${baseUrl}/api/embeddings`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: ollamaEmbeddingModel,
+            prompt: textForEmbedding,
+          }),
         });
-        lastEmbedding = embedding;
+
+        if (!response.ok) {
+          throw new Error(
+            `Ollama embeddings request failed (${response.status}): ${await response.text()}`,
+          );
+        }
+
+        const data = (await response.json()) as { embedding?: number[] };
+        lastEmbedding = data.embedding ?? [];
       } else {
-        // Use Ollama's OpenAI-compatible endpoint for embeddings
-        // This avoids EmbeddingModelV3/V2 compatibility issues with third-party providers
-        // Normalize the URL: remove trailing slash, /api, and /v1 if present, then add /v1
-        const baseUrl = ollamaUrl
-          ?.replace(/\/+$/, "")
-          .replace(/\/v1$/, "")
-          .replace(/\/api$/, "");
-        const ollamaOpenAI = createOpenAI({
-          baseURL: `${baseUrl}/v1`,
-          apiKey: "ollama", // Required but not used by Ollama
-        });
+        if (!openaiKey && !openaiBaseUrl) {
+          throw new Error(
+            "No OpenAI API key found. Set OPENAI_API_KEY (or set OPENAI_BASE_URL for a proxy).",
+          );
+        }
+        if (openaiBaseUrl && !openaiKey) {
+          throw new Error(
+            "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
+          );
+        }
+        const embeddingClient = openaiBaseUrl
+          ? createOpenAI({
+              baseURL: openaiBaseUrl,
+              apiKey: openaiKey,
+            })
+          : openai;
+
         const { embedding } = await embed({
-          model: ollamaOpenAI.embedding(model as string),
-          value: text,
+          model: embeddingClient.embedding(embeddingModel),
+          value: textForEmbedding,
         });
         lastEmbedding = embedding;
       }
 
       // If embedding is not empty, return it immediately
       if (lastEmbedding.length > 0) {
+        // Ollama / open-source embedding models may have dimensions that don't match CORE defaults.
+        // Why: pgvector columns are created with a fixed dimension (e.g. 1536). If we store a vector
+        // with a different dimension, inserts will fail.
+        //
+        // Prefer setting EMBEDDING_MODEL_SIZE to the model's native dimension
+        // (e.g. `mxbai-embed-large` → 1024) so vectors are stored without modification.
+        //
+        // Padding is a pragmatic compatibility bridge:
+        // - When switching embedding models, it's easy to forget updating EMBEDDING_MODEL_SIZE.
+        // - Without padding, vector inserts will start failing immediately.
+        // - Padding with trailing zeros avoids silent information loss (unlike truncation),
+        //   and makes the mismatch visible in logs so it can be fixed properly (re-embed/migrate).
+        if (targetDim && targetDim > 0) {
+          if (lastEmbedding.length < targetDim) {
+            logger.warn(
+              `Embedding dimension mismatch: got ${lastEmbedding.length}, expected ${targetDim}. Padding with zeros; set EMBEDDING_MODEL_SIZE to ${lastEmbedding.length} and re-embed to fix permanently.`,
+            );
+            lastEmbedding = lastEmbedding.concat(
+              new Array(targetDim - lastEmbedding.length).fill(0),
+            );
+          } else if (lastEmbedding.length > targetDim) {
+            // Truncation would silently discard signal. Fail with an actionable error instead.
+            throw new Error(
+              `Embedding dimension mismatch: got ${lastEmbedding.length}, expected ${targetDim}. Update EMBEDDING_MODEL_SIZE and re-embed/migrate vectors.`,
+            );
+          }
+        }
         return lastEmbedding;
       }
 
@@ -358,15 +531,36 @@ export async function getEmbedding(text: string) {
         );
       }
     } catch (error) {
-      logger.error(
-        `Embedding attempt ${attempt}/${maxRetries} failed: ${error}`,
-      );
+      const errorString = error instanceof Error ? error.message : String(error);
+      const isContextLengthError =
+        /context length/i.test(errorString) ||
+        /exceeds the context length/i.test(errorString);
+
+      // TODO: Persona/docs can grow unbounded over time; embedding the full text will eventually
+      // hit provider context limits and/or dilute retrieval signal. Long-term fix: chunk and/or
+      // summarize before embedding, and store per-chunk vectors rather than truncating.
+      // Ollama can reject long inputs for embeddings. Retry with a shorter prompt.
+      if (
+        isContextLengthError &&
+        attempt < maxRetries &&
+        textForEmbedding.length > 256
+      ) {
+        const prevLen = textForEmbedding.length;
+        textForEmbedding = textForEmbedding.slice(
+          0,
+          Math.max(256, Math.floor(textForEmbedding.length / 2)),
+        );
+        logger.warn(
+          `Embedding input exceeded model context; truncating from ${prevLen} to ${textForEmbedding.length} chars and retrying...`,
+        );
+        continue;
+      }
+
+      logger.error(`Embedding attempt ${attempt}/${maxRetries} failed: ${error}`);
     }
   }
 
-  // Return last embedding even if empty after all retries
-  logger.warn(
-    `All ${maxRetries} attempts returned empty embedding, returning last response`,
+  throw new Error(
+    `Failed to generate non-empty embedding after ${maxRetries} attempts (provider=${embeddingsProvider}, model=${process.env.OLLAMA_EMBEDDING_MODEL || model || "text-embedding-3-small"}).`,
   );
-  return lastEmbedding;
 }

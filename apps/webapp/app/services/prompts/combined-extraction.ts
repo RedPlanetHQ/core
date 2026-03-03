@@ -16,10 +16,17 @@ export const CombinedEntitySchema = z.object({
     .describe("The entity name - clean, without articles or qualifiers"),
   type: z
     .enum(EntityTypes)
+    .nullable()
     .optional()
     .describe("The entity type classification"),
+  // Note: We keep `type`/`attributes` optional+nullable (instead of optional / `record(any)`) for
+  // compatibility with stricter JSON-schema validators used by some OpenAI-compatible providers/proxies.
   attributes: z
-    .record(z.any(), z.any())
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    )
+    .nullable()
     .optional()
     .describe("Optional entity attributes like email, phone, location, etc."),
 });
