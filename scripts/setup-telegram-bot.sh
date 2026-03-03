@@ -25,6 +25,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 OPENCLAW_HOME="$HOME/.openclaw"
 TELEGRAM_BOT_ID="8598721870"
+SKIP_VERIFY=false
+
+# Parse flags
+for arg in "$@"; do
+    case "$arg" in
+        --skip-verify) SKIP_VERIFY=true ;;
+    esac
+done
 
 # --- Pre-flight ---
 step "Pre-flight checks"
@@ -69,27 +77,37 @@ fi
 # --- Verify bot token ---
 step "Verifying Bot Token"
 
-info "Calling Telegram getMe API..."
-VERIFY_RESPONSE=$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" 2>/dev/null || echo '{"ok":false}')
-
-if echo "$VERIFY_RESPONSE" | grep -q '"ok":true'; then
-    BOT_USERNAME=$(echo "$VERIFY_RESPONSE" | grep -o '"username":"[^"]*"' | head -1 | cut -d'"' -f4)
-    BOT_NAME=$(echo "$VERIFY_RESPONSE" | grep -o '"first_name":"[^"]*"' | head -1 | cut -d'"' -f4)
-    VERIFIED_BOT_ID=$(echo "$VERIFY_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | sed 's/"id"://')
-
-    success "Bot verified: $BOT_NAME (@$BOT_USERNAME)"
-    success "Bot ID: $VERIFIED_BOT_ID"
-
-    if [[ "$VERIFIED_BOT_ID" != "$TELEGRAM_BOT_ID" ]]; then
-        warn "Bot ID mismatch! Expected $TELEGRAM_BOT_ID, got $VERIFIED_BOT_ID"
-        warn "Proceeding with verified ID: $VERIFIED_BOT_ID"
-        TELEGRAM_BOT_ID="$VERIFIED_BOT_ID"
-    fi
+if [[ "$SKIP_VERIFY" == "true" ]]; then
+    warn "Skipping API verification (--skip-verify)"
+    BOT_USERNAME="unknown"
+    BOT_NAME="Telegram Bot"
+    # Extract bot ID from token (first part before the colon)
+    TELEGRAM_BOT_ID="${TELEGRAM_BOT_TOKEN%%:*}"
+    success "Using bot ID from token: $TELEGRAM_BOT_ID"
 else
-    error "Bot token verification failed."
-    error "Response: $VERIFY_RESPONSE"
-    error "Please check your token and try again."
-    exit 1
+    info "Calling Telegram getMe API..."
+    VERIFY_RESPONSE=$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe" 2>/dev/null || echo '{"ok":false}')
+
+    if echo "$VERIFY_RESPONSE" | grep -q '"ok":true'; then
+        BOT_USERNAME=$(echo "$VERIFY_RESPONSE" | grep -o '"username":"[^"]*"' | head -1 | cut -d'"' -f4)
+        BOT_NAME=$(echo "$VERIFY_RESPONSE" | grep -o '"first_name":"[^"]*"' | head -1 | cut -d'"' -f4)
+        VERIFIED_BOT_ID=$(echo "$VERIFY_RESPONSE" | grep -o '"id":[0-9]*' | head -1 | sed 's/"id"://')
+
+        success "Bot verified: $BOT_NAME (@$BOT_USERNAME)"
+        success "Bot ID: $VERIFIED_BOT_ID"
+
+        if [[ "$VERIFIED_BOT_ID" != "$TELEGRAM_BOT_ID" ]]; then
+            warn "Bot ID mismatch! Expected $TELEGRAM_BOT_ID, got $VERIFIED_BOT_ID"
+            warn "Proceeding with verified ID: $VERIFIED_BOT_ID"
+            TELEGRAM_BOT_ID="$VERIFIED_BOT_ID"
+        fi
+    else
+        error "Bot token verification failed."
+        error "Response: $VERIFY_RESPONSE"
+        error "Please check your token and try again."
+        error "Hint: Use --skip-verify to skip API verification in offline environments."
+        exit 1
+    fi
 fi
 
 # --- Install integration dependencies ---
@@ -191,13 +209,17 @@ info "    -d '{\"url\": \"https://your-domain.com/api/v1/webhooks/telegram\"}'"
 # --- Test sending a message ---
 step "Testing bot connection"
 
-info "Fetching bot updates to verify connectivity..."
-UPDATES_RESPONSE=$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=1&timeout=1" 2>/dev/null || echo '{"ok":false}')
-
-if echo "$UPDATES_RESPONSE" | grep -q '"ok":true'; then
-    success "Bot API connection verified"
+if [[ "$SKIP_VERIFY" == "true" ]]; then
+    warn "Skipping connection test (--skip-verify)"
 else
-    warn "Could not fetch updates (bot may not have received messages yet - this is normal)"
+    info "Fetching bot updates to verify connectivity..."
+    UPDATES_RESPONSE=$(curl -s "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getUpdates?limit=1&timeout=1" 2>/dev/null || echo '{"ok":false}')
+
+    if echo "$UPDATES_RESPONSE" | grep -q '"ok":true'; then
+        success "Bot API connection verified"
+    else
+        warn "Could not fetch updates (bot may not have received messages yet - this is normal)"
+    fi
 fi
 
 # --- Summary ---
