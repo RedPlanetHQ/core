@@ -33,6 +33,8 @@ interface NoStreamProcessBody {
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
+  /** If true, the user message won't be saved to conversation history (still used as AI context) */
+  skipUserMessage?: boolean;
 }
 
 export async function noStreamProcess(
@@ -56,7 +58,11 @@ export async function noStreamProcess(
 
   const messageUserType = body.messageUserType ?? UserTypeEnum.User;
 
-  if (conversationHistory.length > 1 && !isAssistantApproval) {
+  if (
+    conversationHistory.length > 1 &&
+    !isAssistantApproval &&
+    !body.skipUserMessage
+  ) {
     const message = body.message?.parts[0].text;
     const messageParts = body.message?.parts;
 
