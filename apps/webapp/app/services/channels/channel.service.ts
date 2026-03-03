@@ -136,6 +136,7 @@ export async function handleBackgroundMessage(
         parts: [{ text: task.intent, type: "text" }],
         userType: UserTypeEnum.User,
         asyncJobId: task.id,
+        source: "background-task",
       },
     );
 
