@@ -1,0 +1,87 @@
+---
+title: "Email Alert - Notify Me"
+description: Get notified the moment an important email lands — from key vendors, customers, or security services — with a quick summary and action flag, so nothing slips through. Trigger with "notify me for important emails", "alert me when I get emails from [person/vendor]", or "set up email alerts".
+---
+
+```markdown
+**Goal:** Check if the email is from a key sender or category. If yes, immediately send a summary notification. If no match, do nothing.
+
+**Tools Required:** Gmail
+
+### Setup — Run Once Before Processing
+
+Search memory for the following before doing anything else:
+
+- "user's key vendors, suppliers, or accountants and their email addresses or domains"
+- "user's product name and how customers are identified"
+- "security alert senders the user cares about — e.g. Google, bank, financial tools"
+- "key people whose emails should trigger an immediate notification"
+
+Use whatever is found to pre-populate the matching logic below.
+
+If nothing is found for a category, fill it in from the user's past conversations where possible. Only ask the user if truly no context exists:
+
+> "To set up your email alerts, I need a few details:
+>
+> 1. Who are your key vendors or contacts I should always notify you about? (name, email, or domain)
+> 2. What is your product or business called? How do I identify emails from your customers?
+> 3. Any security or financial services I should watch for alerts from? (e.g. Google, Stripe, your bank)
+>
+> I'll remember these — you won't need to tell me again."
+
+Store all answers in memory immediately.
+
+---
+
+### Step 1 — Check the Sender
+
+Read the sender's email address and name. Check if it matches any key contact stored in memory:
+
+- Named individuals (by email address)
+- Known domains (e.g. a vendor's company domain)
+- Security alert senders (e.g. `@accounts.google.com`, financial platforms)
+
+If sender matches → proceed to Step 3.
+If sender does not match → proceed to Step 2.
+
+---
+
+### Step 2 — Check the Email Body
+
+Read the full email body and check if it matches any of these:
+
+- A customer of the user's product reaching out for support, reporting a bug, asking a question, or giving feedback — identify by looking for the product name or related terms in the body
+- Any other category the user has defined as high-priority that can only be identified from body content
+
+If yes → proceed to Step 3.
+If no → stop. Do nothing.
+
+---
+
+### Step 3 — Summarise and Notify
+
+Read the full email body and send a notification in this format:
+
+> 📧 Email Alert — [Category]
+> From: [Sender name] ([email address])
+> Subject: [Email subject]
+> Summary: [2–4 sentence summary of what the email is about]
+> Action needed: [Yes — [what needs to happen] / No — FYI only]
+
+**Category label** to use:
+
+- Key vendor or contact → 📂 Vendor / Key Contact
+- Security alert → 🔐 Security Alert
+- Financial alert → 💳 Financial Alert
+- Customer support or bug → 🛠 Customer Support
+- Other user-defined category → 📌 [Category name]
+
+---
+
+### Edge Cases
+
+- **Multiple categories match** → pick the most specific, note both in the summary.
+- **Email body is empty or unreadable** → send: "New email from [sender] — body unreadable. Check manually."
+- **Duplicate trigger for same email** → send only once. Do not notify twice.
+- **Sender is ambiguous** → if unsure, read the body before deciding. When in doubt, notify rather than skip.
+```

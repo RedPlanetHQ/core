@@ -34,13 +34,6 @@ export function IngestionRuleSection({
   }, [ingestionRuleText, ingestionRuleFetcher]);
 
   const placeholder = useMemo(() => {
-    if (slug === "linkedin") {
-      return `Example for LinkedIn: "Ingest my posts and professional updates. Capture comments on my posts that mention 'collaboration' or 'partnership'. Ignore generic engagement like 'Congrats!' or 'Good job!'."`;
-    }
-    return `Example for Gmail: "Only ingest emails from the last 24 hours that contain the word 'urgent' or 'important' in the subject line or body. Skip promotional emails and newsletters. Focus on emails from known contacts or business domains."`;
-  }, [slug]);
-
-  const placeholder = useMemo(() => {
     switch (slug) {
       // Productivity & Tasks
       case "linear":

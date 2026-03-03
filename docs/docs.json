@@ -155,6 +155,26 @@
         ]
       },
       {
+        "tab": "Skills",
+        "groups": [
+          {
+            "group": "Overview",
+            "pages": [
+              "skills/overview"
+            ]
+          },
+          {
+            "group": "Skill Library",
+            "pages": [
+              "skills/email_label_management",
+              "skills/morning_brief_gmail_calendar",
+              "skills/notify_emails",
+              "skills/plan_my_day"
+            ]
+          }
+        ]
+      },
+      {
         "tab": "Toolkit",
         "groups": [
           {

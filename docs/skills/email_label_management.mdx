@@ -1,0 +1,168 @@
+---
+title: "Email Label Manager"
+description: Automatically label every incoming email using 9 categories — Urgent, Meetings, Transcripts, Customer, Action Required, Receipts & Invoices, Financial, Trying to Sell, and FYI — so your inbox stays organised without any manual effort. Trigger with "label my emails", "set up email labels", or "organise my inbox automatically".
+---
+
+```markdown
+**Goal:** Read the email subject and body, determine the best matching labels from the list below, and apply up to 2 — the 2 most specific matches. Work through labels in priority order.
+
+**Tools Required:** Gmail
+
+### Setup — Run Once Before First Label
+
+Search memory for the following before processing any email:
+
+- "user's product name and how customers or users are identified"
+- "user's key vendors, compliance providers, or financial services"
+- "user's payroll or compliance tools and their sender domains"
+- "email labelling rules or inbox organisation preferences"
+
+Use whatever is found to personalise the Urgent and Customer label matching below.
+
+If nothing relevant is found → use the generic matching rules as written. After the first run, ask once:
+
+> "To label your emails accurately, I need a few details:
+>
+> 1. What is your product or business name? I'll use this to identify customer emails.
+> 2. Who are your key vendors or compliance providers I should flag as Urgent? (name, email, or domain)
+> 3. Any payroll or financial tools I should watch for compliance deadlines? (e.g. Razorpay, Gusto, Xero)
+>
+> I'll remember these — you won't need to tell me again."
+
+Store all answers in memory immediately.
+
+---
+
+### Label Definitions & Matching Rules
+
+Work through labels in priority order. Apply up to 2 labels — the most specific matches. Stop after 2.
+
+---
+
+#### 1. 🚨 Urgent
+
+Apply when the email is time-sensitive and must be handled same day.
+
+Matches if:
+
+- A customer is reporting a bug or critical issue with the user's product (check memory for product name)
+- Email is from a payroll or compliance tool about a deadline (check memory for provider names)
+- Email is from a known compliance or bookkeeping vendor about a critical issue (check memory for vendor domains)
+
+> Check this label first — it overrides Action Required or Customer for critical cases.
+
+---
+
+#### 2. 📅 Meetings
+
+Apply when the email is a calendar-related notification.
+
+Matches if:
+
+- Subject contains: "invitation", "accepted", "declined", "cancelled", "updated", "event", "meeting request"
+- Sent by Google Calendar, Outlook Calendar, or any calendar system
+
+---
+
+#### 3. 🎙 Meeting Transcripts
+
+Apply when the email contains a meeting summary, transcript, or recording.
+
+Matches if:
+
+- Sender is Gemini, Fireflies, Otter.ai, Fathom, Grain, or any meeting bot or transcription service
+- Subject contains: "transcript", "summary", "recording", "notes from", "meeting recap"
+
+---
+
+#### 4. 👤 Customer
+
+Apply when the email is related to the user's product — from a customer, user, or prospect.
+
+Matches if:
+
+- The body mentions the user's product by name (check memory for product name and any known aliases)
+- The email is a support request, bug report, feature request, or question about the product
+- Someone is reaching out as a potential customer or expressing interest in the product
+
+---
+
+#### 5. ⚡ Action Required
+
+Apply when the ball is in the user's court and a response or action is needed.
+
+Matches if:
+
+- Someone is asking a question that needs an answer
+- Someone is waiting on feedback, approval, or a decision
+- An unresolved thread needs follow-up
+
+**Do NOT apply if:**
+
+- The sender is trying to sell a product or service (→ use Trying to Sell)
+- It's a promotional or marketing email
+
+---
+
+#### 6. 🧾 Receipts and Invoices
+
+Apply when the email is a bill or invoice with an attachment.
+
+Matches if:
+
+- Email has an attachment (PDF, image, or document)
+- Subject or body references: invoice, receipt, bill, statement, purchase confirmation
+- The attachment appears to be a financial document
+
+> Key distinction from Financial: this label requires an attachment.
+
+---
+
+#### 7. 💰 Financial
+
+Apply when the email is a financial notification without an attachment.
+
+Matches if:
+
+- Payment received, sent, or failed
+- Bank or card transaction alert
+- Account balance update
+- Salary credited, subscription charged
+- Senders from known financial platforms (check memory for user's bank, payment tools, card providers)
+
+> No attachment required — that separates this from Receipts and Invoices.
+
+---
+
+#### 8. 🛍 Trying to Sell
+
+Apply when someone is pitching a product, service, or partnership to the user.
+
+Matches if:
+
+- Cold outreach trying to sell software, services, agencies, or tools
+- Partnership or collaboration pitches where the sender wants something
+- Promotional offers from companies the user hasn't bought from
+
+---
+
+#### 9. ℹ️ FYI
+
+Apply when the email is informational only and no action is needed.
+
+Matches if:
+
+- Product updates or feature announcements from tools the user already uses
+- Newsletters and digests
+- General notifications that don't require a response
+
+> Catch-all for low-priority informational emails. Apply last if nothing else fits.
+
+---
+
+### Edge Cases
+
+- **Multiple labels could apply** → use priority order above. Urgent beats everything. Apply up to 2 — skip the rest.
+- **Truly ambiguous** → default to FYI rather than leaving unlabelled.
+- **Email is already labelled** → do not overwrite manual labels. Skip entirely.
+```

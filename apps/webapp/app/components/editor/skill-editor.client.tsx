@@ -4,6 +4,7 @@ import {
   getPlaceholder,
 } from "../conversation/editor-extensions";
 import { Button, Input } from "../ui";
+import { Textarea } from "../ui/textarea";
 import { DeleteSkillAlert } from "../skills/delete-skill-alert";
 
 import React, { useState } from "react";
@@ -153,11 +154,11 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
             <label className="text-muted-foreground/80 px-4 text-sm">
               Short description
             </label>
-            <Input
+            <Textarea
               value={shortDescription}
               onChange={(e) => setShortDescription(e.target.value)}
               placeholder="Brief description of the skill, this is used by the agent to understand the skill"
-              className="no-scrollbar text-md! resize-none overflow-hidden border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
+              className="no-scrollbar text-md! min-h-0 resize-none border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
             />
           </div>
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
-import { Mail, Clock, Check } from "lucide-react";
+import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
+import { Mail, Clock, Check, MessageCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import {
   Card,
@@ -34,8 +34,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const metadata = (user?.metadata as any) || {};
   const whatsappOptin = metadata?.whatsappOptin || false;
+  const imessageOptin = metadata?.imessageOptin || false;
 
-  return json({ whatsappOptin });
+  return json({ whatsappOptin, imessageOptin });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -66,6 +67,19 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ success: true });
   }
 
+  if (intent === "imessage-waitlist") {
+    await updateUser({
+      id: userId,
+      metadata: {
+        ...metadata,
+        imessageOptin: true,
+      },
+      onboardingComplete: user.onboardingComplete,
+    });
+
+    return json({ success: true });
+  }
+
   return json({ error: "Invalid intent" }, { status: 400 });
 }
 
@@ -83,7 +97,7 @@ const DIRECT_CHANNELS = [
     name: "Slack",
     description: "Interact with Core directly in your Slack workspace",
     icon: SlackIcon,
-    status: "coming_soon" as const,
+    status: "available" as const,
   },
   {
     id: "email",
@@ -91,6 +105,13 @@ const DIRECT_CHANNELS = [
     description: "Send emails to Core and get intelligent responses",
     icon: Mail,
     status: "available" as const,
+  },
+  {
+    id: "imessage",
+    name: "iMessage",
+    description: "Chat with Core via Apple iMessage",
+    icon: MessageCircle,
+    status: "waitlist" as const,
   },
 ];
 
@@ -162,7 +183,7 @@ function DirectChannelCard({
             {isJoining ? "Joining..." : "Join Waitlist"}
           </Button>
         )}
-        {channel.id === "email" && <Button
+        {channel.status === "available" && <Button
           variant="secondary"
 
           className="mt-2 w-full rounded"
@@ -229,17 +250,24 @@ function EmailModal({
 }
 
 export default function Connect() {
-  const { whatsappOptin } = useLoaderData<typeof loader>();
+  const { whatsappOptin, imessageOptin } = useLoaderData<typeof loader>();
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const fetcher = useFetcher<{ success: boolean }>();
+  const imessageFetcher = useFetcher<{ success: boolean }>();
+  const navigate = useNavigate();
   const providers = Object.values(PROVIDER_CONFIGS);
 
   const isJoiningWaitlist = fetcher.state === "submitting";
   const hasJoined = whatsappOptin || fetcher.data?.success;
+  const isJoiningImessage = imessageFetcher.state === "submitting";
+  const hasJoinedImessage = imessageOptin || imessageFetcher.data?.success;
 
   const handleDirectChannelClick = (channelId: string) => {
     if (channelId === "email") {
       setIsEmailModalOpen(true);
+    }
+    if (channelId === "slack") {
+      navigate("/home/integrations/slack");
     }
   };
 
@@ -247,6 +275,12 @@ export default function Connect() {
     if (channelId === "whatsapp") {
       fetcher.submit(
         { intent: "whatsapp-waitlist" },
+        { method: "post" }
+      );
+    }
+    if (channelId === "imessage") {
+      imessageFetcher.submit(
+        { intent: "imessage-waitlist" },
         { method: "post" }
       );
     }
@@ -274,13 +308,21 @@ export default function Connect() {
                 key={channel.id}
                 channel={channel}
                 onClick={() => handleDirectChannelClick(channel.id)}
-                isOptedIn={channel.id === "whatsapp" ? hasJoined : undefined}
+                isOptedIn={
+                  channel.id === "whatsapp" ? hasJoined :
+                  channel.id === "imessage" ? hasJoinedImessage :
+                  undefined
+                }
                 onJoinWaitlist={
-                  channel.id === "whatsapp"
+                  channel.id === "whatsapp" || channel.id === "imessage"
                     ? () => handleJoinWaitlist(channel.id)
                     : undefined
                 }
-                isJoining={channel.id === "whatsapp" ? isJoiningWaitlist : false}
+                isJoining={
+                  channel.id === "whatsapp" ? isJoiningWaitlist :
+                  channel.id === "imessage" ? isJoiningImessage :
+                  false
+                }
               />
             ))}
           </div>
