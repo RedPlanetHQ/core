@@ -1,0 +1,36 @@
+{
+  "browser": {
+    "enabled": true,
+    "defaultProfile": "openclaw",
+    "headless": false,
+    "noSandbox": false,
+    "attachOnly": false,
+    "color": "#FF4500",
+    "remoteCdpTimeoutMs": 1500,
+    "remoteCdpHandshakeTimeoutMs": 3000,
+    "evaluateEnabled": true,
+    "snapshotDefaults": {
+      "mode": "efficient"
+    },
+    "ssrfPolicy": {
+      "dangerouslyAllowPrivateNetwork": true
+    },
+    "profiles": {
+      "openclaw": {
+        "cdpPort": 18800,
+        "color": "#FF4500"
+      },
+      "work": {
+        "cdpPort": 18801,
+        "color": "#0066CC"
+      },
+      "chrome": {
+        "cdpUrl": "http://127.0.0.1:18792",
+        "color": "#4285F4"
+      }
+    }
+  },
+  "gateway": {
+    "port": 18789
+  }
+}

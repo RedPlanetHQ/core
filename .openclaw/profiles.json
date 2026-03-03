@@ -1,0 +1,30 @@
+{
+  "profiles": {
+    "openclaw": {
+      "description": "OpenClaw managed browser - isolated agent automation",
+      "cdpPort": 18800,
+      "color": "#FF4500",
+      "managed": true,
+      "userDataDir": "~/.openclaw/browser-data/openclaw"
+    },
+    "work": {
+      "description": "Work profile - separate isolated browser for work tasks",
+      "cdpPort": 18801,
+      "color": "#0066CC",
+      "managed": true,
+      "userDataDir": "~/.openclaw/browser-data/work"
+    },
+    "chrome": {
+      "description": "Chrome extension relay - controls your existing Chrome tabs",
+      "cdpUrl": "http://127.0.0.1:18792",
+      "color": "#4285F4",
+      "managed": false,
+      "driver": "extension"
+    }
+  },
+  "defaults": {
+    "defaultProfile": "openclaw",
+    "autoStartBrowser": true,
+    "snapshotMode": "efficient"
+  }
+}
