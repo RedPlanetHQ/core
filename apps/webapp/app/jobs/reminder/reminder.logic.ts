@@ -127,6 +127,7 @@ export async function processReminderJob(
       unrespondedCount: reminder.unrespondedCount,
       confirmedActive: reminder.confirmedActive,
       occurrenceCount: reminder.occurrenceCount,
+      metadata: metadata,
     });
 
     const [context, userPersona] = await Promise.all([

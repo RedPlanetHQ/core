@@ -31,7 +31,7 @@ export async function createConversation(
   userId: string,
   conversationData: CreateConversationDto,
 ) {
-  const { title, conversationId, source, ...otherData } = conversationData;
+  const { title, conversationId, source, asyncJobId, ...otherData } = conversationData;
 
   if (conversationId) {
     // Add a new message to an existing conversation
@@ -68,6 +68,7 @@ export async function createConversation(
       workspaceId,
       userId,
       source: source || "core",
+      asyncJobId: asyncJobId || null,
       title:
         title?.substring(0, 100) ?? conversationData.message.substring(0, 100),
       ConversationHistory: {

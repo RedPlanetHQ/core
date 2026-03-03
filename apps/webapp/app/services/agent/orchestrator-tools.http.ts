@@ -133,7 +133,7 @@ export class HttpOrchestratorTools extends OrchestratorTools {
             conversationId,
             message,
             parts: [{ type: "text", text: message }],
-            userType: UserTypeEnum.Assistant,
+            userType: UserTypeEnum.Agent,
           },
         });
         logger.info(

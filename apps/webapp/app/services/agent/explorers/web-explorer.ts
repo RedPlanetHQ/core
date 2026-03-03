@@ -1,10 +1,11 @@
-import { streamText, type LanguageModel, stepCountIs, tool } from "ai";
+import { type LanguageModel, stepCountIs, tool, generateText } from "ai";
 import { z } from "zod";
 
 import Exa from "exa-js";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
 import { getModel, getModelForTask } from "~/lib/model.server";
+import { ExplorerResult } from "../types";
 
 const WEB_COMPLEXITY = "high";
 

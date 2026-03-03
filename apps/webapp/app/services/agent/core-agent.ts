@@ -7,6 +7,7 @@ import { type SkillRef } from "./types";
 import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
 import { getBackgroundTaskTools } from "./tools/background-task-tools";
+import { getSkillTool } from "./tools/skill-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -61,6 +62,8 @@ export const createTools = async (
       3. Web: news, current events, documentation, prices, weather, general knowledge, AND reading URLs
       4. Gateways: user's connected devices/agents (e.g., Claude Code on their laptop, browser agent) - use for tasks on their machine
 
+      IMPORTANT: Each call handles ONE data source effectively. If you need data from multiple integrations (e.g., Gmail AND Calendar), make SEPARATE gather_context calls — one per integration. You can call them in parallel.
+
       WHEN TO USE:
       - Before saying "i don't know" - you might know it
       - When user asks about past conversations, decisions, preferences
@@ -70,7 +73,7 @@ export const createTools = async (
       - When user asks to do something on their device/machine (coding tasks, file operations, browser actions)
 
       HOW TO FORM YOUR QUERY:
-      Describe your INTENT clearly. Include any URLs the user shared.
+      Describe your INTENT clearly. One integration/source per query.
 
       EXAMPLES:
       - "What meetings does user have this week" → integrations (calendar)
@@ -84,8 +87,7 @@ export const createTools = async (
       For URLs: include the full URL in your query.
       For GENERAL NEWS/INFO: the orchestrator will use web search.
       For USER-SPECIFIC data: it uses integrations.
-      For DEVICE/MACHINE tasks: it uses gateways.
-      For SKILLS: when user's request matches an available skill, include the skill name and ID in your query so the orchestrator can load and execute it. Example: "Execute skill 'Plan My Day' (skill_id: abc123)"`,
+      For DEVICE/MACHINE tasks: it uses gateways.`,
       inputSchema: z.object({
         query: z
           .string()
@@ -232,6 +234,11 @@ export const createTools = async (
         conversationId,
         channelMetadata,
       );
+
+  // Add get_skill tool when skills are available
+  if (skills && skills.length > 0) {
+    tools["get_skill"] = getSkillTool(workspaceId);
+  }
 
   return { ...tools, ...reminderTools, ...backgroundTaskTools };
 };

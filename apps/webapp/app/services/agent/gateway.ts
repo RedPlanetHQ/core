@@ -11,7 +11,7 @@ import { logger } from "~/services/logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { getConnectedGateways, getGateway } from "~/services/gateway.server";
 import { callGatewayTool } from "../../../websocket";
-import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import { GatewayAgentInfo, type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -233,7 +233,7 @@ export async function getGatewayAgents(
 ): Promise<GatewayAgentInfo[]> {
   const gateways = await getConnectedGateways(workspaceId);
 
-  return gateways.map((gateway) => {
+  return gateways.map((gateway: GatewayAgentInfo) => {
     const tools = (gateway.tools || []) as any as GatewayTool[];
     return {
       id: gateway.id,
