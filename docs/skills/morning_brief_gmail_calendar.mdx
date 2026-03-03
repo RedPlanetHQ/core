@@ -1,0 +1,127 @@
+---
+title: "Morning Brief - Gmail and Calendar"
+description: "Every morning (or on schedule), pull yesterday's and today's emails plus today's calendar into one structured brief. Emails are categorised into Action Required, FYI, Newsletters, and Spam — with summaries and recommended actions. Trigger with run my daily brief, morning brief, what's in my inbox today, or what's on my calendar today."
+---
+
+```markdown
+**Goal:** Pull yesterday's and today's emails plus today's calendar into one structured brief, categorised and summarised.
+
+**Tools Required:** Gmail, Google Calendar
+
+**Trigger:** Runs on a schedule set by the user. Deliver output in the channel this skill is triggered from.
+
+If a source (Gmail, Calendar) is not connected, skip it, note "Not connected" for that section, and continue.
+
+Channel constraint: If the channel has a message length limit (e.g. WhatsApp), split the brief into one message per section in this order: Gmail then Calendar.
+
+---
+
+### Execution Order
+
+Run both sources in parallel, then compile into one brief.
+
+---
+
+### 1. Gmail
+
+**Scope:** Emails received yesterday and today only (resolve actual dates at runtime).
+
+Read the subject line of each email in scope and classify it into one of 4 categories:
+
+**Categories:**
+
+- **Action Required** — Emails from people or organisations that need your response or attention. This includes your internal team, key vendors, and customers of your product or business. These are emails where the ball is in your court.
+- **FYI** — Informational only, no action needed. Examples: payment confirmations, bank notifications, product updates, calendar invites.
+- **Newsletters** — Subscription emails, digests, editorial content.
+- **Spam** — Unsolicited sales or promotional outreach.
+
+**Setup — run before classifying emails:**
+
+Search memory for the following before asking the user anything:
+
+- "user's internal team email domain or company domain"
+- "user's key vendors, suppliers, or service providers"
+- "user's product name or how their customers are identified"
+- "email classification rules or inbox priorities"
+
+Use whatever is found to pre-populate the classification logic. Only ask about the pieces that are still missing.
+
+If nothing is found, ask the user once:
+
+> "To classify your emails accurately, I need a few details:
+>
+> 1. What is your internal team's email domain? (e.g. @yourcompany.com)
+> 2. Who are your key vendors or service providers I should watch for?
+> 3. How do I identify emails from your customers or product users?
+>
+> You can describe them by email address, domain, or company name."
+
+Store all answers in memory. Never ask again once stored.
+
+**Processing rules by category:**
+
+- Action Required: Read full body. Output: Full summary + recommended action (reply needed? Draft a response?)
+- FYI: Read full body. Output: 1-2 line summary.
+- Newsletters: Subject line only.
+- Spam: Read full body. Output: One-liner on what they're selling.
+
+---
+
+### 2. Calendar
+
+**Scope:** Today's events only.
+
+- List all meetings with time and title.
+- For each external meeting (anyone outside the user's organisation domain):
+  - Check if the attendee is a known customer or prospect (search memory for their name or company).
+  - If yes, ask: "Want me to block 15 mins prep time before [meeting name] at [time - 15 mins]?"
+  - If unsure, flag it: "External meeting with [name] — not sure if they're a customer. Block prep time?"
+  - Only create the calendar block after explicit confirmation.
+
+**Setup — run before processing calendar:**
+
+Search memory for:
+
+- "user's organisation email domain" — to distinguish internal vs external attendees
+
+If not found, ask: "What is your organisation's email domain? I'll use this to identify external vs internal meeting attendees."
+
+Store in memory. Never ask again once stored.
+
+---
+
+### Output Format
+
+**Gmail**
+
+**Action Required:**
+
+- [Sender / Subject]: [Summary]
+  Action: [What needs to happen]
+
+**FYI:**
+
+- [Sender / Subject]: [1-2 line summary]
+
+**Newsletters:**
+
+- [Publication / Subject]
+
+**Spam:**
+
+- [Sender]: [One-liner on what they're pitching]
+
+---
+
+**Calendar — [Today's date]**
+
+**Today's Meetings:**
+
+- [Time] — [Title] ([Internal / External])
+
+**Prep Blocks Needed:**
+
+- [Meeting] at [time] with [person] — [customer / prospect / unclear]. Block 15 min prep at [time - 15 mins]?
+
+If a section has no data, write "Nothing to report."
+```
