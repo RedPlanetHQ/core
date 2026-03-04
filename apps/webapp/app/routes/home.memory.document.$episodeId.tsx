@@ -22,9 +22,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
       documentId as string,
       workspaceId as string,
     );
-    const labels = await labelService.getWorkspaceLabels(
-      workspaceId as string,
-    );
+    const labels = await labelService.getWorkspaceLabels(workspaceId as string);
     return json({ document, labels });
   } catch (e) {
     return json({ document: null, labels: [] });
@@ -37,7 +35,6 @@ export default function MemoryDocumentDetail() {
   if (!document) {
     return (
       <div className="flex h-full w-full flex-col">
-        <PageHeader title="Document" />
         <div className="flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4 md:h-[calc(100vh_-_56px)]">
           <Inbox size={30} />
           No document data found
@@ -49,16 +46,6 @@ export default function MemoryDocumentDetail() {
   return (
     <TooltipProvider delayDuration={0}>
       <div className="flex h-[calc(100vh_-_56px)] w-full flex-col overflow-hidden">
-        <PageHeader
-          title="Document"
-          actionsNode={
-            <LogOptions
-              id={document.id as string}
-              status={document.latestIngestionLog?.status}
-            />
-          }
-        />
-
         <ResizablePanelGroup orientation="horizontal">
           <ResizablePanel
             maxSize={75}

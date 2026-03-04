@@ -170,9 +170,11 @@ function App() {
 // `specifiedTheme` is the stored theme in the session storage.
 // `themeAction` is the action name that's used to change the theme in the session storage.
 export default function AppWithProviders() {
+  const { theme } = useTypedLoaderData<typeof loader>();
+
   return (
     <ThemeProvider
-      specifiedTheme={Theme.LIGHT}
+      specifiedTheme={theme}
       disableTransitionOnThemeChange={true}
       themeAction="/action/set-theme"
     >

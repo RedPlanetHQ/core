@@ -89,7 +89,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
     // Redirect to integrations if summary exists (normal flow)
     // or to documents if skipped (no summary)
-    return redirect(summary ? "/home/integrations" : "/home/documents");
+    return redirect(summary ? "/home/integrations" : "/home/memory/documents");
   } catch (e: any) {
     return json({ errors: { body: e.message } }, { status: 400 });
   }
@@ -123,7 +123,7 @@ export default function Onboarding() {
   };
 
   const handleSkip = () => {
-    setRedirectTo("/home/documents");
+    setRedirectTo("/home/memory/documents");
     fetcher.submit({ summary: "" }, { method: "POST", action: "/onboarding" });
   };
 

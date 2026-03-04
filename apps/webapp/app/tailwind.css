@@ -131,20 +131,20 @@
   --custom-color-12: #b0617c;
 
   /* Team Colors */
-  --team-color-1: #E194AD;
-  --team-color-2: #E59593;
-  --team-color-3: #E4997C;
-  --team-color-4: #DDA068;
-  --team-color-5: #D0A95D;
-  --team-color-6: #BFB25F;
-  --team-color-7: #AABA6C;
-  --team-color-8: #93C180;
-  --team-color-9: #7DC599;
-  --team-color-10: #6BC6B3;
-  --team-color-11: #62C4CC;
-  --team-color-12: #67BFE1;
-  --team-color-13: #77B8F0;
-  --team-color-14: #77B8F0;
+  --team-color-1: #e194ad;
+  --team-color-2: #e59593;
+  --team-color-3: #e4997c;
+  --team-color-4: #dda068;
+  --team-color-5: #d0a95d;
+  --team-color-6: #bfb25f;
+  --team-color-7: #aaba6c;
+  --team-color-8: #93c180;
+  --team-color-9: #7dc599;
+  --team-color-10: #6bc6b3;
+  --team-color-11: #62c4cc;
+  --team-color-12: #67bfe1;
+  --team-color-13: #77b8f0;
+  --team-color-14: #77b8f0;
 
   --avatar-1: oklch(60% 0.13 240);
 }
@@ -198,20 +198,20 @@
 
   /* Team Colors */
   /* Team Colors */
-  --team-color-1: #E194AD;
-  --team-color-2: #E59593;
-  --team-color-3: #E4997C;
-  --team-color-4: #DDA068;
-  --team-color-5: #D0A95D;
-  --team-color-6: #BFB25F;
-  --team-color-7: #AABA6C;
-  --team-color-8: #93C180;
-  --team-color-9: #7DC599;
-  --team-color-10: #6BC6B3;
-  --team-color-11: #62C4CC;
-  --team-color-12: #67BFE1;
-  --team-color-13: #77B8F0;
-  --team-color-14: #77B8F0;
+  --team-color-1: #e194ad;
+  --team-color-2: #e59593;
+  --team-color-3: #e4997c;
+  --team-color-4: #dda068;
+  --team-color-5: #d0a95d;
+  --team-color-6: #bfb25f;
+  --team-color-7: #aaba6c;
+  --team-color-8: #93c180;
+  --team-color-9: #7dc599;
+  --team-color-10: #6bc6b3;
+  --team-color-11: #62c4cc;
+  --team-color-12: #67bfe1;
+  --team-color-13: #77b8f0;
+  --team-color-14: #77b8f0;
 
   --sidebar: hsl(240 5.9% 10%);
   --sidebar-foreground: hsl(240 4.8% 95.9%);
@@ -332,11 +332,15 @@
   --radius-5xl: 3rem;
   --radius-full: 9999px;
 
-  --shadow: 0px 6px 20px 0px rgba(0, 0, 0, 0.15), 0px 0px 2px 0px rgba(0, 0, 0, 0.2);
-  --shadow-1: lch(0 0 0 / 0.022) 0px 3px 6px -2px, lch(0 0 0 / 0.044) 0px 1px 1px;
+  --shadow:
+    0px 6px 20px 0px rgba(0, 0, 0, 0.15), 0px 0px 2px 0px rgba(0, 0, 0, 0.2);
+  --shadow-1:
+    lch(0 0 0 / 0.022) 0px 3px 6px -2px, lch(0 0 0 / 0.044) 0px 1px 1px;
 
-  --font-sans: "Geist Variable", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
-  --font-mono: "Geist Mono Variable", monaco, Consolas, "Lucida Console", monospace;
+  --font-sans:
+    "Geist Variable", "Helvetica Neue", "Helvetica", "Arial", sans-serif;
+  --font-mono:
+    "Geist Mono Variable", monaco, Consolas, "Lucida Console", monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -356,7 +360,6 @@
   html {
     height: 100%;
   }
-
 
   body {
     @apply bg-background-2 text-foreground text-base;
@@ -392,7 +395,7 @@
     }
   }
 
-  nav[aria-label='breadcrumb'] li {
+  nav[aria-label="breadcrumb"] li {
     @apply text-base;
   }
 
@@ -404,14 +407,15 @@
     float: left;
     height: 0;
     pointer-events: none;
-
   }
 }
 
-.popover, .dialog-content, .dropdown {
-  box-shadow: 
-  0px 0px 2px 0px rgba(0, 0, 0, 0.2),
-  0px 6px 20px 0px rgba(0, 0, 0, 0.15);
+.popover,
+.dialog-content,
+.dropdown {
+  box-shadow:
+    0px 0px 2px 0px rgba(0, 0, 0, 0.2),
+    0px 6px 20px 0px rgba(0, 0, 0, 0.15);
 }
 
 .title-bar-sigma {
@@ -431,11 +435,11 @@
 }
 
 .editor-container .heading-node:first-child {
-  margin-top: 0!important;
+  margin-top: 0 !important;
 }
 
 .editor-container .paragraph-node:first-child {
-  margin-top: 0!important;
+  margin-top: 0 !important;
 }
 
 .list-item--task {
@@ -505,9 +509,8 @@
 }
 
 @layer base {
-
-
-  .episode-details p, .episode-details li {
+  .episode-details p,
+  .episode-details li {
     @apply text-md;
   }
 
@@ -520,23 +523,23 @@
   }
 
   .tiptap {
-    outline:none;
+    outline: none;
     border: none;
 
     :first-child {
       margin-top: 0 !important;
     }
-    
+
     strong {
       font-weight: 500;
     }
 
-    li  p {
+    li p {
       margin-top: 0 !important;
     }
 
     pre {
-      @apply bg-grayAlpha-100 text-foreground p-4 rounded-md w-fit;
+      @apply bg-grayAlpha-100 text-foreground w-fit rounded-md p-4;
       margin: 1.5rem 0;
 
       code {
@@ -600,4 +603,3 @@
     }
   }
 }
-
