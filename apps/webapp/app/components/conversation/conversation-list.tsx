@@ -1,5 +1,5 @@
-import { useFetcher, useNavigate } from "@remix-run/react";
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
+import { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { GitBranch, LoaderCircle, Timer } from "lucide-react";
@@ -49,28 +49,36 @@ export const ConversationList = ({
 }: {
   currentConversationId?: string;
 }) => {
-  const fetcher = useFetcher<ConversationListResponse>();
+  const location = useLocation();
   const navigate = useNavigate();
+  // Each pathname change gets a new fetcherKey, which resets the fetcher state
+  const fetcherKey = useMemo(() => `conv-list-${location.pathname}`, [location.pathname]);
+  const fetcher = useFetcher<ConversationListResponse>({ key: fetcherKey });
+
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-
   const loadedConversationIds = useRef<Set<string>>(new Set());
 
-  const loadMoreConversations = useCallback(
+  const loadPage = useCallback(
     (page: number) => {
-      if (isLoading) return;
       setIsLoading(true);
-      fetcher.load(`/api/v1/conversations?page=${page}&limit=5`);
+      fetcher.load(`/api/v1/conversations?page=${page}&limit=10`);
     },
-    [isLoading, fetcher],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [fetcher],
   );
 
+  // Reset + reload page 1 whenever pathname changes
   useEffect(() => {
-    loadMoreConversations(1);
+    setConversations([]);
+    loadedConversationIds.current = new Set();
+    setCurrentPage(1);
+    setHasNextPage(true);
+    loadPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.pathname]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
@@ -129,7 +137,7 @@ export const ConversationList = ({
       {hasNextPage && (
         <Button
           variant="link"
-          onClick={() => loadMoreConversations(currentPage + 1)}
+          onClick={() => loadPage(currentPage + 1)}
           disabled={isLoading}
           className="w-fit underline underline-offset-4"
         >

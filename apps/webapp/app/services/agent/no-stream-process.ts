@@ -171,9 +171,13 @@ export async function noStreamProcess(
   };
 
   // Save assistant message to history
+  const lastAssistantMessage = [...result.response.messages]
+    .reverse()
+    .find((m) => m.role === "assistant");
+
   await upsertConversationHistory(
     assistantMessageId,
-    result.response.messages,
+    lastAssistantMessage?.content ?? assistantParts,
     body.id,
     UserTypeEnum.Agent,
   );
