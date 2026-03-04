@@ -2,7 +2,7 @@
   "integrations": {
     "telegram": {
       "enabled": true,
-      "bot_id": "8598721870",
+      "bot_id": "8650716833",
       "profile": "openclaw",
       "autoSync": true,
       "syncFrequency": "*/15 * * * *",
@@ -19,7 +19,7 @@
       {
         "name": "telegram",
         "type": "bot",
-        "botId": "8598721870",
+        "botId": "8650716833",
         "status": "registered",
         "registeredAt": "2026-03-03T00:00:00Z"
       }

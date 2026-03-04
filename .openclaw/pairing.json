@@ -17,7 +17,7 @@
         "type": "integration",
         "transport": "bot-api",
         "baseUrl": "https://api.telegram.org",
-        "botId": "8598721870",
+        "botId": "8650716833",
         "paired": true,
         "verificationMethod": "getMe",
         "lastVerified": null
