@@ -19,9 +19,15 @@ function getClient() {
   invariant(typeof DATABASE_URL === "string", "DATABASE_URL env var not set");
 
   const databaseUrl = extendQueryParams(DATABASE_URL, {
-    connection_limit: env.DATABASE_CONNECTION_LIMIT.toString(),
-    pool_timeout: env.DATABASE_POOL_TIMEOUT.toString(),
-    connection_timeout: env.DATABASE_CONNECTION_TIMEOUT.toString(),
+    connection_limit: env.DATABASE_CONNECTION_LIMIT
+      ? env.DATABASE_CONNECTION_LIMIT.toString()
+      : "10",
+    pool_timeout: env.DATABASE_POOL_TIMEOUT
+      ? env.DATABASE_POOL_TIMEOUT.toString()
+      : "60",
+    connection_timeout: env.DATABASE_CONNECTION_TIMEOUT
+      ? env.DATABASE_CONNECTION_TIMEOUT.toString()
+      : "20",
   });
 
   console.log(
