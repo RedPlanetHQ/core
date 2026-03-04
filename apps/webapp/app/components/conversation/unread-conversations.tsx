@@ -1,4 +1,4 @@
-import { useFetcher, useNavigate } from "@remix-run/react";
+import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
 import { useEffect } from "react";
 import { Ellipsis, GitBranch, Timer } from "lucide-react";
 import { cn } from "~/lib/utils";
@@ -42,11 +42,12 @@ export const UnreadConversations = ({
   const fetcher = useFetcher<ConversationListResponse>();
   const readAllFetcher = useFetcher();
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     fetcher.load("/api/v1/conversations?unread=true&limit=50");
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [location.pathname]);
 
   const conversations = fetcher.data?.conversations ?? [];
 

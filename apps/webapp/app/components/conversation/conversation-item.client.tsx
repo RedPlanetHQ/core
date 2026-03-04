@@ -17,8 +17,6 @@ import {
 import StaticLogo from "../logo/logo";
 import { Button } from "../ui";
 import {
-  ArrowDown,
-  ArrowRight,
   ChevronDown,
   ChevronRight,
   LoaderCircle,
@@ -283,7 +281,7 @@ const ConversationItemComponent = ({
   let currentToolGroup: any[] = [];
 
   message.parts.forEach((part, index) => {
-    if (part.type.includes("tool-")) {
+    if (part.type?.includes("tool-")) {
       currentToolGroup.push(part);
     } else {
       // If we have accumulated tools, add them as a group
@@ -344,7 +342,7 @@ const ConversationItemComponent = ({
   const firstPendingApprovalIdx = findFirstPendingApprovalIndex(message.parts);
 
   const getComponent = (part: any, isDisabled: boolean = false) => {
-    if (part.type.includes("tool-")) {
+    if (part.type?.includes("tool-")) {
       return (
         <Tool
           part={part as any}
@@ -356,7 +354,7 @@ const ConversationItemComponent = ({
       );
     }
 
-    if (part.type.includes("text")) {
+    if (part.type?.includes("text")) {
       return <EditorContent editor={editor} className="editor-container" />;
     }
 
