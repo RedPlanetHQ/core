@@ -84,7 +84,7 @@ export const UnreadConversations = ({
       {conversations.map((conversation) => {
         const icon = getSourceIcon(conversation.source);
         return (
-          <div key={conversation.id} className="flex w-full pr-2">
+          <div key={conversation.id} className="flex w-full">
             <Button
               variant={
                 currentConversationId === conversation.id
@@ -102,9 +102,7 @@ export const UnreadConversations = ({
                 <span className="min-w-0 grow truncate text-base">
                   {conversation.title || "Untitled Conversation"}
                 </span>
-                {icon && (
-                  <span className="text-muted-foreground shrink-0">{icon}</span>
-                )}
+                {icon && <span className="shrink-0">{icon}</span>}
               </div>
             </Button>
           </div>
