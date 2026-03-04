@@ -169,13 +169,13 @@ const Tool = ({
             <p className="text-muted-foreground mb-1 text-xs font-medium">
               Input
             </p>
-            <pre className="bg-grayAlpha-50 mb-2 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#6B8E23]">
+            <pre className="bg-grayAlpha-100 mb-2 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#6B8E23]">
               {JSON.stringify(args, null, 2)}
             </pre>
           </>
         )}
         <p className="text-muted-foreground mb-1 text-xs font-medium">Result</p>
-        <pre className="bg-grayAlpha-50 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
+        <pre className="bg-grayAlpha-100 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
           {typeof outputContent === "string"
             ? outputContent
             : JSON.stringify(outputContent, null, 2)}
@@ -224,15 +224,16 @@ const Tool = ({
       onOpenChange={setIsOpen}
       className={cn(
         "w-full",
-        isNested && "ml-2 border-l border-gray-300 pl-3",
+        isNested && "ml-3 border-l border-gray-300 pl-3",
         !isNested && "my-1",
         isDisabled && "cursor-not-allowed opacity-50",
       )}
     >
       <CollapsibleTrigger asChild>
-        <button
+        <Button
+          variant="ghost"
           className={cn(
-            "flex w-full items-center gap-2 py-1 text-left hover:cursor-pointer",
+            "flex items-center gap-2 py-1 text-left hover:cursor-pointer",
             isDisabled && "cursor-not-allowed",
           )}
           disabled={isDisabled}
@@ -242,9 +243,9 @@ const Tool = ({
           <span className="text-muted-foreground">
             {isOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           </span>
-        </button>
+        </Button>
       </CollapsibleTrigger>
-      <CollapsibleContent className={cn("w-full", isNested && "pl-6")}>
+      <CollapsibleContent className={cn("w-full", isNested && "pl-3")}>
         {hasNestedTools ? renderNestedContent() : renderLeafContent()}
       </CollapsibleContent>
     </Collapsible>
