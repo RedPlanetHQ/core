@@ -154,12 +154,19 @@ export async function parseSlackDMEvent(
   if (event.ts) {
     metadata.messageTs = event.ts;
   }
+  // Capture thread_ts for all message types (DMs and @mentions)
+  // Set as sessionId so message-processor creates a separate conversation per thread
+  if (event.thread_ts) {
+    metadata.threadTs = event.thread_ts;
+    metadata.sessionId = event.thread_ts;
+  }
   if (event.type === "app_mention" && event.channel) {
-    // For @mentions, also set slackChannel + threadTs for reply routing
+    // For @mentions, also set slackChannel for reply routing
     metadata.slackChannel = event.channel;
-    const threadTs = event.thread_ts ?? event.ts;
-    if (threadTs) {
-      metadata.threadTs = threadTs;
+    // Use thread_ts or message ts as threadTs for reply routing
+    if (!metadata.threadTs && event.ts) {
+      metadata.threadTs = event.ts;
+      metadata.sessionId = event.ts;
     }
   }
 

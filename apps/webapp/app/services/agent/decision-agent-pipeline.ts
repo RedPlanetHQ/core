@@ -10,7 +10,7 @@
 
 import { UserTypeEnum } from "@core/types";
 import { runDecisionAgent } from "~/services/agent/decision-agent";
-import { processInboundMessage } from "~/services/agent/message-processor";
+import { processInboundMessage, getOrCreateChannelConversation } from "~/services/agent/message-processor";
 import { runOrchestrator } from "~/services/agent/orchestrator";
 import {
   type ActionPlan,
@@ -268,6 +268,30 @@ async function executePlan(
         logger.info(
           `Sent ${channel} message for ${reminder.id} to ${userData.userId}`,
         );
+
+        // Also store in the channel's conversation so user replies have context
+        try {
+          const channelConversationId = await getOrCreateChannelConversation(
+            userData.userId,
+            userData.workspaceId,
+            `[Reminder] ${reminder.text}`,
+            channel,
+          );
+          await upsertConversationHistory(
+            crypto.randomUUID(),
+            [{ text: `[Reminder] ${reminder.text}`, type: "text" }],
+            channelConversationId,
+            UserTypeEnum.System,
+          );
+          await upsertConversationHistory(
+            crypto.randomUUID(),
+            [{ text: responseText, type: "text" }],
+            channelConversationId,
+            UserTypeEnum.Agent,
+          );
+        } catch (error) {
+          logger.warn(`Failed to mirror reminder to channel conversation`, { error });
+        }
       }
     } catch (error) {
       logger.error(`Failed to execute message for ${reminder.id}`, { error });
