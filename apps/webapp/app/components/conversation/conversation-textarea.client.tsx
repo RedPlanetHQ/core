@@ -54,7 +54,7 @@ export function ConversationTextarea({
   return (
     <div
       className={cn(
-        "bg-background-3 rounded-lg border-1 border-gray-300 py-2",
+        "bg-background-3 border-1 rounded-lg border-gray-300 py-2",
         disabled && "cursor-not-allowed opacity-50",
       )}
     >
@@ -74,7 +74,7 @@ export function ConversationTextarea({
               placeholder: () =>
                 disabled
                   ? "Waiting for approval..."
-                  : placeholder ?? "Ask sol...",
+                  : (placeholder ?? "Ask corebrain..."),
               includeChildren: true,
             }),
             History,

@@ -121,6 +121,7 @@ const { loader, action } = createHybridActionApiRoute(
       workspaceId: authentication.workspaceId as string,
       source: body.source as any,
       finalMessages: useEmptyMessages ? [] : finalMessages,
+      conversationId: body.id,
     });
 
     const result = streamText({
