@@ -123,7 +123,7 @@ fi
 if [ -d "$SCRIPT_DIR/openclaw/workspace/skills" ]; then
   log "Skills kopieren..."
   cp -r "$SCRIPT_DIR/openclaw/workspace/skills/"* "$SKILLS_DIR/" 2>/dev/null || true
-  log "6 Skills installiert: toggle-context, pi-coder, meta-ads, trading-monitor, content-engine, seo-ranker"
+  log "15 Skills installiert (6 Original + 9 Galaxia)"
 fi
 
 # Copy config
