@@ -1,0 +1,55 @@
+{
+  "security": {
+    "tools": {
+      "openclaw-security-guard": {
+        "enabled": true,
+        "npm": "openclaw-security-guard",
+        "features": ["secrets_scanner", "config_auditor", "mcp_auditor", "prompt_injection"],
+        "telemetry": false
+      },
+      "clawprint": {
+        "enabled": true,
+        "repo": "https://github.com/cyntrisec/clawprint",
+        "mode": "daemon",
+        "gateway": "ws://127.0.0.1:18789",
+        "hashAlgorithm": "SHA-256",
+        "secretRedaction": true,
+        "autoVerify": "daily"
+      },
+      "builtin": {
+        "command": "openclaw security audit --deep",
+        "schedule": "weekly"
+      }
+    },
+    "skillPolicy": {
+      "sources": {
+        "priority": ["awesome-vault", "clawhub-verified", "custom-local"],
+        "blocked": ["unverified-github", "raw-gists"]
+      },
+      "scanBeforeInstall": true,
+      "blockPatterns": [
+        "rm -rf",
+        "base64 --decode",
+        "curl.*|.*bash",
+        "eval(",
+        "dangerouslySetInnerHTML",
+        "process.env.*TOKEN.*console"
+      ],
+      "maxBundleSize": "50MB"
+    },
+    "tradingSafety": {
+      "defaultMode": "paper",
+      "requireApproval": true,
+      "maxDailyBudget": 50,
+      "currency": "EUR",
+      "auditTrail": "clawprint",
+      "alertChannel": "telegram"
+    },
+    "adsSafety": {
+      "maxDailySpend": 50,
+      "currency": "EUR",
+      "requireApproval": true,
+      "auditTrail": "clawprint"
+    }
+  }
+}
