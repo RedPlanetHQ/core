@@ -35,6 +35,8 @@ interface NoStreamProcessBody {
   channelMetadata?: Record<string, string>;
   /** If true, the user message won't be saved to conversation history (still used as AI context) */
   skipUserMessage?: boolean;
+  /** When true, background task tools (spawn/list/cancel) are excluded */
+  disableBackgroundTaskTools?: boolean;
 }
 
 export async function noStreamProcess(
@@ -111,6 +113,7 @@ export async function noStreamProcess(
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
     conversationId: body.id,
+    disableBackgroundTaskTools: body.disableBackgroundTaskTools,
   });
 
   // Generate response using generateText (non-streaming)

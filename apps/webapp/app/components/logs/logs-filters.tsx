@@ -306,11 +306,15 @@ export function LogsFilters({
                 className="h-3 w-3 rounded-full"
                 style={{ backgroundColor: selectedLabelObj.color }}
               />
-              <div className="mt-[1px]">{selectedLabelObj.name}</div>
-              <X
-                className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
-                onClick={() => onLabelChange(undefined)}
-              />
+              <div className="flex items-center gap-1 text-base">
+                {selectedLabelObj.name}
+                <Button size="xs" variant="ghost" className="rounded">
+                  <X
+                    className="h-3.5 w-3.5 cursor-pointer"
+                    onClick={() => onLabelChange(undefined)}
+                  />
+                </Button>
+              </div>
             </Badge>
           )}
         </div>

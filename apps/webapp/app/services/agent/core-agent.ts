@@ -8,6 +8,7 @@ import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
 import { getBackgroundTaskTools } from "./tools/background-task-tools";
 import { getSkillTool } from "./tools/skill-tools";
+import { getSleepTool } from "./tools/utils-tools";
 
 /**
  * Recursively checks if a message contains any tool part with state "approval-requested"
@@ -51,6 +52,8 @@ export const createTools = async (
   conversationId?: string,
   /** Additional channel metadata for callbacks */
   channelMetadata?: Record<string, unknown>,
+  /** When true, background task tools (spawn/list/cancel) are excluded */
+  disableBackgroundTaskTools?: boolean,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -189,6 +192,9 @@ export const createTools = async (
     });
   }
 
+  // Sleep tool — available to the main core-agent for polling/retry patterns
+  tools["sleep"] = getSleepTool();
+
   // Add acknowledge tool for channels with intermediate message support
   if (onMessage) {
     tools["acknowledge"] = tool({
@@ -224,16 +230,17 @@ export const createTools = async (
     availableChannels || ["email"],
   );
 
-  // Add background task tools (not in readOnly mode)
-  const backgroundTaskTools = readOnly
-    ? {}
-    : getBackgroundTaskTools(
-        workspaceId,
-        userId,
-        source === "web" ? "web" : channel,
-        conversationId,
-        channelMetadata,
-      );
+  // Add background task tools (not in readOnly mode, not when running as a background task itself)
+  const backgroundTaskTools =
+    readOnly || disableBackgroundTaskTools
+      ? {}
+      : getBackgroundTaskTools(
+          workspaceId,
+          userId,
+          source === "web" ? "web" : channel,
+          conversationId,
+          channelMetadata,
+        );
 
   // Add get_skill tool when skills are available
   if (skills && skills.length > 0) {

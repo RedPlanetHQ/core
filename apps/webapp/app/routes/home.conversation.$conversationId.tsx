@@ -2,7 +2,7 @@ import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
 
 import { useParams, useNavigate } from "@remix-run/react";
 import { requireUser } from "~/services/session.server";
-import { getConversationAndHistory } from "~/services/conversation.server";
+import { getConversationAndHistory, readConversation } from "~/services/conversation.server";
 import {
   ConversationItem,
   ConversationTextarea,
@@ -20,7 +20,6 @@ import {
 } from "ai";
 import { UserTypeEnum } from "@core/types";
 import React from "react";
-import { HistoryDropdown } from "~/components/conversation/history-dropdown";
 
 // Example loader accessing params
 export async function loader({ params, request }: LoaderFunctionArgs) {
@@ -33,6 +32,10 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
 
   if (!conversation) {
     throw new Error("No conversation found");
+  }
+
+  if (conversation.unread) {
+    await readConversation(conversation.id);
   }
 
   return { conversation };
@@ -119,7 +122,6 @@ export default function SingleConversation() {
             variant: "secondary",
           },
         ]}
-        actionsNode={<HistoryDropdown currentConversationId={conversationId} />}
       />
 
       <div className="relative flex h-[calc(100vh)] w-full flex-col items-center justify-center overflow-auto md:h-[calc(100vh_-_56px)]">
@@ -139,7 +141,7 @@ export default function SingleConversation() {
           <div className="flex w-full flex-col items-center">
             <div className="w-full max-w-[90ch] px-1 pr-2">
               <ConversationTextarea
-                className="bg-background-3 w-full border-1 border-gray-300"
+                className="bg-background-3 border-1 w-full border-gray-300"
                 isLoading={status === "streaming" || status === "submitted"}
                 disabled={needsApproval}
                 onConversationCreated={(message) => {
