@@ -1,0 +1,14 @@
+# OpenClaw Cron Jobs
+# Install with: crontab openclaw/cron/crontab.txt
+
+# Discovery Sprint - Dwight (Research) - taeglich 09:00
+0 9 * * * /opt/money-machine/openclaw/cron/discovery-sprint.sh >> /opt/money-machine/openclaw/memory/cron.log 2>&1
+
+# Daily Review - Monica (CEO) - taeglich 22:00
+0 22 * * * /opt/money-machine/openclaw/cron/daily-review.sh >> /opt/money-machine/openclaw/memory/cron.log 2>&1
+
+# Health Check - alle 30 Minuten
+*/30 * * * * /opt/money-machine/server/scripts/health-check.sh >> /opt/money-machine/openclaw/memory/health.log 2>&1
+
+# Auto-Deploy - alle 2 Minuten
+*/2 * * * * /opt/money-machine/server/scripts/auto-deploy.sh >> /opt/money-machine/openclaw/memory/deploy.log 2>&1

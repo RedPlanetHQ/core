@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenClaw Telegram Bot
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/money-machine/integrations/telegram
+EnvironmentFile=/opt/money-machine/.env
+ExecStart=/usr/bin/node index.js
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/money-machine/openclaw/memory/telegram-bot.log
+StandardError=append:/opt/money-machine/openclaw/memory/telegram-bot.log
+
+[Install]
+WantedBy=multi-user.target

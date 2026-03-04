@@ -1,0 +1,8 @@
+{
+  "discoveries": [],
+  "meta": {
+    "agent": "dwight",
+    "maxEntries": 100,
+    "retentionDays": 30
+  }
+}

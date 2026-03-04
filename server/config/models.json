@@ -1,0 +1,30 @@
+{
+  "models": {
+    "primary": {
+      "name": "glm4:9b-chat",
+      "provider": "ollama",
+      "purpose": "Main agent model for all 6 agents",
+      "parameters": "9B",
+      "quantization": "Q4_K_M"
+    },
+    "reranker": {
+      "name": "dengcao/Qwen3-Reranker-8B:Q5_K_M",
+      "provider": "ollama",
+      "purpose": "Document reranking for search results"
+    },
+    "embedding": {
+      "name": "text-embedding-3-small",
+      "provider": "openai",
+      "purpose": "Text embeddings for memory and search",
+      "fallback": "nomic-embed-text"
+    }
+  },
+  "pull_on_start": [
+    "glm4:9b-chat"
+  ],
+  "limits": {
+    "maxLoadedModels": 5,
+    "maxParallel": 15,
+    "flashAttention": true
+  }
+}

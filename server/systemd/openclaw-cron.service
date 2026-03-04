@@ -1,0 +1,12 @@
+[Unit]
+Description=OpenClaw Cron Job Runner
+After=network-online.target ollama.service
+
+[Service]
+Type=oneshot
+User=root
+EnvironmentFile=/opt/money-machine/.env
+ExecStart=/bin/bash -c "crontab /opt/money-machine/openclaw/cron/crontab.txt && echo 'Cron jobs installed'"
+
+[Install]
+WantedBy=multi-user.target

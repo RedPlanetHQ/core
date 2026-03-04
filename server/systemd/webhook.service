@@ -1,0 +1,51 @@
+[Unit]
+Description=OpenClaw Deploy Webhook Receiver
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/money-machine
+EnvironmentFile=/opt/money-machine/.env
+ExecStart=/usr/bin/python3 -c "
+import http.server, json, subprocess, hashlib, hmac, os
+
+WEBHOOK_SECRET = os.environ.get('WEBHOOK_SECRET', '')
+REPO_DIR = os.environ.get('DEPLOY_REPO_DIR', '/opt/money-machine')
+BRANCH = os.environ.get('DEPLOY_BRANCH', 'main')
+
+class Handler(http.server.BaseHTTPRequestHandler):
+    def do_POST(self):
+        if self.path != '/deploy':
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        content_length = int(self.headers.get('Content-Length', 0))
+        body = self.rfile.read(content_length)
+
+        if WEBHOOK_SECRET:
+            sig = self.headers.get('X-Hub-Signature-256', '')
+            expected = 'sha256=' + hmac.new(WEBHOOK_SECRET.encode(), body, hashlib.sha256).hexdigest()
+            if not hmac.compare_digest(sig, expected):
+                self.send_response(403)
+                self.end_headers()
+                return
+
+        subprocess.Popen(['/opt/money-machine/server/scripts/auto-deploy.sh'])
+        self.send_response(200)
+        self.end_headers()
+        self.wfile.write(b'Deploy triggered')
+
+    def log_message(self, format, *args):
+        pass
+
+server = http.server.HTTPServer(('0.0.0.0', int(os.environ.get('WEBHOOK_PORT', 9000))), Handler)
+server.serve_forever()
+"
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target

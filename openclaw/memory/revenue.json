@@ -1,0 +1,19 @@
+{
+  "total": {
+    "x_posts": 0,
+    "templates": 0,
+    "freelance": 0,
+    "affiliate": 0
+  },
+  "daily": [],
+  "goals": {
+    "monthly_target": 1000,
+    "currency": "EUR",
+    "streams": {
+      "x_posts": "Einnahmen durch X/Twitter Promotion Posts",
+      "templates": "Template- und Tool-Verkaeufe",
+      "freelance": "Freelance-Auftraege und Consulting",
+      "affiliate": "Affiliate-Links und Partnerprogramme"
+    }
+  }
+}

@@ -1,0 +1,18 @@
+[Unit]
+Description=OpenClaw Monitoring Dashboard
+After=network-online.target ollama.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/money-machine/dashboard
+EnvironmentFile=/opt/money-machine/.env
+ExecStart=/usr/local/bin/streamlit run dashboard.py --server.port 8503 --server.headless true --server.address 0.0.0.0
+Restart=always
+RestartSec=10
+StandardOutput=append:/opt/money-machine/openclaw/memory/dashboard.log
+StandardError=append:/opt/money-machine/openclaw/memory/dashboard.log
+
+[Install]
+WantedBy=multi-user.target

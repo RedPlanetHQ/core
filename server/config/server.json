@@ -1,0 +1,70 @@
+{
+  "server": {
+    "hostname": "hetzner-ax102",
+    "ip": "65.21.203.174",
+    "specs": {
+      "cpu": "AMD Ryzen 9 7950X3D",
+      "ram": "128GB DDR5 ECC",
+      "storage": "2x 1.92TB NVMe SSD",
+      "os": "Ubuntu 22.04 LTS"
+    }
+  },
+  "services": {
+    "ollama": {
+      "port": 11434,
+      "bind": "0.0.0.0",
+      "numParallel": 15,
+      "maxLoadedModels": 5,
+      "flashAttention": true
+    },
+    "dashboard": {
+      "port": 8503,
+      "framework": "streamlit"
+    },
+    "telegram_bot": {
+      "enabled": true,
+      "autostart": true
+    },
+    "webhook": {
+      "port": 9000,
+      "path": "/deploy"
+    },
+    "webapp": {
+      "port": 3033,
+      "framework": "remix"
+    }
+  },
+  "firewall": {
+    "default_incoming": "deny",
+    "default_outgoing": "allow",
+    "rules": [
+      {"port": 22, "proto": "tcp", "comment": "SSH"},
+      {"port": 11434, "proto": "tcp", "comment": "Ollama API"},
+      {"port": 8503, "proto": "tcp", "comment": "Dashboard"},
+      {"port": 9000, "proto": "tcp", "comment": "Deploy Webhook"},
+      {"port": 3033, "proto": "tcp", "comment": "Webapp"},
+      {"from": "100.64.0.0/10", "comment": "Tailscale"}
+    ]
+  },
+  "paths": {
+    "workspace": "/opt/money-machine",
+    "logs": "/opt/money-machine/openclaw/memory",
+    "config": "/opt/money-machine/openclaw/config",
+    "agents": "/opt/money-machine/openclaw/agents"
+  },
+  "databases": {
+    "postgresql": {
+      "port": 5432,
+      "database": "core",
+      "user": "docker"
+    },
+    "redis": {
+      "port": 6379,
+      "tls": false
+    },
+    "neo4j": {
+      "port": 7687,
+      "protocol": "bolt"
+    }
+  }
+}

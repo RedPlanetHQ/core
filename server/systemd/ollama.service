@@ -1,0 +1,19 @@
+[Unit]
+Description=Ollama AI Server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=root
+Environment="OLLAMA_HOST=0.0.0.0"
+Environment="OLLAMA_NUM_PARALLEL=15"
+Environment="OLLAMA_MAX_LOADED_MODELS=5"
+Environment="OLLAMA_FLASH_ATTENTION=1"
+ExecStart=/usr/local/bin/ollama serve
+Restart=always
+RestartSec=5
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

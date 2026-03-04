@@ -1,0 +1,42 @@
+{
+  "agents": {
+    "monica": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    },
+    "dwight": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    },
+    "kelly": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    },
+    "ryan": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    },
+    "chandler": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    },
+    "ross": {
+      "status": "idle",
+      "lastRun": null,
+      "totalRuns": 0,
+      "lastTask": null
+    }
+  },
+  "queue": [],
+  "history": []
+}

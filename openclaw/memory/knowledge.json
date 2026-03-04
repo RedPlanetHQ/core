@@ -1,0 +1,40 @@
+{
+  "topics": {},
+  "skills": {
+    "content_creation": {
+      "agent": "kelly",
+      "platforms": ["x", "instagram", "youtube", "tiktok"],
+      "templates": []
+    },
+    "research": {
+      "agent": "dwight",
+      "sources": ["web", "github", "producthunt", "hackernews"],
+      "methods": ["trend_analysis", "competitor_scan", "opportunity_detection"]
+    },
+    "coding": {
+      "agent": "ryan",
+      "languages": ["python", "typescript", "bash"],
+      "frameworks": ["remix", "nextjs", "streamlit", "fastapi"]
+    },
+    "sales": {
+      "agent": "chandler",
+      "channels": ["email", "linkedin", "direct"],
+      "strategies": ["cold_outreach", "content_marketing", "seo"]
+    },
+    "video": {
+      "agent": "ross",
+      "platforms": ["youtube"],
+      "content_types": ["tutorial", "review", "showcase"]
+    }
+  },
+  "context": {
+    "owner": "Maurice",
+    "project": "Multi-Device Money Machine",
+    "server": "Hetzner AX102 (128GB RAM, 2x 1.92TB NVMe)",
+    "ip": "65.21.203.174"
+  },
+  "meta": {
+    "maxEntries": 10000,
+    "retentionDays": 30
+  }
+}
