@@ -37,15 +37,42 @@ interface ProcessInboundMessageResult {
 }
 
 /**
- * Get or create a daily conversation for async channels.
- * One session per day per channel.
+ * Get or create a conversation for async channels.
+ * - If sessionId is present in metadata (e.g., thread_ts for Slack): one conversation per session
+ * - Otherwise: one conversation per day per channel
  */
-async function getOrCreateDailyConversation(
+export async function getOrCreateChannelConversation(
   userId: string,
   workspaceId: string,
   message: string,
   channel: string,
+  channelMetadata?: Record<string, string>,
 ): Promise<string> {
+  const sessionId = channelMetadata?.sessionId;
+
+  if (sessionId) {
+    const existing = await prisma.conversation.findFirst({
+      where: {
+        asyncJobId: sessionId,
+        userId,
+        deleted: null,
+      },
+      orderBy: { createdAt: "desc" },
+    });
+
+    if (existing) return existing.id;
+
+    const conversation = await createConversation(workspaceId, userId, {
+      message,
+      parts: [{ text: message, type: "text" }],
+      source: channel,
+      asyncJobId: sessionId,
+    });
+
+    return conversation.conversationId;
+  }
+
+  // No sessionId: daily conversation
   const todayStart = new Date();
   todayStart.setHours(0, 0, 0, 0);
 
@@ -53,6 +80,7 @@ async function getOrCreateDailyConversation(
     where: {
       userId,
       source: channel,
+      asyncJobId: null,
       deleted: null,
       createdAt: { gte: todayStart },
     },
@@ -84,7 +112,7 @@ export async function processInboundMessage({
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId =
     existingConversationId ??
-    (await getOrCreateDailyConversation(userId, workspaceId, userMessage, channel));
+    (await getOrCreateChannelConversation(userId, workspaceId, userMessage, channel, channelMetadata));
 
   // Call the same flow as web chat no_stream
   const assistantMessage = await noStreamProcess(
