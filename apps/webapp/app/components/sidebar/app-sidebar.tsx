@@ -125,7 +125,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
           </div>
         </SidebarContent>
 
-        <SidebarFooter className="flex flex-col gap-2 px-2">
+        <SidebarFooter className="flex flex-col gap-1 px-2">
           <IngestionStatus />
           <Button
             variant="secondary"
