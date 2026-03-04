@@ -10,7 +10,10 @@ import { convertToModelMessages, type ModelMessage, type Tool } from "ai";
 
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
-import { IntegrationAccountWithDefinition, IntegrationLoader } from "~/utils/mcp/integration-loader";
+import {
+  IntegrationAccountWithDefinition,
+  IntegrationLoader,
+} from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PersonalityType } from "~/services/agent/prompts/personality";
@@ -30,6 +33,7 @@ interface BuildAgentContextParams {
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
+  conversationId: string;
 }
 
 interface AgentContext {
@@ -48,6 +52,7 @@ export async function buildAgentContext({
   actionPlan,
   onMessage,
   channelMetadata,
+  conversationId,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills] = await Promise.all([
@@ -71,7 +76,8 @@ export async function buildAgentContext({
   // Determine available messaging channels
   const hasWhatsapp = !!user?.phoneNumber;
   const hasSlack = connectedIntegrations.some(
-    (int: IntegrationAccountWithDefinition) => int.integrationDefinition.slug === "slack",
+    (int: IntegrationAccountWithDefinition) =>
+      int.integrationDefinition.slug === "slack",
   );
   const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
     "email", // always available
@@ -185,7 +191,8 @@ export async function buildAgentContext({
   if (actionPlan) {
     // Detect skill reference — either structured (skillId in context) or in intent text
     const skillId = actionPlan.context?.skillId as string | undefined;
-    const skillName = (actionPlan.context?.skillName as string | undefined) || "";
+    const skillName =
+      (actionPlan.context?.skillName as string | undefined) || "";
     const hasSkillReference =
       skillId || actionPlan.intent?.toLowerCase().includes("skill");
 

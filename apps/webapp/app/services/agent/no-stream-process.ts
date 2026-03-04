@@ -110,6 +110,7 @@ export async function noStreamProcess(
     actionPlan: body.actionPlan,
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
+    conversationId: body.id,
   });
 
   // Generate response using generateText (non-streaming)
