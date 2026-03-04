@@ -23,9 +23,14 @@ export async function handleChannelMessage(
 
     if (result.unknownContact) {
       try {
-        await sendChannelInvite(result.unknownContact, channel.sendReply.bind(channel));
+        await sendChannelInvite(
+          result.unknownContact,
+          channel.sendReply.bind(channel),
+        );
       } catch (err) {
-        logger.error(`Failed to send invite via ${slug}`, { error: String(err) });
+        logger.error(`Failed to send invite via ${slug}`, {
+          error: String(err),
+        });
       }
       return channel.emptyResponse();
     }
@@ -46,9 +51,14 @@ export async function handleChannelMessage(
     });
 
     // Send typing indicator immediately (non-blocking) so user knows we're processing
-    if (channel.capabilities.sendTypingIndicator && channel.sendTypingIndicator) {
+    if (
+      channel.capabilities.sendTypingIndicator &&
+      channel.sendTypingIndicator
+    ) {
       channel.sendTypingIndicator(msg.metadata).catch((err) => {
-        logger.warn(`[${slug}] Typing indicator failed`, { error: String(err) });
+        logger.warn(`[${slug}] Typing indicator failed`, {
+          error: String(err),
+        });
       });
     }
 
@@ -92,7 +102,6 @@ export async function handleChannelMessage(
   return channel.emptyResponse();
 }
 
-
 /**
  * Send a signup/verification invite to an unknown user via their channel.
  */
@@ -102,10 +111,21 @@ export async function sendChannelInvite(
     channel: string;
     metadata?: Record<string, string>;
   },
-  sendReply: (to: string, text: string, metadata?: ReplyMetadata) => Promise<void>,
+  sendReply: (
+    to: string,
+    text: string,
+    metadata?: ReplyMetadata,
+  ) => Promise<void>,
 ): Promise<void> {
   const authCode = await createAuthorizationCode();
-  const signupUrl = `${env.APP_ORIGIN}/account/authorization-code/${authCode.code}`;
+  const token = Buffer.from(
+    JSON.stringify({
+      authorizationCode: authCode.code,
+      identifier: unknownContact.identifier,
+      source: unknownContact.channel,
+    }),
+  ).toString("base64");
+  const signupUrl = `${env.APP_ORIGIN}/agent/verify/${token}`;
 
   const message = `Hey! I'm CORE, your personal assistant.\n\nTo get started, verify your account here:\n${signupUrl}`;
 
