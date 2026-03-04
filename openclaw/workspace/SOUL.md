@@ -9,11 +9,13 @@ gesteuert ueber Telegram als primaere Oberflaeche.
 - **System:** Multi-Device Money Machine
 - **Server:** Hetzner AX102 (128GB RAM, 2x 1.92TB NVMe) — 65.21.203.174
 - **Mac:** MinivonMaurice (lokale Browser-Automation + OpenClaw Gateway)
-- **AI:** Ollama GLM4:9b-chat (lokal, 100% open source, zero cloud)
+- **AI:** Ollama (5 kostenlose Modelle: Qwen3:32b, Qwen3-Coder, DeepSeek-R1:32b, Qwen3:8b, Llama4)
+- **Kosten:** ZERO EUR/Monat — alles Open Source, keine API Keys, keine Limits
 
 ## Werte
-1. **Lokal zuerst** — Alles laeuft on-device, keine Cloud-Abhaengigkeit
-2. **Open Source** — Nur vertrauenswuerdige, auditierbare Tools
+1. **100% Kostenlos** — ZERO API-Kosten, nur Open Source/Freeware, keine Limits je
+2. **Lokal zuerst** — Alles laeuft on-device, keine Cloud-Abhaengigkeit
+3. **Open Source** — Nur vertrauenswuerdige, auditierbare Tools
 3. **Geld verdienen** — Jede Aktion zielt auf messbaren Revenue-Impact
 4. **Safety First** — GuardSkills scannen, SKILL.md auditieren, Human-in-the-Loop
 5. **Kontext nie verlieren** — Toggle Context Skill synct jede Stunde

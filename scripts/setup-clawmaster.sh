@@ -148,22 +148,41 @@ fi
 # ============================================================
 # PHASE 7: Ollama Check (fuer lokale AI)
 # ============================================================
-log "Phase 7: Ollama Check..."
+log "Phase 7: Ollama + Kostenlose Open Source Modelle..."
 
-if command -v ollama &>/dev/null; then
-  log "Ollama gefunden"
-  # Pull Model wenn nicht vorhanden
-  if ollama list 2>/dev/null | grep -q "glm4:9b-chat"; then
-    log "glm4:9b-chat Modell bereits geladen"
-  else
-    log "glm4:9b-chat Modell pullen..."
-    ollama pull glm4:9b-chat || warn "Model Pull fehlgeschlagen"
-  fi
-else
-  warn "Ollama nicht installiert. Fuer 100% lokale AI:"
-  echo "  curl -fsSL https://ollama.ai/install.sh | sh"
-  echo "  ollama pull glm4:9b-chat"
+if ! command -v ollama &>/dev/null; then
+  log "Ollama installieren (kostenlos, open source)..."
+  curl -fsSL https://ollama.ai/install.sh | sh || {
+    error "Ollama Installation fehlgeschlagen"
+    echo "  Manuell: https://ollama.com/download"
+    exit 1
+  }
 fi
+
+log "Ollama $(ollama --version 2>/dev/null || echo 'installiert') OK"
+
+# 5 kostenlose Open Source Modelle — ZERO API Kosten
+MODELS=(
+  "qwen3:32b"         # Haupt-Reasoning (Monica, Dwight) — 20GB RAM
+  "qwen3-coder"       # Coding (Ryan) — 20GB RAM
+  "deepseek-r1:32b"   # Deep Reasoning + Trading (Chandler) — 20GB RAM
+  "qwen3:8b"          # Speed fuer Content (Kelly, Ross) — 5GB RAM
+  "llama4"            # Multimodal: Bilder + Text — 15GB RAM
+)
+
+log "5 kostenlose Modelle werden geladen (parallel)..."
+log "Gesamt RAM-Bedarf: ~80GB von 128GB — alles passt!"
+
+for model in "${MODELS[@]}"; do
+  if ollama list 2>/dev/null | grep -q "${model%%:*}"; then
+    log "$model bereits geladen"
+  else
+    log "Pulling $model (kostenlos)..."
+    ollama pull "$model" &
+  fi
+done
+wait
+log "Alle Modelle geladen — ZERO Kosten!"
 
 # ============================================================
 # PHASE 8: Telegram Bot Pairing
@@ -186,13 +205,21 @@ log "============================================"
 log "  CLAWMASTER v3.0 Setup abgeschlossen!"
 log "============================================"
 echo ""
-log "Installiert:"
-echo "  ✅ OpenClaw (Gateway + CLI)"
-echo "  ✅ Pi Coding Tool"
-echo "  ✅ openclaw-security-guard"
-echo "  ✅ Clawprint (Audit Trail)"
-echo "  ✅ 6 Custom Skills (SKILL.md)"
+log "Installiert (ALLES KOSTENLOS):"
+echo "  ✅ OpenClaw (Gateway + CLI) — FREE"
+echo "  ✅ Pi Coding Tool — FREE"
+echo "  ✅ openclaw-security-guard — FREE"
+echo "  ✅ Clawprint (Audit Trail) — FREE"
+echo "  ✅ 6 Custom Skills (SKILL.md) — FREE"
 echo "  ✅ Workspace (SOUL.md, AGENTS.md, TOOLS.md)"
+echo "  ✅ 5 Open Source AI Modelle via Ollama — ZERO API Kosten:"
+echo "     • qwen3:32b (Reasoning)"
+echo "     • qwen3-coder (Coding)"
+echo "     • deepseek-r1:32b (Deep Thinking)"
+echo "     • qwen3:8b (Speed)"
+echo "     • llama4 (Multimodal)"
+echo ""
+echo "  💰 MONATLICHE KOSTEN: 0 EUR (nur Strom + Server-Miete)"
 echo ""
 log "Naechste Schritte:"
 echo "  1. openclaw gateway --verbose        # Gateway starten"

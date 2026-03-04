@@ -1,12 +1,20 @@
 {
   "agent": {
-    "model": "ollama/glm4:9b-chat",
+    "model": "ollama/qwen3:32b",
     "maxSteps": 100,
-    "temperature": 0.7
+    "temperature": 0.7,
+    "_comment": "100% LOKAL — Kein API Key noetig, keine Kosten, alles Open Source"
   },
   "providers": {
     "ollama": {
-      "baseURL": "http://localhost:11434"
+      "baseURL": "http://localhost:11434",
+      "_models": {
+        "primary": "qwen3:32b (Reasoning + General — 20GB RAM)",
+        "coding": "qwen3-coder (Code-Generierung — 20GB RAM)",
+        "reasoning": "deepseek-r1:32b (Deep Thinking — 20GB RAM)",
+        "fast": "qwen3:8b (Schnelle Antworten — 5GB RAM)",
+        "multimodal": "llama4 (Bilder + Text — 15GB RAM)"
+      }
     }
   },
   "browser": {
