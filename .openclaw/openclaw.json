@@ -3,17 +3,18 @@
     "model": "ollama/qwen3:32b",
     "maxSteps": 100,
     "temperature": 0.7,
-    "_comment": "100% LOKAL — Kein API Key noetig, keine Kosten, alles Open Source"
+    "_comment": "PFEIFER GALAXIA OS — 100% LOKAL, ZERO KOSTEN, Open Source"
   },
   "providers": {
     "ollama": {
       "baseURL": "http://localhost:11434",
       "_models": {
-        "primary": "qwen3:32b (Reasoning + General — 20GB RAM)",
-        "coding": "qwen3-coder (Code-Generierung — 20GB RAM)",
-        "reasoning": "deepseek-r1:32b (Deep Thinking — 20GB RAM)",
-        "fast": "qwen3:8b (Schnelle Antworten — 5GB RAM)",
-        "multimodal": "llama4 (Bilder + Text — 15GB RAM)"
+        "primary": "qwen3:32b (Monica, Dwight, Pam — 20GB RAM)",
+        "coding": "qwen3-coder (Ryan — 20GB RAM)",
+        "reasoning": "deepseek-r1:32b (Chandler — 20GB RAM)",
+        "speed": "qwen3:14b (Kelly, Ross — 10GB RAM)",
+        "multimodal": "llama4 (Thumbnails, Screenshots — 15GB RAM)",
+        "embeddings": "nomic-embed-text (Vector-Search — 0.5GB RAM)"
       }
     }
   },
@@ -54,7 +55,16 @@
       "botToken": "${TELEGRAM_BOT_TOKEN}",
       "adminId": "8531161985",
       "activation": "always",
-      "forumTopics": true
+      "forumTopics": true,
+      "_topics": {
+        "monica": "Orchestration & Strategy",
+        "dwight": "Research & Insights",
+        "kelly": "Writing & X-Content",
+        "pam": "Newsletter & Products",
+        "ryan": "Code & Automation",
+        "chandler": "Money Printer (Sales + Trading)",
+        "ross": "Video & YouTube"
+      }
     }
   },
   "gateway": {
@@ -63,7 +73,15 @@
   "memory": {
     "enabled": true,
     "maxEntries": 10000,
-    "retentionDays": 30
+    "retentionDays": 90
+  },
+  "galaxia": {
+    "root": "/root/galaxia",
+    "vectorDb": "/root/galaxia/vector_db",
+    "planets": "/root/galaxia/planets",
+    "embedModel": "nomic-embed-text",
+    "autoIndex": true,
+    "indexInterval": "1h"
   },
   "skills": {
     "entries": {
@@ -72,7 +90,16 @@
       "meta-ads": { "enabled": true },
       "trading-monitor": { "enabled": true },
       "content-engine": { "enabled": true },
-      "seo-ranker": { "enabled": true }
+      "seo-ranker": { "enabled": true },
+      "agent-team-orchestration": { "enabled": true },
+      "self-improving-agent": { "enabled": true },
+      "bookkeeper": { "enabled": true },
+      "agent-earner": { "enabled": true },
+      "youtube-factory": { "enabled": true },
+      "thumbnail-optimizer": { "enabled": true },
+      "youtube-studio-uploader": { "enabled": true },
+      "laser-focus": { "enabled": true },
+      "agent-memory-ultimate": { "enabled": true }
     }
   },
   "security": {

@@ -1,6 +1,7 @@
 #!/bin/bash
-# CLAWMASTER v3.0 — Complete Setup Script
-# Installiert OpenClaw + Pi + Security Tools auf Mac und Server
+# PFEIFER GALAXIA OS — Complete Setup Script
+# Installiert OpenClaw + Galaxia + Ollama + Skills auf Mac und Server
+# 100% kostenlos, 100% Open Source, ZERO API Kosten
 set -euo pipefail
 
 GREEN='\033[0;32m'
@@ -18,7 +19,7 @@ SKILLS_DIR="$WORKSPACE/skills"
 # ============================================================
 # PHASE 1: System Check
 # ============================================================
-log "=== CLAWMASTER v3.0 Setup ==="
+log "=== PFEIFER GALAXIA OS Setup ==="
 log "Phase 1: System Check..."
 
 # Check Node.js >= 22
@@ -161,17 +162,18 @@ fi
 
 log "Ollama $(ollama --version 2>/dev/null || echo 'installiert') OK"
 
-# 5 kostenlose Open Source Modelle — ZERO API Kosten
+# 6 kostenlose Open Source Modelle — ZERO API Kosten
 MODELS=(
-  "qwen3:32b"         # Haupt-Reasoning (Monica, Dwight) — 20GB RAM
-  "qwen3-coder"       # Coding (Ryan) — 20GB RAM
-  "deepseek-r1:32b"   # Deep Reasoning + Trading (Chandler) — 20GB RAM
-  "qwen3:8b"          # Speed fuer Content (Kelly, Ross) — 5GB RAM
-  "llama4"            # Multimodal: Bilder + Text — 15GB RAM
+  "qwen3:32b"         # Primary: Monica, Dwight, Pam — 20GB RAM
+  "qwen3-coder"       # Coding: Ryan — 20GB RAM
+  "deepseek-r1:32b"   # Reasoning: Chandler (Trading) — 20GB RAM
+  "qwen3:14b"         # Speed: Kelly, Ross (Content) — 10GB RAM
+  "llama4"            # Multimodal: Thumbnails + Screenshots — 15GB RAM
+  "nomic-embed-text"  # Embeddings: Galaxia Vector-Search — 0.5GB RAM
 )
 
-log "5 kostenlose Modelle werden geladen (parallel)..."
-log "Gesamt RAM-Bedarf: ~80GB von 128GB — alles passt!"
+log "6 kostenlose Modelle werden geladen (parallel)..."
+log "Gesamt RAM-Bedarf: ~86GB von 128GB — 42GB Reserve!"
 
 for model in "${MODELS[@]}"; do
   if ollama list 2>/dev/null | grep -q "${model%%:*}"; then
@@ -194,15 +196,56 @@ echo "  1. Oeffne Telegram → @BotFather → /newbot (oder bestehenden Bot nutz
 echo "  2. Bot Token kopieren"
 echo "  3. openclaw channels login"
 echo "  4. Telegram waehlen, Token eingeben"
-echo "  5. Supergroup erstellen mit 6 Topics (siehe telegram-topics/)"
+echo "  5. Supergroup erstellen mit 7 Topics (Inner Circle — Pfeifer Profit Squad)"
+echo "     Topics: Monica, Dwight, Kelly, Pam, Ryan, Chandler, Ross"
 echo ""
+
+# ============================================================
+# PHASE 9: Galaxia OS Setup
+# ============================================================
+log "Phase 9: Galaxia OS initialisieren..."
+
+GALAXIA_ROOT="/root/galaxia"
+mkdir -p "$GALAXIA_ROOT"/{planets,vector_db,scripts,skills,logs}
+
+# Galaxia Vector Core + Scripts kopieren
+if [ -d "$SCRIPT_DIR/galaxia" ]; then
+  cp "$SCRIPT_DIR/galaxia/galaxia-vector-core.py" "$GALAXIA_ROOT/" 2>/dev/null || true
+  cp "$SCRIPT_DIR/galaxia/scripts/"* "$GALAXIA_ROOT/scripts/" 2>/dev/null || true
+  chmod +x "$GALAXIA_ROOT/scripts/"*.sh 2>/dev/null || true
+  chmod +x "$GALAXIA_ROOT/galaxia-vector-core.py" 2>/dev/null || true
+  log "Galaxia Vector Core + Scripts installiert"
+fi
+
+# Python Dependencies (alle kostenlos)
+log "Python Dependencies installieren..."
+pip3 install --quiet lancedb pillow requests piper-tts 2>/dev/null || {
+  warn "Einige Python Pakete konnten nicht installiert werden"
+  echo "  Manuell: pip3 install lancedb pillow requests piper-tts"
+}
+
+# Nomic Embed Model fuer Vector-Search
+if command -v ollama &>/dev/null; then
+  if ! ollama list 2>/dev/null | grep -q "nomic-embed"; then
+    log "Embedding-Modell pullen (fuer Vector-Search)..."
+    ollama pull nomic-embed-text &
+  fi
+fi
+
+# Initial Planeten spawnen
+log "Initiale Planeten spawnen..."
+"$GALAXIA_ROOT/scripts/spawn-planet.sh" "Revenue-Planet" "Templates verkaufen und Freelance-Einnahmen generieren" 2>/dev/null || true
+"$GALAXIA_ROOT/scripts/spawn-planet.sh" "YouTube-Planet-001" "Ersten 3 YouTube Videos produzieren und hochladen" 2>/dev/null || true
+wait
+
+log "Galaxia OS initialisiert!"
 
 # ============================================================
 # SUMMARY
 # ============================================================
 echo ""
 log "============================================"
-log "  CLAWMASTER v3.0 Setup abgeschlossen!"
+log "  PFEIFER GALAXIA OS Setup abgeschlossen!"
 log "============================================"
 echo ""
 log "Installiert (ALLES KOSTENLOS):"
@@ -210,23 +253,31 @@ echo "  ✅ OpenClaw (Gateway + CLI) — FREE"
 echo "  ✅ Pi Coding Tool — FREE"
 echo "  ✅ openclaw-security-guard — FREE"
 echo "  ✅ Clawprint (Audit Trail) — FREE"
-echo "  ✅ 6 Custom Skills (SKILL.md) — FREE"
-echo "  ✅ Workspace (SOUL.md, AGENTS.md, TOOLS.md)"
-echo "  ✅ 5 Open Source AI Modelle via Ollama — ZERO API Kosten:"
-echo "     • qwen3:32b (Reasoning)"
-echo "     • qwen3-coder (Coding)"
-echo "     • deepseek-r1:32b (Deep Thinking)"
-echo "     • qwen3:8b (Speed)"
-echo "     • llama4 (Multimodal)"
+echo "  ✅ 15 Custom Skills (ClawHub) — FREE"
+echo "  ✅ Galaxia Vector Core (LanceDB + Ollama Embeddings) — FREE"
+echo "  ✅ Thumbnail Optimizer (Pillow + AI Critique) — FREE"
+echo "  ✅ Planet Spawn System — FREE"
+echo "  ✅ Workspace (GALAXIA_CORE.md, AGENTS.md, REVENUE-LOG.md)"
+echo "  ✅ 6 Open Source AI Modelle via Ollama — ZERO API Kosten:"
+echo "     • qwen3:32b (Primary: Monica, Dwight, Pam)"
+echo "     • qwen3-coder (Code: Ryan)"
+echo "     • deepseek-r1:32b (Reasoning: Chandler)"
+echo "     • qwen3:14b (Speed: Kelly, Ross)"
+echo "     • llama4 (Multimodal: Thumbnails)"
+echo "     • nomic-embed-text (Vector-Search)"
 echo ""
 echo "  💰 MONATLICHE KOSTEN: 0 EUR (nur Strom + Server-Miete)"
+echo ""
+log "Inner Circle — 7 Agents:"
+echo "  🎯 Monica (CEO)  🔍 Dwight (Research)  ✍️ Kelly (X-Content)"
+echo "  📧 Pam (Products) 💻 Ryan (Code) 💰 Chandler (Sales) 🎬 Ross (YouTube)"
 echo ""
 log "Naechste Schritte:"
 echo "  1. openclaw gateway --verbose        # Gateway starten"
 echo "  2. openclaw channels login            # Telegram pairen"
-echo "  3. Toggle Trial starten: https://claw.toggle.pro"
-echo "  4. Telegram Supergroup erstellen mit 6 Topics"
-echo "  5. Job Descriptions in Topics posten (siehe telegram-topics/)"
+echo "  3. Telegram Supergroup mit 7 Topics erstellen"
+echo "  4. python3 /root/galaxia/galaxia-vector-core.py status"
+echo "  5. Monica: 'Galaxia online. Starte Expansion.'"
 echo ""
 log "Security Check:"
 echo "  openclaw security audit --deep"
