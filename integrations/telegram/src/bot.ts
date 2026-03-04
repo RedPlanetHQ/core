@@ -162,6 +162,12 @@ async function handleMessage(botToken: string, message: any) {
         '/deploylog - Deploy-Logs anzeigen',
         '/logs     - Letzte Bot-Logs',
         '',
+        'Mac Remote (Admin):',
+        '/mac          - Mac-Befehle & Hilfe',
+        '/mac status   - Mac erreichbar?',
+        '/mac info     - Mac System-Info',
+        '/mac <cmd>    - Befehl auf Mac ausfuehren',
+        '',
         'Promo Commands:',
         'Link senden - Automatisch Promo erstellen',
         'Text weiterleiten - Promo aus Inhalt',
@@ -344,6 +350,155 @@ async function handleMessage(botToken: string, message: any) {
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
       text: `Deploy Logs:\n\n${logs}`,
+    });
+    return;
+  }
+
+  // --- Mac Remote Control via SSH ---
+  if (text === '/mac' || text === '/mac help') {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: [
+        'Mac Remote Control (via SSH)',
+        '',
+        '/mac status     - Pruefen ob Mac erreichbar',
+        '/mac info       - Mac System-Info',
+        '/mac ip         - Mac IP-Adressen',
+        '/mac ssh-setup  - SSH Setup-Anleitung',
+        '/mac <befehl>   - Beliebigen Befehl ausfuehren',
+        '',
+        'Beispiele:',
+        '/mac ls ~/Desktop',
+        '/mac open -a Safari',
+        '/mac pmset displaysleepnow',
+        '/mac say "Hallo Maurice"',
+        '',
+        `SSH Host: ${process.env.MAC_SSH_HOST || 'nicht konfiguriert'}`,
+        `SSH User: ${process.env.MAC_SSH_USER || 'nicht konfiguriert'}`,
+      ].join('\n'),
+    });
+    return;
+  }
+
+  if (text.startsWith('/mac ')) {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    const macHost = process.env.MAC_SSH_HOST;
+    const macUser = process.env.MAC_SSH_USER || 'maurice';
+    const macPort = process.env.MAC_SSH_PORT || '22';
+    const macKeyPath = process.env.MAC_SSH_KEY || '/root/.ssh/mac_id_ed25519';
+    const subCmd = text.slice(5).trim();
+
+    // Check if Mac SSH is configured
+    if (!macHost) {
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'Mac SSH nicht konfiguriert!',
+          '',
+          'Setze diese Variablen in .env:',
+          'MAC_SSH_HOST=<deine-mac-ip-oder-tailscale-ip>',
+          'MAC_SSH_USER=maurice',
+          'MAC_SSH_PORT=22',
+          'MAC_SSH_KEY=/root/.ssh/mac_id_ed25519',
+          '',
+          'Tailscale IP findest du auf dem Mac mit:',
+          'tailscale ip -4',
+          '',
+          'Oder verwende /mac ssh-setup fuer die volle Anleitung.',
+        ].join('\n'),
+      });
+      return;
+    }
+
+    // Built-in sub-commands
+    if (subCmd === 'status') {
+      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+      const ping = execCommand(`ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo 'CONNECTED' && hostname && uptime" 2>&1`, 15000);
+
+      const isConnected = ping.includes('CONNECTED');
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: isConnected
+          ? `Mac ist ONLINE\n\n${ping}`
+          : `Mac ist OFFLINE oder nicht erreichbar\n\n${ping}`,
+      });
+      return;
+    }
+
+    if (subCmd === 'info') {
+      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+      const info = execCommand(`ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo '=== Mac Info ===' && sw_vers && echo '' && echo '=== Hardware ===' && system_profiler SPHardwareDataType | grep -E 'Model|Chip|Memory|Serial' && echo '' && echo '=== Disk ===' && df -h / | tail -1 && echo '' && echo '=== Uptime ===' && uptime" 2>&1`, 20000);
+
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: info,
+      });
+      return;
+    }
+
+    if (subCmd === 'ip') {
+      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+      const ipInfo = execCommand(`ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo 'LAN:' && ifconfig | grep 'inet ' | grep -v 127.0.0.1 && echo '' && echo 'Tailscale:' && (tailscale ip -4 2>/dev/null || echo 'nicht installiert') && echo '' && echo 'Public:' && curl -s ifconfig.me" 2>&1`, 20000);
+
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: `Mac IP Adressen:\n\n${ipInfo}`,
+      });
+      return;
+    }
+
+    if (subCmd === 'ssh-setup') {
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'Mac SSH Setup Anleitung:',
+          '',
+          '1. Auf dem Mac Terminal:',
+          '   sudo systemsetup -setremotelogin on',
+          '',
+          '2. SSH-Key auf Server erstellen:',
+          '   ssh-keygen -t ed25519 -f /root/.ssh/mac_id_ed25519 -N ""',
+          '',
+          '3. Key zum Mac kopieren:',
+          '   ssh-copy-id -i /root/.ssh/mac_id_ed25519.pub maurice@<mac-ip>',
+          '',
+          '4. Tailscale auf beiden installieren:',
+          '   Mac: brew install tailscale',
+          '   Server: curl -fsSL https://tailscale.com/install.sh | sh',
+          '',
+          '5. .env auf Server anpassen:',
+          '   MAC_SSH_HOST=100.x.x.x  (Tailscale IP)',
+          '   MAC_SSH_USER=maurice',
+          '   MAC_SSH_KEY=/root/.ssh/mac_id_ed25519',
+          '',
+          '6. Testen: /mac status',
+          '',
+          'Oder fuehre auf dem Mac aus:',
+          '   bash <(curl -s https://raw.githubusercontent.com/Maurice-AIEMPIRE/core/main/scripts/setup-mac-ssh.sh)',
+        ].join('\n'),
+      });
+      return;
+    }
+
+    // Generic command execution on Mac
+    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+    const sshCmd = `ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} ${JSON.stringify(subCmd)}`;
+    const output = execCommand(sshCmd, 30000);
+    const truncated = output.length > 3500 ? output.slice(-3500) + '\n...(gekuerzt)' : output;
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `mac$ ${subCmd}\n\n${truncated || '(keine Ausgabe)'}`,
     });
     return;
   }
