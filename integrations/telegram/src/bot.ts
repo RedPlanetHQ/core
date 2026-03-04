@@ -2,6 +2,49 @@ import { callTelegramApi, formatUser } from './utils';
 import { extractMedia, downloadTelegramFile, extractUrls, classifyUrl, getStorageStats } from './media';
 import { chat, clearSession, getSessionInfo, getProviderName, generatePromo } from './chat';
 import { scrapeUrl } from './scraper';
+import { execSync } from 'child_process';
+import * as fs from 'fs';
+import * as path from 'path';
+
+// Admin ID for privileged commands (set TELEGRAM_ADMIN_ID in .env)
+const ADMIN_ID = parseInt(process.env.TELEGRAM_ADMIN_ID ?? '0', 10);
+
+// Agent configs directory
+const AGENTS_DIR = path.resolve(__dirname, '../../../openclaw/agents');
+
+function isAdmin(userId: number): boolean {
+  return ADMIN_ID === 0 || userId === ADMIN_ID;
+}
+
+function loadAgentConfigs(): Array<{ id: string; name: string; role: string; model: string }> {
+  const agents: Array<{ id: string; name: string; role: string; model: string }> = [];
+  try {
+    if (!fs.existsSync(AGENTS_DIR)) return agents;
+    const dirs = fs.readdirSync(AGENTS_DIR, { withFileTypes: true })
+      .filter(d => d.isDirectory());
+    for (const dir of dirs) {
+      const configPath = path.join(AGENTS_DIR, dir.name, 'config.json');
+      if (fs.existsSync(configPath)) {
+        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
+        agents.push({
+          id: cfg.id ?? dir.name,
+          name: cfg.name ?? dir.name,
+          role: cfg.role ?? 'Agent',
+          model: cfg.model ?? 'glm4:9b-chat',
+        });
+      }
+    }
+  } catch (_) {}
+  return agents;
+}
+
+function execCommand(cmd: string, timeoutMs = 15000): string {
+  try {
+    return execSync(cmd, { timeout: timeoutMs, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
+  } catch (err: any) {
+    return err.stderr?.trim() || err.message || 'Befehl fehlgeschlagen';
+  }
+}
 
 // --- Pending promo drafts (per chat) ---
 interface PendingPromo {
@@ -30,18 +73,20 @@ async function handleMessage(botToken: string, message: any) {
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
       text: [
-        `Hey ${message.from?.first_name ?? 'there'}! Ich bin M0Claw.`,
+        `Hey ${message.from?.first_name ?? 'there'}! Ich bin M0Claw - dein Agent Controller.`,
         '',
-        'Schick mir einen Link — ich erstelle sofort einen Promo-Post.',
-        'Du kannst ihn dann freigeben, bearbeiten oder verwerfen.',
+        'Ich bin dein persoenlicher AI-Agent mit voller Systemkontrolle.',
+        'Schreib mir einfach was du willst - ich fuehre es aus.',
         '',
-        'Oder schreib mir einfach — ich antworte wie ein AI-Chat.',
+        'Quick Commands:',
+        '/agents  - Alle Agents anzeigen',
+        '/system  - Server-Status',
+        '/models  - Ollama Models',
+        '/exec    - Shell-Befehle ausfuehren',
+        '/help    - Alle Befehle',
         '',
-        'Befehle:',
-        '/start  — Diese Hilfe',
-        '/clear  — Chat-Verlauf löschen',
-        '/status — Bot-Status & Speicher',
-        '/ping   — Pong!',
+        'Oder schick mir einen Link fuer automatische Promo-Erstellung.',
+        'Einfach schreiben = AI Chat mit GLM4.',
       ].join('\n'),
     });
     return;
@@ -88,6 +133,159 @@ async function handleMessage(botToken: string, message: any) {
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
       text: 'Pong!',
+    });
+    return;
+  }
+
+  if (text === '/help') {
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: [
+        'M0Claw Agent Controller',
+        '',
+        'Chat Commands:',
+        '/start    - Hilfe anzeigen',
+        '/help     - Alle Befehle',
+        '/clear    - Chat loeschen',
+        '/status   - Bot Status',
+        '/ping     - Verbindungstest',
+        '',
+        'Agent Commands:',
+        '/agents   - Alle Agents auflisten',
+        '/agent <name> - Agent-Details',
+        '/models   - Ollama Models auflisten',
+        '',
+        'System Commands (Admin):',
+        '/system   - Server-Status (RAM, Disk, Services)',
+        '/exec <cmd> - Shell-Befehl ausfuehren',
+        '/logs     - Letzte Bot-Logs',
+        '',
+        'Promo Commands:',
+        'Link senden - Automatisch Promo erstellen',
+        'Text weiterleiten - Promo aus Inhalt',
+        '',
+        'Einfach schreiben = AI Chat mit GLM4',
+      ].join('\n'),
+    });
+    return;
+  }
+
+  if (text === '/agents') {
+    const agents = loadAgentConfigs();
+    if (agents.length === 0) {
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: 'Keine Agents konfiguriert.\nErstelle Configs in openclaw/agents/<name>/config.json',
+      });
+      return;
+    }
+
+    const lines = agents.map(a => `${a.name} (${a.id})\n  Rolle: ${a.role}\n  Model: ${a.model}`);
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: ['Agents:', '', ...lines].join('\n'),
+    });
+    return;
+  }
+
+  if (text.startsWith('/agent ')) {
+    const agentId = text.slice(7).trim().toLowerCase();
+    const agents = loadAgentConfigs();
+    const agent = agents.find(a => a.id === agentId || a.name.toLowerCase() === agentId);
+
+    if (!agent) {
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: `Agent "${agentId}" nicht gefunden.\n/agents zeigt alle verfuegbaren Agents.`,
+      });
+      return;
+    }
+
+    // Read full config
+    const configPath = path.join(AGENTS_DIR, agent.id, 'config.json');
+    let configText = 'Config nicht lesbar';
+    try {
+      configText = fs.readFileSync(configPath, 'utf-8');
+    } catch (_) {}
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: [`Agent: ${agent.name}`, `ID: ${agent.id}`, `Rolle: ${agent.role}`, `Model: ${agent.model}`, '', 'Config:', configText].join('\n'),
+    });
+    return;
+  }
+
+  if (text === '/models') {
+    const output = execCommand('ollama list 2>/dev/null || echo "Ollama nicht erreichbar"');
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `Ollama Models:\n\n${output}`,
+    });
+    return;
+  }
+
+  if (text === '/system') {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    const ram = execCommand("free -h | head -2");
+    const disk = execCommand("df -h / | tail -1");
+    const uptime = execCommand("uptime -p");
+    const ollamaStatus = execCommand("curl -s -m 3 http://localhost:11434/api/tags > /dev/null && echo 'Running' || echo 'Down'");
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: [
+        'System Status:',
+        '',
+        `Uptime: ${uptime}`,
+        '',
+        `RAM:\n${ram}`,
+        '',
+        `Disk: ${disk}`,
+        '',
+        `Ollama: ${ollamaStatus}`,
+        `AI Model: ${process.env.AI_MODEL ?? 'nicht gesetzt'}`,
+      ].join('\n'),
+    });
+    return;
+  }
+
+  if (text.startsWith('/exec ')) {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    const cmd = text.slice(6).trim();
+    if (!cmd) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Usage: /exec <befehl>' });
+      return;
+    }
+
+    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+    const output = execCommand(cmd, 30000);
+    const truncated = output.length > 3500 ? output.slice(-3500) + '\n...(gekuerzt)' : output;
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `$ ${cmd}\n\n${truncated || '(keine Ausgabe)'}`,
+    });
+    return;
+  }
+
+  if (text === '/logs') {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    const logs = execCommand("tail -30 /tmp/telegram-bot.log 2>/dev/null || echo 'Keine Logs gefunden'");
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `Letzte Logs:\n\n${logs}`,
     });
     return;
   }

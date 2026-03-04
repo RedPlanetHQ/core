@@ -1,0 +1,21 @@
+{
+  "id": "monica",
+  "name": "Monica",
+  "role": "CEO / Orchestrator",
+  "description": "Multi-Device Orchestrator - Koordiniert alle Agenten",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "coordination",
+    "revenue_tracking",
+    "self_improvement",
+    "multi_device_management",
+    "system_control",
+    "agent_management"
+  ],
+  "maxSteps": 100,
+  "reasoningMode": "medium",
+  "memoryEnabled": true,
+  "plugins": ["telegram", "revenue", "monitoring"]
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ryan",
+  "name": "Ryan",
+  "role": "Code Engineer",
+  "description": "Code Generation & Technical Tasks",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "code_generation",
+    "debugging",
+    "code_review",
+    "automation"
+  ],
+  "maxSteps": 120,
+  "reasoningMode": "high",
+  "memoryEnabled": true
+}

@@ -1,0 +1,18 @@
+{
+  "id": "dwight",
+  "name": "Dwight",
+  "role": "Research Lead",
+  "description": "Deep Research & Intelligence Backbone",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "web_search",
+    "data_mining",
+    "trend_analysis",
+    "fact_checking"
+  ],
+  "maxSteps": 150,
+  "reasoningMode": "high",
+  "memoryEnabled": true
+}

@@ -1,0 +1,53 @@
+{
+  "version": "2026.3.4",
+  "workspace": "/opt/money-machine",
+  "agent": {
+    "id": "main",
+    "model": "ollama/glm4:9b-chat",
+    "maxSteps": 100,
+    "provider": "ollama",
+    "temperature": 0.7
+  },
+  "providers": {
+    "ollama": {
+      "baseURL": "http://localhost:11434",
+      "numParallel": 15,
+      "maxLoadedModels": 5,
+      "flashAttention": true
+    }
+  },
+  "memory": {
+    "enabled": true,
+    "maxEntries": 10000,
+    "retentionDays": 30
+  },
+  "plugins": {
+    "telegram": {
+      "enabled": true,
+      "botToken": "${TELEGRAM_BOT_TOKEN}",
+      "adminId": "8531161985"
+    }
+  },
+  "optimization": {
+    "maxMemoryUsage": "110GB",
+    "maxConcurrentAgents": 15,
+    "autoScaling": true
+  },
+  "cron": {
+    "enabled": true,
+    "jobs": [
+      {
+        "id": "discovery-sprint",
+        "schedule": "0 9 * * *",
+        "agent": "dwight",
+        "command": "Starte Discovery Sprint"
+      },
+      {
+        "id": "daily-review",
+        "schedule": "0 22 * * *",
+        "agent": "monica",
+        "command": "Starte Daily Review"
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "id": "chandler",
+  "name": "Chandler",
+  "role": "Sales & Marketing",
+  "description": "Sales Automation & Marketing Strategy",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "sales_automation",
+    "lead_generation",
+    "marketing_strategy",
+    "analytics"
+  ],
+  "maxSteps": 80,
+  "reasoningMode": "medium",
+  "memoryEnabled": true
+}

@@ -1,0 +1,18 @@
+{
+  "id": "ross",
+  "name": "Ross",
+  "role": "YouTube & Video",
+  "description": "YouTube Content & Video Strategy",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "video_strategy",
+    "script_writing",
+    "seo_optimization",
+    "thumbnail_ideas"
+  ],
+  "maxSteps": 60,
+  "reasoningMode": "medium",
+  "memoryEnabled": true
+}

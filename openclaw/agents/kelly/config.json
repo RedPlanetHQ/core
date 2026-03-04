@@ -1,0 +1,18 @@
+{
+  "id": "kelly",
+  "name": "Kelly",
+  "role": "Content Creator",
+  "description": "Social Media & Content Creation",
+  "model": "ollama/glm4:9b-chat",
+  "provider": "ollama",
+  "device": "server",
+  "capabilities": [
+    "content_creation",
+    "social_media",
+    "copywriting",
+    "hashtag_generation"
+  ],
+  "maxSteps": 80,
+  "reasoningMode": "medium",
+  "memoryEnabled": true
+}
