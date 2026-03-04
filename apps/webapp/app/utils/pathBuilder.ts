@@ -11,7 +11,7 @@ export function homePath() {
 }
 
 export function graphPath() {
-  return `/home/graph`;
+  return `/home/memory/graph`;
 }
 
 export function documentsPath() {

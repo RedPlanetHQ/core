@@ -20,7 +20,7 @@ import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccoun
 import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
 import { getRedirectURL } from "~/services/oauth/oauth.server";
 
-import { episodesPath } from "~/utils/pathBuilder";
+import { documentsPath } from "~/utils/pathBuilder";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -48,7 +48,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (user.onboardingComplete) {
-    return redirect(episodesPath());
+    return redirect(documentsPath());
   }
 
   return {
