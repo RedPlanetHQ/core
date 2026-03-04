@@ -1,6 +1,6 @@
 import { useFetcher, useNavigate } from "@remix-run/react";
 import { useEffect } from "react";
-import { Ellipsis, Timer } from "lucide-react";
+import { Ellipsis, GitBranch, Timer } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import {
@@ -25,7 +25,8 @@ type ConversationListResponse = {
 
 function getSourceIcon(source: string) {
   if (!source || source === "core") return null;
-  if (source === "background-task") return <Timer size={13} />;
+  if (source === "reminder") return <Timer size={13} />;
+  if (source === "background-task") return <GitBranch size={13} />;
   const key = source.startsWith("integration_")
     ? source.slice("integration_".length)
     : source;
