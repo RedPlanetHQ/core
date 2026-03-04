@@ -158,6 +158,8 @@ async function handleMessage(botToken: string, message: any) {
         'System Commands (Admin):',
         '/system   - Server-Status (RAM, Disk, Services)',
         '/exec <cmd> - Shell-Befehl ausfuehren',
+        '/deploy   - Git pull + Services neustarten',
+        '/deploylog - Deploy-Logs anzeigen',
         '/logs     - Letzte Bot-Logs',
         '',
         'Promo Commands:',
@@ -286,6 +288,62 @@ async function handleMessage(botToken: string, message: any) {
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
       text: `Letzte Logs:\n\n${logs}`,
+    });
+    return;
+  }
+
+  if (text === '/deploy') {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: 'Deploy gestartet... git pull + restart',
+    });
+    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+
+    const repoDir = process.env.DEPLOY_REPO_DIR || '/opt/money-machine';
+    const branch = process.env.DEPLOY_BRANCH || 'main';
+
+    // Git pull
+    const pullResult = execCommand(`cd ${repoDir} && git pull origin ${branch} 2>&1`, 30000);
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `Git Pull:\n${pullResult}`,
+    });
+
+    // Run auto-deploy script if it exists
+    const deployResult = execCommand(`cd ${repoDir} && bash server/scripts/auto-deploy.sh 2>&1`, 60000);
+
+    const shortHash = execCommand(`cd ${repoDir} && git rev-parse --short HEAD`);
+    const lastCommit = execCommand(`cd ${repoDir} && git log -1 --pretty=format:"%s"`);
+
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: [
+        'Deploy abgeschlossen!',
+        '',
+        `Commit: ${shortHash}`,
+        `Message: ${lastCommit}`,
+        '',
+        deployResult ? `Details:\n${deployResult.slice(-1000)}` : '',
+      ].join('\n'),
+    });
+    return;
+  }
+
+  if (text === '/deploylog') {
+    if (!isAdmin(message.from?.id ?? 0)) {
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
+      return;
+    }
+
+    const logs = execCommand("tail -40 /var/log/auto-deploy.log 2>/dev/null || echo 'Keine Deploy-Logs gefunden'");
+    await callTelegramApi(botToken, 'sendMessage', {
+      chat_id: chatId,
+      text: `Deploy Logs:\n\n${logs}`,
     });
     return;
   }
