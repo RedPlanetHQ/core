@@ -1,567 +1,101 @@
+import { readFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+// Load .env from same directory as this script
+try {
+  const envPath = resolve(dirname(fileURLToPath(import.meta.url)), '..', '.env');
+  const envContent = readFileSync(envPath, 'utf-8');
+  for (const line of envContent.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eqIdx = trimmed.indexOf('=');
+    if (eqIdx > 0) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed.slice(eqIdx + 1).trim();
+      if (!process.env[key]) process.env[key] = val;
+    }
+  }
+} catch {}
+
 import { callTelegramApi, formatUser } from './utils';
 import { extractMedia, downloadTelegramFile, extractUrls, classifyUrl, getStorageStats } from './media';
-import { chat, clearSession, getSessionInfo, getProviderName, generatePromo } from './chat';
-import { scrapeUrl } from './scraper';
+import { chat, clearSession, generatePromo } from './chat';
 import { execSync } from 'child_process';
-import * as fs from 'fs';
-import * as path from 'path';
 
-// Admin ID for privileged commands (set TELEGRAM_ADMIN_ID in .env)
-const ADMIN_ID = parseInt(process.env.TELEGRAM_ADMIN_ID ?? '0', 10);
+const ADMIN_ID = process.env.TELEGRAM_ADMIN_ID ? Number(process.env.TELEGRAM_ADMIN_ID) : undefined;
+const TARGET_CHANNEL = process.env.TELEGRAM_TARGET_CHANNEL || '';
 
-// Agent configs directory
-const AGENTS_DIR = path.resolve(__dirname, '../../../openclaw/agents');
+// Store pending promos for approve/reject flow
+const pendingPromos = new Map<string, { chatId: number; promo: string; url?: string }>();
 
-function isAdmin(userId: number): boolean {
-  return ADMIN_ID === 0 || userId === ADMIN_ID;
-}
-
-function loadAgentConfigs(): Array<{ id: string; name: string; role: string; model: string }> {
-  const agents: Array<{ id: string; name: string; role: string; model: string }> = [];
+async function sendTyping(botToken: string, chatId: number) {
   try {
-    if (!fs.existsSync(AGENTS_DIR)) return agents;
-    const dirs = fs.readdirSync(AGENTS_DIR, { withFileTypes: true })
-      .filter(d => d.isDirectory());
-    for (const dir of dirs) {
-      const configPath = path.join(AGENTS_DIR, dir.name, 'config.json');
-      if (fs.existsSync(configPath)) {
-        const cfg = JSON.parse(fs.readFileSync(configPath, 'utf-8'));
-        agents.push({
-          id: cfg.id ?? dir.name,
-          name: cfg.name ?? dir.name,
-          role: cfg.role ?? 'Agent',
-          model: cfg.model ?? 'glm4:9b-chat',
-        });
-      }
-    }
+    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
   } catch (_) {}
-  return agents;
 }
-
-function execCommand(cmd: string, timeoutMs = 15000): string {
-  try {
-    return execSync(cmd, { timeout: timeoutMs, encoding: 'utf-8', stdio: ['pipe', 'pipe', 'pipe'] }).trim();
-  } catch (err: any) {
-    return err.stderr?.trim() || err.message || 'Befehl fehlgeschlagen';
-  }
-}
-
-// --- Pending promo drafts (per chat) ---
-interface PendingPromo {
-  draft: string;
-  scrapedContent: string;
-  sourceUrl: string;
-  platform: string;
-  messageId: number; // the message with inline buttons
-  createdAt: number;
-}
-
-const pendingPromos = new Map<number, PendingPromo>();
-
-// --- Chats waiting for edit feedback ---
-const awaitingFeedback = new Set<number>();
 
 async function handleMessage(botToken: string, message: any) {
   const chatId = message.chat.id;
   const text = (message.text ?? message.caption ?? '').trim();
   const from = message.from ? formatUser(message.from) : 'Unknown';
+  const userId = message.from?.id;
 
   console.log(`[${new Date().toISOString()}] ${from}: ${text || '[media]'}`);
 
   // --- Commands ---
-  if (text === '/start') {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        `Hey ${message.from?.first_name ?? 'there'}! Ich bin M0Claw - dein Agent Controller.`,
-        '',
-        'Ich bin dein persoenlicher AI-Agent mit voller Systemkontrolle.',
-        'Schreib mir einfach was du willst - ich fuehre es aus.',
-        '',
-        'Quick Commands:',
-        '/agents  - Alle Agents anzeigen',
-        '/system  - Server-Status',
-        '/models  - Ollama Models',
-        '/exec    - Shell-Befehle ausfuehren',
-        '/help    - Alle Befehle',
-        '',
-        'Oder schick mir einen Link fuer automatische Promo-Erstellung.',
-        'Einfach schreiben = AI Chat mit GLM4.',
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text === '/clear') {
-    clearSession(chatId);
-    pendingPromos.delete(chatId);
-    awaitingFeedback.delete(chatId);
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: 'Chat-Verlauf gelöscht. Neuer Chat gestartet.',
-    });
-    return;
-  }
-
-  if (text === '/status') {
-    const uptime = process.uptime();
-    const h = Math.floor(uptime / 3600);
-    const m = Math.floor((uptime % 3600) / 60);
-    const stats = getStorageStats();
-    const session = getSessionInfo(chatId);
-    const hasPending = pendingPromos.has(chatId);
-    const typeLines = Object.entries(stats.byType)
-      .map(([k, v]) => `  ${k}: ${v}`)
-      .join('\n');
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        `Status: Online`,
-        `Uptime: ${h}h ${m}m`,
-        `AI: ${getProviderName()}`,
-        `Chat-Nachrichten: ${session.messageCount}`,
-        `Dateien: ${stats.totalFiles} (${stats.totalSizeMB} MB)`,
-        hasPending ? '\nPromo-Entwurf: ausstehend' : '',
-        typeLines ? `\nNach Typ:\n${typeLines}` : '',
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text === '/ping') {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: 'Pong!',
-    });
-    return;
-  }
-
-  if (text === '/help') {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        'M0Claw Agent Controller',
-        '',
-        'Chat Commands:',
-        '/start    - Hilfe anzeigen',
-        '/help     - Alle Befehle',
-        '/clear    - Chat loeschen',
-        '/status   - Bot Status',
-        '/ping     - Verbindungstest',
-        '',
-        'Agent Commands:',
-        '/agents   - Alle Agents auflisten',
-        '/agent <name> - Agent-Details',
-        '/models   - Ollama Models auflisten',
-        '',
-        'System Commands (Admin):',
-        '/system   - Server-Status (RAM, Disk, Services)',
-        '/exec <cmd> - Shell-Befehl ausfuehren',
-        '/deploy   - Git pull + Services neustarten',
-        '/deploylog - Deploy-Logs anzeigen',
-        '/logs     - Letzte Bot-Logs',
-        '',
-        'Mac Remote (Admin):',
-        '/mac          - Mac-Befehle & Hilfe',
-        '/mac status   - Mac erreichbar?',
-        '/mac info     - Mac System-Info',
-        '/mac <cmd>    - Befehl auf Mac ausfuehren',
-        '',
-        'Promo Commands:',
-        'Link senden - Automatisch Promo erstellen',
-        'Text weiterleiten - Promo aus Inhalt',
-        '',
-        'Einfach schreiben = AI Chat mit GLM4',
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text === '/agents') {
-    const agents = loadAgentConfigs();
-    if (agents.length === 0) {
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: 'Keine Agents konfiguriert.\nErstelle Configs in openclaw/agents/<name>/config.json',
-      });
-      return;
-    }
-
-    const lines = agents.map(a => `${a.name} (${a.id})\n  Rolle: ${a.role}\n  Model: ${a.model}`);
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: ['Agents:', '', ...lines].join('\n'),
-    });
-    return;
-  }
-
-  if (text.startsWith('/agent ')) {
-    const agentId = text.slice(7).trim().toLowerCase();
-    const agents = loadAgentConfigs();
-    const agent = agents.find(a => a.id === agentId || a.name.toLowerCase() === agentId);
-
-    if (!agent) {
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: `Agent "${agentId}" nicht gefunden.\n/agents zeigt alle verfuegbaren Agents.`,
-      });
-      return;
-    }
-
-    // Read full config
-    const configPath = path.join(AGENTS_DIR, agent.id, 'config.json');
-    let configText = 'Config nicht lesbar';
-    try {
-      configText = fs.readFileSync(configPath, 'utf-8');
-    } catch (_) {}
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [`Agent: ${agent.name}`, `ID: ${agent.id}`, `Rolle: ${agent.role}`, `Model: ${agent.model}`, '', 'Config:', configText].join('\n'),
-    });
-    return;
-  }
-
-  if (text === '/models') {
-    const output = execCommand('ollama list 2>/dev/null || echo "Ollama nicht erreichbar"');
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Ollama Models:\n\n${output}`,
-    });
-    return;
-  }
-
-  if (text === '/system') {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    const ram = execCommand("free -h | head -2");
-    const disk = execCommand("df -h / | tail -1");
-    const uptime = execCommand("uptime -p");
-    const ollamaStatus = execCommand("curl -s -m 3 http://localhost:11434/api/tags > /dev/null && echo 'Running' || echo 'Down'");
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        'System Status:',
-        '',
-        `Uptime: ${uptime}`,
-        '',
-        `RAM:\n${ram}`,
-        '',
-        `Disk: ${disk}`,
-        '',
-        `Ollama: ${ollamaStatus}`,
-        `AI Model: ${process.env.AI_MODEL ?? 'nicht gesetzt'}`,
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text.startsWith('/exec ')) {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    const cmd = text.slice(6).trim();
-    if (!cmd) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Usage: /exec <befehl>' });
-      return;
-    }
-
-    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-    const output = execCommand(cmd, 30000);
-    const truncated = output.length > 3500 ? output.slice(-3500) + '\n...(gekuerzt)' : output;
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `$ ${cmd}\n\n${truncated || '(keine Ausgabe)'}`,
-    });
-    return;
-  }
-
-  if (text === '/logs') {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    const logs = execCommand("tail -30 /tmp/telegram-bot.log 2>/dev/null || echo 'Keine Logs gefunden'");
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Letzte Logs:\n\n${logs}`,
-    });
-    return;
-  }
-
-  if (text === '/deploy') {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: 'Deploy gestartet... git pull + restart',
-    });
-    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
-    const repoDir = process.env.DEPLOY_REPO_DIR || '/opt/money-machine';
-    const branch = process.env.DEPLOY_BRANCH || 'main';
-
-    // Git pull
-    const pullResult = execCommand(`cd ${repoDir} && git pull origin ${branch} 2>&1`, 30000);
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Git Pull:\n${pullResult}`,
-    });
-
-    // Run auto-deploy script if it exists
-    const deployResult = execCommand(`cd ${repoDir} && bash server/scripts/auto-deploy.sh 2>&1`, 60000);
-
-    const shortHash = execCommand(`cd ${repoDir} && git rev-parse --short HEAD`);
-    const lastCommit = execCommand(`cd ${repoDir} && git log -1 --pretty=format:"%s"`);
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        'Deploy abgeschlossen!',
-        '',
-        `Commit: ${shortHash}`,
-        `Message: ${lastCommit}`,
-        '',
-        deployResult ? `Details:\n${deployResult.slice(-1000)}` : '',
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text === '/deploylog') {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    const logs = execCommand("tail -40 /var/log/auto-deploy.log 2>/dev/null || echo 'Keine Deploy-Logs gefunden'");
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Deploy Logs:\n\n${logs}`,
-    });
-    return;
-  }
-
-  // --- Mac Remote Control via SSH ---
-  if (text === '/mac' || text === '/mac help') {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: [
-        'Mac Remote Control (via SSH)',
-        '',
-        '/mac status     - Pruefen ob Mac erreichbar',
-        '/mac info       - Mac System-Info',
-        '/mac ip         - Mac IP-Adressen',
-        '/mac ssh-setup  - SSH Setup-Anleitung',
-        '/mac <befehl>   - Beliebigen Befehl ausfuehren',
-        '',
-        'Beispiele:',
-        '/mac ls ~/Desktop',
-        '/mac open -a Safari',
-        '/mac pmset displaysleepnow',
-        '/mac say "Hallo Maurice"',
-        '',
-        `SSH Host: ${process.env.MAC_SSH_HOST || 'nicht konfiguriert'}`,
-        `SSH User: ${process.env.MAC_SSH_USER || 'nicht konfiguriert'}`,
-      ].join('\n'),
-    });
-    return;
-  }
-
-  if (text.startsWith('/mac ')) {
-    if (!isAdmin(message.from?.id ?? 0)) {
-      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Nur fuer Admin.' });
-      return;
-    }
-
-    const macHost = process.env.MAC_SSH_HOST;
-    const macUser = process.env.MAC_SSH_USER || 'maurice';
-    const macPort = process.env.MAC_SSH_PORT || '22';
-    const macKeyPath = process.env.MAC_SSH_KEY || '/root/.ssh/mac_id_ed25519';
-    const subCmd = text.slice(5).trim();
-
-    // Check if Mac SSH is configured
-    if (!macHost) {
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: [
-          'Mac SSH nicht konfiguriert!',
-          '',
-          'Setze diese Variablen in .env:',
-          'MAC_SSH_HOST=<deine-mac-ip-oder-tailscale-ip>',
-          'MAC_SSH_USER=maurice',
-          'MAC_SSH_PORT=22',
-          'MAC_SSH_KEY=/root/.ssh/mac_id_ed25519',
-          '',
-          'Tailscale IP findest du auf dem Mac mit:',
-          'tailscale ip -4',
-          '',
-          'Oder verwende /mac ssh-setup fuer die volle Anleitung.',
-        ].join('\n'),
-      });
-      return;
-    }
-
-    // Built-in sub-commands
-    if (subCmd === 'status') {
-      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-      const ping = execCommand(`ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo 'CONNECTED' && hostname && uptime" 2>&1`, 15000);
-
-      const isConnected = ping.includes('CONNECTED');
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: isConnected
-          ? `Mac ist ONLINE\n\n${ping}`
-          : `Mac ist OFFLINE oder nicht erreichbar\n\n${ping}`,
-      });
-      return;
-    }
-
-    if (subCmd === 'info') {
-      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-      const info = execCommand(`ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo '=== Mac Info ===' && sw_vers && echo '' && echo '=== Hardware ===' && system_profiler SPHardwareDataType | grep -E 'Model|Chip|Memory|Serial' && echo '' && echo '=== Disk ===' && df -h / | tail -1 && echo '' && echo '=== Uptime ===' && uptime" 2>&1`, 20000);
-
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: info,
-      });
-      return;
-    }
-
-    if (subCmd === 'ip') {
-      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-      const ipInfo = execCommand(`ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} "echo 'LAN:' && ifconfig | grep 'inet ' | grep -v 127.0.0.1 && echo '' && echo 'Tailscale:' && (tailscale ip -4 2>/dev/null || echo 'nicht installiert') && echo '' && echo 'Public:' && curl -s ifconfig.me" 2>&1`, 20000);
-
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: `Mac IP Adressen:\n\n${ipInfo}`,
-      });
-      return;
-    }
-
-    if (subCmd === 'ssh-setup') {
-      await callTelegramApi(botToken, 'sendMessage', {
-        chat_id: chatId,
-        text: [
-          'Mac SSH Setup Anleitung:',
-          '',
-          '1. Auf dem Mac Terminal:',
-          '   sudo systemsetup -setremotelogin on',
-          '',
-          '2. SSH-Key auf Server erstellen:',
-          '   ssh-keygen -t ed25519 -f /root/.ssh/mac_id_ed25519 -N ""',
-          '',
-          '3. Key zum Mac kopieren:',
-          '   ssh-copy-id -i /root/.ssh/mac_id_ed25519.pub maurice@<mac-ip>',
-          '',
-          '4. Tailscale auf beiden installieren:',
-          '   Mac: brew install tailscale',
-          '   Server: curl -fsSL https://tailscale.com/install.sh | sh',
-          '',
-          '5. .env auf Server anpassen:',
-          '   MAC_SSH_HOST=100.x.x.x  (Tailscale IP)',
-          '   MAC_SSH_USER=maurice',
-          '   MAC_SSH_KEY=/root/.ssh/mac_id_ed25519',
-          '',
-          '6. Testen: /mac status',
-          '',
-          'Oder fuehre auf dem Mac aus:',
-          '   bash <(curl -s https://raw.githubusercontent.com/Maurice-AIEMPIRE/core/main/scripts/setup-mac-ssh.sh)',
-        ].join('\n'),
-      });
-      return;
-    }
-
-    // Generic command execution on Mac
-    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
-    const sshCmd = `ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no -i ${macKeyPath} -p ${macPort} ${macUser}@${macHost} ${JSON.stringify(subCmd)}`;
-    const output = execCommand(sshCmd, 30000);
-    const truncated = output.length > 3500 ? output.slice(-3500) + '\n...(gekuerzt)' : output;
-
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `mac$ ${subCmd}\n\n${truncated || '(keine Ausgabe)'}`,
-    });
-    return;
-  }
-
-  // --- If awaiting edit feedback for a pending promo ---
-  if (awaitingFeedback.has(chatId) && text) {
-    const pending = pendingPromos.get(chatId);
-    if (pending) {
-      awaitingFeedback.delete(chatId);
-
-      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
-      const revisedDraft = await generatePromo(
-        pending.scrapedContent + `\n\nVorheriger Entwurf:\n${pending.draft}`,
-        text,
-      );
-
-      pending.draft = revisedDraft;
-
-      // Send revised draft with buttons
-      const sent = await sendPromoPreview(botToken, chatId, revisedDraft, pending.sourceUrl);
-      pending.messageId = sent.message_id;
-
-      return;
-    }
-    awaitingFeedback.delete(chatId);
+  if (text.startsWith('/')) {
+    const handled = await handleCommand(botToken, chatId, text, userId);
+    if (handled) return;
   }
 
   // --- Media handling ---
   const media = extractMedia(message);
   if (media) {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `${mediaEmoji(media.type)} ${mediaLabel(media.type)} empfangen — wird heruntergeladen...`,
-    });
-
+    await sendTyping(botToken, chatId);
     try {
       const localPath = await downloadTelegramFile(botToken, media.fileId, media.fileName, media.type);
       const sizeKB = media.fileSize ? (media.fileSize / 1024).toFixed(1) : '?';
 
       await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
-        text: [
-          `${mediaEmoji(media.type)} ${mediaLabel(media.type)} gespeichert`,
-          `Datei: ${media.fileName}`,
-          `Typ: ${media.mimeType ?? 'unbekannt'}`,
-          `Groesse: ${sizeKB} KB`,
-          `Pfad: ${localPath}`,
-        ].join('\n'),
+        text: `${mediaEmoji(media.type)} Gespeichert: ${media.fileName} (${sizeKB} KB)\n${localPath}`,
       });
     } catch (err: any) {
-      console.error(`Download error:`, err.message);
       await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
         text: `Fehler beim Download: ${err.message}`,
       });
     }
 
-    // Also check caption for URLs → trigger promo flow
+    // Check caption for URLs → promo flow
     const urls = extractUrls(message);
     if (urls.length > 0) {
-      await handleUrlsWithPromo(botToken, chatId, urls);
+      await handlePromoFlow(botToken, chatId, urls, text);
     }
+    return;
+  }
+
+  // --- URL handling → Promo Flow ---
+  const urls = extractUrls(message);
+  if (urls.length > 0) {
+    await sendTyping(botToken, chatId);
+    await handlePromoFlow(botToken, chatId, urls, text);
+    return;
+  }
+
+  // --- Forwarded / Long text → Promo Flow ---
+  if (message.forward_from || message.forward_from_chat) {
+    if (text.length > 20) {
+      await sendTyping(botToken, chatId);
+      await handlePromoFlow(botToken, chatId, [], text);
+      return;
+    }
+  }
+  if (text.length > 100 && !text.endsWith('?')) {
+    // Long text that's not a question → treat as content for promo
+    await sendTyping(botToken, chatId);
+    await handlePromoFlow(botToken, chatId, [], text);
     return;
   }
 
@@ -570,388 +104,324 @@ async function handleMessage(botToken: string, message: any) {
     const c = message.contact;
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
-      text: [
-        'Kontakt empfangen:',
-        `Name: ${c.first_name} ${c.last_name ?? ''}`.trim(),
-        c.phone_number ? `Tel: ${c.phone_number}` : '',
-        c.vcard ? 'vCard vorhanden' : '',
-      ].filter(Boolean).join('\n'),
+      text: `Kontakt: ${c.first_name} ${c.last_name ?? ''} ${c.phone_number ? `| Tel: ${c.phone_number}` : ''}`.trim(),
     });
     return;
   }
 
   // --- Location ---
   if (message.location) {
-    const loc = message.location;
     await callTelegramApi(botToken, 'sendMessage', {
       chat_id: chatId,
-      text: `Standort empfangen: ${loc.latitude}, ${loc.longitude}`,
+      text: `Standort: ${message.location.latitude}, ${message.location.longitude}`,
     });
     return;
   }
 
-  // --- URL handling → Promo flow ---
-  const urls = extractUrls(message);
-  if (urls.length > 0) {
-    await handleUrlsWithPromo(botToken, chatId, urls);
-    return;
-  }
-
-  // --- Forwarded messages (no URLs) → Promo flow ---
-  const isForwarded = !!(message.forward_date || message.forward_from || message.forward_from_chat || message.forward_origin);
-  if (isForwarded && text && text.length > 20) {
-    await handleContentAsPromo(botToken, chatId, text, 'forwarded');
-    return;
-  }
-
-  // --- Long pasted text (likely a copied post) → Promo flow ---
-  if (text && text.length > 100 && !text.endsWith('?')) {
-    await handleContentAsPromo(botToken, chatId, text, 'pasted');
-    return;
-  }
-
-  // --- Plain text → AI Chat ---
+  // --- AI Chat (default for all text) ---
   if (text) {
-    await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
+    await sendTyping(botToken, chatId);
     const reply = await chat(chatId, text);
 
+    // Split long messages (Telegram limit: 4096 chars)
     const chunks = splitMessage(reply, 4000);
     for (const chunk of chunks) {
       await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
         text: chunk,
-        disable_web_page_preview: true,
+        parse_mode: 'Markdown',
+      }).catch(() => {
+        // Fallback without markdown if parsing fails
+        return callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: chunk,
+        });
       });
     }
     return;
   }
 
-  // Fallback for unknown message types
+  // Fallback
   await callTelegramApi(botToken, 'sendMessage', {
     chat_id: chatId,
-    text: 'Nachricht empfangen (Typ nicht erkannt).',
+    text: 'Nachricht empfangen.',
   });
 }
 
-// --- Promo flow: scrape → generate → preview with buttons ---
-async function handleUrlsWithPromo(botToken: string, chatId: number, urls: string[]) {
-  // Process the first URL for promo (can be extended for multiple)
-  const url = urls[0];
-  const info = classifyUrl(url);
+async function handleCommand(botToken: string, chatId: number, text: string, userId?: number): Promise<boolean> {
+  const cmd = text.split(' ')[0].toLowerCase();
+  const args = text.slice(cmd.length).trim();
 
-  await callTelegramApi(botToken, 'sendMessage', {
-    chat_id: chatId,
-    text: `${platformEmoji(info.platform)} ${info.platform} Link erkannt — lade Inhalt...`,
-    disable_web_page_preview: true,
-  });
+  switch (cmd) {
+    case '/start':
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'M0Claw - Dein KI-Agent',
+          '',
+          'Schreib mir einfach - ich antworte mit KI.',
+          'Links/Content → automatischer Promo-Post',
+          '',
+          '/clear - Chat zuruecksetzen',
+          '/status - System-Status',
+          '/models - Ollama Models',
+          '/exec <cmd> - Shell Command',
+          '/help - Alle Befehle',
+        ].join('\n'),
+      });
+      return true;
 
-  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+    case '/clear':
+      clearSession(chatId);
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: 'Chat-Verlauf geloescht.',
+      });
+      return true;
 
-  // Scrape the URL
-  const scraped = await scrapeUrl(url, info.platform);
+    case '/status': {
+      const uptime = process.uptime();
+      const h = Math.floor(uptime / 3600);
+      const m = Math.floor((uptime % 3600) / 60);
+      const stats = getStorageStats();
+      const model = process.env.AI_MODEL || 'openclaw-qwen3-8b:20k';
+      const ollamaUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1';
 
-  if (scraped.error && !scraped.text) {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `Fehler beim Laden: ${scraped.error}\n\nSchick mir den Inhalt manuell, dann erstelle ich den Promo daraus.`,
-    });
-    return;
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'M0Claw Status',
+          `Uptime: ${h}h ${m}m`,
+          `Model: ${model}`,
+          `Ollama: ${ollamaUrl}`,
+          `Dateien: ${stats.totalFiles} (${stats.totalSizeMB} MB)`,
+          `Sessions: ${(globalThis as any).__sessions_count ?? 'N/A'}`,
+        ].join('\n'),
+      });
+      return true;
+    }
+
+    case '/ping':
+      await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Pong!' });
+      return true;
+
+    case '/models': {
+      try {
+        const out = execSync('ollama list 2>/dev/null', { timeout: 10000 }).toString().trim();
+        const lines = out.split('\n').slice(0, 15); // max 15 lines
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: `Ollama Models:\n\n${lines.join('\n')}`,
+        });
+      } catch {
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: 'Ollama nicht erreichbar.',
+        });
+      }
+      return true;
+    }
+
+    case '/exec': {
+      if (!args) {
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: 'Usage: /exec <command>',
+        });
+        return true;
+      }
+      try {
+        const out = execSync(args, { timeout: 30000, maxBuffer: 1024 * 1024 }).toString().trim();
+        const result = out.substring(0, 3500) || '(keine Ausgabe)';
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: `$ ${args}\n\n${result}`,
+        });
+      } catch (err: any) {
+        const errMsg = (err.stderr?.toString() || err.message || 'Fehler').substring(0, 2000);
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: `Fehler:\n${errMsg}`,
+        });
+      }
+      return true;
+    }
+
+    case '/system': {
+      try {
+        const hostname = execSync('hostname').toString().trim();
+        const diskRaw = execSync("df -h / | tail -1 | awk '{print $4}'").toString().trim();
+        const memRaw = execSync("vm_stat | head -5").toString().trim();
+        const ollamaRunning = execSync("pgrep -x ollama >/dev/null 2>&1 && echo 'running' || echo 'stopped'").toString().trim();
+
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: [
+            `System: ${hostname}`,
+            `Disk frei: ${diskRaw}`,
+            `Ollama: ${ollamaRunning}`,
+          ].join('\n'),
+        });
+      } catch (err: any) {
+        await callTelegramApi(botToken, 'sendMessage', {
+          chat_id: chatId,
+          text: `System-Info Fehler: ${err.message}`,
+        });
+      }
+      return true;
+    }
+
+    case '/help':
+      await callTelegramApi(botToken, 'sendMessage', {
+        chat_id: chatId,
+        text: [
+          'M0Claw Befehle:',
+          '',
+          '/start - Willkommen',
+          '/clear - Chat loeschen',
+          '/status - Bot-Status',
+          '/ping - Pong',
+          '/models - Ollama Models',
+          '/exec <cmd> - Shell ausfuehren',
+          '/system - System-Info',
+          '/help - Diese Hilfe',
+          '',
+          'Oder einfach schreiben - KI antwortet!',
+          'Links → Promo-Post mit Freigabe',
+        ].join('\n'),
+      });
+      return true;
+
+    default:
+      return false; // not a known command, pass to AI
   }
+}
 
-  // Show what was scraped
-  const scrapedPreview = scraped.text.substring(0, 500) + (scraped.text.length > 500 ? '...' : '');
-  await callTelegramApi(botToken, 'sendMessage', {
-    chat_id: chatId,
-    text: `Inhalt geladen:\n\n${scrapedPreview}`,
-    disable_web_page_preview: true,
-  });
-
-  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
+async function handlePromoFlow(botToken: string, chatId: number, urls: string[], content: string) {
+  const url = urls[0]; // primary URL
+  const sourceText = content || (url ? `Inhalt von: ${url}` : 'Content');
 
   // Generate promo
-  const draft = await generatePromo(scraped.text);
+  const promo = await generatePromo(sourceText, url);
+  const promoId = `promo_${Date.now()}_${chatId}`;
 
-  // Store pending promo
-  const sent = await sendPromoPreview(botToken, chatId, draft, url);
+  pendingPromos.set(promoId, { chatId, promo, url });
 
-  pendingPromos.set(chatId, {
-    draft,
-    scrapedContent: scraped.text,
-    sourceUrl: url,
-    platform: info.platform,
-    messageId: sent.message_id,
-    createdAt: Date.now(),
-  });
-
-  // If there are more URLs, mention them
-  if (urls.length > 1) {
-    await callTelegramApi(botToken, 'sendMessage', {
-      chat_id: chatId,
-      text: `(${urls.length - 1} weitere Links erkannt — schick sie einzeln für separate Promos)`,
-    });
-  }
-}
-
-// --- Handle pasted/forwarded content as promo source ---
-async function handleContentAsPromo(botToken: string, chatId: number, content: string, source: string) {
-  const sourceLabel = source === 'forwarded' ? 'Weitergeleiteter Post' : 'Kopierter Text';
-
+  // Send with inline keyboard
   await callTelegramApi(botToken, 'sendMessage', {
     chat_id: chatId,
-    text: `${sourceLabel} erkannt — erstelle Promo-Post...`,
-  });
-
-  await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
-  const draft = await generatePromo(content);
-  const sent = await sendPromoPreview(botToken, chatId, draft, `[${sourceLabel}]`);
-
-  pendingPromos.set(chatId, {
-    draft,
-    scrapedContent: content,
-    sourceUrl: `[${sourceLabel}]`,
-    platform: 'text',
-    messageId: sent.message_id,
-    createdAt: Date.now(),
-  });
-}
-
-// --- Send promo preview with inline keyboard ---
-async function sendPromoPreview(botToken: string, chatId: number, draft: string, sourceUrl: string) {
-  return await callTelegramApi(botToken, 'sendMessage', {
-    chat_id: chatId,
-    text: [
-      '--- PROMO ENTWURF ---',
-      '',
-      draft,
-      '',
-      '--- ENDE ---',
-      '',
-      `Quelle: ${sourceUrl}`,
-    ].join('\n'),
-    disable_web_page_preview: true,
+    text: `Promo-Vorschlag:\n\n${promo}`,
     reply_markup: {
       inline_keyboard: [
         [
-          { text: 'Freigeben', callback_data: 'promo_approve' },
-          { text: 'Bearbeiten', callback_data: 'promo_edit' },
-          { text: 'Verwerfen', callback_data: 'promo_discard' },
+          { text: 'Freigeben', callback_data: `approve:${promoId}` },
+          { text: 'Neu generieren', callback_data: `regen:${promoId}` },
         ],
         [
-          { text: 'Neu generieren', callback_data: 'promo_regenerate' },
+          { text: 'Bearbeiten', callback_data: `edit:${promoId}` },
+          { text: 'Verwerfen', callback_data: `reject:${promoId}` },
         ],
       ],
     },
   });
 }
 
-// --- Handle callback queries (button clicks) ---
-async function handleCallbackQuery(botToken: string, query: any) {
-  const chatId = query.message?.chat?.id;
-  const data = query.data;
-  const callbackId = query.id;
+async function handleCallbackQuery(botToken: string, callback: any) {
+  const data = callback.data || '';
+  const chatId = callback.message?.chat?.id;
+  const messageId = callback.message?.message_id;
 
-  if (!chatId || !data) {
-    await callTelegramApi(botToken, 'answerCallbackQuery', { callback_query_id: callbackId });
-    return;
-  }
+  if (!chatId) return;
 
-  const pending = pendingPromos.get(chatId);
+  const [action, promoId] = data.split(':');
+  const pending = promoId ? pendingPromos.get(`${action === 'approve' || action === 'regen' || action === 'edit' || action === 'reject' ? '' : ''}${promoId}`) : undefined;
 
-  if (!pending) {
-    await callTelegramApi(botToken, 'answerCallbackQuery', {
-      callback_query_id: callbackId,
-      text: 'Kein Entwurf vorhanden.',
-      show_alert: true,
-    });
-    return;
-  }
+  // Re-construct key
+  const fullKey = `${promoId}`;
+  const promoData = pendingPromos.get(fullKey);
 
-  switch (data) {
-    case 'promo_approve': {
-      await callTelegramApi(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-        text: 'Freigegeben!',
-      });
+  // Acknowledge the callback
+  await callTelegramApi(botToken, 'answerCallbackQuery', {
+    callback_query_id: callback.id,
+  }).catch(() => {});
 
-      // Remove inline buttons from the preview message
-      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
-        chat_id: chatId,
-        message_id: pending.messageId,
-        reply_markup: { inline_keyboard: [] },
-      }).catch(() => {}); // ignore if message can't be edited
+  switch (action) {
+    case 'approve': {
+      if (!promoData) {
+        await callTelegramApi(botToken, 'sendMessage', { chat_id: chatId, text: 'Promo nicht mehr verfuegbar.' });
+        return;
+      }
 
-      // Post to target channel if configured
-      const targetChannel = process.env.TELEGRAM_TARGET_CHANNEL;
-      if (targetChannel) {
+      if (TARGET_CHANNEL) {
         try {
           await callTelegramApi(botToken, 'sendMessage', {
-            chat_id: targetChannel,
-            text: pending.draft,
+            chat_id: TARGET_CHANNEL,
+            text: promoData.promo,
             disable_web_page_preview: false,
           });
-
           await callTelegramApi(botToken, 'sendMessage', {
             chat_id: chatId,
-            text: 'GEPOSTET — Der Promo-Post wurde im Kanal veroeffentlicht.',
-            disable_web_page_preview: true,
+            text: `Promo gepostet in Channel!`,
           });
         } catch (err: any) {
-          console.error(`[PROMO] Failed to post to channel ${targetChannel}:`, err.message);
           await callTelegramApi(botToken, 'sendMessage', {
             chat_id: chatId,
-            text: [
-              `Fehler beim Posten im Kanal: ${err.message}`,
-              '',
-              'Fertiger Post zum manuellen Kopieren:',
-              '',
-              pending.draft,
-            ].join('\n'),
-            disable_web_page_preview: true,
+            text: `Post-Fehler: ${err.message}\n\nPrüfe ob der Bot Admin im Channel ist.`,
           });
         }
       } else {
-        // No target channel — send text for manual copy
         await callTelegramApi(botToken, 'sendMessage', {
           chat_id: chatId,
-          text: [
-            'FREIGEGEBEN — Fertiger Post:',
-            '',
-            pending.draft,
-            '',
-            'Kopiere den Text oben und poste ihn direkt.',
-            '',
-            'Tipp: Setze TELEGRAM_TARGET_CHANNEL in .env fuer automatisches Posten.',
-          ].join('\n'),
-          disable_web_page_preview: true,
+          text: `Freigegeben! (Kein Ziel-Channel konfiguriert)\n\nSetze TELEGRAM_TARGET_CHANNEL in .env`,
         });
       }
-
-      pendingPromos.delete(chatId);
-      awaitingFeedback.delete(chatId);
-
-      console.log(`[PROMO] Approved for chat ${chatId}: ${pending.sourceUrl}`);
+      pendingPromos.delete(fullKey);
       break;
     }
 
-    case 'promo_edit': {
-      await callTelegramApi(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-      });
-
-      awaitingFeedback.add(chatId);
+    case 'regen': {
+      if (!promoData) return;
+      await sendTyping(botToken, chatId);
+      const newPromo = await generatePromo(promoData.promo, promoData.url);
+      promoData.promo = newPromo;
 
       await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
-        text: [
-          'Was soll ich aendern?',
-          '',
-          'Schreib mir dein Feedback, z.B.:',
-          '- "Kuerzer"',
-          '- "Mehr Emojis"',
-          '- "Auf Englisch"',
-          '- "Fuer LinkedIn statt Twitter"',
-          '- "Aggressiver / mehr Hype"',
-        ].join('\n'),
+        text: `Neuer Vorschlag:\n\n${newPromo}`,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: 'Freigeben', callback_data: `approve:${fullKey}` },
+              { text: 'Neu generieren', callback_data: `regen:${fullKey}` },
+            ],
+            [
+              { text: 'Bearbeiten', callback_data: `edit:${fullKey}` },
+              { text: 'Verwerfen', callback_data: `reject:${fullKey}` },
+            ],
+          ],
+        },
       });
       break;
     }
 
-    case 'promo_discard': {
-      await callTelegramApi(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-        text: 'Verworfen.',
-      });
-
-      // Remove inline buttons
-      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
-        chat_id: chatId,
-        message_id: pending.messageId,
-        reply_markup: { inline_keyboard: [] },
-      }).catch(() => {});
-
+    case 'edit': {
       await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
-        text: 'Entwurf verworfen. Schick mir einen neuen Link wenn du willst.',
+        text: 'Schick mir den bearbeiteten Text - ich poste ihn dann.',
       });
-
-      pendingPromos.delete(chatId);
-      awaitingFeedback.delete(chatId);
+      // The next message will be treated as edited promo (handled via AI chat)
       break;
     }
 
-    case 'promo_regenerate': {
-      await callTelegramApi(botToken, 'answerCallbackQuery', {
-        callback_query_id: callbackId,
-        text: 'Wird neu generiert...',
-      });
-
-      await callTelegramApi(botToken, 'sendChatAction', { chat_id: chatId, action: 'typing' });
-
-      const newDraft = await generatePromo(pending.scrapedContent);
-      pending.draft = newDraft;
-
-      // Remove old buttons
-      await callTelegramApi(botToken, 'editMessageReplyMarkup', {
+    case 'reject': {
+      pendingPromos.delete(fullKey);
+      await callTelegramApi(botToken, 'sendMessage', {
         chat_id: chatId,
-        message_id: pending.messageId,
-        reply_markup: { inline_keyboard: [] },
-      }).catch(() => {});
-
-      // Send new preview
-      const sent = await sendPromoPreview(botToken, chatId, newDraft, pending.sourceUrl);
-      pending.messageId = sent.message_id;
-
+        text: 'Promo verworfen.',
+      });
       break;
-    }
-
-    default: {
-      await callTelegramApi(botToken, 'answerCallbackQuery', { callback_query_id: callbackId });
     }
   }
-}
-
-function mediaEmoji(type: string): string {
-  const map: Record<string, string> = {
-    photo: '[Foto]',
-    video: '[Video]',
-    document: '[Datei]',
-    audio: '[Audio]',
-    voice: '[Sprach]',
-    video_note: '[VideoMsg]',
-    sticker: '[Sticker]',
-    animation: '[GIF]',
-  };
-  return map[type] ?? '[Medien]';
-}
-
-function mediaLabel(type: string): string {
-  const map: Record<string, string> = {
-    photo: 'Foto',
-    video: 'Video',
-    document: 'Dokument',
-    audio: 'Audiodatei',
-    voice: 'Sprachnachricht',
-    video_note: 'Videonachricht',
-    sticker: 'Sticker',
-    animation: 'GIF/Animation',
-  };
-  return map[type] ?? 'Medien';
-}
-
-function platformEmoji(platform: string): string {
-  const map: Record<string, string> = {
-    instagram: '[IG]',
-    tiktok: '[TT]',
-    youtube: '[YT]',
-    x: '[X]',
-    telegram: '[TG]',
-    reddit: '[RD]',
-    direct: '[->]',
-    web: '[WEB]',
-  };
-  return map[platform] ?? '[?]';
 }
 
 function splitMessage(text: string, maxLen: number): string[] {
@@ -963,20 +433,28 @@ function splitMessage(text: string, maxLen: number): string[] {
       chunks.push(remaining);
       break;
     }
+    // Find last newline within limit
     let splitAt = remaining.lastIndexOf('\n', maxLen);
-    if (splitAt < maxLen * 0.5) splitAt = remaining.lastIndexOf(' ', maxLen);
-    if (splitAt < maxLen * 0.3) splitAt = maxLen;
+    if (splitAt < maxLen / 2) splitAt = maxLen;
     chunks.push(remaining.substring(0, splitAt));
     remaining = remaining.substring(splitAt).trimStart();
   }
   return chunks;
 }
 
+function mediaEmoji(type: string): string {
+  const map: Record<string, string> = {
+    photo: '[Foto]', video: '[Video]', document: '[Datei]', audio: '[Audio]',
+    voice: '[Sprach]', video_note: '[VideoMsg]', sticker: '[Sticker]', animation: '[GIF]',
+  };
+  return map[type] ?? '[Medien]';
+}
+
 // --- Polling loop ---
 async function pollUpdates(botToken: string) {
   let offset = 0;
 
-  // Clear pending updates so we only process new ones
+  // Clear pending updates
   try {
     const pending = await callTelegramApi(botToken, 'getUpdates', { offset: -1, limit: 1, timeout: 0 });
     if (pending.length > 0) {
@@ -984,7 +462,9 @@ async function pollUpdates(botToken: string) {
     }
   } catch (_) {}
 
-  console.log(`[${new Date().toISOString()}] M0Claw bot polling started (offset=${offset})`);
+  console.log(`[${new Date().toISOString()}] M0Claw bot polling (offset=${offset})`);
+  console.log(`Model: ${process.env.AI_MODEL || 'openclaw-qwen3-8b:20k'}`);
+  console.log(`Ollama: ${process.env.OLLAMA_BASE_URL || 'http://localhost:11434/v1'}`);
 
   while (true) {
     try {
@@ -1002,18 +482,18 @@ async function pollUpdates(botToken: string) {
           try {
             await handleCallbackQuery(botToken, update.callback_query);
           } catch (err: any) {
-            console.error(`Error handling callback ${update.update_id}:`, err.message);
+            console.error(`Callback error:`, err.message);
           }
         } else if (update.message) {
           try {
             await handleMessage(botToken, update.message);
           } catch (err: any) {
-            console.error(`Error handling message ${update.update_id}:`, err.message);
+            console.error(`Message error ${update.update_id}:`, err.message);
           }
         }
       }
     } catch (err: any) {
-      console.error(`[${new Date().toISOString()}] Polling error: ${err.message}`);
+      console.error(`[${new Date().toISOString()}] Poll error: ${err.message}`);
       await new Promise((r) => setTimeout(r, 5000));
     }
   }
@@ -1024,12 +504,11 @@ const botToken = process.env.TELEGRAM_BOT_TOKEN;
 
 if (!botToken) {
   console.error('TELEGRAM_BOT_TOKEN is required.');
-  console.error('Usage: TELEGRAM_BOT_TOKEN=your-token npx tsx src/bot.ts');
   process.exit(1);
 }
 
 console.log('Starting M0Claw Telegram bot...');
 pollUpdates(botToken).catch((err) => {
-  console.error('Fatal error:', err);
+  console.error('Fatal:', err);
   process.exit(1);
 });
