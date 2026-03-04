@@ -37,7 +37,9 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [documentResults, setDocumentResults] = useState<DocumentResult[]>([]);
-  const [conversationResults, setConversationResults] = useState<ConversationResult[]>([]);
+  const [conversationResults, setConversationResults] = useState<
+    ConversationResult[]
+  >([]);
   const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
 
@@ -53,8 +55,12 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
       setIsSearching(true);
       try {
         const [docsRes, convsRes] = await Promise.all([
-          fetch(`/api/v1/documents/search?${new URLSearchParams({ q: debouncedQuery, mode: "full", limit: "10" })}`),
-          fetch(`/api/v1/conversations?${new URLSearchParams({ search: debouncedQuery, limit: "10" })}`),
+          fetch(
+            `/api/v1/documents/search?${new URLSearchParams({ q: debouncedQuery, mode: "full", limit: "10" })}`,
+          ),
+          fetch(
+            `/api/v1/conversations?${new URLSearchParams({ search: debouncedQuery, limit: "10" })}`,
+          ),
         ]);
         if (docsRes.ok) {
           const data = await docsRes.json();
@@ -75,12 +81,12 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   }, [debouncedQuery]);
 
   const handleAddDocument = () => {
-    navigate(`/home/document`);
+    navigate(`/home/memory/document`);
     onOpenChange(false);
   };
 
   const handleDocumentClick = (documentId: string) => {
-    navigate(`/home/documents/${documentId}`);
+    navigate(`/home/memory/document/${documentId}`);
     onOpenChange(false);
   };
 

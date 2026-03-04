@@ -114,7 +114,7 @@ export const ConversationNew = ({
                   type="button"
                   onClick={() => handleSelectPrompt(item.prompt)}
                   className={cn(
-                    "hover:bg-background/50 flex flex-col gap-2 rounded-xl border border-gray-300 p-2 text-left transition-colors",
+                    "hover:bg-background/80 bg-background/50 flex flex-col gap-2 rounded-xl border border-gray-300 p-2 text-left transition-colors",
                   )}
                 >
                   <Icon className="h-5 w-5 shrink-0" />

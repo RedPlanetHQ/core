@@ -29,6 +29,8 @@ import {
   type PersonalityType,
 } from "~/services/agent/prompts/personality";
 import { cn } from "~/lib/utils";
+import { Theme, useTheme } from "remix-themes";
+import { Moon, Sun } from "lucide-react";
 
 interface SuccessDataResponse {
   success: boolean;
@@ -95,6 +97,22 @@ export default function AccountSettings() {
 
   const currentPersonality =
     personalityFetcher.formData?.get("personality")?.toString() || personality;
+  const [theme, setTheme] = useTheme();
+
+  const themeOptions = [
+    {
+      id: Theme.LIGHT,
+      name: "Light",
+      description: "Clean and bright interface",
+      icon: Sun,
+    },
+    {
+      id: Theme.DARK,
+      name: "Dark",
+      description: "Easy on the eyes in low light",
+      icon: Moon,
+    },
+  ];
 
   const handleDeleteAccount = () => {
     fetcher.submit(
@@ -205,6 +223,43 @@ export default function AccountSettings() {
                   </div>
                 </Card>
               ))}
+            </div>
+          </div>
+
+          {/* Theme */}
+          <div className="mb-8">
+            <h2 className="text-md mb-4">Theme</h2>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Choose your preferred appearance
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {themeOptions.map((option) => {
+                const Icon = option.icon;
+                const isSelected = theme === option.id;
+                return (
+                  <Card
+                    key={option.id}
+                    className={cn(
+                      "hover:border-primary/50 relative cursor-pointer p-4 transition-all",
+                      isSelected && "border-primary/50 border-1",
+                    )}
+                    onClick={() => setTheme(option.id)}
+                  >
+                    {isSelected && (
+                      <div className="absolute right-3 top-3">
+                        <Check className="text-primary h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="mb-2">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="mb-1 font-medium">{option.name}</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {option.description}
+                    </p>
+                  </Card>
+                );
+              })}
             </div>
           </div>
 

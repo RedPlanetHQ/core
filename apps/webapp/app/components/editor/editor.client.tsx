@@ -69,7 +69,7 @@ export const Editor = ({ defaultLabelId, labels }: EditorProps) => {
   React.useEffect(() => {
     if (fetcher.state === "idle") {
       if (fetcher.data !== undefined) {
-        navigate(`/home/document`);
+        navigate(`/home/memory/document`);
       }
     }
   }, [fetcher.state, fetcher.data]);
