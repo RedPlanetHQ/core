@@ -2,17 +2,43 @@
   "id": "kelly",
   "name": "Kelly",
   "role": "Content Creator",
-  "description": "Social Media & Content Creation",
-  "model": "ollama/glm4:9b-chat",
+  "description": "Social Media & Content Creation — Browser Automation via OpenClaw",
+  "model": "ollama/qwen3:14b",
   "provider": "ollama",
   "device": "server",
   "capabilities": [
     "content_creation",
     "social_media",
     "copywriting",
-    "hashtag_generation"
+    "hashtag_generation",
+    "browser_x_twitter",
+    "browser_tweet",
+    "browser_thread",
+    "browser_engage"
   ],
   "maxSteps": 80,
   "reasoningMode": "medium",
-  "memoryEnabled": true
+  "memoryEnabled": true,
+  "browser": {
+    "enabled": true,
+    "profile": "openclaw",
+    "scripts": {
+      "x-twitter": "openclaw/browser/x-twitter.sh"
+    },
+    "allowedDomains": [
+      "x.com",
+      "twitter.com",
+      "analytics.twitter.com"
+    ]
+  },
+  "commands": {
+    "/kelly-login": "bash openclaw/browser/x-twitter.sh login",
+    "/kelly-tweet": "bash openclaw/browser/x-twitter.sh tweet",
+    "/kelly-thread": "bash openclaw/browser/x-twitter.sh thread",
+    "/kelly-trending": "bash openclaw/browser/x-twitter.sh trending",
+    "/kelly-analytics": "bash openclaw/browser/x-twitter.sh analytics",
+    "/kelly-engage": "bash openclaw/browser/x-twitter.sh engage",
+    "/kelly-reply": "bash openclaw/browser/x-twitter.sh reply",
+    "/kelly-profile": "bash openclaw/browser/x-twitter.sh profile"
+  }
 }

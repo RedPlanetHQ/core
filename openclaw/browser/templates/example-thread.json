@@ -1,0 +1,12 @@
+{
+  "posts": [
+    "Ich habe 7 AI Agents gebaut die mein Business automatisch betreiben. Komplett kostenlos. 0 EUR API Kosten. So geht's:",
+    "Agent 1: Monica (CEO) — Koordiniert alles, trackt Revenue, spawnt neue Projekte. Laeuft auf qwen3:32b lokal auf meinem Server.",
+    "Agent 2: Dwight (Research) — Findet Trends, analysiert Konkurrenz, recherchiert Topics. Alles automatisch ueber Browser.",
+    "Agent 3: Kelly (Content) — Schreibt Tweets, Threads, Social Media Posts. Postet automatisch auf X. Genau diesen Thread hier.",
+    "Agent 4: Ross (YouTube) — Schreibt Scripts, generiert Thumbnails, laedt Videos hoch. Alles via YouTube Studio Browser Automation.",
+    "Agent 5: Ryan (Code) — Baut Templates, schreibt Automation Scripts, deployed Apps. Kostenlos mit qwen3-coder.",
+    "Agent 6: Chandler (Sales) — Findet Freelance Jobs, verkauft Templates, trackt Trading. DeepSeek R1 fuer Deep Reasoning.",
+    "Das Ganze laeuft auf einem Hetzner Server (128GB RAM), 100% Open Source, 0 EUR monatliche AI Kosten. Alle Modelle lokal mit Ollama. Der Browser wird ueber OpenClaw gesteuert. Fragen? Ask me anything."
+  ]
+}

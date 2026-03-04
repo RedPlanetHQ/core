@@ -98,6 +98,7 @@
       "youtube-factory": { "enabled": true },
       "thumbnail-optimizer": { "enabled": true },
       "youtube-studio-uploader": { "enabled": true },
+      "x-twitter-browser": { "enabled": true },
       "laser-focus": { "enabled": true },
       "agent-memory-ultimate": { "enabled": true }
     }

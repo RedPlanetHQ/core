@@ -2,17 +2,42 @@
   "id": "ross",
   "name": "Ross",
   "role": "YouTube & Video",
-  "description": "YouTube Content & Video Strategy",
-  "model": "ollama/glm4:9b-chat",
+  "description": "YouTube Content & Video Strategy — Browser Automation via OpenClaw",
+  "model": "ollama/qwen3:14b",
   "provider": "ollama",
   "device": "server",
   "capabilities": [
     "video_strategy",
     "script_writing",
     "seo_optimization",
-    "thumbnail_ideas"
+    "thumbnail_ideas",
+    "browser_youtube_studio",
+    "browser_upload",
+    "browser_analytics",
+    "browser_community"
   ],
   "maxSteps": 60,
   "reasoningMode": "medium",
-  "memoryEnabled": true
+  "memoryEnabled": true,
+  "browser": {
+    "enabled": true,
+    "profile": "openclaw",
+    "scripts": {
+      "youtube-studio": "openclaw/browser/youtube-studio.sh"
+    },
+    "allowedDomains": [
+      "studio.youtube.com",
+      "youtube.com",
+      "accounts.google.com"
+    ]
+  },
+  "commands": {
+    "/ross-login": "bash openclaw/browser/youtube-studio.sh login",
+    "/ross-upload": "bash openclaw/browser/youtube-studio.sh upload",
+    "/ross-analytics": "bash openclaw/browser/youtube-studio.sh analytics",
+    "/ross-comments": "bash openclaw/browser/youtube-studio.sh comments",
+    "/ross-community": "bash openclaw/browser/youtube-studio.sh community",
+    "/ross-status": "bash openclaw/browser/youtube-studio.sh status",
+    "/ross-shorts": "bash openclaw/browser/youtube-studio.sh shorts"
+  }
 }
