@@ -31,7 +31,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   }
 }
 
-export default function InboxNotSelected() {
+export default function MemoryDocumentDetail() {
   const { document, labels } = useLoaderData<typeof loader>();
 
   if (!document) {
@@ -48,7 +48,7 @@ export default function InboxNotSelected() {
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex h-[calc(100vh)] w-full flex-col overflow-hidden md:h-[calc(100vh_-_16px)]">
+      <div className="flex h-[calc(100vh_-_56px)] w-full flex-col overflow-hidden">
         <PageHeader
           title="Document"
           actionsNode={

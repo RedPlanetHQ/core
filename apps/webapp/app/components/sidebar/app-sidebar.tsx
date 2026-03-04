@@ -18,7 +18,10 @@ import {
   Mail,
   Phone,
   Search,
-  Settings,
+  Brain,
+  Clock,
+  Library,
+  Plug,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -26,6 +29,8 @@ import { NavUser } from "./nav-user";
 import Logo from "../logo/logo";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
+import { ConversationList } from "../conversation/conversation-list";
+import { UnreadConversations } from "../conversation/unread-conversations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,8 +42,6 @@ import { type Label } from "@prisma/client";
 
 import { useNavigate } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
-import { Agent } from "./agent";
-import { Memory } from "./memory";
 
 const data = {
   navMain: [
@@ -53,9 +56,19 @@ const data = {
       icon: LayoutGrid,
     },
     {
-      title: "Settings",
-      url: "/settings/account",
-      icon: Settings,
+      title: "My mind",
+      url: "/home/memory",
+      icon: Brain,
+    },
+    {
+      title: "Reminders",
+      url: "/home/agent/reminders",
+      icon: Clock,
+    },
+    {
+      title: "Skills",
+      url: "/home/agent/skills",
+      icon: Library,
     },
   ],
 };
@@ -96,7 +109,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
                   variant="secondary"
                   size="sm"
                   className="rounded"
-                  onClick={() => navigate(`/home/document`)}
+                  onClick={() => navigate(`/home/conversation`)}
                 >
                   <Plus size={16} />
                 </Button>
@@ -106,12 +119,25 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <Agent />
-          <Memory />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <UnreadConversations />
+            <ConversationList />
+          </div>
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-2 px-2">
           <IngestionStatus />
+          <Button
+            variant="secondary"
+            className="w-full justify-start gap-2 rounded"
+            size="lg"
+            onClick={() => {
+              navigate("/home/agent/connect");
+            }}
+          >
+            <Plug size={18} />
+            Connect
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

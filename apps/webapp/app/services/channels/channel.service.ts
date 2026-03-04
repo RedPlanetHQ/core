@@ -148,6 +148,7 @@ export async function handleBackgroundMessage(
       conversationId: conversation.conversationId,
       skipUserMessage: true,
       channelMetadata: metadata,
+      disableBackgroundTaskTools: true,
     });
 
     if (responseText && task.callbackConversationId) {

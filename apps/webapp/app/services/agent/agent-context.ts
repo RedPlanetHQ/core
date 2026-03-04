@@ -11,7 +11,7 @@ import { convertToModelMessages, type ModelMessage, type Tool } from "ai";
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 import {
-  IntegrationAccountWithDefinition,
+  type IntegrationAccountWithDefinition,
   IntegrationLoader,
 } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
@@ -34,6 +34,8 @@ interface BuildAgentContextParams {
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
   conversationId: string;
+  /** When true, background task tools (spawn/list/cancel) are excluded */
+  disableBackgroundTaskTools?: boolean;
 }
 
 interface AgentContext {
@@ -53,6 +55,7 @@ export async function buildAgentContext({
   onMessage,
   channelMetadata,
   conversationId,
+  disableBackgroundTaskTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills] = await Promise.all([
@@ -96,6 +99,9 @@ export async function buildAgentContext({
     onMessage,
     defaultChannel,
     availableChannels,
+    conversationId,
+    undefined,
+    disableBackgroundTaskTools,
   );
 
   // Build system prompt
