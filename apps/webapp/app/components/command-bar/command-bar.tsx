@@ -86,7 +86,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   };
 
   const handleDocumentClick = (documentId: string) => {
-    navigate(`/home/memory/document/${documentId}`);
+    navigate(`/home/memory/documents/${documentId}`);
     onOpenChange(false);
   };
 

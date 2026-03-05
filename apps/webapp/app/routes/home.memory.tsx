@@ -1,6 +1,7 @@
-import { Outlet, useLocation, useNavigate } from "@remix-run/react";
+import { Outlet, useLocation, useNavigate, useParams } from "@remix-run/react";
 import { Download, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
+import { LogOptions } from "~/components/logs/log-options";
 
 export default function MemoryLayout() {
   const location = useLocation();
@@ -9,6 +10,7 @@ export default function MemoryLayout() {
   const isGraph = location.pathname.includes("/home/memory/graph");
   const isDocuments = location.pathname.includes("/home/memory/documents");
   const isLabels = location.pathname.includes("/home/memory/labels");
+  const params = useParams();
 
   const tabs = [
     {
@@ -41,12 +43,6 @@ export default function MemoryLayout() {
           },
           variant: "secondary" as const,
         },
-        {
-          label: "New document",
-          icon: <Plus size={14} />,
-          onClick: () => navigate("/home/memory/document"),
-          variant: "secondary" as const,
-        },
       ]
     : isLabels && location.pathname === "/home/memory/labels"
       ? [
@@ -61,7 +57,18 @@ export default function MemoryLayout() {
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="My mind" tabs={tabs} actions={actions} />
+      <PageHeader
+        title="My mind"
+        tabs={tabs}
+        actions={actions}
+        actionsNode={
+          <>
+            {isDocuments && params.episodeId && (
+              <LogOptions id={params.episodeId} />
+            )}
+          </>
+        }
+      />
       <div className="flex h-full flex-col">
         <Outlet />
       </div>
