@@ -119,6 +119,7 @@ export const ConversationList = ({
             onClick={() => navigate(`/home/conversation/${conversation.id}`)}
             full
             tabIndex={0}
+            isActive={currentConversationId === conversation.id}
             aria-current={
               currentConversationId === conversation.id ? "page" : undefined
             }

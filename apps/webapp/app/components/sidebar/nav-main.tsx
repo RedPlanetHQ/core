@@ -15,10 +15,24 @@ export const NavMain = ({
     title: string;
     url: string;
     icon?: any;
+    strict?: boolean;
   }[];
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
+
+  const isActive = (item: {
+    title: string;
+    url: string;
+    icon?: any;
+    strict?: boolean;
+  }) => {
+    if (item.strict) {
+      return location.pathname === item.url;
+    } else {
+      return location.pathname.includes(item.url);
+    }
+  };
 
   return (
     <SidebarGroup>
@@ -27,11 +41,10 @@ export const NavMain = ({
           {items.map((item) => (
             <SidebarMenuItem key={item.title}>
               <Button
-                isActive={location.pathname.includes(item.url)}
+                isActive={isActive(item)}
                 className={cn(
                   "bg-grayAlpha-100 text-foreground w-fit gap-1 !rounded-md",
-                  location.pathname.includes(item.url) &&
-                    "!bg-accent !text-accent-foreground",
+                  isActive(item) && "!bg-accent !text-accent-foreground",
                 )}
                 onClick={() => navigate(item.url)}
                 variant="ghost"
