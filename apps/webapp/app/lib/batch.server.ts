@@ -8,6 +8,7 @@ import { AnthropicBatchProvider } from "./batch/providers/anthropic";
 import { logger } from "~/services/logger.service";
 import { generateObject, generateText, type LanguageModel } from "ai";
 import { getModel, getModelForBatch } from "~/lib/model.server";
+import { env } from "~/env.server";
 
 // Global provider instances (singleton pattern)
 let openaiProvider: OpenAIBatchProvider | null = null;
@@ -210,10 +211,7 @@ async function runInlineBatch<T = any>(
  */
 export async function createBatch<T = any>(params: CreateBatchParams<T>) {
   try {
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
     logger.info(
@@ -253,10 +251,7 @@ export async function getBatch<T = any>(
       );
     }
 
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
     return await provider.getBatch<T>(params);
@@ -279,10 +274,7 @@ export async function cancelBatch(
       return { success: false };
     }
 
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
     if (provider.cancelBatch) {
@@ -318,11 +310,11 @@ export function createBatchRequests(
 export function getSupportedBatchModels() {
   const models: Record<string, string[]> = {};
 
-  if (process.env.OPENAI_API_KEY) {
+  if (env.OPENAI_API_KEY) {
     models.openai = new OpenAIBatchProvider().supportedModels;
   }
 
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (env.ANTHROPIC_API_KEY) {
     models.anthropic = new AnthropicBatchProvider().supportedModels;
   }
 
