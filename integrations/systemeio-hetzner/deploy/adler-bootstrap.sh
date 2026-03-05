@@ -491,36 +491,18 @@ services:
     networks:
       - core
 
-  ollama:
-    container_name: core-ollama
-    image: ollama/ollama:latest
-    <<: *restart-policy
-    logging: *logging-config
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - core
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 16G
+  # Ollama laeuft auf dem Host (Port 11434) - kein Container noetig
 
   openclaw:
     container_name: openclaw
     image: ghcr.io/openclaw/openclaw:latest
     <<: *restart-policy
     logging: *logging-config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - OPENCLAW_MODEL_PROVIDER=ollama
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - OPENCLAW_SANDBOX=false
@@ -531,9 +513,6 @@ services:
     volumes:
       - openclaw_data:/home/node/.openclaw
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      ollama:
-        condition: service_healthy
     networks:
       - core
 
@@ -548,7 +527,6 @@ volumes:
   neo4j_data:
   n8n_data:
   openclaw_data:
-  ollama_data:
 COMPOSEEOF
 
 # Deployen
@@ -558,7 +536,7 @@ docker compose pull
 echo "  Container werden gestartet..."
 docker compose up -d
 
-echo -e "${GREEN}  OK - Alle 7 Container gestartet${NC}"
+echo -e "${GREEN}  OK - Alle Container gestartet (Ollama nutzt Host-Installation)${NC}"
 
 # ================================================================
 # PHASE 7: NGINX + SSL + TELEGRAM
@@ -655,7 +633,7 @@ if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q t
 {
   "ollama": {
     "apiKey": "local",
-    "baseURL": "http://ollama:11434"
+    "baseURL": "http://host.docker.internal:11434"
   }
 }
 AUTHEOF
@@ -664,8 +642,8 @@ AUTHEOF
 
     # Ollama Modelle
     echo "  Ollama Modelle laden (dauert beim ersten Mal)..."
-    docker exec core-ollama ollama pull qwen3:14b 2>/dev/null && echo -e "${GREEN}    qwen3:14b OK${NC}" || true
-    docker exec core-ollama ollama pull mistral:7b 2>/dev/null && echo -e "${GREEN}    mistral:7b OK${NC}" || true
+    ollama pull qwen3:14b 2>/dev/null && echo -e "${GREEN}    qwen3:14b OK${NC}" || true
+    ollama pull mistral:7b 2>/dev/null && echo -e "${GREEN}    mistral:7b OK${NC}" || true
 
     # Telegram konfigurieren
     if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then

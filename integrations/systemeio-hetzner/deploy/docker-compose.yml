@@ -152,29 +152,9 @@ services:
       - core
 
   # ===========================================
-  # Ollama - Lokale AI Modelle
+  # Ollama - Nutzt Host-Installation (Port 11434)
+  # Container deaktiviert - Host-Ollama wird verwendet
   # ===========================================
-  ollama:
-    container_name: core-ollama
-    image: ollama/ollama:latest
-    restart: unless-stopped
-    logging: *logging-config
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    networks:
-      - core
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
-      interval: 30s
-      timeout: 10s
-      retries: 5
-      start_period: 30s
-    deploy:
-      resources:
-        limits:
-          memory: 16G
 
   # ===========================================
   # OpenClaw - AI Assistant + Telegram Bot
@@ -184,9 +164,11 @@ services:
     image: ghcr.io/openclaw/openclaw:latest
     restart: unless-stopped
     logging: *logging-config
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - OPENCLAW_MODEL_PROVIDER=ollama
-      - OLLAMA_BASE_URL=http://ollama:11434
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
       - OPENCLAW_SANDBOX=false
@@ -197,9 +179,6 @@ services:
     volumes:
       - openclaw_data:/home/node/.openclaw
       - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      ollama:
-        condition: service_healthy
     networks:
       - core
 
@@ -214,4 +193,3 @@ volumes:
   neo4j_data:
   n8n_data:
   openclaw_data:
-  ollama_data:
