@@ -52,7 +52,10 @@ export const ConversationList = ({
   const location = useLocation();
   const navigate = useNavigate();
   // Each pathname change gets a new fetcherKey, which resets the fetcher state
-  const fetcherKey = useMemo(() => `conv-list-${location.pathname}`, [location.pathname]);
+  const fetcherKey = useMemo(
+    () => `conv-list-${location.pathname}`,
+    [location.pathname],
+  );
   const fetcher = useFetcher<ConversationListResponse>({ key: fetcherKey });
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
@@ -64,7 +67,7 @@ export const ConversationList = ({
   const loadPage = useCallback(
     (page: number) => {
       setIsLoading(true);
-      fetcher.load(`/api/v1/conversations?page=${page}&limit=10`);
+      fetcher.load(`/api/v1/conversations?unread=false&page=${page}&limit=10`);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [fetcher],
