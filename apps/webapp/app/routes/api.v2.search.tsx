@@ -49,7 +49,7 @@ const { action, loader } = createHybridActionApiRoute(
       console.error,
     );
 
-    // When structured: false, extract text from MCP format
+    // When structured: false, extract text
     if (!body.structured && results.content) {
       return json({ text: results.content[0]?.text ?? "" });
     }

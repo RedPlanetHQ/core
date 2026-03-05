@@ -166,18 +166,10 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                   value={doc.id}
                   onSelect={() => handleDocumentClick(doc.id)}
                   className="flex items-center gap-2 py-2"
-                  onClick={() => {
-                    console.log("clickeddddd");
-                  }}
                   disabled={false}
                 >
                   <File className="h-4 w-4 flex-shrink-0" />
-                  <div
-                    className="min-w-0 flex-1"
-                    onClick={() => {
-                      console.log("asdfasdfasd2e423423");
-                    }}
-                  >
+                  <div className="min-w-0 flex-1">
                     <p className="text-foreground truncate text-sm">
                       {doc.title}
                     </p>

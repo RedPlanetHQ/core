@@ -4,6 +4,7 @@ import { getModel, getModelForTask } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "../search.server";
 import { searchV2 } from "../search-v2";
+import { formatRecallAsMarkdown } from "../search-v2/formatter";
 import { prisma } from "~/db.server";
 
 const searchService = new SearchService();
@@ -18,7 +19,8 @@ function hasSearchResults(result: any): boolean {
     return (
       result.episodes.length > 0 ||
       (result.entity !== null && result.entity !== undefined) ||
-      (result.statements && result.statements.length > 0)
+      (result.statements && result.statements.length > 0) ||
+      (result.facets !== null && result.facets !== undefined)
     );
   }
 
@@ -326,6 +328,7 @@ export async function searchMemoryWithAgent(
     let invalidFacts: any[] = [];
     let entity: any = null;
     let facts: any[] = [];
+    let facets: any = null;
     let usedVersion: "v1" | "v2" = "v2";
 
     if (hasSearchResults(v2Result)) {
@@ -336,6 +339,7 @@ export async function searchMemoryWithAgent(
       invalidFacts = v2Structured.invalidatedFacts || [];
       entity = v2Structured.entity || null;
       facts = v2Structured.facts || [];
+      facets = v2Structured.facets || null;
     } else if (!isV3User && v1Promise) {
       // V2 empty and V1 fallback enabled - wait for V1 (already running in parallel)
       logger.info(`[MemoryAgent] V2 empty, using V1 fallback`);
@@ -357,12 +361,38 @@ export async function searchMemoryWithAgent(
 
     // If structured option is true, return raw JSON data for API use
     if (options.structured) {
+      // For facets queries, flatten aspects into facts and promote topics/entities to top level
+      const facetFacts = facets?.aspects?.flatMap((a) =>
+        a.statements.map((s) => ({
+          fact: s.fact,
+          validAt: s.validAt,
+          attributes: {},
+          aspect: a.aspect,
+          episodeUuid: s.episodeUuid,
+        }))
+      ) ?? [];
+
       return {
         episodes,
-        facts,
+        facts: facets ? facetFacts : facts,
         invalidatedFacts: invalidFacts,
         entity,
+        topics: facets?.topics ?? [],
+        entities: facets?.entities ?? [],
         version: usedVersion,
+      };
+    }
+
+    // For facets results, use the formatter directly (manual episode formatting below doesn't handle facets)
+    if (facets) {
+      return {
+        content: [
+          {
+            type: "text",
+            text: formatRecallAsMarkdown({ episodes: [], facets, invalidatedFacts: [] }),
+          },
+        ],
+        isError: false,
       };
     }
 
