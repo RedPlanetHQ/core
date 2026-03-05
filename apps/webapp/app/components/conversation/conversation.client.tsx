@@ -97,7 +97,7 @@ export const ConversationNew = ({
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
         <Logo size={40} />
-        <h1 className="text-3xl font-semibold tracking-tight">
+        <h1 className="text-3xl font-medium tracking-tight">
           What can I help with?
         </h1>
       </div>

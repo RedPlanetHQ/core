@@ -8,6 +8,8 @@ import type {
   RecallResult,
   RecallEpisode,
   RecallInvalidatedFact,
+  RecallFacets,
+  RecallTopicFacet,
 } from "./types";
 import { getMatchedLabelIds } from "./router";
 import { type EntityNode, type EpisodicNode, type StatementAspect, type StatementNode } from "@core/types";
@@ -315,11 +317,13 @@ export async function handleEntityLookup(
   // ========================================
   const entityUuids = entities.map((e) => e.uuid);
 
+  const aspects = ctx.routerOutput.aspects.length > 0 ? ctx.routerOutput.aspects : undefined;
   const episodes = await graphProvider.getEpisodesForEntities({
     entityUuids,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
     maxEpisodes,
+    aspects,
   });
 
   logger.info(
@@ -814,6 +818,92 @@ async function normalizeToRecallResult(
 
 
 /**
+ * Handle temporal_facets - enumerate what exists in a time range without reading episode content
+ * Runs topic, entity, and aspect queries in parallel based on requested facet dimensions
+ */
+export async function handleTemporalFacets(ctx: HandlerContext): Promise<RecallFacets> {
+  const startTime = Date.now();
+  const graphProvider = ProviderFactory.getGraphProvider();
+
+  const { startTime: temporalStart, endTime: temporalEnd } = getTemporalDateRange(ctx);
+  const effectiveStart = temporalStart || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Default to all dimensions if none specified
+  const facetDimensions = ctx.routerOutput.facets?.length > 0
+    ? ctx.routerOutput.facets
+    : ["topics", "entities", "aspects"] as const;
+
+  logger.info(
+    `[Handler:temporal_facets] Dimensions: [${facetDimensions.join(", ")}], ` +
+    `Range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`
+  );
+
+  const [topicsRaw, entitiesRaw, aspectsRaw] = await Promise.all([
+    facetDimensions.includes("topics")
+      ? graphProvider.getTopicsForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+        })
+      : Promise.resolve(null),
+    facetDimensions.includes("entities")
+      ? graphProvider.getEntitiesForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+        })
+      : Promise.resolve(null),
+    facetDimensions.includes("aspects")
+      ? graphProvider.getAspectsForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+          aspects: ctx.routerOutput.aspects.length > 0 ? ctx.routerOutput.aspects : undefined,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  // Resolve label names for topics
+  let topics: RecallTopicFacet[] | undefined;
+  if (topicsRaw) {
+    const labelIds = topicsRaw.map((t) => t.labelId);
+    const labels = await prisma.label.findMany({
+      where: { id: { in: labelIds } },
+      select: { id: true, name: true },
+    });
+    const nameMap = new Map(labels.map((l) => [l.id, l.name]));
+    topics = topicsRaw.map((t) => ({
+      labelId: t.labelId,
+      labelName: nameMap.get(t.labelId) || t.labelId,
+      episodeCount: t.episodeCount,
+    }));
+  }
+
+  logger.info(
+    `[Handler:temporal_facets] Done in ${Date.now() - startTime}ms. ` +
+    `Topics: ${topics?.length ?? 0}, Entities: ${entitiesRaw?.length ?? 0}, Aspects: ${aspectsRaw?.length ?? 0}`
+  );
+
+  return {
+    topics,
+    entities: entitiesRaw ?? undefined,
+    aspects: aspectsRaw?.map((a) => ({
+      aspect: a.aspect as StatementAspect,
+      statementCount: a.statementCount,
+      statements: a.statements.map((s) => ({
+        fact: s.fact,
+        validAt: new Date(s.validAt),
+        episodeUuid: s.episodeUuid,
+      })),
+    })),
+    dateRange: { startTime: effectiveStart, endTime: temporalEnd },
+  };
+}
+
+/**
  * Route to appropriate handler based on query type
  * Applies reranking and normalization for episode-returning handlers
  */
@@ -856,8 +946,28 @@ export async function routeToHandler(
 
     case "temporal": {
       const episodes = await handleTemporal(ctx);
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
+      // Only rerank when there's a topic focus — pure date-range queries have no semantic
+      // content to score against, so sort by recency instead to avoid filtering valid results
+      const hasTopic =
+        ctx.routerOutput.entityHints.length > 0 ||
+        ctx.routerOutput.selectedLabels.length > 0;
+      const rerankedEpisodes = hasTopic
+        ? await applyEpisodeReranking(episodes, ctx)
+        : episodes
+            .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+            .slice(0, ctx.options.maxEpisodes || 10);
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+    }
+
+    case "temporal_facets": {
+      const facets = await handleTemporalFacets(ctx);
+      return {
+        episodes: [],
+        invalidatedFacts: [],
+        statements: [],
+        entity: null,
+        facets,
+      };
     }
 
     case "exploratory": {

@@ -8,11 +8,18 @@ export const QueryTypes = [
   "entity_lookup", // Direct entity information lookup
   "aspect_query", // Filter by statement aspects (most common)
   "temporal", // Time-based queries (recent, last week, etc.)
+  "temporal_facets", // Enumerate what exists in a time range (topics, people, aspects) without reading content
   "exploratory", // Open-ended exploration (what do you know about X)
   "relationship", // Connections between entities
 ] as const;
 
 export type QueryType = (typeof QueryTypes)[number];
+
+/**
+ * Facet dimensions for temporal_facets queries
+ */
+export const FacetDimensions = ["topics", "entities", "aspects"] as const;
+export type FacetDimension = (typeof FacetDimensions)[number];
 
 /**
  * Temporal filter specification
@@ -103,6 +110,11 @@ export const AspectExtractionSchema = z.object({
     .array(z.string())
     .describe("Label names from the matched topics that are relevant to this query. Only include labels that directly relate to the query intent."),
 
+  // For temporal_facets: which dimensions to enumerate
+  facets: z
+    .array(z.enum(FacetDimensions as unknown as [string, ...string[]]))
+    .describe("For temporal_facets queries: which dimensions to enumerate. Use ['topics'] for topic/label questions, ['entities'] for people/entity questions, ['aspects'] for preference/goal/decision questions. Can combine multiple. Empty for non-temporal_facets queries."),
+
   // For entity_lookup: whether to look up a specific attribute or broad info
   lookupMode: z
     .enum(LookupModes as unknown as [string, ...string[]])
@@ -149,6 +161,7 @@ export interface RouterOutput {
   selectedLabels: string[]; // Label names selected by LLM from matchedLabels
   lookupMode: LookupMode; // For entity_lookup: 'attribute' or 'broad'
   attributeHint: string | null; // For entity_lookup attribute mode: which attribute
+  facets: FacetDimension[]; // For temporal_facets: which dimensions to enumerate
   confidence: number;
 
   // Metadata
@@ -200,6 +213,41 @@ export interface RecallEntity {
 }
 
 /**
+ * Facet result types for temporal_facets queries
+ */
+export interface RecallTopicFacet {
+  labelId: string;
+  labelName: string;
+  episodeCount: number;
+}
+
+export interface RecallEntityFacet {
+  entityUuid: string;
+  entityName: string;
+  mentionCount: number;
+}
+
+export interface RecallAspectFacet {
+  aspect: StatementAspect;
+  statementCount: number;
+  statements: {
+    fact: string;
+    validAt: Date;
+    episodeUuid: string;
+  }[];
+}
+
+export interface RecallFacets {
+  topics?: RecallTopicFacet[];
+  entities?: RecallEntityFacet[];
+  aspects?: RecallAspectFacet[];
+  dateRange: {
+    startTime: Date;
+    endTime?: Date;
+  };
+}
+
+/**
  * Main recall result interface (structured output)
  * Matches current search output format for consistency
  */
@@ -215,6 +263,12 @@ export interface RecallResult {
 
   // Entity (for entity_lookup queries)
   entity?: RecallEntity | null;
+
+  // Facets (for temporal_facets queries)
+  facets?: RecallFacets;
+
+  // Warning message (e.g. token budget exceeded for temporal queries)
+  warning?: string;
 }
 
 /**
@@ -312,7 +366,9 @@ export const QUERY_TYPE_DEFINITIONS: Record<QueryType, string> = {
   aspect_query:
     "Query filtered by statement aspects (e.g., 'What are my goals?', 'What does John prefer?', 'Need to understand user preferences for feature X')",
   temporal:
-    "Time-based queries (e.g., 'What happened last week?', 'Recent updates', 'Need recent context about project activities')",
+    "Time-based queries that retrieve episode content (e.g., 'What happened last week?', 'Recent updates', 'What did I work on last month?')",
+  temporal_facets:
+    "Enumerate what categories exist in a time range WITHOUT reading episode content (e.g., 'What topics did I speak about last week?', 'Who are the people I mentioned this month?', 'What preferences were identified last week?', 'What decisions were made recently?')",
   exploratory:
     "Open-ended exploration and context gathering (e.g., 'What do you know about me?', 'I need context about X to help with Y', 'Looking for information about authentication implementation')",
   relationship:

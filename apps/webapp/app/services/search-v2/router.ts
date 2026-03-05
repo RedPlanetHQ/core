@@ -13,6 +13,7 @@ import {
   type QueryType,
   type TemporalFilter,
   type LookupMode,
+  type FacetDimension,
   ASPECT_DEFINITIONS,
   QUERY_TYPE_DEFINITIONS,
 } from "./types";
@@ -81,52 +82,67 @@ Query: "How do I write emails?"
 (No matched topics - selectedLabels MUST be empty array)
 `}
 Query: "What are my fitness goals?"
-→ aspects: ["Goal"], queryType: "aspect_query", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Goal"], queryType: "aspect_query", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "Need to understand what preferences and goals the user has for fitness tracking"
-→ aspects: ["Preference", "Goal"], queryType: "aspect_query", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["fitness"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Preference", "Goal"], queryType: "aspect_query", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["fitness"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "What is John's phone number?"
-→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John"], selectedLabels: [], lookupMode: "attribute", attributeHint: "phone", shouldSearch: true
+→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John"], selectedLabels: [], lookupMode: "attribute", attributeHint: "phone", facets: [], shouldSearch: true
 
 Query: "John's email address?"
-→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John"], selectedLabels: [], lookupMode: "attribute", attributeHint: "email", shouldSearch: true
+→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John"], selectedLabels: [], lookupMode: "attribute", attributeHint: "email", facets: [], shouldSearch: true
 
 Query: "What team does Sarah work on?"
-→ aspects: ["Identity", "Relationship"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "attribute", attributeHint: "team", shouldSearch: true
+→ aspects: ["Identity", "Relationship"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "attribute", attributeHint: "team", facets: [], shouldSearch: true
 
 Query: "Who is Sarah?"
-→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Identity"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "anything about airbnb email"
-→ aspects: ["Knowledge", "Habit"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["airbnb email"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Knowledge", "Habit"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["airbnb email"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "Looking for information about Sarah to understand her role and background"
-→ aspects: ["Identity", "Knowledge"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Identity", "Knowledge"], queryType: "entity_lookup", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["Sarah"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "What happened last week with the CORE project?"
-→ aspects: ["Event", "Habit"], queryType: "temporal", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: ["CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Event", "Habit"], queryType: "temporal", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: ["CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "Need recent context about CORE project activities to catch up on progress"
-→ aspects: ["Habit", "Event", "Decision"], queryType: "temporal", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: ["CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Habit", "Event", "Decision"], queryType: "temporal", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: ["CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
+
+Query: "What topics did I speak about last week?"
+→ aspects: [], queryType: "temporal_facets", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["topics"], shouldSearch: true
+
+Query: "Who are the people I spoke about this month?"
+→ aspects: [], queryType: "temporal_facets", temporal: {type: "recent", days: 30, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["entities"], shouldSearch: true
+
+Query: "What preferences were identified last week?"
+→ aspects: ["Preference"], queryType: "temporal_facets", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["aspects"], shouldSearch: true
+
+Query: "What decisions and goals came up last month?"
+→ aspects: ["Decision", "Goal"], queryType: "temporal_facets", temporal: {type: "recent", days: 30, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["aspects"], shouldSearch: true
+
+Query: "Give me an overview of last week — topics, people, and what I decided"
+→ aspects: ["Decision"], queryType: "temporal_facets", temporal: {type: "recent", days: 7, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: ["topics", "entities", "aspects"], shouldSearch: true
 
 Query: "search implementation in CORE"
-→ aspects: ["Knowledge", "Habit", "Decision"], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["search", "CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Knowledge", "Habit", "Decision"], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["search", "CORE"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "I need context about authentication implementation and security discussions to help review this PR"
-→ aspects: ["Knowledge", "Habit", "Decision"], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["authentication", "security"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Knowledge", "Habit", "Decision"], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["authentication", "security"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "How does John know Mike?"
-→ aspects: ["Relationship"], queryType: "relationship", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John", "Mike"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Relationship"], queryType: "relationship", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John", "Mike"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "Need to understand the connection between John and Mike for team planning"
-→ aspects: ["Relationship"], queryType: "relationship", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John", "Mike"], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: true
+→ aspects: ["Relationship"], queryType: "relationship", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: ["John", "Mike"], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
 Query: "Hello!"
-→ aspects: [], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: false
+→ aspects: [], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: false
 
 Query: "What's the weather like?"
-→ aspects: [], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, shouldSearch: false`;
+→ aspects: [], queryType: "exploratory", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: false`;
 }
 
 /**
@@ -244,6 +260,7 @@ async function extractAspects(
       selectedLabels: [],
       lookupMode: "broad",
       attributeHint: null,
+      facets: [],
       confidence: 0.3,
     };
   }
@@ -280,6 +297,7 @@ export async function routeIntent(
     selectedLabels: aspectExtraction.selectedLabels || [],
     lookupMode: aspectExtraction.lookupMode as "attribute" | "broad",
     attributeHint: aspectExtraction.attributeHint,
+    facets: (aspectExtraction.facets || []) as FacetDimension[],
     confidence: aspectExtraction.confidence,
     routingTimeMs,
   };
