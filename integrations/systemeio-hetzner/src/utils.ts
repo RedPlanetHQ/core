@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { randomBytes } from 'crypto';
 
 // ============================================================================
 // SYSTEME.IO API CLIENT
@@ -185,6 +186,8 @@ set -euo pipefail
 # ============================================================
 
 export DEBIAN_FRONTEND=noninteractive
+SERVER_IP=$(curl -s -4 ifconfig.me || curl -s -4 icanhazip.com || hostname -I | awk '{print $1}')
+PROVISION_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 
 # System Update
 apt-get update && apt-get upgrade -y
@@ -296,14 +299,14 @@ DOCKER_EOF
 docker-compose up -d
 
 # Create customer info file
-cat > /opt/ki-power/customer-info.json << 'INFO_EOF'
+cat > /opt/ki-power/customer-info.json << INFO_EOF
 {
   "customerId": "${params.customerId}",
   "customerEmail": "${params.customerEmail}",
-  "provisionedAt": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")",
+  "provisionedAt": "\$PROVISION_DATE",
   "services": {
-    "openWebUI": "http://SERVER_IP:3000",
-    "n8n": "http://SERVER_IP:5678",
+    "openWebUI": "http://\$SERVER_IP:3000",
+    "n8n": "http://\$SERVER_IP:5678",
     "adminUser": "admin",
     "adminPassword": "${params.adminPassword}"
   },
@@ -350,8 +353,8 @@ cat > /etc/cron.d/ki-power-updates << 'CRON_EOF'
 CRON_EOF
 
 echo "KI-Power Server setup complete!"
-echo "Open WebUI: http://$(curl -s ifconfig.me):3000"
-echo "n8n: http://$(curl -s ifconfig.me):5678"
+echo "Open WebUI: http://\$SERVER_IP:3000"
+echo "n8n: http://\$SERVER_IP:5678"
 `;
 }
 
@@ -422,10 +425,11 @@ export async function provisionCustomerServer(params: {
 }
 
 function generateSecurePassword(): string {
-  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%';
+  const chars = 'abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const bytes = randomBytes(24);
   let password = '';
   for (let i = 0; i < 24; i++) {
-    password += chars.charAt(Math.floor(Math.random() * chars.length));
+    password += chars.charAt(bytes[i] % chars.length);
   }
   return password;
 }

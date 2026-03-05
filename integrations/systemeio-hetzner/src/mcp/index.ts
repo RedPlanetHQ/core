@@ -6,15 +6,11 @@ import {
   addTagToContact,
   getSales,
   getFunnels,
-  getCourses,
   grantCourseAccess,
   listServers,
-  createServer,
   getServer,
   deleteServer,
-  listServerTypes,
   provisionCustomerServer,
-  generateCloudInitScript,
 } from '../utils';
 
 // ============================================================================
@@ -234,7 +230,7 @@ export async function callTool(name: string, args: any, config: any) {
           yearlyProjection: `€${active.length * 99 * 12}`,
           hetznerCost: `~€${managed.length * 15}`, // Approx cpx31 cost
           monthlyProfit: `~€${active.length * 99 - managed.length * 15}`,
-          profitMargin: managed.length > 0 ? `${Math.round(((active.length * 99 - managed.length * 15) / (active.length * 99)) * 100)}%` : 'N/A',
+          profitMargin: active.length > 0 ? `${Math.round(((active.length * 99 - managed.length * 15) / (active.length * 99)) * 100)}%` : 'N/A',
           servers: managed.map((s: any) => ({
             name: s.name,
             status: s.status,

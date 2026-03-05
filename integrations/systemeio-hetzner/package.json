@@ -3,17 +3,14 @@
   "version": "1.0.0",
   "description": "Systeme.io Affiliate + Hetzner KI-Server Auto-Provisioning - Digital Fast Food System",
   "main": "./bin/index.js",
-  "module": "./bin/index.mjs",
-  "type": "module",
   "files": [
-    "systemeio-hetzner",
     "bin"
   ],
   "bin": {
     "systemeio-hetzner": "./bin/index.js"
   },
   "scripts": {
-    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify"
+    "build": "tsup"
   },
   "dependencies": {
     "axios": "^1.7.9",

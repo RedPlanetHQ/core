@@ -50,8 +50,8 @@ export async function handleSchedule(
       for (const sale of sales) {
         const saleId = String(sale.id);
 
-        // Skip already processed sales
-        if (settings.lastSaleId && saleId <= settings.lastSaleId) {
+        // Skip already processed sales (numeric comparison for reliable ordering)
+        if (settings.lastSaleId && Number(saleId) <= Number(settings.lastSaleId)) {
           continue;
         }
 
@@ -115,9 +115,6 @@ export async function handleSchedule(
       const activeCount = managedServers.filter((s: any) => s.status === 'running').length;
       const totalMonthlyRevenue = activeCount * 99;
 
-      settings.activeServers = String(activeCount);
-      settings.totalRevenue = String(totalMonthlyRevenue);
-
       // Report any server issues
       for (const server of managedServers) {
         if (server.status !== 'running') {
@@ -130,8 +127,12 @@ export async function handleSchedule(
         }
       }
 
-      // Periodic revenue report (only on first sync or status change)
-      if (settings.activeServers !== String(activeCount) || !settings.lastSyncTime) {
+      // Periodic revenue report (on first sync or server count change)
+      const previousActiveServers = settings.activeServers;
+      settings.activeServers = String(activeCount);
+      settings.totalRevenue = String(totalMonthlyRevenue);
+
+      if (previousActiveServers !== String(activeCount) || !settings.lastSyncTime) {
         messages.push(
           createActivityMessage(
             `Dashboard: ${activeCount} aktive Server | €${totalMonthlyRevenue}/Monat Umsatz | ${provisionedCustomers.length} Kunden total`,
