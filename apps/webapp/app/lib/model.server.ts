@@ -16,58 +16,14 @@ import { logger } from "~/services/logger.service";
 import { createOllama } from "ollama-ai-provider-v2";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
+import { env } from "~/env.server";
 
 export type ModelComplexity = "high" | "low";
 
-/**
- * Provider compatibility notes:
- * - Default behavior is unchanged: OpenAI via the Responses API.
- * - OpenAI-compatible proxies can opt in via `OPENAI_BASE_URL` + `OPENAI_API_MODE=chat_completions`.
- * - Optional self-hosted models can be enabled via `OLLAMA_URL` with `CHAT_PROVIDER=ollama`
- *   and/or `EMBEDDINGS_PROVIDER=ollama`.
- */
-
-function getChatProvider(): "openai" | "ollama" {
-  // Unset defaults to OpenAI to preserve upstream behavior.
-  // Set CHAT_PROVIDER=ollama to route chat to a local Ollama server.
-  const raw = (process.env.CHAT_PROVIDER || "").trim().toLowerCase();
-  return raw === "ollama" ? "ollama" : "openai";
-}
-
-function getEmbeddingsProvider(): "openai" | "ollama" | undefined {
-  const raw = (process.env.EMBEDDINGS_PROVIDER || process.env.EMBEDDING_PROVIDER)
-    ?.trim()
-    .toLowerCase();
-  if (!raw) return undefined;
-  if (raw === "openai" || raw === "ollama") return raw;
-  return undefined;
-}
-
-function getOpenAIAPIMode(): "responses" | "chat_completions" {
-  const explicit = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
-  if (explicit === "chat_completions") {
-    return "chat_completions";
-  }
-  if (explicit === "responses") {
-    return "responses";
-  }
-
-  return "responses";
-}
-
-function shouldUseOllamaForEmbeddings(args: {
-  embeddingsProvider?: "openai" | "ollama";
-  embeddingModel: string;
-}): boolean {
-  const { embeddingsProvider, embeddingModel } = args;
-  if (embeddingsProvider === "ollama") return true;
-  if (embeddingsProvider === "openai") return false;
-  // Backwards compatible behavior: assume OpenAI for known OpenAI embedding model ids/patterns.
-  // Anything else is assumed to be served by a local/self-hosted embedding provider (e.g. Ollama).
-  const normalized = embeddingModel.trim();
-  const isOpenAIEmbeddingModel =
-    normalized.startsWith("text-embedding-") || normalized === "text-embedding-ada-002";
-  return !isOpenAIEmbeddingModel;
+function shouldUseOllamaForEmbeddings(
+  embeddingsProvider?: "openai" | "ollama",
+): boolean {
+  return embeddingsProvider === "ollama";
 }
 
 /**
@@ -76,7 +32,7 @@ function shouldUseOllamaForEmbeddings(args: {
  * LOW complexity automatically downgrades to cheaper variants if possible.
  */
 export function getModelForTask(complexity: ModelComplexity = "high"): string {
-  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+  const baseModel = env.MODEL;
 
   // HIGH complexity - always use the configured model
   if (complexity === "high") {
@@ -114,7 +70,7 @@ export function getModelForTask(complexity: ModelComplexity = "high"): string {
  * so we downgrade to a known-working variant.
  */
 export function getModelForBatch(): string {
-  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+  const baseModel = env.MODEL;
 
   const batchDowngrades: Record<string, string> = {
     "gpt-5.2-2025-12-11": "gpt-5-2025-08-07",
@@ -127,17 +83,17 @@ export function getModelForBatch(): string {
 export const getModel = (takeModel?: string) => {
   let model = takeModel;
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const openaiBaseUrl = process.env.OPENAI_BASE_URL;
-  const ollamaUrl = process.env.OLLAMA_URL;
-  const chatProvider = getChatProvider();
-  const openaiApiMode = getOpenAIAPIMode();
-  model = model || process.env.MODEL || "gpt-4.1-2025-04-14";
+  const anthropicKey = env.ANTHROPIC_API_KEY;
+  const googleKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
+  const openaiKey = env.OPENAI_API_KEY;
+  const openaiBaseUrl = env.OPENAI_BASE_URL;
+  const ollamaUrl = env.OLLAMA_URL;
+  const chatProvider = env.CHAT_PROVIDER;
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  model = model || env.MODEL;
 
   let modelInstance;
-  let modelTemperature = Number(process.env.MODEL_TEMPERATURE) || 1;
+  let modelTemperature = env.MODEL_TEMPERATURE;
   // Keep OLLAMA_URL if provided (used for self-hosted/local models)
 
   const useOllamaForChat = chatProvider === "ollama";
@@ -149,20 +105,18 @@ export const getModel = (takeModel?: string) => {
         "CHAT_PROVIDER is set to ollama but OLLAMA_URL is not set",
       );
     }
-    const ollamaModel =
-      (process.env.OLLAMA_MODEL || model || "").toString().trim();
-    if (!ollamaModel) {
+    if (!model) {
       throw new Error(
-        "No chat model configured for Ollama. Set OLLAMA_MODEL or MODEL.",
+        "No chat model configured for Ollama. Set MODEL.",
       );
     }
-    if (!process.env.OLLAMA_MODEL && /^gpt-/.test(ollamaModel)) {
+    if (/^gpt-/.test(model)) {
       logger.warn(
-        `Using Ollama with MODEL=${ollamaModel}. If this is an OpenAI model id, set OLLAMA_MODEL to a local Ollama model (e.g. llama3.2:1b).`,
+        `Using Ollama with MODEL=${model}. If this is an OpenAI model id, set MODEL to a local Ollama model (e.g. llama3.2:1b).`,
       );
     }
     const ollama = createOllama({ baseURL: ollamaUrl });
-    modelInstance = ollama(ollamaModel);
+    modelInstance = ollama(model);
   } else if (model.includes("claude")) {
     if (!anthropicKey) {
       throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
@@ -225,9 +179,8 @@ export async function makeModelCall(
   const modelInstance = getModel(model);
   const generateTextOptions: any = {};
 
-  const chatProvider = getChatProvider();
-  const openaiApiMode = getOpenAIAPIMode();
-  const useOllamaForChat = chatProvider === "ollama";
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
 
   // Add OpenAI provider options for prompt caching (Responses API only).
   // Why: many OpenAI-compatible proxies reject these parameters on `/chat/completions`.
@@ -325,9 +278,8 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   cacheKey?: string,
   temperature?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
-  const chatProvider = getChatProvider();
-  const openaiApiMode = getOpenAIAPIMode();
-  const useOllamaForChat = chatProvider === "ollama";
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
 
   // Default upstream behavior expects `generateObject()` to parse strict JSON output.
   //
@@ -336,15 +288,15 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   //
   // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
   // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
-  const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "")
+  const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
     .trim()
     .toLowerCase();
   // Proxy/self-hosted modes only (preserves upstream defaults):
   // - OPENAI_API_MODE=chat_completions + OPENAI_BASE_URL indicates an OpenAI-compatible proxy
   // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
   const isProxyChatMode =
-    openaiApiMode === "chat_completions" && !!process.env.OPENAI_BASE_URL;
-  const isOllamaChatProvider = chatProvider === "ollama";
+    openaiApiMode === "chat_completions" && !!env.OPENAI_BASE_URL;
+  const isOllamaChatProvider = useOllamaForChat;
 
   const tolerantOutput =
     tolerantOverride.length > 0
@@ -604,12 +556,12 @@ export function isProprietaryModel(
 }
 
 export async function getEmbedding(text: string) {
-  const ollamaUrl = process.env.OLLAMA_URL;
-  const model = process.env.EMBEDDING_MODEL;
-  const openaiBaseUrl = process.env.OPENAI_BASE_URL;
-  const openaiKey = process.env.OPENAI_API_KEY;
-  const embeddingsProvider = getEmbeddingsProvider();
-  const targetDimRaw = process.env.EMBEDDING_MODEL_SIZE;
+  const ollamaUrl = env.OLLAMA_URL;
+  const model = env.EMBEDDING_MODEL;
+  const openaiBaseUrl = env.OPENAI_BASE_URL;
+  const openaiKey = env.OPENAI_API_KEY;
+  const embeddingsProvider = env.EMBEDDINGS_PROVIDER;
+  const targetDimRaw = env.EMBEDDING_MODEL_SIZE;
   const targetDim =
     targetDimRaw && Number.isFinite(Number(targetDimRaw))
       ? Number(targetDimRaw)
@@ -622,10 +574,7 @@ export async function getEmbedding(text: string) {
     try {
       const embeddingModel = model || "text-embedding-3-small";
 
-      const useOllamaEmbeddings = shouldUseOllamaForEmbeddings({
-        embeddingsProvider,
-        embeddingModel,
-      });
+      const useOllamaEmbeddings = shouldUseOllamaForEmbeddings(embeddingsProvider);
 
       if (useOllamaEmbeddings) {
         if (!ollamaUrl) {
@@ -633,17 +582,13 @@ export async function getEmbedding(text: string) {
             "Ollama embeddings selected but OLLAMA_URL is not set. Set OLLAMA_URL or set EMBEDDINGS_PROVIDER=openai.",
           );
         }
-        const ollamaEmbeddingModel =
-          (process.env.OLLAMA_EMBEDDING_MODEL || embeddingModel).toString().trim();
         // Ollama's stable embeddings endpoint is /api/embeddings (not always available on /v1/embeddings).
-        // Why: some Ollama versions expose embeddings only on `/api/embeddings`, while `/v1/embeddings`
-        // may be missing or behave differently.
         const baseUrl = ollamaUrl.replace(/\/+$/, "");
         const response = await fetch(`${baseUrl}/api/embeddings`, {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
-            model: ollamaEmbeddingModel,
+            model: embeddingModel,
             prompt: textForEmbedding,
           }),
         });
@@ -750,6 +695,6 @@ export async function getEmbedding(text: string) {
   }
 
   throw new Error(
-    `Failed to generate non-empty embedding after ${maxRetries} attempts (provider=${embeddingsProvider}, model=${process.env.OLLAMA_EMBEDDING_MODEL || model || "text-embedding-3-small"}).`,
+    `Failed to generate non-empty embedding after ${maxRetries} attempts (provider=${embeddingsProvider}, model=${model || "text-embedding-3-small"}).`,
   );
 }
