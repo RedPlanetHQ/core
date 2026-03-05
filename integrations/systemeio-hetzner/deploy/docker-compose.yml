@@ -148,6 +148,28 @@ services:
     networks:
       - core
 
+  # ===========================================
+  # OpenClaw - AI Assistant + Telegram Bot
+  # ===========================================
+  openclaw:
+    container_name: openclaw
+    image: ghcr.io/openclaw/openclaw:latest
+    restart: unless-stopped
+    logging: *logging-config
+    environment:
+      - OPENCLAW_MODEL_PROVIDER=openai
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_SANDBOX=true
+      - TZ=Europe/Berlin
+    ports:
+      - "18789:18789"
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - core
+
 networks:
   core:
     name: core
@@ -158,3 +180,4 @@ volumes:
   redis_data:
   neo4j_data:
   n8n_data:
+  openclaw_data:

@@ -28,7 +28,7 @@ echo -e "${NC}"
 # ============================================================
 # 1. API KEYS ABFRAGEN
 # ============================================================
-echo -e "${YELLOW}[1/6] API Keys Konfiguration${NC}"
+echo -e "${YELLOW}[1/7] API Keys Konfiguration${NC}"
 echo ""
 
 # Pruefen ob .env schon existiert
@@ -70,6 +70,15 @@ if [ -z "${OPENAI_API_KEY:-}" ]; then
     fi
 fi
 
+# Telegram Bot Token fuer OpenClaw
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+    echo -e "${BLUE}Telegram Bot Token (fuer OpenClaw AI Assistant):${NC}"
+    echo "  → Telegram: @BotFather → /newbot → Token kopieren"
+    echo "  (Enter zum Ueberspringen - kann spaeter konfiguriert werden)"
+    read -p "  Telegram Bot Token: " TELEGRAM_BOT_TOKEN
+    TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
+fi
+
 # Optionale Domain
 echo ""
 echo -e "${BLUE}Domain fuer SSL (optional, Enter zum Ueberspringen):${NC}"
@@ -83,7 +92,7 @@ echo ""
 # ============================================================
 # 2. SYSTEM-PAKETE INSTALLIEREN
 # ============================================================
-echo -e "${YELLOW}[2/6] System-Pakete installieren...${NC}"
+echo -e "${YELLOW}[2/7] System-Pakete installieren...${NC}"
 
 export DEBIAN_FRONTEND=noninteractive
 
@@ -104,7 +113,7 @@ echo -e "${GREEN}  ✓ System-Pakete installiert${NC}"
 # ============================================================
 # 3. DOCKER INSTALLIEREN
 # ============================================================
-echo -e "${YELLOW}[3/6] Docker installieren...${NC}"
+echo -e "${YELLOW}[3/7] Docker installieren...${NC}"
 
 if command -v docker &> /dev/null; then
     echo -e "${GREEN}  ✓ Docker ist bereits installiert$(docker --version)${NC}"
@@ -126,7 +135,7 @@ fi
 # ============================================================
 # 4. FIREWALL & SICHERHEIT
 # ============================================================
-echo -e "${YELLOW}[4/6] Firewall & Sicherheit konfigurieren...${NC}"
+echo -e "${YELLOW}[4/7] Firewall & Sicherheit konfigurieren...${NC}"
 
 # UFW Firewall
 ufw default deny incoming 2>/dev/null || true
@@ -146,7 +155,7 @@ echo -e "${GREEN}  ✓ Fail2Ban aktiv${NC}"
 # ============================================================
 # 5. KI-POWER APP DEPLOYEN
 # ============================================================
-echo -e "${YELLOW}[5/6] KI-Power System deployen...${NC}"
+echo -e "${YELLOW}[5/7] KI-Power System deployen...${NC}"
 
 mkdir -p "$INSTALL_DIR"
 cd "$INSTALL_DIR"
@@ -217,6 +226,10 @@ RERANK_PROVIDER=none
 
 # Queue
 QUEUE_PROVIDER=bullmq
+
+# OpenClaw
+OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
 ENVEOF
 
 chmod 600 "$INSTALL_DIR/.env"
@@ -309,6 +322,25 @@ services:
     networks:
       - core
 
+  # OpenClaw - AI Assistant mit Telegram Integration
+  openclaw:
+    container_name: openclaw
+    image: ghcr.io/openclaw/openclaw:latest
+    restart: unless-stopped
+    environment:
+      - OPENCLAW_MODEL_PROVIDER=openai
+      - OPENAI_API_KEY=\${OPENAI_API_KEY}
+      - OPENCLAW_GATEWAY_TOKEN=\${OPENCLAW_GATEWAY_TOKEN}
+      - OPENCLAW_SANDBOX=true
+      - TZ=Europe/Berlin
+    ports:
+      - "18789:18789"
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - core
+
 networks:
   core:
     name: core
@@ -319,6 +351,7 @@ volumes:
   redis_data:
   neo4j_data:
   n8n_data:
+  openclaw_data:
 COMPOSEEOF
 
 # Docker Images pullen und starten
@@ -333,7 +366,7 @@ echo -e "${GREEN}  ✓ Alle Container gestartet${NC}"
 # ============================================================
 # 6. NGINX REVERSE PROXY
 # ============================================================
-echo -e "${YELLOW}[6/6] Nginx Reverse Proxy konfigurieren...${NC}"
+echo -e "${YELLOW}[6/7] Nginx Reverse Proxy konfigurieren...${NC}"
 
 cat > /etc/nginx/sites-available/ki-power << 'NGINXEOF'
 upstream core_app {
@@ -342,6 +375,10 @@ upstream core_app {
 
 upstream n8n_app {
     server 127.0.0.1:5678;
+}
+
+upstream openclaw_app {
+    server 127.0.0.1:18789;
 }
 
 server {
@@ -363,6 +400,17 @@ server {
 
     location /n8n/ {
         proxy_pass http://n8n_app/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location /openclaw/ {
+        proxy_pass http://openclaw_app/;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
@@ -394,6 +442,62 @@ if [ -n "${DOMAIN}" ]; then
 fi
 
 echo -e "${GREEN}  ✓ Nginx konfiguriert${NC}"
+
+# ============================================================
+# 7. OPENCLAW TELEGRAM SETUP
+# ============================================================
+echo -e "${YELLOW}[7/7] OpenClaw + Telegram konfigurieren...${NC}"
+
+# Warten bis OpenClaw Container laeuft
+echo "  Warte auf OpenClaw Container..."
+RETRY=0
+while [ $RETRY -lt 30 ]; do
+    if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+        break
+    fi
+    sleep 2
+    RETRY=$((RETRY + 1))
+done
+
+if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+    echo -e "${GREEN}  ✓ OpenClaw Container laeuft${NC}"
+
+    # Telegram Channel konfigurieren wenn Token vorhanden
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        echo "  Telegram Bot wird konfiguriert..."
+
+        # OpenClaw Telegram Channel config erstellen
+        mkdir -p /opt/ki-power/openclaw-config
+        cat > /opt/ki-power/openclaw-config/telegram.json << TGEOF
+{
+  "channels": [
+    {
+      "type": "telegram",
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowedUsers": [],
+      "autoApprove": false
+    }
+  ]
+}
+TGEOF
+
+        # Config in den Container kopieren
+        docker cp /opt/ki-power/openclaw-config/telegram.json openclaw:/home/node/.openclaw/channels.json 2>/dev/null || true
+
+        # Container neustarten damit Config geladen wird
+        docker restart openclaw 2>/dev/null || true
+        echo -e "${GREEN}  ✓ Telegram Bot konfiguriert${NC}"
+    else
+        echo -e "${YELLOW}  Telegram Bot Token nicht angegeben - spaeter konfigurieren unter:${NC}"
+        echo -e "${YELLOW}    http://${SERVER_IP}:18789 → Settings → Channels → Telegram${NC}"
+    fi
+
+    # Gateway Token speichern
+    source "$INSTALL_DIR/.env"
+    echo -e "${GREEN}  ✓ OpenClaw Gateway Token: ${OPENCLAW_GATEWAY_TOKEN}${NC}"
+else
+    echo -e "${YELLOW}  OpenClaw Container noch nicht bereit - manuell pruefen: docker logs openclaw${NC}"
+fi
 
 # ============================================================
 # AUTO-UPDATE CRON
@@ -436,6 +540,14 @@ case "${1:-status}" in
     start)
         docker compose up -d 2>/dev/null || docker-compose up -d
         ;;
+    openclaw)
+        echo "=== OpenClaw Status ==="
+        docker logs --tail=20 openclaw 2>/dev/null || echo "OpenClaw nicht gestartet"
+        echo ""
+        source /opt/ki-power/.env
+        echo "Gateway Token: ${OPENCLAW_GATEWAY_TOKEN:-nicht gesetzt}"
+        echo "Control UI:    http://$(curl -s -4 ifconfig.me 2>/dev/null || echo localhost):18789"
+        ;;
     *)
         echo "KI-Power Management"
         echo "  ki-power status   - Zeige System-Status"
@@ -444,6 +556,7 @@ case "${1:-status}" in
         echo "  ki-power update   - System aktualisieren"
         echo "  ki-power stop     - System stoppen"
         echo "  ki-power start    - System starten"
+        echo "  ki-power openclaw - OpenClaw Status + Token anzeigen"
         ;;
 esac
 MGMTEOF
@@ -459,6 +572,7 @@ echo -e "╠══════════════════════�
 echo -e "║                                                          ║"
 echo -e "║  ${YELLOW}CORE App:${NC}     http://${SERVER_IP}                        "
 echo -e "║  ${YELLOW}n8n:${NC}          http://${SERVER_IP}/n8n/                    "
+echo -e "║  ${YELLOW}OpenClaw:${NC}     http://${SERVER_IP}:18789                   "
 echo -e "║                                                          "
 echo -e "║  ${YELLOW}Management:${NC}   ki-power status                            "
 echo -e "║  ${YELLOW}Logs:${NC}         ki-power logs                               "
@@ -473,9 +587,10 @@ echo -e "║  ${RED}Die .env Datei enthaelt alle Passwoerter.${NC}              
 echo -e "╚══════════════════════════════════════════════════════════╝${NC}"
 echo ""
 echo -e "${GREEN}Naechste Schritte:${NC}"
-echo "  1. Oeffne http://${SERVER_IP} im Browser"
-echo "  2. Erstelle deinen Admin-Account"
-echo "  3. Richte die Systeme.io Integration ein"
-echo "  4. Erstelle deinen ersten Sales Funnel"
+echo "  1. Oeffne http://${SERVER_IP} im Browser → CORE App"
+echo "  2. Oeffne http://${SERVER_IP}:18789 → OpenClaw (Token aus .env)"
+echo "  3. Verbinde OpenClaw mit Telegram: Settings → Channels"
+echo "  4. Richte die Systeme.io Integration ein"
+echo "  5. Erstelle deinen ersten Sales Funnel"
 echo ""
 echo -e "${BLUE}Bei Problemen: ki-power logs${NC}"
