@@ -101,9 +101,66 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
+  // Fetch recent FAILED items (last 24 hours)
+  const oneDayAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000);
+  const failedQueue = await prisma.ingestionQueue.findMany({
+    where: {
+      workspaceId,
+      status: "FAILED",
+      updatedAt: {
+        gte: oneDayAgo,
+      },
+    },
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      error: true,
+      data: true,
+      sessionId: true,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+    take: 20,
+  });
+
+  // For each failed item, look up the corresponding documentId via sessionId
+  const sessionIds = failedQueue
+    .map((item) => item.sessionId)
+    .filter(Boolean) as string[];
+
+  const documents =
+    sessionIds.length > 0
+      ? await prisma.document.findMany({
+          where: {
+            sessionId: { in: sessionIds },
+            workspaceId,
+            deleted: null,
+          },
+          select: {
+            id: true,
+            sessionId: true,
+          },
+        })
+      : [];
+
+  const sessionToDocumentId = Object.fromEntries(
+    documents.map((d) => [d.sessionId, d.id]),
+  );
+
+  const failedQueueWithDocumentId = failedQueue.map((item) => ({
+    ...item,
+    documentId: item.sessionId
+      ? sessionToDocumentId[item.sessionId] ?? null
+      : null,
+  }));
+
   return json({
     queue: updatedQueue,
     count: updatedQueue.length,
+    failedQueue: failedQueueWithDocumentId,
+    failedCount: failedQueueWithDocumentId.length,
     markedAsStale: {
       processing: staleProcessingItems.length,
       pending: stalePendingItems.length,

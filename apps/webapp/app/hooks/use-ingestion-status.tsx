@@ -9,9 +9,16 @@ export interface IngestionQueueItem {
   data: any;
 }
 
+export interface FailedIngestionQueueItem extends IngestionQueueItem {
+  sessionId: string | null;
+  documentId: string | null;
+}
+
 export interface IngestionStatusResponse {
   queue: IngestionQueueItem[];
   count: number;
+  failedQueue: FailedIngestionQueueItem[];
+  failedCount: number;
 }
 
 export function useIngestionStatus() {
