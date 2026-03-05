@@ -751,6 +751,72 @@ fi
 echo -e "${GREEN}  OK - Nginx + Telegram fertig${NC}"
 
 # ================================================================
+# PHASE 7b: CLAWHUB SKILLS INSTALLIEREN (Top Skills)
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 7b] ClawHub Skills - Top Skills installieren${NC}"
+
+if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+    # ClawHub CLI im Container nutzen
+    echo "  Top ClawHub Skills werden installiert..."
+
+    # 1. Summarize (10K+ Downloads) - Texte zusammenfassen
+    docker exec openclaw npx clawhub@latest install summarize 2>/dev/null && \
+        echo -e "${GREEN}    [1/8] Summarize - Texte/Artikel zusammenfassen${NC}" || \
+        echo -e "${YELLOW}    [1/8] Summarize - manuell: clawhub install summarize${NC}"
+
+    # 2. GitHub (10K+ Downloads) - GitHub Integration
+    docker exec openclaw npx clawhub@latest install github 2>/dev/null && \
+        echo -e "${GREEN}    [2/8] GitHub - Issues, PRs, Repos verwalten${NC}" || \
+        echo -e "${YELLOW}    [2/8] GitHub - manuell: clawhub install github${NC}"
+
+    # 3. Gog (14K Downloads) - Google Workspace
+    docker exec openclaw npx clawhub@latest install gog 2>/dev/null && \
+        echo -e "${GREEN}    [3/8] Gog - Google Mail, Calendar, Drive, Sheets${NC}" || \
+        echo -e "${YELLOW}    [3/8] Gog - manuell: clawhub install gog${NC}"
+
+    # 4. Agent Browser (11K Downloads) - Web Automatisierung
+    docker exec openclaw npx clawhub@latest install agent-browser 2>/dev/null && \
+        echo -e "${GREEN}    [4/8] Agent Browser - Web Scraping + Automatisierung${NC}" || \
+        echo -e "${YELLOW}    [4/8] Agent Browser - manuell: clawhub install agent-browser${NC}"
+
+    # 5. Capability Evolver (35K Downloads) - Selbstverbesserung
+    docker exec openclaw npx clawhub@latest install capability-evolver 2>/dev/null && \
+        echo -e "${GREEN}    [5/8] Capability Evolver - KI verbessert sich selbst${NC}" || \
+        echo -e "${YELLOW}    [5/8] Capability Evolver - manuell: clawhub install capability-evolver${NC}"
+
+    # 6. Self-Improving Agent (15K Downloads, 132 Stars) - Lernfaehig
+    docker exec openclaw npx clawhub@latest install self-improving-agent 2>/dev/null && \
+        echo -e "${GREEN}    [6/8] Self-Improving Agent - lernt aus Interaktionen${NC}" || \
+        echo -e "${YELLOW}    [6/8] Self-Improving Agent - manuell: clawhub install self-improving-agent${NC}"
+
+    # 7. Wacli (16K Downloads) - WhatsApp CLI
+    docker exec openclaw npx clawhub@latest install wacli 2>/dev/null && \
+        echo -e "${GREEN}    [7/8] Wacli - WhatsApp Integration${NC}" || \
+        echo -e "${YELLOW}    [7/8] Wacli - manuell: clawhub install wacli${NC}"
+
+    # 8. ByteRover (16K Downloads) - Code Analyse
+    docker exec openclaw npx clawhub@latest install byterover 2>/dev/null && \
+        echo -e "${GREEN}    [8/8] ByteRover - Code-Analyse + Optimierung${NC}" || \
+        echo -e "${YELLOW}    [8/8] ByteRover - manuell: clawhub install byterover${NC}"
+
+    echo ""
+    echo -e "${GREEN}  OK - ClawHub Top Skills installiert${NC}"
+    echo -e "${CYAN}  Weitere Skills: docker exec openclaw npx clawhub@latest search \"keyword\"${NC}"
+    echo -e "${CYAN}  Alle Skills:    https://clawhub.ai/skills?sort=downloads${NC}"
+else
+    echo -e "${YELLOW}  OpenClaw Container nicht bereit - Skills spaeter installieren:${NC}"
+    echo "    docker exec openclaw npx clawhub@latest install summarize"
+    echo "    docker exec openclaw npx clawhub@latest install github"
+    echo "    docker exec openclaw npx clawhub@latest install gog"
+    echo "    docker exec openclaw npx clawhub@latest install agent-browser"
+    echo "    docker exec openclaw npx clawhub@latest install capability-evolver"
+    echo "    docker exec openclaw npx clawhub@latest install self-improving-agent"
+    echo "    docker exec openclaw npx clawhub@latest install wacli"
+    echo "    docker exec openclaw npx clawhub@latest install byterover"
+fi
+
+# ================================================================
 # PHASE 8: WATCHDOG + AUTO-HEAL + BACKUPS
 # ================================================================
 echo ""
@@ -969,6 +1035,57 @@ case "${1:-status}" in
         /usr/local/bin/adler-neural-watchdog
         echo -e "${C_GREEN}Heilungslauf abgeschlossen. Siehe: adler neural${C_NC}"
         ;;
+    skills)
+        echo ""
+        echo -e "${C_CYAN}${C_BOLD}=== OPENCLAW SKILLS (ClawHub) ===${C_NC}"
+        echo ""
+        case "${2:-}" in
+            install)
+                if [ -n "${3:-}" ]; then
+                    echo "  Installiere Skill: $3..."
+                    docker exec openclaw npx clawhub@latest install "$3" 2>/dev/null && \
+                        echo -e "${C_GREEN}  $3 installiert!${C_NC}" || \
+                        echo -e "${C_RED}  Fehler beim Installieren von $3${C_NC}"
+                else
+                    echo "  Nutzung: adler skills install <skill-name>"
+                fi
+                ;;
+            search)
+                if [ -n "${3:-}" ]; then
+                    docker exec openclaw npx clawhub@latest search "$3" 2>/dev/null
+                else
+                    echo "  Nutzung: adler skills search <keyword>"
+                fi
+                ;;
+            list)
+                echo -e "${C_BOLD}Installierte Skills:${C_NC}"
+                docker exec openclaw ls /home/node/.openclaw/skills/ 2>/dev/null || echo "  Keine Skills gefunden"
+                echo ""
+                echo -e "${C_BOLD}Top ClawHub Skills (empfohlen):${C_NC}"
+                echo "  capability-evolver  (35K DL) - KI verbessert sich selbst"
+                echo "  wacli               (16K DL) - WhatsApp Integration"
+                echo "  byterover           (16K DL) - Code-Analyse"
+                echo "  self-improving-agent (15K DL) - Lernfaehiger Agent"
+                echo "  gog                 (14K DL) - Google Workspace"
+                echo "  agent-browser       (11K DL) - Web Automatisierung"
+                echo "  summarize           (10K DL) - Texte zusammenfassen"
+                echo "  github              (10K DL) - GitHub Integration"
+                ;;
+            *)
+                echo "  Verfuegbare Kommandos:"
+                echo "    adler skills list                - Installierte + Top Skills"
+                echo "    adler skills install <name>      - Skill installieren"
+                echo "    adler skills search <keyword>    - Skills suchen"
+                echo ""
+                echo "  Beispiele:"
+                echo "    adler skills install summarize"
+                echo "    adler skills search telegram"
+                echo "    adler skills search marketing"
+                echo ""
+                echo "  Alle Skills: https://clawhub.ai/skills?sort=downloads"
+                ;;
+        esac
+        ;;
     tailscale)
         echo ""
         echo -e "${C_CYAN}${C_BOLD}=== TAILSCALE VERWALTUNG ===${C_NC}"
@@ -1051,6 +1168,7 @@ case "${1:-status}" in
         echo -e "${C_CYAN}${C_BOLD}ADLER SERVER MANAGEMENT${C_NC}"
         echo ""
         echo "  adler status      - Komplett-Status (System + Mesh + Neural)"
+        echo "  adler skills      - ClawHub Skills installieren/suchen"
         echo "  adler keys        - API Keys anzeigen/setzen"
         echo "  adler mesh        - Tailscale Mesh Status + Features + Latenz"
         echo "  adler tailscale   - Tailscale Serve/Funnel/Cert/Exit-Node"
