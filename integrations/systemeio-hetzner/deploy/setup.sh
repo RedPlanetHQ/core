@@ -322,22 +322,48 @@ services:
     networks:
       - core
 
+  # Ollama - Lokale AI Modelle
+  ollama:
+    container_name: core-ollama
+    image: ollama/ollama:latest
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
   # OpenClaw - AI Assistant mit Telegram Integration
   openclaw:
     container_name: openclaw
     image: ghcr.io/openclaw/openclaw:latest
     restart: unless-stopped
     environment:
-      - OPENCLAW_MODEL_PROVIDER=openai
-      - OPENAI_API_KEY=\${OPENAI_API_KEY}
+      - OPENCLAW_MODEL_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENAI_API_KEY=\${OPENAI_API_KEY:-}
       - OPENCLAW_GATEWAY_TOKEN=\${OPENCLAW_GATEWAY_TOKEN}
-      - OPENCLAW_SANDBOX=true
+      - OPENCLAW_SANDBOX=false
       - TZ=Europe/Berlin
     ports:
       - "18789:18789"
     volumes:
       - openclaw_data:/home/node/.openclaw
       - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      ollama:
+        condition: service_healthy
     networks:
       - core
 
@@ -352,6 +378,7 @@ volumes:
   neo4j_data:
   n8n_data:
   openclaw_data:
+  ollama_data:
 COMPOSEEOF
 
 # Docker Images pullen und starten
@@ -461,6 +488,30 @@ done
 
 if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
     echo -e "${GREEN}  ✓ OpenClaw Container laeuft${NC}"
+
+    # Auth-Profile fuer Ollama setzen
+    echo "  Ollama Auth-Profile wird konfiguriert..."
+    mkdir -p /opt/ki-power/openclaw-config
+    cat > /opt/ki-power/openclaw-config/auth-profiles.json << AUTHEOF
+{
+  "ollama": {
+    "apiKey": "local",
+    "baseURL": "http://ollama:11434"
+  }
+}
+AUTHEOF
+
+    # Auth-Profile in alle Agent-Verzeichnisse kopieren
+    docker exec openclaw mkdir -p /home/node/.openclaw/agents/main/agent 2>/dev/null || true
+    docker cp /opt/ki-power/openclaw-config/auth-profiles.json openclaw:/home/node/.openclaw/agents/main/agent/auth-profiles.json 2>/dev/null || true
+    echo -e "${GREEN}  ✓ Ollama Auth-Profile gesetzt${NC}"
+
+    # Ollama Modelle pullen
+    echo "  Ollama Modelle werden heruntergeladen (das dauert beim ersten Mal)..."
+    docker exec core-ollama ollama pull qwen3:14b 2>/dev/null && echo -e "${GREEN}    ✓ qwen3:14b${NC}" || echo -e "${YELLOW}    ⚠ qwen3:14b fehlgeschlagen${NC}"
+    docker exec core-ollama ollama pull mistral:7b 2>/dev/null && echo -e "${GREEN}    ✓ mistral:7b${NC}" || echo -e "${YELLOW}    ⚠ mistral:7b fehlgeschlagen${NC}"
+    docker exec core-ollama ollama pull deepseek-r1:32b 2>/dev/null && echo -e "${GREEN}    ✓ deepseek-r1:32b${NC}" || echo -e "${YELLOW}    ⚠ deepseek-r1:32b fehlgeschlagen${NC}"
+    echo -e "${GREEN}  ✓ Ollama Modelle bereit${NC}"
 
     # Telegram Channel konfigurieren wenn Token vorhanden
     if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
