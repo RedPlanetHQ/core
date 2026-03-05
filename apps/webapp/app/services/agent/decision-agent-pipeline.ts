@@ -96,6 +96,7 @@ export async function runCASEPipeline(
       trigger,
       context,
       userPersona,
+      executorTools,
     );
 
     logger.info(`[CASE pipeline] Decision for ${reminderId}`, {
@@ -235,6 +236,7 @@ async function executePlan(
         skipUserMessage: true,
         messageUserType: UserTypeEnum.System,
         actionPlan,
+        executorTools,
       });
 
       // Send on channel

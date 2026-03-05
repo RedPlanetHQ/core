@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { runOrchestrator } from "./orchestrator";
 import { type SkillRef } from "./types";
+import { type OrchestratorTools } from "./orchestrator-tools";
 
 import { logger } from "../logger.service";
 import { getReminderTools } from "./tools/reminder-tools";
@@ -54,6 +55,8 @@ export const createTools = async (
   channelMetadata?: Record<string, unknown>,
   /** When true, background task tools (spawn/list/cancel) are excluded */
   disableBackgroundTaskTools?: boolean,
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -112,6 +115,7 @@ export const createTools = async (
           abortSignal,
           persona,
           skills,
+          executorTools,
         );
 
         // Stream the orchestrator's work to the UI
@@ -166,6 +170,7 @@ export const createTools = async (
           abortSignal,
           persona,
           skills,
+          executorTools,
         );
 
         // Stream the orchestrator's work to the UI

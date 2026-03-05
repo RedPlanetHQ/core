@@ -617,7 +617,7 @@ export async function performEpisodeGraphSearch(
   try {
     // If no entities extracted, return empty
     if (queryEntities.length === 0) {
-      logger.info("Episode graph search: no entities extracted from query");
+      logger.debug("Episode graph search: no entities extracted from query");
       return [];
     }
 

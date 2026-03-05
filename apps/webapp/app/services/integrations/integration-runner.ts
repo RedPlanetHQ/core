@@ -57,7 +57,7 @@ export class IntegrationRunner {
    */
   static async load(): Promise<void> {
     try {
-      logger.info("Starting integration definitions load process");
+      logger.debug("Starting integration definitions load process");
 
       // Get all integration definitions without workspaceId (global integrations)
       const integrationDefinitions =
@@ -68,7 +68,7 @@ export class IntegrationRunner {
           },
         });
 
-      logger.info(
+      logger.debug(
         `Found ${integrationDefinitions.length} global integration definitions`,
       );
 
@@ -82,7 +82,7 @@ export class IntegrationRunner {
         }
       }
 
-      logger.info("Completed integration definitions load process");
+      logger.debug("Completed integration definitions load process");
     } catch (error) {
       logger.error("Failed to load integration definitions:", { error });
       throw error;
@@ -95,7 +95,7 @@ export class IntegrationRunner {
   private static async downloadIntegration(
     integration: IntegrationDefinitionV2,
   ): Promise<void> {
-    logger.info(`Processing integration: ${integration.slug}`);
+    logger.debug(`Processing integration: ${integration.slug}`);
 
     const integrationDir = path.join(
       process.cwd(),
@@ -107,12 +107,12 @@ export class IntegrationRunner {
     // Create directory if it doesn't exist
     if (!fs.existsSync(integrationDir)) {
       fs.mkdirSync(integrationDir, { recursive: true });
-      logger.info(`Created directory: ${integrationDir}`);
+      logger.debug(`Created directory: ${integrationDir}`);
     }
 
     // Skip if file already exists
     if (fs.existsSync(targetFile)) {
-      logger.info(`Integration ${integration.slug} already exists, skipping`);
+      logger.debug(`Integration ${integration.slug} already exists, skipping`);
       return;
     }
 
@@ -146,7 +146,7 @@ export class IntegrationRunner {
     targetFile: string,
     slug: string,
   ): Promise<void> {
-    logger.info(`Fetching content from URL: ${url}`);
+    logger.debug(`Fetching content from URL: ${url}`);
     const response = await fetch(url);
 
     if (!response.ok) {
@@ -182,7 +182,7 @@ export class IntegrationRunner {
       fs.chmodSync(targetFile, "755");
     }
 
-    logger.info(`Successfully saved integration: ${slug} to ${targetFile}`);
+    logger.debug(`Successfully saved integration: ${slug} to ${targetFile}`);
   }
 
   /**
@@ -197,7 +197,7 @@ export class IntegrationRunner {
       ? sourcePath
       : path.join(process.cwd(), sourcePath);
 
-    logger.info(`Copying content from local path: ${absoluteSourcePath}`);
+    logger.debug(`Copying content from local path: ${absoluteSourcePath}`);
 
     if (!fs.existsSync(absoluteSourcePath)) {
       logger.error(`Source file does not exist: ${absoluteSourcePath}`);
@@ -211,7 +211,7 @@ export class IntegrationRunner {
       fs.chmodSync(targetFile, "755");
     }
 
-    logger.info(`Successfully copied integration: ${slug} to ${targetFile}`);
+    logger.debug(`Successfully copied integration: ${slug} to ${targetFile}`);
   }
 
   /**
@@ -260,7 +260,7 @@ export class IntegrationRunner {
     const { eventBody, integrationDefinition } = params;
     const slug = integrationDefinition.slug;
 
-    logger.info(`Running setup for integration: ${slug}`);
+    logger.debug(`Running setup for integration: ${slug}`);
 
     const stdout = await this.executeCommand(
       [
@@ -291,7 +291,7 @@ export class IntegrationRunner {
     const { webhookData, integrationDefinition } = params;
     const slug = integrationDefinition.slug;
 
-    logger.info(`Running identify for integration: ${slug}`);
+    logger.debug(`Running identify for integration: ${slug}`);
 
     const stdout = await this.executeCommand(
       [
@@ -322,7 +322,7 @@ export class IntegrationRunner {
     const { config, integrationDefinition } = params;
     const slug = integrationDefinition.slug;
 
-    logger.info(`Running get-tools for integration: ${slug}`);
+    logger.debug(`Running get-tools for integration: ${slug}`);
 
     const stdout = await this.executeCommand(
       [
@@ -348,7 +348,7 @@ export class IntegrationRunner {
       params;
     const slug = integrationDefinition.slug;
 
-    logger.info(`Running call-tool ${toolName} for integration: ${slug}`);
+    logger.debug(`Running call-tool ${toolName} for integration: ${slug}`);
 
     const configWithTimezone = {
       ...config,
@@ -382,7 +382,7 @@ export class IntegrationRunner {
     const { eventData, config, integrationDefinition, state } = params;
     const slug = integrationDefinition.slug;
 
-    logger.info(`Running process for integration: ${slug}`);
+    logger.debug(`Running process for integration: ${slug}`);
 
     const stdout = await this.executeCommand(
       [
@@ -469,7 +469,7 @@ export class IntegrationRunner {
           },
         });
         result.account = newAccount;
-        logger.info(`Created new integration account: ${newAccount.id}`);
+        logger.debug(`Created new integration account: ${newAccount.id}`);
       }
     }
 

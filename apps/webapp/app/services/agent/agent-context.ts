@@ -19,6 +19,7 @@ import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PersonalityType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { prisma } from "~/db.server";
 
 interface BuildAgentContextParams {
@@ -36,6 +37,8 @@ interface BuildAgentContextParams {
   conversationId: string;
   /** When true, background task tools (spawn/list/cancel) are excluded */
   disableBackgroundTaskTools?: boolean;
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools;
 }
 
 interface AgentContext {
@@ -56,6 +59,7 @@ export async function buildAgentContext({
   channelMetadata,
   conversationId,
   disableBackgroundTaskTools,
+  executorTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills] = await Promise.all([
@@ -102,6 +106,7 @@ export async function buildAgentContext({
     conversationId,
     undefined,
     disableBackgroundTaskTools,
+    executorTools,
   );
 
   // Build system prompt

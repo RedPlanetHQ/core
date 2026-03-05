@@ -35,7 +35,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
     // Parse body
     const eventBody = await request.json();
 
-    logger.log(`Webhook received for ${sourceName}`, {
+    logger.debug(`Webhook received for ${sourceName}`, {
       integrationAccountId,
       eventBody:
         typeof eventBody === "object"
@@ -104,7 +104,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     // For GET requests, parse query parameters as event body
     const eventBody = Object.fromEntries(url.searchParams);
 
-    logger.log(`Webhook GET request for ${sourceName}`, {
+    logger.debug(`Webhook GET request for ${sourceName}`, {
       integrationAccountId,
       eventBody: JSON.stringify(eventBody).substring(0, 200),
     });

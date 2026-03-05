@@ -14,6 +14,10 @@ import {
 } from "~/services/background-task.server";
 import { logger } from "~/services/logger.service";
 import { handleBackgroundMessage } from "~/services/channels/channel.service";
+import { env } from "~/env.server";
+import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
+import { CoreClient } from "@redplanethq/sdk";
+import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 
 // ============================================================================
 // Types
@@ -56,13 +60,23 @@ export async function processBackgroundTask(
       throw new Error(`Background task ${taskId} not found`);
     }
 
+    // Create HTTP orchestrator tools for background task context
+    const { token } = await getOrCreatePersonalAccessToken({
+      name: "background-task-internal",
+      userId,
+      workspaceId,
+      returnDecrypted: true,
+    });
+    const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
+    const executorTools = new HttpOrchestratorTools(client);
+
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => {
       abortController.abort();
     }, timeoutMs);
 
     try {
-      await handleBackgroundMessage(task);
+      await handleBackgroundMessage(task, executorTools);
 
       clearTimeout(timeoutId);
       await markBackgroundTaskCompleted(taskId, "Task completed");

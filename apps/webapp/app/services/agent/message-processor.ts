@@ -10,6 +10,7 @@ import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
 
 interface ProcessInboundMessageParams {
@@ -31,6 +32,8 @@ interface ProcessInboundMessageParams {
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools;
 }
 
 interface ProcessInboundMessageResult {
@@ -112,6 +115,7 @@ export async function processInboundMessage({
   onMessage,
   channelMetadata,
   disableBackgroundTaskTools,
+  executorTools,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId =
     existingConversationId ??
@@ -132,6 +136,7 @@ export async function processInboundMessage({
       onMessage,
       channelMetadata,
       disableBackgroundTaskTools,
+      executorTools,
     },
     userId,
     workspaceId,

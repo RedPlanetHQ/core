@@ -147,6 +147,7 @@ export async function runDecisionAgent(
   trigger: Trigger,
   context: DecisionContext,
   userPersona?: string,
+  executorTools?: import("./orchestrator-tools").OrchestratorTools,
 ): Promise<DecisionAgentResult> {
   const startTime = Date.now();
 
@@ -214,6 +215,10 @@ export async function runDecisionAgent(
       undefined, // onMessage
       context.user.defaultChannel,
       context.user.availableChannels,
+      undefined, // conversationId
+      undefined, // channelMetadata
+      undefined, // disableBackgroundTaskTools
+      executorTools,
     );
 
     const { text } = await generateText({

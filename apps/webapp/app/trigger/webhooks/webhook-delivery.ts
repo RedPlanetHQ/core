@@ -207,7 +207,7 @@ export async function triggerWebhookDelivery(
       activityId,
       workspaceId,
     });
-    logger.log(`Triggered webhook delivery for activity ${activityId}`);
+    logger.debug(`Triggered webhook delivery for activity ${activityId}`);
   } catch (error: any) {
     logger.error(
       `Failed to trigger webhook delivery for activity ${activityId}:`,
