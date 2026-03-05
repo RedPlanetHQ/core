@@ -117,10 +117,10 @@ AUTOEOF
 echo -e "${GREEN}  OK - System aktualisiert + Auto-Updates aktiv${NC}"
 
 # ================================================================
-# PHASE 3: TAILSCALE ABSICHERN
+# PHASE 3: TAILSCALE VOLLAUSBAU
 # ================================================================
 echo ""
-echo -e "${YELLOW}[PHASE 3/8] Tailscale Netzwerk absichern${NC}"
+echo -e "${YELLOW}[PHASE 3/8] Tailscale Netzwerk - Vollausbau${NC}"
 
 # Pruefen ob Tailscale installiert ist
 if command -v tailscale &> /dev/null; then
@@ -135,13 +135,74 @@ else
     echo -e "${YELLOW}  Fuehre nach dem Setup aus: tailscale up --ssh${NC}"
 fi
 
-# Tailscale SSH aktivieren (erlaubt SSH ueber Tailscale ohne Keys)
+# --- Tailscale SSH (kein SSH-Key noetig, ACL-basiert) ---
 tailscale set --ssh 2>/dev/null || true
+echo -e "${GREEN}  [1/6] Tailscale SSH aktiv (SSH ueber Tailscale ohne Keys)${NC}"
 
-# Tailscale als Auto-Start
+# --- Tailscale als Auto-Start ---
 systemctl enable tailscaled 2>/dev/null || true
 
-echo -e "${GREEN}  OK - Tailscale gesichert + SSH via Tailscale aktiv${NC}"
+# --- MagicDNS: Server erreichbar als ubuntu-2404-noble-amd64-base ---
+TS_DOMAIN=$(tailscale status --json 2>/dev/null | jq -r '.MagicDNSSuffix // empty' 2>/dev/null || echo "")
+TS_HOSTNAME=$(tailscale status --json 2>/dev/null | jq -r '.Self.HostName // empty' 2>/dev/null || echo "")
+if [ -n "$TS_DOMAIN" ]; then
+    TS_FQDN="${TS_HOSTNAME}.${TS_DOMAIN}"
+    echo -e "${GREEN}  [2/6] MagicDNS aktiv: ${TS_FQDN}${NC}"
+else
+    TS_FQDN=""
+    echo -e "${YELLOW}  [2/6] MagicDNS: Aktiviere in Tailscale Admin -> DNS -> MagicDNS${NC}"
+fi
+
+# --- Tailscale als Subnet Router (Docker-Netz erreichbar) ---
+tailscale set --advertise-routes=172.18.0.0/16 --accept-routes 2>/dev/null || true
+echo -e "${GREEN}  [3/6] Subnet Router: Docker-Netz (172.18.0.0/16) fuer Tailnet freigegeben${NC}"
+echo -e "${YELLOW}        -> Noch genehmigen in Tailscale Admin -> Machines -> ... -> Edit route settings${NC}"
+
+# --- Tailscale als Exit Node (optionaler VPN-Ausgang) ---
+tailscale set --advertise-exit-node 2>/dev/null || true
+echo -e "${GREEN}  [4/6] Exit Node angeboten (iPhone/Mac koennen Server als VPN nutzen)${NC}"
+echo -e "${YELLOW}        -> Genehmigen in Tailscale Admin -> Machines -> ... -> Edit route settings${NC}"
+
+# --- Tailscale HTTPS Zertifikate (kostenlos, automatisch) ---
+if [ -n "$TS_FQDN" ]; then
+    mkdir -p /opt/ki-power/certs
+    tailscale cert --cert-file /opt/ki-power/certs/tailscale.crt --key-file /opt/ki-power/certs/tailscale.key "$TS_FQDN" 2>/dev/null && {
+        echo -e "${GREEN}  [5/6] HTTPS Zertifikat erstellt fuer ${TS_FQDN}${NC}"
+    } || {
+        echo -e "${YELLOW}  [5/6] HTTPS Cert: Aktiviere HTTPS in Tailscale Admin -> DNS -> HTTPS Certificates${NC}"
+    }
+else
+    echo -e "${YELLOW}  [5/6] HTTPS Cert: Braucht MagicDNS (siehe oben)${NC}"
+fi
+
+# --- Tailscale Serve: Services direkt ueber Tailscale erreichbar ---
+# Core App auf Port 443 ueber Tailscale (HTTPS automatisch)
+tailscale serve --bg --https=443 http://localhost:3033 2>/dev/null && {
+    echo -e "${GREEN}  [6/6] Tailscale Serve aktiv: https://${TS_FQDN:-server}/ -> Core App${NC}"
+} || {
+    echo -e "${YELLOW}  [6/6] Tailscale Serve: Wird nach Container-Start konfiguriert${NC}"
+}
+
+# n8n ueber Tailscale Serve auf Port 8443
+tailscale serve --bg --https=8443 http://localhost:5678 2>/dev/null && {
+    echo -e "${GREEN}        Tailscale Serve: https://${TS_FQDN:-server}:8443/ -> n8n${NC}"
+} || true
+
+echo ""
+echo -e "${GREEN}  OK - Tailscale Vollausbau: SSH + MagicDNS + Subnet + Exit Node + HTTPS + Serve${NC}"
+echo ""
+echo -e "${CYAN}  Dein Tailnet (4 Geraete):${NC}"
+echo "    iphone175              100.122.13.33"
+echo "    mac-mini-von-maurice   100.118.223.64"
+echo "    ssh-console            100.87.166.49"
+echo "    adler-server (HIER)    100.124.239.46"
+echo ""
+if [ -n "$TS_FQDN" ]; then
+    echo -e "${CYAN}  Zugriff von jedem Tailscale-Geraet:${NC}"
+    echo "    Core App:   https://${TS_FQDN}/"
+    echo "    n8n:        https://${TS_FQDN}:8443/"
+    echo "    SSH:        ssh root@${TS_FQDN}"
+fi
 
 # ================================================================
 # PHASE 4: SSH HAERTEN + FIREWALL
@@ -607,8 +668,28 @@ ln -sf /etc/nginx/sites-available/adler-server /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 nginx -t && systemctl restart nginx
 
-# SSL wenn Domain
-if [ -n "${DOMAIN}" ]; then
+# SSL: Tailscale Cert oder Domain-Cert
+if [ -f "/opt/ki-power/certs/tailscale.crt" ] && [ -f "/opt/ki-power/certs/tailscale.key" ]; then
+    # Tailscale HTTPS Zertifikat verwenden
+    TS_FQDN_NGINX=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName' 2>/dev/null | sed 's/\.$//')
+    cat >> /etc/nginx/sites-available/adler-server << TSSLEOF
+
+server {
+    listen 443 ssl;
+    server_name ${TS_FQDN_NGINX:-_};
+    ssl_certificate /opt/ki-power/certs/tailscale.crt;
+    ssl_certificate_key /opt/ki-power/certs/tailscale.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+    client_max_body_size 50M;
+
+    location / { proxy_pass http://core_app; proxy_set_header Host \$host; proxy_set_header X-Real-IP \$remote_addr; proxy_set_header X-Forwarded-Proto https; proxy_http_version 1.1; proxy_set_header Upgrade \$http_upgrade; proxy_set_header Connection "upgrade"; }
+    location /n8n/ { proxy_pass http://n8n_app/; proxy_set_header Host \$host; proxy_set_header X-Forwarded-Proto https; }
+    location /openclaw/ { proxy_pass http://openclaw_app/; proxy_set_header Host \$host; proxy_set_header X-Forwarded-Proto https; }
+}
+TSSLEOF
+    nginx -t && systemctl restart nginx
+    echo -e "${GREEN}  Tailscale HTTPS aktiv: https://${TS_FQDN_NGINX}/${NC}"
+elif [ -n "${DOMAIN}" ]; then
     sed -i "s/server_name _;/server_name ${DOMAIN};/" /etc/nginx/sites-available/adler-server
     nginx -t && systemctl restart nginx
     certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --email "admin@${DOMAIN}" || \
@@ -793,10 +874,26 @@ case "${1:-status}" in
         ;;
     mesh)
         echo ""
-        echo -e "${C_CYAN}${C_BOLD}=== MESH NETZWERK ===${C_NC}"
+        echo -e "${C_CYAN}${C_BOLD}=== TAILSCALE MESH NETZWERK ===${C_NC}"
         echo ""
         echo -e "${C_BOLD}Tailscale Status:${C_NC}"
         tailscale status 2>/dev/null || echo "  Tailscale nicht verfuegbar"
+        echo ""
+        echo -e "${C_BOLD}MagicDNS:${C_NC}"
+        TS_SUFFIX=$(tailscale status --json 2>/dev/null | jq -r '.MagicDNSSuffix // "nicht aktiv"' 2>/dev/null)
+        echo "  Domain-Suffix: $TS_SUFFIX"
+        echo ""
+        echo -e "${C_BOLD}Tailscale Serve (aktive Proxies):${C_NC}"
+        tailscale serve status 2>/dev/null || echo "  Keine Serve-Konfiguration"
+        echo ""
+        echo -e "${C_BOLD}Features:${C_NC}"
+        TS_JSON=$(tailscale status --json 2>/dev/null)
+        TS_SSH=$(echo "$TS_JSON" | jq -r '.Self.Capabilities // [] | if any(. == "https://tailscale.com/cap/ssh") then "AKTIV" else "INAKTIV" end' 2>/dev/null || echo "?")
+        TS_EXIT=$(echo "$TS_JSON" | jq -r 'if .Self.ExitNodeOption then "ANGEBOTEN" else "AUS" end' 2>/dev/null || echo "?")
+        TS_ROUTES=$(echo "$TS_JSON" | jq -r '.Self.AllowedIPs // [] | map(select(. != (input.Self.TailscaleIPs[]))) | join(", ")' 2>/dev/null || echo "?")
+        echo "  SSH:         $TS_SSH"
+        echo "  Exit Node:   $TS_EXIT"
+        echo "  Subnets:     $(tailscale status --json 2>/dev/null | jq -r '[.Self.AllowedIPs[] | select(contains("/16") or contains("/24"))] | join(", ") // "keine"' 2>/dev/null || echo '?')"
         echo ""
         echo -e "${C_BOLD}Latenz-Test:${C_NC}"
         echo -n "  iphone175 (100.122.13.33):      "
@@ -872,6 +969,54 @@ case "${1:-status}" in
         /usr/local/bin/adler-neural-watchdog
         echo -e "${C_GREEN}Heilungslauf abgeschlossen. Siehe: adler neural${C_NC}"
         ;;
+    tailscale)
+        echo ""
+        echo -e "${C_CYAN}${C_BOLD}=== TAILSCALE VERWALTUNG ===${C_NC}"
+        echo ""
+        case "${2:-}" in
+            serve)
+                echo -e "${C_BOLD}Tailscale Serve konfigurieren:${C_NC}"
+                tailscale serve --bg --https=443 http://localhost:3033 2>/dev/null && echo -e "${C_GREEN}  Core App -> https://$(tailscale status --json | jq -r '.Self.DNSName' 2>/dev/null | sed 's/\.$//')/${C_NC}"
+                tailscale serve --bg --https=8443 http://localhost:5678 2>/dev/null && echo -e "${C_GREEN}  n8n      -> https://$(tailscale status --json | jq -r '.Self.DNSName' 2>/dev/null | sed 's/\.$//')/:8443/${C_NC}"
+                ;;
+            funnel)
+                echo -e "${C_BOLD}Tailscale Funnel (oeffentlich aus Internet erreichbar):${C_NC}"
+                echo -e "${C_YELLOW}  WARNUNG: Funnel macht den Service oeffentlich!${C_NC}"
+                if [ "${3:-}" = "on" ]; then
+                    tailscale funnel --bg --https=443 http://localhost:3033 2>/dev/null && echo -e "${C_GREEN}  Core App jetzt oeffentlich erreichbar!${C_NC}"
+                elif [ "${3:-}" = "off" ]; then
+                    tailscale funnel --https=443 off 2>/dev/null && echo -e "${C_GREEN}  Funnel deaktiviert${C_NC}"
+                else
+                    echo "  Nutzung: adler tailscale funnel on|off"
+                fi
+                ;;
+            cert)
+                echo -e "${C_BOLD}HTTPS Zertifikat erneuern:${C_NC}"
+                TS_FQDN=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName' 2>/dev/null | sed 's/\.$//')
+                tailscale cert --cert-file /opt/ki-power/certs/tailscale.crt --key-file /opt/ki-power/certs/tailscale.key "$TS_FQDN" 2>/dev/null && echo -e "${C_GREEN}  Zertifikat erneuert fuer ${TS_FQDN}${C_NC}"
+                ;;
+            exit-node)
+                if [ "${3:-}" = "on" ]; then
+                    tailscale set --advertise-exit-node 2>/dev/null && echo -e "${C_GREEN}  Exit Node aktiviert - Server als VPN nutzbar${C_NC}"
+                elif [ "${3:-}" = "off" ]; then
+                    tailscale set --advertise-exit-node=false 2>/dev/null && echo -e "${C_GREEN}  Exit Node deaktiviert${C_NC}"
+                else
+                    echo "  Nutzung: adler tailscale exit-node on|off"
+                fi
+                ;;
+            *)
+                echo "  Verfuegbare Kommandos:"
+                echo "    adler tailscale serve      - Services ueber Tailscale HTTPS bereitstellen"
+                echo "    adler tailscale funnel on   - Core App oeffentlich machen (Internet)"
+                echo "    adler tailscale funnel off  - Funnel deaktivieren"
+                echo "    adler tailscale cert        - HTTPS Zertifikat erneuern"
+                echo "    adler tailscale exit-node on|off - Server als VPN Exit Node"
+                echo ""
+                echo "  Aktiver Status:"
+                tailscale serve status 2>/dev/null || echo "    Kein Serve aktiv"
+                ;;
+        esac
+        ;;
     keys)
         echo ""
         echo -e "${C_CYAN}${C_BOLD}=== API KEYS VERWALTEN ===${C_NC}"
@@ -905,18 +1050,24 @@ case "${1:-status}" in
         echo ""
         echo -e "${C_CYAN}${C_BOLD}ADLER SERVER MANAGEMENT${C_NC}"
         echo ""
-        echo "  adler status    - Komplett-Status (System + Mesh + Neural)"
-        echo "  adler keys      - API Keys anzeigen/setzen"
-        echo "  adler mesh      - Mesh-Netzwerk Status + Latenz"
-        echo "  adler neural    - Neural Watchdog Analyse + Incidents"
-        echo "  adler heal      - Sofort Selbstheilung ausfuehren"
-        echo "  adler telegram  - Telegram Bot Status"
-        echo "  adler logs      - Logs anzeigen (optional: Service)"
-        echo "  adler restart   - Neustart (optional: Service)"
-        echo "  adler update    - System aktualisieren"
-        echo "  adler backup    - Sofort-Backup erstellen"
-        echo "  adler stop      - System stoppen"
-        echo "  adler start     - System starten"
+        echo "  adler status      - Komplett-Status (System + Mesh + Neural)"
+        echo "  adler keys        - API Keys anzeigen/setzen"
+        echo "  adler mesh        - Tailscale Mesh Status + Features + Latenz"
+        echo "  adler tailscale   - Tailscale Serve/Funnel/Cert/Exit-Node"
+        echo "  adler neural      - Neural Watchdog Analyse + Incidents"
+        echo "  adler heal        - Sofort Selbstheilung ausfuehren"
+        echo "  adler telegram    - Telegram Bot Status"
+        echo "  adler logs        - Logs anzeigen (optional: Service)"
+        echo "  adler restart     - Neustart (optional: Service)"
+        echo "  adler update      - System aktualisieren"
+        echo "  adler backup      - Sofort-Backup erstellen"
+        echo "  adler stop        - System stoppen"
+        echo "  adler start       - System starten"
+        echo ""
+        echo -e "  ${C_CYAN}Tailscale Schnellzugriff:${C_NC}"
+        echo "  adler tailscale serve       - HTTPS Proxy aktivieren"
+        echo "  adler tailscale funnel on   - App oeffentlich machen"
+        echo "  adler tailscale exit-node on - Server als VPN"
         echo ""
         ;;
 esac
@@ -946,45 +1097,62 @@ echo -e "${GREEN}  OK - Initiale Metriken gesammelt${NC}"
 # FERTIG!
 # ================================================================
 echo ""
+TS_FQDN_FINAL=$(tailscale status --json 2>/dev/null | jq -r '.Self.DNSName' 2>/dev/null | sed 's/\.$//' || echo "")
+
 echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗"
 echo -e "║    ADLER SERVER ERFOLGREICH EINGERICHTET!                    ║"
 echo -e "╠══════════════════════════════════════════════════════════════╣${NC}"
 echo -e "║                                                              ║"
-echo -e "║  ${GREEN}CORE App:${NC}      http://${TS_IP}:3033                          "
-echo -e "║  ${GREEN}n8n:${NC}           http://${TS_IP}:3033/n8n/                     "
-echo -e "║  ${GREEN}OpenClaw:${NC}      http://${TS_IP}:18789                         "
-echo -e "║  ${GREEN}Public IP:${NC}     ${SERVER_IP}                                  "
-echo -e "║  ${GREEN}Tailscale IP:${NC}  ${TS_IP}                                     "
+if [ -n "$TS_FQDN_FINAL" ]; then
+echo -e "║  ${GREEN}TAILSCALE ZUGRIFF (von iPhone/Mac/ueberall im Tailnet):${NC}   "
+echo -e "║    Core App:  https://${TS_FQDN_FINAL}/                     "
+echo -e "║    n8n:       https://${TS_FQDN_FINAL}:8443/               "
+echo -e "║    SSH:       ssh root@${TS_FQDN_FINAL}                    "
 echo -e "║                                                              "
-echo -e "║  ${YELLOW}Management:${NC}    adler status                                "
-echo -e "║  ${YELLOW}Telegram:${NC}      adler telegram                              "
-echo -e "║  ${YELLOW}Logs:${NC}          adler logs                                  "
-echo -e "║  ${YELLOW}Backup:${NC}        adler backup                                "
-echo -e "║  ${YELLOW}Config:${NC}        /opt/ki-power/.env                           "
+fi
+echo -e "║  ${GREEN}DIREKT-ZUGRIFF (Tailscale IP):${NC}                             "
+echo -e "║    Core App:  http://${TS_IP}:3033                          "
+echo -e "║    n8n:       http://${TS_IP}:5678                          "
+echo -e "║    OpenClaw:  http://${TS_IP}:18789                         "
+echo -e "║    Public IP: ${SERVER_IP}                                  "
+echo -e "║                                                              "
+echo -e "║  ${YELLOW}Management:${NC}                                                "
+echo -e "║    adler status     - Gesamtuebersicht                      "
+echo -e "║    adler keys       - API Keys setzen                       "
+echo -e "║    adler tailscale  - Tailscale Serve/Funnel/Cert/VPN       "
+echo -e "║    adler mesh       - Netzwerk + Latenz                     "
+echo -e "║    adler logs       - Container Logs                        "
+echo -e "║    adler backup     - Sofort-Backup                         "
 echo -e "║                                                              "
 if [ -n "${DOMAIN:-}" ]; then
 echo -e "║  ${GREEN}Domain:${NC}        https://${DOMAIN}                            "
+echo -e "║                                                              "
 fi
+echo -e "║  ${CYAN}TAILSCALE FEATURES:${NC}                                        "
+echo -e "║    - MagicDNS: Server erreichbar als ${TS_FQDN_FINAL:-hostname}     "
+echo -e "║    - Tailscale SSH: Kein SSH-Key noetig, ACL-basiert        "
+echo -e "║    - HTTPS Certs: Automatisch, kostenlos via Tailscale      "
+echo -e "║    - Tailscale Serve: Core + n8n mit HTTPS ueber Tailnet    "
+echo -e "║    - Exit Node: Server als VPN (adler tailscale exit-node)  "
+echo -e "║    - Subnet Router: Docker-Netz im Tailnet erreichbar      "
+echo -e "║    - Funnel: Apps oeffentlich machen (adler tailscale funnel)"
+echo -e "║                                                              "
+echo -e "║  ${CYAN}TAILNET GERAETE:${NC}                                           "
+echo -e "║    iphone175              100.122.13.33                      "
+echo -e "║    mac-mini-von-maurice   100.118.223.64                     "
+echo -e "║    ssh-console            100.87.166.49                      "
+echo -e "║    adler-server (HIER)    100.124.239.46                     "
 echo -e "║                                                              "
 echo -e "║  ${CYAN}SICHERHEIT:${NC}                                                "
-echo -e "║    - SSH: Nur Key-Authentifizierung                         "
-echo -e "║    - Firewall: UFW aktiv (SSH + HTTP + HTTPS + Tailscale)   "
-echo -e "║    - Fail2Ban: Brute-Force Schutz aktiv                    "
-echo -e "║    - Tailscale: Verschluesseltes Mesh-Netzwerk             "
-echo -e "║    - Auto-Updates: Woechentlich Sonntag 3:00               "
+echo -e "║    - Firewall: UFW (nur Tailscale + HTTP/S)                 "
+echo -e "║    - Fail2Ban: Brute-Force Schutz                           "
+echo -e "║    - WireGuard: Verschluesseltes Mesh (via Tailscale)       "
+echo -e "║    - Auto-Updates: Woechentlich Sonntag 3:00                "
 echo -e "║                                                              "
-echo -e "║  ${CYAN}NEURAL WATCHDOG (SELBSTLERNEND):${NC}                            "
-echo -e "║    - Alle 2 Min: Metriken sammeln + Muster analysieren     "
-echo -e "║    - Praediktiv: Probleme erkennen BEVOR sie auftreten     "
-echo -e "║    - Auto-Heal: Docker, Tailscale, Telegram, Nginx, Disk   "
-echo -e "║    - Mesh-Monitor: Alle 3 Geraete permanent ueberwacht     "
-echo -e "║    - Trend-Analyse: CPU, RAM, Disk Vorhersage              "
-echo -e "║                                                              "
-echo -e "║  ${CYAN}AUSFALLSICHERHEIT:${NC}                                         "
-echo -e "║    - Backups: Taeglich 4:00 Uhr (7 Tage aufbewahrt)       "
-echo -e "║    - Docker: Live-Restore bei Docker-Restart               "
-echo -e "║    - Container: Automatischer Neustart bei Crash           "
-echo -e "║    - OOM-Schutz: Kritische Container priorisiert           "
+echo -e "║  ${CYAN}NEURAL WATCHDOG:${NC}                                           "
+echo -e "║    - Alle 2 Min: Metriken + Muster + Vorhersage            "
+echo -e "║    - Auto-Heal: Docker, Tailscale, Nginx, Disk             "
+echo -e "║    - Mesh-Monitor: Alle 4 Geraete ueberwacht               "
 echo -e "║                                                              "
 echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
