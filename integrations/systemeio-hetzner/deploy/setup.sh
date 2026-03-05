@@ -230,6 +230,10 @@ QUEUE_PROVIDER=bullmq
 # OpenClaw
 OPENCLAW_GATEWAY_TOKEN=$(openssl rand -hex 32)
 TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+
+# n8n Authentifizierung
+N8N_USER=admin
+N8N_PASSWORD=$(openssl rand -hex 12)
 ENVEOF
 
 chmod 600 "$INSTALL_DIR/.env"
@@ -315,6 +319,9 @@ services:
       - N8N_PORT=5678
       - N8N_PROTOCOL=http
       - GENERIC_TIMEZONE=Europe/Berlin
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=\${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=\${N8N_PASSWORD}
     ports:
       - "5678:5678"
     volumes:
@@ -355,6 +362,7 @@ services:
       - OPENAI_API_KEY=\${OPENAI_API_KEY:-}
       - OPENCLAW_GATEWAY_TOKEN=\${OPENCLAW_GATEWAY_TOKEN}
       - OPENCLAW_SANDBOX=false
+      - TELEGRAM_BOT_TOKEN=\${TELEGRAM_BOT_TOKEN:-}
       - TZ=Europe/Berlin
     ports:
       - "18789:18789"
