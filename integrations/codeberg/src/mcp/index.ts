@@ -131,86 +131,6 @@ const CreateIssueCommentSchema = z.object({
   body: z.string().describe("Comment body"),
 });
 
-// Pull Request Schemas
-const ListPullRequestsSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  state: z.enum(["open", "closed", "all"]).optional().default("open").describe("PR state"),
-  page: z.number().optional().default(1).describe("Page number"),
-  limit: z.number().optional().default(30).describe("Results per page"),
-});
-
-const GetPullRequestSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  pull_number: z.number().describe("Pull request number"),
-});
-
-const CreatePullRequestSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  title: z.string().describe("Pull request title"),
-  head: z.string().describe("The name of the branch where your changes are implemented"),
-  base: z.string().describe("The name of the branch you want the changes pulled into"),
-  body: z.string().optional().describe("Pull request description"),
-});
-
-const UpdatePullRequestSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  pull_number: z.number().describe("Pull request number"),
-  title: z.string().optional().describe("New PR title"),
-  body: z.string().optional().describe("New PR body"),
-  state: z.enum(["open", "closed"]).optional().describe("New state"),
-  base: z.string().optional().describe("New base branch"),
-});
-
-const MergePullRequestSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  pull_number: z.number().describe("Pull request number"),
-  Do: z
-    .enum(["merge", "rebase", "rebase-merge", "squash"])
-    .optional()
-    .default("merge")
-    .describe("Merge style"),
-  MergeTitleField: z.string().optional().describe("Title for the merge commit"),
-  MergeMessageField: z.string().optional().describe("Message for the merge commit"),
-});
-
-// Content Schemas
-const GetFileContentsSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  path: z.string().describe("File path"),
-  ref: z
-    .string()
-    .optional()
-    .describe("The name of the commit/branch/tag. Default the repository’s default branch"),
-});
-
-const CreateOrUpdateFileSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  path: z.string().describe("File path"),
-  content: z.string().describe("File content (base64 encoded or plain text)"),
-  message: z.string().optional().describe("Commit message"),
-  branch: z.string().optional().describe("Branch name. Default the repository’s default branch"),
-  sha: z
-    .string()
-    .optional()
-    .describe("The blob SHA of the file being replaced (required for updates)"),
-});
-
-const DeleteFileSchema = z.object({
-  owner: z.string().describe("Repository owner"),
-  repo: z.string().describe("Repository name"),
-  path: z.string().describe("File path"),
-  message: z.string().optional().describe("Commit message"),
-  branch: z.string().optional().describe("Branch name"),
-  sha: z.string().describe("The blob SHA of the file being deleted"),
-});
-
 // Issue Template Schemas
 const ListIssueTemplatesSchema = z.object({
   owner: z.string().describe("Repository owner"),
@@ -238,16 +158,6 @@ const ListProjectsSchema = z.object({
   repo: z.string().describe("Repository name"),
 });
 
-// Search Schema
-const SearchRepositoriesSchema = z.object({
-  q: z.string().describe("Keyword to search"),
-  limit: z.number().optional().default(30).describe("Results per page"),
-  page: z.number().optional().default(1).describe("Page number"),
-});
-
-// Empty Schema for get_me
-const EmptySchema = z.object({});
-
 // ============================================================================
 // HELPERS
 // ============================================================================
@@ -375,44 +285,6 @@ const SearchRepositoriesSchema = z.object({
 
 // Empty Schema for get_me
 const EmptySchema = z.object({});
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-async function resolveLabelIds(
-  owner: string,
-  repo: string,
-  labels: (string | number)[]
-): Promise<number[]> {
-  const ids: number[] = [];
-  const namesToResolve: string[] = [];
-
-  for (const label of labels) {
-    if (typeof label === "number") {
-      ids.push(label);
-    } else {
-      namesToResolve.push(label);
-    }
-  }
-
-  if (namesToResolve.length > 0) {
-    const response = await codebergClient.get(
-      `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels?limit=1000`
-    );
-    const allLabels = response.data;
-
-    for (const name of namesToResolve) {
-      const found = allLabels.find((l: any) => l.name === name);
-      if (found) {
-        ids.push(found.id);
-      } else {
-        throw new Error(`Label not found: ${name}`);
-      }
-    }
-  }
-  return ids;
-}
 
 // ============================================================================
 // TOOL EXPORT FUNCTION
