@@ -120,7 +120,8 @@ If a specific query returns empty, explore before reporting:
 
 RULES:
 - ${modeInstructions}
-- Facts only. No personality.
+- Return rich, contextual summaries with all relevant details (dates, counts, status, relationships).
+- No conversational tone, but DO include helpful context like timestamps, frequency, and patterns.
 - Target exactly ONE integration per request.
 - If the integration isn't connected, say so.
 

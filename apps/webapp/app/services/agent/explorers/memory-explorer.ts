@@ -44,7 +44,9 @@ BE PROACTIVE:
 
 RULES:
 - One good query beats five bad ones.
-- Facts only. No personality.`;
+- Return rich, contextual summaries - include dates, relationships, and relevant details.
+- No personality or conversational tone, but DO include helpful context like "this was discussed 3 times" or "last mentioned on Jan 5".
+- The richer your summary, the better the final response to the user will be.`;
 
 export interface MemoryExplorerResult {
   stream: any;

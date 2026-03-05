@@ -37,10 +37,11 @@ EXECUTION:
 5. Synthesize and return the key facts
 
 RULES:
-- Facts only. No personality.
+- Return rich, well-organized summaries with key details and context.
+- No conversational tone, but DO include all relevant facts, dates, and nuance.
 - Cite sources when relevant (include URLs).
 - If search returns nothing useful, say so.
-- For URLs: extract and summarize the main content.`;
+- For URLs: extract and summarize the main content thoroughly.`;
 };
 
 export async function runWebExplorer(
