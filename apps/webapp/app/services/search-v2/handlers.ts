@@ -1031,7 +1031,8 @@ export async function routeToHandler(
       // content to score against, so sort by recency instead to avoid filtering valid results
       const hasTopic =
         ctx.routerOutput.entityHints.length > 0 ||
-        ctx.routerOutput.selectedLabels.length > 0;
+        ctx.routerOutput.selectedLabels.length > 0 ||
+        ctx.routerOutput.aspects.length > 0;
       const rerankedEpisodes = hasTopic
         ? await applyEpisodeReranking(episodes, ctx)
         : episodes
