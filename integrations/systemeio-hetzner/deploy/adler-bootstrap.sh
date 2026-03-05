@@ -770,10 +770,22 @@ if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q t
         echo -e "${GREEN}    [2/8] GitHub - Issues, PRs, Repos verwalten${NC}" || \
         echo -e "${YELLOW}    [2/8] GitHub - manuell: clawhub install github${NC}"
 
-    # 3. Gog (14K Downloads) - Google Workspace
-    docker exec openclaw npx clawhub@latest install gog 2>/dev/null && \
-        echo -e "${GREEN}    [3/8] Gog - Google Mail, Calendar, Drive, Sheets${NC}" || \
-        echo -e "${YELLOW}    [3/8] Gog - manuell: clawhub install gog${NC}"
+    # 3. Gog (14K Downloads) - Google Workspace (braucht gog Binary!)
+    docker exec openclaw npx clawhub@latest install gog 2>/dev/null || true
+    # gog Binary installieren (Linux amd64)
+    GOG_URL=$(curl -fsSL https://api.github.com/repos/steipete/gogcli/releases/latest 2>/dev/null | jq -r '.assets[] | select(.name | contains("linux_amd64")) | .browser_download_url' 2>/dev/null || echo "")
+    if [ -n "$GOG_URL" ]; then
+        cd /tmp && curl -fsSL -o gogcli.tgz "$GOG_URL" && tar -xzf gogcli.tgz && install -m 0755 gog /usr/local/bin/gog 2>/dev/null && {
+            # Auch in Container kopieren
+            docker cp /usr/local/bin/gog openclaw:/usr/local/bin/gog 2>/dev/null || true
+            echo -e "${GREEN}    [3/8] Gog - Google Mail, Calendar, Drive, Sheets (Binary OK)${NC}"
+            echo -e "${YELLOW}          Setup: gog auth credentials /pfad/zu/client_secret.json${NC}"
+            echo -e "${YELLOW}          Dann:  gog auth add deine@gmail.com --services gmail,calendar,drive,sheets${NC}"
+        } || echo -e "${YELLOW}    [3/8] Gog - Binary-Download fehlgeschlagen${NC}"
+        cd "$INSTALL_DIR"
+    else
+        echo -e "${YELLOW}    [3/8] Gog - Binary manuell: siehe github.com/steipete/gogcli${NC}"
+    fi
 
     # 4. Agent Browser (11K Downloads) - Web Automatisierung
     docker exec openclaw npx clawhub@latest install agent-browser 2>/dev/null && \
@@ -1035,6 +1047,52 @@ case "${1:-status}" in
         /usr/local/bin/adler-neural-watchdog
         echo -e "${C_GREEN}Heilungslauf abgeschlossen. Siehe: adler neural${C_NC}"
         ;;
+    gog)
+        echo ""
+        echo -e "${C_CYAN}${C_BOLD}=== GOOGLE WORKSPACE (Gog) ===${C_NC}"
+        echo ""
+        if ! command -v gog &>/dev/null; then
+            echo -e "${C_RED}  gog nicht installiert!${C_NC}"
+            echo "  Installiere mit: adler skills install gog"
+            echo "  Oder manuell:    github.com/steipete/gogcli"
+        else
+            case "${2:-}" in
+                setup)
+                    echo "  Google Cloud Setup-Anleitung:"
+                    echo ""
+                    echo "  1. Gehe zu console.cloud.google.com"
+                    echo "  2. APIs & Services -> Credentials -> OAuth Client ID"
+                    echo "  3. Application type: Desktop app"
+                    echo "  4. Download client_secret.json"
+                    echo "  5. Upload auf Server: scp client_secret.json root@100.124.239.46:/opt/ki-power/"
+                    echo "  6. Dann ausfuehren:"
+                    echo "     gog auth credentials /opt/ki-power/client_secret.json"
+                    echo "     gog auth add ${3:-deine@gmail.com} --services gmail,calendar,drive,contacts,sheets,docs"
+                    echo "     export GOG_ACCOUNT=${3:-deine@gmail.com}"
+                    echo ""
+                    echo "  Tipp: GOG_ACCOUNT in /opt/ki-power/.env eintragen"
+                    ;;
+                *)
+                    echo "  Google Workspace Schnellbefehle:"
+                    echo ""
+                    echo "  Mail:"
+                    echo "    gog gmail search 'newer_than:1d' --max 10"
+                    echo "    gog gmail send --to x@y.com --subject 'Hi' --body 'Test'"
+                    echo ""
+                    echo "  Kalender:"
+                    echo "    gog calendar events primary --from \$(date -I) --to \$(date -I -d'+7days')"
+                    echo ""
+                    echo "  Drive:"
+                    echo "    gog drive search 'name contains \"Rechnung\"' --max 10"
+                    echo ""
+                    echo "  Sheets:"
+                    echo "    gog sheets get <sheetId> 'Tab!A1:D10' --json"
+                    echo ""
+                    echo "  Setup: adler gog setup deine@gmail.com"
+                    ;;
+            esac
+        fi
+        ;;
     skills)
         echo ""
         echo -e "${C_CYAN}${C_BOLD}=== OPENCLAW SKILLS (ClawHub) ===${C_NC}"
@@ -1169,6 +1227,7 @@ case "${1:-status}" in
         echo ""
         echo "  adler status      - Komplett-Status (System + Mesh + Neural)"
         echo "  adler skills      - ClawHub Skills installieren/suchen"
+        echo "  adler gog         - Google Workspace (Mail, Calendar, Drive)"
         echo "  adler keys        - API Keys anzeigen/setzen"
         echo "  adler mesh        - Tailscale Mesh Status + Features + Latenz"
         echo "  adler tailscale   - Tailscale Serve/Funnel/Cert/Exit-Node"
