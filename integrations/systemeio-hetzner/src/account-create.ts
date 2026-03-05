@@ -31,11 +31,18 @@ export async function integrationCreate(data: any) {
   try {
     await getContacts(systemeApiKey, 1, 1);
     systemeValid = true;
-  } catch {
+  } catch (error: any) {
+    const detail = error?.response?.status
+      ? ` (HTTP ${error.response.status})`
+      : error?.message
+        ? ` (${error.message})`
+        : '';
     return [
       {
         type: 'error',
-        data: { message: 'Invalid Systeme.io API Key. Please check and try again.' },
+        data: {
+          message: `Invalid Systeme.io API Key${detail}. Please check your key in Settings → API Keys and try again.`,
+        },
       },
     ];
   }
@@ -45,11 +52,18 @@ export async function integrationCreate(data: any) {
   try {
     await listServers(hetznerApiToken);
     hetznerValid = true;
-  } catch {
+  } catch (error: any) {
+    const detail = error?.response?.status
+      ? ` (HTTP ${error.response.status})`
+      : error?.message
+        ? ` (${error.message})`
+        : '';
     return [
       {
         type: 'error',
-        data: { message: 'Invalid Hetzner API Token. Please check and try again.' },
+        data: {
+          message: `Invalid Hetzner API Token${detail}. Please check your token in Security → API Tokens and try again.`,
+        },
       },
     ];
   }

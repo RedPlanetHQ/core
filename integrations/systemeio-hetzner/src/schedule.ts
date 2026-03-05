@@ -33,7 +33,11 @@ export async function handleSchedule(
 ) {
   try {
     if (!config?.systeme_api_key || !config?.hetzner_api_token) {
-      return [];
+      return [
+        createActivityMessage(
+          'Sync übersprungen: Systeme.io API Key oder Hetzner API Token fehlt. Bitte Integration neu konfigurieren.',
+        ),
+      ];
     }
 
     const settings = (state || {}) as SyncState;
@@ -96,8 +100,12 @@ export async function handleSchedule(
 
         settings.lastSaleId = saleId;
       }
-    } catch {
-      // Systeme.io API error - will retry next sync
+    } catch (error: any) {
+      messages.push(
+        createActivityMessage(
+          `Systeme.io API Fehler: ${error?.response?.status ? `HTTP ${error.response.status}` : error?.message || 'Unbekannter Fehler'} - wird beim nächsten Sync erneut versucht`,
+        ),
+      );
     }
 
     // ============================================================
@@ -139,8 +147,12 @@ export async function handleSchedule(
           ),
         );
       }
-    } catch {
-      // Hetzner API error - will retry next sync
+    } catch (error: any) {
+      messages.push(
+        createActivityMessage(
+          `Hetzner API Fehler: ${error?.response?.status ? `HTTP ${error.response.status}` : error?.message || 'Unbekannter Fehler'} - wird beim nächsten Sync erneut versucht`,
+        ),
+      );
     }
 
     // ============================================================
@@ -165,8 +177,12 @@ export async function handleSchedule(
           );
         }
       }
-    } catch {
-      // Will retry next sync
+    } catch (error: any) {
+      messages.push(
+        createActivityMessage(
+          `Kontakte-Sync Fehler: ${error?.response?.status ? `HTTP ${error.response.status}` : error?.message || 'Unbekannter Fehler'} - wird beim nächsten Sync erneut versucht`,
+        ),
+      );
     }
 
     // Update state
@@ -180,7 +196,11 @@ export async function handleSchedule(
     });
 
     return messages;
-  } catch {
-    return [];
+  } catch (error: any) {
+    return [
+      createActivityMessage(
+        `Kritischer Sync-Fehler: ${error?.message || 'Unbekannter Fehler'} - bitte Integration prüfen`,
+      ),
+    ];
   }
 }
