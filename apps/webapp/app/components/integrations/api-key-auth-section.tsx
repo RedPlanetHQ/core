@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { useFetcher } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
@@ -17,27 +17,70 @@ export function ApiKeyAuthSection({
   specData,
   activeAccount,
 }: ApiKeyAuthSectionProps) {
+  const apiKeySpec = specData?.auth?.api_key;
+
+  // Determine if the spec defines multiple API key fields (object type with properties)
+  const isMultiField = useMemo(
+    () => apiKeySpec?.type === "object" && apiKeySpec?.properties,
+    [apiKeySpec],
+  );
+
+  const fieldKeys = useMemo(
+    () => (isMultiField ? Object.keys(apiKeySpec.properties) : []),
+    [isMultiField, apiKeySpec],
+  );
+
+  // Single-field state
   const [apiKey, setApiKey] = useState("");
+  // Multi-field state: { fieldName: value }
+  const [apiKeys, setApiKeys] = useState<Record<string, string>>({});
+
   const [isLoading, setIsLoading] = useState(false);
   const [showApiKeyForm, setShowApiKeyForm] = useState(false);
   const apiKeyFetcher = useFetcher();
 
+  const handleFieldChange = useCallback((field: string, value: string) => {
+    setApiKeys((prev) => ({ ...prev, [field]: value }));
+  }, []);
+
+  const isFormValid = useMemo(() => {
+    if (isMultiField) {
+      return fieldKeys.every((key) => apiKeys[key]?.trim());
+    }
+    return apiKey.trim().length > 0;
+  }, [isMultiField, fieldKeys, apiKeys, apiKey]);
+
   const handleApiKeyConnect = useCallback(() => {
-    if (!apiKey.trim()) return;
+    if (!isFormValid) return;
 
     setIsLoading(true);
-    apiKeyFetcher.submit(
-      {
-        integrationDefinitionId: integration.id,
-        apiKey,
-      },
-      {
-        method: "post",
-        action: "/api/v1/integration_account",
-        encType: "application/json",
-      },
-    );
-  }, [integration.id, apiKey, apiKeyFetcher]);
+
+    if (isMultiField) {
+      apiKeyFetcher.submit(
+        {
+          integrationDefinitionId: integration.id,
+          apiKeys,
+        },
+        {
+          method: "post",
+          action: "/api/v1/integration_account",
+          encType: "application/json",
+        },
+      );
+    } else {
+      apiKeyFetcher.submit(
+        {
+          integrationDefinitionId: integration.id,
+          apiKey,
+        },
+        {
+          method: "post",
+          action: "/api/v1/integration_account",
+          encType: "application/json",
+        },
+      );
+    }
+  }, [integration.id, apiKey, apiKeys, apiKeyFetcher, isMultiField, isFormValid]);
 
   React.useEffect(() => {
     if (apiKeyFetcher.state === "idle" && isLoading) {
@@ -47,7 +90,7 @@ export function ApiKeyAuthSection({
     }
   }, [apiKeyFetcher.state, apiKeyFetcher.data, isLoading]);
 
-  if (activeAccount || !specData?.auth?.api_key) {
+  if (activeAccount || !apiKeySpec) {
     return null;
   }
 
@@ -64,22 +107,53 @@ export function ApiKeyAuthSection({
         </Button>
       ) : (
         <div className="flex flex-col gap-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="apiKey" className="text-sm font-medium">
-              {specData?.auth?.api_key?.label || "API Key"}
-            </label>
-            <Input
-              id="apiKey"
-              placeholder="Enter your API key"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-            />
-            {specData?.auth?.api_key?.description && (
-              <p className="text-muted-foreground text-sm">
-                {specData.auth.api_key.description}
-              </p>
-            )}
-          </div>
+          {isMultiField ? (
+            // Render a field for each property defined in the spec
+            fieldKeys.map((fieldKey) => {
+              const fieldSpec = apiKeySpec.properties[fieldKey];
+              return (
+                <div key={fieldKey} className="flex flex-col gap-1">
+                  <label
+                    htmlFor={`apiKey-${fieldKey}`}
+                    className="text-sm font-medium"
+                  >
+                    {fieldSpec?.label || fieldKey}
+                  </label>
+                  <Input
+                    id={`apiKey-${fieldKey}`}
+                    type="password"
+                    placeholder={fieldSpec?.label || `Enter ${fieldKey}`}
+                    value={apiKeys[fieldKey] || ""}
+                    onChange={(e) => handleFieldChange(fieldKey, e.target.value)}
+                  />
+                  {fieldSpec?.description && (
+                    <p className="text-muted-foreground text-sm">
+                      {fieldSpec.description}
+                    </p>
+                  )}
+                </div>
+              );
+            })
+          ) : (
+            // Single API key field (original behavior)
+            <div className="flex flex-col gap-1">
+              <label htmlFor="apiKey" className="text-sm font-medium">
+                {apiKeySpec?.label || "API Key"}
+              </label>
+              <Input
+                id="apiKey"
+                type="password"
+                placeholder="Enter your API key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+              />
+              {apiKeySpec?.description && (
+                <p className="text-muted-foreground text-sm">
+                  {apiKeySpec.description}
+                </p>
+              )}
+            </div>
+          )}
           <div className="flex justify-end gap-2">
             <Button
               type="button"
@@ -87,6 +161,7 @@ export function ApiKeyAuthSection({
               onClick={() => {
                 setShowApiKeyForm(false);
                 setApiKey("");
+                setApiKeys({});
               }}
             >
               Cancel
@@ -94,7 +169,7 @@ export function ApiKeyAuthSection({
             <Button
               type="button"
               variant="default"
-              disabled={isLoading || !apiKey.trim()}
+              disabled={isLoading || !isFormValid}
               onClick={handleApiKeyConnect}
             >
               {isLoading || apiKeyFetcher.state === "submitting"

@@ -13,10 +13,15 @@ import { scheduler } from "~/services/oauth/scheduler";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
 // Schema for creating an integration account with API key
+// Supports both single apiKey (string) and multiple apiKeys (object)
 const IntegrationAccountBodySchema = z.object({
   integrationDefinitionId: z.string(),
-  apiKey: z.string(),
-});
+  apiKey: z.string().optional(),
+  apiKeys: z.record(z.string()).optional(),
+}).refine(
+  (data) => data.apiKey || data.apiKeys,
+  { message: "Either apiKey or apiKeys must be provided" },
+);
 
 /**
  * GET /api/v1/integration_account
@@ -45,7 +50,7 @@ const loader = createHybridLoaderApiRoute(
 
 /**
  * POST /api/v1/integration_account
- * Creates an integration account with an API key
+ * Creates an integration account with an API key (single or multiple)
  */
 const { action } = createHybridActionApiRoute(
   {
@@ -57,7 +62,7 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
-    const { integrationDefinitionId, apiKey } = body;
+    const { integrationDefinitionId, apiKey, apiKeys } = body;
     const { userId } = authentication;
 
 
@@ -74,14 +79,17 @@ const { action } = createHybridActionApiRoute(
         );
       }
 
+      // Build the eventBody based on whether single or multi-key auth
+      const eventBody = apiKeys
+        ? { apiKeys }
+        : { apiKey };
+
       // Trigger the SETUP event for the integration
       const setupResult = await runIntegrationTrigger(
         integrationDefinition,
         {
           event: IntegrationEventType.SETUP,
-          eventBody: {
-            apiKey,
-          },
+          eventBody,
         },
         userId,
         authentication.workspaceId,

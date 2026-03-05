@@ -3,13 +3,17 @@ import { getContacts, listServers } from './utils';
 /**
  * Handles the setup event for the Systeme.io + Hetzner integration.
  * Validates both API keys and creates the integration account.
+ *
+ * Supports both:
+ * - Multi-field API key flow: eventBody.apiKeys = { systeme_api_key, hetzner_api_token }
+ * - Legacy OAuth flow: eventBody.oauthResponse = { systeme_api_key, hetzner_api_token }
  */
 export async function integrationCreate(data: any) {
-  const { oauthResponse } = data;
+  // Support multi-field API key flow (apiKeys object) and legacy oauthResponse
+  const keys = data.apiKeys || data.oauthResponse || {};
 
-  // Both keys come from the setup form
-  const systemeApiKey = oauthResponse.systeme_api_key;
-  const hetznerApiToken = oauthResponse.hetzner_api_token;
+  const systemeApiKey = keys.systeme_api_key;
+  const hetznerApiToken = keys.hetzner_api_token;
 
   if (!systemeApiKey || !hetznerApiToken) {
     return [
