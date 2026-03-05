@@ -3,6 +3,7 @@ import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { generateText, type LanguageModel } from "ai";
 import { getModel } from "~/lib/model.server";
+import { env } from "~/env.server";
 
 export interface CreateConversationTitlePayload {
   conversationId: string;
@@ -36,13 +37,10 @@ export async function processConversationTitleCreation(
     // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
     const tolerantOutput =
       tolerantOverride
-        ? tolerantOverride === "true" ||
-          tolerantOverride === "1" ||
-          tolerantOverride === "yes"
-        : ((process.env.OPENAI_API_MODE || "").trim().toLowerCase() ===
-            "chat_completions" &&
-            !!process.env.OPENAI_BASE_URL) ||
-          (process.env.CHAT_PROVIDER || "").trim().toLowerCase() === "ollama";
+        ? tolerantOverride === "true" || tolerantOverride === "1" || tolerantOverride === "yes"
+        : ((env.OPENAI_API_MODE === "chat_completions" || env.OPENAI_API_MODE === "chat") &&
+            !!env.OPENAI_BASE_URL) ||
+          env.CHAT_PROVIDER === "ollama";
     const { text } = await generateText({
       model: getModel() as LanguageModel,
       messages: [
