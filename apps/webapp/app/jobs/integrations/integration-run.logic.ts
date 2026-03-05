@@ -429,7 +429,7 @@ export async function processIntegrationRun(
   } = payload;
 
   try {
-    logger.info(`Starting integration run for ${integrationDefinition.slug}`, {
+    logger.debug(`Starting integration run for ${integrationDefinition.slug}`, {
       event,
       integrationId: integrationDefinition.id,
     });
@@ -437,7 +437,7 @@ export async function processIntegrationRun(
     // Load the integration file from a URL or a local path
     const integrationSource = integrationDefinition.url as string;
     const integrationFile = await loadIntegrationSource(integrationSource);
-    logger.info(`Loaded integration file from ${integrationSource}`);
+    logger.debug(`Loaded integration file from ${integrationSource}`);
 
     // Prepare enhanced event body based on event type
     let enhancedEventBody = eventBody;
@@ -456,7 +456,7 @@ export async function processIntegrationRun(
       };
     }
 
-    logger.info(`Executing integration CLI`, {
+    logger.debug(`Executing integration CLI`, {
       event,
       integrationId: integrationDefinition.id,
       hasConfig: !!integrationAccount?.integrationConfiguration,
@@ -474,14 +474,14 @@ export async function processIntegrationRun(
       settings?.state,
     );
 
-    logger.info("Integration CLI executed successfully");
+    logger.debug("Integration CLI executed successfully");
 
     // Process the output messages
     const messages = callbacks.extractMessages
       ? callbacks.extractMessages(output)
       : [];
 
-    logger.info("Integration run completed", {
+    logger.debug("Integration run completed", {
       messageCount: messages.length,
       messageTypes: messages.map((m) => m.type),
     });

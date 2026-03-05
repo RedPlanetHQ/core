@@ -58,7 +58,7 @@ export async function deliverWebhook(params: WebhookDeliveryParams): Promise<{
   });
   const deliveryResults: DeliveryResult[] = [];
 
-  logger.log(`Delivering ${eventType} webhook to ${targets.length} targets`);
+  logger.debug(`Delivering ${eventType} webhook to ${targets.length} targets`);
 
   // Send webhook to each target
   for (const target of targets) {
@@ -111,7 +111,7 @@ export async function deliverWebhook(params: WebhookDeliveryParams): Promise<{
 
       deliveryResults.push(result);
 
-      logger.log(`Webhook delivered to ${target.url}:`, {
+      logger.debug(`Webhook delivered to ${target.url}:`, {
         status: response.status,
         event: eventType,
         success: response.ok,

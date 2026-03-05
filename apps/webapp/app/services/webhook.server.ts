@@ -17,7 +17,7 @@ export class WebhookService {
     eventHeaders: EventHeaders,
     eventBody: EventBody,
   ): Promise<{ challenge?: string; status: string }> {
-    logger.log(`Received webhook ${sourceName}`, {
+    logger.debug(`Received webhook ${sourceName}`, {
       where: "WebhookService.handleEvents",
     });
 
@@ -52,7 +52,7 @@ export class WebhookService {
               include: { integrationDefinition: true },
             });
 
-            logger.info("Found integration accounts for webhook", {
+            logger.debug("Found integration accounts for webhook", {
               accountIds,
               integrationAccountIds: integrationAccounts.map((acc) => acc.id),
               count: integrationAccounts.length,
@@ -93,7 +93,7 @@ export class WebhookService {
         });
       });
     } else {
-      logger.log(
+      logger.debug(
         `Could not find integration accounts for webhook ${sourceName}`,
         {
           where: "WebhookService.handleEvents",
@@ -116,7 +116,7 @@ export class WebhookService {
     await Promise.all(
       integrationAccounts.map(async (integrationAccount) => {
         try {
-          logger.info(`Processing webhook for ${sourceName}`, {
+          logger.debug(`Processing webhook for ${sourceName}`, {
             integrationAccountId: integrationAccount.id,
             integrationSlug: integrationAccount.integrationDefinition.slug,
           });
@@ -147,7 +147,7 @@ export class WebhookService {
             integrationAccount.id,
           );
 
-          logger.log(`Successfully processed webhook for ${sourceName}`, {
+          logger.debug(`Successfully processed webhook for ${sourceName}`, {
             integrationAccountId: integrationAccount.id,
             activitiesCreated: processResult.activities?.length || 0,
             messagesProcessed: messages.length,

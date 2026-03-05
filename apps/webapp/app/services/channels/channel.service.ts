@@ -11,6 +11,7 @@ import {
   upsertConversationHistory,
 } from "../conversation.server";
 import { UserTypeEnum } from "@core/types";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 /**
  * Process an inbound message through the channel pipeline.
@@ -115,6 +116,7 @@ export async function handleChannelMessage(
  */
 export async function handleBackgroundMessage(
   task: BackgroundTask,
+  executorTools?: OrchestratorTools,
 ): Promise<void> {
   const slug = task.callbackChannel;
   const channel = getChannel(slug);
@@ -149,6 +151,7 @@ export async function handleBackgroundMessage(
       skipUserMessage: true,
       channelMetadata: metadata,
       disableBackgroundTaskTools: true,
+      executorTools,
     });
 
     if (responseText && task.callbackConversationId) {

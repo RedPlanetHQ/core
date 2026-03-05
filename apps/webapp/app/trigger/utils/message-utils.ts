@@ -164,7 +164,7 @@ export const createActivities = async ({
             activity.id,
             integrationAccount?.workspaceId,
           );
-          logger.log("Webhook delivery triggered for activity", {
+          logger.debug("Webhook delivery triggered for activity", {
             activityId: activity.id,
           });
         } catch (error) {

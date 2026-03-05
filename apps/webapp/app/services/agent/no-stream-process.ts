@@ -9,6 +9,7 @@ import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { deductCredits } from "~/trigger/utils/utils";
 
 interface NoStreamProcessBody {
@@ -37,6 +38,8 @@ interface NoStreamProcessBody {
   skipUserMessage?: boolean;
   /** When true, background task tools (spawn/list/cancel) are excluded */
   disableBackgroundTaskTools?: boolean;
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools;
 }
 
 export async function noStreamProcess(
@@ -114,6 +117,7 @@ export async function noStreamProcess(
     channelMetadata: body.channelMetadata,
     conversationId: body.id,
     disableBackgroundTaskTools: body.disableBackgroundTaskTools,
+    executorTools: body.executorTools,
   });
 
   // Generate response using generateText (non-streaming)
