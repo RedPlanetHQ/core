@@ -1,5 +1,6 @@
 
 import type { RecallResult } from "./types";
+import { countTokens, DEFAULT_TOKEN_BUDGET } from "~/services/search/tokenBudget";
 
 /**
  * Format recall result as markdown for LLM consumption
@@ -7,6 +8,52 @@ import type { RecallResult } from "./types";
  */
 export function formatRecallAsMarkdown(result: RecallResult): string {
   const sections: string[] = [];
+
+  // Facets section (for temporal_facets queries)
+  if (result.facets) {
+    const { facets } = result;
+    const startDate = facets.dateRange.startTime.toLocaleDateString("en-US", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+    const endDate = facets.dateRange.endTime
+      ? facets.dateRange.endTime.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+      : "now";
+    sections.push(`## Memory Overview (${startDate} – ${endDate})\n`);
+
+    if (facets.topics && facets.topics.length > 0) {
+      sections.push("### Topics");
+      facets.topics.forEach((t) => {
+        sections.push(`- **${t.labelName}** (${t.episodeCount} episode${t.episodeCount !== 1 ? "s" : ""})`);
+      });
+      sections.push("");
+    }
+
+    if (facets.entities && facets.entities.length > 0) {
+      sections.push("### People & Entities");
+      facets.entities.forEach((e) => {
+        sections.push(`- **${e.entityName}** (${e.mentionCount} mention${e.mentionCount !== 1 ? "s" : ""})`);
+      });
+      sections.push("");
+    }
+
+    if (facets.aspects && facets.aspects.length > 0) {
+      sections.push("### By Aspect");
+      facets.aspects.forEach((a) => {
+        const date = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+        sections.push(`\n**${a.aspect}** (${a.statementCount} statement${a.statementCount !== 1 ? "s" : ""})`);
+        a.statements.forEach((s) => {
+          sections.push(`- ${s.fact} _(${date(s.validAt)})_ \`ep:${s.episodeUuid.slice(0, 8)}\``);
+        });
+      });
+      sections.push("");
+    }
+
+    if (!facets.topics?.length && !facets.entities?.length && !facets.aspects?.length) {
+      sections.push("*No data found in the requested time range.*\n");
+    }
+
+    return truncateAtTokenBudget(sections.join("\n"));
+  }
 
   // Add entity section (if present, typically for entity_lookup queries)
   if (result.entity) {
@@ -127,7 +174,34 @@ export function formatRecallAsMarkdown(result: RecallResult): string {
     sections.push("*No relevant memories found.*\n");
   }
 
-  return sections.join("\n");
+  return truncateAtTokenBudget(sections.join("\n"));
+}
+
+/**
+ * Truncate text to fit within DEFAULT_TOKEN_BUDGET.
+ * Splits on newlines to avoid cutting mid-line.
+ * Appends a warning at the bottom if truncated.
+ */
+function truncateAtTokenBudget(text: string): string {
+  if (countTokens(text) <= DEFAULT_TOKEN_BUDGET) return text;
+
+  const lines = text.split("\n");
+  const kept: string[] = [];
+  let tokens = 0;
+
+  for (const line of lines) {
+    const lineTokens = countTokens(line + "\n");
+    if (tokens + lineTokens > DEFAULT_TOKEN_BUDGET) break;
+    kept.push(line);
+    tokens += lineTokens;
+  }
+
+  kept.push(
+    "\n---",
+    "> **There is more data in this time range that was not shown.** Reduce the date range (e.g. last 3 days instead of last week) to see complete results."
+  );
+
+  return kept.join("\n");
 }
 
 /**
@@ -161,6 +235,8 @@ export function formatForV1Compatibility(result: RecallResult): {
     attributes: Record<string, any>;
     uuid: string;
   } | null;
+  facets?: RecallResult["facets"];
+  warning?: string;
 } {
   // Map episodes (already in correct format)
   const episodes = result.episodes.map((ep) => ({
@@ -203,6 +279,8 @@ export function formatForV1Compatibility(result: RecallResult): {
     invalidatedFacts,
     statements,
     entity,
+    facets: result.facets,
+    warning: result.warning,
   };
 }
 

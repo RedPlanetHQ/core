@@ -73,8 +73,12 @@ export function createSearchV2Methods(core: Neo4jCore) {
       userId: string;
       workspaceId?: string;
       maxEpisodes: number;
+      aspects?: string[];
     }): Promise<EpisodicNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const aspectFilter = params.aspects && params.aspects.length > 0
+        ? "AND s1.aspect IN $aspects"
+        : "";
 
       const query = `
                 UNWIND $entityUuids as entityUuid
@@ -83,6 +87,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 // Find statements where entity is subject or object
                 OPTIONAL MATCH (s1:Statement{userId: $userId${wsFilter}})-[:HAS_SUBJECT|HAS_OBJECT]->(ent)
                 WHERE (s1.invalidAt IS NULL OR s1.invalidAt > datetime())
+                ${aspectFilter}
 
                 WITH DISTINCT s1 as s
                 WHERE s IS NOT NULL
@@ -103,6 +108,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         entityUuids: params.entityUuids,
         userId: params.userId,
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        ...(params.aspects && params.aspects.length > 0 && { aspects: params.aspects }),
       });
 
       return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
@@ -243,6 +249,131 @@ export function createSearchV2Methods(core: Neo4jCore) {
       });
 
       return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
+    },
+
+    /**
+     * Get distinct topic label IDs and episode counts in a time range
+     * Used by handleTemporalFacets in search-v2
+     */
+    async getTopicsForFacets(params: {
+      userId: string;
+      workspaceId?: string;
+      startTime: Date;
+      endTime?: Date;
+      limit?: number;
+    }): Promise<{ labelId: string; episodeCount: number }[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const limit = params.limit || 20;
+
+      const query = `
+        MATCH (e:Episode {userId: $userId${wsFilter}})
+        WHERE e.createdAt >= datetime($startTime)
+          ${params.endTime ? "AND e.createdAt <= datetime($endTime)" : ""}
+          AND e.labelIds IS NOT NULL AND size(e.labelIds) > 0
+        UNWIND e.labelIds AS labelId
+        RETURN DISTINCT labelId, count(DISTINCT e) AS episodeCount
+        ORDER BY episodeCount DESC
+        LIMIT ${limit}
+      `;
+
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        startTime: params.startTime.toISOString(),
+        ...(params.endTime && { endTime: params.endTime.toISOString() }),
+      });
+
+      return results.map((r) => ({
+        labelId: r.get("labelId") as string,
+        episodeCount: r.get("episodeCount").toNumber() as number,
+      }));
+    },
+
+    /**
+     * Get distinct entities mentioned in statements in a time range
+     * Used by handleTemporalFacets in search-v2
+     */
+    async getEntitiesForFacets(params: {
+      userId: string;
+      workspaceId?: string;
+      startTime: Date;
+      endTime?: Date;
+      limit?: number;
+    }): Promise<{ entityUuid: string; entityName: string; mentionCount: number }[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const limit = params.limit || 20;
+
+      const query = `
+        MATCH (e:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
+        WHERE s.validAt >= datetime($startTime)
+          ${params.endTime ? "AND s.validAt <= datetime($endTime)" : ""}
+          AND (s.invalidAt IS NULL OR s.invalidAt > datetime())
+        MATCH (s)-[:HAS_SUBJECT]->(subject:Entity {userId: $userId${wsFilter}})
+        WHERE subject.name IS NOT NULL
+        RETURN DISTINCT subject.uuid AS entityUuid, subject.name AS entityName, count(DISTINCT s) AS mentionCount
+        ORDER BY mentionCount DESC
+        LIMIT ${limit}
+      `;
+
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        startTime: params.startTime.toISOString(),
+        ...(params.endTime && { endTime: params.endTime.toISOString() }),
+      });
+
+      return results.map((r) => ({
+        entityUuid: r.get("entityUuid") as string,
+        entityName: r.get("entityName") as string,
+        mentionCount: r.get("mentionCount").toNumber() as number,
+      }));
+    },
+
+    /**
+     * Get statement counts grouped by aspect in a time range, with sample facts
+     * Used by handleTemporalFacets in search-v2
+     */
+    async getAspectsForFacets(params: {
+      userId: string;
+      workspaceId?: string;
+      startTime: Date;
+      endTime?: Date;
+      aspects?: string[];
+    }): Promise<{ aspect: string; statementCount: number; statements: { fact: string; validAt: string; episodeUuid: string }[] }[]> {
+      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
+      const aspectFilter = params.aspects && params.aspects.length > 0
+        ? "AND s.aspect IN $aspects"
+        : "";
+
+      const query = `
+        MATCH (e:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
+        WHERE s.validAt >= datetime($startTime)
+          ${params.endTime ? "AND s.validAt <= datetime($endTime)" : ""}
+          AND (s.invalidAt IS NULL OR s.invalidAt > datetime())
+          AND s.aspect IS NOT NULL
+          ${aspectFilter}
+        WITH s.aspect AS aspect, s, e
+        ORDER BY s.validAt DESC
+        WITH aspect,
+             count(s) AS statementCount,
+             collect({fact: s.fact, validAt: toString(s.validAt), episodeUuid: e.uuid}) AS allStatements
+        RETURN aspect, statementCount, allStatements[0..50] AS statements
+        ORDER BY statementCount DESC
+      `;
+
+      const results = await core.runQuery(query, {
+        userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        startTime: params.startTime.toISOString(),
+        ...(params.endTime && { endTime: params.endTime.toISOString() }),
+        ...(params.aspects && params.aspects.length > 0 && { aspects: params.aspects }),
+      });
+
+      return results.map((r) => ({
+        aspect: r.get("aspect") as string,
+        statementCount: r.get("statementCount").toNumber() as number,
+        statements: r.get("statements") as { fact: string; validAt: string; episodeUuid: string }[],
+      }));
     },
   };
 }
