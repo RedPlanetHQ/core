@@ -28,6 +28,7 @@ import { Ghost } from "./icons/ghost";
 import { Fireflies } from "./icons/fireflies";
 import { Whatsapp } from "./icons/whatsapp";
 import { Metabase } from "./icons/metabase";
+import { Resend } from "./icons/resend";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -66,6 +67,7 @@ export const ICON_MAPPING = {
   fireflies: Fireflies,
   whatsapp: Whatsapp,
   metabase: Metabase,
+  resend: Resend,
 
   // Default icon
   integration: LayoutGrid,
