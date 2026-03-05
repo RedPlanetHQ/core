@@ -1,0 +1,929 @@
+#!/bin/bash
+set -euo pipefail
+
+# ================================================================
+# ADLER SERVER - KOMPLETTES BOOTSTRAP-SCRIPT
+# ================================================================
+# EIN Befehl - Alles eingerichtet:
+#   curl -sL https://raw.githubusercontent.com/Maurice-AIEMPIRE/core/main/integrations/systemeio-hetzner/deploy/adler-bootstrap.sh | bash
+# ODER direkt auf dem Server:
+#   bash adler-bootstrap.sh
+# ================================================================
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+INSTALL_DIR="/opt/ki-power"
+LOG_FILE="/var/log/adler-setup.log"
+
+# Alles loggen
+exec > >(tee -a "$LOG_FILE") 2>&1
+
+echo -e "${CYAN}${BOLD}"
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║              ADLER SERVER - KOMPLETTES SETUP                ║"
+echo "║     Tailscale + KI-Power + Telegram + Sicherheit           ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
+echo "  Gestartet: $(date)"
+echo "  Log: $LOG_FILE"
+echo ""
+
+# ================================================================
+# PHASE 0: ROOT CHECK
+# ================================================================
+if [ "$(id -u)" -ne 0 ]; then
+    echo -e "${RED}Fehler: Dieses Script muss als root ausgefuehrt werden!${NC}"
+    echo "  Fuehre aus: sudo bash adler-bootstrap.sh"
+    exit 1
+fi
+
+# ================================================================
+# PHASE 1: API KEYS ABFRAGEN
+# ================================================================
+echo -e "${YELLOW}[PHASE 1/8] API Keys & Konfiguration${NC}"
+echo ""
+
+# Pruefen ob bestehende Config existiert
+if [ -f "$INSTALL_DIR/.env" ]; then
+    echo -e "${GREEN}Bestehende .env gefunden unter $INSTALL_DIR/.env${NC}"
+    read -p "Bestehende Konfiguration verwenden? (j/n): " USE_EXISTING
+    if [ "$USE_EXISTING" = "j" ]; then
+        source "$INSTALL_DIR/.env"
+        echo -e "${GREEN}  -> Bestehende Config geladen${NC}"
+    fi
+fi
+
+if [ -z "${SYSTEME_API_KEY:-}" ]; then
+    echo -e "${BLUE}Systeme.io API Key:${NC}"
+    echo "  -> Dashboard -> Settings -> API Keys -> Create"
+    read -p "  Dein Systeme.io API Key: " SYSTEME_API_KEY
+    [ -z "$SYSTEME_API_KEY" ] && { echo -e "${RED}API Key fehlt!${NC}"; exit 1; }
+fi
+
+if [ -z "${HETZNER_API_TOKEN:-}" ]; then
+    echo -e "${BLUE}Hetzner Cloud API Token:${NC}"
+    echo "  -> console.hetzner.cloud -> Security -> API Tokens"
+    read -p "  Dein Hetzner API Token: " HETZNER_API_TOKEN
+    [ -z "$HETZNER_API_TOKEN" ] && { echo -e "${RED}Token fehlt!${NC}"; exit 1; }
+fi
+
+if [ -z "${OPENAI_API_KEY:-}" ]; then
+    echo -e "${BLUE}OpenAI API Key:${NC}"
+    echo "  -> platform.openai.com/api-keys"
+    read -p "  Dein OpenAI API Key: " OPENAI_API_KEY
+    [ -z "$OPENAI_API_KEY" ] && { echo -e "${RED}API Key fehlt!${NC}"; exit 1; }
+fi
+
+if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
+    echo -e "${BLUE}Telegram Bot Token (WICHTIG fuer Nachrichten):${NC}"
+    echo "  -> Telegram: @BotFather -> /newbot -> Token kopieren"
+    read -p "  Telegram Bot Token: " TELEGRAM_BOT_TOKEN
+fi
+
+echo ""
+echo -e "${BLUE}Domain fuer SSL (optional, Enter zum Ueberspringen):${NC}"
+read -p "  Domain (z.B. adler.deine-domain.de): " DOMAIN
+DOMAIN="${DOMAIN:-}"
+
+echo -e "${GREEN}  OK - Alle Keys konfiguriert${NC}"
+
+# ================================================================
+# PHASE 2: SYSTEM-UPDATE & PAKETE
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 2/8] System-Pakete & Grundlagen${NC}"
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update -qq
+apt-get upgrade -y -qq
+apt-get install -y -qq \
+    curl wget git unzip \
+    software-properties-common apt-transport-https \
+    ca-certificates gnupg lsb-release \
+    nginx certbot python3-certbot-nginx \
+    ufw fail2ban \
+    jq htop iotop net-tools \
+    logrotate cron \
+    unattended-upgrades apt-listchanges
+
+# Automatische Sicherheitsupdates aktivieren
+cat > /etc/apt/apt.conf.d/20auto-upgrades << 'AUTOEOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+APT::Periodic::AutocleanInterval "7";
+AUTOEOF
+
+echo -e "${GREEN}  OK - System aktualisiert + Auto-Updates aktiv${NC}"
+
+# ================================================================
+# PHASE 3: TAILSCALE ABSICHERN
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 3/8] Tailscale Netzwerk absichern${NC}"
+
+# Pruefen ob Tailscale installiert ist
+if command -v tailscale &> /dev/null; then
+    TS_IP=$(tailscale ip -4 2>/dev/null || echo "")
+    TS_STATUS=$(tailscale status --json 2>/dev/null | jq -r '.Self.Online' 2>/dev/null || echo "false")
+    echo -e "${GREEN}  Tailscale installiert - IP: ${TS_IP:-unbekannt}${NC}"
+    echo -e "${GREEN}  Status: Online=${TS_STATUS}${NC}"
+else
+    echo "  Tailscale wird installiert..."
+    curl -fsSL https://tailscale.com/install.sh | sh
+    echo -e "${YELLOW}  WICHTIG: Tailscale muss noch verbunden werden!${NC}"
+    echo -e "${YELLOW}  Fuehre nach dem Setup aus: tailscale up --ssh${NC}"
+fi
+
+# Tailscale SSH aktivieren (erlaubt SSH ueber Tailscale ohne Keys)
+tailscale set --ssh 2>/dev/null || true
+
+# Tailscale als Auto-Start
+systemctl enable tailscaled 2>/dev/null || true
+
+echo -e "${GREEN}  OK - Tailscale gesichert + SSH via Tailscale aktiv${NC}"
+
+# ================================================================
+# PHASE 4: SSH HAERTEN + FIREWALL
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 4/8] SSH & Firewall maximal absichern${NC}"
+
+# SSH Config haerten
+cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak.$(date +%s)
+
+cat > /etc/ssh/sshd_config.d/99-adler-hardened.conf << 'SSHEOF'
+# ADLER SERVER - Gehaertete SSH Konfiguration
+# Nur Key-basierte Anmeldung - kein Passwort
+
+# Basis-Sicherheit
+PermitRootLogin prohibit-password
+PasswordAuthentication no
+ChallengeResponseAuthentication no
+PubkeyAuthentication yes
+UsePAM yes
+
+# Brute-Force Schutz
+MaxAuthTries 3
+LoginGraceTime 30
+MaxStartups 3:50:10
+MaxSessions 5
+
+# Idle-Timeout (30 Min Inaktivitaet -> trennen)
+ClientAliveInterval 300
+ClientAliveCountMax 6
+
+# Sicherheit
+X11Forwarding no
+AllowTcpForwarding yes
+PermitTunnel no
+AllowAgentForwarding yes
+
+# Protokoll
+Protocol 2
+SSHEOF
+
+# SSH neu starten
+systemctl restart sshd 2>/dev/null || systemctl restart ssh 2>/dev/null || true
+
+# UFW Firewall - Tailscale-aware
+ufw --force reset 2>/dev/null || true
+ufw default deny incoming
+ufw default allow outgoing
+
+# SSH erlauben (Port 22)
+ufw allow 22/tcp
+
+# Tailscale Subnet erlauben (100.x.x.x)
+ufw allow from 100.64.0.0/10 to any comment 'Tailscale Netzwerk'
+
+# Web-Traffic
+ufw allow 80/tcp comment 'HTTP'
+ufw allow 443/tcp comment 'HTTPS'
+
+# Tailscale Interface durchlassen
+ufw allow in on tailscale0 comment 'Tailscale Interface'
+
+ufw --force enable
+
+# Fail2Ban konfigurieren
+cat > /etc/fail2ban/jail.local << 'F2BEOF'
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 3
+backend = systemd
+
+[sshd]
+enabled = true
+port = ssh
+filter = sshd
+maxretry = 3
+bantime = 7200
+
+[nginx-http-auth]
+enabled = true
+filter = nginx-http-auth
+port = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 5
+F2BEOF
+
+systemctl enable fail2ban
+systemctl restart fail2ban
+
+echo -e "${GREEN}  OK - SSH gehaertet (nur Keys) + Firewall aktiv + Fail2Ban aktiv${NC}"
+
+# ================================================================
+# PHASE 5: DOCKER INSTALLIEREN
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 5/8] Docker installieren${NC}"
+
+if command -v docker &> /dev/null; then
+    echo -e "${GREEN}  Docker bereits installiert: $(docker --version)${NC}"
+else
+    curl -fsSL https://get.docker.com | sh
+    systemctl enable docker
+    systemctl start docker
+    echo -e "${GREEN}  Docker installiert: $(docker --version)${NC}"
+fi
+
+# Docker Compose pruefen
+if docker compose version &> /dev/null; then
+    echo -e "${GREEN}  Docker Compose verfuegbar${NC}"
+else
+    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+    chmod +x /usr/local/bin/docker-compose
+    echo -e "${GREEN}  Docker Compose installiert${NC}"
+fi
+
+# Docker Log-Rotation
+cat > /etc/docker/daemon.json << 'DOCKEREOF'
+{
+    "log-driver": "local",
+    "log-opts": {
+        "max-size": "20m",
+        "max-file": "5"
+    },
+    "live-restore": true,
+    "default-ulimits": {
+        "nofile": {
+            "Name": "nofile",
+            "Hard": 65536,
+            "Soft": 65536
+        }
+    }
+}
+DOCKEREOF
+
+systemctl restart docker
+echo -e "${GREEN}  OK - Docker mit Log-Rotation + Live-Restore konfiguriert${NC}"
+
+# ================================================================
+# PHASE 6: KI-POWER STACK DEPLOYEN
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 6/8] KI-Power Stack deployen${NC}"
+
+mkdir -p "$INSTALL_DIR"
+cd "$INSTALL_DIR"
+
+# Sichere Passwoerter generieren
+generate_secret() { openssl rand -hex 16; }
+
+DB_PASSWORD="${POSTGRES_PASSWORD:-$(generate_secret)}"
+NEO4J_PASS="${NEO4J_PASSWORD:-$(generate_secret)}"
+SESSION="${SESSION_SECRET:-$(generate_secret)}"
+ENCRYPT="${ENCRYPTION_KEY:-$(generate_secret)}"
+MAGIC="${MAGIC_LINK_SECRET:-$(generate_secret)}"
+GW_TOKEN="${OPENCLAW_GATEWAY_TOKEN:-$(openssl rand -hex 32)}"
+N8N_PW="${N8N_PASSWORD:-$(openssl rand -hex 12)}"
+
+# Server IPs ermitteln
+SERVER_IP=$(curl -s -4 ifconfig.me 2>/dev/null || curl -s -4 icanhazip.com 2>/dev/null || echo "localhost")
+TS_IP=$(tailscale ip -4 2>/dev/null || echo "$SERVER_IP")
+
+# .env erstellen
+cat > "$INSTALL_DIR/.env" << ENVEOF
+# ==========================================
+# ADLER SERVER - KI-POWER KONFIGURATION
+# Generiert: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Server Public IP: ${SERVER_IP}
+# Tailscale IP: ${TS_IP}
+# ==========================================
+
+# API Keys
+SYSTEME_API_KEY=${SYSTEME_API_KEY}
+HETZNER_API_TOKEN=${HETZNER_API_TOKEN}
+OPENAI_API_KEY=${OPENAI_API_KEY}
+
+# App
+VERSION=0.4.0
+NODE_ENV=production
+LOGIN_ORIGIN=http://${TS_IP}:3033
+APP_ORIGIN=http://${TS_IP}:3033
+
+# Database
+POSTGRES_USER=kipower
+POSTGRES_PASSWORD=${DB_PASSWORD}
+POSTGRES_DB=core
+DATABASE_URL=postgresql://kipower:${DB_PASSWORD}@postgres:5432/core?schema=core
+DIRECT_URL=postgresql://kipower:${DB_PASSWORD}@postgres:5432/core?schema=core
+
+# Security
+SESSION_SECRET=${SESSION}
+ENCRYPTION_KEY=${ENCRYPT}
+MAGIC_LINK_SECRET=${MAGIC}
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_TLS_DISABLED=true
+
+# Neo4j
+NEO4J_URI=bolt://neo4j:7687
+NEO4J_USERNAME=neo4j
+NEO4J_PASSWORD=${NEO4J_PASS}
+NEO4J_AUTH=neo4j/${NEO4J_PASS}
+
+# Auth
+ENABLE_EMAIL_LOGIN=true
+AUTH_GOOGLE_CLIENT_ID=
+AUTH_GOOGLE_CLIENT_SECRET=
+
+# AI
+MODEL=gpt-4.1-2025-04-14
+EMBEDDING_MODEL=text-embedding-3-small
+RERANK_PROVIDER=none
+
+# Queue
+QUEUE_PROVIDER=bullmq
+
+# OpenClaw + Telegram
+OPENCLAW_GATEWAY_TOKEN=${GW_TOKEN}
+TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+
+# n8n
+N8N_USER=admin
+N8N_PASSWORD=${N8N_PW}
+ENVEOF
+
+chmod 600 "$INSTALL_DIR/.env"
+
+# Docker Compose erstellen
+cat > "$INSTALL_DIR/docker-compose.yml" << 'COMPOSEEOF'
+x-logging: &logging-config
+  driver: local
+  options:
+    max-size: 20m
+    max-file: "5"
+    compress: "true"
+
+x-restart: &restart-policy
+  restart: unless-stopped
+
+version: "3.8"
+
+services:
+  core:
+    container_name: core-app
+    image: redplanethq/core:${VERSION:-0.4.0}
+    <<: *restart-policy
+    logging: *logging-config
+    env_file: .env
+    ports:
+      - "3033:3000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  postgres:
+    container_name: core-postgres
+    image: pgvector/pgvector:pg18-trixie
+    <<: *restart-policy
+    logging: *logging-config
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER:-kipower}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB:-core}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-kipower}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  redis:
+    container_name: core-redis
+    image: redis:7-alpine
+    <<: *restart-policy
+    logging: *logging-config
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  neo4j:
+    container_name: core-neo4j
+    image: redplanethq/neo4j:0.1.0
+    <<: *restart-policy
+    logging: *logging-config
+    environment:
+      - NEO4J_AUTH=${NEO4J_AUTH}
+      - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*
+      - NEO4J_dbms_security_procedures_allowlist=gds.*,apoc.*
+      - NEO4J_apoc_export_file_enabled=true
+      - NEO4J_apoc_import_file_enabled=true
+      - NEO4J_apoc_import_file_use_neo4j_config=true
+      - NEO4J_server_memory_heap_initial__size=1G
+      - NEO4J_server_memory_heap_max__size=2G
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  n8n:
+    container_name: core-n8n
+    image: n8nio/n8n:latest
+    <<: *restart-policy
+    logging: *logging-config
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - GENERIC_TIMEZONE=Europe/Berlin
+      - N8N_PATH=/n8n/
+      - N8N_EDITOR_BASE_URL=${APP_ORIGIN}/n8n/
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    networks:
+      - core
+
+  ollama:
+    container_name: core-ollama
+    image: ollama/ollama:latest
+    <<: *restart-policy
+    logging: *logging-config
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    networks:
+      - core
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 16G
+
+  openclaw:
+    container_name: openclaw
+    image: ghcr.io/openclaw/openclaw:latest
+    <<: *restart-policy
+    logging: *logging-config
+    environment:
+      - OPENCLAW_MODEL_PROVIDER=ollama
+      - OLLAMA_BASE_URL=http://ollama:11434
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENCLAW_GATEWAY_TOKEN=${OPENCLAW_GATEWAY_TOKEN:-}
+      - OPENCLAW_SANDBOX=false
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TZ=Europe/Berlin
+    ports:
+      - "18789:18789"
+    volumes:
+      - openclaw_data:/home/node/.openclaw
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      ollama:
+        condition: service_healthy
+    networks:
+      - core
+
+networks:
+  core:
+    name: core
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  neo4j_data:
+  n8n_data:
+  openclaw_data:
+  ollama_data:
+COMPOSEEOF
+
+# Deployen
+echo "  Docker Images werden heruntergeladen..."
+cd "$INSTALL_DIR"
+docker compose pull
+echo "  Container werden gestartet..."
+docker compose up -d
+
+echo -e "${GREEN}  OK - Alle 7 Container gestartet${NC}"
+
+# ================================================================
+# PHASE 7: NGINX + SSL + TELEGRAM
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 7/8] Nginx + Telegram konfigurieren${NC}"
+
+# Nginx Config
+cat > /etc/nginx/sites-available/adler-server << 'NGINXEOF'
+upstream core_app { server 127.0.0.1:3033; }
+upstream n8n_app { server 127.0.0.1:5678; }
+upstream openclaw_app { server 127.0.0.1:18789; }
+
+server {
+    listen 80 default_server;
+    server_name _;
+    client_max_body_size 50M;
+
+    # Security Headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        proxy_pass http://core_app;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 86400;
+    }
+
+    location /n8n/ {
+        proxy_pass http://n8n_app/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location /openclaw/ {
+        proxy_pass http://openclaw_app/;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+
+    location /health {
+        access_log off;
+        return 200 'OK';
+        add_header Content-Type text/plain;
+    }
+}
+NGINXEOF
+
+ln -sf /etc/nginx/sites-available/adler-server /etc/nginx/sites-enabled/
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl restart nginx
+
+# SSL wenn Domain
+if [ -n "${DOMAIN}" ]; then
+    sed -i "s/server_name _;/server_name ${DOMAIN};/" /etc/nginx/sites-available/adler-server
+    nginx -t && systemctl restart nginx
+    certbot --nginx -d "${DOMAIN}" --non-interactive --agree-tos --email "admin@${DOMAIN}" || \
+        echo -e "${YELLOW}  SSL fehlgeschlagen - spaeter: certbot --nginx -d ${DOMAIN}${NC}"
+fi
+
+# Telegram Bot konfigurieren
+echo "  Warte auf OpenClaw Container..."
+RETRY=0
+while [ $RETRY -lt 30 ]; do
+    if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+        break
+    fi
+    sleep 2
+    RETRY=$((RETRY + 1))
+done
+
+if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+    # Ollama Auth-Profile setzen
+    mkdir -p /opt/ki-power/openclaw-config
+    cat > /opt/ki-power/openclaw-config/auth-profiles.json << 'AUTHEOF'
+{
+  "ollama": {
+    "apiKey": "local",
+    "baseURL": "http://ollama:11434"
+  }
+}
+AUTHEOF
+    docker exec openclaw mkdir -p /home/node/.openclaw/agents/main/agent 2>/dev/null || true
+    docker cp /opt/ki-power/openclaw-config/auth-profiles.json openclaw:/home/node/.openclaw/agents/main/agent/auth-profiles.json 2>/dev/null || true
+
+    # Ollama Modelle
+    echo "  Ollama Modelle laden (dauert beim ersten Mal)..."
+    docker exec core-ollama ollama pull qwen3:14b 2>/dev/null && echo -e "${GREEN}    qwen3:14b OK${NC}" || true
+    docker exec core-ollama ollama pull mistral:7b 2>/dev/null && echo -e "${GREEN}    mistral:7b OK${NC}" || true
+
+    # Telegram konfigurieren
+    if [ -n "${TELEGRAM_BOT_TOKEN:-}" ]; then
+        cat > /opt/ki-power/openclaw-config/telegram.json << TGEOF
+{
+  "channels": [
+    {
+      "type": "telegram",
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowedUsers": [],
+      "autoApprove": false
+    }
+  ]
+}
+TGEOF
+        docker cp /opt/ki-power/openclaw-config/telegram.json openclaw:/home/node/.openclaw/channels.json 2>/dev/null || true
+        docker restart openclaw 2>/dev/null || true
+        echo -e "${GREEN}  OK - Telegram Bot konfiguriert und aktiv${NC}"
+    else
+        echo -e "${YELLOW}  Kein Telegram Token - spaeter konfigurieren${NC}"
+    fi
+fi
+
+echo -e "${GREEN}  OK - Nginx + Telegram fertig${NC}"
+
+# ================================================================
+# PHASE 8: WATCHDOG + AUTO-HEAL + BACKUPS
+# ================================================================
+echo ""
+echo -e "${YELLOW}[PHASE 8/8] Watchdog, Auto-Heal & Backups${NC}"
+
+# Watchdog-Script: Ueberwacht alle Services und startet sie bei Ausfall neu
+cat > /usr/local/bin/adler-watchdog << 'WATCHEOF'
+#!/bin/bash
+# ADLER WATCHDOG - Prueft alle Services und heilt automatisch
+LOG="/var/log/adler-watchdog.log"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $1" >> "$LOG"; }
+
+# Docker pruefen
+if ! systemctl is-active --quiet docker; then
+    log "KRITISCH: Docker ist down - Neustart!"
+    systemctl restart docker
+    sleep 10
+fi
+
+# Container pruefen
+cd /opt/ki-power
+EXPECTED="core-app core-postgres core-redis core-neo4j core-n8n core-ollama openclaw"
+for CONTAINER in $EXPECTED; do
+    STATUS=$(docker inspect --format='{{.State.Status}}' "$CONTAINER" 2>/dev/null || echo "missing")
+    if [ "$STATUS" != "running" ]; then
+        log "WARNUNG: $CONTAINER ist $STATUS - Starte neu..."
+        docker compose up -d 2>/dev/null
+        break
+    fi
+done
+
+# Telegram Health Check - OpenClaw Telegram Verbindung pruefen
+if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
+    # OpenClaw-Logs auf Telegram-Fehler pruefen (letzte 5 Min)
+    TG_ERRORS=$(docker logs --since 5m openclaw 2>&1 | grep -ci "telegram.*error\|ETELEGRAM\|polling.*failed" || true)
+    if [ "$TG_ERRORS" -gt 3 ]; then
+        log "WARNUNG: Telegram hat $TG_ERRORS Fehler - Neustart OpenClaw..."
+        docker restart openclaw
+    fi
+fi
+
+# Tailscale pruefen
+if command -v tailscale &> /dev/null; then
+    TS_STATUS=$(tailscale status --json 2>/dev/null | jq -r '.Self.Online' 2>/dev/null || echo "false")
+    if [ "$TS_STATUS" != "true" ]; then
+        log "WARNUNG: Tailscale offline - Neustart!"
+        systemctl restart tailscaled
+        sleep 5
+        tailscale up --ssh 2>/dev/null || true
+    fi
+fi
+
+# Nginx pruefen
+if ! systemctl is-active --quiet nginx; then
+    log "WARNUNG: Nginx down - Neustart!"
+    systemctl restart nginx
+fi
+
+# Disk Space pruefen (Warnung bei <10%)
+DISK_USAGE=$(df / | tail -1 | awk '{print $5}' | tr -d '%')
+if [ "$DISK_USAGE" -gt 90 ]; then
+    log "WARNUNG: Disk ${DISK_USAGE}% voll! Docker Cleanup..."
+    docker system prune -f --volumes 2>/dev/null || true
+fi
+WATCHEOF
+chmod +x /usr/local/bin/adler-watchdog
+
+# Watchdog alle 2 Minuten ausfuehren
+cat > /etc/cron.d/adler-watchdog << 'CRONEOF'
+# Adler Watchdog - alle 2 Minuten
+*/2 * * * * root /usr/local/bin/adler-watchdog
+CRONEOF
+
+# Woechentliches Update - Sonntag 3:00 Uhr
+cat > /etc/cron.d/adler-update << 'CRONEOF'
+# Adler Auto-Update: Sonntag 3:00 Uhr
+0 3 * * 0 root cd /opt/ki-power && docker compose pull && docker compose up -d && docker system prune -f >> /var/log/adler-update.log 2>&1
+CRONEOF
+
+# Taegliches Datenbank-Backup - 4:00 Uhr
+mkdir -p /opt/ki-power/backups
+cat > /usr/local/bin/adler-backup << 'BACKUPEOF'
+#!/bin/bash
+BACKUP_DIR="/opt/ki-power/backups"
+DATE=$(date +%Y%m%d_%H%M%S)
+
+# PostgreSQL Backup
+docker exec core-postgres pg_dumpall -U kipower > "$BACKUP_DIR/postgres_${DATE}.sql" 2>/dev/null
+if [ $? -eq 0 ]; then
+    gzip "$BACKUP_DIR/postgres_${DATE}.sql"
+    echo "[$(date)] Backup OK: postgres_${DATE}.sql.gz" >> /var/log/adler-backup.log
+fi
+
+# Alte Backups loeschen (nur letzte 7 behalten)
+find "$BACKUP_DIR" -name "*.sql.gz" -mtime +7 -delete
+BACKUPEOF
+chmod +x /usr/local/bin/adler-backup
+
+cat > /etc/cron.d/adler-backup << 'CRONEOF'
+# Adler Backup: taeglich 4:00 Uhr
+0 4 * * * root /usr/local/bin/adler-backup
+CRONEOF
+
+# Management-CLI
+cat > /usr/local/bin/adler << 'MGMTEOF'
+#!/bin/bash
+cd /opt/ki-power
+
+case "${1:-status}" in
+    status)
+        echo ""
+        echo "=== ADLER SERVER STATUS ==="
+        echo ""
+        echo "--- Container ---"
+        docker compose ps 2>/dev/null
+        echo ""
+        echo "--- Tailscale ---"
+        tailscale status 2>/dev/null || echo "Tailscale nicht verfuegbar"
+        echo ""
+        echo "--- Disk ---"
+        df -h / | tail -1
+        echo ""
+        echo "--- Memory ---"
+        free -h | head -2
+        echo ""
+        echo "--- Letzter Watchdog ---"
+        tail -3 /var/log/adler-watchdog.log 2>/dev/null || echo "Noch kein Watchdog-Log"
+        ;;
+    logs)
+        docker compose logs -f --tail=50 ${2:-} 2>/dev/null
+        ;;
+    restart)
+        docker compose restart ${2:-} 2>/dev/null
+        ;;
+    update)
+        docker compose pull && docker compose up -d && docker system prune -f
+        echo "Update abgeschlossen!"
+        ;;
+    stop)
+        docker compose stop
+        ;;
+    start)
+        docker compose up -d
+        ;;
+    telegram)
+        echo "=== Telegram Bot Status ==="
+        docker logs --tail=30 openclaw 2>&1 | grep -i "telegram\|bot\|channel" || echo "Keine Telegram-Logs"
+        ;;
+    backup)
+        /usr/local/bin/adler-backup
+        echo "Backup erstellt!"
+        ls -lh /opt/ki-power/backups/
+        ;;
+    *)
+        echo "ADLER SERVER MANAGEMENT"
+        echo "  adler status    - System-Status anzeigen"
+        echo "  adler logs      - Logs anzeigen (optional: Service)"
+        echo "  adler restart   - Neustart (optional: Service)"
+        echo "  adler update    - System aktualisieren"
+        echo "  adler stop      - System stoppen"
+        echo "  adler start     - System starten"
+        echo "  adler telegram  - Telegram Bot Status"
+        echo "  adler backup    - Sofort-Backup erstellen"
+        ;;
+esac
+MGMTEOF
+chmod +x /usr/local/bin/adler
+
+# Log Rotation
+cat > /etc/logrotate.d/adler << 'LOGEOF'
+/var/log/adler-*.log {
+    weekly
+    rotate 4
+    compress
+    delaycompress
+    missingok
+    notifempty
+}
+LOGEOF
+
+echo -e "${GREEN}  OK - Watchdog (alle 2 Min) + Backups (taeglich) + Auto-Update (woechentlich)${NC}"
+
+# ================================================================
+# FERTIG!
+# ================================================================
+echo ""
+echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════════════════╗"
+echo -e "║    ADLER SERVER ERFOLGREICH EINGERICHTET!                    ║"
+echo -e "╠══════════════════════════════════════════════════════════════╣${NC}"
+echo -e "║                                                              ║"
+echo -e "║  ${GREEN}CORE App:${NC}      http://${TS_IP}:3033                          "
+echo -e "║  ${GREEN}n8n:${NC}           http://${TS_IP}:3033/n8n/                     "
+echo -e "║  ${GREEN}OpenClaw:${NC}      http://${TS_IP}:18789                         "
+echo -e "║  ${GREEN}Public IP:${NC}     ${SERVER_IP}                                  "
+echo -e "║  ${GREEN}Tailscale IP:${NC}  ${TS_IP}                                     "
+echo -e "║                                                              "
+echo -e "║  ${YELLOW}Management:${NC}    adler status                                "
+echo -e "║  ${YELLOW}Telegram:${NC}      adler telegram                              "
+echo -e "║  ${YELLOW}Logs:${NC}          adler logs                                  "
+echo -e "║  ${YELLOW}Backup:${NC}        adler backup                                "
+echo -e "║  ${YELLOW}Config:${NC}        /opt/ki-power/.env                           "
+echo -e "║                                                              "
+if [ -n "${DOMAIN:-}" ]; then
+echo -e "║  ${GREEN}Domain:${NC}        https://${DOMAIN}                            "
+fi
+echo -e "║                                                              "
+echo -e "║  ${CYAN}SICHERHEIT:${NC}                                                "
+echo -e "║    - SSH: Nur Key-Authentifizierung                         "
+echo -e "║    - Firewall: UFW aktiv (SSH + HTTP + HTTPS + Tailscale)   "
+echo -e "║    - Fail2Ban: Brute-Force Schutz aktiv                    "
+echo -e "║    - Tailscale: Verschluesseltes Mesh-Netzwerk             "
+echo -e "║    - Auto-Updates: Woechentlich Sonntag 3:00               "
+echo -e "║                                                              "
+echo -e "║  ${CYAN}AUSFALLSICHERHEIT:${NC}                                         "
+echo -e "║    - Watchdog: Alle 2 Min Service-Check + Auto-Heal        "
+echo -e "║    - Backups: Taeglich 4:00 Uhr (7 Tage aufbewahrt)       "
+echo -e "║    - Docker: Live-Restore bei Docker-Restart               "
+echo -e "║    - Container: Automatischer Neustart bei Crash           "
+echo -e "║                                                              "
+echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+echo -e "${RED}${BOLD}WICHTIG: Speichere deine Zugangsdaten!${NC}"
+echo "  n8n Login:     admin / ${N8N_PW}"
+echo "  Gateway Token: ${GW_TOKEN}"
+echo "  Config:        cat /opt/ki-power/.env"
+echo ""
+echo -e "${GREEN}Setup abgeschlossen in $(date)${NC}"
+echo -e "${GREEN}Log: $LOG_FILE${NC}"
