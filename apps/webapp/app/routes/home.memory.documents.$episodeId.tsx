@@ -1,9 +1,7 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { Inbox } from "lucide-react";
-import { PageHeader } from "~/components/common/page-header";
 import { LogDetails } from "~/components/logs/log-details";
-import { LogOptions } from "~/components/logs/log-options";
 import { ResizablePanel, ResizablePanelGroup } from "~/components/ui/resizable";
 import { TooltipProvider } from "~/components/ui/tooltip";
 import { getDocument } from "~/services/document.server";
