@@ -92,6 +92,25 @@ export async function buildAgentContext({
     ...(hasSlack ? (["slack"] as const) : []),
   ];
 
+  // Resolve replyTo for background task callbacks (so tasks are self-contained)
+  let replyTo: string | undefined;
+  if (source === "slack") {
+    const slackAccount = connectedIntegrations.find(
+      (int: IntegrationAccountWithDefinition) =>
+        int.integrationDefinition.slug === "slack",
+    );
+    replyTo = slackAccount?.accountId ?? undefined;
+  } else if (source === "whatsapp") {
+    replyTo = user?.phoneNumber ?? undefined;
+  } else if (source === "email") {
+    replyTo = user?.email ?? undefined;
+  }
+
+  const resolvedChannelMetadata = {
+    ...(channelMetadata ?? {}),
+    ...(replyTo ? { replyTo } : {}),
+  };
+
   const tools = await createTools(
     userId,
     workspaceId,
@@ -104,7 +123,7 @@ export async function buildAgentContext({
     defaultChannel,
     availableChannels,
     conversationId,
-    undefined,
+    resolvedChannelMetadata,
     disableBackgroundTaskTools,
     executorTools,
   );
