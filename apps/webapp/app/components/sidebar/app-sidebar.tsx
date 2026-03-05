@@ -38,9 +38,7 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-import { type Label } from "@prisma/client";
-
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useParams } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
 
 const data = {
@@ -49,6 +47,7 @@ const data = {
       title: "New chat",
       url: "/home/conversation",
       icon: MessageSquare,
+      strict: true,
     },
     {
       title: "Integrations",
@@ -73,10 +72,10 @@ const data = {
   ],
 };
 
-export function AppSidebar({ labels }: { labels: Label[] }) {
+export function AppSidebar() {
   const user = useUser();
   const navigate = useNavigate();
-
+  const params = useParams();
   const [commandBar, setCommandBar] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
@@ -120,8 +119,10 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         <SidebarContent>
           <NavMain items={data.navMain} />
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <UnreadConversations />
-            <ConversationList />
+            <UnreadConversations
+              currentConversationId={params.conversationId}
+            />
+            <ConversationList currentConversationId={params.conversationId} />
           </div>
         </SidebarContent>
 
