@@ -758,74 +758,91 @@ echo -e "${YELLOW}[PHASE 7b] ClawHub Skills - Top Skills installieren${NC}"
 
 if docker inspect --format='{{.State.Running}}' openclaw 2>/dev/null | grep -q true; then
     # ClawHub CLI im Container nutzen
-    echo "  Top ClawHub Skills werden installiert..."
+    echo "  ALLE @steipete Skills + Top Community Skills werden installiert..."
+    echo ""
 
-    # 1. Summarize (10K+ Downloads) - Texte zusammenfassen
-    docker exec openclaw npx clawhub@latest install summarize 2>/dev/null && \
-        echo -e "${GREEN}    [1/8] Summarize - Texte/Artikel zusammenfassen${NC}" || \
-        echo -e "${YELLOW}    [1/8] Summarize - manuell: clawhub install summarize${NC}"
+    # === ALLE 16 STEIPETE SKILLS (clawhub.ai/u/steipete) ===
+    STEIPETE_SKILLS=(
+        "clawdhub|ClawdHub CLI - Skills suchen, installieren, updaten"
+        "github|GitHub - Issues, PRs, Repos, Actions verwalten"
+        "gog|Google Workspace - Gmail, Calendar, Drive, Sheets, Docs"
+        "bird|Bird - Bluesky/Twitter Social Media"
+        "slack|Slack - Nachrichten, Channels, Reactions, Pins"
+        "notion|Notion - Pages, Databases, Blocks API"
+        "1password|1Password CLI - Secrets lesen/injizieren"
+        "trello|Trello - Boards, Listen, Karten verwalten"
+        "brave-search|Brave Search - Web-Suche ohne Browser"
+        "coding-agent|Coding Agent - Code schreiben + refactoren"
+        "frontend-design|Frontend Design - Production-grade Web-UI"
+        "wacli|WhatsApp CLI - WhatsApp Integration"
+        "qmd|Qmd - Lokale Suche (BM25 + Vektoren + Rerank)"
+        "blogwatcher|Blogwatcher - RSS/Atom Feeds ueberwachen"
+        "peekaboo|Peekaboo - macOS UI Capture + Automation"
+        "tmux|Tmux - Terminal Sessions fernsteuern"
+        "things-mac|Things Mac - Things 3 Aufgaben verwalten"
+    )
 
-    # 2. GitHub (10K+ Downloads) - GitHub Integration
-    docker exec openclaw npx clawhub@latest install github 2>/dev/null && \
-        echo -e "${GREEN}    [2/8] GitHub - Issues, PRs, Repos verwalten${NC}" || \
-        echo -e "${YELLOW}    [2/8] GitHub - manuell: clawhub install github${NC}"
+    SKILL_NUM=0
+    SKILL_TOTAL=${#STEIPETE_SKILLS[@]}
+    for entry in "${STEIPETE_SKILLS[@]}"; do
+        SKILL_NUM=$((SKILL_NUM + 1))
+        SKILL_SLUG="${entry%%|*}"
+        SKILL_DESC="${entry##*|}"
+        docker exec openclaw npx clawhub@latest install "@steipete/${SKILL_SLUG}" 2>/dev/null && \
+            echo -e "${GREEN}    [${SKILL_NUM}/${SKILL_TOTAL}] ${SKILL_SLUG} - ${SKILL_DESC}${NC}" || \
+            echo -e "${YELLOW}    [${SKILL_NUM}/${SKILL_TOTAL}] ${SKILL_SLUG} - manuell: clawhub install @steipete/${SKILL_SLUG}${NC}"
+    done
 
-    # 3. Gog (14K Downloads) - Google Workspace (braucht gog Binary!)
-    docker exec openclaw npx clawhub@latest install gog 2>/dev/null || true
-    # gog Binary installieren (Linux amd64)
+    echo ""
+
+    # === GOG BINARY (braucht separates Binary!) ===
     GOG_URL=$(curl -fsSL https://api.github.com/repos/steipete/gogcli/releases/latest 2>/dev/null | jq -r '.assets[] | select(.name | contains("linux_amd64")) | .browser_download_url' 2>/dev/null || echo "")
     if [ -n "$GOG_URL" ]; then
         cd /tmp && curl -fsSL -o gogcli.tgz "$GOG_URL" && tar -xzf gogcli.tgz && install -m 0755 gog /usr/local/bin/gog 2>/dev/null && {
-            # Auch in Container kopieren
             docker cp /usr/local/bin/gog openclaw:/usr/local/bin/gog 2>/dev/null || true
-            echo -e "${GREEN}    [3/8] Gog - Google Mail, Calendar, Drive, Sheets (Binary OK)${NC}"
-            echo -e "${YELLOW}          Setup: gog auth credentials /pfad/zu/client_secret.json${NC}"
-            echo -e "${YELLOW}          Dann:  gog auth add deine@gmail.com --services gmail,calendar,drive,sheets${NC}"
-        } || echo -e "${YELLOW}    [3/8] Gog - Binary-Download fehlgeschlagen${NC}"
+            echo -e "${GREEN}    Gog Binary installiert (/usr/local/bin/gog)${NC}"
+        } || echo -e "${YELLOW}    Gog Binary - manuell: github.com/steipete/gogcli${NC}"
         cd "$INSTALL_DIR"
-    else
-        echo -e "${YELLOW}    [3/8] Gog - Binary manuell: siehe github.com/steipete/gogcli${NC}"
     fi
 
-    # 4. Agent Browser (11K Downloads) - Web Automatisierung
-    docker exec openclaw npx clawhub@latest install agent-browser 2>/dev/null && \
-        echo -e "${GREEN}    [4/8] Agent Browser - Web Scraping + Automatisierung${NC}" || \
-        echo -e "${YELLOW}    [4/8] Agent Browser - manuell: clawhub install agent-browser${NC}"
+    # === TOP COMMUNITY SKILLS (nicht von steipete) ===
+    echo ""
+    echo "  Top Community Skills..."
+    COMMUNITY_SKILLS=(
+        "capability-evolver|Capability Evolver (35K DL) - KI verbessert sich selbst"
+        "self-improving-agent|Self-Improving Agent (15K, 132 Stars) - Lernt aus Interaktionen"
+        "byterover|ByteRover (16K DL) - Code-Analyse + Optimierung"
+        "agent-browser|Agent Browser (11K DL) - Web Scraping + Automatisierung"
+        "summarize|Summarize (10K DL) - Texte zusammenfassen"
+    )
 
-    # 5. Capability Evolver (35K Downloads) - Selbstverbesserung
-    docker exec openclaw npx clawhub@latest install capability-evolver 2>/dev/null && \
-        echo -e "${GREEN}    [5/8] Capability Evolver - KI verbessert sich selbst${NC}" || \
-        echo -e "${YELLOW}    [5/8] Capability Evolver - manuell: clawhub install capability-evolver${NC}"
-
-    # 6. Self-Improving Agent (15K Downloads, 132 Stars) - Lernfaehig
-    docker exec openclaw npx clawhub@latest install self-improving-agent 2>/dev/null && \
-        echo -e "${GREEN}    [6/8] Self-Improving Agent - lernt aus Interaktionen${NC}" || \
-        echo -e "${YELLOW}    [6/8] Self-Improving Agent - manuell: clawhub install self-improving-agent${NC}"
-
-    # 7. Wacli (16K Downloads) - WhatsApp CLI
-    docker exec openclaw npx clawhub@latest install wacli 2>/dev/null && \
-        echo -e "${GREEN}    [7/8] Wacli - WhatsApp Integration${NC}" || \
-        echo -e "${YELLOW}    [7/8] Wacli - manuell: clawhub install wacli${NC}"
-
-    # 8. ByteRover (16K Downloads) - Code Analyse
-    docker exec openclaw npx clawhub@latest install byterover 2>/dev/null && \
-        echo -e "${GREEN}    [8/8] ByteRover - Code-Analyse + Optimierung${NC}" || \
-        echo -e "${YELLOW}    [8/8] ByteRover - manuell: clawhub install byterover${NC}"
+    for entry in "${COMMUNITY_SKILLS[@]}"; do
+        SKILL_SLUG="${entry%%|*}"
+        SKILL_DESC="${entry##*|}"
+        docker exec openclaw npx clawhub@latest install "${SKILL_SLUG}" 2>/dev/null && \
+            echo -e "${GREEN}    ${SKILL_DESC}${NC}" || \
+            echo -e "${YELLOW}    ${SKILL_SLUG} - manuell: clawhub install ${SKILL_SLUG}${NC}"
+    done
 
     echo ""
-    echo -e "${GREEN}  OK - ClawHub Top Skills installiert${NC}"
-    echo -e "${CYAN}  Weitere Skills: docker exec openclaw npx clawhub@latest search \"keyword\"${NC}"
-    echo -e "${CYAN}  Alle Skills:    https://clawhub.ai/skills?sort=downloads${NC}"
+    echo -e "${GREEN}  OK - Alle @steipete Skills + Top Community Skills installiert${NC}"
+    echo -e "${CYAN}  Insgesamt: ${SKILL_TOTAL} steipete + ${#COMMUNITY_SKILLS[@]} Community = $((SKILL_TOTAL + ${#COMMUNITY_SKILLS[@]})) Skills${NC}"
+    echo -e "${CYAN}  Weitere:   docker exec openclaw npx clawhub@latest search \"keyword\"${NC}"
+    echo -e "${CYAN}  Alle:      https://clawhub.ai/skills?sort=downloads${NC}"
 else
     echo -e "${YELLOW}  OpenClaw Container nicht bereit - Skills spaeter installieren:${NC}"
-    echo "    docker exec openclaw npx clawhub@latest install summarize"
-    echo "    docker exec openclaw npx clawhub@latest install github"
-    echo "    docker exec openclaw npx clawhub@latest install gog"
-    echo "    docker exec openclaw npx clawhub@latest install agent-browser"
+    echo ""
+    echo "  Alle @steipete Skills auf einmal:"
+    echo '    for s in clawdhub github gog bird slack notion 1password trello brave-search coding-agent frontend-design wacli qmd blogwatcher peekaboo tmux things-mac; do'
+    echo '      docker exec openclaw npx clawhub@latest install "@steipete/$s"'
+    echo '    done'
+    echo ""
+    echo "  Community Skills:"
     echo "    docker exec openclaw npx clawhub@latest install capability-evolver"
     echo "    docker exec openclaw npx clawhub@latest install self-improving-agent"
-    echo "    docker exec openclaw npx clawhub@latest install wacli"
     echo "    docker exec openclaw npx clawhub@latest install byterover"
+    echo "    docker exec openclaw npx clawhub@latest install agent-browser"
+    echo "    docker exec openclaw npx clawhub@latest install summarize"
 fi
 
 # ================================================================
@@ -1119,15 +1136,31 @@ case "${1:-status}" in
                 echo -e "${C_BOLD}Installierte Skills:${C_NC}"
                 docker exec openclaw ls /home/node/.openclaw/skills/ 2>/dev/null || echo "  Keine Skills gefunden"
                 echo ""
-                echo -e "${C_BOLD}Top ClawHub Skills (empfohlen):${C_NC}"
+                echo -e "${C_BOLD}@steipete Skills (alle vorinstalliert):${C_NC}"
+                echo "  clawdhub         - ClawHub CLI (suchen/installieren)"
+                echo "  github           - GitHub Issues, PRs, Actions"
+                echo "  gog              - Google Mail, Calendar, Drive, Sheets"
+                echo "  bird             - Bluesky/Twitter Social Media"
+                echo "  slack            - Slack Nachrichten + Channels"
+                echo "  notion           - Notion Pages + Databases"
+                echo "  1password        - 1Password Secrets"
+                echo "  trello           - Trello Boards + Karten"
+                echo "  brave-search     - Web-Suche ohne Browser"
+                echo "  coding-agent     - Code schreiben + refactoren"
+                echo "  frontend-design  - Production Web-UI erstellen"
+                echo "  wacli            - WhatsApp Integration"
+                echo "  qmd              - Lokale Suche (BM25+Vektoren)"
+                echo "  blogwatcher      - RSS/Atom Feeds ueberwachen"
+                echo "  peekaboo         - macOS UI Automation"
+                echo "  tmux             - Terminal Sessions fernsteuern"
+                echo "  things-mac       - Things 3 Aufgaben"
+                echo ""
+                echo -e "${C_BOLD}Community Top Skills (vorinstalliert):${C_NC}"
                 echo "  capability-evolver  (35K DL) - KI verbessert sich selbst"
-                echo "  wacli               (16K DL) - WhatsApp Integration"
-                echo "  byterover           (16K DL) - Code-Analyse"
                 echo "  self-improving-agent (15K DL) - Lernfaehiger Agent"
-                echo "  gog                 (14K DL) - Google Workspace"
+                echo "  byterover           (16K DL) - Code-Analyse"
                 echo "  agent-browser       (11K DL) - Web Automatisierung"
                 echo "  summarize           (10K DL) - Texte zusammenfassen"
-                echo "  github              (10K DL) - GitHub Integration"
                 ;;
             *)
                 echo "  Verfuegbare Kommandos:"
