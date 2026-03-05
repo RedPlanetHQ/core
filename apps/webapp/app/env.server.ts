@@ -124,6 +124,11 @@ const EnvironmentSchema = z
     CHAT_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
     EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),
 
+    // Inline batch fallback (when Batch API is unavailable)
+    INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),
+    MAX_INLINE_BATCHES: z.coerce.number().int().positive().default(500),
+    INLINE_BATCH_CONCURRENCY: z.coerce.number().int().positive().default(8),
+
     // Reranking configuration
     RERANK_PROVIDER: z.enum(["cohere", "ollama", "none"]).default("none"),
     COHERE_API_KEY: z.string().optional(),

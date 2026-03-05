@@ -19,30 +19,6 @@ let anthropicProvider: AnthropicBatchProvider | null = null;
 // unchanged by returning a "completed" BatchJob that `getBatch()` can retrieve.
 const inlineBatches = new Map<string, { job: BatchJob; expiresAt: number }>();
 
-const DEFAULT_INLINE_BATCH_TTL_MS = 60 * 60 * 1000; // 1 hour
-const DEFAULT_MAX_INLINE_BATCHES = 500;
-const DEFAULT_INLINE_BATCH_CONCURRENCY = 8;
-
-function readPositiveInt(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function getInlineBatchTtlMs(): number {
-  return readPositiveInt(process.env.INLINE_BATCH_TTL_MS) ?? DEFAULT_INLINE_BATCH_TTL_MS;
-}
-
-function getMaxInlineBatches(): number {
-  return readPositiveInt(process.env.MAX_INLINE_BATCHES) ?? DEFAULT_MAX_INLINE_BATCHES;
-}
-
-function getInlineBatchConcurrency(): number {
-  return (
-    readPositiveInt(process.env.INLINE_BATCH_CONCURRENCY) ??
-    DEFAULT_INLINE_BATCH_CONCURRENCY
-  );
-}
 
 function pruneInlineBatches(now = Date.now()) {
   for (const [id, entry] of inlineBatches.entries()) {
@@ -51,7 +27,7 @@ function pruneInlineBatches(now = Date.now()) {
     }
   }
 
-  const max = getMaxInlineBatches();
+  const max = env.MAX_INLINE_BATCHES;
   if (inlineBatches.size <= max) return;
 
   const oldestFirst = [...inlineBatches.entries()].sort((a, b) => {
@@ -137,7 +113,7 @@ async function runInlineBatch<T = any>(
   const batchId = createInlineBatchId();
   const startedAt = new Date();
 
-  const concurrency = getInlineBatchConcurrency();
+  const concurrency = env.INLINE_BATCH_CONCURRENCY;
 
   // Execute requests with bounded concurrency (avoids overloading local resources and upstream providers).
   const results = await mapWithConcurrency(
@@ -193,7 +169,7 @@ async function runInlineBatch<T = any>(
       failedRequests: results.filter((r: any) => (r as any).error).length,
       results: results as any,
     },
-    expiresAt: completedAt.getTime() + getInlineBatchTtlMs(),
+    expiresAt: completedAt.getTime() + env.INLINE_BATCH_TTL_MS,
   });
   pruneInlineBatches(completedAt.getTime());
 
