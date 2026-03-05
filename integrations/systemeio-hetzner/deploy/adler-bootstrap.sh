@@ -44,7 +44,7 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 # ================================================================
-# PHASE 1: API KEYS ABFRAGEN
+# PHASE 1: API KEYS (ALLE OPTIONAL - spaeter nachtragen)
 # ================================================================
 echo -e "${YELLOW}[PHASE 1/8] API Keys & Konfiguration${NC}"
 echo ""
@@ -52,46 +52,40 @@ echo ""
 # Pruefen ob bestehende Config existiert
 if [ -f "$INSTALL_DIR/.env" ]; then
     echo -e "${GREEN}Bestehende .env gefunden unter $INSTALL_DIR/.env${NC}"
-    read -p "Bestehende Konfiguration verwenden? (j/n): " USE_EXISTING
-    if [ "$USE_EXISTING" = "j" ]; then
-        source "$INSTALL_DIR/.env"
-        echo -e "${GREEN}  -> Bestehende Config geladen${NC}"
-    fi
+    source "$INSTALL_DIR/.env" 2>/dev/null || true
+    echo -e "${GREEN}  -> Bestehende Config geladen${NC}"
 fi
 
+# Alle Keys sind optional - Enter zum Ueberspringen
+echo -e "${BLUE}Alle Keys sind OPTIONAL. Einfach Enter druecken zum Ueberspringen.${NC}"
+echo -e "${BLUE}Keys koennen spaeter jederzeit in /opt/ki-power/.env nachgetragen werden.${NC}"
+echo ""
+
 if [ -z "${SYSTEME_API_KEY:-}" ]; then
-    echo -e "${BLUE}Systeme.io API Key:${NC}"
-    echo "  -> Dashboard -> Settings -> API Keys -> Create"
-    read -p "  Dein Systeme.io API Key: " SYSTEME_API_KEY
-    [ -z "$SYSTEME_API_KEY" ] && { echo -e "${RED}API Key fehlt!${NC}"; exit 1; }
+    read -p "  Systeme.io API Key (Enter = spaeter): " SYSTEME_API_KEY
+    SYSTEME_API_KEY="${SYSTEME_API_KEY:-SPAETER_EINTRAGEN}"
 fi
 
 if [ -z "${HETZNER_API_TOKEN:-}" ]; then
-    echo -e "${BLUE}Hetzner Cloud API Token:${NC}"
-    echo "  -> console.hetzner.cloud -> Security -> API Tokens"
-    read -p "  Dein Hetzner API Token: " HETZNER_API_TOKEN
-    [ -z "$HETZNER_API_TOKEN" ] && { echo -e "${RED}Token fehlt!${NC}"; exit 1; }
+    read -p "  Hetzner API Token (Enter = spaeter): " HETZNER_API_TOKEN
+    HETZNER_API_TOKEN="${HETZNER_API_TOKEN:-SPAETER_EINTRAGEN}"
 fi
 
 if [ -z "${OPENAI_API_KEY:-}" ]; then
-    echo -e "${BLUE}OpenAI API Key:${NC}"
-    echo "  -> platform.openai.com/api-keys"
-    read -p "  Dein OpenAI API Key: " OPENAI_API_KEY
-    [ -z "$OPENAI_API_KEY" ] && { echo -e "${RED}API Key fehlt!${NC}"; exit 1; }
+    read -p "  OpenAI API Key (Enter = spaeter): " OPENAI_API_KEY
+    OPENAI_API_KEY="${OPENAI_API_KEY:-SPAETER_EINTRAGEN}"
 fi
 
 if [ -z "${TELEGRAM_BOT_TOKEN:-}" ]; then
-    echo -e "${BLUE}Telegram Bot Token (WICHTIG fuer Nachrichten):${NC}"
-    echo "  -> Telegram: @BotFather -> /newbot -> Token kopieren"
-    read -p "  Telegram Bot Token: " TELEGRAM_BOT_TOKEN
+    read -p "  Telegram Bot Token (Enter = spaeter): " TELEGRAM_BOT_TOKEN
+    TELEGRAM_BOT_TOKEN="${TELEGRAM_BOT_TOKEN:-}"
 fi
 
-echo ""
-echo -e "${BLUE}Domain fuer SSL (optional, Enter zum Ueberspringen):${NC}"
-read -p "  Domain (z.B. adler.deine-domain.de): " DOMAIN
+# Domain auch optional
+read -p "  Domain fuer SSL (Enter = keine): " DOMAIN
 DOMAIN="${DOMAIN:-}"
 
-echo -e "${GREEN}  OK - Alle Keys konfiguriert${NC}"
+echo -e "${GREEN}  OK - Konfiguration fertig (fehlende Keys spaeter: nano /opt/ki-power/.env)${NC}"
 
 # ================================================================
 # PHASE 2: SYSTEM-UPDATE & PAKETE
@@ -900,11 +894,41 @@ case "${1:-status}" in
         /usr/local/bin/adler-neural-watchdog
         echo -e "${C_GREEN}Heilungslauf abgeschlossen. Siehe: adler neural${C_NC}"
         ;;
+    keys)
+        echo ""
+        echo -e "${C_CYAN}${C_BOLD}=== API KEYS VERWALTEN ===${C_NC}"
+        echo ""
+        source /opt/ki-power/.env 2>/dev/null || true
+        echo "  Aktueller Status:"
+        [ "${SYSTEME_API_KEY:-SPAETER_EINTRAGEN}" != "SPAETER_EINTRAGEN" ] && echo -e "    Systeme.io:  ${C_GREEN}GESETZT${C_NC}" || echo -e "    Systeme.io:  ${C_RED}FEHLT${C_NC}"
+        [ "${HETZNER_API_TOKEN:-SPAETER_EINTRAGEN}" != "SPAETER_EINTRAGEN" ] && echo -e "    Hetzner:     ${C_GREEN}GESETZT${C_NC}" || echo -e "    Hetzner:     ${C_RED}FEHLT${C_NC}"
+        [ "${OPENAI_API_KEY:-SPAETER_EINTRAGEN}" != "SPAETER_EINTRAGEN" ] && echo -e "    OpenAI:      ${C_GREEN}GESETZT${C_NC}" || echo -e "    OpenAI:      ${C_RED}FEHLT${C_NC}"
+        [ -n "${TELEGRAM_BOT_TOKEN:-}" ] && echo -e "    Telegram:    ${C_GREEN}GESETZT${C_NC}" || echo -e "    Telegram:    ${C_RED}FEHLT${C_NC}"
+        echo ""
+        echo "  Keys eintragen mit:"
+        echo "    adler keys set systeme DEIN_KEY"
+        echo "    adler keys set hetzner DEIN_TOKEN"
+        echo "    adler keys set openai DEIN_KEY"
+        echo "    adler keys set telegram DEIN_BOT_TOKEN"
+        echo ""
+        if [ "${2:-}" = "set" ] && [ -n "${3:-}" ] && [ -n "${4:-}" ]; then
+            case "$3" in
+                systeme)  sed -i "s|^SYSTEME_API_KEY=.*|SYSTEME_API_KEY=$4|" /opt/ki-power/.env ;;
+                hetzner)  sed -i "s|^HETZNER_API_TOKEN=.*|HETZNER_API_TOKEN=$4|" /opt/ki-power/.env ;;
+                openai)   sed -i "s|^OPENAI_API_KEY=.*|OPENAI_API_KEY=$4|" /opt/ki-power/.env ;;
+                telegram) sed -i "s|^TELEGRAM_BOT_TOKEN=.*|TELEGRAM_BOT_TOKEN=$4|" /opt/ki-power/.env ;;
+                *) echo -e "${C_RED}Unbekannter Key: $3${C_NC}"; exit 1 ;;
+            esac
+            echo -e "${C_GREEN}  $3 Key wurde gesetzt! Neustart der Services...${C_NC}"
+            docker compose up -d 2>/dev/null
+        fi
+        ;;
     *)
         echo ""
         echo -e "${C_CYAN}${C_BOLD}ADLER SERVER MANAGEMENT${C_NC}"
         echo ""
         echo "  adler status    - Komplett-Status (System + Mesh + Neural)"
+        echo "  adler keys      - API Keys anzeigen/setzen"
         echo "  adler mesh      - Mesh-Netzwerk Status + Latenz"
         echo "  adler neural    - Neural Watchdog Analyse + Incidents"
         echo "  adler heal      - Sofort Selbstheilung ausfuehren"
