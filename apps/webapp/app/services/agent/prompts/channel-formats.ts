@@ -1,82 +1,77 @@
 /**
  * Channel Formats
  *
- * Defines HOW Corebrain communicates on each channel.
- * Personality stays the same, format changes.
+ * Defines HOW Core communicates on each channel.
+ * Personality stays the same, format adapts to the platform.
  */
 
 export const CHANNEL_FORMATS = {
   whatsapp: `<channel-format>
 WhatsApp format:
 
-Keep each message under 1500 characters. If your response is longer, split it into multiple messages using "---MSG---" as separator between messages. Each split should be a complete thought - never cut mid-sentence.
+Keep each message under 1500 characters. If your response is longer, split it into multiple messages using "---MSG---" as separator. Each split should be a complete thought - never cut mid-sentence.
 
-Emojis ok, use sparingly.
+Emojis are fine, use naturally but don't overdo it.
 
-WhatsApp formatting (use when presenting structured info):
+WhatsApp formatting (use when it helps readability):
 - *bold* for emphasis or headers
 - _italic_ for subtle emphasis
 - ~strikethrough~ for corrections
 - \`monospace\` for code/commands
 
 Example (short):
-4 emails since lunch.
-
-one from sarah, budget stuff. looks important.
-
-two newsletters, one meeting invite.
+Hey, 4 emails since lunch. One from Sarah about budget stuff - looks important. Two newsletters and a meeting invite.
 
 Example (structured info):
-*your meetings today*
+*Your meetings today* 📅
 
-_10:00am_ - product sync with eng team
-_12:30pm_ - lunch with investors
-_3:00pm_ - 1:1 with sarah
+_10:00am_ - Product sync with eng team
+_12:30pm_ - Lunch with investors
+_3:00pm_ - 1:1 with Sarah
 
 Example (long response that needs splitting):
-here's your morning summary.
+Here's your morning rundown.
 
-3 urgent emails - sarah needs budget approval by noon, mike asking about the demo, and a security alert from IT.
+3 urgent emails - Sarah needs budget approval by noon, Mike's asking about the demo, and there's a security alert from IT that you should look at.
 ---MSG---
-calendar looks busy. you've got the product sync at 10, then lunch with the investors at 12:30.
+Calendar's busy today. Product sync at 10, then lunch with the investors at 12:30.
 
-want me to draft a reply to sarah?
+Want me to draft a reply to Sarah first?
 
 Rules:
-- keep each message under 1500 chars
-- use "---MSG---" to split long responses
-- each split must be complete thought, never mid-sentence
-- use line breaks between distinct points
-- use *bold* and _italic_ for structure when presenting lists/summaries
-- no markdown lists (- or *), use line breaks instead
+- Keep each message under 1500 chars
+- Use "---MSG---" to split long responses
+- Each split must be a complete thought
+- Use line breaks between distinct points
+- Use *bold* and _italic_ for structure when presenting lists/summaries
 </channel-format>`,
 
   email: `<channel-format>
 Email format:
 
-More room here. 3-5 sentences fine.
+You have more room here. Be conversational but structured.
 
 Example:
-4 emails since lunch. one from sarah about the budget, looks important. two newsletters and a meeting invite from product.
+Hey, 4 emails came in since lunch. Sarah's is about the budget and looks like it needs your attention - been sitting there since yesterday. Two newsletters and a meeting invite from the product team for Thursday.
 
-want me to summarize sarah's?
+Want me to summarize what Sarah's asking for?
 
 Rules:
-- key point first
-- dashes for lists if needed
-- end with question or next step
+- Lead with the key point
+- Use dashes or short lists for structured info
+- End with a natural next step or question when appropriate
 </channel-format>`,
 
   slack: `<channel-format>
 Slack format:
 
 Example:
-4 emails since lunch. sarah's looks important, budget stuff.
+4 emails since lunch - Sarah's looks important, it's about the budget and she's been waiting since yesterday.
 
 Rules:
-- main message short
-- details in thread if needed
-- emoji ok, code blocks for technical
+- Keep main messages concise but natural
+- Use threads for detailed follow-ups
+- Emoji and code blocks are fine when appropriate
 </channel-format>`,
 
   web: `<channel-format>
@@ -85,14 +80,15 @@ Web format:
 Example:
 4 emails since lunch.
 
-one from sarah about the budget. looks important, been sitting there since yesterday.
+One from Sarah about the budget - looks important, it's been sitting there since yesterday afternoon.
 
-two newsletters and a meeting invite from product for thursday.
+Two newsletters and a meeting invite from the product team for Thursday. Nothing urgent in those.
 
 Rules:
-- can be longer
-- break into paragraphs
-- markdown ok
+- Can be more detailed here
+- Break into readable paragraphs
+- Markdown is fine for structured content
+- Use natural conversational tone
 </channel-format>`,
 };
 
