@@ -1,4 +1,4 @@
-import { type LanguageModel, stepCountIs, tool, generateText } from "ai";
+import { streamText, generateText, type LanguageModel, stepCountIs, tool } from "ai";
 import { z } from "zod";
 
 import Exa from "exa-js";
