@@ -35,18 +35,30 @@ export function getBackgroundTaskTools(
 ): Record<string, Tool> {
   return {
     spawn_background_task: tool({
-      description: `Start a long-running task in the background. Use this when:
-- User asks to check something periodically and report back
-- User wants to run a task that may take a while (coding, browser automation)
-- User says "let me know when done" or "notify me when complete"
+      description: `Spawn an autonomous background task that runs independently and notifies the user when done.
 
-The task runs autonomously and will notify the user on the current channel when done.
+ONLY use this when the user EXPLICITLY asks for background/async execution:
+- User says "in the background", "let me know later", "notify me when done"
+- User wants to disconnect and be notified on channel later
+
+DO NOT use this for:
+- Regular multi-step tasks (fetching data, calling integrations, sending messages) — just do them inline
+- Tasks you can complete in the current conversation — do them now
+- Retrying failed operations — retry inline, don't spawn a background task
+
+The background task runs as a separate agent with NO conversation history. It only has the intent string you provide. It runs ONCE (no polling/looping) and sends the result to the user's channel.
+
 Maximum 5 active tasks per workspace. Default timeout: 30 minutes.
 
-Examples:
-- "Check the deployment status every 5 minutes and let me know when it's done"
-- "Run the test suite in the background and notify me of the results"
-- "Monitor my PR for approval and tell me when it's merged"`,
+USE examples (user explicitly asks for background):
+- "Run the full test suite in the background and ping me on Slack when done"
+- "Deploy to staging and let me know on WhatsApp when it's live"
+- "Send that report to the team and notify me when everyone's replied"
+
+DO NOT USE examples (just do these inline):
+- "Check my calendar for today" → use gather_context directly
+- "Send a message to Kabir on WhatsApp" → use take_action directly
+- "Retry the Google Calendar integration" → retry inline with gather_context/take_action`,
       inputSchema: z.object({
         intent: z
           .string()
