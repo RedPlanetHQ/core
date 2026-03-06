@@ -146,19 +146,6 @@ export const createActivities = async ({
         },
       });
 
-      const ingestData = {
-        episodeBody: message.data.text,
-        referenceTime: new Date().toISOString(),
-        source: integrationAccount?.integrationDefinition.slug,
-        type: EpisodeTypeEnum.CONVERSATION,
-      };
-
-      const queueResponse = await addToQueue(
-        ingestData,
-        integrationAccount?.integratedById,
-        activity.id,
-      );
-
       if (integrationAccount?.workspaceId) {
         try {
           await triggerWebhookDelivery(
@@ -178,7 +165,6 @@ export const createActivities = async ({
 
       return {
         activityId: activity.id,
-        queueId: queueResponse.id,
         text: message.data.text as string,
       };
     }),
@@ -186,7 +172,10 @@ export const createActivities = async ({
 
   // Enqueue CASE pipeline if integration account has autoActivityRead enabled
   try {
-    const accountSettings = integrationAccount.settings as Record<string, unknown> | null;
+    const accountSettings = integrationAccount.settings as Record<
+      string,
+      unknown
+    > | null;
 
     if (accountSettings?.autoActivityRead) {
       const user = await prisma.user.findUnique({
@@ -208,7 +197,10 @@ export const createActivities = async ({
       }
     }
   } catch (error) {
-    logger.error("Failed to enqueue activity case", { integrationAccountId, error });
+    logger.error("Failed to enqueue activity case", {
+      integrationAccountId,
+      error,
+    });
   }
 
   return results;

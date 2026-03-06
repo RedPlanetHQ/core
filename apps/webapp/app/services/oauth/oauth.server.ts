@@ -14,7 +14,6 @@ import { logger } from "../logger.service";
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import type { IntegrationDefinitionV2 } from "@core/database";
 import { env } from "~/env.server";
-import { scheduler } from "./scheduler";
 
 // PKCE utilities
 function generateCodeVerifier(): string {
@@ -179,16 +178,12 @@ export async function callbackHandler(params: CallbackParams) {
     });
 
     // Handle the setup result - process account messages
-    const setupResult = await IntegrationRunner.handleSetupMessages(
+    await IntegrationRunner.handleSetupMessages(
       messages,
       integrationDefinition as any,
       sessionRecord.workspaceId,
       sessionRecord.userId as string,
     );
-
-    await scheduler({
-      integrationAccountId: setupResult?.account?.id as string,
-    });
 
     return new Response(null, {
       status: 302,

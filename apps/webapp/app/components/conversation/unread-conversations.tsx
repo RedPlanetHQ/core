@@ -86,7 +86,7 @@ export const UnreadConversations = ({
       {conversations.map((conversation) => {
         const icon = getSourceIcon(conversation.source);
         return (
-          <div key={conversation.id} className="flex w-full">
+          <div key={conversation.id} className="mb-0.5 flex w-full">
             <Button
               variant={
                 currentConversationId === conversation.id

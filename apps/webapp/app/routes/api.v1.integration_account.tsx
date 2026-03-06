@@ -8,7 +8,6 @@ import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { getIntegrationDefinitionWithId } from "~/services/integrationDefinition.server";
 import { logger } from "~/services/logger.service";
 
-import { scheduler } from "~/services/oauth/scheduler";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 
 // Schema for creating an integration account with API key
@@ -101,10 +100,6 @@ const { action } = createHybridActionApiRoute(
           { status: 400 },
         );
       }
-
-      await scheduler({
-        integrationAccountId: setupResult?.account?.id,
-      });
 
       return json({ success: true, setupResult });
     } catch (error) {
