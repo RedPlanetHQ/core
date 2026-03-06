@@ -169,7 +169,9 @@
               "skills/email_label_management",
               "skills/morning_brief_gmail_calendar",
               "skills/notify_emails",
-              "skills/plan_my_day"
+              "skills/plan_my_day",
+              "skills/account_research",
+              "skills/user_changelog"
             ]
           }
         ]
