@@ -1,0 +1,53 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Dev: Full Stack",
+      "type": "shell",
+      "command": "pnpm turbo dev",
+      "group": { "kind": "build", "isDefault": true },
+      "isBackground": true,
+      "problemMatcher": ["$tsc-watch"]
+    },
+    {
+      "label": "Dev: Webapp only",
+      "type": "shell",
+      "command": "pnpm --filter @core/webapp dev",
+      "isBackground": true,
+      "problemMatcher": ["$tsc-watch"]
+    },
+    {
+      "label": "Dev: Telegram Bot",
+      "type": "shell",
+      "command": "pnpm --filter @core/telegram-bot dev",
+      "isBackground": true
+    },
+    {
+      "label": "Build: All",
+      "type": "shell",
+      "command": "pnpm turbo build",
+      "group": "build"
+    },
+    {
+      "label": "DB: Generate Prisma",
+      "type": "shell",
+      "command": "pnpm --filter @core/database prisma generate"
+    },
+    {
+      "label": "DB: Migrate",
+      "type": "shell",
+      "command": "pnpm --filter @core/database prisma migrate dev"
+    },
+    {
+      "label": "DB: Studio",
+      "type": "shell",
+      "command": "pnpm --filter @core/database prisma studio"
+    },
+    {
+      "label": "Typecheck: All",
+      "type": "shell",
+      "command": "pnpm turbo typecheck",
+      "group": "test"
+    }
+  ]
+}
