@@ -171,7 +171,8 @@
               "skills/notify_emails",
               "skills/plan_my_day",
               "skills/account_research",
-              "skills/user_changelog"
+              "skills/user_changelog",
+              "skills/engineering_analytics"
             ]
           }
         ]
