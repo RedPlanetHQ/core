@@ -7,12 +7,12 @@
 
 import { prisma } from "~/db.server";
 import {
-  Trigger,
-  ReminderTrigger,
-  DecisionContext,
-  TodayState,
-  ReminderSummary,
-  UserState,
+  type Trigger,
+  type ReminderTrigger,
+  type DecisionContext,
+  type TodayState,
+  type ReminderSummary,
+  type UserState,
 } from "../types/decision-agent";
 import type { MessageChannel } from "~/services/agent/types";
 import { logger } from "~/services/logger.service";
@@ -86,11 +86,12 @@ async function getUserState(
     ]);
 
     const metadata = user?.metadata as Record<string, unknown> | null;
-    const defaultChannel = (metadata?.defaultChannel as
-      | "whatsapp"
-      | "slack"
-      | "email"
-      | undefined) ?? "email";
+    const defaultChannel =
+      (metadata?.defaultChannel as
+        | "whatsapp"
+        | "slack"
+        | "email"
+        | undefined) ?? "email";
 
     // Determine available channels
     const availableChannels: Array<"whatsapp" | "slack" | "email"> = ["email"];
@@ -150,13 +151,15 @@ async function getTodayState(
     });
 
     // Convert to ReminderSummary format
-    const remindersSent: ReminderSummary[] = remindersSentToday.map((r: any) => ({
-      id: r.id,
-      action: r.text,
-      sentAt: r.lastSentAt!,
-      acknowledged: r.unrespondedCount === 0,
-      hasGoal: r.text.includes("goal:"), // Simple heuristic
-    }));
+    const remindersSent: ReminderSummary[] = remindersSentToday.map(
+      (r: any) => ({
+        id: r.id,
+        action: r.text,
+        sentAt: r.lastSentAt!,
+        acknowledged: r.unrespondedCount === 0,
+        hasGoal: r.text.includes("goal:"), // Simple heuristic
+      }),
+    );
 
     // Count acknowledged reminders
     const remindersAcknowledged = remindersSent.filter(
@@ -295,7 +298,10 @@ export async function getOrCreateAsyncConversation(
     orderBy: { createdAt: "desc" },
   });
 
-  if (existing && existing._count.ConversationHistory < MAX_MESSAGES_PER_CONVERSATION) {
+  if (
+    existing &&
+    existing._count.ConversationHistory < MAX_MESSAGES_PER_CONVERSATION
+  ) {
     // Add trigger message to existing conversation
     await upsertConversationHistory(
       crypto.randomUUID(),
