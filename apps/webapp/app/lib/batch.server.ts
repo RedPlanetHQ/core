@@ -68,20 +68,34 @@ function pruneInlineBatches(now = Date.now()) {
 }
 
 function getProvider(modelId: string) {
-  // OpenAI models
-  if (modelId.includes("gpt") || modelId.includes("o1")) {
+  const normalizedModelId = (modelId || "").toLowerCase();
+  const hasOpenAIBaseUrl =
+    typeof process.env.OPENAI_BASE_URL === "string" &&
+    process.env.OPENAI_BASE_URL.trim().length > 0;
+
+  // Anthropic models
+  if (normalizedModelId.includes("claude")) {
+    if (!anthropicProvider) {
+      anthropicProvider = new AnthropicBatchProvider();
+    }
+    return anthropicProvider;
+  }
+
+  // If an OpenAI base URL is configured, assume we're using an OpenAI-compatible endpoint
+  // (often a proxy) and route batch calls through the OpenAI provider regardless of model name.
+  if (hasOpenAIBaseUrl) {
     if (!openaiProvider) {
       openaiProvider = new OpenAIBatchProvider();
     }
     return openaiProvider;
   }
 
-  // Anthropic models
-  if (modelId.includes("claude")) {
-    if (!anthropicProvider) {
-      anthropicProvider = new AnthropicBatchProvider();
+  // OpenAI models
+  if (normalizedModelId.includes("gpt") || normalizedModelId.includes("o1")) {
+    if (!openaiProvider) {
+      openaiProvider = new OpenAIBatchProvider();
     }
-    return anthropicProvider;
+    return openaiProvider;
   }
 
   throw new Error(`No batch provider available for model: ${modelId}`);
@@ -89,18 +103,6 @@ function getProvider(modelId: string) {
 
 function createInlineBatchId() {
   return `inline-${crypto.randomUUID()}`;
-}
-
-function isMethodNotAllowedError(error: unknown): boolean {
-  if (!error) return false;
-  if (typeof error === "object") {
-    const anyError = error as any;
-    const statusLike = anyError.status ?? anyError.statusCode ?? anyError.code;
-    if (statusLike === 405 || statusLike === "405") return true;
-  }
-  const message =
-    error instanceof Error ? error.message : String(error ?? "");
-  return message.includes("405") || message.includes("Method Not Allowed");
 }
 
 async function mapWithConcurrency<TInput, TOutput>(
@@ -216,21 +218,26 @@ export async function createBatch<T = any>(params: CreateBatchParams<T>) {
     }
 
     const provider = getProvider(modelId);
+    const openaiApiMode = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
+    const hasOpenAIBaseUrl =
+      typeof process.env.OPENAI_BASE_URL === "string" &&
+      process.env.OPENAI_BASE_URL.trim().length > 0;
+    const forceInlineForProxy =
+      provider.providerName === "openai" &&
+      hasOpenAIBaseUrl &&
+      openaiApiMode === "chat_completions";
+
     logger.info(
       `Creating batch with ${provider.providerName} provider for model ${modelId}`,
     );
 
-    try {
-      return await provider.createBatch(params);
-    } catch (error) {
-      // OpenAI-compatible proxies often do not implement the OpenAI Batch API.
-      // If the provider fails with a "405 Method Not Allowed", fall back to
-      // executing the requests directly.
-      if (provider.providerName === "openai" && isMethodNotAllowedError(error)) {
-        return await runInlineBatch(params);
-      }
-      throw error;
+    // OpenAI-compatible proxies in chat-completions mode typically don't expose `/batches`.
+    // Route directly to inline execution instead of attempting the Batch API first.
+    if (forceInlineForProxy) {
+      return await runInlineBatch(params);
     }
+
+    return await provider.createBatch(params);
   } catch (error) {
     logger.error("Batch creation failed:", { error });
     throw error;

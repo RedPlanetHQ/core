@@ -132,6 +132,50 @@ const EnvironmentSchema = z
     // Queue provider
     QUEUE_PROVIDER: z.enum(["trigger", "bullmq"]).default("trigger"),
 
+    // BullMQ tuning (optional)
+    //
+    // Some OpenAI-compatible proxies apply strict rate limits. If you see frequent 429s,
+    // reduce concurrency for BullMQ workers to smooth out bursts.
+    BULLMQ_CONCURRENCY_PREPROCESS: z.coerce.number().int().positive().default(5),
+    BULLMQ_CONCURRENCY_INGEST: z.coerce.number().int().positive().default(3),
+    BULLMQ_CONCURRENCY_CONVERSATION_TITLE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10),
+    BULLMQ_CONCURRENCY_SESSION_COMPACTION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(3),
+    BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    BULLMQ_CONCURRENCY_TITLE_GENERATION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10),
+    BULLMQ_CONCURRENCY_PERSONA_GENERATION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1),
+    BULLMQ_CONCURRENCY_GRAPH_RESOLUTION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1),
+    BULLMQ_CONCURRENCY_INTEGRATION_RUN: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(3),
+    BULLMQ_CONCURRENCY_REMINDER: z.coerce.number().int().positive().default(10),
+    BULLMQ_CONCURRENCY_FOLLOW_UP: z.coerce.number().int().positive().default(5),
+
     // Provider configuration
     GRAPH_PROVIDER: z.enum(["neo4j", "falkordb", "helix"]).default("neo4j"),
     VECTOR_PROVIDER: z

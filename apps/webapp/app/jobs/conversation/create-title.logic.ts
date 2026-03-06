@@ -28,13 +28,21 @@ export async function processConversationTitleCreation(
     //
     // Some OpenAI-compatible proxies / self-hosted models may not consistently
     // follow that format. Enable tolerant parsing only when explicitly opted in.
-    const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "").trim().toLowerCase();
+    const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "")
+      .trim()
+      .toLowerCase();
+    // Proxy/self-hosted modes only (preserves upstream defaults):
+    // - OPENAI_API_MODE=chat_completions + OPENAI_BASE_URL indicates an OpenAI-compatible proxy
+    // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
     const tolerantOutput =
       tolerantOverride
-        ? tolerantOverride === "true" || tolerantOverride === "1" || tolerantOverride === "yes"
-        : ((process.env.OPENAI_API_MODE || "").trim().toLowerCase() === "chat_completions" ||
-            (process.env.OPENAI_API_MODE || "").trim().toLowerCase() === "chat" ||
-            (process.env.CHAT_PROVIDER || "").trim().toLowerCase() === "ollama");
+        ? tolerantOverride === "true" ||
+          tolerantOverride === "1" ||
+          tolerantOverride === "yes"
+        : ((process.env.OPENAI_API_MODE || "").trim().toLowerCase() ===
+            "chat_completions" &&
+            !!process.env.OPENAI_BASE_URL) ||
+          (process.env.CHAT_PROVIDER || "").trim().toLowerCase() === "ollama";
     const { text } = await generateText({
       model: getModel() as LanguageModel,
       messages: [
