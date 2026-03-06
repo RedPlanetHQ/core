@@ -262,6 +262,16 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     throw new Error(`Unsupported model type: ${model}`);
   }
 
+  // Anthropic's native output_format.schema rejects additionalProperties:{},
+  // minimum, and maximum constraints. Use jsonTool mode to send the schema
+  // as a tool input_schema instead, which has no such restrictions.
+  if (model.includes("claude")) {
+    generateObjectOptions.providerOptions = {
+      ...generateObjectOptions.providerOptions,
+      anthropic: { structuredOutputMode: "jsonTool" },
+    };
+  }
+
   const { object, usage } = await generateObject({
     model: modelInstance,
     schema,

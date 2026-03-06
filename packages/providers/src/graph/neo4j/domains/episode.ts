@@ -66,7 +66,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         createdAt: episode.createdAt.toISOString(),
         validAt: episode.validAt.toISOString(),
         contentEmbedding: episode.contentEmbedding || [],
-        sessionId: episode.sessionId,
+        sessionId: episode.sessionId ?? null,
         queueId: episode.queueId || null,
         type: episode.type || null,
         chunkIndex: episode.chunkIndex !== undefined ? episode.chunkIndex : null,

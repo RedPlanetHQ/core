@@ -242,7 +242,7 @@ export class KnowledgeGraphService {
         params.workspaceId as string,
         params.queueId,
         params.labelIds || [],
-        params.sessionId,
+        params.sessionId || episode.uuid, // sessionId is NOT NULL in EpisodeEmbedding
         params.version,
         params.chunkIndex,
       );
