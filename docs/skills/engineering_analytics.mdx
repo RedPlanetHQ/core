@@ -1,0 +1,124 @@
+---
+title: "Engineering Analytics"
+description: Track DORA metrics, delivery speed, and code quality for your engineering team. Auto-logs results to a Google Spreadsheet for week-over-week tracking. Trigger with "engineering metrics for [repo]", "DORA metrics", "team stats this week", or "weekly engineering report".
+---
+
+````markdown
+**Goal:** Pull engineering metrics from a GitHub repository, present a team-level report, and log the results to a Google Spreadsheet for historical tracking.
+
+**Connectors:**
+
+| Connector            | Required? | What It Adds                                                                               |
+| -------------------- | --------- | ------------------------------------------------------------------------------------------ |
+| **GitHub Analytics** | Required  | All engineering metrics — DORA, delivery speed, stability, code quality                    |
+| **Google Sheets**    | Optional  | Auto-creates "Engineering Analytics" spreadsheet, appends week-over-week data on every run |
+
+> **No Google Sheets connected?** The full report still appears in chat. CORE will ask if you'd like to connect Sheets for persistent tracking.
+
+---
+
+### Step 1 — Parse the Request
+
+Identify what to analyze:
+
+- **Repo**: Which `owner/repo`? If the user has only one repo connected, default to it. If multiple, ask.
+- **Time period**: Default to last 7 days. Accept "last 2 weeks", "this month", "since March 1", etc.
+- **Comparison**: Always enable week-over-week comparison by default.
+- **Specific metrics**: If the user only asks about PRs or deployments, fetch only the relevant subset instead of everything.
+
+If the repo is unclear, ask:
+
+> "Which repository should I analyze? For example: `RedPlanetHQ/core`"
+
+---
+
+### Step 2 — Fetch Metrics
+
+Use the **GitHub Analytics** integration to pull metrics.
+
+**For a full report** (default):
+
+1. Call `all_metrics` with:
+   - `owner`: repository owner (e.g. `RedPlanetHQ`)
+   - `repo`: repository name (e.g. `core`)
+   - `days`: number of days (default `7`), or use `startDate` / `endDate` for a custom range
+   - `compareWithPrevious`: `true`
+2. This returns every metric in one call — DORA, delivery speed, stability, and code quality
+
+**For a subset** (user asked for specific metrics only):
+
+Use the individual actions instead:
+
+| User asks about        | Action to call          |
+| ---------------------- | ----------------------- |
+| Deployments            | `deployment_frequency`  |
+| Lead time              | `lead_time_for_changes` |
+| Failure rate           | `change_failure_rate`   |
+| PR merge time          | `pr_merge_time`         |
+| PR throughput          | `pr_throughput`         |
+| Commit frequency       | `commit_frequency`      |
+| Hotfixes               | `hotfix_rate`           |
+| Reverts                | `revert_rate`           |
+| PR size / code quality | `pr_size`               |
+
+Always pass `compareWithPrevious: true` so trends are visible.
+
+**For multiple repos**: Call `all_metrics` (or the relevant subset) for each repo separately, then combine the results side by side.
+
+---
+
+### Step 3 — Show Team Report
+
+Present the metrics in a single flat table where each row is a time period. This makes week-over-week comparison easy to scan.
+
+```markdown
+## Engineering Report: [owner/repo]
+
+| Week/Date          | Deploy Freq | Lead Time (hrs) | Change Fail Rate | PR Merge Time (hrs) | PR Throughput | Commit Freq | Hotfix Rate | Revert Rate | Avg PR Size (lines) |
+| ------------------ | ----------- | --------------- | ---------------- | ------------------- | ------------- | ----------- | ----------- | ----------- | ------------------- |
+| [period 1]         | [X]         | [X]             | [X]%             | [X]                 | [X]           | [X]         | [X]%        | [X]%        | [X]                 |
+| [period 2, if any] | [Y]         | [Y]             | [Y]%             | [Y]                 | [Y]           | [Y]         | [Y]%        | [Y]%        | [Y]                 |
+
+### Key Observations
+
+- [Flag any metric with a significant change (>20% swing) — e.g. "PR merge time increased 40% week-over-week, possible review bottleneck"]
+- [Highlight wins — e.g. "Deployment frequency doubled compared to last week"]
+- [Note any zeroes or missing data — e.g. "No releases detected this period — check if release mechanism is tag-based or branch-based"]
+- [Call out stability or quality concerns — e.g. "Revert rate at 15%, higher than typical — worth investigating recent reverts"]
+- [If nothing notable: "All metrics stable — no significant week-over-week changes"]
+```
+
+**Rules for Key Observations:**
+
+- Only include bullets for metrics that actually changed or need attention — don't list every metric
+- Lead with the metric name, then the insight
+- If a metric is zero or N/A, explain why it might be (e.g. no releases, no PRs merged)
+- Cap at 3-5 bullets — keep it scannable
+
+**Row rules:**
+
+- If the user provides a single week/period, show only 1 row — still use this same table format
+- If `compareWithPrevious` is enabled, show 2 rows (current + previous)
+- If the user asks for a longer range (e.g. "last month"), break it into weekly rows — one row per week
+
+This same table structure (without the Observations section) is used when logging to Google Sheets (Step 5), so each run appends a new row and the spreadsheet becomes a historical tracker you can chart over time.
+
+---
+
+### Step 4 — Present Final Output
+
+1. Show the complete team report from Step 3
+2. If Google Sheets was updated, confirm: "Logged to [spreadsheet name] — [link]"
+3. Ask:
+
+> "Want me to drill into any specific metric, change the time range, or add more repos?"
+
+---
+
+### Edge Cases
+
+- **No deployments/releases found** → show deployment frequency as 0 and note: "No releases detected in this period. If you use a different release mechanism, let me know."
+- **No PRs merged** → show PR metrics as 0/N/A, still show commit frequency
+- **Multiple repos** → present each repo as a separate section, then a combined summary if more than 2 repos
+- **User asks "compare with last month"** → use `startDate`/`endDate` for current period and manually set comparison dates
+````
