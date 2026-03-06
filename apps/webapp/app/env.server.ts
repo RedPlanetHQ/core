@@ -89,6 +89,10 @@ const EnvironmentSchema = z
 
     //OpenAI
     OPENAI_API_KEY: z.string().optional(),
+    OPENAI_BASE_URL: z.string().optional(),
+    OPENAI_API_MODE: z
+      .enum(["responses", "chat_completions", "chat"])
+      .default("responses"),
     ANTHROPIC_API_KEY: z.string().optional(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
 
@@ -115,7 +119,15 @@ const EnvironmentSchema = z
     MODEL: z.string().default(LLMModelEnum.GPT41),
     EMBEDDING_MODEL: z.string().default("mxbai-embed-large"),
     EMBEDDING_MODEL_SIZE: z.string().default("1024"),
+    MODEL_TEMPERATURE: z.coerce.number().default(1),
     OLLAMA_URL: z.string().optional(),
+    CHAT_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
+    EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),
+
+    // Inline batch fallback (when Batch API is unavailable)
+    INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),
+    MAX_INLINE_BATCHES: z.coerce.number().int().positive().default(500),
+    INLINE_BATCH_CONCURRENCY: z.coerce.number().int().positive().default(8),
 
     // Reranking configuration
     RERANK_PROVIDER: z.enum(["cohere", "ollama", "none"]).default("none"),

@@ -12,6 +12,7 @@ import {
   getModelForBatch,
   makeStructuredModelCall,
 } from "~/lib/model.server";
+import { env } from "~/env.server";
 
 // Global provider instances (singleton pattern)
 let openaiProvider: OpenAIBatchProvider | null = null;
@@ -22,30 +23,6 @@ let anthropicProvider: AnthropicBatchProvider | null = null;
 // unchanged by returning a "completed" BatchJob that `getBatch()` can retrieve.
 const inlineBatches = new Map<string, { job: BatchJob; expiresAt: number }>();
 
-const DEFAULT_INLINE_BATCH_TTL_MS = 60 * 60 * 1000; // 1 hour
-const DEFAULT_MAX_INLINE_BATCHES = 500;
-const DEFAULT_INLINE_BATCH_CONCURRENCY = 8;
-
-function readPositiveInt(value: string | undefined): number | undefined {
-  if (!value) return undefined;
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-function getInlineBatchTtlMs(): number {
-  return readPositiveInt(process.env.INLINE_BATCH_TTL_MS) ?? DEFAULT_INLINE_BATCH_TTL_MS;
-}
-
-function getMaxInlineBatches(): number {
-  return readPositiveInt(process.env.MAX_INLINE_BATCHES) ?? DEFAULT_MAX_INLINE_BATCHES;
-}
-
-function getInlineBatchConcurrency(): number {
-  return (
-    readPositiveInt(process.env.INLINE_BATCH_CONCURRENCY) ??
-    DEFAULT_INLINE_BATCH_CONCURRENCY
-  );
-}
 
 function pruneInlineBatches(now = Date.now()) {
   for (const [id, entry] of inlineBatches.entries()) {
@@ -54,7 +31,7 @@ function pruneInlineBatches(now = Date.now()) {
     }
   }
 
-  const max = getMaxInlineBatches();
+  const max = env.MAX_INLINE_BATCHES;
   if (inlineBatches.size <= max) return;
 
   const oldestFirst = [...inlineBatches.entries()].sort((a, b) => {
@@ -74,8 +51,8 @@ function pruneInlineBatches(now = Date.now()) {
 function getProvider(modelId: string) {
   const normalizedModelId = (modelId || "").toLowerCase();
   const hasOpenAIBaseUrl =
-    typeof process.env.OPENAI_BASE_URL === "string" &&
-    process.env.OPENAI_BASE_URL.trim().length > 0;
+    typeof env.OPENAI_BASE_URL === "string" &&
+    env.OPENAI_BASE_URL.trim().length > 0;
 
   // Anthropic models
   if (normalizedModelId.includes("claude")) {
@@ -154,11 +131,11 @@ async function runInlineBatch<T = any>(
   const batchId = createInlineBatchId();
   const startedAt = new Date();
 
-  const concurrency = getInlineBatchConcurrency();
-  const openaiApiMode = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
+  const concurrency = env.INLINE_BATCH_CONCURRENCY;
+  const openaiApiMode = env.OPENAI_API_MODE;
   const hasOpenAIBaseUrl =
-    typeof process.env.OPENAI_BASE_URL === "string" &&
-    process.env.OPENAI_BASE_URL.trim().length > 0;
+    typeof env.OPENAI_BASE_URL === "string" &&
+    env.OPENAI_BASE_URL.trim().length > 0;
   const isProxyChatMode =
     hasOpenAIBaseUrl && openaiApiMode === "chat_completions";
 
@@ -249,7 +226,7 @@ async function runInlineBatch<T = any>(
       failedRequests: results.filter((r: any) => (r as any).error).length,
       results: results as any,
     },
-    expiresAt: completedAt.getTime() + getInlineBatchTtlMs(),
+    expiresAt: completedAt.getTime() + env.INLINE_BATCH_TTL_MS,
   });
   pruneInlineBatches(completedAt.getTime());
 
@@ -268,16 +245,13 @@ async function runInlineBatch<T = any>(
  */
 export async function createBatch<T = any>(params: CreateBatchParams<T>) {
   try {
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
-    const openaiApiMode = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
+    const openaiApiMode = env.OPENAI_API_MODE;
     const hasOpenAIBaseUrl =
-      typeof process.env.OPENAI_BASE_URL === "string" &&
-      process.env.OPENAI_BASE_URL.trim().length > 0;
+      typeof env.OPENAI_BASE_URL === "string" &&
+      env.OPENAI_BASE_URL.trim().length > 0;
     const forceInlineForProxy =
       provider.providerName === "openai" &&
       hasOpenAIBaseUrl &&
@@ -316,10 +290,7 @@ export async function getBatch<T = any>(
       );
     }
 
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
     return await provider.getBatch<T>(params);
@@ -342,10 +313,7 @@ export async function cancelBatch(
       return { success: false };
     }
 
-    const modelId = process.env.MODEL as string;
-    if (!modelId) {
-      throw new Error("MODEL environment variable is not set");
-    }
+    const modelId = env.MODEL;
 
     const provider = getProvider(modelId);
     if (provider.cancelBatch) {
@@ -381,11 +349,11 @@ export function createBatchRequests(
 export function getSupportedBatchModels() {
   const models: Record<string, string[]> = {};
 
-  if (process.env.OPENAI_API_KEY) {
+  if (env.OPENAI_API_KEY) {
     models.openai = new OpenAIBatchProvider().supportedModels;
   }
 
-  if (process.env.ANTHROPIC_API_KEY) {
+  if (env.ANTHROPIC_API_KEY) {
     models.anthropic = new AnthropicBatchProvider().supportedModels;
   }
 
