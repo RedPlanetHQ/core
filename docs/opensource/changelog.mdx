@@ -3,70 +3,63 @@ title: "Changelog"
 description: "Product updates and announcements"
 ---
 
-<Update label="February 2026" description="v0.5.0 - v0.5.3">
+<Update label="February 2026" description="v0.3.0 - v0.5.3">
 
-## 🎯 New Features
+## New Features
 
-**Gateway (self-hosted tool runner)**
+**Run CORE in your environment (Gateway)**
 
-- Run tools via a gateway so CORE can execute actions in your environment, not just hosted integrations
-- Groundwork for longer, async workflows that don’t die mid-flight
+- You can now run tools through a self-hosted Gateway, so CORE can take actions inside your network and with your local setup.
+- This also unlocks longer-running workflows that can continue in the background instead of timing out mid-run.
 
-**Channels (email + WhatsApp plumbing)**
+**Email + WhatsApp are now first-class channels**
 
-- Unified email + WhatsApp webhooks under a single channel system
-- More consistent delivery and history behavior across channels
+- CORE’s email and WhatsApp handling is now built on a unified “channel” system, so message delivery, history, and follow-ups behave more consistently across surfaces.
+- This is the foundation for doing the same across more channels going forward.
 
-**Slack support (DMs + channels)**
+**Talk to CORE in Slack (DMs, channels, and threads)**
 
-- Talk to CORE in Slack (DM + mentions)
-- Slack threads can be tracked as separate conversations for cleaner context and follow-ups
+- You can now use CORE from Slack via DMs and channel mentions.
+- Threads are tracked as separate conversations, which keeps context clean when multiple topics are happening in the same channel.
 
-**Multi-workspace support**
+**Separate work and personal (Multiple workspaces)**
 
-- Create multiple workspaces to separate contexts (work vs personal, etc.)
+- You can now create multiple workspaces under one account to keep different contexts (work, personal, clients) cleanly separated.
 
-**New integrations**
+**New integrations: Jira/Confluence, Ghost, LinkedIn, and Codeberg**
 
-- **Atlassian (Jira + Confluence)**: OAuth-based integration to pull in Jira/Confluence knowledge
-- **LinkedIn**: Profile fetching and activity-related workflows
-- **Codeberg**: New integration with expanded GitHub parity (issues, labels, repo content, PR management)
-- **Ghost**: Manage Ghost content via CORE (Ghost Admin API key auth)
+- **Atlassian (Jira + Confluence):** Connect via OAuth and let CORE pull in tickets, docs, and knowledge without manual copy/paste.
+- **Ghost:** Manage posts/pages/tags via the Ghost Admin API so publishing workflows can be automated.
+- **LinkedIn:** Fetch profile and activity context for networking and outreach workflows.
+- **Codeberg:** A Git-hosting integration with growing parity to GitHub (issues, PRs, labels, and repo content).
 
-**Skills (first-class workflows)**
+**Skills: reusable workflows, not one-off prompts**
 
-- Introduced skills so CORE can run structured reusable workflows, not just one-off tool calls
-- Improved skill UI clarity so it’s easier to understand what you’re running
+- CORE can now run “skills” — structured, reusable workflows — so common tasks (research, outreach, triage, recurring ops) become repeatable playbooks.
 
-**UX: clearer ingestion rules**
+## Performance & Reliability
 
-- Added concrete ingestion rule examples across integrations to make setup less guessy
+- **Slack webhooks:** Slack DM bot verification now runs asynchronously, avoiding Slack’s 3-second timeout failures.
+- **Reminders:** Reminder execution was refactored onto a centralized pipeline for more consistent scheduling and delivery.
 
-## ⚡ Performance & Reliability
+## Improvements
 
-- **Slack webhook reliability**: Moved Slack DM bot verification to async processing to avoid Slack’s 3s timeout failures
-- **Reminders pipeline stability**: Refactored reminder processing onto a centralized pipeline for more consistent execution
+- **GitHub + Codeberg automation:** Better automation parity (including richer issue creation flows and more repo operations) so agents can complete tasks without manual cleanup.
+- **Search V2 (multi-workspace):** Workspace resolution was hardened so search returns results reliably in multi-workspace setups.
+- **Timezone correctness:** Agent datetime context now respects the user’s timezone, reducing “wrong day / wrong time” outcomes.
+- **Setup clarity:** Added concrete ingestion rule examples across integrations so initial configuration is less guessy.
 
-## 🔧 Improvements
+## Fixes
 
-- **GitHub automation parity**: Richer GitHub automation support, including Projects support and issue template discovery/creation
-- **Timezone-aware context**: Agent datetime context now uses the user’s timezone, fewer “wrong day / wrong time” outcomes
-- **Infra/config cleanup**: Reduced reliance on older endpoints and tightened config for smoother deployments
+- **Channels:** Fixed cases where creating a conversation failed for external channels (including email edge cases).
+- **Slack:** Fixed broken inbound Slack processing.
+- **OAuth:** Fixed PKCE handling for OAuth flows.
+- **Gateway:** Fixed browser handoff failures during gateway-driven browser flows.
+- **Search V2:** Fixed exploratory search returning nothing when label routing didn’t find a match.
 
-## 🐛 Fixes
+## Security & Privacy
 
-- Fixed Slack inbound processing being broken in some cases
-- Fixed PKCE handling for OAuth flows
-- Fixed reminder scheduling crashes caused by RRULE
-- Fixed Ghost Admin API configuration issues
-- Fixed gateway browser handoff issues
-- Fixed cases where creating conversations failed for external channels (including email edge cases)
-- Fixed multi-workspace rollout login issues
-- Fixed exploratory search returning nothing when no labels matched, despite relevant data existing
-
-## 🔒 Security & Privacy
-
-- **Skill document exposure**: Prevented skill documents from being exposed via document APIs
+- **Skills:** Prevented skill documents from being exposed via the document APIs.
 
 </Update>
 
@@ -481,7 +474,7 @@ description: "Product updates and announcements"
 
 - One-click authentication for Linear, Slack, GitHub, and Notion
 - Connect your tools once, access them everywhere across AI clients
-- Eliminate repetitive app authentication across different app connections
+- Eliminate repetitive app authentication across different AI platforms
 
 **MCP Integration Hub**
 
