@@ -5,12 +5,9 @@ import {
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
 import { requireUser } from "~/services/session.server";
-import { getWorkspaceById } from "~/models/workspace.server";
 import { prisma } from "~/db.server";
 import { SettingSection } from "~/components/setting-section";
 import { Card } from "~/components/ui/card";
-import { Switch } from "~/components/ui/switch";
-import { Label } from "~/components/ui/label";
 import { Check } from "lucide-react";
 import {
   PERSONALITY_OPTIONS,
@@ -25,21 +22,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     throw new Error("Workspace not found");
   }
 
-  const workspace = await getWorkspaceById(user.workspaceId);
-  if (!workspace) {
-    throw new Error("Workspace not found");
-  }
-
   const userMetadata = user.metadata as Record<string, unknown> | null;
   const personality = (userMetadata?.personality as PersonalityType) || "tars";
-
-  const workspaceMetadata = workspace.metadata as Record<string, unknown> | null;
-  const autoActivityRead = Boolean(workspaceMetadata?.autoActivityRead);
 
   return json({
     personality,
     personalityOptions: PERSONALITY_OPTIONS,
-    autoActivityRead,
   });
 };
 
@@ -69,37 +57,15 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
-  if (intent === "updateAutoActivityRead") {
-    const value = formData.get("autoActivityRead") === "true";
-    const workspace = await getWorkspaceById(user.workspaceId);
-    if (!workspace) {
-      return json({ error: "Workspace not found" }, { status: 404 });
-    }
-    const currentMetadata = (workspace.metadata as Record<string, unknown>) || {};
-    await prisma.workspace.update({
-      where: { id: user.workspaceId },
-      data: { metadata: { ...currentMetadata, autoActivityRead: value } },
-    });
-
-    return json({ success: true });
-  }
-
   return json({ error: "Invalid intent" }, { status: 400 });
 };
 
 export default function AgentSettings() {
-  const { personality, personalityOptions, autoActivityRead } =
-    useLoaderData<typeof loader>();
+  const { personality, personalityOptions } = useLoaderData<typeof loader>();
   const personalityFetcher = useFetcher();
-  const autoActivityFetcher = useFetcher();
 
   const currentPersonality =
     personalityFetcher.formData?.get("personality")?.toString() || personality;
-
-  const optimisticAutoActivity =
-    autoActivityFetcher.formData?.get("autoActivityRead") !== undefined
-      ? autoActivityFetcher.formData.get("autoActivityRead") === "true"
-      : autoActivityRead;
 
   return (
     <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
@@ -107,85 +73,52 @@ export default function AgentSettings() {
         title="Agent Settings"
         description="Configure your agent's behaviour and automation"
       >
-        <>
-          {/* Personalisation */}
-          <div className="mb-8">
-            <h2 className="text-md mb-4">Personalisation</h2>
-            <p className="text-muted-foreground mb-4 text-sm">
-              Choose how your agent communicates with you
-            </p>
-            <div className="grid gap-4 md:grid-cols-3">
-              {personalityOptions.map((option) => (
-                <Card
-                  key={option.id}
-                  className={cn(
-                    "hover:border-primary/50 relative cursor-pointer p-4 transition-all",
-                    currentPersonality === option.id && "border-primary/50 border-1",
-                  )}
-                  onClick={() => {
-                    personalityFetcher.submit(
-                      { intent: "updatePersonality", personality: option.id },
-                      { method: "POST" },
-                    );
-                  }}
-                >
-                  {currentPersonality === option.id && (
-                    <div className="absolute right-3 top-3">
-                      <Check className="text-primary h-4 w-4" />
-                    </div>
-                  )}
-                  <h3 className="mb-1 font-medium">{option.name}</h3>
-                  <p className="text-muted-foreground mb-3 text-sm">
-                    {option.description}
-                  </p>
-                  <div className="space-y-2">
-                    {option.examples.map((example, idx) => (
-                      <div
-                        key={idx}
-                        className="bg-muted/50 rounded-md p-2 text-xs"
-                      >
-                        <p className="text-muted-foreground mb-1">
-                          "{example.prompt}"
-                        </p>
-                        <p className="italic">"{example.response}"</p>
-                      </div>
-                    ))}
+        <div className="mb-8">
+          <h2 className="text-md mb-4">Personalisation</h2>
+          <p className="text-muted-foreground mb-4 text-sm">
+            Choose how your agent communicates with you
+          </p>
+          <div className="grid gap-4 md:grid-cols-3">
+            {personalityOptions.map((option) => (
+              <Card
+                key={option.id}
+                className={cn(
+                  "hover:border-primary/50 relative cursor-pointer p-4 transition-all",
+                  currentPersonality === option.id && "border-primary/50 border-1",
+                )}
+                onClick={() => {
+                  personalityFetcher.submit(
+                    { intent: "updatePersonality", personality: option.id },
+                    { method: "POST" },
+                  );
+                }}
+              >
+                {currentPersonality === option.id && (
+                  <div className="absolute right-3 top-3">
+                    <Check className="text-primary h-4 w-4" />
                   </div>
-                </Card>
-              ))}
-            </div>
-          </div>
-
-          {/* Activity Auto-Read */}
-          <div className="mb-8">
-            <h2 className="text-md mb-4">Activity Auto-Read</h2>
-            <Card className="p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <Label className="text-sm font-medium">
-                    Automatic Activity Processing
-                  </Label>
-                  <p className="text-muted-foreground mt-1 text-sm">
-                    When enabled, new activities from integrations are
-                    automatically sent to your agent grouped by integration.
-                  </p>
+                )}
+                <h3 className="mb-1 font-medium">{option.name}</h3>
+                <p className="text-muted-foreground mb-3 text-sm">
+                  {option.description}
+                </p>
+                <div className="space-y-2">
+                  {option.examples.map((example, idx) => (
+                    <div
+                      key={idx}
+                      className="bg-muted/50 rounded-md p-2 text-xs"
+                    >
+                      <p className="text-muted-foreground mb-1">
+                        "{example.prompt}"
+                      </p>
+                      <p className="italic">"{example.response}"</p>
+                    </div>
+                  ))}
                 </div>
-                <Switch
-                  checked={optimisticAutoActivity}
-                  onCheckedChange={(checked) => {
-                    autoActivityFetcher.submit(
-                      {
-                        intent: "updateAutoActivityRead",
-                        autoActivityRead: String(checked),
-                      },
-                      { method: "POST" },
-                    );
-                  }}
-                />
-              </div>
-            </Card>
+              </Card>
+            ))}
           </div>
-        </>
+        </div>
       </SettingSection>
     </div>
   );
