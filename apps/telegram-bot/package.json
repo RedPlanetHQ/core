@@ -1,7 +1,7 @@
 {
   "name": "@core/telegram-bot",
   "version": "1.0.0",
-  "description": "Telegram bot bridge for CORE - connects Telegram to the CORE conversation API",
+  "description": "Multi-agent Telegram bot bridge for CORE - each chat gets its own AI agent",
   "type": "module",
   "scripts": {
     "start": "tsx index.ts",

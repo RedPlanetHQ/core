@@ -117,8 +117,10 @@ services:
       retries: 10
       start_period: 20s
 
-  # Telegram Bot (Galaxia OS Bot) - bridges Telegram to CORE's conversation API
-  # Uncomment and set TELEGRAM_BOT_TOKEN + CORE_API_TOKEN to enable
+  # Telegram Bot (Galaxia OS Bot) - Multi-agent bridge to CORE
+  # 1. Copy apps/telegram-bot/agents.example.json → agents.json and configure agents
+  # 2. Set TELEGRAM_BOT_TOKEN in .env
+  # 3. Uncomment this block
   # telegram-bot:
   #   container_name: core-telegram-bot
   #   image: node:20-slim
@@ -128,7 +130,6 @@ services:
   #   environment:
   #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
   #     - CORE_API_URL=http://core:3000
-  #     - CORE_API_TOKEN=${CORE_API_TOKEN}
   #   command: npx tsx index.ts
   #   depends_on:
   #     - core
