@@ -130,6 +130,41 @@ function addDateRangeToResult(
 }
 
 /**
+ * Helper: Split a date range into equal cycles, rolling backwards from endDate.
+ * The earliest cycle may be shorter if the range isn't evenly divisible.
+ * Returns cycles ordered chronologically (earliest first).
+ *
+ * Example: endDate=Mar 6, days=28, cycleDays=7
+ * → [{Feb 8–14}, {Feb 15–21}, {Feb 22–28}, {Mar 1–6}]
+ */
+function splitIntoCycles(
+  startDate: string,
+  endDate: string,
+  cycleDays: number
+): Array<{ startDate: string; endDate: string }> {
+  const start = new Date(startDate);
+  const end = new Date(endDate);
+  const cycles: Array<{ startDate: string; endDate: string }> = [];
+
+  let cycleEnd = new Date(end);
+  while (cycleEnd >= start) {
+    let cycleStart = new Date(cycleEnd);
+    cycleStart.setDate(cycleStart.getDate() - cycleDays + 1);
+    if (cycleStart < start) cycleStart = new Date(start);
+
+    cycles.unshift({
+      startDate: cycleStart.toISOString().split('T')[0],
+      endDate: cycleEnd.toISOString().split('T')[0],
+    });
+
+    cycleEnd = new Date(cycleStart);
+    cycleEnd.setDate(cycleEnd.getDate() - 1);
+  }
+
+  return cycles;
+}
+
+/**
  * Deployment Frequency
  * Calculates number of releases/deployments per week
  */
@@ -142,8 +177,18 @@ export async function calculateDeploymentFrequency(
     startDate?: string;
     endDate?: string;
     compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number;
   }
 ): Promise<any> {
+  if (params.author) {
+    return {
+      metric: 'deployment_frequency',
+      skipped: true,
+      reason: 'Release-based metric — not filterable by author',
+    };
+  }
+
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({
     days: params.days,
@@ -235,14 +280,25 @@ export async function calculateLeadTime(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean }
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number; }
 ): Promise<any> {
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculateLeadTime(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'lead_time_for_changes', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
     // Get merged PRs in the time period
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
+    const authorFilter = params.author ? ` author:${params.author}` : '';
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}${authorFilter}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -311,7 +367,7 @@ export async function calculateLeadTime(
     // Add comparison with previous period if requested
     if (params.compareWithPrevious) {
       const prevPeriod = getPreviousPeriod(startDate, endDate);
-      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}${params.author ? ` author:${params.author}` : ''}`;
 
       try {
         const prevPrsResponse = await getGithubData(
@@ -372,13 +428,24 @@ export async function calculatePRMergeTime(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean }
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number; }
 ): Promise<any> {
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculatePRMergeTime(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'pr_merge_time', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
+    const authorFilter = params.author ? ` author:${params.author}` : '';
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}${authorFilter}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -428,7 +495,7 @@ export async function calculatePRMergeTime(
     // Add comparison with previous period if requested
     if (params.compareWithPrevious) {
       const prevPeriod = getPreviousPeriod(startDate, endDate);
-      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}${params.author ? ` author:${params.author}` : ''}`;
 
       try {
         const prevPrsResponse = await getGithubData(
@@ -487,6 +554,8 @@ export async function calculatePRThroughput(
     startDate?: string;
     endDate?: string;
     compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number;
   }
 ): Promise<any> {
   const { owner, repo } = params;
@@ -496,9 +565,18 @@ export async function calculatePRThroughput(
     endDate: params.endDate,
   });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculatePRThroughput(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'pr_throughput', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
     // Calculate current period
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
+    const authorFilter = params.author ? ` author:${params.author}` : '';
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}${authorFilter}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -530,7 +608,7 @@ export async function calculatePRThroughput(
     // Add comparison with previous period if requested
     if (params.compareWithPrevious) {
       const prevPeriod = getPreviousPeriod(startDate, endDate);
-      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+      const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}${params.author ? ` author:${params.author}` : ''}`;
 
       try {
         const prevPrsResponse = await getGithubData(
@@ -576,7 +654,9 @@ export async function calculateCommitFrequency(
   params: { owner: string; repo: string; branch?: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean }
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number; }
 ): Promise<any> {
   const { owner, repo } = params;
   const branch = params.branch || 'main';
@@ -586,13 +666,22 @@ export async function calculateCommitFrequency(
     endDate: params.endDate,
   });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculateCommitFrequency(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'commit_frequency', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
     const sinceDate = new Date(startDate);
     const untilDate = new Date(endDate);
     untilDate.setHours(23, 59, 59, 999);
 
+    const authorParam = params.author ? `&author=${encodeURIComponent(params.author)}` : '';
     const commits = await getGithubData(
-      `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${sinceDate.toISOString()}&until=${untilDate.toISOString()}&per_page=100`,
+      `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${sinceDate.toISOString()}&until=${untilDate.toISOString()}&per_page=100${authorParam}`,
       config.access_token
     );
 
@@ -628,8 +717,9 @@ export async function calculateCommitFrequency(
       prevEnd.setHours(23, 59, 59, 999);
 
       try {
+        const prevAuthorParam = params.author ? `&author=${encodeURIComponent(params.author)}` : '';
         const prevCommits = await getGithubData(
-          `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${prevStart.toISOString()}&until=${prevEnd.toISOString()}&per_page=100`,
+          `https://api.github.com/repos/${owner}/${repo}/commits?sha=${branch}&since=${prevStart.toISOString()}&until=${prevEnd.toISOString()}&per_page=100${prevAuthorParam}`,
           config.access_token
         );
 
@@ -671,8 +761,17 @@ export async function calculateChangeFailureRate(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean; incidentLabels?: string[] }
+    compareWithPrevious?: boolean; incidentLabels?: string[];
+    author?: string; }
 ): Promise<any> {
+  if (params.author) {
+    return {
+      metric: 'change_failure_rate',
+      skipped: true,
+      reason: 'Release-based metric — not filterable by author',
+    };
+  }
+
   const { owner, repo } = params;
   const incidentLabels = params.incidentLabels || ['incident', 'production', 'outage', 'bug'];
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
@@ -685,8 +784,10 @@ export async function calculateChangeFailureRate(
     );
 
     const cutoffDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
     const recentReleases = releases.filter((release: any) => {
-      return new Date(release.published_at) >= cutoffDate;
+      const releaseDate = new Date(release.published_at);
+      return releaseDate >= cutoffDate && releaseDate <= endDateObj;
     });
 
     // Search for production incidents
@@ -789,8 +890,17 @@ export async function calculateHotfixRate(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean; hotfixPatterns?: string[] }
+    compareWithPrevious?: boolean; hotfixPatterns?: string[];
+    author?: string; }
 ): Promise<any> {
+  if (params.author) {
+    return {
+      metric: 'hotfix_rate',
+      skipped: true,
+      reason: 'Release-based metric — not filterable by author',
+    };
+  }
+
   const { owner, repo } = params;
   const hotfixPatterns = params.hotfixPatterns || ['hotfix', 'emergency', 'patch'];
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
@@ -814,7 +924,19 @@ export async function calculateHotfixRate(
       return hotfixPatterns.some(pattern => releaseText.includes(pattern));
     });
 
-    const totalReleases = recentReleases.length || 1;
+    if (recentReleases.length === 0) {
+      const result: any = {
+        metric: 'hotfix_rate',
+        value: 0,
+        unit: 'percentage',
+        note: 'No releases in this period',
+        details: { totalReleases: 0, hotfixes: 0, hotfixRate: '0%', hotfixReleases: [] },
+      };
+      addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+      return result;
+    }
+
+    const totalReleases = recentReleases.length;
     const hotfixRate = (hotfixes.length / totalReleases) * 100;
 
     const result: any = {
@@ -880,14 +1002,25 @@ export async function calculateRevertRate(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean }
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number; }
 ): Promise<any> {
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculateRevertRate(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'revert_rate', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
     // Get merged PRs
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
+    const authorFilter = params.author ? ` author:${params.author}` : '';
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}${authorFilter}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -903,7 +1036,18 @@ export async function calculateRevertRate(
       commit.commit.message.toLowerCase().includes('revert')
     );
 
-    const totalPRs = prsResponse.total_count || 1;
+    const totalPRs = prsResponse.total_count || 0;
+    if (totalPRs === 0) {
+      const result: any = {
+        metric: 'revert_rate',
+        value: 0,
+        unit: 'percentage',
+        note: 'No PRs merged in this period',
+        details: { totalPRs: 0, reverts: revertCommits.length, revertRate: '0%', revertCommits: [] },
+      };
+      addDateRangeToResult(result, startDate, endDate, periodDays, !!params.startDate);
+      return result;
+    }
     const revertRate = (revertCommits.length / totalPRs) * 100;
 
     const result: any = {
@@ -932,7 +1076,7 @@ export async function calculateRevertRate(
       const prevPeriod = getPreviousPeriod(startDate, endDate);
       try {
         // Get previous period merged PRs
-        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}${params.author ? ` author:${params.author}` : ''}`;
         const prevPrsResponse = await getGithubData(
           `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
           config.access_token
@@ -974,13 +1118,24 @@ export async function calculatePRSize(
   params: { owner: string; repo: string; days?: number;
     startDate?: string;
     endDate?: string;
-    compareWithPrevious?: boolean }
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number; }
 ): Promise<any> {
   const { owner, repo } = params;
   const { startDate, endDate, periodDays } = getDateRange({ days: params.days, startDate: params.startDate, endDate: params.endDate });
 
+  if (params.cycleDays) {
+    const cycles = splitIntoCycles(startDate, endDate, params.cycleDays);
+    const cycleResults = await Promise.all(
+      cycles.map(cycle => calculatePRSize(config, { ...params, startDate: cycle.startDate, endDate: cycle.endDate, cycleDays: undefined }))
+    );
+    return { metric: 'pr_size', cycleDays: params.cycleDays, cycles: cycleResults };
+  }
+
   try {
-    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}`;
+    const authorFilter = params.author ? ` author:${params.author}` : '';
+    const searchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${startDate}..${endDate}${authorFilter}`;
     const prsResponse = await getGithubData(
       `https://api.github.com/search/issues?q=${encodeURIComponent(searchQuery)}&per_page=100`,
       config.access_token
@@ -1038,7 +1193,7 @@ export async function calculatePRSize(
     if (params.compareWithPrevious) {
       const prevPeriod = getPreviousPeriod(startDate, endDate);
       try {
-        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}`;
+        const prevSearchQuery = `repo:${owner}/${repo} is:pr is:merged merged:${prevPeriod.startDate}..${prevPeriod.endDate}${params.author ? ` author:${params.author}` : ''}`;
         const prevPrsResponse = await getGithubData(
           `https://api.github.com/search/issues?q=${encodeURIComponent(prevSearchQuery)}&per_page=100`,
           config.access_token
@@ -1085,7 +1240,16 @@ export async function calculatePRSize(
  */
 export async function getAllMetrics(
   config: AnalyticsConfig,
-  params: { owner: string; repo: string; days?: number }
+  params: {
+    owner: string;
+    repo: string;
+    days?: number;
+    startDate?: string;
+    endDate?: string;
+    compareWithPrevious?: boolean;
+    author?: string;
+    cycleDays?: number;
+  }
 ): Promise<any> {
   try {
     const [
@@ -1112,7 +1276,7 @@ export async function getAllMetrics(
 
     return {
       repository: `${params.owner}/${params.repo}`,
-      period: `last_${params.days || 7}_days`,
+      period: params.startDate ? `${params.startDate}_to_${params.endDate || 'today'}` : `last_${params.days || 30}_days`,
       metrics: {
         delivery_speed: {
           deployment_frequency: deploymentFreq,
