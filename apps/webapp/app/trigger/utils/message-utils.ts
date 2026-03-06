@@ -184,15 +184,11 @@ export const createActivities = async ({
     }),
   );
 
-  // Enqueue CASE pipeline if workspace has autoActivityRead enabled
+  // Enqueue CASE pipeline if integration account has autoActivityRead enabled
   try {
-    const workspace = await prisma.workspace.findUnique({
-      where: { id: integrationAccount.workspaceId },
-      select: { metadata: true },
-    });
-    const workspaceMeta = workspace?.metadata as Record<string, unknown> | null;
+    const accountSettings = integrationAccount.settings as Record<string, unknown> | null;
 
-    if (workspaceMeta?.autoActivityRead) {
+    if (accountSettings?.autoActivityRead) {
       const user = await prisma.user.findUnique({
         where: { id: integrationAccount.integratedById },
         select: { email: true },
