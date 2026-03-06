@@ -3,27 +3,70 @@ title: "Changelog"
 description: "Product updates and announcements"
 ---
 
-<Update label="February 2026" description="TODO">
+<Update label="February 2026" description="v0.5.0 - v0.5.3">
 
 ## 🎯 New Features
 
-- TODO
+**Gateway (self-hosted tool runner)**
+
+- Run tools via a gateway so CORE can execute actions in your environment, not just hosted integrations
+- Groundwork for longer, async workflows that don’t die mid-flight
+
+**Channels (email + WhatsApp plumbing)**
+
+- Unified email + WhatsApp webhooks under a single channel system
+- More consistent delivery and history behavior across channels
+
+**Slack support (DMs + channels)**
+
+- Talk to CORE in Slack (DM + mentions)
+- Slack threads can be tracked as separate conversations for cleaner context and follow-ups
+
+**Multi-workspace support**
+
+- Create multiple workspaces to separate contexts (work vs personal, etc.)
+
+**New integrations**
+
+- **Atlassian (Jira + Confluence)**: OAuth-based integration to pull in Jira/Confluence knowledge
+- **LinkedIn**: Profile fetching and activity-related workflows
+- **Codeberg**: New integration with expanded GitHub parity (issues, labels, repo content, PR management)
+- **Ghost**: Manage Ghost content via CORE (Ghost Admin API key auth)
+
+**Skills (first-class workflows)**
+
+- Introduced skills so CORE can run structured reusable workflows, not just one-off tool calls
+- Improved skill UI clarity so it’s easier to understand what you’re running
+
+**UX: clearer ingestion rules**
+
+- Added concrete ingestion rule examples across integrations to make setup less guessy
 
 ## ⚡ Performance & Reliability
 
-- TODO
+- **Slack webhook reliability**: Moved Slack DM bot verification to async processing to avoid Slack’s 3s timeout failures
+- **Reminders pipeline stability**: Refactored reminder processing onto a centralized pipeline for more consistent execution
 
 ## 🔧 Improvements
 
-- TODO
+- **GitHub automation parity**: Richer GitHub automation support, including Projects support and issue template discovery/creation
+- **Timezone-aware context**: Agent datetime context now uses the user’s timezone, fewer “wrong day / wrong time” outcomes
+- **Infra/config cleanup**: Reduced reliance on older endpoints and tightened config for smoother deployments
 
 ## 🐛 Fixes
 
-- TODO
+- Fixed Slack inbound processing being broken in some cases
+- Fixed PKCE handling for OAuth flows
+- Fixed reminder scheduling crashes caused by RRULE
+- Fixed Ghost Admin API configuration issues
+- Fixed gateway browser handoff issues
+- Fixed cases where creating conversations failed for external channels (including email edge cases)
+- Fixed multi-workspace rollout login issues
+- Fixed exploratory search returning nothing when no labels matched, despite relevant data existing
 
 ## 🔒 Security & Privacy
 
-- TODO
+- **Skill document exposure**: Prevented skill documents from being exposed via document APIs
 
 </Update>
 
@@ -166,7 +209,6 @@ description: "Product updates and announcements"
 - **Gmail**: Read, search, and send emails from any AI agent
 - **Google Sheets**: Update spreadsheets and analyze data
 - **Google Docs**: Access and edit documents programmatically
-- **Google Calendar**: Manage events and check availability
 
 **User Persona v0**
 
@@ -225,7 +267,7 @@ description: "Product updates and announcements"
 - Corrected label assignment in persona generation
 - Fixed session compaction timing
 - Resolved OAuth2 form responsiveness
-- Fixed domain cookie handling for non-HTTPS
+- Fixed domain cookie handling for the non-HTTPS
 - Corrected MCP session_id failures
 
 </Update>
@@ -329,7 +371,7 @@ description: "Product updates and announcements"
 **User Profile Memory Tool**
 
 - MCP tool for accessing user profile information
-- AI agents can understand your preferences and context
+- AI agents can understand user profile information
 - More personalized responses across all connected tools
 
 **Enhanced Onboarding**
@@ -384,7 +426,6 @@ description: "Product updates and announcements"
 
 - One-command self-hosting setup with improved configuration
 - Better network isolation and service management
-- Production-ready deployment options for enterprise users
 
 ## ⚡ Performance & Reliability
 
@@ -440,7 +481,7 @@ description: "Product updates and announcements"
 
 - One-click authentication for Linear, Slack, GitHub, and Notion
 - Connect your tools once, access them everywhere across AI clients
-- Eliminate repetitive app authentication across different AI platforms
+- Eliminate repetitive app authentication across different app connections
 
 **MCP Integration Hub**
 
@@ -475,7 +516,7 @@ description: "Product updates and announcements"
 - **Refreshed UI Components**: Cleaner, more intuitive interface design
 - **Enhanced Loading Transitions**: Smoother user experience during memory operations
 - **Improved Integration Flows**: More reliable authentication and connection setup
-- **Better Docker Support**: Simplified containerization for self-hosting setups
+- **Better Docker Support**: Simplified containerization for self-hosted deployments
 
 ## 🐛 Fixes
 
