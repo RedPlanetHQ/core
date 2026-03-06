@@ -288,7 +288,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   //
   // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
   // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
-  const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "")
+  const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
     .trim()
     .toLowerCase();
   // Proxy/self-hosted modes only (preserves upstream defaults):

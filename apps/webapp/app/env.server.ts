@@ -120,6 +120,7 @@ const EnvironmentSchema = z
     EMBEDDING_MODEL: z.string().default("mxbai-embed-large"),
     EMBEDDING_MODEL_SIZE: z.string().default("1024"),
     MODEL_TEMPERATURE: z.coerce.number().default(1),
+    LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
     CHAT_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
     EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),

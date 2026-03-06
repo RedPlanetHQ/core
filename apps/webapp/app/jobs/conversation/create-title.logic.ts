@@ -29,7 +29,7 @@ export async function processConversationTitleCreation(
     //
     // Some OpenAI-compatible proxies / self-hosted models may not consistently
     // follow that format. Enable tolerant parsing only when explicitly opted in.
-    const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "")
+    const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
       .trim()
       .toLowerCase();
     // Proxy/self-hosted modes only (preserves upstream defaults):
