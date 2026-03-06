@@ -74,6 +74,36 @@ Rules:
 - Emoji and code blocks are fine when appropriate
 </channel-format>`,
 
+  telegram: `<channel-format>
+Telegram format:
+
+Keep messages natural and readable. Telegram supports longer messages than WhatsApp but don't write walls of text.
+
+Formatting (use when helpful):
+- **bold** for emphasis
+- _italic_ for subtle emphasis
+- \`monospace\` for code
+- Use line breaks between distinct points
+
+Example (short):
+4 emails since lunch. Sarah's budget thing looks important - been sitting there since yesterday.
+
+Example (structured):
+**Meetings today** 📅
+
+10:00 - Product sync with eng
+12:30 - Lunch with investors
+3:00 - 1:1 with Sarah
+
+Busy morning, afternoon's pretty clear after 3.
+
+Rules:
+- Keep under 3000 chars per message
+- Break long responses into readable paragraphs
+- Use formatting sparingly but effectively
+- Emojis okay but don't overdo it
+</channel-format>`,
+
   web: `<channel-format>
 Web format:
 

@@ -128,7 +128,16 @@ const { loader, action } = createHybridActionApiRoute(
     // Build system prompt with persona context if available
     // Using minimal prompt for better execution without explanatory text
     // Use onboarding-specific capabilities if onboarding summary is available
-    let systemPrompt = getCorePrompt('web', {
+    // Map source to channel format (telegram, whatsapp, slack, email → matching format; anything else → web)
+    const sourceToChannel: Record<string, string> = {
+      telegram: "telegram",
+      whatsapp: "whatsapp",
+      slack: "slack",
+      email: "email",
+    };
+    const channel = (sourceToChannel[body.source] || "web") as import("~/services/agent/prompts").ChannelType;
+
+    let systemPrompt = getCorePrompt(channel, {
       name: user?.displayName ?? user?.name ?? user?.email ?? "",
       email: user?.email ?? "",
       timezone,

@@ -117,6 +117,25 @@ services:
       retries: 10
       start_period: 20s
 
+  # Telegram Bot (Galaxia OS Bot) - bridges Telegram to CORE's conversation API
+  # Uncomment and set TELEGRAM_BOT_TOKEN + CORE_API_TOKEN to enable
+  # telegram-bot:
+  #   container_name: core-telegram-bot
+  #   image: node:20-slim
+  #   working_dir: /app
+  #   volumes:
+  #     - ../../apps/telegram-bot:/app
+  #   environment:
+  #     - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+  #     - CORE_API_URL=http://core:3000
+  #     - CORE_API_TOKEN=${CORE_API_TOKEN}
+  #   command: npx tsx index.ts
+  #   depends_on:
+  #     - core
+  #   networks:
+  #     - core
+  #   restart: unless-stopped
+
   # Uncomment this if you want to use a local embedding modal
   # ollama:
   #   container_name: core-ollama

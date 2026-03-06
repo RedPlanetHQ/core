@@ -1,0 +1,13 @@
+{
+  "name": "@core/telegram-bot",
+  "version": "1.0.0",
+  "description": "Telegram bot bridge for CORE - connects Telegram to the CORE conversation API",
+  "type": "module",
+  "scripts": {
+    "start": "tsx index.ts",
+    "dev": "tsx watch index.ts"
+  },
+  "dependencies": {
+    "tsx": "^4.19.0"
+  }
+}
