@@ -1,8 +1,14 @@
 import React, { useCallback } from "react";
 import { useFetcher } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
-import { Switch } from "~/components/ui/switch";
 import { Label } from "~/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
 import { Check, Trash2 } from "lucide-react";
 
 interface ConnectedAccount {
@@ -60,31 +66,40 @@ function AccountRow({ account }: { account: ConnectedAccount }) {
               Automatically send new activities from this account to your agent
             </p>
           </div>
-          <Switch
-            checked={optimisticAutoActivity}
-            onCheckedChange={(checked) => {
+          <Select
+            value={optimisticAutoActivity ? "enabled" : "disabled"}
+            onValueChange={(value) => {
               autoActivityFetcher.submit(
                 {
                   intent: "updateAutoActivityRead",
                   integrationAccountId: account.id,
-                  autoActivityRead: String(checked),
+                  autoActivityRead: String(value === "enabled"),
                 },
                 { method: "POST" },
               );
             }}
-          />
+          >
+            <SelectTrigger className="w-32">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="enabled">Enabled</SelectItem>
+              <SelectItem value="disabled">Disabled</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex w-full justify-end">
           <Button
             variant="destructive"
-            size="sm"
             className="rounded"
             disabled={disconnectFetcher.state === "submitting"}
             onClick={handleDisconnect}
           >
             <Trash2 size={14} className="mr-1" />
-            {disconnectFetcher.state === "submitting" ? "Removing..." : "Remove"}
+            {disconnectFetcher.state === "submitting"
+              ? "Removing..."
+              : "Remove"}
           </Button>
         </div>
       </div>

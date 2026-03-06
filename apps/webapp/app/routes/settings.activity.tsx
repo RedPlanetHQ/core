@@ -16,7 +16,16 @@ import {
   ResizableHandle,
 } from "~/components/ui/resizable";
 import { ScrollManagedList } from "~/components/virtualized-list";
-import { ExternalLink, Clock } from "lucide-react";
+import { ExternalLink, Clock, X } from "lucide-react";
+import { Button } from "~/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { cn } from "~/lib/utils";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   await requireUser(request);
@@ -50,26 +59,46 @@ function ActivityRow({
   const icon = definition
     ? getIconForAuthorise(definition.slug, 16, definition.icon)
     : null;
+  const plainText = activity.text.replace(/[#*_`[\]()]/g, "").trim();
 
   return (
-    <div
-      onClick={onClick}
-      className={`flex cursor-pointer items-center gap-3 px-3 py-2 transition-colors hover:bg-muted/50 ${
-        isSelected ? "bg-muted" : ""
-      }`}
-    >
-      <div className="flex-shrink-0">{icon}</div>
-      <p className="text-muted-foreground min-w-0 flex-1 truncate text-sm">
-        {activity.text}
-      </p>
-      <span className="text-muted-foreground flex-shrink-0 text-xs">
-        {formatRelativeTime(activity.createdAt)}
-      </span>
+    <div className="group mx-2 flex cursor-default gap-2">
+      <div
+        className={cn(
+          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2",
+          isSelected && "bg-grayAlpha-200",
+        )}
+        onClick={onClick}
+      >
+        <div className="border-border flex w-full min-w-[0px] shrink flex-col gap-1 border-b py-2">
+          <div className={cn("flex w-full min-w-[0px] shrink flex-col")}>
+            <div className="flex w-full items-center gap-4">
+              <div className="inline-flex min-h-[24px] min-w-[0px] shrink items-center justify-start gap-2">
+                {icon}
+
+                <div className={cn("truncate text-left")}>{plainText}</div>
+              </div>
+              <div className="flex grow gap-1"></div>
+              <div className="text-muted-foreground flex shrink-0 items-center justify-center gap-2 text-sm">
+                <div className="text-muted-foreground text-sm">
+                  {formatRelativeTime(activity.createdAt)}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ActivityDetail({ activity }: { activity: ActivityItem }) {
+function ActivityDetail({
+  activity,
+  onClose,
+}: {
+  activity: ActivityItem;
+  onClose: () => void;
+}) {
   const definition = activity.integrationAccount?.integrationDefinition;
   const icon = definition
     ? getIconForAuthorise(definition.slug, 20, definition.icon)
@@ -77,12 +106,19 @@ function ActivityDetail({ activity }: { activity: ActivityItem }) {
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-y-auto p-4">
-      <div className="flex items-center gap-2">
-        {icon}
-        <span className="font-medium">{definition?.name ?? "Unknown"}</span>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          {icon}
+          <span className="font-medium">{definition?.name ?? "Unknown"}</span>
+        </div>
+        <Button variant="ghost" onClick={onClose}>
+          <X size={14} />
+        </Button>
       </div>
 
-      <p className="text-sm leading-relaxed whitespace-pre-wrap">{activity.text}</p>
+      <p className="whitespace-pre-wrap text-sm leading-relaxed">
+        {activity.text}
+      </p>
 
       <div className="text-muted-foreground mt-auto flex flex-col gap-2 text-xs">
         {activity.sourceURL && (
@@ -109,12 +145,12 @@ export default function ActivitySettings() {
   const [selectedActivityId, setSelectedActivityId] = useState<string | null>(
     null,
   );
-  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [selectedSource, setSelectedSource] = useState<string | undefined>();
 
   const { activities, hasMore, loadMore, availableSources, isLoading } =
     useActivities({
       endpoint: "/api/v1/activities",
-      source: sourceFilter || undefined,
+      source: selectedSource,
     });
 
   const selectedActivity = activities.find((a) => a.id === selectedActivityId);
@@ -159,7 +195,7 @@ export default function ActivitySettings() {
               />
             ) : (
               <div className="h-12 animate-pulse px-3 py-2">
-                <div className="h-4 rounded bg-muted" />
+                <div className="bg-muted h-4 rounded" />
               </div>
             )}
           </div>
@@ -172,37 +208,39 @@ export default function ActivitySettings() {
   const itemCount = hasMore ? activities.length + 1 : activities.length;
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b px-4 py-3">
-        <div className="flex items-center justify-between">
-          <h1 className="text-sm font-medium">Activity</h1>
-          {availableSources.length > 0 && (
-            <select
-              className="bg-background border-input h-8 rounded-md border px-2 text-xs"
-              value={sourceFilter}
-              onChange={(e) => setSourceFilter(e.target.value)}
-            >
-              <option value="">All sources</option>
-              {availableSources.map((s) => (
-                <option key={s.slug} value={s.slug}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-      </div>
-
-      <div className="min-h-0 flex-1">
-        <ResizablePanelGroup direction="horizontal" className="h-full">
+    <div className="flex h-full w-full flex-col items-center space-y-6">
+      <div className="flex h-full w-full space-y-4 pb-2">
+        <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
           <ResizablePanel defaultSize={55} minSize={35}>
-            <div className="h-full overflow-hidden">
+            <div className="h-full overflow-hidden pt-3">
+              {availableSources.length > 0 && (
+                <div className="mb-2 px-3">
+                  <Select
+                    value={selectedSource ?? "all"}
+                    onValueChange={(v) =>
+                      setSelectedSource(v === "all" ? undefined : v)
+                    }
+                  >
+                    <SelectTrigger className="w-40" showIcon={false}>
+                      <SelectValue placeholder="All sources" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All sources</SelectItem>
+                      {availableSources.map((s) => (
+                        <SelectItem key={s.slug} value={s.slug}>
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
               {activities.length === 0 && !isLoading ? (
                 <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
                   No activities found
                 </div>
               ) : (
-                <AutoSizer className="h-full">
+                <AutoSizer className="h-[calc(100vh-56px)]">
                   {({ width, height }) => (
                     <InfiniteLoader
                       isRowLoaded={isRowLoaded}
@@ -216,7 +254,9 @@ export default function ActivitySettings() {
                           height={height}
                           width={width}
                           rowCount={itemCount}
-                          rowHeight={({ index }) => cache.getHeight(index, 0)}
+                          rowHeight={({ index }: { index: number }) =>
+                            cache.getHeight(index, 0)
+                          }
                           onRowsRendered={onRowsRendered}
                           rowRenderer={rowRenderer}
                           deferredMeasurementCache={cache}
@@ -239,7 +279,10 @@ export default function ActivitySettings() {
                 collapsible
                 collapsedSize={0}
               >
-                <ActivityDetail activity={selectedActivity} />
+                <ActivityDetail
+                  activity={selectedActivity}
+                  onClose={() => setSelectedActivityId(null)}
+                />
               </ResizablePanel>
             </>
           )}

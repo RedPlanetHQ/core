@@ -52,6 +52,7 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ...(integrationAccount.settings as any),
           scheduleId: createdSchedule.id,
+          autoActivityRead: true,
         },
       },
     });
@@ -66,10 +67,45 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
         settings: {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           ...(integrationAccount.settings as any),
+          autoActivityRead: true,
         },
       },
     });
   }
 
   return "No schedule for this task";
+};
+
+export const unschedule = async (payload: { integrationAccountId: string }) => {
+  const { integrationAccountId } = payload;
+
+  const integrationAccount = await prisma.integrationAccount.findUnique({
+    where: { id: integrationAccountId },
+    select: { settings: true },
+  });
+
+  if (!integrationAccount) {
+    return null;
+  }
+
+  const settings = (integrationAccount.settings as Record<string, any>) || {};
+
+  if (settings.scheduleId && env.QUEUE_PROVIDER === "trigger") {
+    try {
+      await schedules.del(settings.scheduleId);
+    } catch {
+      logger.error("Failed to delete schedule", { scheduleId: settings.scheduleId });
+    }
+  }
+
+  await prisma.integrationAccount.update({
+    where: { id: integrationAccountId },
+    data: {
+      settings: {
+        ...settings,
+        scheduleId: undefined,
+        autoActivityRead: false,
+      },
+    },
+  });
 };

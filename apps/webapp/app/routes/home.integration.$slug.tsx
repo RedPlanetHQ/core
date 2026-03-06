@@ -17,6 +17,7 @@ import { OAuthAuthSection } from "~/components/integrations/oauth-auth-section";
 import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
+import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -60,20 +61,15 @@ export async function action({ request }: ActionFunctionArgs) {
     const integrationAccountId = formData.get("integrationAccountId") as string;
     const value = formData.get("autoActivityRead") === "true";
 
-    const account = await prisma.integrationAccount.findUnique({
-      where: { id: integrationAccountId },
-      select: { settings: true },
-    });
-
-    if (!account) {
-      return json({ error: "Account not found" }, { status: 404 });
+    if (!integrationAccountId) {
+      return json({ error: "integrationAccountId is required" }, { status: 400 });
     }
 
-    const currentSettings = (account.settings as Record<string, unknown>) || {};
-    await prisma.integrationAccount.update({
-      where: { id: integrationAccountId },
-      data: { settings: { ...currentSettings, autoActivityRead: value } },
-    });
+    if (value) {
+      await scheduler({ integrationAccountId });
+    } else {
+      await unschedule({ integrationAccountId });
+    }
 
     return json({ success: true });
   }

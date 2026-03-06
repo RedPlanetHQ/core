@@ -17,7 +17,6 @@ export const integrationRunSchedule = schedules.task({
       where: { id: externalId },
       include: {
         integrationDefinition: true,
-        workspace: true,
       },
     });
 
@@ -27,8 +26,13 @@ export const integrationRunSchedule = schedules.task({
       return deletedSchedule;
     }
 
-    if (!integrationAccount.workspace.userId) {
-      logger.info("No workspace user id found");
+    const userWorkspace = await prisma.userWorkspace.findFirst({
+      where: { workspaceId: integrationAccount.workspaceId },
+      select: { userId: true },
+    });
+
+    if (!userWorkspace) {
+      logger.info("No workspace user found");
       return null;
     }
 
