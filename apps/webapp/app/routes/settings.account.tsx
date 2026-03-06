@@ -1,11 +1,15 @@
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import {
+  json,
+  type LoaderFunctionArgs,
+  type ActionFunctionArgs,
+} from "@remix-run/node";
 import { useLoaderData, useFetcher, useNavigate } from "@remix-run/react";
 import { requireUser } from "~/services/session.server";
 import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
 import { useState } from "react";
 import {
   AlertDialog,
@@ -19,6 +23,14 @@ import {
 } from "~/components/ui/alert-dialog";
 import { SettingSection } from "~/components/setting-section";
 import { SidebarTrigger } from "~/components/ui/sidebar";
+import { prisma } from "~/db.server";
+import {
+  PERSONALITY_OPTIONS,
+  type PersonalityType,
+} from "~/services/agent/prompts/personality";
+import { cn } from "~/lib/utils";
+import { Theme, useTheme } from "remix-themes";
+import { Moon, Sun } from "lucide-react";
 
 interface SuccessDataResponse {
   success: boolean;
@@ -30,19 +42,77 @@ interface ErrorDataResponse {
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
+  const metadata = user.metadata as Record<string, unknown> | null;
+  const personality = (metadata?.personality as PersonalityType) || "tars";
 
   return json({
     user,
+    personality,
+    personalityOptions: PERSONALITY_OPTIONS,
   });
 };
 
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const user = await requireUser(request);
+  const formData = await request.formData();
+  const intent = formData.get("intent");
+
+  if (intent === "updatePersonality") {
+    const personality = formData.get("personality") as string;
+    const validPersonalities = PERSONALITY_OPTIONS.map((p) => p.id);
+
+    if (
+      !personality ||
+      !validPersonalities.includes(personality as PersonalityType)
+    ) {
+      return json({ error: "Invalid personality" }, { status: 400 });
+    }
+
+    const currentMetadata = (user.metadata as Record<string, unknown>) || {};
+    const updatedMetadata = {
+      ...currentMetadata,
+      personality,
+    };
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { metadata: updatedMetadata },
+    });
+
+    return json({ success: true, personality });
+  }
+
+  return json({ error: "Invalid intent" }, { status: 400 });
+};
+
 export default function AccountSettings() {
-  const { user } = useLoaderData<typeof loader>();
+  const { user, personality, personalityOptions } =
+    useLoaderData<typeof loader>();
   const fetcher = useFetcher<SuccessDataResponse | ErrorDataResponse>();
+  const personalityFetcher = useFetcher();
   const navigate = useNavigate();
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [confirmText, setConfirmText] = useState("");
   const isDeleting = fetcher.state === "submitting";
+
+  const currentPersonality =
+    personalityFetcher.formData?.get("personality")?.toString() || personality;
+  const [theme, setTheme] = useTheme();
+
+  const themeOptions = [
+    {
+      id: Theme.LIGHT,
+      name: "Light",
+      description: "Clean and bright interface",
+      icon: Sun,
+    },
+    {
+      id: Theme.DARK,
+      name: "Dark",
+      description: "Easy on the eyes in low light",
+      icon: Moon,
+    },
+  ];
 
   const handleDeleteAccount = () => {
     fetcher.submit(
@@ -64,7 +134,7 @@ export default function AccountSettings() {
   const canDelete = confirmText === user.email;
 
   return (
-    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
+    <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
       <SettingSection
         title="Account Settings"
         description="Manage your account information and preferences"
@@ -105,6 +175,92 @@ export default function AccountSettings() {
                 </div>
               </div>
             </Card>
+          </div>
+
+          {/* Personality */}
+          <div className="mb-8">
+            <h2 className="text-md mb-4">Personality</h2>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Choose how your digital brain communicates with you
+            </p>
+            <div className="grid gap-4 md:grid-cols-3">
+              {personalityOptions.map((option) => (
+                <Card
+                  key={option.id}
+                  className={cn(
+                    "hover:border-primary/50 relative cursor-pointer p-4 transition-all",
+                    currentPersonality === option.id &&
+                      "border-primary/50 border-1",
+                  )}
+                  onClick={() => {
+                    personalityFetcher.submit(
+                      { intent: "updatePersonality", personality: option.id },
+                      { method: "POST" },
+                    );
+                  }}
+                >
+                  {currentPersonality === option.id && (
+                    <div className="absolute right-3 top-3">
+                      <Check className="text-primary h-4 w-4" />
+                    </div>
+                  )}
+                  <h3 className="mb-1 font-medium">{option.name}</h3>
+                  <p className="text-muted-foreground mb-3 text-sm">
+                    {option.description}
+                  </p>
+                  <div className="space-y-2">
+                    {option.examples.map((example, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-muted/50 rounded-md p-2 text-xs"
+                      >
+                        <p className="text-muted-foreground mb-1">
+                          "{example.prompt}"
+                        </p>
+                        <p className="italic">"{example.response}"</p>
+                      </div>
+                    ))}
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+
+          {/* Theme */}
+          <div className="mb-8">
+            <h2 className="text-md mb-4">Theme</h2>
+            <p className="text-muted-foreground mb-4 text-sm">
+              Choose your preferred appearance
+            </p>
+            <div className="grid gap-4 md:grid-cols-2">
+              {themeOptions.map((option) => {
+                const Icon = option.icon;
+                const isSelected = theme === option.id;
+                return (
+                  <Card
+                    key={option.id}
+                    className={cn(
+                      "hover:border-primary/50 relative cursor-pointer p-4 transition-all",
+                      isSelected && "border-primary/50 border-1",
+                    )}
+                    onClick={() => setTheme(option.id)}
+                  >
+                    {isSelected && (
+                      <div className="absolute right-3 top-3">
+                        <Check className="text-primary h-4 w-4" />
+                      </div>
+                    )}
+                    <div className="mb-2">
+                      <Icon className="h-5 w-5" />
+                    </div>
+                    <h3 className="mb-1 font-medium">{option.name}</h3>
+                    <p className="text-muted-foreground text-sm">
+                      {option.description}
+                    </p>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
 
           {/* Danger Zone */}
@@ -197,14 +353,14 @@ export default function AccountSettings() {
 
       {/* Success Message */}
       {fetcher.data && "success" in fetcher.data && fetcher.data.success && (
-        <div className="fixed right-4 bottom-4 rounded-md bg-green-600 p-4 text-white shadow-lg">
+        <div className="fixed bottom-4 right-4 rounded-md bg-green-600 p-4 text-white shadow-lg">
           Account deleted successfully. Redirecting...
         </div>
       )}
 
       {/* Error Message */}
       {fetcher.data && "error" in fetcher.data && (
-        <div className="fixed right-4 bottom-4 rounded-md bg-red-600 p-4 text-white shadow-lg">
+        <div className="fixed bottom-4 right-4 rounded-md bg-red-600 p-4 text-white shadow-lg">
           {fetcher.data.error}
         </div>
       )}

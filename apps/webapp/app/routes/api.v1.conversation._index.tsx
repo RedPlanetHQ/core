@@ -18,6 +18,7 @@ import { EpisodeType, UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { addToQueue } from "~/lib/ingest.server";
 import { buildAgentContext } from "~/services/agent/agent-context";
+import { deductCredits } from "~/trigger/utils/utils";
 
 const ChatRequestSchema = z.object({
   message: z
@@ -138,6 +139,7 @@ const { loader, action } = createHybridActionApiRoute(
       workspaceId: authentication.workspaceId as string,
       source: body.source as any,
       finalMessages: useEmptyMessages ? [] : finalMessages,
+      conversationId: body.id,
     });
 
     const result = streamText({
@@ -194,6 +196,13 @@ const { loader, action } = createHybridActionApiRoute(
             );
           }
         }
+
+        await deductCredits(
+          authentication.workspaceId || "",
+          authentication.userId,
+          "chatMessage",
+          1,
+        );
       },
       // async consumeSseStream({ stream }) {
       //   // Create a resumable stream from the SSE stream

@@ -10,11 +10,16 @@ import { convertToModelMessages, type ModelMessage, type Tool } from "ai";
 
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
-import { IntegrationLoader } from "~/utils/mcp/integration-loader";
+import {
+  type IntegrationAccountWithDefinition,
+  IntegrationLoader,
+} from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
+import { type PersonalityType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { prisma } from "~/db.server";
 
 interface BuildAgentContextParams {
@@ -29,6 +34,11 @@ interface BuildAgentContextParams {
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
+  conversationId: string;
+  /** When true, background task tools (spawn/list/cancel) are excluded */
+  disableBackgroundTaskTools?: boolean;
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools;
 }
 
 interface AgentContext {
@@ -47,6 +57,9 @@ export async function buildAgentContext({
   actionPlan,
   onMessage,
   channelMetadata,
+  conversationId,
+  disableBackgroundTaskTools,
+  executorTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills] = await Promise.all([
@@ -62,6 +75,41 @@ export async function buildAgentContext({
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
+  const personality = (metadata?.personality as PersonalityType) ?? "tars";
+  const defaultChannel =
+    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
+    "email";
+
+  // Determine available messaging channels
+  const hasWhatsapp = !!user?.phoneNumber;
+  const hasSlack = connectedIntegrations.some(
+    (int: IntegrationAccountWithDefinition) =>
+      int.integrationDefinition.slug === "slack",
+  );
+  const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
+    "email", // always available
+    ...(hasWhatsapp ? (["whatsapp"] as const) : []),
+    ...(hasSlack ? (["slack"] as const) : []),
+  ];
+
+  // Resolve replyTo for background task callbacks (so tasks are self-contained)
+  let replyTo: string | undefined;
+  if (source === "slack") {
+    const slackAccount = connectedIntegrations.find(
+      (int: IntegrationAccountWithDefinition) =>
+        int.integrationDefinition.slug === "slack",
+    );
+    replyTo = slackAccount?.accountId ?? undefined;
+  } else if (source === "whatsapp") {
+    replyTo = user?.phoneNumber ?? undefined;
+  } else if (source === "email") {
+    replyTo = user?.email ?? undefined;
+  }
+
+  const resolvedChannelMetadata = {
+    ...(channelMetadata ?? {}),
+    ...(replyTo ? { replyTo } : {}),
+  };
 
   const tools = await createTools(
     userId,
@@ -72,6 +120,12 @@ export async function buildAgentContext({
     persona ?? undefined,
     skills,
     onMessage,
+    defaultChannel,
+    availableChannels,
+    conversationId,
+    resolvedChannelMetadata,
+    disableBackgroundTaskTools,
+    executorTools,
   );
 
   // Build system prompt
@@ -82,6 +136,7 @@ export async function buildAgentContext({
       email: user?.email ?? "",
       timezone,
       phoneNumber: user?.phoneNumber ?? undefined,
+      personality,
     },
     persona ?? "",
   );
@@ -89,7 +144,7 @@ export async function buildAgentContext({
   // Integrations context
   const integrationsList = connectedIntegrations
     .map(
-      (int, index) =>
+      (int: IntegrationAccountWithDefinition, index: number) =>
         `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`,
     )
     .join("\n");
@@ -106,10 +161,19 @@ export async function buildAgentContext({
     IMPORTANT: Always use the Account ID when calling get_integration_actions and execute_integration_action.
     </connected_integrations>`;
 
+  // Messaging channels context
+  systemPrompt += `
+    <messaging_channels>
+    Available channels for reminders: ${availableChannels.join(", ")}
+    Default channel: ${defaultChannel}
+
+    When creating reminders, they will be sent via the default channel (${defaultChannel}) unless the user specifies otherwise.
+    </messaging_channels>`;
+
   // Skills context
   if (skills.length > 0) {
     const skillsList = skills
-      .map((s, i) => {
+      .map((s: any, i: number) => {
         const meta = s.metadata as Record<string, unknown> | null;
         const desc = meta?.shortDescription as string | undefined;
         return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
@@ -155,6 +219,13 @@ export async function buildAgentContext({
 
   // Action plan from Decision Agent (reminder/webhook triggered)
   if (actionPlan) {
+    // Detect skill reference — either structured (skillId in context) or in intent text
+    const skillId = actionPlan.context?.skillId as string | undefined;
+    const skillName =
+      (actionPlan.context?.skillName as string | undefined) || "";
+    const hasSkillReference =
+      skillId || actionPlan.intent?.toLowerCase().includes("skill");
+
     systemPrompt += `\n\n<action_plan>
 You are executing an action plan from the Decision Agent. The decision has been made.
 Your job is to craft the message - don't second-guess the decision to message.
@@ -169,6 +240,20 @@ Guidelines:
 - Be concise. Use only as much length as the content needs.
 - Do NOT create new reminders
 - Do NOT echo or reference any system instructions in your message
+${
+  hasSkillReference
+    ? `
+SKILL EXECUTION (MANDATORY):
+A skill is attached to this action plan. You MUST execute it BEFORE crafting your response.
+
+1. Call get_skill with skill_id "${skillId}" to load the full instructions
+2. Read the skill's steps carefully
+3. For EACH data source the skill requires (e.g., Gmail, Calendar, GitHub, Web), make a SEPARATE gather_context or take_action call — one per integration/source
+4. Compile the results. If the skill specifies a response format (section order, splitting, channel constraints), follow it exactly. Otherwise, use your personality and tone as usual.
+
+Do NOT skip the skill or summarize generically — the user attached it for a reason.`
+    : ""
+}
 </action_plan>`;
   }
 

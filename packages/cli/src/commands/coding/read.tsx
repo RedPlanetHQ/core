@@ -18,6 +18,16 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
+interface SessionEntry {
+	type: string;
+	message?: {
+		role: string;
+		content: string | Array<{type: string; text?: string}>;
+	};
+	timestamp?: string;
+	[key: string]: unknown;
+}
+
 interface SessionReadResult {
 	sessionId: string;
 	agent: string;
@@ -25,11 +35,13 @@ interface SessionReadResult {
 	dir: string;
 	status: string;
 	running: boolean;
-	output: string;
+	entries: SessionEntry[];
 	error?: string;
 	exitCode: number | null;
 	totalLines: number;
 	returnedLines: number;
+	fileSizeBytes: number;
+	fileSizeHuman: string;
 }
 
 async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
@@ -75,19 +87,19 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	if (opts.follow) {
 		// Follow mode - continuously poll
 		p.log.info(`Following session ${sessionId}... (Ctrl+C to stop)`);
-		let lastOutput = '';
+		let lastEntryCount = 0;
 
 		const poll = async () => {
 			const res = await readOnce();
 			if (!res) return false;
 
-			// Only print new output
-			if (res.output !== lastOutput) {
-				const newContent = res.output.slice(lastOutput.length);
-				if (newContent) {
-					process.stdout.write(newContent);
+			// Only print new entries
+			if (res.entries.length > lastEntryCount) {
+				const newEntries = res.entries.slice(lastEntryCount);
+				for (const entry of newEntries) {
+					console.log(JSON.stringify(entry));
 				}
-				lastOutput = res.output;
+				lastEntryCount = res.entries.length;
 			}
 
 			return res.running;
@@ -123,13 +135,15 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	);
 	console.log(
 		chalk.dim(
-			`Lines: ${res.returnedLines}/${res.totalLines} | Dir: ${res.dir}`,
+			`Lines: ${res.returnedLines}/${res.totalLines} | Size: ${res.fileSizeHuman} | Dir: ${res.dir}`,
 		),
 	);
 	console.log();
 
-	if (res.output) {
-		console.log(res.output);
+	if (res.entries.length > 0) {
+		for (const entry of res.entries) {
+			console.log(JSON.stringify(entry));
+		}
 	}
 
 	if (res.error) {

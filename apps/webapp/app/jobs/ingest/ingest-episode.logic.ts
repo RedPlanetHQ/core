@@ -2,7 +2,7 @@ import { z } from "zod";
 import { KnowledgeGraphService } from "~/services/knowledgeGraph.server";
 import { IngestionStatus } from "@core/database";
 import { logger } from "~/services/logger.service";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
 import { refundCredits } from "../credit_utils";
 

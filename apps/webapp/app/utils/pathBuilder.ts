@@ -11,11 +11,11 @@ export function homePath() {
 }
 
 export function graphPath() {
-  return `/home/graph`;
+  return `/home/memory/graph`;
 }
 
-export function episodesPath() {
-  return `/home/episodes`;
+export function documentsPath() {
+  return `/home/memory/documents`;
 }
 
 export function conversationPath() {

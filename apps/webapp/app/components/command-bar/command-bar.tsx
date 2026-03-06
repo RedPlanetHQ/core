@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Loader2, File } from "lucide-react";
+import { Plus, Loader2, File, MessageSquare } from "lucide-react";
 import {
   CommandDialog,
   CommandGroup,
@@ -27,50 +27,71 @@ interface DocumentResult {
   updatedAt: string;
 }
 
+interface ConversationResult {
+  id: string;
+  title: string | null;
+  updatedAt: string;
+}
+
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [documentResults, setDocumentResults] = useState<DocumentResult[]>([]);
+  const [conversationResults, setConversationResults] = useState<
+    ConversationResult[]
+  >([]);
   const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
 
-  // Search documents when debounced query changes
+  // Search documents and conversations when debounced query changes
   useEffect(() => {
     if (!debouncedQuery.trim() || debouncedQuery.length < 2) {
       setDocumentResults([]);
+      setConversationResults([]);
       return;
     }
 
-    const searchDocs = async () => {
+    const search = async () => {
       setIsSearching(true);
       try {
-        const params = new URLSearchParams({
-          q: debouncedQuery,
-          mode: "full",
-          limit: "10",
-        });
-        const response = await fetch(`/api/v1/documents/search?${params}`);
-        if (response.ok) {
-          const data = await response.json();
+        const [docsRes, convsRes] = await Promise.all([
+          fetch(
+            `/api/v1/documents/search?${new URLSearchParams({ q: debouncedQuery, mode: "full", limit: "10" })}`,
+          ),
+          fetch(
+            `/api/v1/conversations?${new URLSearchParams({ search: debouncedQuery, limit: "10" })}`,
+          ),
+        ]);
+        if (docsRes.ok) {
+          const data = await docsRes.json();
           setDocumentResults(data.documents || []);
         }
+        if (convsRes.ok) {
+          const data = await convsRes.json();
+          setConversationResults(data.conversations || []);
+        }
       } catch (error) {
-        console.error("Document search failed:", error);
+        console.error("Search failed:", error);
       } finally {
         setIsSearching(false);
       }
     };
 
-    searchDocs();
+    search();
   }, [debouncedQuery]);
 
   const handleAddDocument = () => {
-    navigate(`/home/episode`);
+    navigate(`/home/memory/document`);
     onOpenChange(false);
   };
 
   const handleDocumentClick = (documentId: string) => {
-    navigate(`/home/episode/${documentId}`);
+    navigate(`/home/memory/documents/${documentId}`);
+    onOpenChange(false);
+  };
+
+  const handleConversationClick = (conversationId: string) => {
+    navigate(`/home/conversation/${conversationId}`);
     onOpenChange(false);
   };
 
@@ -78,7 +99,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     <CommandDialog open={open} onOpenChange={onOpenChange}>
       <Command shouldFilter={false}>
         <CommandInput
-          placeholder="Search documents..."
+          placeholder="Search conversations and documents..."
           className="py-1"
           value={searchQuery}
           onValueChange={setSearchQuery}
@@ -102,6 +123,34 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
             </CommandItem>
           </CommandGroup>
 
+          {/* Conversations */}
+          {conversationResults.length > 0 && (
+            <CommandGroup heading="Conversations" className="max-w-[700px] p-2">
+              {conversationResults.map((conv) => (
+                <CommandItem
+                  key={conv.id}
+                  value={conv.id}
+                  onSelect={() => handleConversationClick(conv.id)}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <MessageSquare className="h-4 w-4 flex-shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-foreground truncate text-sm">
+                      {conv.title || "Untitled Conversation"}
+                    </p>
+                    <p className="text-muted-foreground text-xs">
+                      {new Date(conv.updatedAt).toLocaleDateString("en-US", {
+                        month: "short",
+                        day: "numeric",
+                        year: "numeric",
+                      })}
+                    </p>
+                  </div>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+
           {/* Documents */}
           <CommandGroup heading="Documents" className="max-w-[700px] p-2">
             {isSearching && (
@@ -117,18 +166,10 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                   value={doc.id}
                   onSelect={() => handleDocumentClick(doc.id)}
                   className="flex items-center gap-2 py-2"
-                  onClick={() => {
-                    console.log("clickeddddd");
-                  }}
                   disabled={false}
                 >
                   <File className="h-4 w-4 flex-shrink-0" />
-                  <div
-                    className="min-w-0 flex-1"
-                    onClick={() => {
-                      console.log("asdfasdfasd2e423423");
-                    }}
-                  >
+                  <div className="min-w-0 flex-1">
                     <p className="text-foreground truncate text-sm">
                       {doc.title}
                     </p>

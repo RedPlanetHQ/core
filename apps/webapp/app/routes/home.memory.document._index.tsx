@@ -1,5 +1,4 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { PageHeader } from "~/components/common/page-header";
 import { LabelService } from "~/services/label.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
 import { ClientOnly } from "remix-utils/client-only";
@@ -13,9 +12,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const workspaceId = await getWorkspaceId(request, user?.id as string);
 
   try {
-    const labels = await labelService.getWorkspaceLabels(
-      workspaceId as string,
-    );
+    const labels = await labelService.getWorkspaceLabels(workspaceId as string);
     return json({ labels });
   } catch (e) {
     return json({ labels: [] });
@@ -29,8 +26,6 @@ export default function NewEpisode() {
   return (
     <>
       <div className="episode-details flex h-full flex-col">
-        <PageHeader title="New document" />
-
         <ClientOnly
           fallback={
             <div className="flex w-full justify-center">

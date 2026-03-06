@@ -43,6 +43,10 @@ import {
 import clsx from "clsx";
 import { getUsageSummary } from "./services/billing.server";
 import { Toaster } from "./components/ui/toaster";
+import {
+  getPersonaDocumentForUser,
+  getPersonaForUser,
+} from "./services/document.server";
 
 export const links: LinksFunction = () => [{ rel: "stylesheet", href: styles }];
 
@@ -60,6 +64,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   let usageSummary = null;
   let workspaces: Awaited<ReturnType<typeof getUserWorkspaces>> = [];
   let currentWorkspace = null;
+  let userPersonaDocumentId = null;
 
   if (user) {
     workspaceId = await getWorkspaceId(request, user.id, user.workspaceId);
@@ -67,6 +72,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       ? await getUsageSummary(workspaceId, user.id)
       : null;
     workspaces = await getUserWorkspaces(user.id);
+    userPersonaDocumentId = await getPersonaForUser(workspaceId as string);
+
     currentWorkspace = workspaceId ? await getWorkspaceById(workspaceId) : null;
   }
 
@@ -81,6 +88,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       theme: getTheme(),
       posthogProjectKey,
       telemetryEnabled,
+      userPersonaDocumentId,
       appEnv: env.APP_ENV,
       appOrigin: env.APP_ORIGIN,
     },
@@ -162,9 +170,11 @@ function App() {
 // `specifiedTheme` is the stored theme in the session storage.
 // `themeAction` is the action name that's used to change the theme in the session storage.
 export default function AppWithProviders() {
+  const { theme } = useTypedLoaderData<typeof loader>();
+
   return (
     <ThemeProvider
-      specifiedTheme={Theme.LIGHT}
+      specifiedTheme={theme}
       disableTransitionOnThemeChange={true}
       themeAction="/action/set-theme"
     >

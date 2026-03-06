@@ -20,20 +20,22 @@ export function getAgentReader(agentName: string): AgentReader | null {
 /**
  * Read session output using the appropriate agent reader
  */
-export function readAgentSessionOutput(
+export async function readAgentSessionOutput(
 	agentName: string,
 	dir: string,
 	sessionId: string,
 	options?: AgentReadOptions,
-): AgentReadResult {
+): Promise<AgentReadResult> {
 	const reader = getAgentReader(agentName);
 
 	if (!reader) {
 		return {
-			output: '',
+			entries: [],
 			totalLines: 0,
 			returnedLines: 0,
 			fileExists: false,
+			fileSizeBytes: 0,
+			fileSizeHuman: '0 B',
 			error: `No reader available for agent: ${agentName}`,
 		};
 	}

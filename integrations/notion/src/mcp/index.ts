@@ -186,7 +186,7 @@ const schemas = {
         z.object({
           properties: z.record(z.any()).describe('Page properties as a JSON map'),
           content: z.string().optional().describe('Page content in Notion-flavored Markdown'),
-        })
+        }),
       )
       .max(100)
       .describe('The pages to create'),
@@ -206,14 +206,24 @@ const schemas = {
   updatePage: z.object({
     page_id: z.string().describe('Page ID to update'),
     command: z
-      .enum(['update_properties', 'replace_content', 'replace_content_range', 'insert_content_after'])
+      .enum([
+        'update_properties',
+        'replace_content',
+        'replace_content_range',
+        'insert_content_after',
+      ])
       .describe('The update command to execute'),
-    properties: z.record(z.any()).optional().describe('Properties to update (for update_properties command)'),
+    properties: z
+      .record(z.any())
+      .optional()
+      .describe('Properties to update (for update_properties command)'),
     new_str: z.string().optional().describe('New content string (for content commands)'),
     selection_with_ellipsis: z
       .string()
       .optional()
-      .describe('Selection pattern with ellipsis for replace_content_range or insert_content_after'),
+      .describe(
+        'Selection pattern with ellipsis for replace_content_range or insert_content_after',
+      ),
     allow_deleting_content: z
       .boolean()
       .optional()
@@ -243,8 +253,8 @@ const schemas = {
   // DATABASE TOOLS
   queryDatabase: z.object({
     database_id: z.string().describe('Database ID'),
-    filter: z.object({}).optional(),
-    sorts: z.array(z.object({})).optional(),
+    filter: z.record(z.any()).optional(),
+    sorts: z.array(z.record(z.any())).optional(),
     start_cursor: z.string().optional(),
     page_size: z.number().optional(),
   }),
@@ -271,7 +281,7 @@ const schemas = {
   // SEARCH & USER TOOLS
   search: z.object({
     query: z.string().optional().describe('Search query'),
-    filter: z.object({}).optional(),
+    filter: z.record(z.any()).optional(),
     start_cursor: z.string().optional(),
     page_size: z.number().optional(),
   }),
@@ -610,13 +620,26 @@ ${contentXml}
       }
 
       case 'notion_update_page': {
-        const { page_id, command, properties, new_str, selection_with_ellipsis, allow_deleting_content } =
-          schemas.updatePage.parse(args);
+        const {
+          page_id,
+          command,
+          properties,
+          new_str,
+          selection_with_ellipsis,
+          allow_deleting_content,
+        } = schemas.updatePage.parse(args);
 
         switch (command) {
           case 'update_properties': {
             if (!properties) {
-              return { content: [{ type: 'text', text: 'Error: properties required for update_properties command' }] };
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: 'Error: properties required for update_properties command',
+                  },
+                ],
+              };
             }
 
             // Build Notion properties format
@@ -635,13 +658,17 @@ ${contentXml}
 
           case 'replace_content': {
             if (!new_str) {
-              return { content: [{ type: 'text', text: 'Error: new_str required for replace_content command' }] };
+              return {
+                content: [
+                  { type: 'text', text: 'Error: new_str required for replace_content command' },
+                ],
+              };
             }
 
             // Get existing children to check for child pages/databases
             const existingBlocks = await fetchAllBlockChildren(page_id);
             const childPages = existingBlocks.filter(
-              (b: any) => b.type === 'child_page' || b.type === 'child_database'
+              (b: any) => b.type === 'child_page' || b.type === 'child_database',
             );
 
             if (childPages.length > 0 && !allow_deleting_content) {
@@ -686,7 +713,10 @@ ${contentXml}
             if (!new_str || !selection_with_ellipsis) {
               return {
                 content: [
-                  { type: 'text', text: 'Error: new_str and selection_with_ellipsis required for this command' },
+                  {
+                    type: 'text',
+                    text: 'Error: new_str and selection_with_ellipsis required for this command',
+                  },
                 ],
               };
             }
@@ -727,7 +757,14 @@ ${contentXml}
         } else if (new_parent.workspace) {
           parentObj = { type: 'workspace', workspace: true };
         } else {
-          return { content: [{ type: 'text', text: 'Error: new_parent must specify page_id, database_id, or workspace' }] };
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Error: new_parent must specify page_id, database_id, or workspace',
+              },
+            ],
+          };
         }
 
         const results: { id: string; success: boolean; error?: string }[] = [];
@@ -745,15 +782,15 @@ ${contentXml}
           }
         }
 
-        const successCount = results.filter(r => r.success).length;
-        const failureCount = results.filter(r => !r.success).length;
+        const successCount = results.filter((r) => r.success).length;
+        const failureCount = results.filter((r) => !r.success).length;
 
         let resultText = `Moved ${successCount}/${page_or_database_ids.length} pages successfully.`;
         if (failureCount > 0) {
           resultText += `\n\nFailed (${failureCount}):\n`;
           resultText += results
-            .filter(r => !r.success)
-            .map(r => `- ${r.id}: ${r.error}`)
+            .filter((r) => !r.success)
+            .map((r) => `- ${r.id}: ${r.error}`)
             .join('\n');
         }
 
@@ -874,12 +911,19 @@ ${contentXml}
               title = item.title?.[0]?.plain_text || 'Untitled';
             }
 
-            return `Type: ${type}\nID: ${item.id}\nTitle: ${title}\nURL: ${item.url}\nLast edited: ${item.last_edited_time}`;
+            return `Type: ${type}\nID: ${item.id}\nTitle: ${title}\nURL: ${item.url}\nCreated: ${item.created_time}\nLast edited: ${item.last_edited_time}`;
           })
           .join('\n\n');
 
+        const hasMore: boolean = res.data.has_more || false;
+        const nextCursor: string | null = res.data.next_cursor || null;
+        let text = `Found ${results.length} results:\n\n${formatted}`;
+        if (hasMore && nextCursor) {
+          text += `\n\nnext_cursor: ${nextCursor}`;
+        }
+
         return {
-          content: [{ type: 'text', text: `Found ${results.length} results:\n\n${formatted}` }],
+          content: [{ type: 'text', text }],
         };
       }
 

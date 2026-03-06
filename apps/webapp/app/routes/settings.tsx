@@ -98,7 +98,9 @@ export default function Settings() {
                         variant="secondary"
                         isActive={location.pathname.includes(item.path)}
                         onClick={() => navigate(`/settings/${item.path}`)}
-                        className={cn("flex w-fit min-w-0 justify-start gap-1")}
+                        className={cn(
+                          "!text-foreground flex w-fit min-w-0 justify-start gap-1",
+                        )}
                       >
                         <item.icon size={18} />
                         <span>{item.name}</span>

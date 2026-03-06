@@ -5,7 +5,7 @@ import {
   deliverWebhook,
   prepareWebhookTargets,
 } from "./webhook-delivery-utils";
-import { prisma } from "../utils/prisma";
+import { prisma } from "~/db.server";
 
 const webhookQueue = queue({
   name: "webhook-delivery-queue",
@@ -207,7 +207,7 @@ export async function triggerWebhookDelivery(
       activityId,
       workspaceId,
     });
-    logger.log(`Triggered webhook delivery for activity ${activityId}`);
+    logger.debug(`Triggered webhook delivery for activity ${activityId}`);
   } catch (error: any) {
     logger.error(
       `Failed to trigger webhook delivery for activity ${activityId}:`,

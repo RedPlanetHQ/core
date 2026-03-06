@@ -46,8 +46,8 @@ export function CustomMcpCard({
   return (
     <Card className="bg-background-3 transition-all">
       <CardHeader className="p-4">
-        <div className="flex items-center justify-between">
-          <div className="bg-background-2 mb-2 flex h-6 w-6 items-center justify-center rounded">
+        <div className="mb-2 flex items-center justify-between">
+          <div className="bg-background-2 flex h-6 w-6 items-center justify-center rounded align-middle">
             <Plug size={18} />
           </div>
 
@@ -64,7 +64,7 @@ export function CustomMcpCard({
                 type="submit"
                 variant="ghost"
                 size="sm"
-                className="h-6 w-6 p-0 rounded"
+                className="h-6 w-6 rounded p-0"
                 disabled={fetcher.state === "submitting"}
               >
                 <Trash2 size={14} />
@@ -72,7 +72,7 @@ export function CustomMcpCard({
             </fetcher.Form>
           </div>
         </div>
-        <CardTitle className="text-base">{integration.name}</CardTitle>
+        <CardTitle className="mt-2 text-base">{integration.name}</CardTitle>
         <CardDescription className="line-clamp-2 text-sm">
           {integration.serverUrl}
         </CardDescription>

@@ -52,15 +52,12 @@ export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
 /**
  * Check if a DM channel includes the CORE bot as a member.
  * Uses the sending user's IntegrationAccount to get a bot token for the API call.
- * Returns true if SLACK_BOT_USER_ID is not configured (skip check).
+ * Returns true if bot_user_id is not in the integration config (skip check).
  */
 async function isDMWithBot(
   channelId: string,
   slackUserId: string,
 ): Promise<boolean> {
-  const botUserId = env.SLACK_BOT_USER_ID;
-  if (!botUserId) return true;
-
   const account = await prisma.integrationAccount.findFirst({
     where: {
       accountId: slackUserId,
@@ -76,6 +73,9 @@ async function isDMWithBot(
   const config = account.integrationConfiguration as Record<string, string>;
   const botToken = config?.bot_token;
   if (!botToken) return false;
+
+  const botUserId = config?.bot_user_id;
+  if (!botUserId) return true;
 
   try {
     const res = await fetch(
@@ -154,12 +154,19 @@ export async function parseSlackDMEvent(
   if (event.ts) {
     metadata.messageTs = event.ts;
   }
+  // Capture thread_ts for all message types (DMs and @mentions)
+  // Set as sessionId so message-processor creates a separate conversation per thread
+  if (event.thread_ts) {
+    metadata.threadTs = event.thread_ts;
+    metadata.sessionId = event.thread_ts;
+  }
   if (event.type === "app_mention" && event.channel) {
-    // For @mentions, also set slackChannel + threadTs for reply routing
+    // For @mentions, also set slackChannel for reply routing
     metadata.slackChannel = event.channel;
-    const threadTs = event.thread_ts ?? event.ts;
-    if (threadTs) {
-      metadata.threadTs = threadTs;
+    // Use thread_ts or message ts as threadTs for reply routing
+    if (!metadata.threadTs && event.ts) {
+      metadata.threadTs = event.ts;
+      metadata.sessionId = event.ts;
     }
   }
 

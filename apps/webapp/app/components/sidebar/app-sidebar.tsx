@@ -18,7 +18,10 @@ import {
   Mail,
   Phone,
   Search,
-  Settings,
+  Brain,
+  Clock,
+  Library,
+  Plug,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -26,6 +29,8 @@ import { NavUser } from "./nav-user";
 import Logo from "../logo/logo";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
+import { ConversationList } from "../conversation/conversation-list";
+import { UnreadConversations } from "../conversation/unread-conversations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -33,12 +38,8 @@ import {
   DropdownMenuTrigger,
 } from "../ui/dropdown-menu";
 
-import { type Label } from "@prisma/client";
-
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useParams } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
-import { Agent } from "./agent";
-import { Memory } from "./memory";
 
 const data = {
   navMain: [
@@ -46,6 +47,7 @@ const data = {
       title: "New chat",
       url: "/home/conversation",
       icon: MessageSquare,
+      strict: true,
     },
     {
       title: "Integrations",
@@ -53,17 +55,27 @@ const data = {
       icon: LayoutGrid,
     },
     {
-      title: "Settings",
-      url: "/settings/account",
-      icon: Settings,
+      title: "My mind",
+      url: "/home/memory",
+      icon: Brain,
+    },
+    {
+      title: "Reminders",
+      url: "/home/agent/reminders",
+      icon: Clock,
+    },
+    {
+      title: "Skills",
+      url: "/home/agent/skills",
+      icon: Library,
     },
   ],
 };
 
-export function AppSidebar({ labels }: { labels: Label[] }) {
+export function AppSidebar() {
   const user = useUser();
   const navigate = useNavigate();
-
+  const params = useParams();
   const [commandBar, setCommandBar] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
@@ -96,7 +108,7 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
                   variant="secondary"
                   size="sm"
                   className="rounded"
-                  onClick={() => navigate(`/home/episode`)}
+                  onClick={() => navigate(`/home/conversation`)}
                 >
                   <Plus size={16} />
                 </Button>
@@ -106,12 +118,27 @@ export function AppSidebar({ labels }: { labels: Label[] }) {
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={data.navMain} />
-          <Agent />
-          <Memory />
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+            <UnreadConversations
+              currentConversationId={params.conversationId}
+            />
+            <ConversationList currentConversationId={params.conversationId} />
+          </div>
         </SidebarContent>
 
-        <SidebarFooter className="flex flex-col gap-2 px-2">
+        <SidebarFooter className="flex flex-col gap-1 px-2">
           <IngestionStatus />
+          <Button
+            variant="secondary"
+            className="w-full justify-start gap-2 rounded"
+            size="lg"
+            onClick={() => {
+              navigate("/home/agent/connect");
+            }}
+          >
+            <Plug size={18} />
+            Connect
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button

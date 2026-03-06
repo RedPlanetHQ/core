@@ -778,7 +778,44 @@ export interface IGraphProvider {
     userId: string;
     workspaceId: string;
     maxEpisodes: number;
+    aspects?: string[];
   }): Promise<EpisodicNode[]>;
+
+  /**
+   * Get distinct topic label IDs and episode counts in a time range
+   * Used by handleTemporalFacets in search-v2
+   */
+  getTopicsForFacets(params: {
+    userId: string;
+    workspaceId?: string;
+    startTime: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<{ labelId: string; episodeCount: number }[]>;
+
+  /**
+   * Get distinct entities mentioned in statements in a time range
+   * Used by handleTemporalFacets in search-v2
+   */
+  getEntitiesForFacets(params: {
+    userId: string;
+    workspaceId?: string;
+    startTime: Date;
+    endTime?: Date;
+    limit?: number;
+  }): Promise<{ entityUuid: string; entityName: string; mentionCount: number }[]>;
+
+  /**
+   * Get statement counts grouped by aspect in a time range, with sample facts
+   * Used by handleTemporalFacets in search-v2
+   */
+  getAspectsForFacets(params: {
+    userId: string;
+    workspaceId?: string;
+    startTime: Date;
+    endTime?: Date;
+    aspects?: string[];
+  }): Promise<{ aspect: string; statementCount: number; statements: { fact: string; validAt: string; episodeUuid: string }[] }[]>;
 
   /**
    * Get episodes within a time range with statement filtering

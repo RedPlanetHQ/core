@@ -9,6 +9,7 @@ import {
   scheduleNextOccurrence,
   deactivateReminder,
 } from "~/services/reminder.server";
+import { initializeProvider } from "../utils/provider";
 
 const reminderQueue = queue({
   name: "reminder-queue",
@@ -27,6 +28,7 @@ export const reminderTask = task({
   id: "process-reminder",
   queue: reminderQueue,
   run: async (payload: ReminderJobData) => {
+    await initializeProvider();
     return await processReminderJob(
       payload,
       scheduleNextOccurrence,
@@ -42,6 +44,7 @@ export const followUpTask = task({
   id: "process-followup",
   queue: followUpQueueDef,
   run: async (payload: FollowUpJobData) => {
+    await initializeProvider();
     return await processFollowUpJob(payload);
   },
 });

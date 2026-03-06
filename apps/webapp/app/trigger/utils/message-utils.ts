@@ -2,7 +2,7 @@ import { EpisodeTypeEnum, type Message } from "@core/types";
 import { addToQueue } from "./queue";
 import { triggerWebhookDelivery } from "../webhooks/webhook-delivery";
 import { logger } from "@trigger.dev/sdk";
-import { prisma } from "./prisma";
+import { prisma } from "~/db.server";
 
 export const createIntegrationAccount = async ({
   integrationDefinitionId,
@@ -164,7 +164,7 @@ export const createActivities = async ({
             activity.id,
             integrationAccount?.workspaceId,
           );
-          logger.log("Webhook delivery triggered for activity", {
+          logger.debug("Webhook delivery triggered for activity", {
             activityId: activity.id,
           });
         } catch (error) {

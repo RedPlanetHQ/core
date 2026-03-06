@@ -7,6 +7,7 @@ import {
 } from "~/services/routeBuilders/apiBuilder.server";
 import { addReminder } from "~/services/reminder.server";
 import { logger } from "~/services/logger.service";
+import type { MessageChannel } from "~/services/agent/types";
 
 // Schema for list search parameters
 const RemindersSearchParams = z.object({
@@ -20,12 +21,35 @@ const RemindersSearchParams = z.object({
 const ReminderCreateSchema = z.object({
   text: z.string().min(1, "Text is required"),
   schedule: z.string().min(1, "Schedule is required"),
-  channel: z.enum(["whatsapp", "email"]).default("whatsapp"),
+  channel: z.enum(["whatsapp", "email", "slack"]).default("email"),
   maxOccurrences: z.number().optional().nullable(),
   endDate: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
   metadata: z.record(z.any()).optional().nullable(),
 });
+
+async function getAvailableChannels(
+  workspaceId: string
+): Promise<MessageChannel[]> {
+  const [workspace, slackAccount] = await Promise.all([
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: { UserWorkspace: { include: { user: true }, take: 1 } },
+    }),
+    prisma.integrationAccount.findFirst({
+      where: {
+        workspaceId,
+        integrationDefinition: { slug: "slack" },
+      },
+    }),
+  ]);
+
+  const user = workspace?.UserWorkspace[0]?.user;
+  const channels: MessageChannel[] = ["email"];
+  if (user?.phoneNumber) channels.push("whatsapp");
+  if (slackAccount) channels.push("slack");
+  return channels;
+}
 
 // GET - List reminders
 export const loader = createHybridLoaderApiRoute(
@@ -111,6 +135,20 @@ const { action } = createActionApiRoute(
     try {
       if (!authentication.workspaceId) {
         throw new Response("Workspace not found", { status: 404 });
+      }
+
+      // Validate channel is available
+      const availableChannels = await getAvailableChannels(
+        authentication.workspaceId
+      );
+      if (!availableChannels.includes(body.channel)) {
+        return json(
+          {
+            success: false,
+            message: `Channel "${body.channel}" is not available. Available channels: ${availableChannels.join(", ")}`,
+          },
+          { status: 400 }
+        );
       }
 
       logger.log("Creating reminder via API", {

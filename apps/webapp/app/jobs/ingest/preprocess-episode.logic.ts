@@ -18,7 +18,7 @@ import {
 } from "./ingest-episode.logic";
 import { EpisodeChunker } from "~/services/episodeChunker.server";
 import { saveEpisode } from "~/services/graphModels/episode";
-import { prisma } from "~/trigger/utils/prisma";
+import { prisma } from "~/db.server";
 import { type SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import { getRecentEpisodes } from "~/services/vectorStorage.server";
 import { type EpisodeEmbedding } from "@prisma/client";
@@ -43,7 +43,14 @@ async function getPreviousVersionEpisodes(
   previousVersion: number,
   workspaceId?: string,
 ): Promise<EpisodeEmbedding[]> {
-  const allEpisodes = await getRecentEpisodes(userId, 200, sessionId, undefined, undefined, workspaceId);
+  const allEpisodes = await getRecentEpisodes(
+    userId,
+    200,
+    sessionId,
+    undefined,
+    undefined,
+    workspaceId,
+  );
 
   // Filter to get only episodes from previous version
   return allEpisodes.filter((ep) => ep.version === previousVersion);

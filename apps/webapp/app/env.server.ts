@@ -209,7 +209,6 @@ const EnvironmentSchema = z
 
     // Slack
     SLACK_SIGNING_SECRET: z.string().optional(),
-    SLACK_BOT_USER_ID: z.string().optional(),
 
     // Resend
     RESEND_WEBHOOK_SECRET: z.string().optional(),

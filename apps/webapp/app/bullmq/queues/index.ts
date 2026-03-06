@@ -244,3 +244,21 @@ export const followUpQueue = new Queue("followup-queue", {
     },
   },
 });
+
+/**
+ * Background task queue
+ * Handles long-running background tasks with user notification
+ */
+export const backgroundTaskQueue = new Queue("background-task-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1, // No retries - task handles its own state
+    removeOnComplete: {
+      age: 7200, // Keep completed jobs for 2 hours
+      count: 100,
+    },
+    removeOnFail: {
+      age: 86400, // Keep failed jobs for 24 hours
+    },
+  },
+});

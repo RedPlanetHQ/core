@@ -139,7 +139,7 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_start_session',
 		description:
-			'Start a new coding session with the specified agent (runs in background)',
+			'Start a new coding session with the specified agent (runs in background). After starting, the first coding_read_session call may return status="initializing" — this is normal while the agent boots. Wait a few seconds and retry before concluding failure.',
 		inputSchema: jsonSchemas.coding_start_session!,
 	},
 	{
@@ -317,7 +317,7 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	};
 }
 
-function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
+async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// First check stored session exists
 	const session = getSession(params.sessionId);
 	if (!session) {
@@ -332,12 +332,14 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 
 	// Read from agent's session file using the appropriate reader
 	const {
-		output,
+		entries,
 		totalLines,
 		returnedLines,
 		fileExists,
+		fileSizeBytes,
+		fileSizeHuman,
 		error: readError,
-	} = readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
+	} = await readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
 		lines: params.lines,
 		offset: params.offset,
 		tail: params.tail,
@@ -345,7 +347,13 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 
 	// Determine status
 	let status = session.status;
-	if (running) {
+	let statusMessage: string | undefined;
+	if (running && !fileExists) {
+		// Process is alive but hasn't written its session file yet — still booting
+		status = 'initializing';
+		statusMessage =
+			'Session is starting up. The agent has not written output yet. Wait a few seconds and read again.';
+	} else if (running) {
 		status = 'running';
 	} else if (fileExists && status === 'running') {
 		// Process finished, update status
@@ -363,8 +371,9 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			prompt: session.prompt,
 			dir: session.dir,
 			status,
+			...(statusMessage ? {statusMessage} : {}),
 			running,
-			output,
+			entries,
 			error: readError || session.error,
 			exitCode: null,
 			startedAt: session.startedAt,
@@ -372,6 +381,8 @@ function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			totalLines,
 			returnedLines,
 			fileExists,
+			fileSizeBytes,
+			fileSizeHuman,
 		},
 	};
 }
@@ -418,7 +429,7 @@ export async function executeCodingTool(
 				return handleCloseSession(CloseSessionSchema.parse(params));
 
 			case 'coding_read_session':
-				return handleReadSession(ReadSessionSchema.parse(params));
+				return await handleReadSession(ReadSessionSchema.parse(params));
 
 			case 'coding_list_sessions':
 				ListSessionsSchema.parse(params);

@@ -54,8 +54,12 @@ export type CoreAgentMessage = InferAgentUIMessage<ToolLoopAgent<any>>;
 
 // Helper types for UI components
 export interface CoreAgentToolPart {
-  type: 'tool-gather_context' | 'tool-take_action';
-  state: 'input-streaming' | 'input-available' | 'output-available' | 'output-error';
+  type: "tool-gather_context" | "tool-take_action";
+  state:
+    | "input-streaming"
+    | "input-available"
+    | "output-available"
+    | "output-error";
   preliminary?: boolean;
   input?: any;
   output?: {
@@ -69,13 +73,13 @@ export interface CoreAgentToolPart {
 
 // Helper functions for UI
 export const isStreaming = (part: CoreAgentToolPart): boolean => {
-  return part.state === 'output-available' && part.preliminary === true;
+  return part.state === "output-available" && part.preliminary === true;
 };
 
 export const isComplete = (part: CoreAgentToolPart): boolean => {
-  return part.state === 'output-available' && !part.preliminary;
+  return part.state === "output-available" && !part.preliminary;
 };
 
 export const hasOutput = (part: CoreAgentToolPart): boolean => {
-  return part.state === 'output-available';
+  return part.state === "output-available";
 };

@@ -1,7 +1,8 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { Link, useLoaderData, useNavigate } from "@remix-run/react";
+import { useLoaderData, useNavigate } from "@remix-run/react";
+import { type NavigateFunction } from "@remix-run/react";
 import { useRef } from "react";
-import { Tag, Plus, FileText } from "lucide-react";
+import { Tag, FileText } from "lucide-react";
 import {
   AutoSizer,
   CellMeasurer,
@@ -9,7 +10,6 @@ import {
   List,
   type ListRowProps,
 } from "react-virtualized";
-import { PageHeader } from "~/components/common/page-header";
 import { withOpacity } from "~/lib/color-utils";
 import { LabelService } from "~/services/label.server";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
@@ -46,6 +46,7 @@ function LabelRowRenderer(
   props: ListRowProps,
   labels: LabelItem[],
   cache: CellMeasurerCache,
+  navigate: NavigateFunction,
 ) {
   const { index, key, style, parent } = props;
   const label = labels[index];
@@ -75,14 +76,16 @@ function LabelRowRenderer(
       rowIndex={index}
     >
       <div key={key} style={style} className="px-2 py-1">
-        <Link
-          to={`/home/labels/${label.id}`}
+        <button
+          type="button"
+          onClick={() =>
+            navigate(`/home/memory/documents?label=${label.id}`)
+          }
           className={cn(
-            "group flex items-start gap-3 rounded-lg border border-gray-300 p-3",
+            "group flex w-full items-start gap-3 rounded-lg border border-gray-300 p-3 text-left",
             "bg-background-3 hover:bg-background-3/50 transition-all",
           )}
         >
-          {/* Tag Icon */}
           <div
             className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded"
             style={{ backgroundColor: withOpacity(label.color, 0.12) }}
@@ -90,7 +93,6 @@ function LabelRowRenderer(
             <Tag size={16} style={{ color: label.color }} />
           </div>
 
-          {/* Content */}
           <div className="min-w-0 flex-1">
             <div className="flex items-center justify-between gap-2">
               <h3 className="truncate font-medium">{label.name}</h3>
@@ -105,13 +107,13 @@ function LabelRowRenderer(
               </p>
             )}
           </div>
-        </Link>
+        </button>
       </div>
     </CellMeasurer>
   );
 }
 
-export default function LabelsIndex() {
+export default function MemoryLabelsIndex() {
   const { labels } = useLoaderData<typeof loader>();
   const navigate = useNavigate();
 
@@ -125,23 +127,11 @@ export default function LabelsIndex() {
   const cache = cacheRef.current;
 
   const rowRenderer = (props: ListRowProps) => {
-    return LabelRowRenderer(props, labels, cache);
+    return LabelRowRenderer(props, labels, cache, navigate);
   };
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader
-        title="Labels"
-        actions={[
-          {
-            label: "New label",
-            icon: <Plus size={14} />,
-            onClick: () => navigate("/settings/labels"),
-            variant: "secondary",
-          },
-        ]}
-      />
-
       <div className="flex h-[calc(100vh)] w-full flex-col p-2 md:h-[calc(100vh_-_56px)]">
         {labels.length === 0 ? (
           <div className="mt-20 flex flex-col items-center justify-center">

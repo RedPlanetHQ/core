@@ -12,6 +12,7 @@ export const CreateConversationSchema = z.object({
   conversationId: z.string().optional(),
   source: z.string().optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
+  asyncJobId: z.string().optional(),
   parts: z
     .array(
       z.object({
@@ -30,7 +31,7 @@ export async function createConversation(
   userId: string,
   conversationData: CreateConversationDto,
 ) {
-  const { title, conversationId, source, ...otherData } = conversationData;
+  const { title, conversationId, source, asyncJobId, ...otherData } = conversationData;
 
   if (conversationId) {
     // Add a new message to an existing conversation
@@ -67,6 +68,7 @@ export async function createConversation(
       workspaceId,
       userId,
       source: source || "core",
+      asyncJobId: asyncJobId || null,
       title:
         title?.substring(0, 100) ?? conversationData.message.substring(0, 100),
       ConversationHistory: {
@@ -118,6 +120,14 @@ export async function deleteConversation(conversationId: string) {
 export async function readConversation(conversationId: string) {
   return prisma.conversation.update({
     where: { id: conversationId },
+    data: { unread: false },
+  });
+}
+
+// Mark all conversations as read for a user
+export async function readAllConversations(userId: string) {
+  return prisma.conversation.updateMany({
+    where: { userId, unread: true, deleted: null },
     data: { unread: false },
   });
 }
@@ -191,7 +201,7 @@ export const upsertConversationHistory = async (
   thoughts?: Record<string, any>,
 ) => {
   if (id) {
-    return await prisma.conversationHistory.upsert({
+    const result = await prisma.conversationHistory.upsert({
       where: {
         id,
       },
@@ -211,6 +221,11 @@ export const upsertConversationHistory = async (
         userType,
       },
     });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { unread: true },
+    });
+    return result;
   } else {
     await prisma.conversationHistory.create({
       data: {
@@ -221,6 +236,10 @@ export const upsertConversationHistory = async (
         userType,
       },
     });
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { unread: true },
+    });
   }
 };
 
@@ -229,6 +248,7 @@ export const GetConversationsListSchema = z.object({
   limit: z.string().optional().default("20"),
   search: z.string().optional(),
   source: z.string().optional(),
+  unread: z.string().optional(),
 });
 
 export type GetConversationsListDto = z.infer<
@@ -250,6 +270,9 @@ export async function getConversationsList(
     deleted: null,
     ...(params.source && {
       source: params.source,
+    }),
+    ...(params.unread === "true" && {
+      unread: true,
     }),
     ...(params.search && {
       OR: [

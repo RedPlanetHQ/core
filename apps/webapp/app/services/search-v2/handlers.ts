@@ -8,9 +8,16 @@ import type {
   RecallResult,
   RecallEpisode,
   RecallInvalidatedFact,
+  RecallFacets,
+  RecallTopicFacet,
 } from "./types";
 import { getMatchedLabelIds } from "./router";
-import { type EntityNode, type EpisodicNode, type StatementAspect, type StatementNode } from "@core/types";
+import {
+  type EntityNode,
+  type EpisodicNode,
+  type StatementAspect,
+  type StatementNode,
+} from "@core/types";
 
 /** Episode with optional relevance score from reranking */
 type RankedEpisode = EpisodicNode & { relevanceScore?: number };
@@ -23,7 +30,7 @@ import { getEmbedding } from "~/lib/model.server";
 async function applyCohereStatementReranking(
   query: string,
   statements: StatementNode[],
-  options?: { limit?: number; model?: string }
+  options?: { limit?: number; model?: string },
 ): Promise<(StatementNode & { cohereScore: number })[]> {
   const { model = "rerank-v3.5", limit = 50 } = options || {};
 
@@ -41,7 +48,9 @@ async function applyCohereStatementReranking(
     const cohere = new CohereClientV2({ token: apiKey });
     const documents = statements.map((s) => s.fact);
 
-    logger.info(`[Rerank] Reranking ${documents.length} statements with query: "${query.slice(0, 50)}..."`);
+    logger.debug(
+      `[Rerank] Reranking ${documents.length} statements with query: "${query.slice(0, 50)}..."`,
+    );
 
     const response = await cohere.rerank({
       query,
@@ -59,7 +68,7 @@ async function applyCohereStatementReranking(
       `[Rerank] Top 3: ${reranked
         .slice(0, 3)
         .map((r) => `[${r.cohereScore.toFixed(2)}] ${r.fact.slice(0, 40)}...`)
-        .join(" | ")}`
+        .join(" | ")}`,
     );
 
     return reranked;
@@ -115,7 +124,7 @@ function getTemporalDateRange(ctx: HandlerContext): {
  * Group statements by aspect
  */
 function groupByAspect(
-  statements: StatementNode[]
+  statements: StatementNode[],
 ): Record<StatementAspect, StatementNode[]> {
   const grouped = {} as Record<StatementAspect, StatementNode[]>;
 
@@ -136,18 +145,24 @@ function groupByAspect(
  * Returns raw episode nodes without reranking or normalization
  * This is the most common query type
  */
-export async function handleAspectQuery(ctx: HandlerContext): Promise<EpisodicNode[]> {
+export async function handleAspectQuery(
+  ctx: HandlerContext,
+): Promise<EpisodicNode[]> {
   const startTime = Date.now();
   const graphProvider = ProviderFactory.getGraphProvider();
 
-  const labelIds = getMatchedLabelIds(ctx.routerOutput, ctx.options.fallbackThreshold || 0.5);
+  const labelIds = getMatchedLabelIds(
+    ctx.routerOutput,
+    ctx.options.fallbackThreshold || 0.5,
+  );
   const aspects = ctx.routerOutput.aspects;
-  const { startTime: temporalStart, endTime: temporalEnd } = getTemporalDateRange(ctx);
+  const { startTime: temporalStart, endTime: temporalEnd } =
+    getTemporalDateRange(ctx);
   const maxEpisodes = ctx.options.maxEpisodes || 20;
 
   logger.info(
     `[Handler:aspect_query] Labels: [${labelIds.join(", ")}], ` +
-    `Aspects: [${aspects.join(", ")}], MaxEpisodes: ${maxEpisodes}`
+      `Aspects: [${aspects.join(", ")}], MaxEpisodes: ${maxEpisodes}`,
   );
 
   // Find episodes that have statements matching the aspects
@@ -167,7 +182,7 @@ export async function handleAspectQuery(ctx: HandlerContext): Promise<EpisodicNo
   }
 
   logger.info(
-    `[Handler:aspect_query] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`
+    `[Handler:aspect_query] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -177,8 +192,8 @@ export async function handleAspectQuery(ctx: HandlerContext): Promise<EpisodicNo
  * Result type for entity lookup
  */
 type EntityLookupResult =
-  | { mode: 'attribute'; entities: EntityNode[] }
-  | { mode: 'broad'; episodes: EpisodicNode[]; entities: EntityNode[] };
+  | { mode: "attribute"; entities: EntityNode[] }
+  | { mode: "broad"; episodes: EpisodicNode[]; entities: EntityNode[] };
 
 /**
  * Handle entity_lookup - find information about specific entities
@@ -190,7 +205,7 @@ type EntityLookupResult =
  *   → Returns episodes about the entity
  */
 export async function handleEntityLookup(
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<EntityLookupResult | null> {
   const startTime = Date.now();
   const graphProvider = ProviderFactory.getGraphProvider();
@@ -207,7 +222,7 @@ export async function handleEntityLookup(
 
   logger.info(
     `[Handler:entity_lookup] Mode: ${lookupMode}, Entities: [${entityHints.join(", ")}]` +
-    (attributeHint ? `, Attribute: ${attributeHint}` : "")
+      (attributeHint ? `, Attribute: ${attributeHint}` : ""),
   );
 
   // Step 1: Find matching entities using semantic vector search
@@ -219,7 +234,9 @@ export async function handleEntityLookup(
     const hintEmbedding = await getEmbedding(hint);
 
     if (!hintEmbedding || hintEmbedding.length === 0) {
-      logger.warn(`[Handler:entity_lookup] Failed to get embedding for hint: ${hint}`);
+      logger.debug(
+        `[Handler:entity_lookup] Failed to get embedding for hint: ${hint}`,
+      );
       continue;
     }
 
@@ -234,7 +251,11 @@ export async function handleEntityLookup(
 
     // Fetch full entity data for vector matches
     const entityUuids = vectorResults.map((r) => r.id);
-    const entityNodes = await graphProvider.getEntities(entityUuids, ctx.userId, ctx.workspaceId);
+    const entityNodes = await graphProvider.getEntities(
+      entityUuids,
+      ctx.userId,
+      ctx.workspaceId,
+    );
 
     allEntities.push(...entityNodes.filter((e) => e && e.uuid && e.name));
   }
@@ -254,14 +275,16 @@ export async function handleEntityLookup(
   }
 
   logger.info(
-    `[Handler:entity_lookup] Found ${entities.length} entities via vector search: [${entities.map((e) => e.name).join(", ")}]`
+    `[Handler:entity_lookup] Found ${entities.length} entities via vector search: [${entities.map((e) => e.name).join(", ")}]`,
   );
 
   // ========================================
   // ATTRIBUTE MODE: Quick attribute lookup
   // ========================================
   if (lookupMode === "attribute" && attributeHint) {
-    logger.info(`[Handler:entity_lookup] Attribute mode - looking for: ${attributeHint}`);
+    logger.debug(
+      `[Handler:entity_lookup] Attribute mode - looking for: ${attributeHint}`,
+    );
 
     // Check if any entity has the requested attribute
     let foundAttribute = false;
@@ -269,9 +292,10 @@ export async function handleEntityLookup(
       if (entity.attributes) {
         try {
           // Parse attributes if it's a string (JSON)
-          const attrs = typeof entity.attributes === "string"
-            ? JSON.parse(entity.attributes)
-            : entity.attributes;
+          const attrs =
+            typeof entity.attributes === "string"
+              ? JSON.parse(entity.attributes)
+              : entity.attributes;
 
           if (!attrs || typeof attrs !== "object") {
             continue;
@@ -279,19 +303,23 @@ export async function handleEntityLookup(
 
           // Look for the attribute (case-insensitive key match)
           const attrKey = Object.keys(attrs).find(
-            (k) => k && attributeHint &&
+            (k) =>
+              k &&
+              attributeHint &&
               (k.toLowerCase() === attributeHint.toLowerCase() ||
-                k.toLowerCase().includes(attributeHint.toLowerCase()))
+                k.toLowerCase().includes(attributeHint.toLowerCase())),
           );
 
           if (attrKey && attrs[attrKey]) {
             foundAttribute = true;
             logger.info(
-              `[Handler:entity_lookup] Found attribute ${attrKey}=${attrs[attrKey]} for ${entity.name}`
+              `[Handler:entity_lookup] Found attribute ${attrKey}=${attrs[attrKey]} for ${entity.name}`,
             );
           }
         } catch (error) {
-          logger.warn(`[Handler:entity_lookup] Failed to parse attributes for entity ${entity.uuid}: ${error}`);
+          logger.debug(
+            `[Handler:entity_lookup] Failed to parse attributes for entity ${entity.uuid}: ${error}`,
+          );
         }
       }
     }
@@ -299,14 +327,14 @@ export async function handleEntityLookup(
     // If attribute found, return just entities
     if (foundAttribute) {
       logger.info(
-        `[Handler:entity_lookup] Attribute lookup complete: ${entities.length} entities in ${Date.now() - startTime}ms`
+        `[Handler:entity_lookup] Attribute lookup complete: ${entities.length} entities in ${Date.now() - startTime}ms`,
       );
-      return { mode: 'attribute', entities };
+      return { mode: "attribute", entities };
     }
 
     // Attribute not in entity.attributes - fall through to broad mode
     logger.info(
-      `[Handler:entity_lookup] Attribute "${attributeHint}" not in entity attributes, falling back to broad mode`
+      `[Handler:entity_lookup] Attribute "${attributeHint}" not in entity attributes, falling back to broad mode`,
     );
   }
 
@@ -315,18 +343,21 @@ export async function handleEntityLookup(
   // ========================================
   const entityUuids = entities.map((e) => e.uuid);
 
+  const aspects =
+    ctx.routerOutput.aspects.length > 0 ? ctx.routerOutput.aspects : undefined;
   const episodes = await graphProvider.getEpisodesForEntities({
     entityUuids,
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
     maxEpisodes,
+    aspects,
   });
 
   logger.info(
-    `[Handler:entity_lookup] Returning ${entities.length} entities with ${episodes.length} episodes in ${Date.now() - startTime}ms`
+    `[Handler:entity_lookup] Returning ${entities.length} entities with ${episodes.length} episodes in ${Date.now() - startTime}ms`,
   );
 
-  return { mode: 'broad', episodes, entities };
+  return { mode: "broad", episodes, entities };
 }
 
 /**
@@ -334,13 +365,17 @@ export async function handleEntityLookup(
  * Returns raw episode nodes without reranking or normalization
  */
 export async function handleTemporal(
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<EpisodicNode[]> {
   const startTime = Date.now();
   const graphProvider = ProviderFactory.getGraphProvider();
 
-  const labelIds = getMatchedLabelIds(ctx.routerOutput, ctx.options.fallbackThreshold || 0.5);
-  const { startTime: temporalStart, endTime: temporalEnd } = getTemporalDateRange(ctx);
+  const labelIds = getMatchedLabelIds(
+    ctx.routerOutput,
+    ctx.options.fallbackThreshold || 0.5,
+  );
+  const { startTime: temporalStart, endTime: temporalEnd } =
+    getTemporalDateRange(ctx);
   const limit = Math.floor(ctx.options.maxEpisodes || 10);
 
   // Default to last 7 days if no temporal filter specified
@@ -348,7 +383,7 @@ export async function handleTemporal(
     temporalStart || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
 
   logger.info(
-    `[Handler:temporal] Time range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`
+    `[Handler:temporal] Time range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`,
   );
 
   // Get episodes within time range using graph provider method
@@ -368,7 +403,7 @@ export async function handleTemporal(
   }
 
   logger.info(
-    `[Handler:temporal] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`
+    `[Handler:temporal] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -384,20 +419,25 @@ export async function handleTemporal(
  * - "recent progress on feature X"
  */
 export async function handleExploratory(
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<EpisodicNode[]> {
   const startTime = Date.now();
   const graphProvider = ProviderFactory.getGraphProvider();
 
-  const labelIds = getMatchedLabelIds(ctx.routerOutput, ctx.options.fallbackThreshold || 0.5);
+  const labelIds = getMatchedLabelIds(
+    ctx.routerOutput,
+    ctx.options.fallbackThreshold || 0.5,
+  );
   const maxEpisodes = ctx.options.maxEpisodes || 20;
 
   logger.info(
-    `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxEpisodes: ${maxEpisodes}`
+    `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxEpisodes: ${maxEpisodes}`,
   );
 
   if (labelIds.length === 0) {
-    logger.info("[Handler:exploratory] No labels matched, falling back to recent episodes");
+    logger.debug(
+      "[Handler:exploratory] No labels matched, falling back to recent episodes",
+    );
   }
 
   // Get episodes filtered by labels using graph provider method
@@ -414,7 +454,7 @@ export async function handleExploratory(
   }
 
   logger.info(
-    `[Handler:exploratory] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`
+    `[Handler:exploratory] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -428,7 +468,7 @@ export async function handleExploratory(
  * Returns raw statement nodes without reranking or normalization
  */
 export async function handleRelationship(
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<StatementNode[]> {
   const startTime = Date.now();
   const graphProvider = ProviderFactory.getGraphProvider();
@@ -438,13 +478,13 @@ export async function handleRelationship(
 
   if (entityHints.length < 2) {
     logger.info(
-      "[Handler:relationship] Need at least 2 entities for relationship query"
+      "[Handler:relationship] Need at least 2 entities for relationship query",
     );
     return [];
   }
 
   logger.info(
-    `[Handler:relationship] Finding relationships between: [${entityHints.join(", ")}]`
+    `[Handler:relationship] Finding relationships between: [${entityHints.join(", ")}]`,
   );
 
   // Find statements that connect the hinted entities
@@ -457,17 +497,18 @@ export async function handleRelationship(
   });
 
   if (statements.length === 0) {
-    logger.info("[Handler:relationship] No statements found connecting entities");
+    logger.debug(
+      "[Handler:relationship] No statements found connecting entities",
+    );
     return [];
   }
 
   logger.info(
-    `[Handler:relationship] Found ${statements.length} statements in ${Date.now() - startTime}ms`
+    `[Handler:relationship] Found ${statements.length} statements in ${Date.now() - startTime}ms`,
   );
 
   return statements;
 }
-
 
 /**
  * Apply vector similarity reranking using batchScore
@@ -483,7 +524,9 @@ async function applyVectorReranking(
   const queryEmbedding = await getEmbedding(query);
 
   if (!queryEmbedding || queryEmbedding.length === 0) {
-    logger.warn("[Reranking:vector] Failed to get query embedding, returning original order");
+    logger.debug(
+      "[Reranking:vector] Failed to get query embedding, returning original order",
+    );
     return episodes.slice(0, maxEpisodes);
   }
 
@@ -508,7 +551,7 @@ async function applyVectorReranking(
 
   logger.info(
     `[Reranking:vector] ${episodes.length} → ${scored.length} episodes in ${Date.now() - startTime}ms ` +
-    `(threshold ${threshold}, top: ${scored[0]?.relevanceScore?.toFixed(3) ?? "N/A"})`
+      `(threshold ${threshold}, top: ${scored[0]?.relevanceScore?.toFixed(3) ?? "N/A"})`,
   );
 
   return scored;
@@ -521,7 +564,7 @@ async function applyVectorReranking(
 async function applyEpisodeReranking(
   episodes: EpisodicNode[],
   ctx: HandlerContext,
-  options?: { threshold?: number }
+  options?: { threshold?: number },
 ): Promise<RankedEpisode[]> {
   const enableReranking = ctx.options.enableReranking !== false;
   const query = ctx.options.query;
@@ -543,10 +586,14 @@ async function applyEpisodeReranking(
         },
       }));
 
-      const reranked = await applyCohereEpisodeReranking(query, episodesForRerank, {
-        limit: maxEpisodes,
-        model: "rerank-v3.5",
-      });
+      const reranked = await applyCohereEpisodeReranking(
+        query,
+        episodesForRerank,
+        {
+          limit: maxEpisodes,
+          model: "rerank-v3.5",
+        },
+      );
 
       const rerankedEpisodes = reranked
         .filter((r: any) => r.cohereScore >= RELEVANCE_THRESHOLD)
@@ -559,17 +606,24 @@ async function applyEpisodeReranking(
         });
 
       logger.info(
-        `[Reranking:cohere] ${episodes.length} → ${rerankedEpisodes.length} episodes (threshold ${RELEVANCE_THRESHOLD})`
+        `[Reranking:cohere] ${episodes.length} → ${rerankedEpisodes.length} episodes (threshold ${RELEVANCE_THRESHOLD})`,
       );
       return rerankedEpisodes;
     } catch (error) {
-      logger.warn(`[Reranking:cohere] Failed, falling back to vector reranking: ${error}`);
+      logger.debug(
+        `[Reranking:cohere] Failed, falling back to vector reranking: ${error}`,
+      );
     }
   }
 
   // Fallback: vector similarity reranking
   try {
-    return await applyVectorReranking(episodes, query, maxEpisodes, RELEVANCE_THRESHOLD);
+    return await applyVectorReranking(
+      episodes,
+      query,
+      maxEpisodes,
+      RELEVANCE_THRESHOLD,
+    );
   } catch (error) {
     logger.warn(`[Reranking:vector] Failed, using original order: ${error}`);
     return episodes.slice(0, maxEpisodes);
@@ -583,7 +637,7 @@ async function applyEpisodeReranking(
 async function applyStatementReranking(
   statements: StatementNode[],
   ctx: HandlerContext,
-  options?: { threshold?: number }
+  options?: { threshold?: number },
 ): Promise<StatementNode[]> {
   const enableReranking = ctx.options.enableReranking !== false;
   const query = ctx.options.query;
@@ -605,11 +659,13 @@ async function applyStatementReranking(
       .map(({ cohereScore, ...rest }) => rest); // Remove cohereScore from final output
 
     logger.info(
-      `[Reranking] Reranked ${statements.length} statements to ${rerankedStatements.length} (threshold ${RELEVANCE_THRESHOLD})`
+      `[Reranking] Reranked ${statements.length} statements to ${rerankedStatements.length} (threshold ${RELEVANCE_THRESHOLD})`,
     );
     return rerankedStatements as StatementNode[];
   } catch (error) {
-    logger.warn(`[Reranking] Statement reranking failed, using original order: ${error}`);
+    logger.debug(
+      `[Reranking] Statement reranking failed, using original order: ${error}`,
+    );
     return statements.slice(0, maxStatements);
   }
 }
@@ -620,7 +676,7 @@ async function applyStatementReranking(
  */
 async function replaceWithCompacts(
   episodes: RankedEpisode[],
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<RecallEpisode[]> {
   if (episodes.length === 0) return [];
 
@@ -652,7 +708,7 @@ async function replaceWithCompacts(
   });
 
   logger.info(
-    `[replaceWithCompacts] Found ${sessionGroups.size} sessions to check for compacts`
+    `[replaceWithCompacts] Found ${sessionGroups.size} sessions to check for compacts`,
   );
 
   // Fetch compacted session documents from Document table
@@ -668,7 +724,7 @@ async function replaceWithCompacts(
   const compactMap = new Map(compactDocs.map((doc) => [doc.sessionId!, doc]));
 
   logger.info(
-    `[replaceWithCompacts] Found ${compactMap.size} compacted session documents`
+    `[replaceWithCompacts] Found ${compactMap.size} compacted session documents`,
   );
 
   // Build result: replace session episodes with compacts
@@ -693,7 +749,7 @@ async function replaceWithCompacts(
       if (compactDoc && group.episodes.length > 2) {
         // Collect unique labelIds from all episodes in this session
         const sessionLabelIds = Array.from(
-          new Set(group.episodes.flatMap((ep) => ep.labelIds || []))
+          new Set(group.episodes.flatMap((ep) => ep.labelIds || [])),
         );
 
         result.push({
@@ -707,7 +763,7 @@ async function replaceWithCompacts(
         processedSessions.add(sessionId);
 
         logger.debug(
-          `[replaceWithCompacts] Replaced session ${sessionId.slice(0, 8)} with compact, score: ${group.highestScore.toFixed(3)}`
+          `[replaceWithCompacts] Replaced session ${sessionId.slice(0, 8)} with compact, score: ${group.highestScore.toFixed(3)}`,
         );
       } else {
         // No compact, keep episode
@@ -741,7 +797,7 @@ async function replaceWithCompacts(
  */
 async function extractInvalidatedFacts(
   episodes: EpisodicNode[],
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<RecallInvalidatedFact[]> {
   if (episodes.length === 0) return [];
 
@@ -749,11 +805,15 @@ async function extractInvalidatedFacts(
   const episodeUuids = episodes.map((ep) => ep.uuid);
 
   logger.info(
-    `[extractInvalidatedFacts] Fetching invalidated statements for ${episodeUuids.length} episodes`
+    `[extractInvalidatedFacts] Fetching invalidated statements for ${episodeUuids.length} episodes`,
   );
 
   // Get all statements for these episodes
-  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(episodeUuids, ctx.userId, ctx.workspaceId);
+  const invalidFacts = await graphProvider.getEpisodesInvalidFacts(
+    episodeUuids,
+    ctx.userId,
+    ctx.workspaceId,
+  );
 
   // Filter for invalidated statements only
   const invalidatedFacts = invalidFacts.map((stmt) => ({
@@ -764,7 +824,7 @@ async function extractInvalidatedFacts(
   }));
 
   logger.info(
-    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} invalidated facts`
+    `[extractInvalidatedFacts] Found ${invalidatedFacts.length} invalidated facts`,
   );
 
   return invalidatedFacts;
@@ -776,10 +836,11 @@ async function extractInvalidatedFacts(
  */
 async function normalizeToRecallResult(
   handlerResult: any,
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<RecallResult> {
   // Extract episodes from various possible sources
-  const rawEpisodes = handlerResult.episodes || handlerResult.episodesWithContent || [];
+  const rawEpisodes =
+    handlerResult.episodes || handlerResult.episodesWithContent || [];
 
   // Step 1: Replace session episodes with compacts
   const episodes = await replaceWithCompacts(rawEpisodes, ctx);
@@ -788,20 +849,21 @@ async function normalizeToRecallResult(
   const invalidatedFacts = await extractInvalidatedFacts(rawEpisodes, ctx);
 
   // Extract statements if present
-  const statements: RecallResult["statements"] = handlerResult.statements?.map((s: any) => ({
-    fact: s.fact,
-    validAt: s.validAt,
-    attributes: s.attributes || {},
-    aspect: s.aspect,
-  })) || [];
+  const statements: RecallResult["statements"] =
+    handlerResult.statements?.map((s: any) => ({
+      fact: s.fact,
+      validAt: s.validAt,
+      attributes: s.attributes || {},
+      aspect: s.aspect,
+    })) || [];
 
   // Extract entity if present (first entity for entity_lookup)
   const entity: RecallResult["entity"] = handlerResult.entities?.[0]
     ? {
-      uuid: handlerResult.entities[0].uuid,
-      name: handlerResult.entities[0].name,
-      attributes: handlerResult.entities[0].attributes || {},
-    }
+        uuid: handlerResult.entities[0].uuid,
+        name: handlerResult.entities[0].name,
+        attributes: handlerResult.entities[0].attributes || {},
+      }
     : null;
 
   return {
@@ -812,13 +874,113 @@ async function normalizeToRecallResult(
   };
 }
 
+/**
+ * Handle temporal_facets - enumerate what exists in a time range without reading episode content
+ * Runs topic, entity, and aspect queries in parallel based on requested facet dimensions
+ */
+export async function handleTemporalFacets(
+  ctx: HandlerContext,
+): Promise<RecallFacets> {
+  const startTime = Date.now();
+  const graphProvider = ProviderFactory.getGraphProvider();
+
+  const { startTime: temporalStart, endTime: temporalEnd } =
+    getTemporalDateRange(ctx);
+  const effectiveStart =
+    temporalStart || new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+
+  // Default to all dimensions if none specified
+  const facetDimensions =
+    ctx.routerOutput.facets?.length > 0
+      ? ctx.routerOutput.facets
+      : (["topics", "entities", "aspects"] as const);
+
+  logger.debug(
+    `[Handler:temporal_facets] Dimensions: [${facetDimensions.join(", ")}], ` +
+      `Range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`,
+  );
+
+  const [topicsRaw, entitiesRaw, aspectsRaw] = await Promise.all([
+    facetDimensions.includes("topics")
+      ? graphProvider.getTopicsForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+        })
+      : Promise.resolve(null),
+    facetDimensions.includes("entities")
+      ? graphProvider.getEntitiesForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+        })
+      : Promise.resolve(null),
+    facetDimensions.includes("aspects")
+      ? graphProvider.getAspectsForFacets({
+          userId: ctx.userId,
+          workspaceId: ctx.workspaceId,
+          startTime: effectiveStart,
+          endTime: temporalEnd,
+          aspects:
+            ctx.routerOutput.aspects.length > 0
+              ? ctx.routerOutput.aspects
+              : undefined,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  logger.debug(
+    `[Handler:temporal_facets] Raw results — ` +
+      `topics: ${topicsRaw?.length ?? "skipped"}, ` +
+      `entities: ${entitiesRaw?.length ?? "skipped"}, ` +
+      `aspects: ${aspectsRaw?.length ?? "skipped"}`,
+  );
+
+  // Resolve label names for topics
+  let topics: RecallTopicFacet[] | undefined;
+  if (topicsRaw) {
+    const labelIds = topicsRaw.map((t) => t.labelId);
+    const labels = await prisma.label.findMany({
+      where: { id: { in: labelIds } },
+      select: { id: true, name: true },
+    });
+    const nameMap = new Map(labels.map((l) => [l.id, l.name]));
+    topics = topicsRaw.map((t) => ({
+      labelId: t.labelId,
+      labelName: nameMap.get(t.labelId) || t.labelId,
+      episodeCount: t.episodeCount,
+    }));
+  }
+
+  logger.debug(
+    `[Handler:temporal_facets] Done in ${Date.now() - startTime}ms. ` +
+      `Topics: ${topics?.length ?? 0}, Entities: ${entitiesRaw?.length ?? 0}, Aspects: ${aspectsRaw?.length ?? 0}`,
+  );
+
+  return {
+    topics,
+    entities: entitiesRaw ?? undefined,
+    aspects: aspectsRaw?.map((a) => ({
+      aspect: a.aspect as StatementAspect,
+      statementCount: a.statementCount,
+      statements: a.statements.map((s) => ({
+        fact: s.fact,
+        validAt: new Date(s.validAt),
+        episodeUuid: s.episodeUuid,
+      })),
+    })),
+    dateRange: { startTime: effectiveStart, endTime: temporalEnd },
+  };
+}
 
 /**
  * Route to appropriate handler based on query type
  * Applies reranking and normalization for episode-returning handlers
  */
 export async function routeToHandler(
-  ctx: HandlerContext
+  ctx: HandlerContext,
 ): Promise<RecallResult> {
   const { queryType } = ctx.routerOutput;
 
@@ -832,20 +994,29 @@ export async function routeToHandler(
       }
 
       // Attribute mode - return entity only
-      if (result.mode === 'attribute') {
-        return await normalizeToRecallResult({
-          entities: result.entities,
-          entity: result.entities[0]
-        }, ctx);
+      if (result.mode === "attribute") {
+        return await normalizeToRecallResult(
+          {
+            entities: result.entities,
+            entity: result.entities[0],
+          },
+          ctx,
+        );
       }
 
       // Broad mode - return episodes with entity
-      const rerankedEpisodes = await applyEpisodeReranking(result.episodes, ctx);
-      return await normalizeToRecallResult({
-        episodes: rerankedEpisodes,
-        entities: result.entities,
-        entity: result.entities[0]
-      }, ctx);
+      const rerankedEpisodes = await applyEpisodeReranking(
+        result.episodes,
+        ctx,
+      );
+      return await normalizeToRecallResult(
+        {
+          episodes: rerankedEpisodes,
+          entities: result.entities,
+          entity: result.entities[0],
+        },
+        ctx,
+      );
     }
 
     case "aspect_query": {
@@ -856,25 +1027,57 @@ export async function routeToHandler(
 
     case "temporal": {
       const episodes = await handleTemporal(ctx);
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
+      // Only rerank when there's a topic focus — pure date-range queries have no semantic
+      // content to score against, so sort by recency instead to avoid filtering valid results
+      const hasTopic =
+        ctx.routerOutput.entityHints.length > 0 ||
+        ctx.routerOutput.selectedLabels.length > 0 ||
+        ctx.routerOutput.aspects.length > 0;
+      const rerankedEpisodes = hasTopic
+        ? await applyEpisodeReranking(episodes, ctx)
+        : episodes
+            .sort(
+              (a, b) =>
+                new Date(b.createdAt).getTime() -
+                new Date(a.createdAt).getTime(),
+            )
+            .slice(0, ctx.options.maxEpisodes || 10);
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+    }
+
+    case "temporal_facets": {
+      const facets = await handleTemporalFacets(ctx);
+      return {
+        episodes: [],
+        invalidatedFacts: [],
+        statements: [],
+        entity: null,
+        facets,
+      };
     }
 
     case "exploratory": {
       const episodes = await handleExploratory(ctx);
       // Lower threshold for exploratory (broader results)
-      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx, { threshold: 0.05 });
+      const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx, {
+        threshold: 0.05,
+      });
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
     }
 
     case "relationship": {
       const statements = await handleRelationship(ctx);
       const rerankedStatements = await applyStatementReranking(statements, ctx);
-      return await normalizeToRecallResult({ statements: rerankedStatements }, ctx);
+      return await normalizeToRecallResult(
+        { statements: rerankedStatements },
+        ctx,
+      );
     }
 
     default:
-      logger.warn(`[Handler] Unknown query type: ${queryType}, using aspect_query`);
+      logger.debug(
+        `[Handler] Unknown query type: ${queryType}, using aspect_query`,
+      );
       const episodes = await handleAspectQuery(ctx);
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);

@@ -9,6 +9,8 @@ import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import { deductCredits } from "~/trigger/utils/utils";
 
 interface NoStreamProcessBody {
   id: string;
@@ -32,6 +34,12 @@ interface NoStreamProcessBody {
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
   channelMetadata?: Record<string, string>;
+  /** If true, the user message won't be saved to conversation history (still used as AI context) */
+  skipUserMessage?: boolean;
+  /** When true, background task tools (spawn/list/cancel) are excluded */
+  disableBackgroundTaskTools?: boolean;
+  /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
+  executorTools?: OrchestratorTools;
 }
 
 export async function noStreamProcess(
@@ -55,7 +63,11 @@ export async function noStreamProcess(
 
   const messageUserType = body.messageUserType ?? UserTypeEnum.User;
 
-  if (conversationHistory.length > 1 && !isAssistantApproval) {
+  if (
+    conversationHistory.length > 1 &&
+    !isAssistantApproval &&
+    !body.skipUserMessage
+  ) {
     const message = body.message?.parts[0].text;
     const messageParts = body.message?.parts;
 
@@ -103,6 +115,9 @@ export async function noStreamProcess(
     actionPlan: body.actionPlan,
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
+    conversationId: body.id,
+    disableBackgroundTaskTools: body.disableBackgroundTaskTools,
+    executorTools: body.executorTools,
   });
 
   // Generate response using generateText (non-streaming)
@@ -122,10 +137,35 @@ export async function noStreamProcess(
 
   // Create assistant message with UI-compatible parts
   // (must match the format expected by convertToModelMessages on reload)
+  // Build parts from result.steps so tool calls are preserved (not just result.text)
   const assistantMessageId = crypto.randomUUID();
-  const assistantParts: { type: string; text: string }[] = [];
-  if (result.text) {
-    assistantParts.push({ type: "text", text: result.text });
+  const assistantParts: any[] = [];
+
+  for (const step of result.steps) {
+    // Add step-start marker for multi-step flows (matches streaming format)
+    if (result.steps.length > 1 && step !== result.steps[0]) {
+      assistantParts.push({ type: "step-start" });
+    }
+
+    // Add tool invocation parts (matching the UIMessage format from streamText)
+    for (const toolCall of step.toolCalls) {
+      const toolResult = step.toolResults.find(
+        (r: any) => r.toolCallId === toolCall.toolCallId,
+      );
+      assistantParts.push({
+        type: `tool-${toolCall.toolName}`,
+        toolCallId: toolCall.toolCallId,
+        toolName: toolCall.toolName,
+        state: "output-available",
+        input: toolCall.input,
+        output: toolResult?.output,
+      });
+    }
+
+    // Add text part if this step produced text
+    if (step.text) {
+      assistantParts.push({ type: "text", text: step.text });
+    }
   }
 
   const assistantMessage = {
@@ -134,10 +174,10 @@ export async function noStreamProcess(
     parts: assistantParts,
   };
 
-  // Save assistant message to history
+  // Save assistant message to history (use assistantParts — UI-compatible format)
   await upsertConversationHistory(
     assistantMessageId,
-    result.response.messages,
+    assistantParts,
     body.id,
     UserTypeEnum.Agent,
   );
@@ -156,6 +196,8 @@ export async function noStreamProcess(
       workspaceId,
     );
   }
+
+  await deductCredits(workspaceId, userId, "chatMessage", 1);
 
   return { ...assistantMessage, text: result.text };
 }

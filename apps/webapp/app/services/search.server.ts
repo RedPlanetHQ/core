@@ -125,23 +125,23 @@ export class SearchService {
     ] = await Promise.all([
       performBM25Search(query, userId, workspaceId, opts).then((r) => {
         searchTimings.bm25 = Date.now() - searchStartTime;
-        logger.info(`BM25 search completed in ${searchTimings.bm25}ms`);
+        logger.debug(`BM25 search completed in ${searchTimings.bm25}ms`);
         return r;
       }),
       performVectorSearch(queryVector, userId, workspaceId, opts).then((r) => {
         searchTimings.vector = Date.now() - searchStartTime;
-        logger.info(`Vector search completed in ${searchTimings.vector}ms`);
+        logger.debug(`Vector search completed in ${searchTimings.vector}ms`);
         return r;
       }),
       performBfsSearch(query, queryVector, userId, workspaceId, entities, opts).then((r) => {
         searchTimings.bfs = Date.now() - searchStartTime;
-        logger.info(`BFS search completed in ${searchTimings.bfs}ms`);
+        logger.debug(`BFS search completed in ${searchTimings.bfs}ms`);
         return r;
       }),
       performEpisodeGraphSearch(entities, queryVector, userId, workspaceId, opts).then(
         (r) => {
           searchTimings.episodeGraph = Date.now() - searchStartTime;
-          logger.info(
+          logger.debug(
             `Episode graph search completed in ${searchTimings.episodeGraph}ms`,
           );
           return r;
@@ -149,14 +149,14 @@ export class SearchService {
       ),
       performEpisodeVectorSearch(queryVector, userId, workspaceId, opts).then((r) => {
         searchTimings.episodeVector = Date.now() - searchStartTime;
-        logger.info(
+        logger.debug(
           `Episode vector search completed in ${searchTimings.episodeVector}ms`,
         );
         return r;
       }),
     ]);
 
-    logger.info(
+    logger.debug(
       `Search results - BM25: ${bm25Results.length}, Vector: ${vectorResults.length}, BFS: ${bfsResults.length}, EpisodeGraph: ${episodeGraphResults.length}, EpisodeVector: ${episodeVectorResults.length}`,
     );
 
@@ -171,7 +171,7 @@ export class SearchService {
       bm25: bm25Results,
     });
 
-    logger.info(
+    logger.debug(
       `Extracted ${episodesWithProvenance.length} unique episodes from all sources`,
     );
 

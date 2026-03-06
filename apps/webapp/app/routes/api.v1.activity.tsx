@@ -65,7 +65,7 @@ const { action, loader } = createActionApiRoute(
       if (authentication.workspaceId) {
         try {
           await triggerWebhookDelivery(activity.id, authentication.workspaceId);
-          logger.log("Webhook delivery triggered for activity", {
+          logger.debug("Webhook delivery triggered for activity", {
             activityId: activity.id,
           });
         } catch (webhookError) {

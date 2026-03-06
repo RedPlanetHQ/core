@@ -73,8 +73,8 @@ export function NavUser({ user }: { user: ExtendedUser }) {
             <DropdownMenuSub>
               <DropdownMenuSubTrigger className="flex gap-2">
                 <AvatarText
-                  text={user.currentWorkspace?.name as string}
-                  className="h-4 w-4 rounded text-xs"
+                  text={user.name ?? "User"}
+                  className="h-5 w-5 rounded text-xs"
                 />
                 Switch workspace
               </DropdownMenuSubTrigger>
@@ -89,8 +89,8 @@ export function NavUser({ user }: { user: ExtendedUser }) {
                     >
                       <div className="flex items-center gap-2">
                         <AvatarText
-                          text={workspace.name}
-                          className="h-5 w-5 rounded text-xs"
+                          text={user.name ?? "User"}
+                          className="h-5.5 w-5.5 rounded text-xs"
                         />
                         <span className="truncate">{workspace.name}</span>
                       </div>

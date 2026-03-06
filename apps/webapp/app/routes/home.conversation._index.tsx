@@ -18,7 +18,6 @@ import {
 } from "~/services/conversation.server";
 
 import { PageHeader } from "~/components/common/page-header";
-import { HistoryDropdown } from "~/components/conversation/history-dropdown";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Only return userId, not the heavy nodeLinks
@@ -36,17 +35,23 @@ export async function action({ request }: ActionFunctionArgs) {
   const workspace = await requireWorkpace(request);
   const formData = await request.formData();
 
-  const submission = parseWithZod(formData, { schema: CreateConversationSchema });
+  const submission = parseWithZod(formData, {
+    schema: CreateConversationSchema,
+  });
 
-  if (submission.status !== 'success') {
+  if (submission.status !== "success") {
     return json(submission.reply());
   }
 
-  const conversation = await createConversation(workspace?.id as string, userId, {
-    message: submission.value.message,
-    title: submission.value.title ?? "Untitled",
-    parts: [{ text: submission.value.message, type: "text" }],
-  });
+  const conversation = await createConversation(
+    workspace?.id as string,
+    userId,
+    {
+      message: submission.value.message,
+      title: submission.value.title ?? "Untitled",
+      parts: [{ text: submission.value.message, type: "text" }],
+    },
+  );
 
   // If conversationId exists in submission, return the conversation data (don't redirect)
   if (submission.value.conversationId) {
@@ -69,7 +74,7 @@ export default function Chat() {
 
   return (
     <>
-      <PageHeader title="Conversation" actionsNode={<HistoryDropdown />} />
+      <PageHeader title="Conversation" />
       {typeof window !== "undefined" && <ConversationNew user={user} />}
     </>
   );

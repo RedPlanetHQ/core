@@ -2,7 +2,7 @@ import { IntegrationEventType } from "@core/types";
 import { logger, schedules, tasks } from "@trigger.dev/sdk/v3";
 
 import { type integrationRun } from "./integration-run";
-import { prisma } from "../utils/prisma";
+import { prisma } from "~/db.server";
 
 export const integrationRunSchedule = schedules.task({
   id: "integration-run-schedule",

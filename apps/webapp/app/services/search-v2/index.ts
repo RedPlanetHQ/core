@@ -107,14 +107,14 @@ export async function searchV2(
 
   const workspaceId = await resolveWorkspaceIdForUser(userId, options.workspaceId);
 
-  logger.info(`[SearchV2] Starting search for: "${query.slice(0, 100)}..."`);
+  logger.debug(`[SearchV2] Starting search for: "${query.slice(0, 100)}..."`);
 
   // Step 1: Route the intent (parallel vector + LLM)
   const routerOutput = await routeIntent(query, userId, workspaceId);
 
   // Step 2: Check if we should search
   if (!shouldProceedWithSearch(routerOutput)) {
-    logger.info("[SearchV2] Router determined no search needed");
+    logger.debug("[SearchV2] Router determined no search needed");
 
     const emptyResult: RecallResult = {
       episodes: [],
