@@ -7,7 +7,11 @@ import { OpenAIBatchProvider } from "./batch/providers/openai";
 import { AnthropicBatchProvider } from "./batch/providers/anthropic";
 import { logger } from "~/services/logger.service";
 import { generateObject, generateText, type LanguageModel } from "ai";
-import { getModel, getModelForBatch } from "~/lib/model.server";
+import {
+  getModel,
+  getModelForBatch,
+  makeStructuredModelCall,
+} from "~/lib/model.server";
 
 // Global provider instances (singleton pattern)
 let openaiProvider: OpenAIBatchProvider | null = null;
@@ -105,6 +109,18 @@ function createInlineBatchId() {
   return `inline-${crypto.randomUUID()}`;
 }
 
+function isContentOnlySchema(schema: unknown): boolean {
+  const shape = (schema as { shape?: Record<string, unknown> } | null)?.shape;
+  if (!shape || typeof shape !== "object") return false;
+  const keys = Object.keys(shape);
+  return (
+    keys.length === 1 &&
+    keys[0] === "content" &&
+    typeof shape.content === "object" &&
+    shape.content !== null
+  );
+}
+
 async function mapWithConcurrency<TInput, TOutput>(
   items: TInput[],
   concurrency: number,
@@ -139,6 +155,12 @@ async function runInlineBatch<T = any>(
   const startedAt = new Date();
 
   const concurrency = getInlineBatchConcurrency();
+  const openaiApiMode = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
+  const hasOpenAIBaseUrl =
+    typeof process.env.OPENAI_BASE_URL === "string" &&
+    process.env.OPENAI_BASE_URL.trim().length > 0;
+  const isProxyChatMode =
+    hasOpenAIBaseUrl && openaiApiMode === "chat_completions";
 
   // Execute requests with bounded concurrency (avoids overloading local resources and upstream providers).
   const results = await mapWithConcurrency(
@@ -152,6 +174,39 @@ async function runInlineBatch<T = any>(
           : (request.messages as any);
 
         if (params.outputSchema) {
+          if (isProxyChatMode) {
+            const temperature =
+              typeof request.options?.temperature === "number"
+                ? request.options.temperature
+                : undefined;
+            try {
+              const { object } = await makeStructuredModelCall(
+                params.outputSchema as any,
+                messages as any,
+                "high",
+                undefined,
+                temperature,
+              );
+
+              return { customId: request.customId, response: object as any };
+            } catch (error) {
+              // For simple `{ content: string }` payloads (persona/aspect sections),
+              // degrade to plain text and wrap it so callers can continue.
+              if (isContentOnlySchema(params.outputSchema)) {
+                const { text } = await generateText({
+                  model,
+                  messages,
+                  ...(request.options || {}),
+                });
+                return {
+                  customId: request.customId,
+                  response: { content: text } as any,
+                };
+              }
+              throw error;
+            }
+          }
+
           const { object } = await generateObject({
             model,
             schema: params.outputSchema as any,
@@ -198,10 +253,11 @@ async function runInlineBatch<T = any>(
   });
   pruneInlineBatches(completedAt.getTime());
 
-  logger.warn(
-    `[batch] Falling back to inline execution (batch API unavailable).`,
-    { batchId, totalRequests: params.requests.length },
-  );
+  logger.info(`[batch] Using inline batch execution.`, {
+    batchId,
+    totalRequests: params.requests.length,
+    mode: isProxyChatMode ? "proxy_chat_completions" : "generic_inline",
+  });
 
   return { batchId };
 }
