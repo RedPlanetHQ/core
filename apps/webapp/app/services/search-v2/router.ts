@@ -4,6 +4,7 @@ import {
   makeStructuredModelCall,
 } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
+import { env } from "~/env.server";
 
 import {
   AspectExtractionSchema,
@@ -167,7 +168,7 @@ async function searchLabels(
     namespace: VECTOR_NAMESPACES.LABEL,
     limit,
     filter: { workspaceId },
-    threshold: 0.7, // Low threshold to get candidates, we'll filter by score later
+    threshold: env.SEARCH_LABEL_VECTOR_THRESHOLD, // Candidate threshold, later filtered/selected by router
   });
 
   if (searchResults.length === 0) {
