@@ -23,6 +23,7 @@ import type {
   FollowUpJobData,
 } from "~/jobs/reminder/reminder.logic";
 import type { BackgroundTaskPayload } from "~/jobs/background-task/background-task.logic";
+import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -450,6 +451,34 @@ export async function cancelFollowUpsForReminder(
 export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
+
+/**
+ * Enqueue activity CASE job
+ */
+export async function enqueueActivityCase(
+  payload: ActivityCasePayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { activityCaseTask } = await import(
+      "~/trigger/integrations/activity-case"
+    );
+    const handler = await activityCaseTask.trigger(payload, {
+      queue: "activity-case-queue",
+      concurrencyKey: payload.workspaceId,
+      tags: [payload.workspaceId, payload.integrationSlug],
+    });
+    return { id: handler.id };
+  } else {
+    const { activityCaseQueue } = await import("~/bullmq/queues");
+    const job = await activityCaseQueue.add("activity-case", payload, {
+      jobId: `activity-case-${payload.integrationAccountId}-${Date.now()}`,
+      attempts: 1,
+    });
+    return { id: job.id };
+  }
+}
 
 /**
  * Enqueue background task job

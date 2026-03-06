@@ -246,6 +246,24 @@ export const followUpQueue = new Queue("followup-queue", {
 });
 
 /**
+ * Activity CASE queue
+ * Sends new integration activities through the CASE pipeline
+ */
+export const activityCaseQueue = new Queue("activity-case-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1,
+    removeOnComplete: {
+      age: 3600,
+      count: 1000,
+    },
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
  * Background task queue
  * Handles long-running background tasks with user notification
  */

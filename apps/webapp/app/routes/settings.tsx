@@ -6,6 +6,8 @@ import {
   User,
   Tag,
   Building,
+  Activity,
+  Bot,
 } from "lucide-react";
 
 import {
@@ -57,6 +59,8 @@ export default function Settings() {
     workspace: [
       { name: "Overview", icon: Building, path: "workspace" },
       { name: "Labels", icon: Tag, path: "labels" },
+      { name: "Activity", icon: Activity, path: "activity" },
+      { name: "Agent", icon: Bot, path: "workspace/agent" },
     ],
   };
   const navigate = useNavigate();
