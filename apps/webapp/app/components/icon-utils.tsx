@@ -27,6 +27,7 @@ import { Todoist } from "./icons/todoist";
 import { Ghost } from "./icons/ghost";
 import { Fireflies } from "./icons/fireflies";
 import { Whatsapp } from "./icons/whatsapp";
+import { Metabase } from "./icons/metabase";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -64,6 +65,7 @@ export const ICON_MAPPING = {
   ghost: Ghost,
   fireflies: Fireflies,
   whatsapp: Whatsapp,
+  metabase: Metabase,
 
   // Default icon
   integration: LayoutGrid,
