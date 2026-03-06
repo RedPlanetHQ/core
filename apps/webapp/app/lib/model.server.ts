@@ -45,7 +45,7 @@ function getEmbeddingsProvider(): "openai" | "ollama" | undefined {
 
 function getOpenAIAPIMode(): "responses" | "chat_completions" {
   const explicit = (process.env.OPENAI_API_MODE || "").trim().toLowerCase();
-  if (explicit === "chat_completions" || explicit === "chat") {
+  if (explicit === "chat_completions") {
     return "chat_completions";
   }
   if (explicit === "responses") {
@@ -325,14 +325,61 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   cacheKey?: string,
   temperature?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
+  const chatProvider = getChatProvider();
+  const openaiApiMode = getOpenAIAPIMode();
+  const useOllamaForChat = chatProvider === "ollama";
+
+  // Default upstream behavior expects `generateObject()` to parse strict JSON output.
+  //
+  // Some OpenAI-compatible proxies / self-hosted models occasionally wrap JSON in Markdown fences
+  // (e.g. ```json ... ```). This is valid human formatting but breaks strict JSON parsing.
+  //
+  // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
+  // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
+  const tolerantOverride = (process.env.LLM_TOLERANT_OUTPUT || "")
+    .trim()
+    .toLowerCase();
+  // Proxy/self-hosted modes only (preserves upstream defaults):
+  // - OPENAI_API_MODE=chat_completions + OPENAI_BASE_URL indicates an OpenAI-compatible proxy
+  // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
+  const isProxyChatMode =
+    openaiApiMode === "chat_completions" && !!process.env.OPENAI_BASE_URL;
+  const isOllamaChatProvider = chatProvider === "ollama";
+
+  const tolerantOutput =
+    tolerantOverride.length > 0
+      ? tolerantOverride === "true" ||
+        tolerantOverride === "1" ||
+        tolerantOverride === "yes"
+      : isProxyChatMode || isOllamaChatProvider;
+
+  const tryParseJsonFromText = (raw: string): unknown | undefined => {
+    const trimmed = (raw ?? "").toString().trim();
+    if (!trimmed) return undefined;
+
+    const unfenced = trimmed
+      // Remove common Markdown fences anywhere in the output.
+      .replace(/```(?:json)?/gi, "")
+      .trim();
+
+    const start = unfenced.indexOf("{");
+    const end = unfenced.lastIndexOf("}");
+    const candidate =
+      start >= 0 && end > start ? unfenced.slice(start, end + 1).trim() : "";
+    if (!candidate) return undefined;
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return undefined;
+    }
+  };
+
   const model = getModelForTask(complexity);
   logger.info(`[Structured] complexity: ${complexity}, model: ${model}`);
 
   const modelInstance = getModel(model);
   const generateObjectOptions: any = {};
-  const chatProvider = getChatProvider();
-  const openaiApiMode = getOpenAIAPIMode();
-  const useOllamaForChat = chatProvider === "ollama";
 
   if (temperature !== undefined) {
     generateObjectOptions.temperature = temperature;
@@ -367,12 +414,150 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     throw new Error(`Unsupported model type: ${model}`);
   }
 
-  const { object, usage } = await generateObject({
-    model: modelInstance,
-    schema,
-    messages,
-    ...generateObjectOptions,
-  });
+  type ModelUsage = {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    cachedInputTokens?: number;
+  };
+
+  const getTextFromError = (value: unknown): string | undefined => {
+    if (!value || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    return typeof record.text === "string" ? record.text : undefined;
+  };
+
+  const getCause = (value: unknown): unknown => {
+    if (!value || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    return record.cause;
+  };
+
+  const isModelUsage = (value: unknown): value is ModelUsage => {
+    if (!value || typeof value !== "object") return false;
+    const record = value as Record<string, unknown>;
+    return (
+      (record.inputTokens === undefined ||
+        typeof record.inputTokens === "number") &&
+      (record.outputTokens === undefined ||
+        typeof record.outputTokens === "number") &&
+      (record.totalTokens === undefined ||
+        typeof record.totalTokens === "number") &&
+      (record.cachedInputTokens === undefined ||
+        typeof record.cachedInputTokens === "number")
+    );
+  };
+
+  let object: z.infer<T> | undefined;
+  let usage: ModelUsage | undefined;
+  try {
+    if (isProxyChatMode || useOllamaForChat) {
+      // OpenAI-compatible proxies (and some self-hosted models) don't reliably support OpenAI's
+      // JSON Schema structured output in chat-completions mode.
+      //
+      // Instead, we explicitly ask for strict JSON and parse it ourselves. This preserves the
+      // default upstream path (Responses API + structured outputs) while making proxy/self-hosted
+      // deployments work without needing upstream-only capabilities.
+      const jsonOnlyPreamble: ModelMessage = {
+        role: "system",
+        content:
+          "Return ONLY a single valid JSON object that matches the requested schema. " +
+          "Do not wrap it in Markdown fences. Do not include extra text. " +
+          "Include every required key; use null for nullable fields; use [] for empty arrays.",
+      };
+
+      const textResult = await generateText({
+        model: modelInstance,
+        messages: [jsonOnlyPreamble, ...messages],
+        temperature: generateObjectOptions.temperature,
+      });
+
+      const parsed = tryParseJsonFromText(textResult.text);
+      const validated = parsed ? schema.safeParse(parsed) : undefined;
+      if (!validated?.success) {
+        // Some proxies/self-hosted models ignore the "JSON only" constraint sporadically. When that
+        // happens, a targeted repair prompt is usually enough to convert the output into valid JSON
+        // without changing upstream defaults (this branch only runs in proxy/self-hosted chat modes).
+        const repairResult = await generateText({
+          model: modelInstance,
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
+                "Return ONLY the JSON object, with no Markdown fences and no extra text.",
+            },
+            {
+              role: "user",
+              content: textResult.text,
+            },
+          ],
+        });
+
+        const repairedParsed = tryParseJsonFromText(repairResult.text);
+        const repairedValidated = repairedParsed
+          ? schema.safeParse(repairedParsed)
+          : undefined;
+        if (!repairedValidated?.success) {
+          const err = new Error(
+            "No object generated: could not parse/validate JSON from proxy/self-hosted model output.",
+          ) as Error & { text?: string; repairText?: string };
+          err.text = textResult.text;
+          err.repairText = repairResult.text;
+          throw err;
+        }
+
+        object = repairedValidated.data;
+        usage = repairResult.usage ?? textResult.usage;
+      } else {
+        object = validated.data;
+        usage = textResult.usage;
+      }
+    } else {
+      const result = await generateObject({
+        model: modelInstance,
+        schema,
+        messages,
+        ...generateObjectOptions,
+      });
+      object = result.object;
+      usage = result.usage;
+    }
+  } catch (error) {
+    if (!tolerantOutput) {
+      throw error;
+    }
+
+    const directText = getTextFromError(error);
+    const cause = getCause(error);
+    const causeText = getTextFromError(cause);
+    const nestedCauseText = getTextFromError(getCause(cause));
+    const rawText =
+      directText ||
+      causeText ||
+      nestedCauseText ||
+      "";
+
+    const parsed = rawText ? tryParseJsonFromText(rawText) : undefined;
+    const validated = parsed ? schema.safeParse(parsed) : undefined;
+    if (validated?.success) {
+      logger.warn(
+        "[Structured] Tolerant output repair: recovered JSON from non-strict model output.",
+        {
+          model,
+          complexity,
+        },
+      );
+      object = validated.data;
+      if (error && typeof error === "object") {
+        const record = error as Record<string, unknown>;
+        usage = isModelUsage(record.usage) ? record.usage : undefined;
+      }
+    } else {
+      throw error;
+    }
+  }
 
   const tokenUsage = usage
     ? {
@@ -389,7 +574,11 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     );
   }
 
-  return { object: object as any, usage: tokenUsage };
+  if (object === undefined) {
+    throw new Error("No object generated from structured model call.");
+  }
+
+  return { object, usage: tokenUsage };
 }
 
 /**

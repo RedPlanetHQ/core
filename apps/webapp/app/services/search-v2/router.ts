@@ -57,6 +57,18 @@ For entity_lookup queries, determine the lookup mode:
 - **attribute**: User wants a specific attribute (phone number, email, team, role, title, location, etc.)
 - **broad**: User wants general information about the entity ("Who is X?", "Tell me about X", "anything about X")
 
+## Output Format (STRICT)
+Return a single JSON object with **exactly** these keys (do not rename fields):
+- aspects: string[] (values must be from the Statement Aspects list above)
+- queryType: string (must be one of the Query Types above)
+- temporal: { type: "recent" | "range" | "before" | "after" | "all", days: number | null, startDate: string | null, endDate: string | null }
+- shouldSearch: boolean
+- entityHints: string[]
+- selectedLabels: string[]
+- lookupMode: "attribute" | "broad"
+- attributeHint: string | null
+- confidence: number (0 to 1)
+
 ## Instructions
 Queries can be direct questions OR agent intent descriptions (e.g., "Need context about X to help with Y"). Handle both patterns.
 
