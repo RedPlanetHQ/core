@@ -21,6 +21,8 @@ const RepoSchema = z.object({
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (week-over-week, default: false)'),
+  author: z.string().optional().describe('GitHub username to filter by (PRs authored, commits authored)'),
+  cycleDays: z.number().optional().describe('Break the date range into cycles of N days and calculate metrics for each cycle separately. E.g. days=30 + cycleDays=7 gives 4-5 weekly rows; days=30 + cycleDays=14 gives 2-3 biweekly rows. If omitted, metrics are calculated for the full range as a single period.'),
 });
 
 const CommitFrequencySchema = z.object({
@@ -31,6 +33,8 @@ const CommitFrequencySchema = z.object({
   startDate: z.string().optional().describe('Start date in YYYY-MM-DD format (overrides days)'),
   endDate: z.string().optional().describe('End date in YYYY-MM-DD format (default: today)'),
   compareWithPrevious: z.boolean().optional().describe('Compare with previous period (default: false)'),
+  author: z.string().optional().describe('GitHub username to filter commits by'),
+  cycleDays: z.number().optional().describe('Break the date range into cycles of N days and calculate metrics for each cycle separately.'),
 });
 
 const ChangeFailureRateSchema = z.object({
