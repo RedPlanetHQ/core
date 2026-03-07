@@ -5,7 +5,7 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useFetcher, useLoaderData } from "@remix-run/react";
-import { Mail, Clock, Check, Star } from "lucide-react";
+import { Mail, Clock, Check, Star, MessageCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import {
   Card,
@@ -46,6 +46,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const metadata = (user?.metadata as any) || {};
   const whatsappOptin = metadata?.whatsappOptin || false;
+  const imessageOptin = metadata?.imessageOptin || false;
   const defaultChannel = metadata?.defaultChannel || "email";
 
   // Check connected channels
@@ -67,6 +68,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     whatsappOptin,
+    imessageOptin,
     defaultChannel,
     connectedChannels: {
       whatsapp: hasWhatsapp,
@@ -97,6 +99,19 @@ export async function action({ request }: ActionFunctionArgs) {
       metadata: {
         ...metadata,
         whatsappOptin: true,
+      },
+      onboardingComplete: user.onboardingComplete,
+    });
+
+    return json({ success: true });
+  }
+
+  if (intent === "imessage-waitlist") {
+    await updateUser({
+      id: userId,
+      metadata: {
+        ...metadata,
+        imessageOptin: true,
       },
       onboardingComplete: user.onboardingComplete,
     });
@@ -194,26 +209,21 @@ function DirectChannelCard({
           </div>
           <div className="flex items-center gap-1">
             {isDefault && (
-              <Badge className="bg-primary/10 text-primary rounded text-xs">
+              <Badge className="bg-primary/10 text-primary gap-0.5 rounded text-xs">
                 <Star size={10} className="mr-1" />
                 Default
               </Badge>
             )}
-            {isWaitlist && isOptedIn && (
+            {isWaitlist && !isConnected && isOptedIn && (
               <Badge className="rounded bg-green-100 text-xs text-green-800">
                 <Check size={10} />
                 On Waitlist
               </Badge>
             )}
-            {isWaitlist && !isOptedIn && (
+            {isWaitlist && !isConnected && !isOptedIn && (
               <Badge variant="secondary" className="text-xs">
                 <Clock size={10} />
                 Waitlist
-              </Badge>
-            )}
-            {channel.status === "coming_soon" && (
-              <Badge variant="secondary" className="text-xs">
-                Coming Soon
               </Badge>
             )}
             {channel.status === "available" && !isDefault && (
@@ -224,7 +234,7 @@ function DirectChannelCard({
           </div>
         </div>
         <CardTitle className="text-base">{channel.name}</CardTitle>
-        <CardDescription className="line-clamp-2 text-sm">
+        <CardDescription className="line-clamp-2 min-h-[35px] text-sm">
           {channel.description}
         </CardDescription>
         <div className="mt-2 flex gap-2">
@@ -338,27 +348,26 @@ function EmailModal({
 }
 
 export default function Connect() {
-  const { whatsappOptin, defaultChannel, connectedChannels } =
+  const { whatsappOptin, imessageOptin, defaultChannel, connectedChannels } =
     useLoaderData<typeof loader>();
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const fetcher = useFetcher<{ success: boolean }>();
+  const imessageFetcher = useFetcher<{ success: boolean }>();
   const defaultFetcher = useFetcher<{
     success: boolean;
     defaultChannel?: string;
   }>();
   const providers = Object.values(PROVIDER_CONFIGS);
-
   const isJoiningWaitlist = fetcher.state === "submitting";
   const hasJoined = whatsappOptin || fetcher.data?.success;
+  const isJoiningImessageWaitlist = imessageFetcher.state === "submitting";
+  const hasJoinedImessage = imessageOptin || imessageFetcher.data?.success;
   const isSettingDefault = defaultFetcher.state === "submitting";
   const currentDefault = defaultFetcher.data?.defaultChannel || defaultChannel;
 
   const handleDirectChannelClick = (channelId: string) => {
     if (channelId === "email") {
       setIsEmailModalOpen(true);
-    }
-    if (channelId === "slack") {
-      navigate("/home/integrations/slack");
     }
   };
 
@@ -416,7 +425,11 @@ export default function Connect() {
                     : undefined
                 }
                 isJoining={
-                  channel.id === "whatsapp" ? isJoiningWaitlist : false
+                  channel.id === "whatsapp"
+                    ? isJoiningWaitlist
+                    : channel.id === "imessage"
+                      ? isJoiningImessageWaitlist
+                      : false
                 }
                 isConnected={
                   connectedChannels[

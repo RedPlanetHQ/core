@@ -23,7 +23,8 @@ import {
   TooltipTrigger,
 } from "~/components/ui/tooltip";
 import { getIcon, type IconType } from "~/components/icon-utils";
-import { StyledMarkdown } from "~/components/common/styled-markdown";
+import { EditorContent, useEditor } from "@tiptap/react";
+import { extensionsForConversation } from "../conversation/editor-extensions";
 
 interface LibrarySkillCardProps {
   skill: LibrarySkill;
@@ -34,11 +35,7 @@ interface LibrarySkillCardProps {
   onUninstall: () => void;
 }
 
-function IntegrationLogos({
-  skill,
-}: {
-  skill: LibrarySkill;
-}) {
+function IntegrationLogos({ skill }: { skill: LibrarySkill }) {
   return (
     <div className="flex items-center gap-1.5">
       {skill.integrations.map((integration) => {
@@ -83,17 +80,22 @@ function SkillPreviewModal({
   onUninstall: () => void;
 }) {
   const isInstalled = !!installedSkillId;
+  const editor = useEditor({
+    extensions: [...extensionsForConversation],
+    editable: false,
+    content: skill.content,
+  });
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="flex max-h-[80vh] w-[90vw] max-w-4xl flex-col p-0">
+      <DialogContent className="sm:max-w-8xl flex max-h-[80vh] !w-[50vw] flex-col p-0">
         <DialogHeader className="border-b p-4 pb-3">
           <div className="flex items-center justify-between pr-6">
             <DialogTitle className="text-base font-medium">
               {skill.title}
             </DialogTitle>
             {isInstalled && (
-              <Badge className="bg-green-100 text-xs text-green-800 rounded">
+              <Badge className="rounded bg-green-100 text-xs text-green-800">
                 <Check size={10} />
                 Installed
               </Badge>
@@ -102,19 +104,24 @@ function SkillPreviewModal({
           <IntegrationLogos skill={skill} />
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto p-4">
-          <StyledMarkdown className="text-sm">{skill.content}</StyledMarkdown>
+        <div className="flex-1 overflow-y-auto p-4 text-base">
+          <EditorContent
+            editor={editor}
+            className="editor-container"
+            defaultValue={skill.content}
+          />
         </div>
 
-        <div className="border-t p-4">
+        <div className="flex justify-end border-t p-2">
           {isInstalled ? (
             <Button
               variant="ghost"
-              className="w-full rounded text-destructive hover:text-destructive"
+              className="text-destructive hover:text-destructive w-full rounded"
               onClick={() => {
                 onUninstall();
                 onClose();
               }}
+              size="lg"
               disabled={isRemoving}
             >
               {isRemoving ? "Removing..." : "Remove"}
@@ -122,7 +129,8 @@ function SkillPreviewModal({
           ) : (
             <Button
               variant="secondary"
-              className="w-full rounded"
+              className="rounded"
+              size="lg"
               onClick={() => {
                 onInstall();
                 onClose();
@@ -161,31 +169,30 @@ export function LibrarySkillCard({
   return (
     <>
       <Card
-        className="flex cursor-pointer flex-col transition-all hover:border-primary/50"
+        className="hover:border-primary/50 flex cursor-pointer flex-col transition-all"
         onClick={handleCardClick}
       >
-        <CardHeader className="flex flex-1 flex-col gap-2 p-4">
+        <CardHeader className="flex flex-1 flex-col gap-0 p-4">
           <div className="flex items-center justify-between">
             <IntegrationLogos skill={skill} />
             {isInstalled && (
-              <Badge className="bg-green-100 text-xs text-green-800 rounded shrink-0">
+              <Badge className="shrink-0 rounded bg-green-100 text-xs text-green-800">
                 <Check size={10} />
                 Installed
               </Badge>
             )}
           </div>
 
-          <CardTitle className="text-base font-medium">{skill.title}</CardTitle>
-          <CardDescription className="flex-1 text-sm">
+          <CardTitle className="text-md font-medium">{skill.title}</CardTitle>
+          <CardDescription className="line-clamp-3 flex-1 text-sm">
             {skill.shortDescription}
           </CardDescription>
 
-          <div className="mt-auto pt-2">
+          <div className="mt-auto flex justify-end pt-2">
             {isInstalled ? (
               <Button
-                variant="ghost"
-                size="sm"
-                className="w-full rounded text-destructive hover:text-destructive"
+                variant="destructive"
+                className="rounded"
                 onClick={(e) => {
                   e.stopPropagation();
                   onUninstall();
@@ -197,8 +204,7 @@ export function LibrarySkillCard({
             ) : (
               <Button
                 variant="secondary"
-                size="sm"
-                className="w-full rounded"
+                className="rounded"
                 onClick={(e) => {
                   e.stopPropagation();
                   onInstall();

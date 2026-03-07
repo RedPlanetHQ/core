@@ -1,9 +1,10 @@
 ---
 title: "Email Alert - Notify Me"
 description: Get notified the moment an important email lands — from key vendors, customers, or security services — with a quick summary and action flag, so nothing slips through. Trigger with "notify me for important emails", "alert me when I get emails from [person/vendor]", or "set up email alerts".
+category: Email
+integrations: '[{"name":"Gmail","slug":"gmail"}]'
 ---
 
-```markdown
 **Goal:** Check if the email is from a key sender or category. If yes, immediately send a summary notification. If no match, do nothing.
 
 **Tools Required:** Gmail
@@ -84,4 +85,3 @@ Read the full email body and send a notification in this format:
 - **Email body is empty or unreadable** → send: "New email from [sender] — body unreadable. Check manually."
 - **Duplicate trigger for same email** → send only once. Do not notify twice.
 - **Sender is ambiguous** → if unsure, read the body before deciding. When in doubt, notify rather than skip.
-```
