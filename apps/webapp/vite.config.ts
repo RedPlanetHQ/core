@@ -41,6 +41,6 @@ export default defineConfig({
       "posthog-js/react",
       "rrule",
     ],
-    external: ["@prisma/client"],
+    external: ["@prisma/client", "@redplanethq/sdk"],
   },
 });

@@ -12,15 +12,12 @@ import { getIcon, type IconType } from "~/components/icon-utils";
 import { Checkbox } from "~/components/ui/checkbox";
 import { MCPAuthSection } from "~/components/integrations/mcp-auth-section";
 import { ConnectedAccountSection } from "~/components/integrations/connected-account-section";
-import { IngestionRuleSection } from "~/components/integrations/ingestion-rule-section";
 import { ApiKeyAuthSection } from "~/components/integrations/api-key-auth-section";
 import { OAuthAuthSection } from "~/components/integrations/oauth-auth-section";
-import {
-  getIngestionRuleBySource,
-  upsertIngestionRule,
-} from "~/services/ingestionRule.server";
 import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
+import { prisma } from "~/db.server";
+import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -48,76 +45,36 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
   );
 
-  // Get ingestion rule for the first account (if exists)
-  let ingestionRule = null;
-  if (activeAccounts.length > 0) {
-    ingestionRule = await getIngestionRuleBySource(
-      activeAccounts[0].id,
-      workspace?.id as string,
-    );
-  }
-
   return json({
     integration,
     integrationAccounts,
     activeAccounts,
     userId,
-    ingestionRule,
   });
 }
 
-export async function action({ request, params }: ActionFunctionArgs) {
-  const userId = await requireUserId(request);
-  const workspace = await requireWorkpace(request);
-  const { slug } = params;
-
-  if (!workspace) {
-    return;
-  }
-
+export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
-  const ingestionRuleText = formData.get("ingestionRule") as string;
+  const intent = formData.get("intent") as string;
 
-  if (!ingestionRuleText) {
-    return json({ error: "Ingestion rule is required" }, { status: 400 });
+  if (intent === "updateAutoActivityRead") {
+    const integrationAccountId = formData.get("integrationAccountId") as string;
+    const value = formData.get("autoActivityRead") === "true";
+
+    if (!integrationAccountId) {
+      return json({ error: "integrationAccountId is required" }, { status: 400 });
+    }
+
+    if (value) {
+      await scheduler({ integrationAccountId });
+    } else {
+      await unschedule({ integrationAccountId });
+    }
+
+    return json({ success: true });
   }
 
-  const [integrationDefinitions, integrationAccounts] = await Promise.all([
-    getIntegrationDefinitions(workspace.id),
-    getIntegrationAccounts(userId, workspace.id),
-  ]);
-
-  // Combine fixed integrations with dynamic ones
-  const allIntegrations = integrationDefinitions;
-
-  const integration = allIntegrations.find(
-    (def) => def.slug === slug || def.id === slug,
-  );
-
-  if (!integration) {
-    throw new Response("Integration not found", { status: 404 });
-  }
-
-  const activeAccounts = integrationAccounts.filter(
-    (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
-  );
-
-  if (activeAccounts.length === 0) {
-    return json(
-      { error: "No active integration account found" },
-      { status: 400 },
-    );
-  }
-
-  // Apply ingestion rule to the first account (for now)
-  await upsertIngestionRule({
-    text: ingestionRuleText,
-    source: activeAccounts[0].id,
-    workspaceId: workspace.id,
-    userId,
-  });
-
-  return json({ success: true });
+  return json({ error: "Invalid intent" }, { status: 400 });
 }
 
 function parseSpec(spec: any) {
@@ -136,14 +93,12 @@ interface IntegrationDetailProps {
   integration: any;
   integrationAccounts: any;
   activeAccounts: any[];
-  ingestionRule: any;
 }
 
 export function IntegrationDetail({
   integration,
   integrationAccounts,
   activeAccounts,
-  ingestionRule,
 }: IntegrationDetailProps) {
   const hasActiveAccounts = activeAccounts && activeAccounts.length > 0;
 
@@ -252,13 +207,6 @@ export function IntegrationDetail({
                 activeAccount={hasActiveAccounts ? activeAccounts[0] : null}
                 hasMCPAuth={hasMCPAuth}
               />
-
-              {/* Ingestion Rule Section */}
-              <IngestionRuleSection
-                ingestionRule={ingestionRule}
-                activeAccount={hasActiveAccounts ? activeAccounts[0] : null}
-                slug={integration.slug}
-              />
             </div>
           </Section>
         </div>
@@ -268,7 +216,7 @@ export function IntegrationDetail({
 }
 
 export default function IntegrationDetailWrapper() {
-  const { integration, integrationAccounts, activeAccounts, ingestionRule } =
+  const { integration, integrationAccounts, activeAccounts } =
     useLoaderData<typeof loader>();
 
   return (
@@ -276,7 +224,6 @@ export default function IntegrationDetailWrapper() {
       integration={integration}
       integrationAccounts={integrationAccounts}
       activeAccounts={activeAccounts}
-      ingestionRule={ingestionRule}
     />
   );
 }

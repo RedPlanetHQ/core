@@ -6,6 +6,8 @@ import {
   User,
   Tag,
   Building,
+  Activity,
+  Bot,
 } from "lucide-react";
 
 import {
@@ -55,14 +57,29 @@ export default function Settings() {
       { name: "Webhooks", icon: Webhook, path: "webhooks" },
     ],
     workspace: [
-      { name: "Overview", icon: Building, path: "workspace" },
+      { name: "Overview", icon: Building, path: "workspace", strict: true },
       { name: "Labels", icon: Tag, path: "labels" },
+      { name: "Activity", icon: Activity, path: "activity" },
+      { name: "Agent", icon: Bot, path: "workspace/agent" },
     ],
   };
   const navigate = useNavigate();
 
   const gotoHome = () => {
     navigate("/home/conversation");
+  };
+
+  const isActive = (item: {
+    name: string;
+    path: string;
+    icon?: any;
+    strict?: boolean;
+  }) => {
+    if (item.strict) {
+      return location.pathname === item.path;
+    } else {
+      return location.pathname.includes(item.path);
+    }
   };
 
   return (
@@ -96,7 +113,7 @@ export default function Settings() {
                     <SidebarMenuItem key={item.name}>
                       <Button
                         variant="secondary"
-                        isActive={location.pathname.includes(item.path)}
+                        isActive={isActive(item)}
                         onClick={() => navigate(`/settings/${item.path}`)}
                         className={cn(
                           "!text-foreground flex w-fit min-w-0 justify-start gap-1",

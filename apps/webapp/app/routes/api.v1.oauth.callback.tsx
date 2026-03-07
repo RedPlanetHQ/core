@@ -18,9 +18,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // Only allow GET requests
   if (request.method.toUpperCase() !== "GET") {
-    return new Response("Method Not Allowed", { 
+    return new Response("Method Not Allowed", {
       status: 405,
-      headers: { Allow: "GET" }
+      headers: { Allow: "GET" },
     });
   }
 

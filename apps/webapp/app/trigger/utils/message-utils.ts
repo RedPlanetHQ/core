@@ -3,6 +3,7 @@ import { addToQueue } from "./queue";
 import { triggerWebhookDelivery } from "../webhooks/webhook-delivery";
 import { logger } from "@trigger.dev/sdk";
 import { prisma } from "~/db.server";
+import { enqueueActivityCase } from "~/lib/queue-adapter.server";
 
 export const createIntegrationAccount = async ({
   integrationDefinitionId,
@@ -134,7 +135,7 @@ export const createActivities = async ({
     return [];
   }
 
-  return await Promise.all(
+  const results = await Promise.all(
     messages.map(async (message) => {
       const activity = await prisma.activity.create({
         data: {
@@ -144,19 +145,6 @@ export const createActivities = async ({
           workspaceId: integrationAccount?.workspaceId,
         },
       });
-
-      const ingestData = {
-        episodeBody: message.data.text,
-        referenceTime: new Date().toISOString(),
-        source: integrationAccount?.integrationDefinition.slug,
-        type: EpisodeTypeEnum.CONVERSATION,
-      };
-
-      const queueResponse = await addToQueue(
-        ingestData,
-        integrationAccount?.integratedById,
-        activity.id,
-      );
 
       if (integrationAccount?.workspaceId) {
         try {
@@ -177,8 +165,43 @@ export const createActivities = async ({
 
       return {
         activityId: activity.id,
-        queueId: queueResponse.id,
+        text: message.data.text as string,
       };
     }),
   );
+
+  // Enqueue CASE pipeline if integration account has autoActivityRead enabled
+  try {
+    const accountSettings = integrationAccount.settings as Record<
+      string,
+      unknown
+    > | null;
+
+    if (accountSettings?.autoActivityRead) {
+      const user = await prisma.user.findUnique({
+        where: { id: integrationAccount.integratedById },
+        select: { email: true },
+      });
+
+      if (user?.email) {
+        const activitiesText = results.map((r) => r.text).join("\n\n");
+        await enqueueActivityCase({
+          integrationAccountId,
+          workspaceId: integrationAccount.workspaceId,
+          userId: integrationAccount.integratedById,
+          userEmail: user.email,
+          integrationSlug: integrationAccount.integrationDefinition.slug,
+          activitiesText,
+          timezone: "UTC",
+        });
+      }
+    }
+  } catch (error) {
+    logger.error("Failed to enqueue activity case", {
+      integrationAccountId,
+      error,
+    });
+  }
+
+  return results;
 };

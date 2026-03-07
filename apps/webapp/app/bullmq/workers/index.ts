@@ -76,6 +76,10 @@ import {
   type BackgroundTaskPayload,
   processBackgroundTask,
 } from "~/jobs/background-task/background-task.logic";
+import {
+  type ActivityCasePayload,
+  processActivityCase,
+} from "~/jobs/integrations/activity-case.logic";
 
 /**
  * Episode preprocessing worker
@@ -286,6 +290,22 @@ export const followUpWorker = new Worker(
 );
 
 /**
+ * Activity CASE worker
+ * Sends new integration activities through the CASE pipeline
+ */
+export const activityCaseWorker = new Worker(
+  "activity-case-queue",
+  async (job) => {
+    const payload = job.data as ActivityCasePayload;
+    return await processActivityCase(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
  * Background task worker
  * Processes long-running background tasks with user notification
  */
@@ -318,6 +338,7 @@ export async function closeAllWorkers(): Promise<void> {
     integrationRunWorker.close(),
     reminderWorker.close(),
     followUpWorker.close(),
+    activityCaseWorker.close(),
     backgroundTaskWorker.close(),
     reminderQueue.close(),
     followUpQueue.close(),
