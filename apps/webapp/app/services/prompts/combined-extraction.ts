@@ -10,17 +10,24 @@ import { EntityTypes, StatementAspects } from "@core/types";
 /**
  * Schema for combined extraction output
  */
+// Note: `type` and `attributes` use `.nullable()` (not `.optional()`) so the LLM can
+// return null when values are unknown, while keeping the fields in the JSON schema's
+// `required` array. OpenAI's strict mode rejects schemas where `required` doesn't
+// include every property — `.optional()` removes the field from `required` and breaks it.
 export const CombinedEntitySchema = z.object({
   name: z
     .string()
     .describe("The entity name - clean, without articles or qualifiers"),
   type: z
     .enum(EntityTypes)
-    .optional()
+    .nullable()
     .describe("The entity type classification"),
   attributes: z
-    .record(z.any(), z.any())
-    .optional()
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    )
+    .nullable()
     .describe("Optional entity attributes like email, phone, location, etc."),
 });
 

@@ -343,6 +343,16 @@ export async function extractLabelsFromEpisode(
       });
 
       if (similarLabels.length > 0) {
+        // Some vector backends (or invalid stored vectors) can produce NaN/undefined scores.
+        // Treat non-finite scores as "no match" to avoid mislabeling everything as similar.
+        const topScore = (similarLabels[0] as any)?.score;
+        if (typeof topScore !== "number" || !Number.isFinite(topScore)) {
+          logger.warn(
+            `Ignoring semantic label match for "${raw.name}" due to non-finite similarity score`,
+            { score: topScore },
+          );
+          // Fall through to "new label" behavior.
+        } else {
         // Found a semantically similar label - use it instead
         const matchedLabelId = similarLabels[0].id;
         const matchedLabel = availableLabels.find(
@@ -356,10 +366,19 @@ export async function extractLabelsFromEpisode(
             isNew: false,
             labelId: matchedLabel.id,
           });
+          const score =
+            typeof similarLabels[0].score === "number"
+              ? similarLabels[0].score
+              : undefined;
+          const scoreText =
+            score !== undefined && Number.isFinite(score)
+              ? score.toFixed(3)
+              : "n/a";
           logger.info(
-            `Label "${raw.name}" matched existing label "${matchedLabel.name}" by semantic similarity (score: ${similarLabels[0].score.toFixed(3)})`,
+            `Label "${raw.name}" matched existing label "${matchedLabel.name}" by semantic similarity (score: ${scoreText})`,
           );
           continue;
+        }
         }
       }
     }

@@ -44,9 +44,14 @@ Environment variables for the CORE webapp container.
 | `AUTH_GOOGLE_CLIENT_ID`                 | No       | —                                              | Google OAuth client ID                                                                           |
 | `AUTH_GOOGLE_CLIENT_SECRET`             | No       | —                                              | Google OAuth client secret                                                                       |
 | **AI Providers**                        |          |                                                |                                                                                                 |
-| `OPENAI_API_KEY`                        | No       | —                                              | OpenAI API key for memory processing                                                             |
-| `MODEL`                                 | No       | gpt-4-turbo-2024-04-09                         | Default language model                                                                           |
+| `OPENAI_API_KEY`                        | No       | —                                              | OpenAI API key. Required for OpenAI; for many OpenAI-compatible proxies any non-empty value works |
+| `OPENAI_BASE_URL`                       | No       | —                                              | OpenAI-compatible API base URL (e.g. proxy endpoint)                                             |
+| `OPENAI_API_MODE`                       | No       | responses                                     | OpenAI API mode: `responses` (default) or `chat_completions` (common for proxies)               |
+| `MODEL`                                 | No       | gpt-4-turbo-2024-04-09                         | Default chat model                                                                               |
+| `CHAT_PROVIDER`                         | No       | openai                                        | Chat provider: `openai` (default) or `ollama`                                                    |
+| `EMBEDDINGS_PROVIDER`                   | No       | openai                                        | Embeddings provider: `openai` (default) or `ollama`                                              |
 | `EMBEDDING_MODEL`                       | No       | text-embedding-3-small                         | Model for text embeddings                                                                        |
+| `EMBEDDING_MODEL_SIZE`                  | No       | 1536                                          | Embedding dimension (must match pgvector schema/index dimension)                                 |
 | `OLLAMA_URL`                            | No       | http://ollama:11434                            | Ollama server URL for local models                                                               |
 | **Background Jobs**                     |          |                                                |                                                                                                 |
 | `QUEUE_PROVIDER`                        | No       | trigger                                        | Queue provider: "trigger" for Trigger.dev or "bullmq" for BullMQ (Redis-based)                  |

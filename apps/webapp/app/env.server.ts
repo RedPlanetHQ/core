@@ -89,6 +89,10 @@ const EnvironmentSchema = z
 
     //OpenAI
     OPENAI_API_KEY: z.string().optional(),
+    OPENAI_BASE_URL: z.string().optional(),
+    OPENAI_API_MODE: z
+      .enum(["responses", "chat_completions", "chat"])
+      .default("responses"),
     ANTHROPIC_API_KEY: z.string().optional(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
 
@@ -115,7 +119,16 @@ const EnvironmentSchema = z
     MODEL: z.string().default(LLMModelEnum.GPT41),
     EMBEDDING_MODEL: z.string().default("mxbai-embed-large"),
     EMBEDDING_MODEL_SIZE: z.string().default("1024"),
+    MODEL_TEMPERATURE: z.coerce.number().default(1),
+    LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
+    CHAT_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
+    EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),
+
+    // Inline batch fallback (when Batch API is unavailable)
+    INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),
+    MAX_INLINE_BATCHES: z.coerce.number().int().positive().default(500),
+    INLINE_BATCH_CONCURRENCY: z.coerce.number().int().positive().default(8),
 
     // Reranking configuration
     RERANK_PROVIDER: z.enum(["cohere", "ollama", "none"]).default("none"),
@@ -131,6 +144,54 @@ const EnvironmentSchema = z
 
     // Queue provider
     QUEUE_PROVIDER: z.enum(["trigger", "bullmq"]).default("trigger"),
+
+    // BullMQ tuning (optional)
+    //
+    // Some OpenAI-compatible proxies apply strict rate limits. If you see frequent 429s,
+    // reduce concurrency for BullMQ workers to smooth out bursts.
+    BULLMQ_CONCURRENCY_PREPROCESS: z.coerce.number().int().positive().default(5),
+    BULLMQ_CONCURRENCY_INGEST: z.coerce.number().int().positive().default(3),
+    BULLMQ_CONCURRENCY_CONVERSATION_TITLE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10),
+    BULLMQ_CONCURRENCY_SESSION_COMPACTION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(3),
+    BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(5),
+    BULLMQ_CONCURRENCY_TITLE_GENERATION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(10),
+    BULLMQ_CONCURRENCY_PERSONA_GENERATION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1),
+    BULLMQ_CONCURRENCY_GRAPH_RESOLUTION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(1),
+    BULLMQ_CONCURRENCY_INTEGRATION_RUN: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(3),
+    BULLMQ_CONCURRENCY_REMINDER: z.coerce.number().int().positive().default(10),
+    BULLMQ_CONCURRENCY_FOLLOW_UP: z.coerce.number().int().positive().default(5),
+
+    // Search-v2 label match tuning
+    // Default keeps current behavior; lower for embedding providers with lower cosine ranges.
+    SEARCH_LABEL_VECTOR_THRESHOLD: z.coerce.number().min(0).max(1).default(0.7),
 
     // Provider configuration
     GRAPH_PROVIDER: z.enum(["neo4j", "falkordb", "helix"]).default("neo4j"),

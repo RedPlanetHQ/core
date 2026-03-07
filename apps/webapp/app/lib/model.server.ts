@@ -16,8 +16,15 @@ import { logger } from "~/services/logger.service";
 import { createOllama } from "ollama-ai-provider-v2";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
+import { env } from "~/env.server";
 
 export type ModelComplexity = "high" | "low";
+
+function shouldUseOllamaForEmbeddings(
+  embeddingsProvider?: "openai" | "ollama",
+): boolean {
+  return embeddingsProvider === "ollama";
+}
 
 /**
  * Get the appropriate model for a given complexity level.
@@ -25,7 +32,7 @@ export type ModelComplexity = "high" | "low";
  * LOW complexity automatically downgrades to cheaper variants if possible.
  */
 export function getModelForTask(complexity: ModelComplexity = "high"): string {
-  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+  const baseModel = env.MODEL;
 
   // HIGH complexity - always use the configured model
   if (complexity === "high") {
@@ -63,7 +70,7 @@ export function getModelForTask(complexity: ModelComplexity = "high"): string {
  * so we downgrade to a known-working variant.
  */
 export function getModelForBatch(): string {
-  const baseModel = process.env.MODEL || "gpt-4.1-2025-04-14";
+  const baseModel = env.MODEL;
 
   const batchDowngrades: Record<string, string> = {
     "gpt-5.2-2025-12-11": "gpt-5-2025-08-07",
@@ -76,45 +83,78 @@ export function getModelForBatch(): string {
 export const getModel = (takeModel?: string) => {
   let model = takeModel;
 
-  const anthropicKey = process.env.ANTHROPIC_API_KEY;
-  const googleKey = process.env.GOOGLE_GENERATIVE_AI_API_KEY;
-  const openaiKey = process.env.OPENAI_API_KEY;
-  let ollamaUrl = process.env.OLLAMA_URL;
-  model = model || process.env.MODEL || "gpt-4.1-2025-04-14";
+  const anthropicKey = env.ANTHROPIC_API_KEY;
+  const googleKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
+  const openaiKey = env.OPENAI_API_KEY;
+  const openaiBaseUrl = env.OPENAI_BASE_URL;
+  const ollamaUrl = env.OLLAMA_URL;
+  const chatProvider = env.CHAT_PROVIDER;
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  model = model || env.MODEL;
 
   let modelInstance;
-  let modelTemperature = Number(process.env.MODEL_TEMPERATURE) || 1;
-  ollamaUrl = undefined;
+  let modelTemperature = env.MODEL_TEMPERATURE;
+  // Keep OLLAMA_URL if provided (used for self-hosted/local models)
 
-  // First check if Ollama URL exists and use Ollama
-  if (ollamaUrl) {
-    const ollama = createOllama({
-      baseURL: ollamaUrl,
-    });
-    modelInstance = ollama(model || "llama2"); // Default to llama2 if no model specified
-  } else {
-    // If no Ollama, check other models
+  const useOllamaForChat = chatProvider === "ollama";
 
-    if (model.includes("claude")) {
-      if (!anthropicKey) {
-        throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
-      }
-      modelInstance = anthropic(model);
-      modelTemperature = 0.5;
-    } else if (model.includes("gemini")) {
-      if (!googleKey) {
-        throw new Error("No Google API key found. Set GOOGLE_API_KEY");
-      }
-      modelInstance = google(model);
-    } else {
-      if (!openaiKey) {
-        throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
-      }
-      modelInstance = openai.responses(model);
+  // First check if Ollama URL exists and use Ollama (env-gated).
+  if (useOllamaForChat) {
+    if (!ollamaUrl) {
+      throw new Error(
+        "CHAT_PROVIDER is set to ollama but OLLAMA_URL is not set",
+      );
     }
-
-    return modelInstance;
+    if (!model) {
+      throw new Error(
+        "No chat model configured for Ollama. Set MODEL.",
+      );
+    }
+    if (/^gpt-/.test(model)) {
+      logger.warn(
+        `Using Ollama with MODEL=${model}. If this is an OpenAI model id, set MODEL to a local Ollama model (e.g. llama3.2:1b).`,
+      );
+    }
+    const ollama = createOllama({ baseURL: ollamaUrl });
+    modelInstance = ollama(model);
+  } else if (model.includes("claude")) {
+    if (!anthropicKey) {
+      throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
+    }
+    modelInstance = anthropic(model);
+    modelTemperature = 0.5;
+  } else if (model.includes("gemini")) {
+    if (!googleKey) {
+      throw new Error(
+        "No Google API key found. Set GOOGLE_GENERATIVE_AI_API_KEY",
+      );
+    }
+    modelInstance = google(model);
+  } else {
+    if (!openaiKey && !openaiBaseUrl) {
+      throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
+    }
+    if (openaiBaseUrl && !openaiKey) {
+      // Many OpenAI-compatible proxies accept any non-empty value, but the SDK expects a key.
+      // Keep config explicit: require OPENAI_API_KEY even when using OPENAI_BASE_URL.
+      throw new Error(
+        "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
+      );
+    }
+    const openaiClient = openaiBaseUrl
+      ? createOpenAI({
+          baseURL: openaiBaseUrl,
+          apiKey: openaiKey,
+        })
+      : openai;
+    // `responses`: preferred when calling native OpenAI (supports prompt caching, stored items, etc.).
+    // `chat_completions`: preferred for many OpenAI-compatible proxies (more widely supported, stateless).
+    modelInstance = openaiApiMode === "chat_completions"
+      ? openaiClient.chat(model)
+      : openaiClient.responses(model);
   }
+
+  return modelInstance;
 };
 
 export interface TokenUsage {
@@ -139,8 +179,16 @@ export async function makeModelCall(
   const modelInstance = getModel(model);
   const generateTextOptions: any = {};
 
-  // Add OpenAI provider options for prompt caching and disable web search
-  if (model.includes("gpt")) {
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
+
+  // Add OpenAI provider options for prompt caching (Responses API only).
+  // Why: many OpenAI-compatible proxies reject these parameters on `/chat/completions`.
+  if (
+    model.includes("gpt") &&
+    openaiApiMode === "responses" &&
+    !useOllamaForChat
+  ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `ingestion-${complexity}`,
     };
@@ -230,6 +278,55 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   cacheKey?: string,
   temperature?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
+  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
+
+  // Default upstream behavior expects `generateObject()` to parse strict JSON output.
+  //
+  // Some OpenAI-compatible proxies / self-hosted models occasionally wrap JSON in Markdown fences
+  // (e.g. ```json ... ```). This is valid human formatting but breaks strict JSON parsing.
+  //
+  // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
+  // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
+  const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
+    .trim()
+    .toLowerCase();
+  // Proxy/self-hosted modes only (preserves upstream defaults):
+  // - OPENAI_API_MODE=chat_completions + OPENAI_BASE_URL indicates an OpenAI-compatible proxy
+  // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
+  const isProxyChatMode =
+    openaiApiMode === "chat_completions" && !!env.OPENAI_BASE_URL;
+  const isOllamaChatProvider = useOllamaForChat;
+
+  const tolerantOutput =
+    tolerantOverride.length > 0
+      ? tolerantOverride === "true" ||
+        tolerantOverride === "1" ||
+        tolerantOverride === "yes"
+      : isProxyChatMode || isOllamaChatProvider;
+
+  const tryParseJsonFromText = (raw: string): unknown | undefined => {
+    const trimmed = (raw ?? "").toString().trim();
+    if (!trimmed) return undefined;
+
+    const unfenced = trimmed
+      // Remove common Markdown fences anywhere in the output.
+      .replace(/```(?:json)?/gi, "")
+      .trim();
+
+    const start = unfenced.indexOf("{");
+    const end = unfenced.lastIndexOf("}");
+    const candidate =
+      start >= 0 && end > start ? unfenced.slice(start, end + 1).trim() : "";
+    if (!candidate) return undefined;
+
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      return undefined;
+    }
+  };
+
   const model = getModelForTask(complexity);
   logger.info(`[Structured] complexity: ${complexity}, model: ${model}`);
 
@@ -241,7 +338,11 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   }
 
   // Add OpenAI provider options for prompt caching
-  if (model.includes("gpt")) {
+  if (
+    model.includes("gpt") &&
+    openaiApiMode === "responses" &&
+    !useOllamaForChat
+  ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `structured-${complexity}`,
       strictJsonSchema: false,
@@ -265,12 +366,150 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     throw new Error(`Unsupported model type: ${model}`);
   }
 
-  const { object, usage } = await generateObject({
-    model: modelInstance,
-    schema,
-    messages,
-    ...generateObjectOptions,
-  });
+  type ModelUsage = {
+    inputTokens?: number;
+    outputTokens?: number;
+    totalTokens?: number;
+    cachedInputTokens?: number;
+  };
+
+  const getTextFromError = (value: unknown): string | undefined => {
+    if (!value || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    return typeof record.text === "string" ? record.text : undefined;
+  };
+
+  const getCause = (value: unknown): unknown => {
+    if (!value || typeof value !== "object") return undefined;
+    const record = value as Record<string, unknown>;
+    return record.cause;
+  };
+
+  const isModelUsage = (value: unknown): value is ModelUsage => {
+    if (!value || typeof value !== "object") return false;
+    const record = value as Record<string, unknown>;
+    return (
+      (record.inputTokens === undefined ||
+        typeof record.inputTokens === "number") &&
+      (record.outputTokens === undefined ||
+        typeof record.outputTokens === "number") &&
+      (record.totalTokens === undefined ||
+        typeof record.totalTokens === "number") &&
+      (record.cachedInputTokens === undefined ||
+        typeof record.cachedInputTokens === "number")
+    );
+  };
+
+  let object: z.infer<T> | undefined;
+  let usage: ModelUsage | undefined;
+  try {
+    if (isProxyChatMode || useOllamaForChat) {
+      // OpenAI-compatible proxies (and some self-hosted models) don't reliably support OpenAI's
+      // JSON Schema structured output in chat-completions mode.
+      //
+      // Instead, we explicitly ask for strict JSON and parse it ourselves. This preserves the
+      // default upstream path (Responses API + structured outputs) while making proxy/self-hosted
+      // deployments work without needing upstream-only capabilities.
+      const jsonOnlyPreamble: ModelMessage = {
+        role: "system",
+        content:
+          "Return ONLY a single valid JSON object that matches the requested schema. " +
+          "Do not wrap it in Markdown fences. Do not include extra text. " +
+          "Include every required key; use null for nullable fields; use [] for empty arrays.",
+      };
+
+      const textResult = await generateText({
+        model: modelInstance,
+        messages: [jsonOnlyPreamble, ...messages],
+        temperature: generateObjectOptions.temperature,
+      });
+
+      const parsed = tryParseJsonFromText(textResult.text);
+      const validated = parsed ? schema.safeParse(parsed) : undefined;
+      if (!validated?.success) {
+        // Some proxies/self-hosted models ignore the "JSON only" constraint sporadically. When that
+        // happens, a targeted repair prompt is usually enough to convert the output into valid JSON
+        // without changing upstream defaults (this branch only runs in proxy/self-hosted chat modes).
+        const repairResult = await generateText({
+          model: modelInstance,
+          temperature: 0,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
+                "Return ONLY the JSON object, with no Markdown fences and no extra text.",
+            },
+            {
+              role: "user",
+              content: textResult.text,
+            },
+          ],
+        });
+
+        const repairedParsed = tryParseJsonFromText(repairResult.text);
+        const repairedValidated = repairedParsed
+          ? schema.safeParse(repairedParsed)
+          : undefined;
+        if (!repairedValidated?.success) {
+          const err = new Error(
+            "No object generated: could not parse/validate JSON from proxy/self-hosted model output.",
+          ) as Error & { text?: string; repairText?: string };
+          err.text = textResult.text;
+          err.repairText = repairResult.text;
+          throw err;
+        }
+
+        object = repairedValidated.data;
+        usage = repairResult.usage ?? textResult.usage;
+      } else {
+        object = validated.data;
+        usage = textResult.usage;
+      }
+    } else {
+      const result = await generateObject({
+        model: modelInstance,
+        schema,
+        messages,
+        ...generateObjectOptions,
+      });
+      object = result.object;
+      usage = result.usage;
+    }
+  } catch (error) {
+    if (!tolerantOutput) {
+      throw error;
+    }
+
+    const directText = getTextFromError(error);
+    const cause = getCause(error);
+    const causeText = getTextFromError(cause);
+    const nestedCauseText = getTextFromError(getCause(cause));
+    const rawText =
+      directText ||
+      causeText ||
+      nestedCauseText ||
+      "";
+
+    const parsed = rawText ? tryParseJsonFromText(rawText) : undefined;
+    const validated = parsed ? schema.safeParse(parsed) : undefined;
+    if (validated?.success) {
+      logger.warn(
+        "[Structured] Tolerant output repair: recovered JSON from non-strict model output.",
+        {
+          model,
+          complexity,
+        },
+      );
+      object = validated.data;
+      if (error && typeof error === "object") {
+        const record = error as Record<string, unknown>;
+        usage = isModelUsage(record.usage) ? record.usage : undefined;
+      }
+    } else {
+      throw error;
+    }
+  }
 
   const tokenUsage = usage
     ? {
@@ -287,7 +526,11 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
     );
   }
 
-  return { object: object as any, usage: tokenUsage };
+  if (object === undefined) {
+    throw new Error("No object generated from structured model call.");
+  }
+
+  return { object, usage: tokenUsage };
 }
 
 /**
@@ -313,41 +556,105 @@ export function isProprietaryModel(
 }
 
 export async function getEmbedding(text: string) {
-  const ollamaUrl = process.env.OLLAMA_URL;
-  const model = process.env.EMBEDDING_MODEL;
+  const ollamaUrl = env.OLLAMA_URL;
+  const model = env.EMBEDDING_MODEL;
+  const openaiBaseUrl = env.OPENAI_BASE_URL;
+  const openaiKey = env.OPENAI_API_KEY;
+  const embeddingsProvider = env.EMBEDDINGS_PROVIDER;
+  const targetDimRaw = env.EMBEDDING_MODEL_SIZE;
+  const targetDim =
+    targetDimRaw && Number.isFinite(Number(targetDimRaw))
+      ? Number(targetDimRaw)
+      : undefined;
   const maxRetries = 3;
   let lastEmbedding: number[] = [];
+  let textForEmbedding = (text ?? "").toString();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      if (model === "text-embedding-3-small") {
-        // Use OpenAI embedding model when explicitly requested
-        const { embedding } = await embed({
-          model: openai.embedding("text-embedding-3-small"),
-          value: text,
+      const embeddingModel = model || "text-embedding-3-small";
+
+      const useOllamaEmbeddings = shouldUseOllamaForEmbeddings(embeddingsProvider);
+
+      if (useOllamaEmbeddings) {
+        if (!ollamaUrl) {
+          throw new Error(
+            "Ollama embeddings selected but OLLAMA_URL is not set. Set OLLAMA_URL or set EMBEDDINGS_PROVIDER=openai.",
+          );
+        }
+        // Ollama's stable embeddings endpoint is /api/embeddings (not always available on /v1/embeddings).
+        const baseUrl = ollamaUrl.replace(/\/+$/, "");
+        const response = await fetch(`${baseUrl}/api/embeddings`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            model: embeddingModel,
+            prompt: textForEmbedding,
+          }),
         });
-        lastEmbedding = embedding;
+
+        if (!response.ok) {
+          throw new Error(
+            `Ollama embeddings request failed (${response.status}): ${await response.text()}`,
+          );
+        }
+
+        const data = (await response.json()) as { embedding?: number[] };
+        lastEmbedding = data.embedding ?? [];
       } else {
-        // Use Ollama's OpenAI-compatible endpoint for embeddings
-        // This avoids EmbeddingModelV3/V2 compatibility issues with third-party providers
-        // Normalize the URL: remove trailing slash, /api, and /v1 if present, then add /v1
-        const baseUrl = ollamaUrl
-          ?.replace(/\/+$/, "")
-          .replace(/\/v1$/, "")
-          .replace(/\/api$/, "");
-        const ollamaOpenAI = createOpenAI({
-          baseURL: `${baseUrl}/v1`,
-          apiKey: "ollama", // Required but not used by Ollama
-        });
+        if (!openaiKey && !openaiBaseUrl) {
+          throw new Error(
+            "No OpenAI API key found. Set OPENAI_API_KEY (or set OPENAI_BASE_URL for a proxy).",
+          );
+        }
+        if (openaiBaseUrl && !openaiKey) {
+          throw new Error(
+            "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
+          );
+        }
+        const embeddingClient = openaiBaseUrl
+          ? createOpenAI({
+              baseURL: openaiBaseUrl,
+              apiKey: openaiKey,
+            })
+          : openai;
+
         const { embedding } = await embed({
-          model: ollamaOpenAI.embedding(model as string),
-          value: text,
+          model: embeddingClient.embedding(embeddingModel),
+          value: textForEmbedding,
         });
         lastEmbedding = embedding;
       }
 
       // If embedding is not empty, return it immediately
       if (lastEmbedding.length > 0) {
+        // Ollama / open-source embedding models may have dimensions that don't match CORE defaults.
+        // Why: pgvector columns are created with a fixed dimension (e.g. 1536). If we store a vector
+        // with a different dimension, inserts will fail.
+        //
+        // Prefer setting EMBEDDING_MODEL_SIZE to the model's native dimension
+        // (e.g. `mxbai-embed-large` → 1024) so vectors are stored without modification.
+        //
+        // Padding is a pragmatic compatibility bridge:
+        // - When switching embedding models, it's easy to forget updating EMBEDDING_MODEL_SIZE.
+        // - Without padding, vector inserts will start failing immediately.
+        // - Padding with trailing zeros avoids silent information loss (unlike truncation),
+        //   and makes the mismatch visible in logs so it can be fixed properly (re-embed/migrate).
+        if (targetDim && targetDim > 0) {
+          if (lastEmbedding.length < targetDim) {
+            logger.warn(
+              `Embedding dimension mismatch: got ${lastEmbedding.length}, expected ${targetDim}. Padding with zeros; set EMBEDDING_MODEL_SIZE to ${lastEmbedding.length} and re-embed to fix permanently.`,
+            );
+            lastEmbedding = lastEmbedding.concat(
+              new Array(targetDim - lastEmbedding.length).fill(0),
+            );
+          } else if (lastEmbedding.length > targetDim) {
+            // Truncation would silently discard signal. Fail with an actionable error instead.
+            throw new Error(
+              `Embedding dimension mismatch: got ${lastEmbedding.length}, expected ${targetDim}. Update EMBEDDING_MODEL_SIZE and re-embed/migrate vectors.`,
+            );
+          }
+        }
         return lastEmbedding;
       }
 
@@ -358,15 +665,36 @@ export async function getEmbedding(text: string) {
         );
       }
     } catch (error) {
-      logger.error(
-        `Embedding attempt ${attempt}/${maxRetries} failed: ${error}`,
-      );
+      const errorString = error instanceof Error ? error.message : String(error);
+      const isContextLengthError =
+        /context length/i.test(errorString) ||
+        /exceeds the context length/i.test(errorString);
+
+      // TODO: Persona/docs can grow unbounded over time; embedding the full text will eventually
+      // hit provider context limits and/or dilute retrieval signal. Long-term fix: chunk and/or
+      // summarize before embedding, and store per-chunk vectors rather than truncating.
+      // Ollama can reject long inputs for embeddings. Retry with a shorter prompt.
+      if (
+        isContextLengthError &&
+        attempt < maxRetries &&
+        textForEmbedding.length > 256
+      ) {
+        const prevLen = textForEmbedding.length;
+        textForEmbedding = textForEmbedding.slice(
+          0,
+          Math.max(256, Math.floor(textForEmbedding.length / 2)),
+        );
+        logger.warn(
+          `Embedding input exceeded model context; truncating from ${prevLen} to ${textForEmbedding.length} chars and retrying...`,
+        );
+        continue;
+      }
+
+      logger.error(`Embedding attempt ${attempt}/${maxRetries} failed: ${error}`);
     }
   }
 
-  // Return last embedding even if empty after all retries
-  logger.warn(
-    `All ${maxRetries} attempts returned empty embedding, returning last response`,
+  throw new Error(
+    `Failed to generate non-empty embedding after ${maxRetries} attempts (provider=${embeddingsProvider}, model=${model || "text-embedding-3-small"}).`,
   );
-  return lastEmbedding;
 }

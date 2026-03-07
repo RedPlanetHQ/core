@@ -59,54 +59,72 @@ const { loader, action } = createHybridActionApiRoute(
     const isAssistantApproval = body.needsApproval;
 
     const conversationHistory = conversation?.ConversationHistory ?? [];
+    const normalizeParts = (parts: any[] | undefined) =>
+      (Array.isArray(parts) ? parts : []).filter(Boolean);
+    const hasNonEmptyParts = (parts: any[] | undefined) =>
+      normalizeParts(parts).length > 0;
+    const incomingUserText = body.message?.parts?.[0]?.text;
 
-    if (conversationHistory.length === 1 && !isAssistantApproval) {
-      const message = body.message?.parts[0].text;
+    if (conversationHistory.length === 1 && !isAssistantApproval && incomingUserText) {
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
         conversationId: body.id,
-        message,
+        message: incomingUserText,
       });
     }
 
     if (conversationHistory.length > 1 && !isAssistantApproval) {
-      const message = body.message?.parts[0].text;
       const messageParts = body.message?.parts;
+      const normalizedMessageParts = normalizeParts(messageParts);
 
-      await upsertConversationHistory(
-        message.id ?? crypto.randomUUID(),
-        messageParts,
-        body.id,
-        UserTypeEnum.User,
-      );
+      if (hasNonEmptyParts(normalizedMessageParts)) {
+        await upsertConversationHistory(
+          body.message?.id ?? crypto.randomUUID(),
+          normalizedMessageParts,
+          body.id,
+          UserTypeEnum.User,
+        );
+      }
     }
 
     const messages = conversationHistory.map((history: any) => {
       return {
-        parts: history.parts,
+        parts: normalizeParts(history.parts),
         role:
           history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
         id: history.id,
       };
     });
 
-    let finalMessages = messages;
-    const message = body.message?.parts[0].text;
+    const finalFromHistory = messages.filter((m: any) => hasNonEmptyParts(m.parts));
+    let finalMessages = finalFromHistory;
+    const incomingMessageId = body.message?.id;
 
     if (!isAssistantApproval) {
-      const message = body.message?.parts[0].text;
+      const message = incomingUserText;
       const id = body.message?.id;
 
-      finalMessages = [
-        ...messages,
-        {
-          parts: [{ text: message, type: "text" }],
-          role: "user",
-          id: id ?? generateId(),
-        },
-      ];
+      const last = finalFromHistory[finalFromHistory.length - 1];
+      const alreadyInHistory = !!(incomingMessageId && last?.id === incomingMessageId);
+
+      if (message && !alreadyInHistory) {
+        finalMessages = [
+          ...finalFromHistory,
+          {
+            parts: [{ text: message, type: "text" }],
+            role: "user",
+            id: id ?? generateId(),
+          },
+        ];
+      }
     } else {
-      finalMessages = body.messages as any;
+      finalMessages = (body.messages as any[]) ?? [];
+      finalMessages = finalMessages
+        .map((m: any) => ({
+          ...m,
+          parts: normalizeParts(m.parts),
+        }))
+        .filter((m: any) => hasNonEmptyParts(m.parts));
     }
 
     const validatedMessages = await validateUIMessages({
@@ -167,7 +185,7 @@ const { loader, action } = createHybridActionApiRoute(
 
             await addToQueue(
               {
-                episodeBody: `<user>${message}</user><assistant>${messageText}</assistant>`,
+                episodeBody: `<user>${incomingUserText ?? ""}</user><assistant>${messageText}</assistant>`,
                 source: "core",
                 referenceTime: new Date().toISOString(),
                 type: EpisodeType.CONVERSATION,
