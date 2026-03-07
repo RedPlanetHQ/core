@@ -30,6 +30,7 @@ import {
   hasNeedsApprovalDeep,
   getToolDisplayName,
 } from "./conversation-utils";
+import { StyledMarkdown } from "../common/styled-markdown";
 
 interface AIConversationItemProps {
   message: UIMessage;
@@ -355,7 +356,14 @@ const ConversationItemComponent = ({
     }
 
     if (part.type?.includes("text")) {
-      return <EditorContent editor={editor} className="editor-container" />;
+      // return  <StyledMarkdown className="text-sm">{part.text}</StyledMarkdown>
+      return (
+        <EditorContent
+          editor={editor}
+          className="editor-container"
+          defaultValue={part.content}
+        />
+      );
     }
 
     return null;

@@ -1,9 +1,10 @@
 ---
 title: "Email Label Manager"
 description: Automatically label every incoming email using 9 categories — Urgent, Meetings, Transcripts, Customer, Action Required, Receipts & Invoices, Financial, Trying to Sell, and FYI — so your inbox stays organised without any manual effort. Trigger with "label my emails", "set up email labels", or "organise my inbox automatically".
+category: Email
+integrations: '[{"name":"Gmail","slug":"gmail"}]'
 ---
 
-```markdown
 **Goal:** Read the email subject and body, determine the best matching labels from the list below, and apply up to 2 — the 2 most specific matches. Work through labels in priority order.
 
 **Tools Required:** Gmail
@@ -165,4 +166,3 @@ Matches if:
 - **Multiple labels could apply** → use priority order above. Urgent beats everything. Apply up to 2 — skip the rest.
 - **Truly ambiguous** → default to FYI rather than leaving unlabelled.
 - **Email is already labelled** → do not overwrite manual labels. Skip entirely.
-```

@@ -56,7 +56,7 @@ const markdownComponents: Components = {
   p: ({ className, ...props }) => (
     <p
       className={cn(
-        "mb-1 leading-normal [&:not(:first-child)]:mt-1",
+        "mb-1 break-words leading-normal [&:not(:first-child)]:mt-1",
         className,
       )}
       {...props}
@@ -119,15 +119,25 @@ const markdownComponents: Components = {
       {...props}
     />
   ),
-  a: ({ className, ...props }) => (
-    <a
-      className={cn(
-        "font-medium text-blue-600 underline underline-offset-4 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300",
-        className,
-      )}
-      {...props}
-    />
-  ),
+  a: ({ className, href, children, ...props }) => {
+    const childText =
+      typeof children === "string" ? children : String(children ?? "");
+    const isBareUrl = childText === href && href && href.length > 50;
+    const display = isBareUrl ? href!.slice(0, 50) + "…" : children;
+    return (
+      <a
+        href={href}
+        title={isBareUrl ? href : undefined}
+        className={cn(
+          "break-all font-medium text-blue-600 underline underline-offset-4 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300",
+          className,
+        )}
+        {...props}
+      >
+        {display}
+      </a>
+    );
+  },
   hr: ({ className, ...props }) => (
     <hr
       className={cn(

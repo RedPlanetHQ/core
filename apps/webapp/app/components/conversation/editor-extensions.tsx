@@ -29,20 +29,25 @@ const horizontalRule = HorizontalRule.configure({
 const heading = Heading.extend({
   renderHTML({ node, HTMLAttributes }) {
     const hasLevel = this.options.levels.includes(node.attrs.level);
-    const level: 1 | 2 | 3 = hasLevel
+    const level: 1 | 2 | 3 | 4 = hasLevel
       ? node.attrs.level
       : this.options.levels[0];
-    const levelMap = { 1: "text-2xl", 2: "text-xl", 3: "text-lg" };
+    const levelMap = {
+      1: "text-2xl",
+      2: "text-xl",
+      3: "text-lg",
+      4: "text-md",
+    };
 
     return [
       `h${level}`,
       mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
-        class: `heading-node h${node.attrs.level}-style ${levelMap[level]} my-[1rem] font-normal`,
+        class: `heading-node h${node.attrs.level}-style ${levelMap[level]} my-[0.25rem] font-medium`,
       }),
       0,
     ];
   },
-}).configure({ levels: [1, 2, 3] });
+}).configure({ levels: [1, 2, 3, 4] });
 
 const defaultPlaceholder = Placeholder.configure({
   placeholder: ({ node }) => {
@@ -83,12 +88,12 @@ export const starterKit = StarterKit.configure({
   history: false,
   bulletList: {
     HTMLAttributes: {
-      class: cx("list-disc list-outside pl-4 leading-1 my-1 mb-1.5"),
+      class: cx("list-disc list-outside pl-6 leading-1 my-1 mb-1.5"),
     },
   },
   orderedList: {
     HTMLAttributes: {
-      class: cx("list-decimal list-outside pl-4 leading-1 my-1"),
+      class: cx("list-decimal list-outside pl-6 leading-1 my-1"),
     },
   },
   listItem: {
@@ -98,12 +103,12 @@ export const starterKit = StarterKit.configure({
   },
   blockquote: {
     HTMLAttributes: {
-      class: cx("border-l-4 border-gray-400 dark:border-gray-500"),
+      class: cx("border-l-2 border-gray-300 dark:border-gray-600 pl-2"),
     },
   },
   paragraph: {
     HTMLAttributes: {
-      class: cx("leading-[24px] mt-[1rem] paragraph-node"),
+      class: cx("leading-[22px] mt-[0.25rem] paragraph-node"),
     },
   },
   codeBlock: false,

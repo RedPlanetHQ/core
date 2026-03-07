@@ -1,9 +1,10 @@
 ---
 title: "Product Changelog"
 description: Generate a formatted product changelog from recent git commits. Groups changes by type, writes user-facing descriptions, and outputs a publish-ready changelog entry. Trigger with "generate changelog", "create changelog from commits", "what shipped this month", "changelog for [version]", or "write release notes from [date] to [date]".
+category: Engineering
+integrations: '[{"name":"GitHub","slug":"github"}]'
 ---
 
-````markdown
 **Goal:** Read recent commits from a GitHub repository, categorize them, group by feature area, and output a formatted changelog entry ready to publish.
 
 **Tools Required:** GitHub. Optional: Linear (for richer issue context).
@@ -216,4 +217,3 @@ If the user prefers to commit manually, just provide the formatted changelog tex
 - **Ambiguous categorization** → when a commit spans multiple categories (e.g. a feature that also fixes a bug), pick the primary intent. Mention the secondary benefit in the description.
 - **Squash commits with long descriptions** → use the PR title as the primary description, pull details from the body.
 - **Monorepo with multiple packages** → if the user specifies a scope (e.g. "changelog for the webapp"), filter commits by path prefix.
-````

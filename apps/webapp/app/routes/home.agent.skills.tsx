@@ -1,20 +1,22 @@
 import { useState, useEffect } from "react";
-import { json, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
+import {
+  json,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
 import { useFetcher, useLoaderData, useNavigate } from "@remix-run/react";
 import { Library, LoaderCircle, Plus } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import { useSkills } from "~/hooks/use-skills";
 import { VirtualSkillsList } from "~/components/skills/virtual-skills-list";
-import { LibrarySkillCard } from "~/components/skills/library-skill-card";
+import { LibrarySkillCard } from "~/components/skills/library-skill-card.client";
 import { Card, CardContent } from "~/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
 import { createSkill, deleteSkill } from "~/services/skills.server";
-import {
-  LIBRARY_SKILLS,
-  LIBRARY_SKILLS_BY_CATEGORY,
-} from "~/lib/skills-library";
+import { getLibrarySkills, groupSkillsByCategory } from "~/lib/skills-library";
+import { ClientOnly } from "remix-utils/client-only";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
@@ -38,7 +40,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
     }
   }
 
-  return json({ installedSlugs });
+  const librarySkills = await getLibrarySkills();
+
+  return json({ installedSlugs, librarySkills });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -49,7 +53,8 @@ export async function action({ request }: ActionFunctionArgs) {
 
   if (intent === "install-library-skill") {
     const slug = formData.get("slug") as string;
-    const skill = LIBRARY_SKILLS.find((s) => s.slug === slug);
+    const librarySkills = await getLibrarySkills();
+    const skill = librarySkills.find((s) => s.slug === slug);
     if (!skill) return json({ error: "Skill not found" }, { status: 404 });
 
     await createSkill(workspaceId as string, user?.id as string, {
@@ -75,9 +80,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Skills() {
-  const { installedSlugs: loaderInstalledSlugs } = useLoaderData<typeof loader>();
+  const { installedSlugs: loaderInstalledSlugs, librarySkills } =
+    useLoaderData<typeof loader>();
+  const libraryByCategory = groupSkillsByCategory(librarySkills);
   const navigate = useNavigate();
-  const { skills, hasMore, loadMore, isLoading, isInitialLoad, reset } = useSkills();
+  const { skills, hasMore, loadMore, isLoading, isInitialLoad, reset } =
+    useSkills();
   const fetcher = useFetcher<{ success: boolean }>();
 
   // Optimistically track pending operations
@@ -134,7 +142,10 @@ export default function Skills() {
           </TabsList>
 
           {/* My Skills Tab */}
-          <TabsContent value="my-skills" className="flex-1 overflow-hidden mt-4">
+          <TabsContent
+            value="my-skills"
+            className="mt-4 flex-1 overflow-hidden"
+          >
             {isInitialLoad ? (
               <div className="flex w-full justify-center pt-8">
                 <LoaderCircle className="text-primary h-4 w-4 animate-spin" />
@@ -165,38 +176,51 @@ export default function Skills() {
             )}
           </TabsContent>
 
+          <ClientOnly
+            fallback={
+              <div className="flex w-full justify-center">
+                <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+              </div>
+            }
+          >
+            {() => (
+              <TabsContent
+                value="library"
+                className="mt-4 flex-1 overflow-y-auto"
+              >
+                <div className="space-y-8 pb-8">
+                  {Object.entries(libraryByCategory).map(
+                    ([category, skills]) => (
+                      <div key={category} className="space-y-2">
+                        <h3 className="text-muted-foreground text-sm font-medium">
+                          {category}
+                        </h3>
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                          {skills.map((skill) => (
+                            <LibrarySkillCard
+                              key={skill.slug}
+                              skill={skill}
+                              installedSkillId={installedSlugs[skill.slug]}
+                              isInstalling={pendingInstall === skill.slug}
+                              isRemoving={pendingRemove === skill.slug}
+                              onInstall={() => handleInstall(skill.slug)}
+                              onUninstall={() =>
+                                handleUninstall(
+                                  installedSlugs[skill.slug],
+                                  skill.slug,
+                                )
+                              }
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    ),
+                  )}
+                </div>
+              </TabsContent>
+            )}
+          </ClientOnly>
           {/* Library Tab */}
-          <TabsContent value="library" className="flex-1 overflow-y-auto mt-4">
-            <div className="space-y-8 pb-8">
-              {Object.entries(LIBRARY_SKILLS_BY_CATEGORY).map(
-                ([category, skills]) => (
-                  <div key={category} className="space-y-3">
-                    <h3 className="text-sm font-semibold text-muted-foreground">
-                      {category}
-                    </h3>
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
-                      {skills.map((skill) => (
-                        <LibrarySkillCard
-                          key={skill.slug}
-                          skill={skill}
-                          installedSkillId={installedSlugs[skill.slug]}
-                          isInstalling={pendingInstall === skill.slug}
-                          isRemoving={pendingRemove === skill.slug}
-                          onInstall={() => handleInstall(skill.slug)}
-                          onUninstall={() =>
-                            handleUninstall(
-                              installedSlugs[skill.slug],
-                              skill.slug,
-                            )
-                          }
-                        />
-                      ))}
-                    </div>
-                  </div>
-                ),
-              )}
-            </div>
-          </TabsContent>
         </Tabs>
       </div>
     </div>

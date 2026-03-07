@@ -114,6 +114,7 @@
     "graphology-layout-force": "^0.2.4",
     "graphology-layout-forceatlas2": "^0.10.1",
     "graphology-layout-noverlap": "^0.4.2",
+    "gray-matter": "4.0.3",
     "handlebars": "^4.7.8",
     "ioredis": "^5.6.1",
     "isbot": "^5.1.34",

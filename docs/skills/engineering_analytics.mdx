@@ -1,9 +1,10 @@
 ---
 title: "Engineering Analytics"
 description: Track DORA metrics, delivery speed, and code quality for your engineering team. Auto-logs results to a Google Spreadsheet for week-over-week tracking. Trigger with "engineering metrics for [repo]", "DORA metrics", "team stats this week", or "weekly engineering report".
+category: Engineering
+integrations: '[{"name":"GitHub","slug":"github"},{"name":"Google Sheets","slug":"google-sheets"}]'
 ---
 
-````markdown
 **Goal:** Pull engineering metrics from a GitHub repository, present a team-level report, and log the results to a Google Spreadsheet for historical tracking.
 
 **Connectors:**
@@ -121,4 +122,3 @@ This same table structure (without the Observations section) is used when loggin
 - **No PRs merged** → show PR metrics as 0/N/A, still show commit frequency
 - **Multiple repos** → present each repo as a separate section, then a combined summary if more than 2 repos
 - **User asks "compare with last month"** → use `startDate`/`endDate` for current period and manually set comparison dates
-````
