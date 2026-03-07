@@ -16,7 +16,7 @@ export interface LibrarySkill {
 import matter from "gray-matter";
 
 const GITHUB_API =
-  "https://api.github.com/repos/RedPlanetHQ/core/contents/docs/skills?ref=master";
+  "https://api.github.com/repos/RedPlanetHQ/core/contents/docs/skills?ref=main";
 
 // Simple in-memory cache
 let cachedSkills: LibrarySkill[] | null = null;
