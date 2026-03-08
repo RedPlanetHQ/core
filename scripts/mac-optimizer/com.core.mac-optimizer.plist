@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  LaunchAgent: com.core.mac-optimizer
+  Führt mac-performance-fix.sh automatisch aus:
+    - Beim Login
+    - Jede Stunde (3600 Sekunden)
+  Installation: ./install-launchagent.sh
+-->
+<plist version="1.0">
+<dict>
+    <!-- Eindeutiger Bezeichner -->
+    <key>Label</key>
+    <string>com.core.mac-optimizer</string>
+
+    <!-- Pfad zum Skript (wird durch install-launchagent.sh gesetzt) -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>SCRIPT_PATH_PLACEHOLDER</string>
+    </array>
+
+    <!-- Beim Login starten -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Alle 3600 Sekunden (1 Stunde) wiederholen -->
+    <key>StartInterval</key>
+    <integer>3600</integer>
+
+    <!-- Bei Absturz automatisch neustarten -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- Ausgabe in Log-Datei -->
+    <key>StandardOutPath</key>
+    <string>HOME_PLACEHOLDER/Library/Logs/mac-optimizer/launchagent-stdout.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>HOME_PLACEHOLDER/Library/Logs/mac-optimizer/launchagent-stderr.log</string>
+
+    <!-- Niedrige Priorität – stört normale Arbeit nicht -->
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <!-- Umgebungsvariablen -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>DRY_RUN</key>
+        <string>0</string>
+    </dict>
+</dict>
+</plist>
