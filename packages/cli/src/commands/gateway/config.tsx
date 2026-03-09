@@ -6,6 +6,7 @@ import zod from 'zod';
 import { randomUUID } from 'node:crypto';
 import { exec } from 'node:child_process';
 import { promisify } from 'node:util';
+import { existsSync } from 'node:fs';
 import { getPreferences, updatePreferences } from '@/config/preferences';
 import { getConfig } from '@/config/index';
 import {
@@ -31,6 +32,17 @@ const execAsync = promisify(exec);
 
 const DEFAULT_APP_URL = 'https://app.getcore.me';
 
+// Tool slot definitions
+type ToolSlot = 'browser' | 'coding' | 'exec' | 'imessage';
+
+interface ToolSlotInfo {
+	value: ToolSlot;
+	label: string;
+	hint: string;
+	checkAvailable?: () => Promise<{ available: boolean; message?: string; path?: string }>;
+	configure?: (existingConfig: GatewayConfig | undefined) => Promise<{ enabled: boolean; config?: Record<string, unknown> } | symbol>;
+}
+
 export const options = zod.object({
 	// Direct set options (non-interactive)
 	name: zod.string().optional().describe('Gateway name'),
@@ -38,6 +50,7 @@ export const options = zod.object({
 	coding: zod.boolean().optional().describe('Enable/disable coding tools'),
 	browser: zod.boolean().optional().describe('Enable/disable browser tools'),
 	exec: zod.boolean().optional().describe('Enable/disable exec tools'),
+	imessage: zod.boolean().optional().describe('Enable/disable iMessage tools'),
 	show: zod.boolean().optional().describe('Show current configuration'),
 });
 
@@ -92,13 +105,21 @@ async function isClaudeCodeInstalled(): Promise<{ installed: boolean; path?: str
 	return { installed: false };
 }
 
-// Check if npm is available
-async function isNpmAvailable(): Promise<boolean> {
+// Check if iMessage database is accessible
+async function isIMessageAvailable(): Promise<{ available: boolean; message?: string }> {
+	const dbPath = join(homedir(), 'Library/Messages/chat.db');
+	if (!existsSync(dbPath)) {
+		return { available: false, message: 'Messages database not found' };
+	}
+
 	try {
-		await execAsync('which npm');
-		return true;
+		await execAsync(`sqlite3 "${dbPath}" "SELECT 1 LIMIT 1"`);
+		return { available: true };
 	} catch {
-		return false;
+		return {
+			available: false,
+			message: 'Grant Full Disk Access to terminal in System Settings > Privacy & Security',
+		};
 	}
 }
 
@@ -110,9 +131,10 @@ function formatConfig(config: GatewayConfig | undefined): string {
 		`${chalk.bold('Name:')} ${config.name || chalk.dim('(not set)')}`,
 		`${chalk.bold('Description:')} ${config.description || chalk.dim('(none)')}`,
 		`${chalk.bold('URL:')} ${config.url || DEFAULT_APP_URL}`,
-		`${chalk.bold('Coding:')} ${config.slots?.coding?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
 		`${chalk.bold('Browser:')} ${config.slots?.browser?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+		`${chalk.bold('Coding:')} ${config.slots?.coding?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
 		`${chalk.bold('Exec:')} ${config.slots?.exec?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+		`${chalk.bold('iMessage:')} ${config.slots?.imessage?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
 	].join('\n');
 }
 
@@ -155,6 +177,9 @@ async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ succe
 	if (opts.exec !== undefined) {
 		slots.exec = { ...slots.exec, enabled: opts.exec };
 	}
+	if (opts.imessage !== undefined) {
+		slots.imessage = { ...slots.imessage, enabled: opts.imessage };
+	}
 	newConfig.slots = slots;
 
 	updatePreferences({ gateway: newConfig });
@@ -163,6 +188,94 @@ async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ succe
 	p.note(formatConfig(newConfig), 'Gateway Configuration');
 
 	return { success: true };
+}
+
+// Configure exec slot
+async function configureExec(existingConfig: GatewayConfig | undefined): Promise<{ allow: string[]; deny: string[] } | symbol> {
+	const execMode = await p.select({
+		message: 'Command access mode',
+		options: EXEC_MODE_OPTIONS,
+		initialValue: 'custom',
+	});
+
+	if (p.isCancel(execMode)) {
+		return execMode;
+	}
+
+	let execAllow: string[] = [];
+	let execDeny: string[] = [];
+
+	if (execMode === 'allow_all') {
+		execAllow = ['Bash(*)'];
+	} else if (execMode === 'deny_all') {
+		execDeny = ['Bash(*)'];
+	} else {
+		// Custom mode - select specific commands
+		const selectedAllowed = await p.multiselect({
+			message: 'Select allowed commands (space to toggle)',
+			options: EXEC_COMMAND_OPTIONS,
+			initialValues: existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
+			required: false,
+		});
+
+		if (p.isCancel(selectedAllowed)) {
+			return selectedAllowed;
+		}
+
+		execAllow = selectedAllowed as string[];
+
+		// Ask for denied commands from remaining
+		const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
+			opt => !execAllow.includes(opt.value)
+		);
+
+		if (remainingCommands.length > 0) {
+			const deniedCommands = await p.multiselect({
+				message: 'Select denied commands (optional)',
+				options: remainingCommands,
+				initialValues: existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
+				required: false,
+			});
+
+			if (!p.isCancel(deniedCommands)) {
+				execDeny = deniedCommands as string[];
+			}
+		}
+
+		// Custom allow patterns
+		const customAllowPatterns = await p.text({
+			message: 'Additional allow patterns (comma-separated, e.g. "docker *, kubectl *")',
+			placeholder: 'Leave empty to skip',
+			initialValue: '',
+		});
+
+		if (!p.isCancel(customAllowPatterns) && customAllowPatterns && customAllowPatterns.trim()) {
+			const patterns = (customAllowPatterns as string)
+				.split(',')
+				.map(s => s.trim())
+				.filter(Boolean)
+				.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+			execAllow.push(...patterns);
+		}
+
+		// Custom deny patterns
+		const customDenyPatterns = await p.text({
+			message: 'Additional deny patterns (comma-separated, e.g. "sudo *, rm -rf *")',
+			placeholder: 'Leave empty to skip',
+			initialValue: '',
+		});
+
+		if (!p.isCancel(customDenyPatterns) && customDenyPatterns && customDenyPatterns.trim()) {
+			const patterns = (customDenyPatterns as string)
+				.split(',')
+				.map(s => s.trim())
+				.filter(Boolean)
+				.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+			execDeny.push(...patterns);
+		}
+	}
+
+	return { allow: execAllow, deny: execDeny };
 }
 
 // Interactive wizard
@@ -221,183 +334,149 @@ async function runInteractiveConfig() {
 		return { cancelled: true };
 	}
 
-	// Step 3: Coding slot
-	const codingSpinner = p.spinner();
-	codingSpinner.start('Checking for claude-code...');
-	const claudeResult = await isClaudeCodeInstalled();
-	codingSpinner.stop(claudeResult.installed
-		? chalk.green(`Found: ${claudeResult.path}`)
-		: chalk.yellow('claude-code not found')
-	);
+	// Step 3: Check availability of all tools
+	const checkSpinner = p.spinner();
+	checkSpinner.start('Checking available tools...');
 
-	let codingEnabled = false;
-	let claudePath: string | undefined;
+	const [claudeResult, browserInstalled, imessageResult] = await Promise.all([
+		isClaudeCodeInstalled(),
+		isAgentBrowserInstalled(),
+		isIMessageAvailable(),
+	]);
 
-	if (claudeResult.installed) {
-		claudePath = claudeResult.path;
-		const enableCoding = await p.confirm({
-			message: 'Enable coding tools?',
-			initialValue: existingConfig?.slots?.coding?.enabled ?? true,
-		});
+	checkSpinner.stop('Tools checked');
 
-		if (p.isCancel(enableCoding)) {
-			p.cancel('Configuration cancelled');
-			return { cancelled: true };
-		}
+	// Build tool options based on availability
+	const toolOptions: { value: ToolSlot; label: string; hint: string }[] = [
+		{
+			value: 'browser',
+			label: 'Browser',
+			hint: browserInstalled ? chalk.green('available') : chalk.yellow('requires install'),
+		},
+		{
+			value: 'coding',
+			label: 'Coding',
+			hint: claudeResult.installed ? chalk.green('claude-code found') : chalk.yellow('claude-code not found'),
+		},
+		{
+			value: 'exec',
+			label: 'Exec',
+			hint: 'Run shell commands',
+		},
+		{
+			value: 'imessage',
+			label: 'iMessage',
+			hint: imessageResult.available ? chalk.green('available') : chalk.yellow(imessageResult.message || 'not available'),
+		},
+	];
 
-		codingEnabled = enableCoding;
-	}
+	// Get currently enabled tools for initial values
+	const currentlyEnabled: ToolSlot[] = [];
+	if (existingConfig?.slots?.browser?.enabled) currentlyEnabled.push('browser');
+	if (existingConfig?.slots?.coding?.enabled) currentlyEnabled.push('coding');
+	if (existingConfig?.slots?.exec?.enabled) currentlyEnabled.push('exec');
+	if (existingConfig?.slots?.imessage?.enabled) currentlyEnabled.push('imessage');
 
-	// Step 5: Browser slot
-	const browserSpinner = p.spinner();
-	browserSpinner.start('Checking for agent-browser...');
-	let browserInstalled = await isAgentBrowserInstalled();
-	browserSpinner.stop(browserInstalled
-		? chalk.green('agent-browser installed')
-		: chalk.yellow('agent-browser not found')
-	);
-
-	let browserEnabled = false;
-
-	if (!browserInstalled) {
-		const installBrowser = await p.confirm({
-			message: 'Install agent-browser?',
-			initialValue: false,
-		});
-
-		if (p.isCancel(installBrowser)) {
-			p.cancel('Configuration cancelled');
-			return { cancelled: true };
-		}
-
-		if (installBrowser) {
-			const installSpinner = p.spinner();
-			installSpinner.start('Installing agent-browser...');
-			try {
-				const result = await installAgentBrowser();
-				if (result.code === 0) {
-					installSpinner.stop(chalk.green('agent-browser installed'));
-					browserInstalled = true;
-					browserEnabled = true;
-				} else {
-					installSpinner.stop(chalk.red('Installation failed'));
-				}
-			} catch {
-				installSpinner.stop(chalk.red('Installation failed'));
-			}
-		}
-	}
-
-	if (browserInstalled && !browserEnabled) {
-		const enableBrowser = await p.confirm({
-			message: 'Enable browser tools?',
-			initialValue: existingConfig?.slots?.browser?.enabled ?? true,
-		});
-
-		if (p.isCancel(enableBrowser)) {
-			p.cancel('Configuration cancelled');
-			return { cancelled: true };
-		}
-
-		browserEnabled = enableBrowser;
-	}
-
-	// Step 6: Exec slot
-	const enableExec = await p.confirm({
-		message: 'Enable exec tools? (run shell commands)',
-		initialValue: existingConfig?.slots?.exec?.enabled ?? false,
+	// Step 4: Multi-select tools to configure
+	const selectedTools = await p.multiselect({
+		message: 'Which tools do you want to enable?',
+		options: toolOptions,
+		initialValues: currentlyEnabled,
+		required: false,
 	});
 
-	if (p.isCancel(enableExec)) {
+	if (p.isCancel(selectedTools)) {
 		p.cancel('Configuration cancelled');
 		return { cancelled: true };
 	}
 
-	let execEnabled = enableExec;
+	const toolsToEnable = selectedTools as ToolSlot[];
+
+	// Initialize slot config
+	let browserEnabled = false;
+	let codingEnabled = false;
+	let execEnabled = false;
+	let imessageEnabled = false;
 	let execAllow: string[] = [];
 	let execDeny: string[] = [];
+	let claudePath: string | undefined;
 
-	if (execEnabled) {
-		// Step 1: Choose mode
-		const execMode = await p.select({
-			message: 'Command access mode',
-			options: EXEC_MODE_OPTIONS,
-			initialValue: 'custom',
-		});
+	// Configure each selected tool
+	for (const tool of toolsToEnable) {
+		switch (tool) {
+			case 'browser': {
+				if (!browserInstalled) {
+					const installBrowser = await p.confirm({
+						message: 'Browser tools require agent-browser. Install now?',
+						initialValue: true,
+					});
 
-		if (p.isCancel(execMode)) {
-			p.cancel('Configuration cancelled');
-			return { cancelled: true };
-		}
+					if (p.isCancel(installBrowser)) {
+						p.cancel('Configuration cancelled');
+						return { cancelled: true };
+					}
 
-		if (execMode === 'allow_all') {
-			execAllow = ['Bash(*)'];
-		} else if (execMode === 'deny_all') {
-			execDeny = ['Bash(*)'];
-		} else {
-			// Custom mode - select specific commands
-			const selectedAllowed = await p.multiselect({
-				message: 'Select allowed commands (space to toggle)',
-				options: EXEC_COMMAND_OPTIONS,
-				initialValues: existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
-				required: false,
-			});
-
-			if (p.isCancel(selectedAllowed)) {
-				p.cancel('Configuration cancelled');
-				return { cancelled: true };
-			}
-
-			execAllow = selectedAllowed as string[];
-
-			// Ask for denied commands from remaining
-			const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
-				opt => !execAllow.includes(opt.value)
-			);
-
-			if (remainingCommands.length > 0) {
-				const deniedCommands = await p.multiselect({
-					message: 'Select denied commands (optional)',
-					options: remainingCommands,
-					initialValues: existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
-					required: false,
-				});
-
-				if (!p.isCancel(deniedCommands)) {
-					execDeny = deniedCommands as string[];
+					if (installBrowser) {
+						const installSpinner = p.spinner();
+						installSpinner.start('Installing agent-browser...');
+						try {
+							const result = await installAgentBrowser();
+							if (result.code === 0) {
+								installSpinner.stop(chalk.green('agent-browser installed'));
+								browserEnabled = true;
+							} else {
+								installSpinner.stop(chalk.red('Installation failed - browser tools disabled'));
+							}
+						} catch {
+							installSpinner.stop(chalk.red('Installation failed - browser tools disabled'));
+						}
+					}
+				} else {
+					browserEnabled = true;
 				}
+				break;
 			}
 
-			// Custom allow patterns
-			const customAllowPatterns = await p.text({
-				message: 'Additional allow patterns (comma-separated, e.g. "docker *, kubectl *")',
-				placeholder: 'Leave empty to skip',
-				initialValue: '',
-			});
-
-			if (!p.isCancel(customAllowPatterns) && customAllowPatterns && customAllowPatterns.trim()) {
-				const patterns = (customAllowPatterns as string)
-					.split(',')
-					.map(s => s.trim())
-					.filter(Boolean)
-					.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
-				execAllow.push(...patterns);
+			case 'coding': {
+				if (!claudeResult.installed) {
+					p.log.warn(chalk.yellow('claude-code not found - coding tools will be disabled'));
+					p.log.info(chalk.dim('Install with: npm install -g @anthropic-ai/claude-code'));
+				} else {
+					claudePath = claudeResult.path;
+					codingEnabled = true;
+				}
+				break;
 			}
 
-			// Custom deny patterns
-			const customDenyPatterns = await p.text({
-				message: 'Additional deny patterns (comma-separated, e.g. "sudo *, rm -rf *")',
-				placeholder: 'Leave empty to skip',
-				initialValue: '',
-			});
+			case 'exec': {
+				p.log.step(chalk.cyan('Configuring exec tools...'));
+				const execConfig = await configureExec(existingConfig);
+				if (p.isCancel(execConfig)) {
+					p.cancel('Configuration cancelled');
+					return { cancelled: true };
+				}
+				execEnabled = true;
+				execAllow = (execConfig as { allow: string[]; deny: string[] }).allow;
+				execDeny = (execConfig as { allow: string[]; deny: string[] }).deny;
+				break;
+			}
 
-			if (!p.isCancel(customDenyPatterns) && customDenyPatterns && customDenyPatterns.trim()) {
-				const patterns = (customDenyPatterns as string)
-					.split(',')
-					.map(s => s.trim())
-					.filter(Boolean)
-					.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
-				execDeny.push(...patterns);
+			case 'imessage': {
+				if (!imessageResult.available) {
+					p.log.warn(chalk.yellow(`iMessage not available: ${imessageResult.message}`));
+					const proceed = await p.confirm({
+						message: 'Enable iMessage tools anyway? (may fail at runtime)',
+						initialValue: false,
+					});
+					if (p.isCancel(proceed)) {
+						p.cancel('Configuration cancelled');
+						return { cancelled: true };
+					}
+					imessageEnabled = proceed;
+				} else {
+					imessageEnabled = true;
+				}
+				break;
 			}
 		}
 	}
@@ -408,13 +487,14 @@ async function runInteractiveConfig() {
 
 	const gatewayId = existingConfig?.id || randomUUID();
 	const slots: GatewaySlots = {
-		coding: { enabled: codingEnabled },
 		browser: { enabled: browserEnabled },
+		coding: { enabled: codingEnabled },
 		exec: {
 			enabled: execEnabled,
 			allow: execAllow.length > 0 ? execAllow : undefined,
 			deny: execDeny.length > 0 ? execDeny : undefined,
 		},
+		imessage: { enabled: imessageEnabled },
 	};
 
 	// Get URL from auth config (set during login)

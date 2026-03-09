@@ -29,6 +29,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const gmailAccount = await getIntegrationAccountBySlugAndUser(
     "gmail",
     user.id,
+    user.workspaceId as string,
   );
 
   // Get Gmail integration definition

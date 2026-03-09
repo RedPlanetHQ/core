@@ -33,12 +33,20 @@ export interface ChannelHandler {
   sendTypingIndicator?(metadata?: Record<string, string>): Promise<void>;
 }
 
+export interface InboundAttachment {
+  data: Uint8Array;
+  mimeType: string;
+  name?: string;
+  originalUrl?: string;
+}
+
 export interface InboundMessage {
   userId: string;
   workspaceId: string;
   userMessage: string;
   replyTo: string; // phone number, email address, etc.
   metadata?: Record<string, string>; // e.g. { subject: "Re: ..." }
+  attachments?: InboundAttachment[];
 }
 
 export interface ReplyMetadata {

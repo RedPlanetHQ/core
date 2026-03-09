@@ -12,6 +12,7 @@ import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
+import { type InboundAttachment } from "~/services/channels/types";
 
 interface ProcessInboundMessageParams {
   userId: string;
@@ -34,6 +35,8 @@ interface ProcessInboundMessageParams {
   channelMetadata?: Record<string, string>;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
+  /** Image/file attachments from Slack or WhatsApp */
+  attachments?: InboundAttachment[];
 }
 
 interface ProcessInboundMessageResult {
@@ -116,17 +119,30 @@ export async function processInboundMessage({
   channelMetadata,
   disableBackgroundTaskTools,
   executorTools,
+  attachments,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId =
     existingConversationId ??
     (await getOrCreateChannelConversation(userId, workspaceId, userMessage, channel, channelMetadata));
+
+  // Build message parts: text first, then any image attachments
+  const messageParts: any[] = [{ type: "text", text: userMessage }];
+  if (attachments && attachments.length > 0) {
+    for (const attachment of attachments) {
+      messageParts.push({
+        type: "image",
+        image: attachment.data,
+        mimeType: attachment.mimeType,
+      });
+    }
+  }
 
   // Call the same flow as web chat no_stream
   const assistantMessage = await noStreamProcess(
     {
       id: conversationId,
       message: {
-        parts: [{ type: "text", text: userMessage }],
+        parts: messageParts,
         role: "user",
       },
       source: channel,

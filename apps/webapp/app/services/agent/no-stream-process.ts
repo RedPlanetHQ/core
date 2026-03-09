@@ -93,13 +93,12 @@ export async function noStreamProcess(
   let finalMessages = messages;
 
   if (!isAssistantApproval) {
-    const message = body.message?.parts[0].text;
     const id = body.message?.id;
     const userMessageId = id ?? generateId();
     finalMessages = [
       ...messages,
       {
-        parts: [{ text: message, type: "text" }],
+        parts: body.message?.parts ?? [{ text: message, type: "text" }],
         role: "user",
         id: userMessageId,
       },
