@@ -31,7 +31,8 @@ export async function createConversation(
   userId: string,
   conversationData: CreateConversationDto,
 ) {
-  const { title, conversationId, source, asyncJobId, ...otherData } = conversationData;
+  const { title, conversationId, source, asyncJobId, ...otherData } =
+    conversationData;
 
   if (conversationId) {
     // Add a new message to an existing conversation
@@ -197,6 +198,7 @@ export const upsertConversationHistory = async (
   parts: any,
   conversationId: string,
   userType: UserTypeEnum,
+  unread: boolean = true,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   thoughts?: Record<string, any>,
 ) => {
@@ -223,7 +225,7 @@ export const upsertConversationHistory = async (
     });
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { unread: true },
+      data: { unread },
     });
     return result;
   } else {
@@ -238,7 +240,7 @@ export const upsertConversationHistory = async (
     });
     await prisma.conversation.update({
       where: { id: conversationId },
-      data: { unread: true },
+      data: { unread },
     });
   }
 };

@@ -10,7 +10,10 @@
 
 import { UserTypeEnum } from "@core/types";
 import { runDecisionAgent } from "~/services/agent/decision-agent";
-import { processInboundMessage, getOrCreateChannelConversation } from "~/services/agent/message-processor";
+import {
+  processInboundMessage,
+  getOrCreateChannelConversation,
+} from "~/services/agent/message-processor";
 import { runOrchestrator } from "~/services/agent/orchestrator";
 import {
   type ActionPlan,
@@ -184,7 +187,7 @@ async function executePlan(
   // Derive source from trigger type
   const conversationSource =
     trigger.type === "integration_webhook"
-      ? (trigger.data as any).integration ?? "integration"
+      ? ((trigger.data as any).integration ?? "integration")
       : "reminder";
 
   const conversationId = await getOrCreateAsyncConversation(
@@ -292,7 +295,9 @@ async function executePlan(
             UserTypeEnum.Agent,
           );
         } catch (error) {
-          logger.warn(`Failed to mirror reminder to channel conversation`, { error });
+          logger.warn(`Failed to mirror reminder to channel conversation`, {
+            error,
+          });
         }
       }
     } catch (error) {
@@ -352,7 +357,11 @@ async function executePlan(
                   toolCallId: stateToolCallId,
                   toolName: "silent_action",
                   state: "output-available",
-                  input: { action: action.description, type: "update_state", data: action.data },
+                  input: {
+                    action: action.description,
+                    type: "update_state",
+                    data: action.data,
+                  },
                   output: "state updated",
                 },
               ],

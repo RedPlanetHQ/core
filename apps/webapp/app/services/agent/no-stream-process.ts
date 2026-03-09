@@ -76,6 +76,7 @@ export async function noStreamProcess(
       messageParts,
       body.id,
       messageUserType,
+      false,
     );
   }
 
@@ -180,6 +181,7 @@ export async function noStreamProcess(
     assistantParts,
     body.id,
     UserTypeEnum.Agent,
+    false,
   );
 
   // Add to ingestion queue
