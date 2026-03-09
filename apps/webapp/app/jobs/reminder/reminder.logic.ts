@@ -145,7 +145,9 @@ export async function processReminderJob(
       returnDecrypted: true,
     });
 
-    const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
+    // Use INTERNAL_API_URL for container-internal calls, fallback to APP_ORIGIN
+    const apiUrl = env.INTERNAL_API_URL || env.APP_ORIGIN;
+    const client = new CoreClient({ baseUrl: apiUrl, token: token! });
     const executorTools = new HttpOrchestratorTools(client);
 
     const result: CASEPipelineResult = await runCASEPipeline({
