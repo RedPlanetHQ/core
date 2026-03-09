@@ -13,11 +13,11 @@
   "dependencies": {
     "@core/database": "workspace:*",
     "@core/types": "workspace:*",
+    "@qdrant/js-client-rest": "^1.17.0",
     "neo4j-driver": "^5.23.0",
     "pg": "^8.11.3"
   },
   "devDependencies": {
-    "@qdrant/js-client-rest": "^1.17.0",
     "@types/node": "^20.10.0",
     "@types/pg": "^8.10.9",
     "typescript": "^5.3.3"

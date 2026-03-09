@@ -16,6 +16,7 @@ import type { IModelProvider } from "./model/interface";
 
 import { Neo4jGraphProvider } from "./graph";
 import { PgVectorProvider } from "./vector";
+import { QdrantVectorProvider } from "./vector/qdrant";
 
 export class ProviderFactory {
   private static graphProvider: IGraphProvider | null = null;
@@ -77,8 +78,13 @@ export class ProviderFactory {
     switch (config.type) {
       case "pgvector":
         return new PgVectorProvider({ prisma: config.config.prisma });
-      case "turbopuffer":
       case "qdrant":
+        return new QdrantVectorProvider({
+          url: config.config.url,
+          apiKey: config.config.apiKey,
+          embeddingSize: config.config.embeddingSize || parseInt(process.env.EMBEDDING_MODEL_SIZE || "1024", 10),
+        });
+      case "turbopuffer":
       default:
         throw new Error(`Unknown vector provider: ${config.type}`);
     }
