@@ -8,12 +8,15 @@
 set -euo pipefail
 
 # --- Konfiguration -----------------------------------------------------------
+OPTIMIZER_DIR="${OPTIMIZER_DIR:-$HOME/.mac-optimizer}"
 LOG_DIR="$HOME/Library/Logs/mac-optimizer"
 LOG_FILE="$LOG_DIR/fix-$(date +%Y-%m-%d).log"
-MAX_CPU_PERCENT=80        # Prozesse mit mehr als X% CPU werden gewarnt
-MAX_LOG_AGE_DAYS=7        # Alte Log-Dateien nach X Tagen löschen
-MAX_LOG_FILE_MB=100       # System-Logs bis zu X MB bereinigen (~/Library/Logs)
 DRY_RUN=${DRY_RUN:-0}     # DRY_RUN=1 für Testlauf ohne echte Änderungen
+
+# Defaults (können von config.sh überschrieben werden)
+MAX_CPU_PERCENT=80
+MAX_LOG_AGE_DAYS=7
+MAX_LOG_FILE_MB=100
 
 # --- Hilfsfunktionen ---------------------------------------------------------
 mkdir -p "$LOG_DIR"
@@ -251,27 +254,56 @@ fix_kernel_params() {
 main() {
     require_macos
 
+    # License & Config laden
+    mkdir -p "$OPTIMIZER_DIR"
+    if [[ -f "$OPTIMIZER_DIR/license.sh" ]]; then
+        source "$OPTIMIZER_DIR/license.sh"
+        check_license >/dev/null 2>&1 || true
+    else
+        export LICENSE_TIER="free"
+    fi
+
+    if [[ -f "$OPTIMIZER_DIR/config.sh" ]]; then
+        source "$OPTIMIZER_DIR/config.sh"
+        load_config
+        MAX_CPU_PERCENT=${CPU_THRESHOLD:-80}
+        MAX_LOG_AGE_DAYS=${LOG_RETENTION_DAYS:-7}
+        MAX_LOG_FILE_MB=${MIN_FILE_SIZE_MB:-100}
+    fi
+
     echo "" | tee -a "$LOG_FILE"
     info "=========================================================="
     info "  Mac Performance Auto-Fix gestartet"
     info "  $(date)"
     info "  macOS $(sw_vers -productVersion) | $(uname -m)"
-    info "  DRY_RUN=$DRY_RUN"
+    info "  Tier: ${LICENSE_TIER^^} | DRY_RUN=$DRY_RUN"
     info "=========================================================="
 
-    fix_hung_processes
-    fix_memory
-    fix_disk
+    # FREE TIER: Basis-Optimierungen
     fix_dns_cache
     fix_temp_files
-    fix_spotlight
-    fix_network
-    fix_kernel_params
+    fix_disk
     report_startup_items
+    fix_network
+
+    # PREMIUM TIER: Erweiterte Optimierungen
+    if [[ "${LICENSE_TIER:-free}" == "premium" ]]; then
+        fix_hung_processes
+        fix_memory
+        fix_spotlight
+        fix_kernel_params
+    else
+        info "💡 Premium-Features deaktiviert (Free-Tier)"
+        info "   Upgrade: https://mac-optimizer.io/upgrade"
+    fi
 
     section "Zusammenfassung"
     success "Alle Checks abgeschlossen. Log: $LOG_FILE"
-    info "Tipp: Für automatische Ausführung: ./install-launchagent.sh"
+
+    # Update-Check (nur Premium)
+    if [[ "${LICENSE_TIER:-free}" == "premium" ]] && [[ -f "$OPTIMIZER_DIR/update-check.sh" ]]; then
+        bash "$OPTIMIZER_DIR/update-check.sh" --check || true
+    fi
 }
 
 main "$@"
