@@ -50,17 +50,21 @@ export async function reserveCredits(
   if (userUsage.availableCredits < amount) {
     // Reserve whatever is available if subscription allows overage
     if (userWorkspace.workspace.Subscription.enableUsageBilling) {
-      // For overage-enabled plans, reserve the full amount
-      await prisma.userUsage.update({
-        where: {
-          id: userUsage.id,
-          availableCredits: userUsage.availableCredits, // optimistic lock
-        },
-        data: {
-          availableCredits: Math.max(0, userUsage.availableCredits - amount),
-        },
-      });
-      return amount;
+      // For overage-enabled plans, only deduct what's actually available
+      const actualDeducted = Math.min(amount, userUsage.availableCredits);
+      if (actualDeducted > 0) {
+        await prisma.userUsage.update({
+          where: {
+            id: userUsage.id,
+            availableCredits: userUsage.availableCredits, // optimistic lock
+          },
+          data: {
+            availableCredits: 0,
+          },
+        });
+      }
+      // Return only what was actually deducted, so reconciliation math is correct
+      return actualDeducted;
     }
     return 0;
   }
