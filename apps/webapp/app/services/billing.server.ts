@@ -5,6 +5,7 @@
  * Works in both self-hosted (unlimited) and cloud (metered) modes.
  */
 
+import Stripe from "stripe";
 import { prisma } from "~/db.server";
 import {
   BILLING_CONFIG,
@@ -12,6 +13,29 @@ import {
   isBillingEnabled,
 } from "~/config/billing.server";
 import type { PlanType, Subscription } from "@prisma/client";
+
+const stripe = BILLING_CONFIG.stripe?.secretKey
+  ? new Stripe(BILLING_CONFIG.stripe.secretKey)
+  : null;
+
+/**
+ * Get the subscription amount from Stripe in dollars.
+ * Returns 0 if no Stripe subscription exists or Stripe is not configured.
+ */
+async function getSubscriptionAmount(
+  stripeSubscriptionId: string | null | undefined,
+): Promise<number> {
+  if (!stripe || !stripeSubscriptionId) {
+    return 0;
+  }
+  try {
+    const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const unitAmount = sub.items.data[0]?.price?.unit_amount;
+    return unitAmount ? unitAmount / 100 : 0;
+  } catch {
+    return 0;
+  }
+}
 
 export type CreditOperation = "addEpisode" | "search" | "chatMessage";
 
@@ -57,9 +81,9 @@ export async function resetMonthlyCredits(
       monthlyCreditsAllocated: subscription.monthlyCredits,
       creditsUsed: userUsage.usedCredits,
       overageCreditsUsed: userUsage.overageCredits,
-      subscriptionAmount: 0, // TODO: Get from Stripe
+      subscriptionAmount: await getSubscriptionAmount(subscription.stripeSubscriptionId),
       usageAmount: subscription.overageAmount,
-      totalAmount: subscription.overageAmount,
+      totalAmount: (await getSubscriptionAmount(subscription.stripeSubscriptionId)) + subscription.overageAmount,
     },
   });
 

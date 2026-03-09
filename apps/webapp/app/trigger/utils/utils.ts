@@ -4,10 +4,34 @@ import {
   type UserUsage,
 } from "@prisma/client";
 
+import Stripe from "stripe";
 import nodeCrypto from "node:crypto";
 import { customAlphabet } from "nanoid";
 import { prisma } from "./prisma";
 import { BILLING_CONFIG, isBillingEnabled } from "~/config/billing.server";
+
+const stripe = BILLING_CONFIG.stripe?.secretKey
+  ? new Stripe(BILLING_CONFIG.stripe.secretKey)
+  : null;
+
+/**
+ * Get the subscription amount from Stripe in dollars.
+ * Returns 0 if no Stripe subscription exists or Stripe is not configured.
+ */
+async function getSubscriptionAmount(
+  stripeSubscriptionId: string | null | undefined,
+): Promise<number> {
+  if (!stripe || !stripeSubscriptionId) {
+    return 0;
+  }
+  try {
+    const sub = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    const unitAmount = sub.items.data[0]?.price?.unit_amount;
+    return unitAmount ? unitAmount / 100 : 0;
+  } catch {
+    return 0;
+  }
+}
 
 // Token generation utilities
 const tokenValueLength = 40;
@@ -491,9 +515,9 @@ export async function resetMonthlyCredits(
       monthlyCreditsAllocated: subscription.monthlyCredits,
       creditsUsed: userUsage.usedCredits,
       overageCreditsUsed: userUsage.overageCredits,
-      subscriptionAmount: 0, // TODO: Get from Stripe
+      subscriptionAmount: await getSubscriptionAmount(subscription.stripeSubscriptionId),
       usageAmount: subscription.overageAmount,
-      totalAmount: subscription.overageAmount,
+      totalAmount: (await getSubscriptionAmount(subscription.stripeSubscriptionId)) + subscription.overageAmount,
     },
   });
 

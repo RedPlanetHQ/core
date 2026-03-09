@@ -467,11 +467,8 @@ export class OAuth2Service {
       throw new Error(OAuth2Errors.INVALID_GRANT);
     }
 
-    // Validate PKCE if required //TODO: cursor is failing to send right pkce
-    if (
-      authCode.codeChallenge &&
-      params.redirectUri.includes("cursor:://anysphere")
-    ) {
+    // Validate PKCE if code_challenge was sent (RFC 7636)
+    if (authCode.codeChallenge) {
       if (!params.codeVerifier) {
         throw new Error(OAuth2Errors.INVALID_REQUEST);
       }
