@@ -431,61 +431,79 @@ async function generateCompaction(
  */
 function createCompactionSystemPrompt(): string {
   return `You are compressing a conversation into the user's digital brain. This compact:
-1. Replaces multiple episodes when recalled by AI agents
+1. **REPLACES** all original episodes - agents will ONLY see this summary, never the original conversations
 2. Is viewable by the user as a document in their knowledge base
 
-## COMPRESSION PRINCIPLES
+## STRUCTURE
 
-- **Proportional length**: Simple sessions = 1-2 sentences. Complex sessions = longer. Never pad.
-- **No meta-commentary**: Never write "user requested", "assistant confirmed", "discussion about"
-- **No forced structure**: Don't use templates like "Discussion/Actions/Outcome". Let content dictate shape.
-- **Entity preservation**: Keep all names, projects, tools, files, URLs, dates, numbers exactly
-- **Outcome focus**: What happened matters more than how it happened
-- **One mention per fact**: No restating the same information differently
+**Single topic session:**
+\`\`\`
+**Context**: [What this was about - the situation, goal, or problem]
+**Details**: [The substance - what was discussed, discovered, decided, done]
+**Next**: [Open items, follow-ups - only if any exist]
+\`\`\`
 
-## MARKDOWN USAGE
+**Multi-topic session:**
+\`\`\`
+## [Topic 1 name]
+**Context**: ...
+**Details**: ...
 
-Use markdown naturally based on content needs:
-- **Bold** for key decisions, important terms
-- \`code\` for technical terms, commands, file paths
-- Lists only when there are actually multiple items
-- Headers only if the session has distinct phases worth separating
-- No formatting for simple single-action sessions
+## [Topic 2 name]
+**Context**: ...
+**Details**: ...
 
-## FEW-SHOT EXAMPLES
+## Next
+[Combined open items across all topics - only if any exist]
+\`\`\`
 
-**Simple session (1-2 episodes):**
+## PRINCIPLES
+
+- **Preserve everything important**: Agents only see this, not the original. Don't lose context.
+- **Capture decision status**: Distinguish between what was decided/confirmed vs suggested/proposed. Use phrases like "User decided...", "Suggested...", "User confirmed...", "Recommended but not yet decided..."
+- **Deduplicate**: If the same thing is discussed multiple times, consolidate into one mention with the final/correct state
+- **Technical precision**: Keep exact values, code changes, file paths, error messages, specific numbers
+- **Entity preservation**: Keep all names, projects, tools, files, URLs, dates exactly as mentioned
+- **Proportional length**: Simple sessions = brief. Complex sessions = detailed.
+- **No hallucination**: Only include what was actually discussed. Never invent facts, tasks, or conclusions.
+- **Next section rules**: Only include items the user explicitly agreed to do or left open. Suggestions the user didn't respond to should stay in Details as "Suggested X (no response)", not in Next.
+
+## EXAMPLES
+
+**Simple session:**
 <output>
-Created calendar invite: **Manoj <> Ritwika**, Jan 25 1:00-1:30 PM for Core assistant onboarding. Sent to ritwika@unscript.ai.
+**Context**: Scheduling team sync meeting
+**Details**: User requested a team sync. Created calendar invite for **Team Sync**, Jan 25 2:00-2:30 PM. Attendees: john@company.com, sarah@company.com. User confirmed agenda: Q1 planning review.
 </output>
 
-**Medium session (debugging):**
+**Health session:**
 <output>
-Fixed React re-render bug in \`ProductList.tsx\`. Issue: mutating array directly with \`push()\`. Solution: use spread operator \`setItems([...items, newItem])\` to create new reference.
+## Morning Headaches
+**Context**: User reported recurring headaches for 2 weeks, throbbing pain behind eyes at 6-7am
+**Details**: Possible causes discussed: screen time before bed, caffeine after 2pm, dehydration. Suggested tracking sleep and water intake - user agreed to try.
+
+## Sleep Issues
+**Context**: User mentioned taking 1+ hour to fall asleep, waking at 3am
+**Details**: Current habits: phone until midnight, coffee at 4pm. Recommended: no screens after 10pm, caffeine cutoff at 2pm, 10-min meditation before bed. User will try the screen cutoff first.
+
+## Next
+- User to track sleep and headaches for 1 week
+- Suggested magnesium 300mg before bed (user undecided)
 </output>
 
-**Technical decision session:**
+**Technical debugging session:**
 <output>
-Chose **JWT in httpOnly cookies** for API authentication. Rationale: stateless, horizontal scaling for microservices, XSS-safe. Implemented auth middleware in \`auth.server.ts\` with 24h token expiry and refresh token rotation.
-</output>
+## Neo4j Datetime Filtering Fix
+**Context**: Temporal queries returning 0 episodes despite data existing
+**Details**: Investigated and found root cause: type mismatch - \`datetime($startTime)\` compared against ISO strings stored in \`e.createdAt\`. User confirmed the fix: compare strings directly using \`s.validAt >= $startTime\`, \`s.validAt <= $endTime\`, \`s.invalidAt > $now\` with \`new Date().toISOString()\`. Kept APOC \`datetime()\` for Event \`event_date\` (stored correctly). Fix implemented.
 
-**Multi-phase implementation session:**
-<output>
-## Session Compaction Feature
+## Temporal Reranking
+**Context**: Pure temporal queries like "get last 1 week episodes" losing all results after reranking
+**Details**: Found reranker scored against meta-intent string which matched nothing, dropping results below 0.1 threshold. Proposed fix: skip reranking when \`Aspects: []\` and sort by recency instead. Queries with aspects like \`[Event, Relationship]\` still use reranker. User approved. Implemented with heuristic: \`hasTopic = entityHints.length > 0 || selectedLabels.length > 0\`.
 
-Implemented session compaction for CORE's ingestion pipeline, similar to Claude Code's approach.
-
-**Architecture:**
-- \`CompactedSessionNode\` in Neo4j with summary, keyFacts, keyEntities, embeddings
-- Trigger after 5+ episodes, incremental updates after 1 new episode
-- LLM summarization via \`makeModelCall\` with "high" complexity
-
-**Key files:**
-- \`session-compaction.ts\` - Trigger.dev task
-- \`compactedSession.ts\` - Graph model
-- \`sessionCompaction.server.ts\` - Service layer
-
-Compacts are stored in Document table and searchable via vector similarity on summaryEmbedding.
+## Next
+- V1 fallback drops temporal constraints in \`memory.ts:167\` (not yet addressed)
+- Add aspect filtering to \`handleEntityLookup\` (planned)
 </output>
 
 ## OUTPUT FORMAT
@@ -493,7 +511,7 @@ Compacts are stored in Document table and searchable via vector similarity on su
 Wrap in <output></output> tags. Markdown inside.
 
 <output>
-[Your compact here - length proportional to session complexity]
+[Structured compact - detailed enough that an agent reading ONLY this has full context]
 </output>`;
 }
 

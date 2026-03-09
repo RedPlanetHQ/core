@@ -14,6 +14,9 @@ import { updateEpisodeLabels } from "~/services/graphModels/episode";
 import { generateOklchColor } from "~/components/ui/color-utils";
 import { type ModelMessage } from "ai";
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
+import { countTokens } from "~/services/search/tokenBudget";
+
+const MAX_CONTENT_TOKENS = 20000;
 
 // Similarity threshold for matching labels (higher = stricter matching)
 const LABEL_SIMILARITY_THRESHOLD = 0.85;
@@ -79,15 +82,16 @@ export async function processLabelAssignment(
     }
 
     let existingLabelIds: string[] = [];
+    let sessionContext: string | undefined;
 
-    // Check Document table for existing labels (source of truth)
+    // Check Document table for existing labels and session content
     if (ingestionQueue.sessionId) {
       const document = await prisma.document.findFirst({
         where: {
           sessionId: ingestionQueue.sessionId,
           workspaceId: ingestionQueue.workspaceId,
         },
-        select: { labelIds: true },
+        select: { labelIds: true, content: true },
       });
 
       if (document?.labelIds && document.labelIds.length > 0) {
@@ -99,6 +103,10 @@ export async function processLabelAssignment(
             labelIds: existingLabelIds,
           },
         );
+      }
+
+      if (document?.content) {
+        sessionContext = document.content;
       }
     }
 
@@ -126,6 +134,7 @@ export async function processLabelAssignment(
         description: l.description,
       })),
       payload.workspaceId,
+      sessionContext,
     );
 
     // Separate matched vs new labels
@@ -290,11 +299,13 @@ export async function extractLabelsFromEpisode(
     description: string | null;
   }>,
   workspaceId: string,
+  sessionContext?: string,
 ): Promise<ExtractedLabel[]> {
-  const messages = buildLabelExtractionMessages(episodeBody, availableLabels);
+  const messages = buildLabelExtractionMessages(episodeBody, availableLabels, sessionContext);
 
   logger.info("Extracting labels from episode", {
-    episodeLength: episodeBody.length,
+    episodeTokens: countTokens(episodeBody),
+    sessionContextTokens: sessionContext ? countTokens(sessionContext) : 0,
     availableLabelCount: availableLabels.length,
   });
 
@@ -383,92 +394,136 @@ export async function extractLabelsFromEpisode(
 }
 
 /**
- * Build messages for label extraction
+ * Build messages for label extraction using HTML tags for clear section management.
+ * Applies token-based truncation (MAX_CONTENT_TOKENS) across session context + current episode.
  */
-function buildLabelExtractionMessages(
+export function buildLabelExtractionMessages(
   episodeBody: string,
   availableLabels: Array<{
     id: string;
     name: string;
     description: string | null;
   }>,
+  sessionContext?: string,
 ): ModelMessage[] {
-  const existingLabelsSection =
+  // Token-aware truncation: prioritise current episode, fill remainder with session context
+  const episodeTokens = countTokens(episodeBody);
+  let truncatedEpisode = episodeBody;
+  let truncatedContext: string | undefined;
+
+  if (episodeTokens > MAX_CONTENT_TOKENS) {
+    // Edge case: episode alone exceeds budget — hard-trim from the end
+    const chars = Math.floor((MAX_CONTENT_TOKENS / episodeTokens) * episodeBody.length);
+    truncatedEpisode = episodeBody.substring(0, chars) + "...[truncated]";
+  }
+
+  if (sessionContext) {
+    const remaining = MAX_CONTENT_TOKENS - countTokens(truncatedEpisode);
+    if (remaining > 200) {
+      const contextTokens = countTokens(sessionContext);
+      if (contextTokens <= remaining) {
+        truncatedContext = sessionContext;
+      } else {
+        // Keep the most recent part of the session (tail), drop oldest
+        const ratio = remaining / contextTokens;
+        const startChar = Math.floor((1 - ratio) * sessionContext.length);
+        truncatedContext =
+          "...[earlier context omitted]\n" + sessionContext.substring(startChar);
+      }
+    }
+  }
+
+  const existingLabelsXml =
     availableLabels.length > 0
-      ? `## Existing Labels
+      ? `<existing_labels>
+${availableLabels
+  .map(
+    (l) =>
+      `  <label name="${l.name}"${l.description ? ` description="${l.description}"` : ""} />`,
+  )
+  .join("\n")}
+</existing_labels>`
+      : "<existing_labels />";
 
-The user already has these labels. Use them if they match (prefer existing over creating new):
+  const sessionContextXml = truncatedContext
+    ? `<session_context>
+${truncatedContext}
+</session_context>`
+    : "";
 
-${availableLabels.map((l) => `- **${l.name}**${l.description ? `: ${l.description}` : ""}`).join("\n")}`
-      : "";
+  const currentEpisodeXml = `<current_episode>
+${truncatedEpisode}
+</current_episode>`;
 
   return [
     {
       role: "system",
       content: `You extract LABELS from episodes for a USER'S PERSONAL KNOWLEDGE SYSTEM.
 
-## CORE PRINCIPLE
+<core_principle>
+Labels are HIGH-LEVEL THEMES the user is actively discussing. They help organise and retrieve episodes later.
+Labels must reflect the actual topics the user speaks about — if a user is discussing Search, Authentication, Payments, etc., those deserve labels. Do NOT dismiss topics as "too generic" if the user is substantively engaging with them.
+</core_principle>
 
-Labels are HIGH-LEVEL THEMES the user discusses. They help organize and retrieve episodes later.
-Extract ONLY labels that represent USER-SPECIFIC topics, projects, or themes.
-
-${existingLabelsSection}
-
-## WHAT TO EXTRACT
-
+<what_to_extract>
 Extract labels when the episode:
-1. **Substantially discusses** a theme (not just mentions)
-2. **Contains user-specific context** about the theme
-3. **Represents a searchable category** for future retrieval
+1. Substantially discusses a theme (not just a passing mention)
+2. Contains user-specific context about the theme
+3. Represents a searchable category for future retrieval
 
-**EXTRACT labels for:**
+EXTRACT labels for:
 - User's projects and work (CORE, API Design, Mobile App)
-- User's professional domains (AI, TypeScript, DevOps)
+- User's professional domains and features (Search, AI, Authentication, DevOps)
 - User's personal interests (Fitness, Cooking, Photography)
 - Recurring activities (Code Review, Team Management, Learning)
 
-**DO NOT extract labels for:**
-- ❌ Brief mentions without substantial content
-- ❌ Generic concepts not central to episode
-- ❌ Textbook terms (Progressive Overload, Calorie Deficit)
-- ❌ Tools only mentioned in passing
+DO NOT extract labels for:
+- Brief mentions with no substantive content
+- Textbook/generic definitions the user is not personally engaged with
+- Tools only mentioned in passing without real discussion
+</what_to_extract>
 
-## MATCHING RULES
+<matching_rules>
+1. Check existing_labels first — reuse the EXACT name if it fits
+2. Create a new label only when no existing label covers the theme
+3. Prefer broader labels — use "Fitness" not "Evening Cycling" if "Fitness" already exists
+</matching_rules>
 
-1. **Check existing labels first** - if an existing label matches, use its EXACT name
-2. **Create new labels** only if no existing label covers the theme
-3. **Prefer broader labels** - use "Fitness" not "Evening Cycling" if "Fitness" exists
-
-## LABEL NAMING RULES
-
+<label_naming_rules>
 - 1-3 words, Title Case
-- Use noun form: "Fitness" not "Getting Fit"
+- Use noun form: "Search" not "Searching", "Fitness" not "Getting Fit"
 - Be specific but not verbose: "Code Review" not "Code Review Process Guidelines"
 
-| ❌ TOO VERBOSE | ✅ CLEAN |
-|----------------|----------|
-| Code Review Process | Code Review |
-| Database Connection Setup | Database Setup |
-| Morning Exercise Routine | Morning Routine |
-| Project Documentation Standards | Documentation |
+Examples:
+  TOO VERBOSE           → CLEAN
+  Code Review Process   → Code Review
+  Database Connection   → Database Setup
+  Morning Exercise      → Morning Routine
+  Memory Search System  → Memory Search
+</label_naming_rules>
 
-## DESCRIPTION RULES
-
+<description_rules>
 - Max 15 words
-- Describe what USER does/discusses about this topic
-- User-specific, not a generic definition
+- Describe what the USER does/discusses about this topic
+- User-specific, not a generic dictionary definition
 
-| ❌ GENERIC DEFINITION | ✅ USER-SPECIFIC |
-|-----------------------|------------------|
-| "The practice of physical exercise" | "User's fat loss goals and workout routine" |
-| "A software project" | "Personal knowledge management system user is building" |
-| "Database technology" | "Graph storage architecture for CORE project" |`,
+Examples:
+  GENERIC DEFINITION                      → USER-SPECIFIC
+  "The practice of physical exercise"     → "User's fat loss goals and workout routine"
+  "A software project"                    → "Personal knowledge management system user is building"
+  "Database technology"                   → "Graph storage architecture for CORE project"
+  "A search algorithm"                    → "Temporal and semantic search routing in CORE memory"
+</description_rules>`,
     },
     {
       role: "user",
-      content: `Extract labels from this episode:
+      content: `Extract labels from the content below.
 
-${episodeBody.substring(0, 4000)}${episodeBody.length > 4000 ? "..." : ""}`,
+${existingLabelsXml}
+
+${sessionContextXml}
+
+${currentEpisodeXml}`,
     },
   ];
 }
