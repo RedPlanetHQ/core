@@ -108,7 +108,7 @@ export const ConversationList = ({
       )}
 
       {conversations.map((conversation) => (
-        <div key={conversation.id} className="mb-0.5 flex w-full">
+        <div key={conversation.id} className="mb-0.5 flex min-h-[28px] w-full">
           <Button
             variant={
               currentConversationId === conversation.id ? "secondary" : "ghost"
