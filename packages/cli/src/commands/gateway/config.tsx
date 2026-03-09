@@ -27,6 +27,14 @@ import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 import type { GatewayConfig, GatewaySlots } from '@/types/config';
 import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
+import {
+	createAppBundle,
+	openFullDiskAccessSettings,
+	testMessagesAccess,
+	isAppBundleInstalled,
+	getAppExecutablePath,
+	getAppBundlePath,
+} from '@/utils/app-bundle';
 
 const execAsync = promisify(exec);
 
@@ -278,6 +286,74 @@ async function configureExec(existingConfig: GatewayConfig | undefined): Promise
 	return { allow: execAllow, deny: execDeny };
 }
 
+// Configure iMessage slot — creates .app bundle and guides FDA setup
+// Returns true if enabled, false if skipped, null if cancelled
+async function configureIMessage(): Promise<boolean | null> {
+	// If already installed and accessible, just enable
+	if (isAppBundleInstalled() && testMessagesAccess()) {
+		p.log.success(chalk.green('CoreBrainGateway.app already installed and has Full Disk Access'));
+		return true;
+	}
+
+	p.log.step(chalk.cyan('Setting up iMessage access...'));
+
+	// Step 1: Create the .app bundle
+	const bundleSpinner = p.spinner();
+	bundleSpinner.start('Creating CoreBrainGateway.app in /Applications...');
+	try {
+		const __filename = fileURLToPath(import.meta.url);
+		const __dirname = dirname(__filename);
+		const gatewayEntryPath = join(__dirname, '..', '..', 'server', 'gateway-entry.js');
+		createAppBundle(process.execPath, gatewayEntryPath);
+		bundleSpinner.stop(chalk.green('CoreBrainGateway.app created in /Applications'));
+	} catch (err) {
+		bundleSpinner.stop(chalk.red('Failed to create app bundle'));
+		p.log.error(err instanceof Error ? err.message : 'Unknown error');
+		return false;
+	}
+
+	// Step 2: Open System Settings → Full Disk Access
+	openFullDiskAccessSettings();
+
+	p.log.info([
+		'',
+		chalk.bold('Grant Full Disk Access to CoreBrain Gateway:'),
+		`  1. In the panel that just opened, click ${chalk.bold('+')}`,
+		`  2. Select ${chalk.bold('CoreBrainGateway')} from Applications`,
+		`  3. Make sure the toggle is ${chalk.bold('ON')}`,
+		'',
+	].join('\n'));
+
+	// Step 3: Wait for user then verify
+	let verified = false;
+	while (!verified) {
+		const next = await p.select({
+			message: 'Once you\'ve added CoreBrainGateway to Full Disk Access:',
+			options: [
+				{ value: 'verify', label: 'Verify access' },
+				{ value: 'skip', label: 'Skip iMessage for now' },
+			],
+		});
+
+		if (p.isCancel(next)) return null;
+
+		if (next === 'skip') return false;
+
+		const verifySpinner = p.spinner();
+		verifySpinner.start('Checking Full Disk Access...');
+		const ok = testMessagesAccess();
+		if (ok) {
+			verifySpinner.stop(chalk.green('Full Disk Access confirmed — iMessage tools ready'));
+			verified = true;
+		} else {
+			verifySpinner.stop(chalk.yellow('Not yet — Messages database not accessible'));
+			p.log.warn(`Make sure ${chalk.bold(getAppBundlePath())} is in Full Disk Access with the toggle ON, then try again.`);
+		}
+	}
+
+	return true;
+}
+
 // Interactive wizard
 async function runInteractiveConfig() {
 	const prefs = getPreferences();
@@ -396,7 +472,7 @@ async function runInteractiveConfig() {
 	let browserEnabled = false;
 	let codingEnabled = false;
 	let execEnabled = false;
-	let imessageEnabled = false;
+	let imessageEnabled: boolean = false;
 	let execAllow: string[] = [];
 	let execDeny: string[] = [];
 	let claudePath: string | undefined;
@@ -462,20 +538,12 @@ async function runInteractiveConfig() {
 			}
 
 			case 'imessage': {
-				if (!imessageResult.available) {
-					p.log.warn(chalk.yellow(`iMessage not available: ${imessageResult.message}`));
-					const proceed = await p.confirm({
-						message: 'Enable iMessage tools anyway? (may fail at runtime)',
-						initialValue: false,
-					});
-					if (p.isCancel(proceed)) {
-						p.cancel('Configuration cancelled');
-						return { cancelled: true };
-					}
-					imessageEnabled = proceed;
-				} else {
-					imessageEnabled = true;
+				const result = await configureIMessage();
+				if (result === null) {
+					p.cancel('Configuration cancelled');
+					return { cancelled: true };
 				}
+				imessageEnabled = result;
 				break;
 			}
 		}
@@ -561,11 +629,13 @@ async function runInteractiveConfig() {
 	const gatewayEntryPath = getGatewayEntryPath();
 	const logDir = join(getConfigPath(), 'logs');
 
+	// If iMessage is enabled, launch via the .app bundle so it inherits Full Disk Access
+	const useAppBundle = imessageEnabled && isAppBundleInstalled();
 	const serviceConfig: ServiceConfig = {
 		name: serviceName,
 		displayName: 'CoreBrain Gateway',
-		command: process.execPath,
-		args: [gatewayEntryPath],
+		command: useAppBundle ? getAppExecutablePath() : process.execPath,
+		args: useAppBundle ? [] : [gatewayEntryPath],
 		port: 0,
 		workingDirectory: homedir(),
 		logPath: join(logDir, 'gateway-stdout.log'),
