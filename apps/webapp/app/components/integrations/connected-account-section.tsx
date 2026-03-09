@@ -20,9 +20,16 @@ interface ConnectedAccount {
 
 interface ConnectedAccountSectionProps {
   activeAccounts: ConnectedAccount[];
+  isAutoReadAvailable?: boolean;
 }
 
-function AccountRow({ account }: { account: ConnectedAccount }) {
+function AccountRow({
+  account,
+  isAutoReadAvailable = true,
+}: {
+  account: ConnectedAccount;
+  isAutoReadAvailable?: boolean;
+}) {
   const disconnectFetcher = useFetcher();
   const autoActivityFetcher = useFetcher();
 
@@ -65,6 +72,11 @@ function AccountRow({ account }: { account: ConnectedAccount }) {
             <p className="text-muted-foreground text-xs">
               Automatically send new activities from this account to your agent
             </p>
+            {!isAutoReadAvailable && (
+              <p className="text-xs text-amber-500">
+                Upgrade to Pro or Max to enable this feature
+              </p>
+            )}
           </div>
           <Select
             value={optimisticAutoActivity ? "enabled" : "disabled"}
@@ -78,6 +90,7 @@ function AccountRow({ account }: { account: ConnectedAccount }) {
                 { method: "POST" },
               );
             }}
+            disabled={!isAutoReadAvailable}
           >
             <SelectTrigger className="w-32">
               <SelectValue />
@@ -109,6 +122,7 @@ function AccountRow({ account }: { account: ConnectedAccount }) {
 
 export function ConnectedAccountSection({
   activeAccounts,
+  isAutoReadAvailable = true,
 }: ConnectedAccountSectionProps) {
   if (!activeAccounts || activeAccounts.length === 0) return null;
 
@@ -119,7 +133,11 @@ export function ConnectedAccountSection({
       </h3>
       <div className="space-y-3">
         {activeAccounts.map((account) => (
-          <AccountRow key={account.id} account={account} />
+          <AccountRow
+            key={account.id}
+            account={account}
+            isAutoReadAvailable={isAutoReadAvailable}
+          />
         ))}
       </div>
     </div>

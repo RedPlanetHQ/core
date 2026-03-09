@@ -118,3 +118,10 @@ export function validateBillingConfig() {
 
   console.log("✅ Billing is enabled with Stripe integration");
 }
+
+/**
+ * Check if a plan type is a paid plan (PRO or MAX)
+ */
+export function isPaidPlan(planType: "FREE" | "PRO" | "MAX"): boolean {
+  return planType === "PRO" || planType === "MAX";
+}

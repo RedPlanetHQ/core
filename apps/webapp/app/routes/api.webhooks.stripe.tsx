@@ -14,6 +14,7 @@ import { prisma } from "~/db.server";
 import { BILLING_CONFIG, getPlanConfig } from "~/config/billing.server";
 import { logger } from "~/services/logger.service";
 import type { PlanType } from "@prisma/client";
+import { unscheduleAllForWorkspace } from "~/services/oauth/scheduler";
 
 // Initialize Stripe
 const stripe = BILLING_CONFIG.stripe.secretKey
@@ -265,6 +266,9 @@ async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
         overageAmount: 0,
       },
     });
+
+    // Remove all auto-read schedules for this workspace (paid feature only)
+    await unscheduleAllForWorkspace(existingSubscription.workspaceId);
 
     const workspace = await prisma.workspace.findUnique({
       where: { id: existingSubscription.workspaceId },

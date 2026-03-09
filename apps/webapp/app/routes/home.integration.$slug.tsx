@@ -19,16 +19,21 @@ import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
+import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);
   const { slug } = params;
 
-  const [integrationDefinitions, integrationAccounts] = await Promise.all([
-    getIntegrationDefinitions(workspace?.id),
-    getIntegrationAccounts(userId, workspace?.id as string),
-  ]);
+  const [integrationDefinitions, integrationAccounts, subscription] =
+    await Promise.all([
+      getIntegrationDefinitions(workspace?.id),
+      getIntegrationAccounts(userId, workspace?.id as string),
+      prisma.subscription.findUnique({
+        where: { workspaceId: workspace?.id },
+      }),
+    ]);
 
   // Combine fixed integrations with dynamic ones
   const allIntegrations = integrationDefinitions;
@@ -45,11 +50,16 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
   );
 
+  // Auto-read is available if billing is disabled OR user has a paid plan
+  const isAutoReadAvailable =
+    !isBillingEnabled() || isPaidPlan(subscription?.planType || "FREE");
+
   return json({
     integration,
     integrationAccounts,
     activeAccounts,
     userId,
+    isAutoReadAvailable,
   });
 }
 
@@ -93,12 +103,14 @@ interface IntegrationDetailProps {
   integration: any;
   integrationAccounts: any;
   activeAccounts: any[];
+  isAutoReadAvailable: boolean;
 }
 
 export function IntegrationDetail({
   integration,
   integrationAccounts,
   activeAccounts,
+  isAutoReadAvailable,
 }: IntegrationDetailProps) {
   const hasActiveAccounts = activeAccounts && activeAccounts.length > 0;
 
@@ -199,7 +211,10 @@ export function IntegrationDetail({
               )}
 
               {/* Connected Accounts Info */}
-              <ConnectedAccountSection activeAccounts={activeAccounts as any} />
+              <ConnectedAccountSection
+                activeAccounts={activeAccounts as any}
+                isAutoReadAvailable={isAutoReadAvailable}
+              />
 
               {/* MCP Authentication Section */}
               <MCPAuthSection
@@ -216,7 +231,7 @@ export function IntegrationDetail({
 }
 
 export default function IntegrationDetailWrapper() {
-  const { integration, integrationAccounts, activeAccounts } =
+  const { integration, integrationAccounts, activeAccounts, isAutoReadAvailable } =
     useLoaderData<typeof loader>();
 
   return (
@@ -224,6 +239,7 @@ export default function IntegrationDetailWrapper() {
       integration={integration}
       integrationAccounts={integrationAccounts}
       activeAccounts={activeAccounts}
+      isAutoReadAvailable={isAutoReadAvailable}
     />
   );
 }
