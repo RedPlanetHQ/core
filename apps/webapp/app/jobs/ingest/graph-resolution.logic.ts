@@ -325,16 +325,25 @@ export async function processGraphResolution(
         // Don't throw - the graph resolution work is still valid
       }
 
-      // Reconcile credits: reserved upfront vs actual statements created
-      const reservedCredits = currentOutput?.reservedCredits || 0;
+      // Credit reconciliation: only reconcile when all chunks are done
+      const reservedCredits = finalOutput?.reservedCredits || currentOutput?.reservedCredits || 0;
+      const totalChunks = payload.episodeDetails?.totalChunks || 1;
+      const completedChunks = finalOutput?.episodes?.length || 1;
+      const allChunksDone = completedChunks >= totalChunks;
+
       if (reservedCredits > 0) {
-        await reconcileCredits(
-          payload.workspaceId,
-          payload.userId,
-          "addEpisode",
-          reservedCredits,
-          statementsCount,
-        );
+        if (allChunksDone) {
+          // All chunks done: reconcile reserved vs total statements across all chunks
+          const totalStatementsUsed = finalOutput?.statementsCreated || statementsCount;
+          await reconcileCredits(
+            payload.workspaceId,
+            payload.userId,
+            "addEpisode",
+            reservedCredits,
+            totalStatementsUsed,
+          );
+        }
+        // Non-last chunks: credits already reserved, no action needed
       } else {
         // Fallback: no reservation found (legacy path), deduct full amount
         await deductCredits(

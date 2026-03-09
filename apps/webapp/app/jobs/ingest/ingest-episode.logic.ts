@@ -160,7 +160,9 @@ export async function processEpisodeIngestion(
         : IngestionStatus.FAILED;
 
     // Refund reserved credits if nothing was processed (nothing to remember)
-    if (isNothingToRemember) {
+    // Only refund for single-chunk episodes; multi-chunk reconciliation happens in graph-resolution
+    const totalChunks = payload.body.totalChunks || 1;
+    if (isNothingToRemember && totalChunks <= 1) {
       try {
         const queue = await prisma.ingestionQueue.findUnique({
           where: { id: payload.queueId },
@@ -286,26 +288,30 @@ export async function processEpisodeIngestion(
     return { success: true, episodeDetails };
   } catch (err: any) {
     // Refund reserved credits on failure
-    try {
-      const queue = await prisma.ingestionQueue.findUnique({
-        where: { id: payload.queueId },
-        select: { output: true },
-      });
-      const reservedCredits = (queue?.output as any)?.reservedCredits;
-      if (reservedCredits && reservedCredits > 0) {
-        await refundCredits(
-          payload.workspaceId,
-          payload.userId,
-          reservedCredits,
-        );
-        logger.info(
-          `Refunded ${reservedCredits} reserved credits for failed ingestion ${payload.queueId}`,
-        );
+    // Only refund for single-chunk episodes; multi-chunk reconciliation happens in graph-resolution
+    const errorTotalChunks = payload.body.totalChunks || 1;
+    if (errorTotalChunks <= 1) {
+      try {
+        const queue = await prisma.ingestionQueue.findUnique({
+          where: { id: payload.queueId },
+          select: { output: true },
+        });
+        const reservedCredits = (queue?.output as any)?.reservedCredits;
+        if (reservedCredits && reservedCredits > 0) {
+          await refundCredits(
+            payload.workspaceId,
+            payload.userId,
+            reservedCredits,
+          );
+          logger.info(
+            `Refunded ${reservedCredits} reserved credits for failed ingestion ${payload.queueId}`,
+          );
+        }
+      } catch (refundError) {
+        logger.warn(`Failed to refund credits for ${payload.queueId}:`, {
+          error: refundError,
+        });
       }
-    } catch (refundError) {
-      logger.warn(`Failed to refund credits for ${payload.queueId}:`, {
-        error: refundError,
-      });
     }
 
     try {
