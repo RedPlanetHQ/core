@@ -13,7 +13,7 @@ import {
 } from "@ai-sdk/openai";
 import { logger } from "~/services/logger.service";
 
-import { createOllama } from "ollama-ai-provider-v2";
+import { createOpenAI } from "@ai-sdk/openai";
 import { anthropic } from "@ai-sdk/anthropic";
 import { google } from "@ai-sdk/google";
 
@@ -84,36 +84,33 @@ export const getModel = (takeModel?: string) => {
 
   let modelInstance;
   let modelTemperature = Number(process.env.MODEL_TEMPERATURE) || 1;
-  ollamaUrl = undefined;
 
-  // First check if Ollama URL exists and use Ollama
-  if (ollamaUrl) {
-    const ollama = createOllama({
-      baseURL: ollamaUrl,
-    });
-    modelInstance = ollama(model || "llama2"); // Default to llama2 if no model specified
-  } else {
-    // If no Ollama, check other models
-
-    if (model.includes("claude")) {
-      if (!anthropicKey) {
-        throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
-      }
-      modelInstance = anthropic(model);
-      modelTemperature = 0.5;
-    } else if (model.includes("gemini")) {
-      if (!googleKey) {
-        throw new Error("No Google API key found. Set GOOGLE_API_KEY");
-      }
-      modelInstance = google(model);
-    } else {
-      if (!openaiKey) {
-        throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
-      }
-      modelInstance = openai.responses(model);
+  // Check model type first before defaulting to Ollama
+  if (model.includes("claude")) {
+    if (!anthropicKey) {
+      throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
     }
-
-    return modelInstance;
+    modelInstance = anthropic(model);
+    modelTemperature = 0.5;
+  } else if (model.includes("gemini")) {
+    if (!googleKey) {
+      throw new Error("No Google API key found. Set GOOGLE_API_KEY");
+    }
+    modelInstance = google(model);
+  } else if (model.includes("gpt")) {
+    if (!openaiKey) {
+      throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
+    }
+    modelInstance = openai.responses(model);
+  } else if (ollamaUrl) {
+    // Use Ollama for other models (e.g., llama, mistral, etc.)
+    const ollama = createOpenAI({
+      baseURL: `${ollamaUrl}/v1`,
+      apiKey: "ollama", // Required but not used by Ollama
+    });
+    modelInstance = ollama(model || "llama2");
+  } else {
+    throw new Error(`Unsupported model: ${model}. No provider configured.`);
   }
 };
 
