@@ -166,6 +166,24 @@ export class QdrantVectorProvider implements IVectorProvider {
   }
 
   /**
+   * Extract a usable offset from Qdrant's next_page_offset, which can be
+   * string | number | Record<string, unknown> | null | undefined.
+   * Returns string | number | undefined for use in the scroll API.
+   */
+  private extractOffset(
+    nextPageOffset: string | number | Record<string, unknown> | null | undefined
+  ): string | number | undefined {
+    if (nextPageOffset === null || nextPageOffset === undefined) {
+      return undefined;
+    }
+    if (typeof nextPageOffset === "string" || typeof nextPageOffset === "number") {
+      return nextPageOffset;
+    }
+    // Record<string, unknown> case - shouldn't happen in practice, treat as end
+    return undefined;
+  }
+
+  /**
    * Build a Qdrant payload from metadata and content
    */
   private buildPayload(
@@ -505,7 +523,7 @@ export class QdrantVectorProvider implements IVectorProvider {
 
     try {
       // Retrieve existing points to get their current labelIds
-      const points = await this.client.getPoints(collectionName, {
+      const points = await this.client.retrieve(collectionName, {
         ids: episodeUuids,
         with_payload: true,
       });
@@ -571,14 +589,14 @@ export class QdrantVectorProvider implements IVectorProvider {
         ],
       };
 
-      let offset: string | number | undefined = undefined;
+      let nextOffset: string | number | undefined = undefined;
       let hasMore = true;
 
       while (hasMore) {
         const scrollResult = await this.client.scroll(collectionName, {
           filter,
           limit: 100,
-          offset,
+          offset: nextOffset,
           with_payload: true,
         });
 
@@ -610,8 +628,8 @@ export class QdrantVectorProvider implements IVectorProvider {
           updatedCount++;
         }
 
-        offset = scrollResult.next_page_offset ?? undefined;
-        if (offset === undefined || offset === null) {
+        nextOffset = this.extractOffset(scrollResult.next_page_offset);
+        if (nextOffset === undefined) {
           hasMore = false;
         }
       }
@@ -640,14 +658,14 @@ export class QdrantVectorProvider implements IVectorProvider {
       };
 
       const results: EpisodeEmbedding[] = [];
-      let offset: string | number | undefined = undefined;
+      let nextOffset: string | number | undefined = undefined;
       let hasMore = true;
 
       while (hasMore) {
         const scrollResult = await this.client.scroll(collectionName, {
           filter,
           limit: 100,
-          offset,
+          offset: nextOffset,
           with_payload: true,
           with_vector: true,
         });
@@ -660,8 +678,8 @@ export class QdrantVectorProvider implements IVectorProvider {
           );
         }
 
-        offset = scrollResult.next_page_offset ?? undefined;
-        if (offset === undefined || offset === null) {
+        nextOffset = this.extractOffset(scrollResult.next_page_offset);
+        if (nextOffset === undefined) {
           hasMore = false;
         }
       }
@@ -715,7 +733,7 @@ export class QdrantVectorProvider implements IVectorProvider {
       // Qdrant doesn't natively support ordering by payload field,
       // so we scroll and sort client-side by createdAt descending
       const results: EpisodeEmbedding[] = [];
-      let offset: string | number | undefined = undefined;
+      let nextOffset: string | number | undefined = undefined;
       let hasMore = true;
 
       // Fetch more than needed to account for sorting; cap at a reasonable limit
@@ -726,7 +744,7 @@ export class QdrantVectorProvider implements IVectorProvider {
         const scrollResult = await this.client.scroll(collectionName, {
           filter,
           limit: batchSize,
-          offset,
+          offset: nextOffset,
           with_payload: true,
           with_vector: true,
         });
@@ -739,12 +757,8 @@ export class QdrantVectorProvider implements IVectorProvider {
           );
         }
 
-        offset = scrollResult.next_page_offset ?? undefined;
-        if (
-          offset === undefined ||
-          offset === null ||
-          scrollResult.points.length === 0
-        ) {
+        nextOffset = this.extractOffset(scrollResult.next_page_offset);
+        if (nextOffset === undefined || scrollResult.points.length === 0) {
           hasMore = false;
         }
       }
