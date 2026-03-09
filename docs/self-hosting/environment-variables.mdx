@@ -58,6 +58,35 @@ Environment variables for the CORE webapp container.
 | `POSTHOG_PROJECT_KEY`                   | No       | phc_SwfGIzzX5gh5bazVWoRxZTBhkr7FwvzArS0NRyGXm1a | PostHog project key for usage analytics                                                       |
 | `TELEMETRY_ENABLED`                     | No       | true                                           | Enable (true) or disable (false) telemetry collection                                            |
 | `TELEMETRY_ANONYMOUS`                   | No       | false                                          | Send anonymous telemetry (true) or include user email (false)                                    |
+| **Provider Configuration**              |          |                                                |                                                                                                 |
+| `GRAPH_PROVIDER`                        | No       | neo4j                                          | Graph database provider: "neo4j", "falkordb", or "helix"                                        |
+| `VECTOR_PROVIDER`                       | No       | pgvector                                       | Vector store provider: "pgvector", "turbopuffer", or "qdrant"                                   |
+| `MODEL_PROVIDER`                        | No       | vercel-ai                                      | Model provider abstraction layer                                                                 |
+| **Reranking**                           |          |                                                |                                                                                                 |
+| `RERANK_PROVIDER`                       | No       | none                                           | Reranking provider: "cohere", "ollama", or "none"                                               |
+| `COHERE_API_KEY`                        | No       | —                                              | Cohere API key (required when RERANK_PROVIDER=cohere)                                           |
+| `COHERE_RERANK_MODEL`                   | No       | rerank-english-v3.0                            | Cohere reranking model                                                                           |
+| `COHERE_SCORE_THRESHOLD`                | No       | 0.3                                            | Minimum score threshold for Cohere reranking                                                    |
+| `OLLAMA_RERANK_MODEL`                   | No       | dengcao/Qwen3-Reranker-8B:Q4_K_M              | Ollama reranking model                                                                           |
+| `OLLAMA_SCORE_THRESHOLD`                | No       | 0.3                                            | Minimum score threshold for Ollama reranking                                                    |
+| **Email / SMTP**                        |          |                                                |                                                                                                 |
+| `EMAIL_TRANSPORT`                       | No       | —                                              | Email transport: "smtp" or "resend"                                                             |
+| `FROM_EMAIL`                            | No       | —                                              | Sender email address                                                                             |
+| `REPLY_TO_EMAIL`                        | No       | —                                              | Reply-to email address                                                                           |
+| `RESEND_API_KEY`                        | No       | —                                              | Resend API key (required when EMAIL_TRANSPORT=resend)                                           |
+| `RESEND_WEBHOOK_SECRET`                 | No       | —                                              | Resend webhook signing secret                                                                   |
+| `SMTP_HOST`                             | No       | —                                              | SMTP server hostname                                                                             |
+| `SMTP_PORT`                             | No       | —                                              | SMTP server port                                                                                 |
+| `SMTP_SECURE`                           | No       | —                                              | Use TLS for SMTP (true/false)                                                                   |
+| `SMTP_USER`                             | No       | —                                              | SMTP authentication username                                                                    |
+| `SMTP_PASSWORD`                         | No       | —                                              | SMTP authentication password                                                                    |
+| **Channels**                            |          |                                                |                                                                                                 |
+| `SLACK_SIGNING_SECRET`                  | No       | —                                              | Slack app signing secret for webhook verification                                               |
+| `TWILIO_ACCOUNT_SID`                    | No       | —                                              | Twilio account SID (required for WhatsApp channel)                                              |
+| `TWILIO_AUTH_TOKEN`                     | No       | —                                              | Twilio auth token (required for WhatsApp channel)                                               |
+| `TWILIO_WHATSAPP_NUMBER`                | No       | —                                              | Twilio WhatsApp number (e.g. whatsapp:+14155238886)                                             |
+| **Other**                               |          |                                                |                                                                                                 |
+| `EXA_API_KEY`                           | No       | —                                              | Exa API key for web search capabilities                                                         |
 
 
 ## Security Considerations

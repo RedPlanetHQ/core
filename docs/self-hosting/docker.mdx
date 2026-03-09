@@ -64,6 +64,22 @@ For self deployment:
    docker compose up -d
    ```
 
+## Configuring Your Host URL
+
+After deployment, set your public host URL so that Gateway and channel integrations (Slack, WhatsApp, etc.) can reach your instance.
+
+In your `.env` file, update the following variables to match your actual host:
+
+```env
+APP_ORIGIN=https://your-domain.com
+LOGIN_ORIGIN=https://your-domain.com
+```
+
+- **`APP_ORIGIN`** — The public URL of your CORE instance. Used by the Gateway and channel integrations to construct callback and webhook URLs.
+- **`LOGIN_ORIGIN`** — The URL used for authentication flows (magic links, OAuth redirects). Usually the same as `APP_ORIGIN`.
+
+> If these are not set correctly, Gateway connections and channel webhooks (e.g. Slack events, WhatsApp callbacks) will fail to reach your instance.
+
 ## Next Steps
 
 Once deployed, you can:

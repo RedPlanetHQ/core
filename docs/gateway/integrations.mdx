@@ -1,0 +1,29 @@
+---
+title: "Integrations"
+description: "Manage integrations on your CORE instance from the CLI"
+---
+
+The `corebrain` CLI lets you manage integrations on your connected CORE instance — including self-hosted deployments.
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `corebrain integrations add` | Register a new custom integration |
+| `corebrain integrations list` | List all integrations on the instance |
+| `corebrain integrations remove [slug]` | Remove a workspace integration |
+
+## Self-Hosted Instances
+
+When logged into a self-hosted instance, these commands register integrations directly on that instance. Make sure you've pointed the CLI at your own URL:
+
+```bash
+corebrain login
+# Enter your self-hosted instance URL when prompted
+```
+
+All subsequent `corebrain integrations` commands will operate against that instance.
+
+For full details on the interactive add wizard, listing, and removal, see [Adding Integrations to Your Instance](/integrations/adding-to-instance).
+
+For building integration packages from scratch, see [Building Integrations](/integrations/building-integrations).
