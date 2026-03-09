@@ -13,7 +13,7 @@ export default function WelcomeEmail() {
       <Head />
       <Preview>building your digital brain</Preview>
       <Body style={main}>
-        <Text style={paragraphLight}>hi there,</Text>
+        <Text style={paragraphLight}>hi there 👋</Text>
         <Text
           style={{
             ...paragraphLight,
@@ -21,42 +21,47 @@ export default function WelcomeEmail() {
           }}
         >
           <Link style={anchor} href="https://x.com/manikagg01">
-            Manik
-          </Link>
-          from core here. welcome to core. when i first tried core memory, two actions made it click
-          for me. each came down to the same thing: understanding how I can add relevant context
-          about everything that matters to me in core memory and recall it wherever I want.
+            manik
+          </Link>{" "}
+          from core here. welcome to core. three things made it click for me:
         </Text>
-        <Text style={heading}>core mcp</Text>
-        <Text style={paragraphLight}>
-          seamlessly add your code context from cursor/claude-code, project context from linear, or
-          brainstorming sessions from claude desktop via mcp. solve context loss problems across ai
-          tools with persistent, cross-session memory. add this url and get started
-        </Text>
-        <Text style={{ ...paragraphLight, display: "flex", alignItems: "center", marginTop: 0 }}>
-          <Link
-            style={{
-              ...anchor,
 
-              display: "inline-flex",
-            }}
-          >
-            https://app.getcore.me/api/v1/mcp?source='Your Coding Agent'
+        <Text style={heading}>meet your chief of staff</Text>
+        <Text style={paragraphLight}>
+          use core as your executive assistant on whatsapp, slack, imessage, and more.
+        </Text>
+        <Text style={{ ...paragraphLight, marginTop: 0 }}>
+          set a reminder or a skill once, and it works proactively on your behalf in the background,
+          no trigger, no prompt needed.{" "}
+          <Link style={anchor} href="https://docs.getcore.me/quickstart/chief-of-staff">
+            know more
           </Link>
-          . Check how to connect{" "}
-          <Link
-            style={{
-              ...anchor,
-              marginLeft: "4px",
-              display: "inline-flex",
-            }}
-            href="https://docs.getcore.me/providers/claude"
-          >
+          .
+        </Text>
+        <Img
+          alt="Chief of Staff"
+          style={{
+            marginLeft: "auto",
+            marginRight: "auto",
+            width: "100%",
+            borderRadius: "2%",
+            marginTop: "10px",
+          }}
+          src="https://integrations.heysol.ai/public/chief_of_staff.png"
+        />
+
+        <Text style={heading}>supercharge your coding agent</Text>
+        <Text style={paragraphLight}>
+          add core to cursor, claude or any coding agent via a single mcp url. your agent gets
+          persistent memory across sessions.
+        </Text>
+        <Text style={{ ...paragraphLight, marginTop: 0 }}>
+          connect{" "}
+          <Link style={anchor} href="https://docs.getcore.me/providers/claude">
             claude
           </Link>
           .
         </Text>
-
         <Img
           alt="Claude"
           style={{
@@ -66,27 +71,20 @@ export default function WelcomeEmail() {
             borderRadius: "2%",
             marginTop: "10px",
           }}
-          src="https://integrations.heysol.ai/core-claude.gif"
+          src="https://integrations.heysol.ai/public/supercharge-coding-agent.gif"
         />
-        <Text style={heading}>browser extension</Text>
+
+        <Text style={heading}>sync chatgpt/gemini conversations</Text>
         <Text style={paragraphLight}>
-          recall relevant context from core memory in chatgpt, grok, and gemini. save conversations
-          and content from chatgpt, grok, gemini, twitter, youtube, blog posts, and any webpage
-          directly into your Core memory with simple text selection. Check steps to connect
-          <Link
-            style={{
-              ...anchor,
-              marginLeft: "4px",
-              display: "inline-flex",
-            }}
-            href="https://docs.getcore.me/providers/browser-extension"
-          >
+          saving my insights from chatgpt/gemini conversations as memory in core for future
+          reference. check steps to connect{" "}
+          <Link style={anchor} href="https://docs.getcore.me/providers/browser-extension">
             here
           </Link>
           .
         </Text>
         <Img
-          alt="Claude"
+          alt="Core Extension"
           style={{
             marginLeft: "auto",
             marginRight: "auto",
@@ -94,21 +92,21 @@ export default function WelcomeEmail() {
             borderRadius: "2%",
             marginTop: "10px",
           }}
-          src="https://integrations.heysol.ai/core-extension.gif"
+          src="https://integrations.heysol.ai/public/sync-chatgpt-conv.gif"
         />
 
-        <Text style={heading}>need real-time, human help to get started? </Text>
+        <Text style={heading}>need real-time, human help to get started?</Text>
         <Text style={paragraphLight}>
           - join our{" "}
           <Link style={anchor} href="https://discord.gg/YGUZcvDjUa">
             discord community
           </Link>{" "}
-          & get direct help from our team + over 100+ enthusiasts using Core memory
+          & get direct help from our team
         </Text>
         <Text style={paragraphLight}>
-          - We are open-source us ⭐ on our repo -{" "}
+          - we are open-source ⭐ us on {" "}
           <Link style={anchor} href="https://github.com/RedPlanetHQ/core">
-            https://github.com/RedPlanetHQ/core
+            github
           </Link>
         </Text>
 
