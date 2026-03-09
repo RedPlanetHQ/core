@@ -2,7 +2,15 @@ import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { verifySlackSignature } from "./client";
 import { logger } from "~/services/logger.service";
-import type { InboundParseResult } from "../types";
+import type { InboundAttachment, InboundParseResult } from "../types";
+
+export interface SlackFile {
+  id: string;
+  name?: string;
+  mimetype?: string;
+  url_private?: string;
+  url_private_download?: string;
+}
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface SlackEventPayload {
@@ -21,6 +29,7 @@ export interface SlackEventPayload {
     subtype?: string;
     ts?: string;
     thread_ts?: string;
+    files?: SlackFile[];
   };
 }
 
@@ -36,13 +45,16 @@ export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
   // DM message
   if (event.type === "message" && event.channel_type === "im") {
     if (event.bot_id || event.subtype) return false;
-    if (!event.user || !event.text) return false;
+    if (!event.user) return false;
+    // Allow messages with files even if text is empty
+    if (!event.text && (!event.files || event.files.length === 0)) return false;
     return true;
   }
 
   // @mention in a channel
   if (event.type === "app_mention") {
-    if (!event.user || !event.text) return false;
+    if (!event.user) return false;
+    if (!event.text && (!event.files || event.files.length === 0)) return false;
     return true;
   }
 
@@ -99,6 +111,23 @@ async function isDMWithBot(
   }
 }
 
+async function downloadSlackFile(
+  url: string,
+  botToken: string,
+): Promise<Uint8Array | null> {
+  try {
+    const res = await fetch(url, {
+      headers: { Authorization: `Bearer ${botToken}` },
+    });
+    if (!res.ok) return null;
+    const buffer = await res.arrayBuffer();
+    return new Uint8Array(buffer);
+  } catch (err) {
+    logger.warn("Failed to download Slack file", { url, error: String(err) });
+    return null;
+  }
+}
+
 /**
  * Parse a pre-parsed Slack event body into an InboundParseResult.
  * Called from the webhook route which already has the JSON.
@@ -110,9 +139,10 @@ export async function parseSlackDMEvent(
   if (!event) return {};
 
   const slackUserId = event.user;
-  const text = event.text;
+  const text = event.text ?? "";
 
-  if (!slackUserId || !text) return {};
+  if (!slackUserId) return {};
+  if (!text && (!event.files || event.files.length === 0)) return {};
 
   // For DMs, verify the channel is with the CORE bot (not some other DM)
   if (event.channel_type === "im" && event.channel) {
@@ -134,6 +164,7 @@ export async function parseSlackDMEvent(
     select: {
       integratedById: true,
       workspaceId: true,
+      integrationConfiguration: true,
     },
   });
 
@@ -141,6 +172,9 @@ export async function parseSlackDMEvent(
     logger.warn("Slack message from unknown user", { slackUserId });
     return {};
   }
+
+  const config = account.integrationConfiguration as Record<string, string> | null;
+  const botToken = config?.bot_token;
 
   // Include channel context for typing indicators and integration queries
   const metadata: Record<string, string> = {
@@ -170,6 +204,24 @@ export async function parseSlackDMEvent(
     }
   }
 
+  // Download any image files attached to the message
+  const attachments: InboundAttachment[] = [];
+  if (event.files && botToken) {
+    for (const file of event.files) {
+      const downloadUrl = file.url_private_download ?? file.url_private;
+      if (!downloadUrl || !file.mimetype?.startsWith("image/")) continue;
+      const data = await downloadSlackFile(downloadUrl, botToken);
+      if (data) {
+        attachments.push({
+          data,
+          mimeType: file.mimetype,
+          name: file.name,
+          originalUrl: file.url_private,
+        });
+      }
+    }
+  }
+
   return {
     message: {
       userId: account.integratedById,
@@ -177,6 +229,7 @@ export async function parseSlackDMEvent(
       userMessage: text,
       replyTo: slackUserId,
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
+      ...(attachments.length > 0 ? { attachments } : {}),
     },
   };
 }

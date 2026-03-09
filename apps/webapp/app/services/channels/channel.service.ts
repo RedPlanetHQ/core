@@ -86,6 +86,7 @@ export async function handleChannelMessage(
       userMessage: msg.userMessage,
       onMessage,
       channelMetadata: msg.metadata,
+      attachments: msg.attachments,
     });
 
     logger.info(`[${slug}] Got response, sending reply to ${msg.replyTo}`, {

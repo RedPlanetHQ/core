@@ -87,6 +87,9 @@ export interface GatewaySlots {
 		allow?: string[]; // Glob-like patterns: "Bash(npm run *)", "Bash(git commit *)"
 		deny?: string[]; // Glob-like patterns: "Bash(git push *)"
 	};
+	imessage?: {
+		enabled: boolean;
+	};
 }
 
 export interface GatewayConfig {

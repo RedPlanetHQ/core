@@ -4,6 +4,7 @@ import {browserTools, executeBrowserTool} from '@/server/tools/browser-tools';
 import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
 import {execTools, executeExecTool} from '@/server/tools/exec-tools';
 import {utilsTools, executeUtilsTool} from '@/server/tools/utils-tools';
+import {imessageTools, executeIMessageTool} from '@/server/tools/imessage-tools';
 import {browserCloseAll} from '@/utils/agent-browser';
 import {getPreferences} from '@/config/preferences';
 import type {GatewayTool} from '@/server/tools/browser-tools';
@@ -13,6 +14,7 @@ interface ToolSlots {
 	browser: GatewayTool[];
 	coding: GatewayTool[];
 	exec: GatewayTool[];
+	imessage: GatewayTool[];
 }
 
 // Gateway client configuration
@@ -112,6 +114,10 @@ export class GatewayClient {
 
 		if (slots?.exec?.enabled) {
 			tools.push(...execTools);
+		}
+
+		if (slots?.imessage?.enabled) {
+			tools.push(...imessageTools);
 		}
 
 		return tools;
@@ -255,6 +261,12 @@ export class GatewayClient {
 							result = {success: false, error: 'Exec slot is not enabled'};
 						} else {
 							result = await executeExecTool(toolCall.tool, toolCall.params);
+						}
+					} else if (toolCall.tool.startsWith('imessage_')) {
+						if (!slots?.imessage?.enabled) {
+							result = {success: false, error: 'iMessage slot is not enabled'};
+						} else {
+							result = await executeIMessageTool(toolCall.tool, toolCall.params);
 						}
 					} else {
 						result = {success: false, error: `Unknown tool: ${toolCall.tool}`};

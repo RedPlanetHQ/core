@@ -2,7 +2,8 @@ import { getUserByPhone } from "~/models/user.server";
 import { prisma } from "~/db.server";
 import { verifyTwilioSignature } from "./client";
 import { logger } from "~/services/logger.service";
-import type { InboundParseResult } from "../types";
+import type { InboundAttachment, InboundParseResult } from "../types";
+import { env } from "~/env.server";
 
 /**
  * Parse a Twilio WhatsApp webhook request into an InboundParseResult.
@@ -18,8 +19,9 @@ export async function parseInbound(
 
   const from = (params.From ?? "").replace("whatsapp:", "");
   const body = params.Body ?? "";
+  const numMedia = parseInt(params.NumMedia ?? "0", 10);
 
-  if (!from || !body) {
+  if (!from || (!body && numMedia === 0)) {
     return {};
   }
 
@@ -50,6 +52,35 @@ export async function parseInbound(
     return {};
   }
 
+  // Download any media attachments (images) from Twilio
+  const attachments: InboundAttachment[] = [];
+  if (numMedia > 0 && env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN) {
+    const basicAuth = Buffer.from(
+      `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`,
+    ).toString("base64");
+
+    for (let i = 0; i < numMedia; i++) {
+      const mediaUrl = params[`MediaUrl${i}`];
+      const mimeType = params[`MediaContentType${i}`] ?? "application/octet-stream";
+      if (!mediaUrl || !mimeType.startsWith("image/")) continue;
+
+      try {
+        const res = await fetch(mediaUrl, {
+          headers: { Authorization: `Basic ${basicAuth}` },
+        });
+        if (!res.ok) continue;
+        const buffer = await res.arrayBuffer();
+        attachments.push({
+          data: new Uint8Array(buffer),
+          mimeType,
+          originalUrl: mediaUrl,
+        });
+      } catch (err) {
+        logger.warn("Failed to download WhatsApp media", { mediaUrl, error: String(err) });
+      }
+    }
+  }
+
   return {
     message: {
       userId: user.id,
@@ -60,6 +91,7 @@ export async function parseInbound(
         channel: "whatsapp",
         ...(params.MessageSid ? { messageSid: params.MessageSid } : {}),
       },
+      ...(attachments.length > 0 ? { attachments } : {}),
     },
   };
 }
