@@ -48,8 +48,12 @@ export async function parseInbound(
     return {};
   }
 
+  const email = env.FROM_EMAIL
+    ? env.FROM_EMAIL.match(/<(.+)>/)?.[1] || env.FROM_EMAIL
+    : "";
+
   // Only process emails addressed to brain@getcore.me
-  if (env.FROM_EMAIL && (!to || !to.includes(env.FROM_EMAIL))) {
+  if (env.FROM_EMAIL && (!to || !to.includes(email))) {
     return {};
   }
 
