@@ -10,6 +10,7 @@ import {
   BILLING_CONFIG,
   getPlanConfig,
   isBillingEnabled,
+  isPaidPlan,
 } from "~/config/billing.server";
 import type { PlanType, Subscription } from "@prisma/client";
 
@@ -299,4 +300,73 @@ export async function hasCredits(
 
   // Free plan with no credits left
   return false;
+}
+
+/**
+ * Check if webhooks are available for a workspace
+ * - If billing is disabled: always returns true
+ * - If billing is enabled: returns true only for PRO and MAX plans
+ */
+export async function isWebhooksAvailableForWorkspace(
+  workspaceId: string,
+): Promise<boolean> {
+  // If billing is disabled, webhooks are available for everyone
+  if (!isBillingEnabled()) {
+    return true;
+  }
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    include: {
+      Subscription: true,
+    },
+  });
+
+  if (!workspace?.Subscription) {
+    // No subscription means FREE tier
+    return false;
+  }
+
+  return isPaidPlan(workspace.Subscription.planType);
+}
+
+/**
+ * Get webhook availability status with reason
+ * Useful for displaying upgrade prompts in UI
+ */
+export async function getWebhookAvailability(workspaceId: string): Promise<{
+  available: boolean;
+  reason?: "billing_disabled" | "paid_plan" | "free_plan";
+  currentPlan?: "FREE" | "PRO" | "MAX";
+}> {
+  // If billing is disabled, webhooks are available for everyone
+  if (!isBillingEnabled()) {
+    return {
+      available: true,
+      reason: "billing_disabled",
+    };
+  }
+
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    include: {
+      Subscription: true,
+    },
+  });
+
+  const planType = workspace?.Subscription?.planType || "FREE";
+
+  if (isPaidPlan(planType)) {
+    return {
+      available: true,
+      reason: "paid_plan",
+      currentPlan: planType,
+    };
+  }
+
+  return {
+    available: false,
+    reason: "free_plan",
+    currentPlan: planType,
+  };
 }

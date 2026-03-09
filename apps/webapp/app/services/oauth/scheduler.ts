@@ -2,6 +2,7 @@ import { logger, schedules } from "@trigger.dev/sdk/v3";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { integrationRunSchedule } from "~/trigger/integrations/integration-run-schedule";
+import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 
 export const scheduler = async (payload: { integrationAccountId: string }) => {
   const { integrationAccountId } = payload;
@@ -10,7 +11,11 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
     where: { id: integrationAccountId, deleted: null },
     include: {
       integrationDefinition: true,
-      workspace: true,
+      workspace: {
+        include: {
+          Subscription: true,
+        },
+      },
     },
   });
 
@@ -21,6 +26,18 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
 
   if (!integrationAccount.workspace) {
     return null;
+  }
+
+  // Check if auto-read is available for this workspace's plan
+  if (isBillingEnabled()) {
+    const planType = integrationAccount.workspace.Subscription?.planType || "FREE";
+    if (!isPaidPlan(planType)) {
+      logger.warn("Auto-read requires a paid plan", {
+        workspaceId: integrationAccount.workspace.id,
+        planType,
+      });
+      return { error: "Auto-read requires a Pro or Max plan" };
+    }
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -108,4 +125,44 @@ export const unschedule = async (payload: { integrationAccountId: string }) => {
       },
     },
   });
+};
+
+/**
+ * Unschedule all auto-read schedules for a workspace
+ * Used when a workspace is downgraded to a free plan
+ */
+export const unscheduleAllForWorkspace = async (workspaceId: string) => {
+  const integrationAccounts = await prisma.integrationAccount.findMany({
+    where: {
+      workspaceId,
+      deleted: null,
+    },
+    select: {
+      id: true,
+      settings: true,
+    },
+  });
+
+  const accountsWithAutoRead = integrationAccounts.filter((account) => {
+    const settings = (account.settings as Record<string, any>) || {};
+    return settings.autoActivityRead === true;
+  });
+
+  logger.info("Unscheduling auto-read for downgraded workspace", {
+    workspaceId,
+    accountCount: accountsWithAutoRead.length,
+  });
+
+  for (const account of accountsWithAutoRead) {
+    try {
+      await unschedule({ integrationAccountId: account.id });
+    } catch (error) {
+      logger.error("Failed to unschedule account", {
+        accountId: account.id,
+        error,
+      });
+    }
+  }
+
+  return { unscheduledCount: accountsWithAutoRead.length };
 };
