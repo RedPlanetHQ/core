@@ -1,0 +1,153 @@
+---
+title: "Gamma"
+description: "AI-powered presentation, document, and website creation platform"
+---
+
+## Overview
+
+Integrate Gamma to sync your AI-generated presentations, documents, and websites into CORE. List, retrieve, and create Gamma content directly from your workspace without switching tabs.
+
+## Setup Guide
+
+- `Authentication Type` : API Key (Pro account required)
+
+## How to Connect
+
+1. Log in to [Gamma](https://gamma.app) with a Pro account or above
+2. Go to **Settings** → **API key** tab
+3. Generate and copy your API key (starts with `sk-gamma-`)
+4. Go to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+5. Click on the **Gamma** card
+6. Paste the API key into the configuration field
+7. Click **Connect** to establish the integration
+
+## Use Cases
+
+#### Action Use Cases
+
+When you ask CORE to perform Gamma tasks, it uses MCP tools to execute your requests:
+
+<AccordionGroup>
+  <Accordion title="Browse Your Presentations" icon="presentation-screen">
+    **Scenario**: Quickly find and review your Gamma presentations
+
+    ```
+    "Show me my last 10 Gamma presentations"
+    ```
+
+    The agent will use `gamma_list_presentations` to fetch your recent presentations with titles, update timestamps, and direct links.
+  </Accordion>
+
+  <Accordion title="Get Presentation Details" icon="magnifying-glass">
+    **Scenario**: Retrieve a specific presentation by ID
+
+    ```
+    "Get the details of my Gamma presentation with ID abc123"
+    ```
+
+    The agent will use `gamma_get_presentation` to return the full details including title, URL, and last updated time.
+  </Accordion>
+
+  <Accordion title="Generate a New Presentation" icon="wand-magic-sparkles">
+    **Scenario**: Create a new AI-generated presentation from a prompt
+
+    ```
+    "Create a Gamma presentation on the topic of product-led growth strategies for SaaS startups"
+    ```
+
+    The agent will use `gamma_create_presentation` with your prompt and return the new presentation's URL.
+  </Accordion>
+
+  <Accordion title="Browse Documents" icon="file-lines">
+    **Scenario**: List and review your Gamma documents
+
+    ```
+    "Show me all my Gamma documents updated in the last week"
+    ```
+
+    The agent will use `gamma_list_documents` to fetch your documents with titles and links.
+  </Accordion>
+
+  <Accordion title="Review Published Websites" icon="globe">
+    **Scenario**: Check the status of your Gamma-published websites
+
+    ```
+    "List all my published Gamma websites"
+    ```
+
+    The agent will use `gamma_list_websites` to return all your published sites with URLs.
+  </Accordion>
+</AccordionGroup>
+
+#### Proactive Use Cases
+
+CORE syncs your Gamma activity every 30 minutes and surfaces updates automatically:
+
+<AccordionGroup>
+  <Accordion title="Track Content Activity" icon="clock">
+    **Trigger**: Gamma presentation or document updated
+
+    **Automated Action**: Log activity to CORE timeline
+
+    ```
+    "When a Gamma presentation is updated, add it to my daily activity summary"
+    ```
+
+    CORE captures every update to your presentations, documents, and websites and surfaces them in your timeline — so you always have a log of what you worked on.
+  </Accordion>
+
+  <Accordion title="Cross-tool Workflow" icon="link">
+    **Trigger**: New Gamma presentation created
+
+    **Automated Action**: Share link in Slack or log to Notion
+
+    ```
+    "When I create a new Gamma presentation, send the link to #team-updates on Slack"
+    ```
+
+    CORE can combine the Gamma sync with other integrations — automatically sharing newly created presentations with your team without manual copying.
+  </Accordion>
+</AccordionGroup>
+
+## Available MCP Tools
+
+<Tabs>
+  <Tab title="Presentations">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `gamma_list_presentations` | List your Gamma presentations with pagination |
+| `gamma_get_presentation` | Get details of a specific presentation by ID |
+| `gamma_create_presentation` | Generate a new presentation from a text prompt |
+
+  </Tab>
+  <Tab title="Documents">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `gamma_list_documents` | List your Gamma documents with pagination |
+| `gamma_get_document` | Get details of a specific document by ID |
+
+  </Tab>
+  <Tab title="Websites">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `gamma_list_websites` | List your published Gamma websites with pagination |
+
+  </Tab>
+</Tabs>
+
+### Triggers
+
+Gamma triggers use scheduled polling — CORE checks for new and updated content every 30 minutes.
+
+| Event | Description |
+|-------|-------------|
+| `GAMMA_PRESENTATION_UPDATED` | Triggered when a presentation is created or modified |
+| `GAMMA_DOCUMENT_UPDATED` | Triggered when a document is created or modified |
+| `GAMMA_WEBSITE_UPDATED` | Triggered when a published website is created or modified |
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**
