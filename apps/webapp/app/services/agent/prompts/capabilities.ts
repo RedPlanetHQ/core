@@ -27,7 +27,7 @@ Good: "scan last 2 weeks for meetings I had and emails that might need follow-up
 Bad: "check github"
 Good: "find PRs I opened that are waiting for review, and any PRs where I'm tagged but haven't responded"
 
-The orchestrator is dumb - it just executes. You need to be specific about what you want and why.
+gather_context executes your intent literally. Be specific — describe what you want retrieved and why, not just what to fetch.
 
 DO via take_action:
 - create/update/delete in any connected integration

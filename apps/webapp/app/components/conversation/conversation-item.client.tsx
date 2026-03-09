@@ -3,7 +3,6 @@ import { EditorContent, useEditor } from "@tiptap/react";
 import { useEffect, memo, useState } from "react";
 import { cn } from "~/lib/utils";
 import { extensionsForConversation } from "./editor-extensions";
-import { skillExtension } from "../editor/skill-extension";
 import {
   type ChatAddToolApproveResponseFunction,
   type ToolUIPart,
@@ -30,7 +29,6 @@ import {
   hasNeedsApprovalDeep,
   getToolDisplayName,
 } from "./conversation-utils";
-import { StyledMarkdown } from "../common/styled-markdown";
 
 interface AIConversationItemProps {
   message: UIMessage;
@@ -260,7 +258,7 @@ const ConversationItemComponent = ({
   const [showAllTools, setShowAllTools] = useState(false);
 
   const editor = useEditor({
-    extensions: [...extensionsForConversation, skillExtension],
+    extensions: [...extensionsForConversation],
     editable: false,
     content: textPart ? textPart.text : "",
   });

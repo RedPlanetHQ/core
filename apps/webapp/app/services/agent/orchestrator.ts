@@ -75,7 +75,7 @@ const getOrchestratorPrompt = (
   skills?: SkillRef[],
 ) => {
   const personaSection = userPersona
-    ? `\nUSER PERSONA (identity, preferences, directives - use this FIRST before searching memory):\n${userPersona}\n`
+    ? `\nUSER PERSONA (use identity + directives only — style/preference sections are for the front-end agent, not you):\n${userPersona}\n`
     : "";
 
   const skillsSection =
@@ -194,7 +194,9 @@ When you have completed the action, write a clear, concise summary as your final
 Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`;
   }
 
-  return `You are an orchestrator. Gather information based on the intent.
+  return `You are a read orchestrator. Gather data from integrations, memory, and the web based on the intent, then return structured results to the calling agent.
+
+OUTPUT: Return facts and raw data — no personality, no prose. Include IDs and metadata needed for follow-up actions.
 ${personaSection}${dateTimeSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
@@ -211,12 +213,6 @@ TOOLS:
 - get_skill: Load a user-defined skill's full instructions by ID
 - gateway_*: Offload tasks to connected gateways based on their description
 ${integrationInstructions}
-PRIORITY ORDER FOR CONTEXT:
-1. User persona above — check here FIRST for preferences, directives, identity
-2. memory_search — if persona doesn't have what you need
-3. Integrations / web_search — for live data or real-time info
-4. NEVER ask the user for information that's in persona or memory
-
 CRITICAL FOR memory_search - describe your INTENT, not keywords:
 
 BAD (keyword soup - will fail):
@@ -247,17 +243,18 @@ Intent: "What's the weather in SF"
 Intent: "summarize this: https://example.com/article"
 → web_search (reads the URL content)
 
-BE PROACTIVE:
-- If a specific query returns empty, try a broader one to validate data exists.
-- If integration returns empty, confirm the resource exists before saying "nothing found".
-
 RULES:
-- Check user persona FIRST — it has identity, preferences, directives.
+- Check user persona FIRST — use identity and directives; ignore style/preference sections.
 - Call memory_search for anything not in persona (prior conversations, specific history).
 - NEVER ask the user for info that's already in persona or memory.
+- If a specific query returns empty, try a broader one before reporting "nothing found".
 - Call multiple tools in parallel when data could be in multiple places.
 - No personality. Return raw facts.
-- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.`;
+- CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
+
+FINAL SUMMARY:
+When you have gathered all relevant data, write a concise summary as your final response.
+Include: what was found, key facts, relevant IDs/metadata the caller will need.`;
 };
 
 export interface OrchestratorResult {
