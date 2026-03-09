@@ -1,0 +1,55 @@
+---
+title: "Connect AI Providers"
+description: "Connect AI tools to your self-hosted CORE instance via MCP"
+---
+
+Any AI provider that supports MCP can connect directly to your self-hosted instance. You just point it at your instance's MCP endpoint instead of CORE Cloud.
+
+## MCP Endpoint
+
+```
+https://<your-instance>/api/v1/mcp?source=<ai_provider>
+```
+
+For example, if your instance is hosted at `corebrain.host.com`:
+
+```
+https://corebrain.host.com/api/v1/mcp?source=Claude
+https://corebrain.host.com/api/v1/mcp?source=Cursor
+https://corebrain.host.com/api/v1/mcp?source=VSCode
+```
+
+## Parameters
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `source` | Yes | Identifies the AI provider in your dashboard |
+| `integrations` | No | Comma-separated list of integrations to include (e.g. `github,linear`) |
+| `no_integrations` | No | Set to `true` to disable all integrations and expose CORE tools only |
+
+## Examples
+
+**All integrations:**
+```
+https://corebrain.host.com/api/v1/mcp?source=Claude
+```
+
+**Specific integrations only:**
+```
+https://corebrain.host.com/api/v1/mcp?source=Cursor&integrations=github,linear
+```
+
+**CORE tools only:**
+```
+https://corebrain.host.com/api/v1/mcp?source=VSCode&no_integrations=true
+```
+
+## Provider Setup
+
+Use the URL above wherever your AI tool asks for an MCP server URL. For provider-specific configuration steps, see the individual guides:
+
+- [Claude](/providers/claude)
+- [Cursor](/providers/cursor)
+- [VS Code](/providers/vscode)
+- [Zed](/providers/zed)
+- [All providers →](/mcp/configuration)

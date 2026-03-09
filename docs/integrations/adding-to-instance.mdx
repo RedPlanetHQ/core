@@ -1,0 +1,69 @@
+---
+title: "Adding Integrations to Your Instance"
+description: "Register custom integrations on your self-hosted CORE instance using the CLI"
+---
+
+On a self-hosted instance, you can register custom integrations directly via the `corebrain` CLI without touching the source code.
+
+## Prerequisites
+
+Make sure you are logged into your self-hosted instance:
+
+```bash
+corebrain login
+# When prompted, enter your instance URL (e.g. https://your-domain.com)
+```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `corebrain integrations add` | Register a new integration on your instance |
+| `corebrain integrations list` | List all integrations (global and workspace) |
+| `corebrain integrations remove [slug]` | Remove a workspace integration |
+
+## Adding an Integration
+
+Run the interactive wizard:
+
+```bash
+corebrain integrations add
+```
+
+You will be prompted for:
+
+- **Name** — Display name for the integration
+- **Description** — Short description of what it connects to
+- **Slug** — Unique identifier (e.g. `my-service`)
+- **Auth type** — `API Key` or `OAuth2`
+- **Source URL** — Documentation or homepage URL for the service
+- **Trigger type** — `Webhook` (receives events) or `Schedule` (periodic sync)
+- **Sync interval** — If schedule-based: every 15, 20, or 30 minutes
+
+The CLI builds a spec from your answers and registers the integration via the API.
+
+## Listing Integrations
+
+```bash
+corebrain integrations list
+```
+
+Returns all integrations split into **Workspace** (custom, created via CLI) and **Global** (built-in) integrations.
+
+## Removing an Integration
+
+```bash
+corebrain integrations remove
+```
+
+Presents an interactive selector of removable workspace integrations. Global (built-in) integrations cannot be removed.
+
+You can also pass a slug directly:
+
+```bash
+corebrain integrations remove my-service
+```
+
+## Further Reading
+
+For building full integration packages with webhook handlers and schedule runners, see [Building Integrations](/integrations/building-integrations).

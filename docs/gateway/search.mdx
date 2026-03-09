@@ -1,0 +1,46 @@
+---
+title: "Search"
+description: "Search your CORE memory from the terminal"
+---
+
+The `corebrain search` command gives you an interactive terminal UI to search documents stored in your CORE instance's memory.
+
+## Usage
+
+```bash
+corebrain search
+```
+
+## Interface
+
+The command opens an interactive TUI with two modes:
+
+**Search mode**
+- Type a query and press `Enter` to search
+- Results appear as a list below the search box, showing title, source, and labels
+- Up to 20 results are returned per query
+
+**Document view**
+- Press `Enter` on a result to open the full document content
+- Scroll through content with `↑` / `↓` or `j` / `k`
+- Page through with `PgUp` / `PgDn`
+- Press `q` or `Esc` to go back to results
+
+## Keyboard Shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Enter` | Submit search / open document |
+| `↑` / `↓` or `j` / `k` | Navigate results / scroll document |
+| `Tab` | Switch focus between search box and results |
+| `PgUp` / `PgDn` | Page scroll in document view |
+| `q` / `Esc` | Back / exit |
+
+## Self-Hosted Instances
+
+When logged into a self-hosted instance, `corebrain search` queries memory on that instance. Make sure you are logged in with your instance URL:
+
+```bash
+corebrain login
+# Enter your instance URL when prompted
+```

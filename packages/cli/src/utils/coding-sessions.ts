@@ -7,7 +7,12 @@ const SESSIONS_DIR = getConfigPath();
 const SESSIONS_FILE = join(SESSIONS_DIR, 'sessions.json');
 
 // Session status
-export type SessionStatus = 'running' | 'completed' | 'error' | 'closed';
+export type SessionStatus =
+	| 'initializing'
+	| 'running'
+	| 'completed'
+	| 'error'
+	| 'closed';
 
 // Stored session data
 export interface StoredSession {

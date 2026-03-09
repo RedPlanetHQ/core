@@ -15,9 +15,7 @@
         "groups": [
           {
             "group": "Home",
-            "pages": [
-              "introduction"
-            ]
+            "pages": ["introduction"]
           },
           {
             "group": "Getting Started",
@@ -35,15 +33,11 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "concepts/overview"
-            ]
+            "pages": ["concepts/overview"]
           },
           {
             "group": "Agent",
-            "pages": [
-              "concepts/meta-agent"
-            ]
+            "pages": ["concepts/meta-agent"]
           },
           {
             "group": "Memory",
@@ -59,9 +53,7 @@
           },
           {
             "group": "Toolkit",
-            "pages": [
-              "concepts/toolkit"
-            ]
+            "pages": ["concepts/toolkit"]
           }
         ]
       },
@@ -70,9 +62,7 @@
         "groups": [
           {
             "group": "Connect CORE",
-            "pages": [
-              "access-core/overview"
-            ]
+            "pages": ["access-core/overview"]
           },
           {
             "group": "Channels",
@@ -94,10 +84,7 @@
               "providers/memory-rules",
               {
                 "group": "Plugins",
-                "pages": [
-                  "providers/claude-code",
-                  "providers/openclaw"
-                ]
+                "pages": ["providers/claude-code", "providers/openclaw"]
               },
               {
                 "group": "IDE",
@@ -144,11 +131,7 @@
               },
               {
                 "group": "Development Platforms",
-                "pages": [
-                  "providers/factory",
-                  "providers/trae",
-                  "providers/rovo-dev"
-                ]
+                "pages": ["providers/factory", "providers/trae", "providers/rovo-dev"]
               }
             ]
           }
@@ -159,9 +142,7 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "skills/overview"
-            ]
+            "pages": ["skills/overview"]
           },
           {
             "group": "Skill Library",
@@ -182,61 +163,35 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "toolkit/overview",
-              "mcp/configuration",
-              "mcp/authentication"
-            ]
+            "pages": ["toolkit/overview", "mcp/configuration", "mcp/authentication"]
           },
           {
             "group": "Communication & Collaboration",
-            "pages": [
-              "toolkit/slack",
-              "toolkit/discord",
-              "toolkit/gmail",
-              "toolkit/zoho-mail"
-            ]
+            "pages": ["toolkit/slack", "toolkit/discord", "toolkit/gmail", "toolkit/zoho-mail"]
           },
           {
             "group": "Project & Task Management",
-            "pages": [
-              "toolkit/linear",
-              "toolkit/todoist",
-              "toolkit/google-tasks"
-            ]
+            "pages": ["toolkit/linear", "toolkit/todoist", "toolkit/google-tasks"]
           },
           {
             "group": "Development & Version Control",
-            "pages": [
-              "toolkit/github",
-              "toolkit/github-analytics"
-            ]
+            "pages": ["toolkit/github", "toolkit/github-analytics"]
           },
           {
             "group": "Calendar & Scheduling",
-            "pages": [
-              "toolkit/google-calendar",
-              "toolkit/cal-com"
-            ]
+            "pages": ["toolkit/google-calendar", "toolkit/cal-com"]
           },
           {
             "group": "Knowledge & Documentation",
-            "pages": [
-              "toolkit/notion",
-              "toolkit/google-docs"
-            ]
+            "pages": ["toolkit/notion", "toolkit/google-docs"]
           },
           {
             "group": "Data & Spreadsheets",
-            "pages": [
-              "toolkit/google-sheets"
-            ]
+            "pages": ["toolkit/google-sheets"]
           },
           {
             "group": "CRM & Sales",
-            "pages": [
-              "toolkit/hubspot"
-            ]
+            "pages": ["toolkit/hubspot"]
           }
         ]
       },
@@ -245,17 +200,19 @@
         "groups": [
           {
             "group": "Overview",
-            "pages": [
-              "gateway/overview"
-            ]
+            "pages": ["gateway/overview"]
           },
           {
             "group": "Capabilities",
-            "pages": [
-              "gateway/browser",
-              "gateway/coding",
-              "gateway/exec"
-            ]
+            "pages": ["gateway/browser", "gateway/coding", "gateway/exec"]
+          },
+          {
+            "group": "Integrations",
+            "pages": ["gateway/integrations"]
+          },
+          {
+            "group": "Search",
+            "pages": ["gateway/search"]
           }
         ]
       },
@@ -265,33 +222,34 @@
           {
             "group": "Get Started",
             "pages": [
-              "guides/local-setup",
-              "migrating-from-v1"
-            ]
-          },
-          {
-            "group": "Contributing",
-            "pages": [
-              "opensource/contributing",
-              "opensource/building-integrations"
-            ]
-          },
-          {
-            "group": "Self Hosting",
-            "pages": [
               "self-hosting/overview",
               "self-hosting/docker",
-              "self-hosting/environment-variables"
+              "self-hosting/environment-variables",
+              "self-hosting/gateway",
+              "self-hosting/ai-providers"
             ]
           },
           {
-            "group": "Writing Integrations",
+            "group": "Channel",
+            "pages": ["channels/email-resend"]
+          },
+          {
+            "group": "Integrations",
             "pages": [
               "integrations/building-integrations",
               "integrations/schedule-based-guide",
               "integrations/webhook-based-guide",
-              "integrations/mcp-hub-guide"
+              "integrations/mcp-hub-guide",
+              "integrations/adding-to-instance"
             ]
+          },
+          {
+            "group": "Local setup",
+            "pages": ["guides/local-setup", "migrating-from-v1"]
+          },
+          {
+            "group": "Contributing",
+            "pages": ["opensource/contributing", "opensource/building-integrations"]
           }
         ]
       },
@@ -300,9 +258,7 @@
         "groups": [
           {
             "group": "Product Updates",
-            "pages": [
-              "opensource/changelog"
-            ]
+            "pages": ["opensource/changelog"]
           }
         ]
       },
@@ -312,9 +268,7 @@
         "groups": [
           {
             "group": "User",
-            "pages": [
-              "GET /api/profile"
-            ]
+            "pages": ["GET /api/profile"]
           },
           {
             "group": "Memory",
@@ -329,9 +283,7 @@
           },
           {
             "group": "Labels",
-            "pages": [
-              "GET /api/v1/labels"
-            ]
+            "pages": ["GET /api/v1/labels"]
           },
           {
             "group": "OAuth2",
@@ -393,8 +345,6 @@
       "twitter": "https://x.com/getcorememory",
       "linkedin": "https://www.linkedin.com/company/getcore-memory",
       "discord": "https://discord.gg/dVTC3BmgEq"
-
-
     }
   }
 }

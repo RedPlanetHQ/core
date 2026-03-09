@@ -1,0 +1,20 @@
+---
+title: "Gateway"
+description: "Connect the CORE Gateway to your self-hosted instance"
+---
+
+The CORE CLI (`corebrain`) connects to CORE Cloud by default. When running a self-hosted instance, you can point it to your own deployment instead.
+
+## Connecting to Your Instance
+
+When you run `corebrain login`, it will ask for a CORE instance URL. Pass your self-hosted instance URL:
+
+```bash
+corebrain login
+# When prompted for instance URL, enter:
+# https://your-domain.com
+```
+
+This connects the Gateway to your own CORE instance instead of CORE Cloud. Make sure `APP_ORIGIN` and `LOGIN_ORIGIN` are set correctly in your `.env` file — see [Docker setup](/self-hosting/docker#configuring-your-host-url).
+
+For full Gateway setup and capabilities, see the [Gateway overview](/gateway/overview).
