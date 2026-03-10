@@ -1,7 +1,7 @@
 import { handleSchedule } from './schedule';
 import { integrationCreate } from './account-create';
 import { getTools, callTool } from './mcp';
-
+import { fileURLToPath } from 'url';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -26,11 +26,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 
-      const result = await callTool(
-        name,
-        args,
-        config?.apiKey
-      );
+      const result = await callTool(name, args, config?.apiKey);
 
       return result;
     }
@@ -80,4 +76,6 @@ function main() {
   linearCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

@@ -2,6 +2,7 @@ import { integrationCreate } from './account-create';
 import { createActivityEvent } from './create-activity';
 import { identify } from './identify';
 import { getTools, callTool } from './mcp';
+import { fileURLToPath } from 'url';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -105,4 +106,6 @@ function main() {
   slackCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

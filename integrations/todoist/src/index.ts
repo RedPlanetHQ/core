@@ -8,6 +8,7 @@ import {
 import { integrationCreate } from './account-create';
 import { handleSchedule } from './schedule';
 import { getTools, callTool } from './mcp';
+import { fileURLToPath } from 'url';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function run(eventPayload: IntegrationEventPayload): Promise<any> {
@@ -80,4 +81,6 @@ function main() {
   todoistCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

@@ -8,6 +8,7 @@ import {
   Message,
 } from '@redplanethq/sdk';
 import { getTools, callTool } from './mcp';
+import { fileURLToPath } from 'url';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -106,4 +107,6 @@ function main() {
   hubspotCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

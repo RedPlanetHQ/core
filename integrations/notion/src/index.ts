@@ -1,6 +1,6 @@
 import { integrationCreate } from './account-create';
 import { callTool, getTools } from './mcp';
-
+import { fileURLToPath } from 'url';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -82,4 +82,6 @@ function main() {
   notionCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
