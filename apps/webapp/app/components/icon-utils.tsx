@@ -41,6 +41,7 @@ import { BlockedLine } from "./icons/blocked";
 import { DoneFill } from "./icons/done";
 import { TaskStatus } from "@core/database";
 import { Task } from "./icons/task";
+import { Spotify } from "./icons/spotify";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -90,6 +91,7 @@ export const ICON_MAPPING = {
   cli: Code,
   "core-extension": Chromium,
   task: Task,
+  spotify: Spotify,
 
   // Default icon
   integration: LayoutGrid,
