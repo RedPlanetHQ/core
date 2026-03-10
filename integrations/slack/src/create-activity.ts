@@ -55,34 +55,6 @@ export const createActivityEvent = async (
   eventData: any,
   config: any,
 ) => {
-  if (eventData.event.type === 'message' && eventData.event.channel === 'D08TQATE3F0') {
-    const event = eventData.event;
-
-    if (!config) {
-      throw new Error('Integration configuration not found');
-    }
-
-    const accessToken = config.access_token;
-
-    const text = `I DMed to you Content: '${event.text}'`;
-
-    const permalinkResponse = await axios.get(
-      `https://slack.com/api/chat.getPermalink?channel=${event.channel}&message_ts=${event.ts}`,
-      {
-        headers: { Authorization: `Bearer ${accessToken}` },
-      },
-    );
-
-    const activity = {
-      sourceURL: permalinkResponse.data.permalink,
-      text,
-      integrationAccountId: config.integrationAccountId,
-      taskId: null,
-    };
-
-    return [createActivityMessage(activity)];
-  }
-
   if (eventData.event.type === 'reaction_added' && eventData.event.reaction === 'eyes') {
     const event = eventData.event;
 

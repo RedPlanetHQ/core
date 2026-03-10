@@ -364,6 +364,16 @@ const ConversationItemComponent = ({
       );
     }
 
+    if (part.type === "file" && (part as any).mediaType?.startsWith("image/")) {
+      return (
+        <img
+          src={(part as any).url}
+          alt={(part as any).filename ?? "attachment"}
+          className="mt-2 max-h-[400px] max-w-full rounded-md object-contain"
+        />
+      );
+    }
+
     return null;
   };
 

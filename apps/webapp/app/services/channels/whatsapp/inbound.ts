@@ -61,7 +61,8 @@ export async function parseInbound(
 
     for (let i = 0; i < numMedia; i++) {
       const mediaUrl = params[`MediaUrl${i}`];
-      const mimeType = params[`MediaContentType${i}`] ?? "application/octet-stream";
+      const mimeType =
+        params[`MediaContentType${i}`] ?? "application/octet-stream";
       if (!mediaUrl || !mimeType.startsWith("image/")) continue;
 
       try {
@@ -71,12 +72,15 @@ export async function parseInbound(
         if (!res.ok) continue;
         const buffer = await res.arrayBuffer();
         attachments.push({
-          data: new Uint8Array(buffer),
+          data: Buffer.from(buffer).toString("base64"),
           mimeType,
           originalUrl: mediaUrl,
         });
       } catch (err) {
-        logger.warn("Failed to download WhatsApp media", { mediaUrl, error: String(err) });
+        logger.warn("Failed to download WhatsApp media", {
+          mediaUrl,
+          error: String(err),
+        });
       }
     }
   }

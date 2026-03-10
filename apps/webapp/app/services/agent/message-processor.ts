@@ -13,6 +13,7 @@ import { type MessagePlan } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
 import { type InboundAttachment } from "~/services/channels/types";
+import { ModelMessage } from "ai";
 
 interface ProcessInboundMessageParams {
   userId: string;
@@ -123,20 +124,28 @@ export async function processInboundMessage({
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
   const conversationId =
     existingConversationId ??
-    (await getOrCreateChannelConversation(userId, workspaceId, userMessage, channel, channelMetadata));
+    (await getOrCreateChannelConversation(
+      userId,
+      workspaceId,
+      userMessage,
+      channel,
+      channelMetadata,
+    ));
 
-  // Build message parts: text first, then any image attachments
+  // Build message parts: text first, then any image attachments as data URLs
   const messageParts: any[] = [{ type: "text", text: userMessage }];
   if (attachments && attachments.length > 0) {
     for (const attachment of attachments) {
       messageParts.push({
-        type: "image",
-        image: attachment.data,
-        mimeType: attachment.mimeType,
+        type: "file",
+        mediaType: attachment.mimeType,
+        url: `data:${attachment.mimeType};base64,${attachment.data}`,
+        ...(attachment.name ? { filename: attachment.name } : {}),
       });
     }
   }
 
+  console.log(messageParts);
   // Call the same flow as web chat no_stream
   const assistantMessage = await noStreamProcess(
     {
