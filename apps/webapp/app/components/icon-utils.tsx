@@ -32,6 +32,7 @@ import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
 import { Jira } from "./icons/jira";
 import { Confluence } from "./icons/confluence";
+import { Spotify } from "./icons/spotify";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -75,6 +76,7 @@ export const ICON_MAPPING = {
   ynab: Ynab,
   jira: Jira,
   confluence: Confluence,
+  spotify: Spotify,
 
   // Default icon
   integration: LayoutGrid,
