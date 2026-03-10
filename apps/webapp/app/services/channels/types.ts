@@ -34,7 +34,7 @@ export interface ChannelHandler {
 }
 
 export interface InboundAttachment {
-  data: Uint8Array;
+  data: string; // base64-encoded image data
   mimeType: string;
   name?: string;
   originalUrl?: string;

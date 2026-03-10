@@ -116,14 +116,14 @@ async function isDMWithBot(
 async function downloadSlackFile(
   url: string,
   botToken: string,
-): Promise<Uint8Array | null> {
+): Promise<string | null> {
   try {
     const res = await fetch(url, {
       headers: { Authorization: `Bearer ${botToken}` },
     });
     if (!res.ok) return null;
     const buffer = await res.arrayBuffer();
-    return new Uint8Array(buffer);
+    return Buffer.from(buffer).toString("base64");
   } catch (err) {
     logger.warn("Failed to download Slack file", { url, error: String(err) });
     return null;
@@ -150,7 +150,9 @@ export async function parseSlackDMEvent(
   if (event.channel_type === "im" && event.channel) {
     const botDM = await isDMWithBot(event.channel, slackUserId);
     if (!botDM) {
-      logger.info("Ignoring DM not directed at CORE bot", { channel: event.channel });
+      logger.info("Ignoring DM not directed at CORE bot", {
+        channel: event.channel,
+      });
       return {};
     }
   }
@@ -175,7 +177,10 @@ export async function parseSlackDMEvent(
     return {};
   }
 
-  const config = account.integrationConfiguration as Record<string, string> | null;
+  const config = account.integrationConfiguration as Record<
+    string,
+    string
+  > | null;
   const botToken = config?.bot_token;
 
   // Include channel context for typing indicators and integration queries
