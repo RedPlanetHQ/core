@@ -134,7 +134,7 @@ export const ConversationNew = ({
                 autofocus
                 extensions={[
                   Placeholder.configure({
-                    placeholder: () => "Ask CORE...",
+                    placeholder: () => "ask corebrain...",
                     includeChildren: true,
                   }),
                   Document,

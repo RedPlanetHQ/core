@@ -13,7 +13,7 @@ export function getSourceIcon(source: string) {
     ? source.slice("integration_".length)
     : source;
   const IconComponent = getIcon(key as IconType);
-  return <IconComponent size={13} />;
+  return <IconComponent size={16} />;
 }
 
 type ConversationItem = {

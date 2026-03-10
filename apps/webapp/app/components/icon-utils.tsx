@@ -30,6 +30,8 @@ import { Whatsapp } from "./icons/whatsapp";
 import { Metabase } from "./icons/metabase";
 import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
+import { Jira } from "./icons/jira";
+import { Confluence } from "./icons/confluence";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -61,6 +63,7 @@ export const ICON_MAPPING = {
   cal_com: CalCom,
   notion: Notion,
   zoho: Zoho,
+  zoho_email: Zoho,
   hubspot: Hubspot,
   discord: Discord,
   todoist: Todoist,
@@ -70,6 +73,8 @@ export const ICON_MAPPING = {
   metabase: Metabase,
   resend: Resend,
   ynab: Ynab,
+  jira: Jira,
+  confluence: Confluence,
 
   // Default icon
   integration: LayoutGrid,

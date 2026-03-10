@@ -4,6 +4,7 @@ import {
 	mkdirSync,
 	writeFileSync,
 	chmodSync,
+	copyFileSync,
 } from 'node:fs';
 import {join, dirname} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -34,10 +35,20 @@ export function isAppBundleInstalled(): boolean {
 export function createAppBundle(nodePath: string, gatewayEntryPath: string): void {
 	const contentsDir = join(APP_PATH, 'Contents');
 	const macosDir = join(contentsDir, 'MacOS');
+	const resourcesDir = join(contentsDir, 'Resources');
 	const executablePath = getAppExecutablePath();
 
 	// Create directory structure
 	mkdirSync(macosDir, {recursive: true});
+	mkdirSync(resourcesDir, {recursive: true});
+
+	// Copy app icon
+	const __filename = fileURLToPath(import.meta.url);
+	const __dirname = dirname(__filename);
+	const icnsSource = join(__dirname, '..', 'assets', 'AppIcon.icns');
+	if (existsSync(icnsSource)) {
+		copyFileSync(icnsSource, join(resourcesDir, 'AppIcon.icns'));
+	}
 
 	// Info.plist — gives the process a bundle identity TCC can track
 	const infoPlist = `<?xml version="1.0" encoding="UTF-8"?>
@@ -52,6 +63,8 @@ export function createAppBundle(nodePath: string, gatewayEntryPath: string): voi
 	<string>CoreBrain Gateway</string>
 	<key>CFBundleExecutable</key>
 	<string>CoreBrainGateway</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleVersion</key>
 	<string>1.0</string>
 	<key>CFBundleShortVersionString</key>
