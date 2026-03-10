@@ -5,7 +5,7 @@ import { Paragraph } from "@tiptap/extension-paragraph";
 import { Text } from "@tiptap/extension-text";
 import { type Editor } from "@tiptap/react";
 import { EditorContent, Placeholder, EditorRoot } from "novel";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { LoaderCircle } from "lucide-react";
@@ -51,13 +51,18 @@ export function ConversationTextarea({
     setText("");
   }, [editor, text, disabled]);
 
+  useEffect(() => {
+    if (disabled && editor) {
+      editor.setEditable(false);
+    }
+
+    if (!disabled && editor) {
+      editor.setEditable(true);
+    }
+  }, [disabled]);
+
   return (
-    <div
-      className={cn(
-        "bg-background-3 border-1 rounded-lg border-gray-300 py-2",
-        disabled && "cursor-not-allowed opacity-50",
-      )}
-    >
+    <div className="bg-background-3 rounded-xl">
       <EditorRoot>
         <EditorContent
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -74,7 +79,7 @@ export function ConversationTextarea({
               placeholder: () =>
                 disabled
                   ? "Waiting for approval..."
-                  : (placeholder ?? "Ask corebrain..."),
+                  : (placeholder ?? "ask corebrain..."),
               includeChildren: true,
             }),
             History,
@@ -94,7 +99,7 @@ export function ConversationTextarea({
           shouldRerenderOnTransaction={false}
           editorProps={{
             attributes: {
-              class: `prose prose-lg dark:prose-invert prose-headings:font-title font-default focus:outline-none max-w-full`,
+              class: `prose prose-base dark:prose-invert focus:outline-none max-w-full`,
             },
             handleKeyDown(view, event) {
               if (disabled) {
@@ -126,12 +131,10 @@ export function ConversationTextarea({
             },
           }}
           immediatelyRender={false}
-          className={cn(
-            "editor-container max-h-[400px] min-h-[40px] w-full min-w-full overflow-auto rounded-lg px-3 text-base",
-          )}
+          className="max-h-[200px] min-h-[56px] w-full overflow-auto px-4 pt-4 text-base"
         />
       </EditorRoot>
-      <div className="mb-1 flex justify-end px-3">
+      <div className="flex justify-end px-3 pb-3 pt-1">
         <Button
           variant="secondary"
           className="gap-1 shadow-none transition-all duration-500 ease-in-out"

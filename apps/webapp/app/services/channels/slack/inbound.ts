@@ -44,7 +44,9 @@ export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
 
   // DM message
   if (event.type === "message" && event.channel_type === "im") {
-    if (event.bot_id || event.subtype) return false;
+    if (event.bot_id) return false;
+    // Allow file_share subtype (image/file uploads), reject other subtypes
+    if (event.subtype && event.subtype !== "file_share") return false;
     if (!event.user) return false;
     // Allow messages with files even if text is empty
     if (!event.text && (!event.files || event.files.length === 0)) return false;

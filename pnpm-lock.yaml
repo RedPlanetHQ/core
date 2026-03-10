@@ -354,6 +354,9 @@ importers:
       luxon:
         specifier: ^3.7.2
         version: 3.7.2
+      marked:
+        specifier: ^17.0.4
+        version: 17.0.4
       morgan:
         specifier: ^1.10.0
         version: 1.10.0
@@ -9824,6 +9827,11 @@ packages:
   marked@15.0.12:
     resolution: {integrity: sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA==}
     engines: {node: '>= 18'}
+    hasBin: true
+
+  marked@17.0.4:
+    resolution: {integrity: sha512-NOmVMM+KAokHMvjWmC5N/ZOvgmSWuqJB8FoYI019j4ogb/PeRMKoKIjReZ2w3376kkA8dSJIP8uD993Kxc0iRQ==}
+    engines: {node: '>= 20'}
     hasBin: true
 
   matcher@5.0.0:
@@ -24611,6 +24619,8 @@ snapshots:
       uc.micro: 2.1.0
 
   marked@15.0.12: {}
+
+  marked@17.0.4: {}
 
   matcher@5.0.0:
     dependencies:
