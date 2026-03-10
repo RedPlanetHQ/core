@@ -1,0 +1,4 @@
+node_modules
+dist
+bin
+*.js.map
