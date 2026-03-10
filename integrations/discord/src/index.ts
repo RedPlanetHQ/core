@@ -78,14 +78,7 @@ class DiscordCLI extends IntegrationCLI {
         OAuth2: {
           token_url: 'https://discord.com/api/oauth2/token',
           authorization_url: 'https://discord.com/api/oauth2/authorize',
-          scopes: [
-            'identify',
-            'guilds',
-            'guilds.members.read',
-            'bot',
-            'messages.read',
-            'gdm.join',
-          ],
+          scopes: ['identify', 'guilds', 'guilds.members.read', 'bot', 'messages.read', 'gdm.join'],
           scope_identifier: 'scope',
           scope_separator: ' ',
           token_params: {

@@ -18,7 +18,7 @@ import {
 	stopProcess,
 	type Logger,
 } from '@/utils/coding-runner';
-import {readAgentSessionOutput} from '@/utils/coding-agents';
+import {readAgentSessionOutput, agentSessionExists, getAgentReader} from '@/utils/coding-agents';
 
 // ============ Zod Schemas ============
 
@@ -211,6 +211,43 @@ async function handleStartSession(params: zod.infer<typeof StartSessionSchema>, 
 			success: false,
 			error: `Failed to start session: ${error}`,
 		};
+	}
+
+	// If this agent has a session reader, wait until the session file appears
+	// before returning — this prevents callers from seeing a false "not started" state.
+	const hasReader = getAgentReader(params.agent) !== null;
+	if (hasReader) {
+		const POLL_INTERVAL_MS = 500;
+		const STARTUP_TIMEOUT_MS = 30_000;
+		const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+
+		const sessionReady = await new Promise<boolean>((resolve) => {
+			function check() {
+				if (agentSessionExists(params.agent, params.dir, sessionId)) {
+					return resolve(true);
+				}
+				if (!isProcessRunning(sessionId)) {
+					return resolve(false);
+				}
+				if (Date.now() >= deadline) {
+					return resolve(false);
+				}
+				setTimeout(check, POLL_INTERVAL_MS);
+			}
+			setTimeout(check, POLL_INTERVAL_MS);
+		});
+
+		if (!sessionReady) {
+			stopProcess(sessionId);
+			session.status = 'error';
+			session.error = 'Session failed to start within 30 seconds';
+			session.updatedAt = Date.now();
+			updateSession(session);
+			return {
+				success: false,
+				error: 'Session failed to start: agent did not produce output within 30 seconds',
+			};
+		}
 	}
 
 	return {
