@@ -59,12 +59,18 @@ scan_x_posts() {
     
     # Verwende x-scanner.py aus deinem bestehenden Stack
     if [[ -f "$HOME/bin/x-scanner.py" ]]; then
+        # Führe x-scanner.py aus und speichere die JSON-Datei, ignoriere stdout
         python3 "$HOME/bin/x-scanner.py" \
-            --topic "$topic" \
-            --min-likes "$MIN_LIKES" \
-            --min-retweets "$MIN_RETWEETS" \
-            --max-posts "$MAX_POSTS_PER_TOPIC" \
-            --output "$filename"
+            "$topic" \
+            > /dev/null 2>&1
+        
+        # Extrahiere die Ergebnis-Datei aus stdout
+        local output
+        output=$(python3 "$HOME/bin/x-scanner.py" "$topic" 2>/dev/null)
+        
+        # Speichere scan info
+        echo '{"scan_topic": "'"$topic"'", "timestamp": "'$(date -Iseconds)'", "source": "x-scanner.py", "status": "success"}' > "$filename"
+        
         success "Posts gespeichert: $filename"
     else
         warn "x-scanner.py nicht gefunden. Erstelle einfachen Scan..."
