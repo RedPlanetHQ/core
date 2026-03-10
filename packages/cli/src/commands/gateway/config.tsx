@@ -1,14 +1,14 @@
-import { useEffect, useState } from 'react';
-import { Text, useApp } from 'ink';
+import {useEffect, useState} from 'react';
+import {Text, useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { randomUUID } from 'node:crypto';
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
-import { existsSync } from 'node:fs';
-import { getPreferences, updatePreferences } from '@/config/preferences';
-import { getConfig } from '@/config/index';
+import {randomUUID} from 'node:crypto';
+import {exec} from 'node:child_process';
+import {promisify} from 'node:util';
+import {existsSync} from 'node:fs';
+import {getPreferences, updatePreferences} from '@/config/preferences';
+import {getConfig} from '@/config/index';
 import {
 	getServiceType,
 	getServiceName,
@@ -20,13 +20,16 @@ import {
 	startService,
 	getServicePid,
 } from '@/utils/service-manager/index';
-import type { ServiceConfig } from '@/utils/service-manager/index';
-import { getConfigPath } from '@/config/paths';
-import { join, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { homedir } from 'node:os';
-import type { GatewayConfig, GatewaySlots } from '@/types/config';
-import { isAgentBrowserInstalled, installAgentBrowser } from '@/utils/agent-browser';
+import type {ServiceConfig} from '@/utils/service-manager/index';
+import {getConfigPath} from '@/config/paths';
+import {join, dirname} from 'node:path';
+import {fileURLToPath} from 'node:url';
+import {homedir} from 'node:os';
+import type {GatewayConfig, GatewaySlots} from '@/types/config';
+import {
+	isAgentBrowserInstalled,
+	installAgentBrowser,
+} from '@/utils/agent-browser';
 import {
 	createAppBundle,
 	openFullDiskAccessSettings,
@@ -47,8 +50,14 @@ interface ToolSlotInfo {
 	value: ToolSlot;
 	label: string;
 	hint: string;
-	checkAvailable?: () => Promise<{ available: boolean; message?: string; path?: string }>;
-	configure?: (existingConfig: GatewayConfig | undefined) => Promise<{ enabled: boolean; config?: Record<string, unknown> } | symbol>;
+	checkAvailable?: () => Promise<{
+		available: boolean;
+		message?: string;
+		path?: string;
+	}>;
+	configure?: (
+		existingConfig: GatewayConfig | undefined,
+	) => Promise<{enabled: boolean; config?: Record<string, unknown>} | symbol>;
 }
 
 export const options = zod.object({
@@ -68,28 +77,28 @@ type Props = {
 
 // Common exec command patterns - simplified groups
 const EXEC_COMMAND_OPTIONS = [
-	{ value: 'Bash(git *)', label: 'git *', hint: 'All git commands' },
-	{ value: 'Bash(npm *)', label: 'npm *', hint: 'All npm commands' },
-	{ value: 'Bash(pnpm *)', label: 'pnpm *', hint: 'All pnpm commands' },
-	{ value: 'Bash(yarn *)', label: 'yarn *', hint: 'All yarn commands' },
-	{ value: 'Bash(ls *)', label: 'ls *', hint: 'List files' },
-	{ value: 'Bash(cat *)', label: 'cat *', hint: 'Read files' },
-	{ value: 'Bash(grep *)', label: 'grep *', hint: 'Search in files' },
-	{ value: 'Bash(find *)', label: 'find *', hint: 'Find files' },
-	{ value: 'Bash(mkdir *)', label: 'mkdir *', hint: 'Create directories' },
-	{ value: 'Bash(rm *)', label: 'rm *', hint: 'Remove files' },
-	{ value: 'Bash(mv *)', label: 'mv *', hint: 'Move files' },
-	{ value: 'Bash(cp *)', label: 'cp *', hint: 'Copy files' },
-	{ value: 'Bash(curl *)', label: 'curl *', hint: 'HTTP requests' },
-	{ value: 'Bash(python *)', label: 'python *', hint: 'Run Python' },
-	{ value: 'Bash(node *)', label: 'node *', hint: 'Run Node.js' },
+	{value: 'Bash(git *)', label: 'git *', hint: 'All git commands'},
+	{value: 'Bash(npm *)', label: 'npm *', hint: 'All npm commands'},
+	{value: 'Bash(pnpm *)', label: 'pnpm *', hint: 'All pnpm commands'},
+	{value: 'Bash(yarn *)', label: 'yarn *', hint: 'All yarn commands'},
+	{value: 'Bash(ls *)', label: 'ls *', hint: 'List files'},
+	{value: 'Bash(cat *)', label: 'cat *', hint: 'Read files'},
+	{value: 'Bash(grep *)', label: 'grep *', hint: 'Search in files'},
+	{value: 'Bash(find *)', label: 'find *', hint: 'Find files'},
+	{value: 'Bash(mkdir *)', label: 'mkdir *', hint: 'Create directories'},
+	{value: 'Bash(rm *)', label: 'rm *', hint: 'Remove files'},
+	{value: 'Bash(mv *)', label: 'mv *', hint: 'Move files'},
+	{value: 'Bash(cp *)', label: 'cp *', hint: 'Copy files'},
+	{value: 'Bash(curl *)', label: 'curl *', hint: 'HTTP requests'},
+	{value: 'Bash(python *)', label: 'python *', hint: 'Run Python'},
+	{value: 'Bash(node *)', label: 'node *', hint: 'Run Node.js'},
 ];
 
 // Special options for allow/deny mode
 const EXEC_MODE_OPTIONS = [
-	{ value: 'allow_all', label: 'Allow all commands' },
-	{ value: 'deny_all', label: 'Deny all commands' },
-	{ value: 'custom', label: 'Select specific commands' },
+	{value: 'allow_all', label: 'Allow all commands'},
+	{value: 'deny_all', label: 'Deny all commands'},
+	{value: 'custom', label: 'Select specific commands'},
 ];
 
 // Get the path to the gateway-entry.js script
@@ -100,33 +109,40 @@ function getGatewayEntryPath(): string {
 }
 
 // Check if claude-code is installed
-async function isClaudeCodeInstalled(): Promise<{ installed: boolean; path?: string }> {
+async function isClaudeCodeInstalled(): Promise<{
+	installed: boolean;
+	path?: string;
+}> {
 	try {
-		const { stdout } = await execAsync('which claude');
+		const {stdout} = await execAsync('which claude');
 		const path = stdout.trim();
 		if (path) {
-			return { installed: true, path };
+			return {installed: true, path};
 		}
 	} catch {
 		// Not found
 	}
-	return { installed: false };
+	return {installed: false};
 }
 
 // Check if iMessage database is accessible
-async function isIMessageAvailable(): Promise<{ available: boolean; message?: string }> {
+async function isIMessageAvailable(): Promise<{
+	available: boolean;
+	message?: string;
+}> {
 	const dbPath = join(homedir(), 'Library/Messages/chat.db');
 	if (!existsSync(dbPath)) {
-		return { available: false, message: 'Messages database not found' };
+		return {available: false, message: 'Messages database not found'};
 	}
 
 	try {
 		await execAsync(`sqlite3 "${dbPath}" "SELECT 1 LIMIT 1"`);
-		return { available: true };
+		return {available: true};
 	} catch {
 		return {
 			available: false,
-			message: 'Grant Full Disk Access to terminal in System Settings > Privacy & Security',
+			message:
+				'Grant Full Disk Access to terminal in System Settings > Privacy & Security',
 		};
 	}
 }
@@ -137,24 +153,44 @@ function formatConfig(config: GatewayConfig | undefined): string {
 	}
 	return [
 		`${chalk.bold('Name:')} ${config.name || chalk.dim('(not set)')}`,
-		`${chalk.bold('Description:')} ${config.description || chalk.dim('(none)')}`,
+		`${chalk.bold('Description:')} ${
+			config.description || chalk.dim('(none)')
+		}`,
 		`${chalk.bold('URL:')} ${config.url || DEFAULT_APP_URL}`,
-		`${chalk.bold('Browser:')} ${config.slots?.browser?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
-		`${chalk.bold('Coding:')} ${config.slots?.coding?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
-		`${chalk.bold('Exec:')} ${config.slots?.exec?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
-		`${chalk.bold('iMessage:')} ${config.slots?.imessage?.enabled ? chalk.green('enabled') : chalk.dim('disabled')}`,
+		`${chalk.bold('Browser:')} ${
+			config.slots?.browser?.enabled
+				? chalk.green('enabled')
+				: chalk.dim('disabled')
+		}`,
+		`${chalk.bold('Coding:')} ${
+			config.slots?.coding?.enabled
+				? chalk.green('enabled')
+				: chalk.dim('disabled')
+		}`,
+		`${chalk.bold('Exec:')} ${
+			config.slots?.exec?.enabled
+				? chalk.green('enabled')
+				: chalk.dim('disabled')
+		}`,
+		`${chalk.bold('iMessage:')} ${
+			config.slots?.imessage?.enabled
+				? chalk.green('enabled')
+				: chalk.dim('disabled')
+		}`,
 	].join('\n');
 }
 
 // Direct update (non-interactive)
-async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ success: boolean; error?: string }> {
+async function runDirectUpdate(
+	opts: zod.infer<typeof options>,
+): Promise<{success: boolean; error?: string}> {
 	const prefs = getPreferences();
 	const existingConfig = prefs.gateway;
 
 	// Show current config
 	if (opts.show) {
 		p.note(formatConfig(existingConfig), 'Gateway Configuration');
-		return { success: true };
+		return {success: true};
 	}
 
 	// Generate id if not exists
@@ -175,31 +211,33 @@ async function runDirectUpdate(opts: zod.infer<typeof options>): Promise<{ succe
 	}
 
 	// Update slots
-	const slots: GatewaySlots = { ...existingConfig?.slots };
+	const slots: GatewaySlots = {...existingConfig?.slots};
 	if (opts.coding !== undefined) {
-		slots.coding = { ...slots.coding, enabled: opts.coding };
+		slots.coding = {...slots.coding, enabled: opts.coding};
 	}
 	if (opts.browser !== undefined) {
-		slots.browser = { ...slots.browser, enabled: opts.browser };
+		slots.browser = {...slots.browser, enabled: opts.browser};
 	}
 	if (opts.exec !== undefined) {
-		slots.exec = { ...slots.exec, enabled: opts.exec };
+		slots.exec = {...slots.exec, enabled: opts.exec};
 	}
 	if (opts.imessage !== undefined) {
-		slots.imessage = { ...slots.imessage, enabled: opts.imessage };
+		slots.imessage = {...slots.imessage, enabled: opts.imessage};
 	}
 	newConfig.slots = slots;
 
-	updatePreferences({ gateway: newConfig });
+	updatePreferences({gateway: newConfig});
 
 	p.log.success(chalk.green('Configuration updated'));
 	p.note(formatConfig(newConfig), 'Gateway Configuration');
 
-	return { success: true };
+	return {success: true};
 }
 
 // Configure exec slot
-async function configureExec(existingConfig: GatewayConfig | undefined): Promise<{ allow: string[]; deny: string[] } | symbol> {
+async function configureExec(
+	existingConfig: GatewayConfig | undefined,
+): Promise<{allow: string[]; deny: string[]} | symbol> {
 	const execMode = await p.select({
 		message: 'Command access mode',
 		options: EXEC_MODE_OPTIONS,
@@ -222,7 +260,8 @@ async function configureExec(existingConfig: GatewayConfig | undefined): Promise
 		const selectedAllowed = await p.multiselect({
 			message: 'Select allowed commands (space to toggle)',
 			options: EXEC_COMMAND_OPTIONS,
-			initialValues: existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
+			initialValues:
+				existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
 			required: false,
 		});
 
@@ -234,14 +273,15 @@ async function configureExec(existingConfig: GatewayConfig | undefined): Promise
 
 		// Ask for denied commands from remaining
 		const remainingCommands = EXEC_COMMAND_OPTIONS.filter(
-			opt => !execAllow.includes(opt.value)
+			opt => !execAllow.includes(opt.value),
 		);
 
 		if (remainingCommands.length > 0) {
 			const deniedCommands = await p.multiselect({
 				message: 'Select denied commands (optional)',
 				options: remainingCommands,
-				initialValues: existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
+				initialValues:
+					existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
 				required: false,
 			});
 
@@ -252,38 +292,48 @@ async function configureExec(existingConfig: GatewayConfig | undefined): Promise
 
 		// Custom allow patterns
 		const customAllowPatterns = await p.text({
-			message: 'Additional allow patterns (comma-separated, e.g. "docker *, kubectl *")',
+			message:
+				'Additional allow patterns (comma-separated, e.g. "docker *, kubectl *")',
 			placeholder: 'Leave empty to skip',
 			initialValue: '',
 		});
 
-		if (!p.isCancel(customAllowPatterns) && customAllowPatterns && customAllowPatterns.trim()) {
+		if (
+			!p.isCancel(customAllowPatterns) &&
+			customAllowPatterns &&
+			customAllowPatterns.trim()
+		) {
 			const patterns = (customAllowPatterns as string)
 				.split(',')
 				.map(s => s.trim())
 				.filter(Boolean)
-				.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+				.map(s => (s.startsWith('Bash(') ? s : `Bash(${s})`));
 			execAllow.push(...patterns);
 		}
 
 		// Custom deny patterns
 		const customDenyPatterns = await p.text({
-			message: 'Additional deny patterns (comma-separated, e.g. "sudo *, rm -rf *")',
+			message:
+				'Additional deny patterns (comma-separated, e.g. "sudo *, rm -rf *")',
 			placeholder: 'Leave empty to skip',
 			initialValue: '',
 		});
 
-		if (!p.isCancel(customDenyPatterns) && customDenyPatterns && customDenyPatterns.trim()) {
+		if (
+			!p.isCancel(customDenyPatterns) &&
+			customDenyPatterns &&
+			customDenyPatterns.trim()
+		) {
 			const patterns = (customDenyPatterns as string)
 				.split(',')
 				.map(s => s.trim())
 				.filter(Boolean)
-				.map(s => s.startsWith('Bash(') ? s : `Bash(${s})`);
+				.map(s => (s.startsWith('Bash(') ? s : `Bash(${s})`));
 			execDeny.push(...patterns);
 		}
 	}
 
-	return { allow: execAllow, deny: execDeny };
+	return {allow: execAllow, deny: execDeny};
 }
 
 // Configure iMessage slot — creates .app bundle and guides FDA setup
@@ -291,7 +341,11 @@ async function configureExec(existingConfig: GatewayConfig | undefined): Promise
 async function configureIMessage(): Promise<boolean | null> {
 	// If already installed and accessible, just enable
 	if (isAppBundleInstalled() && testMessagesAccess()) {
-		p.log.success(chalk.green('CoreBrainGateway.app already installed and has Full Disk Access'));
+		p.log.success(
+			chalk.green(
+				'CoreBrainGateway.app already installed and has Full Disk Access',
+			),
+		);
 		return true;
 	}
 
@@ -303,9 +357,17 @@ async function configureIMessage(): Promise<boolean | null> {
 	try {
 		const __filename = fileURLToPath(import.meta.url);
 		const __dirname = dirname(__filename);
-		const gatewayEntryPath = join(__dirname, '..', '..', 'server', 'gateway-entry.js');
+		const gatewayEntryPath = join(
+			__dirname,
+			'..',
+			'..',
+			'server',
+			'gateway-entry.js',
+		);
 		createAppBundle(process.execPath, gatewayEntryPath);
-		bundleSpinner.stop(chalk.green('CoreBrainGateway.app created in /Applications'));
+		bundleSpinner.stop(
+			chalk.green('CoreBrainGateway.app created in /Applications'),
+		);
 	} catch (err) {
 		bundleSpinner.stop(chalk.red('Failed to create app bundle'));
 		p.log.error(err instanceof Error ? err.message : 'Unknown error');
@@ -315,23 +377,25 @@ async function configureIMessage(): Promise<boolean | null> {
 	// Step 2: Open System Settings → Full Disk Access
 	openFullDiskAccessSettings();
 
-	p.log.info([
-		'',
-		chalk.bold('Grant Full Disk Access to CoreBrain Gateway:'),
-		`  1. In the panel that just opened, click ${chalk.bold('+')}`,
-		`  2. Select ${chalk.bold('CoreBrainGateway')} from Applications`,
-		`  3. Make sure the toggle is ${chalk.bold('ON')}`,
-		'',
-	].join('\n'));
+	p.log.info(
+		[
+			'',
+			chalk.bold('Grant Full Disk Access to CoreBrain Gateway:'),
+			`  1. In the panel that just opened, click ${chalk.bold('+')}`,
+			`  2. Select ${chalk.bold('CoreBrainGateway')} from Applications`,
+			`  3. Make sure the toggle is ${chalk.bold('ON')}`,
+			'',
+		].join('\n'),
+	);
 
 	// Step 3: Wait for user then verify
 	let verified = false;
 	while (!verified) {
 		const next = await p.select({
-			message: 'Once you\'ve added CoreBrainGateway to Full Disk Access:',
+			message: "Once you've added CoreBrainGateway to Full Disk Access:",
 			options: [
-				{ value: 'verify', label: 'Verify access' },
-				{ value: 'skip', label: 'Skip iMessage for now' },
+				{value: 'verify', label: 'Verify access'},
+				{value: 'skip', label: 'Skip iMessage for now'},
 			],
 		});
 
@@ -343,11 +407,19 @@ async function configureIMessage(): Promise<boolean | null> {
 		verifySpinner.start('Checking Full Disk Access...');
 		const ok = testMessagesAccess();
 		if (ok) {
-			verifySpinner.stop(chalk.green('Full Disk Access confirmed — iMessage tools ready'));
+			verifySpinner.stop(
+				chalk.green('Full Disk Access confirmed — iMessage tools ready'),
+			);
 			verified = true;
 		} else {
-			verifySpinner.stop(chalk.yellow('Not yet — Messages database not accessible'));
-			p.log.warn(`Make sure ${chalk.bold(getAppBundlePath())} is in Full Disk Access with the toggle ON, then try again.`);
+			verifySpinner.stop(
+				chalk.yellow('Not yet — Messages database not accessible'),
+			);
+			p.log.warn(
+				`Make sure ${chalk.bold(
+					getAppBundlePath(),
+				)} is in Full Disk Access with the toggle ON, then try again.`,
+			);
 		}
 	}
 
@@ -388,14 +460,14 @@ async function runInteractiveConfig() {
 		message: 'Gateway name',
 		placeholder: 'my-macbook',
 		initialValue: existingConfig?.name || '',
-		validate: (value) => {
+		validate: value => {
 			if (value && !value.trim()) return 'Name is required';
 		},
 	});
 
 	if (p.isCancel(name)) {
 		p.cancel('Configuration cancelled');
-		return { cancelled: true };
+		return {cancelled: true};
 	}
 
 	// Step 2: Description
@@ -407,7 +479,7 @@ async function runInteractiveConfig() {
 
 	if (p.isCancel(description)) {
 		p.cancel('Configuration cancelled');
-		return { cancelled: true };
+		return {cancelled: true};
 	}
 
 	// Step 3: Check availability of all tools
@@ -423,16 +495,20 @@ async function runInteractiveConfig() {
 	checkSpinner.stop('Tools checked');
 
 	// Build tool options based on availability
-	const toolOptions: { value: ToolSlot; label: string; hint: string }[] = [
+	const toolOptions: {value: ToolSlot; label: string; hint: string}[] = [
 		{
 			value: 'browser',
 			label: 'Browser',
-			hint: browserInstalled ? chalk.green('available') : chalk.yellow('requires install'),
+			hint: browserInstalled
+				? chalk.green('available')
+				: chalk.yellow('requires install'),
 		},
 		{
 			value: 'coding',
 			label: 'Coding',
-			hint: claudeResult.installed ? chalk.green('claude-code found') : chalk.yellow('claude-code not found'),
+			hint: claudeResult.installed
+				? chalk.green('claude-code found')
+				: chalk.yellow('claude-code not found'),
 		},
 		{
 			value: 'exec',
@@ -442,7 +518,9 @@ async function runInteractiveConfig() {
 		{
 			value: 'imessage',
 			label: 'iMessage',
-			hint: imessageResult.available ? chalk.green('available') : chalk.yellow(imessageResult.message || 'not available'),
+			hint: imessageResult.available
+				? chalk.green('available')
+				: chalk.yellow(imessageResult.message || 'not available'),
 		},
 	];
 
@@ -451,7 +529,8 @@ async function runInteractiveConfig() {
 	if (existingConfig?.slots?.browser?.enabled) currentlyEnabled.push('browser');
 	if (existingConfig?.slots?.coding?.enabled) currentlyEnabled.push('coding');
 	if (existingConfig?.slots?.exec?.enabled) currentlyEnabled.push('exec');
-	if (existingConfig?.slots?.imessage?.enabled) currentlyEnabled.push('imessage');
+	if (existingConfig?.slots?.imessage?.enabled)
+		currentlyEnabled.push('imessage');
 
 	// Step 4: Multi-select tools to configure
 	const selectedTools = await p.multiselect({
@@ -463,7 +542,7 @@ async function runInteractiveConfig() {
 
 	if (p.isCancel(selectedTools)) {
 		p.cancel('Configuration cancelled');
-		return { cancelled: true };
+		return {cancelled: true};
 	}
 
 	const toolsToEnable = selectedTools as ToolSlot[];
@@ -489,7 +568,7 @@ async function runInteractiveConfig() {
 
 					if (p.isCancel(installBrowser)) {
 						p.cancel('Configuration cancelled');
-						return { cancelled: true };
+						return {cancelled: true};
 					}
 
 					if (installBrowser) {
@@ -501,10 +580,14 @@ async function runInteractiveConfig() {
 								installSpinner.stop(chalk.green('agent-browser installed'));
 								browserEnabled = true;
 							} else {
-								installSpinner.stop(chalk.red('Installation failed - browser tools disabled'));
+								installSpinner.stop(
+									chalk.red('Installation failed - browser tools disabled'),
+								);
 							}
 						} catch {
-							installSpinner.stop(chalk.red('Installation failed - browser tools disabled'));
+							installSpinner.stop(
+								chalk.red('Installation failed - browser tools disabled'),
+							);
 						}
 					}
 				} else {
@@ -515,8 +598,14 @@ async function runInteractiveConfig() {
 
 			case 'coding': {
 				if (!claudeResult.installed) {
-					p.log.warn(chalk.yellow('claude-code not found - coding tools will be disabled'));
-					p.log.info(chalk.dim('Install with: npm install -g @anthropic-ai/claude-code'));
+					p.log.warn(
+						chalk.yellow(
+							'claude-code not found - coding tools will be disabled',
+						),
+					);
+					p.log.info(
+						chalk.dim('Install with: npm install -g @anthropic-ai/claude-code'),
+					);
 				} else {
 					claudePath = claudeResult.path;
 					codingEnabled = true;
@@ -529,11 +618,11 @@ async function runInteractiveConfig() {
 				const execConfig = await configureExec(existingConfig);
 				if (p.isCancel(execConfig)) {
 					p.cancel('Configuration cancelled');
-					return { cancelled: true };
+					return {cancelled: true};
 				}
 				execEnabled = true;
-				execAllow = (execConfig as { allow: string[]; deny: string[] }).allow;
-				execDeny = (execConfig as { allow: string[]; deny: string[] }).deny;
+				execAllow = (execConfig as {allow: string[]; deny: string[]}).allow;
+				execDeny = (execConfig as {allow: string[]; deny: string[]}).deny;
 				break;
 			}
 
@@ -541,7 +630,7 @@ async function runInteractiveConfig() {
 				const result = await configureIMessage();
 				if (result === null) {
 					p.cancel('Configuration cancelled');
-					return { cancelled: true };
+					return {cancelled: true};
 				}
 				imessageEnabled = result;
 				break;
@@ -555,14 +644,14 @@ async function runInteractiveConfig() {
 
 	const gatewayId = existingConfig?.id || randomUUID();
 	const slots: GatewaySlots = {
-		browser: { enabled: browserEnabled },
-		coding: { enabled: codingEnabled },
+		browser: {enabled: browserEnabled},
+		coding: {enabled: codingEnabled},
 		exec: {
 			enabled: execEnabled,
 			allow: execAllow.length > 0 ? execAllow : undefined,
 			deny: execDeny.length > 0 ? execDeny : undefined,
 		},
-		imessage: { enabled: imessageEnabled },
+		imessage: {enabled: imessageEnabled},
 	};
 
 	// Get URL from auth config (set during login)
@@ -587,16 +676,28 @@ async function runInteractiveConfig() {
 		if (!codingConfig['claude-code']) {
 			codingConfig['claude-code'] = {
 				command: claudePath,
-				args: ['-p', '--output-format', 'text', '--dangerously-skip-permissions'],
-				resumeArgs: ['-p', '--output-format', 'text', '--dangerously-skip-permissions', '--resume', '{sessionId}'],
+				args: [
+					'-p',
+					'--output-format',
+					'text',
+					'--dangerously-skip-permissions',
+				],
+				resumeArgs: [
+					'-p',
+					'--output-format',
+					'text',
+					'--dangerously-skip-permissions',
+					'--resume',
+					'{sessionId}',
+				],
 				sessionArg: '--session-id',
 				sessionMode: 'always',
 				sessionIdFields: ['session_id'],
 			};
 		}
-		updatePreferences({ gateway: newConfig, coding: codingConfig });
+		updatePreferences({gateway: newConfig, coding: codingConfig});
 	} else {
-		updatePreferences({ gateway: newConfig });
+		updatePreferences({gateway: newConfig});
 	}
 
 	saveSpinner.stop(chalk.green('Configuration saved'));
@@ -612,7 +713,7 @@ async function runInteractiveConfig() {
 
 	if (p.isCancel(shouldStart) || !shouldStart) {
 		p.outro(chalk.dim("Run 'corebrain gateway start' to start"));
-		return { success: true, started: false };
+		return {success: true, started: false};
 	}
 
 	// Start gateway
@@ -622,7 +723,11 @@ async function runInteractiveConfig() {
 	const serviceType = getServiceType();
 	if (serviceType === 'none') {
 		startSpinner.stop(chalk.red('Service management not supported'));
-		return { success: true, started: false, error: 'Service management not supported' };
+		return {
+			success: true,
+			started: false,
+			error: 'Service management not supported',
+		};
 	}
 
 	const serviceName = getServiceName();
@@ -644,7 +749,7 @@ async function runInteractiveConfig() {
 
 	await installService(serviceConfig);
 	await startService(serviceName);
-	await new Promise((resolve) => setTimeout(resolve, 500));
+	await new Promise(resolve => setTimeout(resolve, 500));
 
 	const pid = getServicePid(serviceName);
 	const currentPrefs = getPreferences();
@@ -662,7 +767,7 @@ async function runInteractiveConfig() {
 	startSpinner.stop(chalk.green('Gateway started'));
 	p.outro(chalk.green('Gateway is running!'));
 
-	return { success: true, started: true };
+	return {success: true, started: true};
 }
 
 async function runConfig(opts: zod.infer<typeof options>) {
@@ -675,8 +780,8 @@ async function runConfig(opts: zod.infer<typeof options>) {
 	return runInteractiveConfig();
 }
 
-export default function GatewayConfigCommand({ options: opts }: Props) {
-	const { exit } = useApp();
+export default function GatewayConfigCommand({options: opts}: Props) {
+	const {exit} = useApp();
 	const [status, setStatus] = useState<'running' | 'done' | 'error'>('running');
 	const [error, setError] = useState('');
 
@@ -684,7 +789,7 @@ export default function GatewayConfigCommand({ options: opts }: Props) {
 		let mounted = true;
 
 		runConfig(opts)
-			.then((result) => {
+			.then(result => {
 				if (mounted) {
 					if ('cancelled' in result && result.cancelled) {
 						setStatus('done');
@@ -696,7 +801,7 @@ export default function GatewayConfigCommand({ options: opts }: Props) {
 					}
 				}
 			})
-			.catch((err) => {
+			.catch(err => {
 				if (mounted) {
 					setError(err instanceof Error ? err.message : 'Unknown error');
 					setStatus('error');
