@@ -34,6 +34,7 @@ info()    { log "INFO " "$@"; }
 warn()    { log "WARN " "$@"; }
 success() { log "OK   " "$@"; }
 error()   { log "ERROR" "$@"; exit 1; }
+section() { echo ""; log "=====" "--- $* ---"; }
 
 # --- Themen für 10x-Entwicklung (priorisiert für dein Empire) ---------------
 declare -a TOPICS=(
