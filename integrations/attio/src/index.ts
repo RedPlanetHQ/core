@@ -1,7 +1,6 @@
 import { integrationCreate } from './account-create';
 import { handleSchedule } from './schedule';
 import { getTools, callTool } from './mcp';
-import { fileURLToPath } from 'url';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
@@ -85,6 +84,4 @@ function main() {
   attioCLI.parse();
 }
 
-if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  main();
-}
+main();
