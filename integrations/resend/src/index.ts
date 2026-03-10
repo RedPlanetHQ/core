@@ -7,6 +7,7 @@ import {
 
 import { integrationCreate } from './account-create';
 import { callTool, getTools } from './mcp';
+import { fileURLToPath } from 'url';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -82,4 +83,6 @@ function main() {
   resendCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

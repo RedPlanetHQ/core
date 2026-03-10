@@ -6,6 +6,7 @@ import {
 } from '@redplanethq/sdk';
 import { callTool, getTools } from './mcp';
 import { integrationCreate } from './account-create';
+import { fileURLToPath } from 'url';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -90,4 +91,6 @@ function main() {
   zohoMailCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}

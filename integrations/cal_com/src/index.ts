@@ -6,6 +6,7 @@ import {
 } from '@redplanethq/sdk';
 import { callTool, getTools } from './mcp';
 import { integrationCreate } from './account-create';
+import { fileURLToPath } from 'url';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -59,9 +60,6 @@ class CalComCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Cal.com. Manage schedules, availability, and calendar settings with powerful automation',
       icon: 'cal-com',
-      mcp: {
-        type: 'cli',
-      },
       auth: {
         api_key: {
           type: 'string',
@@ -79,4 +77,6 @@ function main() {
   calComCLI.parse();
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  main();
+}
