@@ -30,10 +30,15 @@ interface GatewayToolResultMessage {
   error?: string;
 }
 
+interface GatewayPongMessage {
+  type: "pong";
+}
+
 type GatewayClientMessage =
   | GatewayInitMessage
   | GatewaySupportedToolsMessage
-  | GatewayToolResultMessage;
+  | GatewayToolResultMessage
+  | GatewayPongMessage;
 
 interface GatewayConnection {
   ws: WebSocket;
@@ -42,6 +47,7 @@ interface GatewayConnection {
   userId: string;
   name: string | null;
   state: "connecting" | "awaiting_tools" | "ready";
+  pingInterval: NodeJS.Timeout | null;
   pendingToolCalls: Map<
     string,
     {
@@ -157,6 +163,7 @@ export function setupWebSocket(server: Server, module: any) {
         userId: auth.userId,
         name: null,
         state: "connecting",
+        pingInterval: null,
         pendingToolCalls: new Map(),
       };
 
@@ -263,6 +270,19 @@ async function handleMessage(
         type: "ready",
         gatewayId: connection.gatewayId,
       });
+
+      // Start server-side ping every 30s to track liveness
+      connection.pingInterval = setInterval(() => {
+        send(connection.ws, { type: "ping" });
+      }, 30000);
+
+      break;
+    }
+
+    case "pong": {
+      if (connection.gatewayId) {
+        await moduleRef.updateGatewayLastSeen(connection.gatewayId);
+      }
       break;
     }
 
@@ -291,6 +311,12 @@ async function handleDisconnect(
   connection: GatewayConnection,
   connectionId: string,
 ): Promise<void> {
+  // Clear ping interval
+  if (connection.pingInterval) {
+    clearInterval(connection.pingInterval);
+    connection.pingInterval = null;
+  }
+
   // Clean up pending tool calls
   for (const [, pending] of connection.pendingToolCalls) {
     clearTimeout(pending.timer);

@@ -74,7 +74,8 @@ function AccountRow({
             <div>
               <Label className="text-sm font-medium">Activity Auto-Read</Label>
               <p className="text-muted-foreground text-xs">
-                Automatically send new activities from this account to your agent
+                Automatically send new activities from this account to your
+                agent
               </p>
               {!isAutoReadAvailable && (
                 <p className="text-xs text-amber-500">

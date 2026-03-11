@@ -308,6 +308,11 @@ export class GatewayClient {
 				break;
 			}
 
+			case 'ping': {
+				this.send({type: 'pong'});
+				break;
+			}
+
 			case 'error': {
 				const errorMsg = message as unknown as ErrorMessage;
 				this.log(

@@ -4,8 +4,11 @@ import { env } from "~/env.server";
 import { integrationRunSchedule } from "~/trigger/integrations/integration-run-schedule";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 
-export const scheduler = async (payload: { integrationAccountId: string }) => {
-  const { integrationAccountId } = payload;
+export const scheduler = async (payload: {
+  integrationAccountId: string;
+  admin: boolean;
+}) => {
+  const { integrationAccountId, admin } = payload;
 
   const integrationAccount = await prisma.integrationAccount.findUnique({
     where: { id: integrationAccountId, deleted: null },
@@ -29,8 +32,9 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
   }
 
   // Check if auto-read is available for this workspace's plan
-  if (isBillingEnabled()) {
-    const planType = integrationAccount.workspace.Subscription?.planType || "FREE";
+  if (isBillingEnabled() && !admin) {
+    const planType =
+      integrationAccount.workspace.Subscription?.planType || "FREE";
     if (!isPaidPlan(planType)) {
       logger.warn("Auto-read requires a paid plan", {
         workspaceId: integrationAccount.workspace.id,
@@ -46,6 +50,7 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
   if (
     spec.schedule &&
     spec.schedule.frequency &&
+    spec.enabledAutoRead &&
     env.QUEUE_PROVIDER === "trigger"
   ) {
     const createdSchedule = await schedules.create({
@@ -75,19 +80,6 @@ export const scheduler = async (payload: { integrationAccountId: string }) => {
     });
 
     return createdSchedule;
-  } else {
-    await prisma.integrationAccount.update({
-      where: {
-        id: integrationAccount.id,
-      },
-      data: {
-        settings: {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          ...(integrationAccount.settings as any),
-          autoActivityRead: true,
-        },
-      },
-    });
   }
 
   return "No schedule for this task";
@@ -111,7 +103,9 @@ export const unschedule = async (payload: { integrationAccountId: string }) => {
     try {
       await schedules.del(settings.scheduleId);
     } catch {
-      logger.error("Failed to delete schedule", { scheduleId: settings.scheduleId });
+      logger.error("Failed to delete schedule", {
+        scheduleId: settings.scheduleId,
+      });
     }
   }
 

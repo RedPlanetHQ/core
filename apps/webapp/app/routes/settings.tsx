@@ -8,6 +8,7 @@ import {
   Building,
   Activity,
   Bot,
+  Server,
 } from "lucide-react";
 
 import {
@@ -57,10 +58,16 @@ export default function Settings() {
       { name: "Webhooks", icon: Webhook, path: "webhooks" },
     ],
     workspace: [
-      { name: "Overview", icon: Building, path: "workspace", strict: true },
-      { name: "Labels", icon: Tag, path: "labels" },
-      { name: "Activity", icon: Activity, path: "activity" },
-      { name: "Agent", icon: Bot, path: "workspace/agent" },
+      {
+        name: "Overview",
+        icon: Building,
+        path: "/settings/workspace",
+        strict: true,
+      },
+      { name: "Labels", icon: Tag, path: "/settings/labels" },
+      { name: "Activity", icon: Activity, path: "/settings/activity" },
+      { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
+      { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
     ],
   };
   const navigate = useNavigate();
@@ -136,9 +143,11 @@ export default function Settings() {
                     <SidebarMenuItem key={item.name}>
                       <Button
                         variant="secondary"
-                        isActive={location.pathname.includes(item.path)}
-                        onClick={() => navigate(`/settings/${item.path}`)}
-                        className={cn("flex w-fit min-w-0 justify-start gap-1")}
+                        isActive={isActive(item)}
+                        onClick={() => navigate(`${item.path}`)}
+                        className={cn(
+                          "!text-foreground flex w-fit min-w-0 justify-start gap-1",
+                        )}
                       >
                         <item.icon size={16} />
                         <span>{item.name}</span>
