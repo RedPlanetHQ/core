@@ -67,8 +67,14 @@ class FathomCLI extends IntegrationCLI {
       icon: 'fathom',
       auth: {
         api_key: {
-          header_name: 'X-Api-Key',
-          format: '{api_key}',
+          fields: [
+            {
+              name: 'api_key',
+              label: 'API Key',
+              placeholder: 'your-fathom-api-key',
+              description: 'Found in Fathom → Settings → API Keys.',
+            },
+          ],
         },
       },
     };
