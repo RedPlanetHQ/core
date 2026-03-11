@@ -16,6 +16,10 @@ import chalk from 'chalk';
 import {editorTheme, markdownTheme} from './themes.js';
 import {createConversation} from './hooks/use-conversation.js';
 import {ToolCallItem} from './components/tool-call-item.js';
+import {ConversationSelector} from './components/conversation-selector.js';
+import {ReminderList} from './components/reminder-list.js';
+import {IntegrationsView} from './components/integrations-view.js';
+import {fetchConversationHistory, openBrowser} from './utils/stream.js';
 
 export function startTuiApp(
 	baseUrl: string,
@@ -26,7 +30,7 @@ export function startTuiApp(
 	const tui = new TUI(terminal);
 
 	// ── Header ───────────────────────────────────────────────────────────────
-	const c = (s: string) => chalk.hex('#4ade80')(s);
+	const c = (s: string) => chalk.hex('#c15e50')(s);
 	const logoRows = [
 		c('    ▄▄▄▄▄▄▄   '),
 		c('  ▄█████████▄ '),
@@ -63,7 +67,14 @@ export function startTuiApp(
 	const editor = new Editor(tui, editorTheme);
 	editor.setAutocompleteProvider(
 		new CombinedAutocompleteProvider(
-			[{name: 'clear', description: 'Clear conversation and start fresh'}],
+			[
+				{name: 'clear', description: 'Clear conversation and start fresh'},
+				{name: 'resume', description: 'Resume a previous conversation'},
+				{name: 'reminders', description: 'View your reminders'},
+				{name: 'integrations', description: 'View and connect integrations'},
+				{name: 'dashboard', description: 'Open dashboard in browser'},
+				{name: 'exit', description: 'Exit CORE'},
+			],
 			process.cwd(),
 		),
 	);
@@ -138,9 +149,151 @@ export function startTuiApp(
 			return;
 		}
 
+		if (trimmed === '/resume') {
+			showResumeSelector();
+			return;
+		}
+
+		if (trimmed === '/reminders') {
+			showReminderList();
+			return;
+		}
+
+		if (trimmed === '/integrations') {
+			showIntegrationsView();
+			return;
+		}
+
+		if (trimmed === '/dashboard') {
+			openBrowser('https://app.getcore.me');
+			return;
+		}
+
+		if (trimmed === '/exit') {
+			tui.stop();
+			process.stdout.write('\n');
+			process.exit(0);
+		}
+
 		if (isProcessing || !trimmed) return;
 		runMessage(trimmed);
 	};
+
+	function showResumeSelector(): void {
+		// Hide chat UI — remove messagesContainer and editor from TUI
+		tui.removeChild(messagesContainer);
+		tui.removeChild(editor);
+
+		const selector = new ConversationSelector(baseUrl, apiKey, tui, () =>
+			tui.requestRender(),
+		);
+		tui.addChild(selector);
+		tui.setFocus(selector);
+
+		function exitSelector(): void {
+			tui.removeChild(selector);
+			tui.addChild(messagesContainer);
+			tui.addChild(editor);
+			tui.setFocus(editor);
+			tui.requestRender();
+		}
+
+		selector.onCancel = () => {
+			exitSelector();
+		};
+
+		selector.onSelect = conv => {
+			exitSelector();
+			clearConversation();
+			conversation.resume(conv.id);
+
+			const historyLoader = new Loader(
+				tui,
+				s => chalk.cyan(s),
+				s => chalk.gray(s),
+				'Loading history...',
+			);
+			messagesContainer.addChild(historyLoader);
+			historyLoader.start();
+			tui.requestRender();
+
+			fetchConversationHistory(baseUrl, apiKey, conv.id)
+				.then(messages => {
+					messagesContainer.removeChild(historyLoader);
+					historyLoader.stop();
+
+					for (const msg of messages) {
+						const text = msg.parts
+							.filter(p => p.type === 'text' && p.text)
+							.map(p => p.text ?? '')
+							.join('');
+
+						if (!text) continue;
+
+						if (msg.role === 'user') {
+							addToMessages(
+								new Text(chalk.dim('\u2502 ') + chalk.white(text), 0, 0),
+							);
+						} else {
+							addToMessages(new Markdown(text, 1, 0, markdownTheme));
+						}
+						addToMessages(new Spacer(1));
+					}
+
+					tui.requestRender();
+				})
+				.catch((err: Error) => {
+					messagesContainer.removeChild(historyLoader);
+					historyLoader.stop();
+					addToMessages(
+						new Text(
+							chalk.red('Failed to load history: ') + chalk.gray(err.message),
+							1,
+							0,
+						),
+					);
+					tui.requestRender();
+				});
+		};
+	}
+
+	function showReminderList(): void {
+		tui.removeChild(messagesContainer);
+		tui.removeChild(editor);
+
+		const list = new ReminderList(baseUrl, apiKey, tui, () =>
+			tui.requestRender(),
+		);
+		tui.addChild(list);
+		tui.setFocus(list);
+
+		list.onCancel = () => {
+			tui.removeChild(list);
+			tui.addChild(messagesContainer);
+			tui.addChild(editor);
+			tui.setFocus(editor);
+			tui.requestRender();
+		};
+	}
+
+	function showIntegrationsView(): void {
+		tui.removeChild(messagesContainer);
+		tui.removeChild(editor);
+
+		const view = new IntegrationsView(baseUrl, apiKey, tui, () =>
+			tui.requestRender(),
+		);
+		tui.addChild(view);
+		tui.setFocus(view);
+
+		view.onCancel = () => {
+			tui.removeChild(view);
+			tui.addChild(messagesContainer);
+			tui.addChild(editor);
+			tui.setFocus(editor);
+			tui.requestRender();
+		};
+	}
 
 	function runMessage(message: string): void {
 		isProcessing = true;

@@ -16,6 +16,7 @@ export interface Conversation {
 	readonly conversationId: string | null;
 	send(message: string, callbacks: ConversationCallbacks): Promise<void>;
 	clear(): void;
+	resume(id: string): void;
 }
 
 // Tools whose sub-calls should be shown as nested children
@@ -36,6 +37,10 @@ export function createConversation(
 
 		clear() {
 			conversationId = null;
+		},
+
+		resume(id: string) {
+			conversationId = id;
 		},
 
 		async send(message: string, callbacks: ConversationCallbacks) {
