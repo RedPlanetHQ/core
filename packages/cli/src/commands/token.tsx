@@ -4,6 +4,8 @@ import * as p from '@clack/prompts';
 import zod from 'zod';
 import { getConfig } from '@/config/index';
 
+export const description = 'Print the current API token';
+
 export const options = zod.object({});
 
 type Props = {

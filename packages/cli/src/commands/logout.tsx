@@ -5,6 +5,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import { getConfig, updateConfig } from '@/config/index';
 
+export const description = 'Log out and clear stored credentials';
+
 export const options = zod.object({});
 
 type Props = {

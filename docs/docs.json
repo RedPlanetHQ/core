@@ -211,6 +211,14 @@
             "pages": ["gateway/integrations"]
           },
           {
+            "group": "Load",
+            "pages": ["gateway/load/notion"]
+          },
+          {
+            "group": "TUI",
+            "pages": ["gateway/tui/overview"]
+          },
+          {
             "group": "Search",
             "pages": ["gateway/search"]
           }

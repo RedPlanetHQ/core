@@ -8,6 +8,8 @@ import { getConfig } from '@/config/index';
 
 const BASE_URL = 'https://app.getcore.me';
 
+export const description = 'Show current authenticated user info';
+
 export const options = zod.object({});
 
 type Props = {

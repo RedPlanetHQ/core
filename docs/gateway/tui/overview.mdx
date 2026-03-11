@@ -1,0 +1,67 @@
+---
+title: "TUI"
+description: "Interactive terminal UI for chatting with CORE and managing reminders, integrations, and conversations"
+---
+
+## Overview
+
+Running `corebrain` with no subcommand opens the interactive TUI — a full terminal interface for talking to CORE directly from your machine.
+
+```bash
+corebrain
+```
+
+You get a persistent chat session with an editor at the bottom. Type `/` to see available slash commands.
+
+---
+
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/resume` | Browse and resume a previous conversation |
+| `/reminders` | View your reminders |
+| `/integrations` | View and manage connected integrations |
+| `/dashboard` | Open the CORE web dashboard in your browser |
+| `/clear` | Clear the current conversation and start fresh |
+| `/exit` | Exit CORE |
+
+---
+
+## Features
+
+### Resume
+
+`/resume` opens a searchable list of past conversations.
+
+- Navigate with `↑↓`
+- Press `f` to toggle between All sources and CLI-only conversations
+- Press `enter` to load a conversation and continue where you left off
+- Press `esc` to cancel
+
+Conversations paginate automatically — more load as you scroll toward the end of the list.
+
+---
+
+### Reminders
+
+`/reminders` shows all your scheduled reminders with their schedule, channel, and next run time.
+
+- Navigate with `↑↓`
+- Press `f` to cycle through **All → Active → Inactive** filters
+- Press `esc` to close
+
+Each reminder shows its recurrence (e.g. "Daily at 9AM"), the channel it fires on, and how long until the next run. The list paginates automatically as you scroll.
+
+---
+
+### Integrations
+
+`/integrations` shows your connected integration accounts and all available integrations.
+
+- Press `tab` to switch between **Installed** and **All** tabs
+- Navigate with `↑↓`
+- Press `enter` to open the selected integration in the CORE dashboard
+- Press `esc` to close
+
+The **Installed** tab shows accounts you've connected, with a green dot for active accounts. The **All** tab lists every available integration — connected ones are marked with a green dot.
