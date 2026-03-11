@@ -35,6 +35,7 @@ export const scheduler = async (payload: {
   if (isBillingEnabled() && !admin) {
     const planType =
       integrationAccount.workspace.Subscription?.planType || "FREE";
+
     if (!isPaidPlan(planType)) {
       logger.warn("Auto-read requires a paid plan", {
         workspaceId: integrationAccount.workspace.id,
@@ -50,7 +51,7 @@ export const scheduler = async (payload: {
   if (
     spec.schedule &&
     spec.schedule.frequency &&
-    spec.enabledAutoRead &&
+    spec.enableAutoRead &&
     env.QUEUE_PROVIDER === "trigger"
   ) {
     const createdSchedule = await schedules.create({
