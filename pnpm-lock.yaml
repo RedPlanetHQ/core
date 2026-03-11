@@ -160,8 +160,8 @@ importers:
         specifier: ^1.2.7
         version: 1.2.7(@types/react-dom@19.2.3(@types/react@19.2.13))(@types/react@19.2.13)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@redplanethq/sdk':
-        specifier: workspace:*
-        version: link:../../packages/sdk
+        specifier: 0.1.13
+        version: 0.1.13
       '@remix-run/express':
         specifier: 2.17.4
         version: 2.17.4(express@4.21.2)(typescript@5.8.3)
@@ -4321,6 +4321,10 @@ packages:
 
   '@redplanethq/sdk@0.1.0':
     resolution: {integrity: sha512-RmPfT9XESjTSMLlAMkolZEF28PvGo5hlwrG75JQy1tAZkvaTHzC7A2mEAMbsBvOMrJuUztL3NtCmVF//C/C/+A==}
+    engines: {node: '>=18.0.0'}
+
+  '@redplanethq/sdk@0.1.13':
+    resolution: {integrity: sha512-Tb2/MZPdj8HpN2i7HVUQ9ploDWWnm7Cm2Dbk+Sw9Woqy/qs0815h7lNOaHc5W7K7KLEGINGdo1dnATEp9aIVow==}
     engines: {node: '>=18.0.0'}
 
   '@remirror/core-constants@3.0.0':
@@ -17843,6 +17847,11 @@ snapshots:
   '@redplanethq/sdk@0.1.0':
     dependencies:
       commander: 14.0.0
+
+  '@redplanethq/sdk@0.1.13':
+    dependencies:
+      commander: 14.0.0
+      zod: 3.25.76
 
   '@remirror/core-constants@3.0.0': {}
 

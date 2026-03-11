@@ -63,9 +63,6 @@ class DiscordCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Discord. Send messages, manage channels, track server activity, and engage with your community',
       icon: 'discord',
-      mcp: {
-        type: 'cli',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://discord.com/api/oauth2/token',
