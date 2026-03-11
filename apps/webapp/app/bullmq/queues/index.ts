@@ -182,28 +182,6 @@ export const graphResolutionQueue = new Queue("graph-resolution-queue", {
 });
 
 /**
- * Aspect resolution queue
- * Handles async voice aspect deduplication after episode ingestion
- */
-export const aspectResolutionQueue = new Queue("aspect-resolution-queue", {
-  connection: getRedisConnection(),
-  defaultJobOptions: {
-    attempts: 3,
-    backoff: {
-      type: "exponential",
-      delay: 2000,
-    },
-    removeOnComplete: {
-      age: 3600,
-      count: 1000,
-    },
-    removeOnFail: {
-      age: 86400,
-    },
-  },
-});
-
-/**
  * Integration run queue
  * Handles integration execution (SETUP, SYNC, PROCESS, IDENTIFY events)
  */
