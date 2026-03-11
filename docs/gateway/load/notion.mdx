@@ -1,0 +1,61 @@
+---
+title: "Notion"
+description: "Browse and ingest Notion pages into CORE's memory from the CLI"
+---
+
+## Overview
+
+`corebrain load notion` lets you pick pages from your Notion workspace and ingest them into CORE's memory. Once ingested, the content becomes part of CORE's context and can be referenced in future conversations.
+
+```bash
+corebrain load notion
+```
+
+Requires Notion to be connected in your CORE workspace before running.
+
+---
+
+## How It Works
+
+<Steps>
+  <Step title="Connect Notion">
+    Make sure Notion is connected in your CORE workspace at **Settings → Integrations**.
+  </Step>
+
+  <Step title="Run the command">
+    ```bash
+    corebrain load notion
+    ```
+    The CLI checks your Notion connection and opens an interactive page browser.
+  </Step>
+
+  <Step title="Browse and select pages">
+    - Type in the search box and press `enter` to filter pages
+    - Press `tab` or `↓` to move focus to the list
+    - Navigate with `↑↓`
+    - Press `space` to select / deselect a page
+    - Select as many pages as you want
+  </Step>
+
+  <Step title="Ingest">
+    With pages selected, press `enter` to ingest them. The CLI fetches each page's content and stores it in CORE's memory.
+  </Step>
+</Steps>
+
+---
+
+## After Ingestion
+
+After ingesting, you'll see a summary of how many pages succeeded or failed, and a menu to:
+
+- **Continue loading** — go back and select more pages
+- **Remove all (reset)** — clear the list and start fresh
+- **Exit** — close the tool
+
+---
+
+## Notes
+
+- Only pages you have access to in Notion will appear
+- If a page has no content, the title is stored as a fallback
+- More load sources (e.g. Confluence, Google Docs) will be added over time

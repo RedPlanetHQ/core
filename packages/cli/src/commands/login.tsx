@@ -26,6 +26,8 @@ function openBrowser(url: string): void {
 	});
 }
 
+export const description = 'Authenticate with your CORE account';
+
 export const options = zod.object({});
 
 type Props = {

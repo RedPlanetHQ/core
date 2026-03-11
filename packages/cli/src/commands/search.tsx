@@ -6,6 +6,8 @@ import chalk from 'chalk';
 import zod from 'zod';
 import { getConfig } from '@/config/index';
 
+export const description = 'Search documents in your workspace';
+
 export const options = zod.object({});
 
 type Props = {
