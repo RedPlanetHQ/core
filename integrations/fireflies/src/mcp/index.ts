@@ -13,7 +13,10 @@ const SearchTranscriptsSchema = z.object({
   fromDate: z.string().optional().describe('Filter transcripts from this date (ISO 8601)'),
   toDate: z.string().optional().describe('Filter transcripts up to this date (ISO 8601)'),
   keyword: z.string().optional().describe('Search keyword to filter transcripts'),
-  mine: z.boolean().optional().describe('If true, return only transcripts organized by the authenticated user'),
+  mine: z
+    .boolean()
+    .optional()
+    .describe('If true, return only transcripts organized by the authenticated user'),
   organizers: z.array(z.string()).optional().describe('Filter by organizer email addresses'),
   participants: z.array(z.string()).optional().describe('Filter by participant email addresses'),
 });
@@ -34,7 +37,10 @@ const AskFredSchema = z.object({
   transcript_id: z.string().optional().describe('Ask about a specific transcript by ID'),
   fromDate: z.string().optional().describe('Filter context to meetings from this date (ISO 8601)'),
   toDate: z.string().optional().describe('Filter context to meetings up to this date (ISO 8601)'),
-  format_mode: z.enum(['markdown', 'plaintext']).optional().describe('Response format (default: markdown)'),
+  format_mode: z
+    .enum(['markdown', 'plaintext'])
+    .optional()
+    .describe('Response format (default: markdown)'),
 });
 
 const UploadAudioSchema = z.object({
@@ -53,7 +59,10 @@ const GetUserByIdSchema = z.object({
 });
 
 const GetUserGroupsSchema = z.object({
-  mine: z.boolean().optional().describe('If true, return only groups the authenticated user belongs to'),
+  mine: z
+    .boolean()
+    .optional()
+    .describe('If true, return only groups the authenticated user belongs to'),
 });
 
 const ExecuteGraphQLSchema = z.object({
@@ -83,13 +92,15 @@ export async function getTools() {
     },
     {
       name: 'fireflies_search_transcripts',
-      description: 'Search and list meeting transcripts with optional filters for date, keyword, organizer, or participants.',
+      description:
+        'Search and list meeting transcripts with optional filters for date, keyword, organizer, or participants.',
       inputSchema: zodToJsonSchema(SearchTranscriptsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_get_transcript',
-      description: 'Get full details of a meeting transcript including transcript text, speakers, summary, and action items.',
+      description:
+        'Get full details of a meeting transcript including transcript text, speakers, summary, and action items.',
       inputSchema: zodToJsonSchema(GetTranscriptSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
@@ -101,49 +112,57 @@ export async function getTools() {
     },
     {
       name: 'fireflies_ask_fred',
-      description: 'Ask Fred (Fireflies AI) a natural language question about one or all meetings. Returns an AI-generated answer with optional suggested follow-up queries.',
+      description:
+        'Ask Fred (Fireflies AI) a natural language question about one or all meetings. Returns an AI-generated answer with optional suggested follow-up queries.',
       inputSchema: zodToJsonSchema(AskFredSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'fireflies_upload_audio',
-      description: 'Submit a publicly accessible audio or video URL for transcription by Fireflies.',
+      description:
+        'Submit a publicly accessible audio or video URL for transcription by Fireflies.',
       inputSchema: zodToJsonSchema(UploadAudioSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'fireflies_get_transcript_by_id',
-      description: 'Fetch complete details for a specific transcript by ID, including paid-plan fields such as video URL and full meeting attendee list. Requires a paid Fireflies plan.',
+      description:
+        'Fetch complete details for a specific transcript by ID, including paid-plan fields such as video URL and full meeting attendee list. Requires a paid Fireflies plan.',
       inputSchema: zodToJsonSchema(GetTranscriptByIdSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_get_user_by_id',
-      description: 'Fetch profile details for a specific Fireflies team member by their user ID (uid).',
+      description:
+        'Fetch profile details for a specific Fireflies team member by their user ID (uid).',
       inputSchema: zodToJsonSchema(GetUserByIdSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_get_user_groups',
-      description: 'Fetch all user groups within the team, including group members. Optionally filter to only groups the authenticated user belongs to.',
+      description:
+        'Fetch all user groups within the team, including group members. Optionally filter to only groups the authenticated user belongs to.',
       inputSchema: zodToJsonSchema(GetUserGroupsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_execute_graphql',
-      description: 'Execute a raw read-only Fireflies GraphQL query and return the full response (data + errors). Use as a fallback when higher-level tools fail or to access fields not covered by other tools.',
+      description:
+        'Execute a raw read-only Fireflies GraphQL query and return the full response (data + errors). Use as a fallback when higher-level tools fail or to access fields not covered by other tools.',
       inputSchema: zodToJsonSchema(ExecuteGraphQLSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false },
     },
     {
       name: 'fireflies_fetch_ai_app_outputs',
-      description: 'Fetch AI App outputs for specific apps or transcripts. Returns AI-generated results produced by Fireflies AI Apps for meetings.',
+      description:
+        'Fetch AI App outputs for specific apps or transcripts. Returns AI-generated results produced by Fireflies AI Apps for meetings.',
       inputSchema: zodToJsonSchema(FetchAiAppOutputsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_update_meeting_title',
-      description: 'Update the title of a meeting transcript. Requires admin privileges; the meeting owner must be in your team.',
+      description:
+        'Update the title of a meeting transcript. Requires admin privileges; the meeting owner must be in your team.',
       inputSchema: zodToJsonSchema(UpdateMeetingTitleSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
@@ -155,7 +174,7 @@ export async function getTools() {
 export async function callTool(
   name: string,
   args: Record<string, any>,
-  config: Record<string, any>,
+  config: Record<string, any>
 ) {
   try {
     switch (name) {
@@ -269,7 +288,9 @@ export async function callTool(
           .join('\n\n');
 
         return {
-          content: [{ type: 'text', text: `Found ${transcripts.length} transcript(s):\n\n${list}` }],
+          content: [
+            { type: 'text', text: `Found ${transcripts.length} transcript(s):\n\n${list}` },
+          ],
         };
       }
 
@@ -310,10 +331,12 @@ export async function callTool(
           return { content: [{ type: 'text', text: `Transcript ${id} not found.` }] };
         }
 
-        const participants = t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
-        const transcriptText = t.sentences
-          ?.map((s: any) => `[${formatTime(s.start_time)}] ${s.speaker_name}: ${s.raw_words}`)
-          .join('\n') || 'No transcript text available.';
+        const participants =
+          t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
+        const transcriptText =
+          t.sentences
+            ?.map((s: any) => `[${formatTime(s.start_time)}] ${s.speaker_name}: ${s.raw_words}`)
+            .join('\n') || 'No transcript text available.';
 
         const parts = [
           `ID: ${t.id}`,
@@ -360,7 +383,8 @@ export async function callTool(
 
         const list = meetings
           .map((m: any) => {
-            const participants = m.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
+            const participants =
+              m.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
             return [
               `ID: ${m.id}`,
               `State: ${m.state}`,
@@ -373,13 +397,20 @@ export async function callTool(
           .join('\n\n');
 
         return {
-          content: [{ type: 'text', text: `Found ${meetings.length} active meeting(s):\n\n${list}` }],
+          content: [
+            { type: 'text', text: `Found ${meetings.length} active meeting(s):\n\n${list}` },
+          ],
         };
       }
 
       case 'fireflies_ask_fred': {
-        const { query: userQuery, transcript_id, fromDate, toDate, format_mode } =
-          AskFredSchema.parse(args);
+        const {
+          query: userQuery,
+          transcript_id,
+          fromDate,
+          toDate,
+          format_mode,
+        } = AskFredSchema.parse(args);
 
         const filters: Record<string, any> = {};
         if (fromDate) filters.fromDate = fromDate;
@@ -416,7 +447,9 @@ export async function callTool(
 
         const parts = [`Answer:\n${result.answer}`];
         if (result.suggested_queries?.length) {
-          parts.push(`\nSuggested follow-up questions:\n${result.suggested_queries.map((q: string) => `- ${q}`).join('\n')}`);
+          parts.push(
+            `\nSuggested follow-up questions:\n${result.suggested_queries.map((q: string) => `- ${q}`).join('\n')}`
+          );
         }
 
         return { content: [{ type: 'text', text: parts.join('\n') }] };
@@ -504,11 +537,15 @@ export async function callTool(
           return { content: [{ type: 'text', text: `Transcript ${id} not found.` }] };
         }
 
-        const participants = t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
-        const attendees = t.meeting_attendees?.map((a: any) => a.displayName || a.name || a.email).join(', ') || 'N/A';
-        const transcriptText = t.sentences
-          ?.map((s: any) => `[${formatTime(s.start_time)}] ${s.speaker_name}: ${s.raw_words}`)
-          .join('\n') || 'No transcript text available.';
+        const participants =
+          t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
+        const attendees =
+          t.meeting_attendees?.map((a: any) => a.displayName || a.name || a.email).join(', ') ||
+          'N/A';
+        const transcriptText =
+          t.sentences
+            ?.map((s: any) => `[${formatTime(s.start_time)}] ${s.speaker_name}: ${s.raw_words}`)
+            .join('\n') || 'No transcript text available.';
 
         const parts = [
           `ID: ${t.id}`,
@@ -602,7 +639,9 @@ export async function callTool(
 
         const list = groups
           .map((g: any) => {
-            const members = g.members?.map((m: any) => `${m.name || m.uid} <${m.email}>`).join(', ') || 'No members';
+            const members =
+              g.members?.map((m: any) => `${m.name || m.uid} <${m.email}>`).join(', ') ||
+              'No members';
             return `Group: ${g.name} (ID: ${g.id})\nMembers: ${members}`;
           })
           .join('\n\n');
@@ -618,7 +657,12 @@ export async function callTool(
         const trimmed = query.trim().toLowerCase();
         if (!trimmed.startsWith('query') && !trimmed.startsWith('{')) {
           return {
-            content: [{ type: 'text', text: 'Error: Only read-only queries are allowed. The query must start with "query" or "{".' }],
+            content: [
+              {
+                type: 'text',
+                text: 'Error: Only read-only queries are allowed. The query must start with "query" or "{".',
+              },
+            ],
           };
         }
 
@@ -667,7 +711,9 @@ export async function callTool(
             if (o.outputs?.length) {
               sections.push(
                 '\nOutputs:\n' +
-                  o.outputs.map((item: any) => `  [${item.prompt_title}]\n  ${item.response}`).join('\n\n'),
+                  o.outputs
+                    .map((item: any) => `  [${item.prompt_title}]\n  ${item.response}`)
+                    .join('\n\n')
               );
             }
             return sections.join('\n');
@@ -709,9 +755,7 @@ export async function callTool(
     }
   } catch (error: any) {
     const errorMessage =
-      error.response?.data?.errors?.[0]?.message ||
-      error.response?.data?.message ||
-      error.message;
+      error.response?.data?.errors?.[0]?.message || error.response?.data?.message || error.message;
     return { content: [{ type: 'text', text: `Error: ${errorMessage}` }] };
   }
 }

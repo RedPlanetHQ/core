@@ -13,9 +13,19 @@ export class OAuth2Params {
   token_request_auth_method?: string;
 }
 
-export type AuthType = "OAuth2" | "APIKey";
+export type AuthType = "OAuth2" | "api_key" | "mcp";
 
-export class APIKeyParams {
-  "header_name": string;
-  "format": string;
+export type Param = {
+  name: string;
+  label: string;
+  placeholder: string;
+  description: string;
+};
+
+export declare class APIKeyParams {
+  fields: Array<Param>;
+}
+
+export declare class McpAuthParams {
+  server_url: string;
 }

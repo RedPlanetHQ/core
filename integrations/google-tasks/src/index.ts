@@ -67,9 +67,6 @@ class GoogleTasksCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Google Tasks. Create, update, and manage your tasks and task lists',
       icon: 'google-tasks',
-      mcp: {
-        type: 'cli',
-      },
       schedule: {
         frequency: '*/30 * * * *',
       },

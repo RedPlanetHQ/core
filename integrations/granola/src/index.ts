@@ -2,13 +2,14 @@ import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
+  McpAuthParams,
   Spec,
-} from '@redplanethq/sdk';
+} from "@redplanethq/sdk";
 
-import { integrationCreate } from './account-create';
-import { callTool, getTools } from './mcp';
-import { handleSchedule } from './schedule';
-import { fileURLToPath } from 'url';
+import { integrationCreate } from "./account-create";
+import { callTool, getTools } from "./mcp";
+import { handleSchedule } from "./schedule";
+import { fileURLToPath } from "url";
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -48,38 +49,24 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
 class GranolaCLI extends IntegrationCLI {
   constructor() {
-    super('granola', '1.0.0');
+    super("granola", "1.0.0");
   }
 
-  protected async handleEvent(
-    eventPayload: IntegrationEventPayload,
-  ): Promise<any> {
+  protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
     return await run(eventPayload);
   }
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'Granola',
-      key: 'granola',
+      name: "Granola",
+      key: "granola",
       description:
-        'Sync AI meeting notes and transcripts from Granola into CORE. Access your meetings, summaries, and action items.',
-      icon: 'granola',
-      schedule: {
-        frequency: '*/5 * * * *',
-      },
-      mcp: {
-        type: 'cli',
-      },
+        "Sync AI meeting notes and transcripts from Granola into CORE. Access your meetings, summaries, and action items.",
+      icon: "granola",
       auth: {
-        OAuth2: {
-          token_url: 'https://mcp-auth.granola.ai/oauth2/token',
-          authorization_url: 'https://mcp-auth.granola.ai/oauth2/authorize',
-          scopes: ['email', 'offline_access', 'openid', 'profile'],
-          scope_separator: ' ',
-          authorization_params: {
-            code_challenge_method: 'S256',
-          },
-        },
+        mcp: {
+          server_url: "https://mcp.granola.ai/mcp",
+        } as McpAuthParams,
       },
     };
   }

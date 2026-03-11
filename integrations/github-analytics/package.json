@@ -1,6 +1,6 @@
 {
   "name": "@core/github-analytics",
-  "version": "0.1.4",
+  "version": "0.1.5",
   "description": "GitHub Analytics extension for CORE - DORA metrics and engineering insights",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

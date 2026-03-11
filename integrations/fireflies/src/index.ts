@@ -3,11 +3,11 @@ import {
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-} from "@redplanethq/sdk";
+} from '@redplanethq/sdk';
 
-import { integrationCreate } from "./account-create";
-import { callTool, getTools } from "./mcp";
-import { fileURLToPath } from "url";
+import { integrationCreate } from './account-create';
+import { callTool, getTools } from './mcp';
+import { fileURLToPath } from 'url';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -44,7 +44,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
 class FirefliesCLI extends IntegrationCLI {
   constructor() {
-    super("fireflies", "1.0.0");
+    super('fireflies', '1.0.0');
   }
 
   protected async handleEvent(eventPayload: IntegrationEventPayload): Promise<any> {
@@ -53,22 +53,19 @@ class FirefliesCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: "Fireflies",
-      key: "fireflies",
+      name: 'Fireflies',
+      key: 'fireflies',
       description:
-        "Connect Fireflies.ai to access meeting transcripts, summaries, and action items.",
-      icon: "fireflies",
-      mcp: {
-        type: "cli",
-      },
+        'Connect Fireflies.ai to access meeting transcripts, summaries, and action items.',
+      icon: 'fireflies',
       auth: {
         api_key: {
           fields: [
             {
-              name: "api_key",
-              label: "API Key",
-              placeholder: "your-fireflies-api-key",
-              description: "Found in Fireflies → Settings → Integrations → Fireflies API.",
+              name: 'api_key',
+              label: 'API Key',
+              placeholder: 'your-fireflies-api-key',
+              description: 'Found in Fireflies → Settings → Integrations → Fireflies API.',
             },
           ],
         },

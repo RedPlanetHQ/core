@@ -190,6 +190,110 @@ const RemoveMemberRoleSchema = z.object({
   role_id: z.string().describe('Role ID to remove'),
 });
 
+// Schema definitions for Message editing and pinning
+const EditMessageSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+  message_id: z.string().describe('Message ID to edit'),
+  content: z.string().optional().describe('New message content'),
+  embeds: z
+    .array(
+      z.object({
+        title: z.string().optional(),
+        description: z.string().optional(),
+        url: z.string().optional(),
+        color: z.number().optional(),
+        fields: z
+          .array(z.object({ name: z.string(), value: z.string(), inline: z.boolean().optional() }))
+          .optional(),
+      })
+    )
+    .optional()
+    .describe('New embeds'),
+});
+
+const PinMessageSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+  message_id: z.string().describe('Message ID to pin'),
+});
+
+const UnpinMessageSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+  message_id: z.string().describe('Message ID to unpin'),
+});
+
+const GetPinnedMessagesSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+});
+
+// Schema definitions for Threads
+const CreateThreadSchema = z.object({
+  channel_id: z.string().describe('Channel ID to create thread in'),
+  name: z.string().describe('Thread name'),
+  message_id: z.string().optional().describe('Message ID to start thread from (forum/text threads)'),
+  auto_archive_duration: z
+    .number()
+    .optional()
+    .describe('Auto archive duration in minutes (60, 1440, 4320, 10080)'),
+  type: z.number().optional().describe('Thread type (10=announcement, 11=public, 12=private)'),
+});
+
+// Schema definitions for Reactions
+const RemoveReactionSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+  message_id: z.string().describe('Message ID'),
+  emoji: z.string().describe('Emoji to remove'),
+  user_id: z.string().optional().describe('User ID whose reaction to remove (omit for own reaction)'),
+});
+
+const GetReactionsSchema = z.object({
+  channel_id: z.string().describe('Channel ID'),
+  message_id: z.string().describe('Message ID'),
+  emoji: z.string().describe('Emoji to get reactions for'),
+  limit: z.number().optional().default(25).describe('Number of users to return (max 100)'),
+});
+
+// Schema definitions for Member moderation
+const KickMemberSchema = z.object({
+  guild_id: z.string().describe('Guild (server) ID'),
+  user_id: z.string().describe('User ID to kick'),
+});
+
+const BanMemberSchema = z.object({
+  guild_id: z.string().describe('Guild (server) ID'),
+  user_id: z.string().describe('User ID to ban'),
+  delete_message_seconds: z
+    .number()
+    .optional()
+    .describe('Number of seconds of messages to delete (max 604800)'),
+  reason: z.string().optional().describe('Reason for the ban'),
+});
+
+const UnbanMemberSchema = z.object({
+  guild_id: z.string().describe('Guild (server) ID'),
+  user_id: z.string().describe('User ID to unban'),
+});
+
+// Schema definitions for Invites
+const CreateInviteSchema = z.object({
+  channel_id: z.string().describe('Channel ID to create invite for'),
+  max_age: z
+    .number()
+    .optional()
+    .describe('Duration in seconds before invite expires (0 = never, default 86400)'),
+  max_uses: z.number().optional().describe('Max number of uses (0 = unlimited)'),
+  temporary: z.boolean().optional().describe('Whether invite grants temporary membership'),
+  unique: z.boolean().optional().describe('Whether to guarantee a unique invite'),
+});
+
+const DeleteInviteSchema = z.object({
+  invite_code: z.string().describe('Invite code to delete'),
+});
+
+// Schema definitions for DMs
+const CreateDMSchema = z.object({
+  recipient_id: z.string().describe('User ID to open a DM with'),
+});
+
 // Schema definitions for Users
 const GetCurrentUserSchema = z.object({});
 
@@ -318,6 +422,90 @@ export async function getTools() {
       name: 'remove_member_role',
       description: 'Removes a role from a guild member',
       inputSchema: zodToJsonSchema(RemoveMemberRoleSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    // Message editing and pinning tools
+    {
+      name: 'edit_message',
+      description: 'Edits a previously sent message',
+      inputSchema: zodToJsonSchema(EditMessageSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'pin_message',
+      description: 'Pins a message in a channel',
+      inputSchema: zodToJsonSchema(PinMessageSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'unpin_message',
+      description: 'Unpins a message from a channel',
+      inputSchema: zodToJsonSchema(UnpinMessageSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'get_pinned_messages',
+      description: 'Gets all pinned messages in a channel',
+      inputSchema: zodToJsonSchema(GetPinnedMessagesSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    // Thread tools
+    {
+      name: 'create_thread',
+      description: 'Creates a new thread in a channel',
+      inputSchema: zodToJsonSchema(CreateThreadSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    // Reaction tools
+    {
+      name: 'remove_reaction',
+      description: 'Removes a reaction from a message',
+      inputSchema: zodToJsonSchema(RemoveReactionSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'get_reactions',
+      description: 'Gets a list of users who reacted with a specific emoji',
+      inputSchema: zodToJsonSchema(GetReactionsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    // Moderation tools
+    {
+      name: 'kick_member',
+      description: 'Kicks a member from a guild',
+      inputSchema: zodToJsonSchema(KickMemberSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    {
+      name: 'ban_member',
+      description: 'Bans a member from a guild',
+      inputSchema: zodToJsonSchema(BanMemberSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    {
+      name: 'unban_member',
+      description: 'Unbans a user from a guild',
+      inputSchema: zodToJsonSchema(UnbanMemberSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+    },
+    // Invite tools
+    {
+      name: 'create_invite',
+      description: 'Creates an invite for a channel',
+      inputSchema: zodToJsonSchema(CreateInviteSchema),
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
+    },
+    {
+      name: 'delete_invite',
+      description: 'Deletes an invite by code',
+      inputSchema: zodToJsonSchema(DeleteInviteSchema),
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: true },
+    },
+    // DM tools
+    {
+      name: 'create_dm',
+      description: 'Opens a direct message channel with a user',
+      inputSchema: zodToJsonSchema(CreateDMSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
     // User tools
@@ -702,6 +890,168 @@ export async function callTool(
               text: `Role ${validatedArgs.role_id} removed from user ${validatedArgs.user_id}`,
             },
           ],
+        };
+      }
+
+      // Message editing and pinning
+      case 'edit_message': {
+        const validatedArgs = EditMessageSchema.parse(args);
+        const updateData: any = {};
+        if (validatedArgs.content !== undefined) updateData.content = validatedArgs.content;
+        if (validatedArgs.embeds !== undefined) updateData.embeds = validatedArgs.embeds;
+        const response = await discordClient.patch(
+          `/channels/${validatedArgs.channel_id}/messages/${validatedArgs.message_id}`,
+          updateData
+        );
+        return {
+          content: [{ type: 'text', text: `Message ${response.data.id} edited successfully` }],
+        };
+      }
+
+      case 'pin_message': {
+        const validatedArgs = PinMessageSchema.parse(args);
+        await discordClient.put(
+          `/channels/${validatedArgs.channel_id}/pins/${validatedArgs.message_id}`
+        );
+        return {
+          content: [{ type: 'text', text: `Message ${validatedArgs.message_id} pinned` }],
+        };
+      }
+
+      case 'unpin_message': {
+        const validatedArgs = UnpinMessageSchema.parse(args);
+        await discordClient.delete(
+          `/channels/${validatedArgs.channel_id}/pins/${validatedArgs.message_id}`
+        );
+        return {
+          content: [{ type: 'text', text: `Message ${validatedArgs.message_id} unpinned` }],
+        };
+      }
+
+      case 'get_pinned_messages': {
+        const validatedArgs = GetPinnedMessagesSchema.parse(args);
+        const response = await discordClient.get(
+          `/channels/${validatedArgs.channel_id}/pins`
+        );
+        const messages = response.data
+          .map((msg: any) => `[${msg.timestamp}] ${msg.author.username}: ${msg.content || '[embed/attachment]'}`)
+          .join('\n');
+        return {
+          content: [{ type: 'text', text: `${response.data.length} pinned messages:\n\n${messages}` }],
+        };
+      }
+
+      // Thread operations
+      case 'create_thread': {
+        const validatedArgs = CreateThreadSchema.parse(args);
+        const threadData: any = {
+          name: validatedArgs.name,
+          auto_archive_duration: validatedArgs.auto_archive_duration ?? 1440,
+        };
+        if (validatedArgs.type !== undefined) threadData.type = validatedArgs.type;
+
+        const url = validatedArgs.message_id
+          ? `/channels/${validatedArgs.channel_id}/messages/${validatedArgs.message_id}/threads`
+          : `/channels/${validatedArgs.channel_id}/threads`;
+
+        const response = await discordClient.post(url, threadData);
+        return {
+          content: [{ type: 'text', text: `Thread created:\nID: ${response.data.id}\nName: ${response.data.name}` }],
+        };
+      }
+
+      // Reaction operations
+      case 'remove_reaction': {
+        const validatedArgs = RemoveReactionSchema.parse(args);
+        const target = validatedArgs.user_id ? validatedArgs.user_id : '@me';
+        await discordClient.delete(
+          `/channels/${validatedArgs.channel_id}/messages/${validatedArgs.message_id}/reactions/${encodeURIComponent(validatedArgs.emoji)}/${target}`
+        );
+        return {
+          content: [{ type: 'text', text: `Reaction ${validatedArgs.emoji} removed` }],
+        };
+      }
+
+      case 'get_reactions': {
+        const validatedArgs = GetReactionsSchema.parse(args);
+        const response = await discordClient.get(
+          `/channels/${validatedArgs.channel_id}/messages/${validatedArgs.message_id}/reactions/${encodeURIComponent(validatedArgs.emoji)}`,
+          { params: { limit: validatedArgs.limit } }
+        );
+        const users = response.data.map((u: any) => `${u.username} (${u.id})`).join('\n');
+        return {
+          content: [{ type: 'text', text: `${response.data.length} reactions:\n${users}` }],
+        };
+      }
+
+      // Moderation operations
+      case 'kick_member': {
+        const validatedArgs = KickMemberSchema.parse(args);
+        await discordClient.delete(
+          `/guilds/${validatedArgs.guild_id}/members/${validatedArgs.user_id}`
+        );
+        return {
+          content: [{ type: 'text', text: `User ${validatedArgs.user_id} kicked from guild` }],
+        };
+      }
+
+      case 'ban_member': {
+        const validatedArgs = BanMemberSchema.parse(args);
+        const banData: any = {};
+        if (validatedArgs.delete_message_seconds !== undefined)
+          banData.delete_message_seconds = validatedArgs.delete_message_seconds;
+        await discordClient.put(
+          `/guilds/${validatedArgs.guild_id}/bans/${validatedArgs.user_id}`,
+          banData
+        );
+        return {
+          content: [{ type: 'text', text: `User ${validatedArgs.user_id} banned from guild` }],
+        };
+      }
+
+      case 'unban_member': {
+        const validatedArgs = UnbanMemberSchema.parse(args);
+        await discordClient.delete(
+          `/guilds/${validatedArgs.guild_id}/bans/${validatedArgs.user_id}`
+        );
+        return {
+          content: [{ type: 'text', text: `User ${validatedArgs.user_id} unbanned` }],
+        };
+      }
+
+      // Invite operations
+      case 'create_invite': {
+        const validatedArgs = CreateInviteSchema.parse(args);
+        const response = await discordClient.post(
+          `/channels/${validatedArgs.channel_id}/invites`,
+          {
+            max_age: validatedArgs.max_age ?? 86400,
+            max_uses: validatedArgs.max_uses ?? 0,
+            temporary: validatedArgs.temporary ?? false,
+            unique: validatedArgs.unique ?? false,
+          }
+        );
+        return {
+          content: [{ type: 'text', text: `Invite created: https://discord.gg/${response.data.code}\nExpires: ${response.data.max_age === 0 ? 'never' : `in ${response.data.max_age}s`}\nMax uses: ${response.data.max_uses === 0 ? 'unlimited' : response.data.max_uses}` }],
+        };
+      }
+
+      case 'delete_invite': {
+        const validatedArgs = DeleteInviteSchema.parse(args);
+        await discordClient.delete(`/invites/${validatedArgs.invite_code}`);
+        return {
+          content: [{ type: 'text', text: `Invite ${validatedArgs.invite_code} deleted` }],
+        };
+      }
+
+      // DM operations
+      case 'create_dm': {
+        const validatedArgs = CreateDMSchema.parse(args);
+        const response = await discordClient.post('/users/@me/channels', {
+          recipient_id: validatedArgs.recipient_id,
+        });
+        return {
+          content: [{ type: 'text', text: `DM channel opened:\nID: ${response.data.id}` }],
         };
       }
 

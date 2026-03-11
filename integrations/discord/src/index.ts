@@ -1,11 +1,9 @@
 import { integrationCreate } from './account-create';
-import { handleSchedule } from './schedule';
 import {
   IntegrationCLI,
   IntegrationEventPayload,
   IntegrationEventType,
   Spec,
-  Message,
 } from '@redplanethq/sdk';
 import { getTools, callTool } from './mcp';
 import { fileURLToPath } from 'url';
@@ -14,9 +12,6 @@ export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
-
-    case IntegrationEventType.SYNC:
-      return await handleSchedule(eventPayload.config, eventPayload.state);
 
     case IntegrationEventType.GET_TOOLS: {
       const tools = await getTools();
@@ -71,21 +66,27 @@ class DiscordCLI extends IntegrationCLI {
       mcp: {
         type: 'cli',
       },
-      schedule: {
-        frequency: '*/15 * * * *',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://discord.com/api/oauth2/token',
           authorization_url: 'https://discord.com/api/oauth2/authorize',
-          scopes: ['identify', 'guilds', 'guilds.members.read', 'bot', 'messages.read', 'gdm.join'],
+          scopes: [
+            'identify',
+            'email',
+            'guilds',
+            'guilds.members.read',
+            'guilds.channels.read',
+            'bot',
+            'messages.read',
+            'webhook.incoming',
+          ],
           scope_identifier: 'scope',
           scope_separator: ' ',
           token_params: {
             grant_type: 'authorization_code',
           },
           authorization_params: {
-            permissions: '8', // Administrator permissions for bot
+            permissions: '8',
           },
         },
       },

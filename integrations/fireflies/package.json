@@ -1,15 +1,15 @@
 {
   "name": "@core/fireflies",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Fireflies.ai integration for Core",
-  "main": "./bin/index.cjs",
+  "main": "./dist/index.js",
   "type": "module",
   "files": [
     "fireflies",
     "bin"
   ],
   "bin": {
-    "fireflies": "./bin/index.cjs"
+    "fireflies": "./dist/index.js"
   },
   "scripts": {
     "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
