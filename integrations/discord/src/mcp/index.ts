@@ -54,10 +54,24 @@ async function initializeClient(
   });
 }
 
+const CHANNEL_TYPES: Record<number, string> = {
+  0: 'text',
+  2: 'voice',
+  4: 'category',
+  5: 'announcement',
+  10: 'announcement_thread',
+  11: 'public_thread',
+  12: 'private_thread',
+  13: 'stage',
+  15: 'forum',
+  16: 'media',
+};
+
 // Schema definitions for Messages
 const SendMessageSchema = z.object({
   channel_id: z.string().describe('Channel ID to send the message to'),
   content: z.string().describe('Message content (up to 2000 characters)'),
+  reply_to_message_id: z.string().optional().describe('Message ID to reply to'),
   tts: z.boolean().optional().describe('Text-to-speech enabled'),
   embeds: z
     .array(
@@ -309,7 +323,7 @@ export async function getTools() {
     // Message tools
     {
       name: 'send_message',
-      description: 'Sends a message to a Discord channel',
+      description: 'Sends a message to a Discord channel or DM channel. Use reply_to_message_id to reply to a specific message.',
       inputSchema: zodToJsonSchema(SendMessageSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
@@ -542,20 +556,24 @@ export async function callTool(
       // Message operations
       case 'send_message': {
         const validatedArgs = SendMessageSchema.parse(args);
+        const body: any = {
+          content: validatedArgs.content,
+          tts: validatedArgs.tts,
+          embeds: validatedArgs.embeds,
+        };
+        if (validatedArgs.reply_to_message_id) {
+          body.message_reference = { message_id: validatedArgs.reply_to_message_id };
+        }
         const response = await discordClient.post(
           `/channels/${validatedArgs.channel_id}/messages`,
-          {
-            content: validatedArgs.content,
-            tts: validatedArgs.tts,
-            embeds: validatedArgs.embeds,
-          }
+          body
         );
 
         return {
           content: [
             {
               type: 'text',
-              text: `Message sent successfully:\nMessage ID: ${response.data.id}\nChannel: ${response.data.channel_id}`,
+              text: `Message sent successfully:\nMessage ID: ${response.data.id}\nChannel ID: ${response.data.channel_id}${validatedArgs.reply_to_message_id ? `\nIn reply to: ${validatedArgs.reply_to_message_id}` : ''}`,
             },
           ],
         };
@@ -567,11 +585,33 @@ export async function callTool(
           `/channels/${validatedArgs.channel_id}/messages/${validatedArgs.message_id}`
         );
 
+        const msg = response.data;
+        const parts: string[] = [];
+        if (msg.content) parts.push(msg.content);
+        if (msg.embeds?.length) {
+          for (const embed of msg.embeds) {
+            const embedParts: string[] = [];
+            if (embed.title) embedParts.push(`**${embed.title}**`);
+            if (embed.description) embedParts.push(embed.description);
+            if (embed.fields?.length) {
+              for (const field of embed.fields) {
+                embedParts.push(`${field.name}: ${field.value}`);
+              }
+            }
+            if (embed.url) embedParts.push(`URL: ${embed.url}`);
+            if (embedParts.length) parts.push(`[Embed] ${embedParts.join(' | ')}`);
+          }
+        }
+        if (msg.attachments?.length) {
+          for (const att of msg.attachments) {
+            parts.push(`[Attachment] ${att.filename}: ${att.url}`);
+          }
+        }
         return {
           content: [
             {
               type: 'text',
-              text: `Message details:\nAuthor: ${response.data.author.username}\nContent: ${response.data.content}\nTimestamp: ${response.data.timestamp}`,
+              text: `Message details:\nMessage ID: ${msg.id}\nChannel ID: ${msg.channel_id}\nAuthor: ${msg.author.username} (id: ${msg.author.id})\nTimestamp: ${msg.timestamp}\nContent: ${parts.join('\n') || '[no readable content]'}`,
             },
           ],
         };
@@ -589,10 +629,34 @@ export async function callTool(
         );
 
         const messages = response.data
-          .map(
-            (msg: any) =>
-              `[${msg.timestamp}] ${msg.author.username}: ${msg.content || '[embed/attachment]'}`
-          )
+          .map((msg: any) => {
+            if (msg.thread) {
+              return `[${msg.timestamp}] (msg_id: ${msg.id}) ${msg.author.username} (user_id: ${msg.author.id}): [Thread] "${msg.thread.name}" (thread_id: ${msg.thread.id}, ${msg.thread.message_count} messages)`;
+            }
+            const parts: string[] = [];
+            if (msg.content) parts.push(msg.content);
+            if (msg.embeds?.length) {
+              for (const embed of msg.embeds) {
+                const embedParts: string[] = [];
+                if (embed.title) embedParts.push(`**${embed.title}**`);
+                if (embed.description) embedParts.push(embed.description);
+                if (embed.fields?.length) {
+                  for (const field of embed.fields) {
+                    embedParts.push(`${field.name}: ${field.value}`);
+                  }
+                }
+                if (embed.url) embedParts.push(`URL: ${embed.url}`);
+                if (embedParts.length) parts.push(`[Embed] ${embedParts.join(' | ')}`);
+              }
+            }
+            if (msg.attachments?.length) {
+              for (const att of msg.attachments) {
+                parts.push(`[Attachment] ${att.filename}: ${att.url}`);
+              }
+            }
+            const body = parts.length ? parts.join('\n') : '[no readable content]';
+            return `[${msg.timestamp}] (msg_id: ${msg.id}) ${msg.author.username} (user_id: ${msg.author.id}): ${body}`;
+          })
           .join('\n');
 
         return {
@@ -661,11 +725,12 @@ export async function callTool(
         const validatedArgs = GetChannelSchema.parse(args);
         const response = await discordClient.get(`/channels/${validatedArgs.channel_id}`);
 
+        const ch = response.data;
         return {
           content: [
             {
               type: 'text',
-              text: `Channel details:\nID: ${response.data.id}\nName: ${response.data.name}\nType: ${response.data.type}\nTopic: ${response.data.topic || 'N/A'}`,
+              text: `Channel details:\nID: ${ch.id}\nName: ${ch.name}\nType: ${CHANNEL_TYPES[ch.type] || `unknown(${ch.type})`}\nGuild ID: ${ch.guild_id || 'N/A'}\nTopic: ${ch.topic || 'N/A'}${ch.parent_id ? `\nCategory ID: ${ch.parent_id}` : ''}`,
             },
           ],
         };
@@ -712,7 +777,11 @@ export async function callTool(
         const response = await discordClient.get(`/guilds/${validatedArgs.guild_id}/channels`);
 
         const channels = response.data
-          .map((ch: any) => `ID: ${ch.id}, Name: ${ch.name}, Type: ${ch.type}`)
+          .map((ch: any) => {
+            const type = CHANNEL_TYPES[ch.type] || `unknown(${ch.type})`;
+            const parent = ch.parent_id ? `, category_id: ${ch.parent_id}` : '';
+            return `ID: ${ch.id}, Name: ${ch.name}, Type: ${type}${parent}`;
+          })
           .join('\n');
 
         return {
@@ -793,7 +862,7 @@ export async function callTool(
           content: [
             {
               type: 'text',
-              text: `Member details:\nUsername: ${response.data.user.username}\nNick: ${response.data.nick || 'N/A'}\nRoles: ${response.data.roles.join(', ')}`,
+              text: `Member details:\nUser ID: ${response.data.user.id}\nUsername: ${response.data.user.username}\nNick: ${response.data.nick || 'N/A'}\nRoles: ${response.data.roles.join(', ') || 'none'}`,
             },
           ],
         };
@@ -934,7 +1003,26 @@ export async function callTool(
           `/channels/${validatedArgs.channel_id}/pins`
         );
         const messages = response.data
-          .map((msg: any) => `[${msg.timestamp}] ${msg.author.username}: ${msg.content || '[embed/attachment]'}`)
+          .map((msg: any) => {
+            const parts: string[] = [];
+            if (msg.content) parts.push(msg.content);
+            if (msg.embeds?.length) {
+              for (const embed of msg.embeds) {
+                const embedParts: string[] = [];
+                if (embed.title) embedParts.push(`**${embed.title}**`);
+                if (embed.description) embedParts.push(embed.description);
+                if (embed.fields?.length) {
+                  for (const field of embed.fields) embedParts.push(`${field.name}: ${field.value}`);
+                }
+                if (embed.url) embedParts.push(`URL: ${embed.url}`);
+                if (embedParts.length) parts.push(`[Embed] ${embedParts.join(' | ')}`);
+              }
+            }
+            if (msg.attachments?.length) {
+              for (const att of msg.attachments) parts.push(`[Attachment] ${att.filename}: ${att.url}`);
+            }
+            return `[${msg.timestamp}] (msg_id: ${msg.id}) ${msg.author.username} (user_id: ${msg.author.id}): ${parts.join('\n') || '[no readable content]'}`;
+          })
           .join('\n');
         return {
           content: [{ type: 'text', text: `${response.data.length} pinned messages:\n\n${messages}` }],
@@ -1051,7 +1139,7 @@ export async function callTool(
           recipient_id: validatedArgs.recipient_id,
         });
         return {
-          content: [{ type: 'text', text: `DM channel opened:\nID: ${response.data.id}` }],
+          content: [{ type: 'text', text: `DM channel opened:\nChannel ID: ${response.data.id}\nUse send_message with this channel_id to send a DM.` }],
         };
       }
 

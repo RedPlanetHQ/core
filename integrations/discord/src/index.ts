@@ -35,7 +35,10 @@ export async function run(eventPayload: IntegrationEventPayload) {
         integrationDefinition.config.clientId,
         integrationDefinition.config.clientSecret,
         config?.redirect_uri,
-        config
+        {
+          ...config,
+          bot_token: integrationDefinition.config.botToken,
+        }
       );
 
       return result;
@@ -76,6 +79,8 @@ class DiscordCLI extends IntegrationCLI {
             'bot',
             'messages.read',
             'webhook.incoming',
+            'dm_channels.read',
+            'dm_channels.messages.read',
           ],
           scope_identifier: 'scope',
           scope_separator: ' ',

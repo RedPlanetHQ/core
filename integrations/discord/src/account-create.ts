@@ -60,6 +60,8 @@ export async function integrationCreate(
     avatar: avatar,
     email: email,
     guilds: guilds,
+    guildId: oauthResponse.guild?.id || null,
+    guildName: oauthResponse.guild?.name || null,
     redirect_uri: oauthParams.redirect_uri || null,
   };
 
