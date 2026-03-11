@@ -26,6 +26,7 @@ const followUpQueueDef = queue({
  */
 export const reminderTask = task({
   id: "process-reminder",
+  maxDuration: 600,
   queue: reminderQueue,
   run: async (payload: ReminderJobData) => {
     await initializeProvider();

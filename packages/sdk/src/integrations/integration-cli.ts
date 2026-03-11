@@ -1,10 +1,5 @@
 import { Command } from 'commander';
-import {
-  IntegrationEventPayload,
-  Spec,
-  Message,
-  IntegrationEventType,
-} from '@core/types';
+import { IntegrationEventPayload, Spec, Message, IntegrationEventType } from '@core/types';
 
 export abstract class IntegrationCLI {
   protected program: Command;
@@ -36,20 +31,12 @@ export abstract class IntegrationCLI {
     this.program
       .command('setup')
       .description(`Set up a new ${this.integrationName} integration account`)
-      .requiredOption(
-        '--event-body <body>',
-        'Event body JSON (e.g. OAuth response or setup data)',
-      )
-      .requiredOption(
-        '--integration-definition <definition>',
-        'Integration definition JSON',
-      )
+      .requiredOption('--event-body <body>', 'Event body JSON (e.g. OAuth response or setup data)')
+      .requiredOption('--integration-definition <definition>', 'Integration definition JSON')
       .action(async (options) => {
         try {
           const eventBody = JSON.parse(options.eventBody);
-          const integrationDefinition = JSON.parse(
-            options.integrationDefinition,
-          );
+          const integrationDefinition = JSON.parse(options.integrationDefinition);
 
           const messages: Message[] = await this.handleEvent({
             event: IntegrationEventType.SETUP,
@@ -97,16 +84,11 @@ export abstract class IntegrationCLI {
       .command('identify')
       .description('Identify webhook account')
       .requiredOption('--webhook-data <data>', 'Webhook data JSON')
-      .requiredOption(
-        '--integration-definition <definition>',
-        'Integration definition JSON',
-      )
+      .requiredOption('--integration-definition <definition>', 'Integration definition JSON')
       .action(async (options) => {
         try {
           const webhookData = JSON.parse(options.webhookData);
-          const integrationDefinition = JSON.parse(
-            options.integrationDefinition,
-          );
+          const integrationDefinition = JSON.parse(options.integrationDefinition);
 
           const messages: Message[] = await this.handleEvent({
             event: IntegrationEventType.IDENTIFY,
@@ -177,16 +159,11 @@ export abstract class IntegrationCLI {
       .command('get-tools')
       .description('Get available MCP tools for this integration')
       .requiredOption('--config <config>', 'Integration configuration JSON')
-      .requiredOption(
-        '--integration-definition <definition>',
-        'Integration definition JSON',
-      )
+      .requiredOption('--integration-definition <definition>', 'Integration definition JSON')
       .action(async (options) => {
         try {
           const config = JSON.parse(options.config);
-          const integrationDefinition = JSON.parse(
-            options.integrationDefinition,
-          );
+          const integrationDefinition = JSON.parse(options.integrationDefinition);
           const messages: Message[] = await this.handleEvent({
             event: IntegrationEventType.GET_TOOLS,
             eventBody: {},
@@ -207,18 +184,13 @@ export abstract class IntegrationCLI {
       .command('call-tool')
       .description('Call a specific MCP tool')
       .requiredOption('--config <config>', 'Integration configuration JSON')
-      .requiredOption(
-        '--integration-definition <definition>',
-        'Integration definition JSON',
-      )
+      .requiredOption('--integration-definition <definition>', 'Integration definition JSON')
       .requiredOption('--tool-name <name>', 'Name of the tool to call')
       .requiredOption('--tool-arguments <arguments>', 'Tool arguments as JSON')
       .action(async (options) => {
         try {
           const config = JSON.parse(options.config);
-          const integrationDefinition = JSON.parse(
-            options.integrationDefinition,
-          );
+          const integrationDefinition = JSON.parse(options.integrationDefinition);
           const toolArguments = JSON.parse(options.toolArguments);
 
           const messages: Message[] = await this.handleEvent({
@@ -244,9 +216,7 @@ export abstract class IntegrationCLI {
    * This method should handle the integration-specific logic for each event type
    * and return an array of Message objects.
    */
-  protected abstract handleEvent(
-    eventPayload: IntegrationEventPayload,
-  ): Promise<Message[]>;
+  protected abstract handleEvent(eventPayload: IntegrationEventPayload): Promise<Message[]>;
 
   /**
    * Abstract method that must be implemented by each integration

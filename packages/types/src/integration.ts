@@ -1,4 +1,4 @@
-import { APIKeyParams, OAuth2Params } from "./oauth";
+import { APIKeyParams, AuthType, McpAuthParams, OAuth2Params } from "./oauth";
 
 export enum IntegrationEventType {
   /**
@@ -70,17 +70,11 @@ export class Spec {
   schedule?: {
     frequency?: string;
   };
-  mcp?:
-    | {
-        type: "http";
-        url: string;
-        headers?: Record<string, string>;
-        needsAuth?: boolean;
-      }
-    | {
-        type: "cli";
-      };
-  auth?: Record<string, OAuth2Params | APIKeyParams>;
+  auth?: {
+    OAuth2?: OAuth2Params;
+    api_key?: APIKeyParams;
+    mcp?: McpAuthParams;
+  };
 }
 
 export interface Config {

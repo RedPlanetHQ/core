@@ -1,6 +1,6 @@
 {
   "name": "@core/linear",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "description": "linear extension for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

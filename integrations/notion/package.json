@@ -1,6 +1,6 @@
 {
   "name": "@core/notion",
-  "version": "0.1.7",
+  "version": "0.1.11",
   "description": "Notion integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

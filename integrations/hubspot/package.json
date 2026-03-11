@@ -1,6 +1,6 @@
 {
   "name": "@core/hubspot",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "Hubspot integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

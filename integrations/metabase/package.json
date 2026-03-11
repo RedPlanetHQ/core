@@ -1,6 +1,6 @@
 {
   "name": "@core/metabase",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Metabase integration for CORE - sync dashboards, questions, databases, and analytics activity",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

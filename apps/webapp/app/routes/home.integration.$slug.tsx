@@ -14,6 +14,7 @@ import { MCPAuthSection } from "~/components/integrations/mcp-auth-section";
 import { ConnectedAccountSection } from "~/components/integrations/connected-account-section";
 import { ApiKeyAuthSection } from "~/components/integrations/api-key-auth-section";
 import { OAuthAuthSection } from "~/components/integrations/oauth-auth-section";
+import { McpOAuthAuthSection } from "~/components/integrations/mcp-oauth-auth-section";
 import { Section } from "~/components/integrations/section";
 import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
@@ -73,7 +74,10 @@ export async function action({ request }: ActionFunctionArgs) {
     const value = formData.get("autoActivityRead") === "true";
 
     if (!integrationAccountId) {
-      return json({ error: "integrationAccountId is required" }, { status: 400 });
+      return json(
+        { error: "integrationAccountId is required" },
+        { status: 400 },
+      );
     }
 
     if (value) {
@@ -121,8 +125,9 @@ export function IntegrationDetail({
   );
   const hasApiKey = !!specData?.auth?.api_key;
   const hasOAuth2 = !!specData?.auth?.OAuth2;
+  const hasMcpOAuth = !!specData?.auth?.mcp;
   const hasMCPAuth = !!(
-    specData?.mcp.type === "http" && specData?.mcp.needsAuth
+    specData?.mcp?.type === "http" && specData?.mcp?.needsAuth
   );
   const hasAutoActivity = !!specData?.schedule && !!specData?.enableAutoRead;
   const Component = getIcon(integration.icon as IconType);
@@ -179,7 +184,15 @@ export function IntegrationDetail({
                       </span>
                     </div>
                   )}
-                  {!hasApiKey && !hasOAuth2 && !hasMCPAuth && (
+                  {hasMcpOAuth && (
+                    <div className="flex items-center gap-2">
+                      <span className="inline-flex items-center gap-2">
+                        <Checkbox checked />
+                        MCP OAuth authentication
+                      </span>
+                    </div>
+                  )}
+                  {!hasApiKey && !hasOAuth2 && !hasMcpOAuth && !hasMCPAuth && (
                     <div className="text-muted-foreground">
                       No authentication method specified
                     </div>
@@ -188,7 +201,7 @@ export function IntegrationDetail({
               </div>
 
               {/* Connect Section - Always show to allow adding more accounts */}
-              {(hasApiKey || hasOAuth2) && (
+              {(hasApiKey || hasOAuth2 || hasMcpOAuth) && (
                 <div className="mt-6 space-y-4">
                   <h3 className="text-lg font-medium">
                     {hasActiveAccounts
@@ -209,6 +222,16 @@ export function IntegrationDetail({
                     specData={specData}
                     activeAccount={null}
                   />
+
+                  {/* MCP OAuth Authentication */}
+                  {hasMcpOAuth && (
+                    <McpOAuthAuthSection
+                      integration={integration}
+                      activeAccount={
+                        hasActiveAccounts ? activeAccounts[0] : null
+                      }
+                    />
+                  )}
                 </div>
               )}
 
@@ -234,8 +257,12 @@ export function IntegrationDetail({
 }
 
 export default function IntegrationDetailWrapper() {
-  const { integration, integrationAccounts, activeAccounts, isAutoReadAvailable } =
-    useLoaderData<typeof loader>();
+  const {
+    integration,
+    integrationAccounts,
+    activeAccounts,
+    isAutoReadAvailable,
+  } = useLoaderData<typeof loader>();
 
   return (
     <IntegrationDetail

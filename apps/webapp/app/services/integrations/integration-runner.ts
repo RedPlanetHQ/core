@@ -183,7 +183,20 @@ export class IntegrationRunner {
     const modulePath = this.getModulePath(slug);
 
     if (!fs.existsSync(modulePath)) {
-      throw new Error(`Integration module not found: ${modulePath}`);
+      logger.info(`Integration module not found for ${slug}, attempting on-demand download`);
+      const integrationDefinition = await prisma.integrationDefinitionV2.findFirst({
+        where: { slug, deleted: null },
+      });
+
+      if (!integrationDefinition) {
+        throw new Error(`Integration definition not found for slug: ${slug}`);
+      }
+
+      await this.downloadIntegration(integrationDefinition);
+
+      if (!fs.existsSync(modulePath)) {
+        throw new Error(`Integration module not found after download: ${modulePath}`);
+      }
     }
 
     const version = moduleVersions.get(slug) ?? 0;
