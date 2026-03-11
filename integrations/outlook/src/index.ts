@@ -69,9 +69,6 @@ class OutlookCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Microsoft Outlook. Monitor emails, manage calendar events, and handle contacts via Microsoft Graph API',
       icon: 'outlook',
-      mcp: {
-        type: 'cli',
-      },
       schedule: {
         frequency: '*/15 * * * *',
       },
