@@ -258,7 +258,7 @@ async function configureExec(
 	} else {
 		// Custom mode - select specific commands
 		const selectedAllowed = await p.multiselect({
-			message: 'Select allowed commands (space to toggle)',
+			message: 'Select allowed commands (space to select, enter to confirm)',
 			options: EXEC_COMMAND_OPTIONS,
 			initialValues:
 				existingConfig?.slots?.exec?.allow?.filter(a => a !== 'Bash(*)') || [],
@@ -278,7 +278,7 @@ async function configureExec(
 
 		if (remainingCommands.length > 0) {
 			const deniedCommands = await p.multiselect({
-				message: 'Select denied commands (optional)',
+				message: 'Select denied commands (space to select, enter to confirm)',
 				options: remainingCommands,
 				initialValues:
 					existingConfig?.slots?.exec?.deny?.filter(d => d !== 'Bash(*)') || [],
@@ -534,7 +534,7 @@ async function runInteractiveConfig() {
 
 	// Step 4: Multi-select tools to configure
 	const selectedTools = await p.multiselect({
-		message: 'Which tools do you want to enable?',
+		message: 'Which tools do you want to enable? (space to select, enter to confirm)',
 		options: toolOptions,
 		initialValues: currentlyEnabled,
 		required: false,

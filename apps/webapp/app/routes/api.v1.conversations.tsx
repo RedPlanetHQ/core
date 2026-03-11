@@ -4,38 +4,29 @@ import {
   getConversationsList,
   GetConversationsListSchema,
 } from "~/services/conversation.server";
-import { requireUser } from "~/services/session.server";
+import { createHybridLoaderApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 
-export const loader = async ({ request }: { request: Request }) => {
-  // Authenticate the request (allow JWT)
-  const user = await requireUser(request);
+const loader = createHybridLoaderApiRoute(
+  {
+    searchParams: GetConversationsListSchema,
+    allowJWT: true,
+    findResource: async () => 1,
 
-  // Parse search params using the schema
-  const url = new URL(request.url);
-  const searchParamsObj: Record<string, string> = {};
-  url.searchParams.forEach((value, key) => {
-    searchParamsObj[key] = value;
-  });
-  const parseResult = GetConversationsListSchema.safeParse(searchParamsObj);
-  if (!parseResult.success) {
-    return json(
-      { error: "Invalid search parameters", details: parseResult.error.errors },
-      { status: 400 },
+    corsStrategy: "all",
+  },
+  async ({ authentication, searchParams }) => {
+    if (!authentication.workspaceId) {
+      return json({ error: "No workspace found" }, { status: 404 });
+    }
+
+    const result = await getConversationsList(
+      authentication.workspaceId,
+      authentication.userId,
+      searchParams ?? {},
     );
-  }
-  const searchParams = parseResult.data;
 
+    return json(result);
+  },
+);
 
-
-  if (!user.workspaceId) {
-    return json({ error: "No workspace found" }, { status: 404 });
-  }
-
-  const result = await getConversationsList(
-    user.workspaceId,
-    user.id,
-    searchParams || {},
-  );
-
-  return json(result);
-};
+export { loader };
