@@ -190,6 +190,7 @@ export const StatementAspects = [
   "Preference",   // How they want things - likes, dislikes, style choices
   "Habit",         // What they do regularly - recurring behaviors, habits, routines
   "Goal",         // What they want to achieve - future targets, aims
+  "Task",         // One-time commitments - follow-ups, promises, action items
   "Directive",    // Rules and automation - always do X, notify when Y, remind me to Z
   "Decision",     // Choices made, conclusions reached
   "Event",        // Specific occurrences with timestamps
@@ -198,6 +199,54 @@ export const StatementAspects = [
 ] as const;
 
 export type StatementAspect = (typeof StatementAspects)[number];
+
+/**
+ * Voice Aspects — User's voice: stored as complete non-decomposed statements in Aspects Store.
+ * These represent what the user SPEAKS (rules, preferences, beliefs, goals, habits).
+ */
+export const VOICE_ASPECTS = [
+  "Directive",    // Standing rules: always do X, notify when Y
+  "Preference",   // How they want things: likes, dislikes, style choices
+  "Habit",        // Recurring behaviors: routines, patterns
+  "Belief",       // Values, opinions, reasoning
+  "Goal",         // Future targets, aims, aspirations
+  "Task",         // One-time commitments: follow-ups, promises, action items
+] as const;
+
+export type VoiceAspect = (typeof VOICE_ASPECTS)[number];
+
+/**
+ * Graph Aspects — User's world: stored as atomic SPO triples in Neo4j.
+ * These represent what the user OBSERVES (who they are, what happened, who's connected).
+ */
+export const GRAPH_ASPECTS = [
+  "Identity",     // Who they are: role, location, affiliation
+  "Event",        // Specific occurrences with timestamps
+  "Relationship", // Connections between people
+  "Decision",     // Choices made, conclusions reached
+  "Knowledge",    // Expertise, skills, understanding
+  "Problem",      // Blockers, issues, challenges
+  "Task",         // One-time commitments: follow-ups, promises, action items
+] as const;
+
+export type GraphAspect = (typeof GRAPH_ASPECTS)[number];
+
+/**
+ * Voice Aspect node — stored in Aspects Store (Postgres table + vector namespace).
+ * Complete non-decomposed statements representing the user's voice.
+ */
+export interface VoiceAspectNode {
+  uuid: string;
+  fact: string;                   // Complete statement as user expressed it
+  aspect: VoiceAspect;            // Directive | Preference | Habit | Belief | Goal
+  userId: string;
+  workspaceId?: string;
+  episodeUuids: string[];         // All episodes that mention/reinforce this aspect
+  createdAt: Date;
+  validAt: Date;
+  invalidAt: Date | null;
+  invalidatedBy?: string;         // UUID of episode that invalidated this
+}
 
 /**
  * Interface for statement node in the reified knowledge graph
@@ -278,6 +327,7 @@ export type AddEpisodeResult = {
   episodeUuid: string | null;
   type: EpisodeType;
   statementsCreated: number;
+  voiceAspectsCreated: number;
   processingTimeMs: number;
   tokenUsage?: {
     high: { input: number; output: number; total: number };

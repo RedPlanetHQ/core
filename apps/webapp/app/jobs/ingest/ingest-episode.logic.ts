@@ -76,6 +76,11 @@ export async function processEpisodeIngestion(
     workspaceId: string;
     queueId?: string;
   }) => Promise<any>,
+  enqueueAspectResolution?: (params: {
+    episodeUuid: string;
+    userId: string;
+    workspaceId: string;
+  }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
   try {
     logger.log(`Processing job for user ${payload.userId}`);
@@ -151,9 +156,43 @@ export async function processEpisodeIngestion(
       }
     }
 
+    // Trigger async aspect resolution for voice aspects
+    if (
+      episodeDetails.episodeUuid &&
+      episodeDetails.voiceAspectsCreated > 0 &&
+      enqueueAspectResolution
+    ) {
+      try {
+        logger.info(
+          `Triggering aspect resolution for episode ${episodeDetails.episodeUuid}`,
+          {
+            userId: payload.userId,
+            voiceAspectsCount: episodeDetails.voiceAspectsCreated,
+          },
+        );
+
+        await enqueueAspectResolution({
+          episodeUuid: episodeDetails.episodeUuid,
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+        });
+      } catch (aspectResolutionError) {
+        logger.warn(
+          `Failed to trigger aspect resolution after ingestion:`,
+          {
+            error: aspectResolutionError,
+            userId: payload.userId,
+            episodeUuid: episodeDetails.episodeUuid,
+          },
+        );
+      }
+    }
+
     // Determine status: COMPLETED for success or nothing-to-remember, FAILED otherwise
     const isNothingToRemember =
-      !episodeDetails.episodeUuid && episodeDetails.statementsCreated === 0;
+      !episodeDetails.episodeUuid &&
+      episodeDetails.statementsCreated === 0 &&
+      (episodeDetails.voiceAspectsCreated ?? 0) === 0;
     const currentStatus: IngestionStatus =
       episodeDetails.episodeUuid || isNothingToRemember
         ? IngestionStatus.COMPLETED

@@ -17,6 +17,7 @@ import type { SessionCompactionPayload } from "~/jobs/session/session-compaction
 import type { LabelAssignmentPayload } from "~/jobs/labels/label-assignment.logic";
 import type { TitleGenerationPayload } from "~/jobs/titles/title-generation.logic";
 import type { GraphResolutionPayload } from "~/jobs/ingest/graph-resolution.logic";
+import type { AspectResolutionPayload } from "~/jobs/ingest/aspect-resolution.logic";
 import type { IntegrationRunPayload } from "~/jobs/integrations/integration-run.logic";
 import type {
   ReminderJobData,
@@ -256,6 +257,39 @@ export async function enqueueGraphResolution(
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
     });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue aspect resolution job (voice aspect deduplication)
+ */
+export async function enqueueAspectResolution(
+  payload: AspectResolutionPayload,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    const { aspectResolutionTask } =
+      await import("~/trigger/ingest/aspect-resolution");
+    const handler = await aspectResolutionTask.trigger(payload, {
+      concurrencyKey: payload.userId,
+      queue: "aspect-resolution-queue",
+      tags: [payload.userId],
+    });
+    return { id: handler.id };
+  } else {
+    // BullMQ
+    const { aspectResolutionQueue } = await import("~/bullmq/queues");
+    const job = await aspectResolutionQueue.add(
+      "aspect-resolution",
+      payload,
+      {
+        jobId: `aspect-resolution-${payload.episodeUuid}`,
+        attempts: 3,
+        backoff: { type: "exponential", delay: 2000 },
+      },
+    );
     return { id: job.id };
   }
 }

@@ -21,8 +21,11 @@ import {
   type StatementAspect,
   type StatementNode,
   type EpisodicNode,
+  type VoiceAspect,
+  VOICE_ASPECTS,
 } from "@core/types";
 import { ProviderFactory } from "@core/providers";
+import { getActiveVoiceAspects } from "~/services/aspectStore.server";
 import { type ModelMessage } from "ai";
 
 // Minimum statements required to generate a section
@@ -167,7 +170,9 @@ interface ChunkData {
 }
 
 /**
- * Fetch statements grouped by aspect with their provenance episodes
+ * Fetch statements grouped by aspect with their provenance episodes.
+ * Also fetches voice aspects from the Aspects Store and merges them
+ * as synthetic statements for persona-relevant voice aspects (Preference, Directive).
  */
 export async function getStatementsByAspectWithEpisodes(
   userId: string,
@@ -200,7 +205,12 @@ export async function getStatementsByAspectWithEpisodes(
     ORDER BY aspect
   `;
 
-  const results = await graphProvider.runQuery(query, { userId });
+  // Fetch graph statements and voice aspects in parallel
+  const voiceAspectSet = new Set<string>(VOICE_ASPECTS);
+  const [results, voiceAspectNodes] = await Promise.all([
+    graphProvider.runQuery(query, { userId }),
+    getActiveVoiceAspects({ userId, limit: 200 }),
+  ]);
 
   const aspectDataMap = new Map<StatementAspect, AspectData>();
 
@@ -240,6 +250,45 @@ export async function getStatementsByAspectWithEpisodes(
     }));
 
     aspectDataMap.set(aspect, { aspect, statements, episodes });
+  }
+
+  // Merge voice aspects as synthetic statements into their matching aspect groups
+  if (voiceAspectNodes.length > 0) {
+    for (const va of voiceAspectNodes) {
+      if (!voiceAspectSet.has(va.aspect)) continue;
+
+      const aspect = va.aspect as StatementAspect;
+      const syntheticStatement: StatementNode = {
+        uuid: va.uuid,
+        fact: va.fact,
+        factEmbedding: [],
+        createdAt: va.createdAt,
+        validAt: va.validAt,
+        invalidAt: null,
+        attributes: {},
+        userId,
+        aspect,
+      };
+
+      const existing = aspectDataMap.get(aspect);
+      if (existing) {
+        // Avoid duplicates — only add if fact doesn't already exist
+        const factExists = existing.statements.some(
+          (s) => s.fact === va.fact,
+        );
+        if (!factExists) {
+          existing.statements.push(syntheticStatement);
+        }
+      } else {
+        aspectDataMap.set(aspect, {
+          aspect,
+          statements: [syntheticStatement],
+          episodes: [],
+        });
+      }
+    }
+
+    logger.info(`Merged ${voiceAspectNodes.length} voice aspects into aspect data`);
   }
 
   return aspectDataMap;
@@ -944,7 +993,8 @@ async function pollBatchCompletion(batchId: string, maxPollingTime: number) {
 
 /**
  * Fetch statements for a specific episode, grouped by aspect
- * Used for incremental persona generation — only gets statements from one episode
+ * Used for incremental persona generation — only gets statements from one episode.
+ * Also fetches voice aspects linked to this episode from the Aspects Store.
  */
 export async function getStatementsForEpisodeByAspect(
   userId: string,
@@ -969,11 +1019,20 @@ export async function getStatementsForEpisodeByAspect(
     ORDER BY aspect
   `;
 
-  const results = await graphProvider.runQuery(query, {
-    userId,
-    episodeUuid,
-    personaAspects: ["Identity", "Preference", "Directive"],
-  });
+  const voiceAspectSet = new Set<string>(VOICE_ASPECTS);
+
+  // Fetch graph statements and episode's voice aspects in parallel
+  const [results, episodeVoiceAspects] = await Promise.all([
+    graphProvider.runQuery(query, {
+      userId,
+      episodeUuid,
+      personaAspects: ["Identity", "Preference", "Directive"],
+    }),
+    // getVoiceAspectsForEpisode returns voice aspects linked to this episode
+    import("~/services/aspectStore.server").then((m) =>
+      m.getVoiceAspectsForEpisode(episodeUuid, userId),
+    ),
+  ]);
 
   const aspectDataMap = new Map<StatementAspect, AspectData>();
 
@@ -998,6 +1057,41 @@ export async function getStatementsForEpisodeByAspect(
 
     // Episodes not needed for incremental — we already have the existing persona doc
     aspectDataMap.set(aspect, { aspect, statements, episodes: [] });
+  }
+
+  // Merge voice aspects from this episode into persona-relevant aspects
+  for (const va of episodeVoiceAspects) {
+    if (!voiceAspectSet.has(va.aspect)) continue;
+
+    // Only merge Preference and Directive (persona-relevant voice aspects)
+    const aspect = va.aspect as StatementAspect;
+    if (aspect !== "Preference" && aspect !== "Directive") continue;
+
+    const syntheticStatement: StatementNode = {
+      uuid: va.uuid,
+      fact: va.fact,
+      factEmbedding: [],
+      createdAt: va.createdAt,
+      validAt: va.validAt,
+      invalidAt: null,
+      attributes: {},
+      userId,
+      aspect,
+    };
+
+    const existing = aspectDataMap.get(aspect);
+    if (existing) {
+      const factExists = existing.statements.some((s) => s.fact === va.fact);
+      if (!factExists) {
+        existing.statements.push(syntheticStatement);
+      }
+    } else {
+      aspectDataMap.set(aspect, {
+        aspect,
+        statements: [syntheticStatement],
+        episodes: [],
+      });
+    }
   }
 
   return aspectDataMap;

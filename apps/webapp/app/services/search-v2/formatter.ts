@@ -70,6 +70,16 @@ export function formatRecallAsMarkdown(result: RecallResult): string {
     sections.push(""); // Empty line
   }
 
+  // Add voice aspects section (user's voice: directives, preferences, habits, beliefs, goals)
+  if (result.voiceAspects && result.voiceAspects.length > 0) {
+    sections.push("## Voice Aspects\n");
+
+    result.voiceAspects.forEach((va) => {
+      sections.push(`- [${va.aspect}] ${va.fact}`);
+    });
+    sections.push(""); // Empty line
+  }
+
   // Add statements section (for entity_lookup, relationship queries)
   if (result.statements && result.statements.length > 0) {
     sections.push("## Statements\n");
@@ -168,6 +178,7 @@ export function formatRecallAsMarkdown(result: RecallResult): string {
   if (
     result.episodes.length === 0 &&
     (!result.statements || result.statements.length === 0) &&
+    (!result.voiceAspects || result.voiceAspects.length === 0) &&
     (!result.invalidatedFacts || result.invalidatedFacts.length === 0) &&
     !result.entity
   ) {
@@ -230,6 +241,12 @@ export function formatForV1Compatibility(result: RecallResult): {
     attributes: Record<string, string>;
     aspect: string | null;
   }>;
+  voiceAspects?: Array<{
+    uuid: string;
+    fact: string;
+    aspect: string;
+    score?: number;
+  }>;
   entity?: {
     name: string;
     attributes: Record<string, any>;
@@ -274,10 +291,19 @@ export function formatForV1Compatibility(result: RecallResult): {
       }
     : null;
 
+  // Map voice aspects if present
+  const voiceAspects = result.voiceAspects?.map((va) => ({
+    uuid: va.uuid,
+    fact: va.fact,
+    aspect: va.aspect,
+    score: va.score,
+  }));
+
   return {
     episodes,
     invalidatedFacts,
     statements,
+    voiceAspects,
     entity,
     facets: result.facets,
     warning: result.warning,

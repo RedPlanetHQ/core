@@ -35,6 +35,7 @@ import {
   enqueueSessionCompaction,
   enqueuePersonaGeneration,
   enqueueGraphResolution,
+  enqueueAspectResolution,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import {
@@ -45,6 +46,10 @@ import {
   type GraphResolutionPayload,
   processGraphResolution,
 } from "~/jobs/ingest/graph-resolution.logic";
+import {
+  type AspectResolutionPayload,
+  processAspectResolution,
+} from "~/jobs/ingest/aspect-resolution.logic";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   type IntegrationRunPayload,
@@ -124,6 +129,7 @@ export const ingestWorker = new Worker(
       enqueueTitleGeneration,
       enqueuePersonaGeneration,
       enqueueGraphResolution,
+      enqueueAspectResolution,
     );
   },
   {
@@ -223,6 +229,22 @@ export const graphResolutionWorker = new Worker(
   {
     connection: getRedisConnection(),
     concurrency: 1, // Process up to 3 resolutions in parallel
+  },
+);
+
+/**
+ * Aspect resolution worker
+ * Handles async voice aspect deduplication after episode ingestion
+ */
+export const aspectResolutionWorker = new Worker(
+  "aspect-resolution-queue",
+  async (job) => {
+    const payload = job.data as AspectResolutionPayload;
+    return await processAspectResolution(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 1,
   },
 );
 
@@ -335,6 +357,7 @@ export async function closeAllWorkers(): Promise<void> {
     titleGenerationWorker.close(),
     personaGenerationWorker.close(),
     graphResolutionWorker.close(),
+    aspectResolutionWorker.close(),
     integrationRunWorker.close(),
     reminderWorker.close(),
     followUpWorker.close(),

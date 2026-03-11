@@ -8,6 +8,7 @@ import type {
   RecallResult,
   RecallEpisode,
   RecallInvalidatedFact,
+  RecallVoiceAspect,
   RecallFacets,
   RecallTopicFacet,
 } from "./types";
@@ -17,7 +18,10 @@ import {
   type EpisodicNode,
   type StatementAspect,
   type StatementNode,
+  type VoiceAspect,
+  VOICE_ASPECTS,
 } from "@core/types";
+import { searchVoiceAspects } from "~/services/aspectStore.server";
 
 /** Episode with optional relevance score from reranking */
 type RankedEpisode = EpisodicNode & { relevanceScore?: number };
@@ -976,6 +980,53 @@ export async function handleTemporalFacets(
 }
 
 /**
+ * Search voice aspects from the Aspects Store when query involves voice aspect types
+ * Voice aspects: Directive, Preference, Habit, Belief, Goal
+ */
+async function searchVoiceAspectsForQuery(
+  ctx: HandlerContext,
+): Promise<RecallVoiceAspect[]> {
+  const query = ctx.options.query;
+  if (!query) return [];
+
+  // Check if any requested aspects overlap with voice aspects
+  const voiceAspectSet = new Set(VOICE_ASPECTS as readonly string[]);
+  const requestedVoiceAspects = ctx.routerOutput.aspects.filter((a) =>
+    voiceAspectSet.has(a),
+  );
+
+  if (requestedVoiceAspects.length === 0) return [];
+
+  const queryEmbedding = await getEmbedding(query);
+  if (!queryEmbedding || queryEmbedding.length === 0) return [];
+
+  // Search for each requested voice aspect type
+  const results = await searchVoiceAspects({
+    queryVector: queryEmbedding,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    limit: 10,
+    threshold: 0.5,
+  });
+
+  // Filter to only requested voice aspects
+  const filtered = results.filter((r) =>
+    requestedVoiceAspects.includes(r.aspect as StatementAspect),
+  );
+
+  logger.info(
+    `[VoiceAspects] Found ${filtered.length} voice aspects for aspects: [${requestedVoiceAspects.join(", ")}]`,
+  );
+
+  return filtered.map((r) => ({
+    uuid: r.uuid,
+    fact: r.fact,
+    aspect: r.aspect,
+    score: r.score,
+  }));
+}
+
+/**
  * Route to appropriate handler based on query type
  * Applies reranking and normalization for episode-returning handlers
  */
@@ -1020,9 +1071,17 @@ export async function routeToHandler(
     }
 
     case "aspect_query": {
-      const episodes = await handleAspectQuery(ctx);
+      // Run graph episode search and voice aspects search in parallel
+      const [episodes, voiceAspects] = await Promise.all([
+        handleAspectQuery(ctx),
+        searchVoiceAspectsForQuery(ctx),
+      ]);
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
-      return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const result = await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      if (voiceAspects.length > 0) {
+        result.voiceAspects = voiceAspects;
+      }
+      return result;
     }
 
     case "temporal": {
@@ -1074,12 +1133,20 @@ export async function routeToHandler(
       );
     }
 
-    default:
+    default: {
       logger.debug(
         `[Handler] Unknown query type: ${queryType}, using aspect_query`,
       );
-      const episodes = await handleAspectQuery(ctx);
+      const [episodes, voiceAspects] = await Promise.all([
+        handleAspectQuery(ctx),
+        searchVoiceAspectsForQuery(ctx),
+      ]);
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
-      return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const result = await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      if (voiceAspects.length > 0) {
+        result.voiceAspects = voiceAspects;
+      }
+      return result;
+    }
   }
 }

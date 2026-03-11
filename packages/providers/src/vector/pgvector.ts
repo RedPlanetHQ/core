@@ -97,6 +97,10 @@ export class PgVectorProvider implements IVectorProvider {
       table: "label_embeddings",
       name: "label_embeddings_vector_idx",
     },
+    {
+      table: "voice_aspect_embeddings",
+      name: "voice_aspect_embeddings_vector_idx",
+    },
   ] as const;
 
   constructor(config: PgVectorConfig) {
@@ -197,6 +201,8 @@ export class PgVectorProvider implements IVectorProvider {
         return "summary";
       case "label":
         return "name";
+      case "voice_aspect":
+        return "fact";
       default:
         throw new Error(`Invalid namespace: ${namespace}`);
     }
@@ -271,6 +277,19 @@ export class PgVectorProvider implements IVectorProvider {
             "chunkIndex" = EXCLUDED."chunkIndex",
             "updatedAt" = NOW()
       `;
+    } else if (params.namespace === "voice_aspect") {
+      // Voice aspect embeddings also store the aspect type column
+      const aspect = params.metadata?.aspect || null;
+      await this.prisma.$executeRaw`
+        INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "aspect", "createdAt", "updatedAt")
+        VALUES (${params.id}, ${userId}, ${workspaceId}, ${vectorString}::vector, ${metadataString}::jsonb, ${params.content}, ${aspect}, NOW(), NOW())
+        ON CONFLICT (id) DO UPDATE
+        SET vector = EXCLUDED.vector,
+            ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+            "aspect" = EXCLUDED."aspect",
+            metadata = EXCLUDED.metadata,
+            "updatedAt" = NOW()
+      `;
     } else {
       // For other namespaces (statement, entity, compacted_session)
       await this.prisma.$executeRaw`
@@ -308,24 +327,48 @@ export class PgVectorProvider implements IVectorProvider {
           const vectorString = `[${item.vector.join(",")}]`;
           const metadataString = JSON.stringify(item.metadata);
 
-          await tx.$executeRaw`
-          INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
-          VALUES (
-            ${item.id},
-            ${userId},
-            ${workspaceId},
-            ${vectorString}::vector,
-            ${metadataString}::jsonb,
-            ${item.content},
-            NOW(),
-            NOW()
-          )
-          ON CONFLICT (id) DO UPDATE
-          SET vector = EXCLUDED.vector,
-              ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
-              metadata = EXCLUDED.metadata,
-              "updatedAt" = NOW()
-        `;
+          if (namespace === "voice_aspect") {
+            const aspect = item.metadata?.aspect || null;
+            await tx.$executeRaw`
+            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "aspect", "createdAt", "updatedAt")
+            VALUES (
+              ${item.id},
+              ${userId},
+              ${workspaceId},
+              ${vectorString}::vector,
+              ${metadataString}::jsonb,
+              ${item.content},
+              ${aspect},
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET vector = EXCLUDED.vector,
+                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+                "aspect" = EXCLUDED."aspect",
+                metadata = EXCLUDED.metadata,
+                "updatedAt" = NOW()
+          `;
+          } else {
+            await tx.$executeRaw`
+            INSERT INTO ${Prisma.raw(tableName)} (id, "userId", "workspaceId", vector, metadata, ${Prisma.raw(`"${contentName}"`)}, "createdAt", "updatedAt")
+            VALUES (
+              ${item.id},
+              ${userId},
+              ${workspaceId},
+              ${vectorString}::vector,
+              ${metadataString}::jsonb,
+              ${item.content},
+              NOW(),
+              NOW()
+            )
+            ON CONFLICT (id) DO UPDATE
+            SET vector = EXCLUDED.vector,
+                ${Prisma.raw(`"${contentName}"`)} = EXCLUDED.${Prisma.raw(`"${contentName}"`)},
+                metadata = EXCLUDED.metadata,
+                "updatedAt" = NOW()
+          `;
+          }
         }
       },
       {

@@ -13,6 +13,8 @@ import {
   batchDeleteEpisodeEmbeddings,
   batchDeleteStatementEmbeddings,
 } from "../vectorStorage.server";
+import { prisma } from "~/db.server";
+import { deleteVoiceAspectEmbeddings } from "../aspectStore.server";
 
 // Get the graph provider instance
 const graphProvider = () => ProviderFactory.getGraphProvider();
@@ -115,6 +117,34 @@ export async function deleteEpisodeWithRelatedNodes(params: {
   }
   if (result.deletedEntityUuids.length > 0) {
     await batchDeleteEntityEmbeddings(result.deletedEntityUuids);
+  }
+
+  // Clean up voice aspects referencing this episode
+  const voiceAspects = await prisma.voiceAspect.findMany({
+    where: {
+      episodeUuids: { has: params.episodeUuid },
+      userId: params.userId,
+    },
+  });
+
+  if (voiceAspects.length > 0) {
+    const toDelete: string[] = [];
+    for (const va of voiceAspects) {
+      const remaining = va.episodeUuids.filter((id) => id !== params.episodeUuid);
+      if (remaining.length === 0) {
+        toDelete.push(va.id);
+      } else {
+        await prisma.voiceAspect.update({
+          where: { id: va.id },
+          data: { episodeUuids: remaining },
+        });
+      }
+    }
+
+    if (toDelete.length > 0) {
+      await prisma.voiceAspect.deleteMany({ where: { id: { in: toDelete } } });
+      await deleteVoiceAspectEmbeddings(toDelete);
+    }
   }
 
   return {

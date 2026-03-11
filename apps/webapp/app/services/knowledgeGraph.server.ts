@@ -4,6 +4,8 @@ import {
   type EpisodicNode,
   type StatementNode,
   type Triple,
+  type VoiceAspect,
+  type VoiceAspectNode,
   EpisodeTypeEnum,
   EpisodeType,
   type AddEpisodeResult,
@@ -12,9 +14,21 @@ import {
 import { logger } from "./logger.service";
 import crypto from "crypto";
 import {
-  extractCombined,
-  CombinedExtractionSchema,
-} from "./prompts/combined-extraction";
+  extractWorldPrompt,
+  ExtractWorldSchema,
+} from "./prompts/extract-world";
+import {
+  extractVoicePrompt,
+  ExtractVoiceSchema,
+} from "./prompts/extract-voice";
+import {
+  classifyVoicePrompt,
+  ClassifyVoiceSchema,
+} from "./prompts/classify-voice";
+import {
+  classifyWorldPrompt,
+  ClassifyWorldSchema,
+} from "./prompts/classify-world";
 import {
   getEpisode,
   saveEpisode,
@@ -37,6 +51,7 @@ import {
   batchStoreStatementEmbeddings,
   getRecentEpisodes,
 } from "./vectorStorage.server";
+import { saveVoiceAspects } from "./aspectStore.server";
 import { type ModelMessage } from "ai";
 
 // Default number of previous episodes to retrieve for context
@@ -221,6 +236,7 @@ export class KnowledgeGraphService {
           type: params.type || EpisodeType.CONVERSATION,
           episodeUuid: null,
           statementsCreated: 0,
+          voiceAspectsCreated: 0,
           processingTimeMs: 0,
         };
       }
@@ -252,9 +268,9 @@ export class KnowledgeGraphService {
         `Updated episode with normalized content and stored embedding in ${episodeUpdatedTime - normalizedTime} ms`,
       );
 
-      // Step 3 & 4: Combined Entity and Statement Extraction (single LLM call)
-      const extractedStatements =
-        await this.extractCombinedEntitiesAndStatements(
+      // Step 3: Comprehend + Evaluate — extract voice facts and graph facts
+      const { voiceAspects, graphTriples } =
+        await this.comprehendAndClassify(
           episode,
           previousEpisodes,
           tokenMetrics,
@@ -262,28 +278,42 @@ export class KnowledgeGraphService {
         );
       const extractedStatementsTime = Date.now();
       logger.log(
-        `Combined extraction completed in ${extractedStatementsTime - episodeUpdatedTime} ms`,
+        `Comprehend + classify completed in ${extractedStatementsTime - episodeUpdatedTime} ms`,
       );
-      // Save triples without resolution
-      for (const triple of extractedStatements) {
+
+      // Step 4a: Save graph triples to Neo4j
+      for (const triple of graphTriples) {
         await saveTriple(triple);
       }
 
-      // Generate and store embeddings in batch (more efficient than per-triple)
-      if (extractedStatements.length > 0) {
-        // Collect unique entities and facts
+      // Step 4b: Save voice aspects to Aspects Store
+      let savedVoiceAspects: VoiceAspectNode[] = [];
+      if (voiceAspects.length > 0) {
+        savedVoiceAspects = await saveVoiceAspects(
+          voiceAspects.map((va) => ({
+            fact: va.fact,
+            aspect: va.aspect,
+            episodeUuid: episode.uuid,
+            userId: params.userId,
+            workspaceId: params.workspaceId as string,
+          })),
+        );
+        logger.log(
+          `Saved ${savedVoiceAspects.length} voice aspects to aspects store`,
+        );
+      }
 
+      // Step 5: Generate and store embeddings for graph triples
+      if (graphTriples.length > 0) {
         const uniqueEntities = new Map<string, EntityNode>();
         const facts: Array<{ uuid: string; text: string }> = [];
 
-        for (const triple of extractedStatements) {
-          // Collect statement facts
+        for (const triple of graphTriples) {
           facts.push({
             uuid: triple.statement.uuid,
             text: triple.statement.fact,
           });
 
-          // Collect unique entities (subject, predicate, object)
           if (!uniqueEntities.has(triple.subject.uuid)) {
             uniqueEntities.set(triple.subject.uuid, triple.subject);
           }
@@ -296,7 +326,6 @@ export class KnowledgeGraphService {
         }
 
         const embeddingTime = Date.now();
-        // Batch generate embeddings
         const entities = Array.from(uniqueEntities.values());
         const [factEmbeddings, entityEmbeddings] = await Promise.all([
           Promise.all(facts.map((f) => this.getEmbedding(f.text))),
@@ -307,7 +336,6 @@ export class KnowledgeGraphService {
           `Generated embeddings in ${embeddingEndTime - embeddingTime} ms`,
         );
 
-        // Batch store statement embeddings (single database call)
         await batchStoreStatementEmbeddings(
           facts.map((fact, index) => ({
             uuid: fact.uuid,
@@ -317,12 +345,7 @@ export class KnowledgeGraphService {
           })),
           params.workspaceId as string,
         );
-        const embeddingStoreEndTime = Date.now();
-        logger.log(
-          `Stored embeddings in ${embeddingStoreEndTime - embeddingEndTime} ms`,
-        );
 
-        // Batch store entity embeddings (single database call)
         await batchStoreEntityEmbeddings(
           entities.map((entity, index) => ({
             uuid: entity.uuid,
@@ -332,15 +355,14 @@ export class KnowledgeGraphService {
           })),
           params.workspaceId as string,
         );
-        const embeddingEntityStoreEndTime = Date.now();
         logger.log(
-          `Stored entity embeddings in ${embeddingEntityStoreEndTime - embeddingEndTime} ms`,
+          `Stored embeddings in ${Date.now() - embeddingEndTime} ms`,
         );
       }
 
       const saveTriplesTime = Date.now();
       logger.log(
-        `Saved ${extractedStatements.length} triples and stored embeddings in ${saveTriplesTime - extractedStatementsTime} ms`,
+        `Saved ${graphTriples.length} triples + ${savedVoiceAspects.length} voice aspects in ${saveTriplesTime - extractedStatementsTime} ms`,
       );
 
       const endTime = Date.now();
@@ -352,7 +374,8 @@ export class KnowledgeGraphService {
       return {
         type: params.type || EpisodeType.CONVERSATION,
         episodeUuid: episode.uuid,
-        statementsCreated: extractedStatements.length,
+        statementsCreated: graphTriples.length,
+        voiceAspectsCreated: savedVoiceAspects.length,
         processingTimeMs,
         tokenUsage: tokenMetrics,
         totalChunks: params.totalChunks,
@@ -365,10 +388,15 @@ export class KnowledgeGraphService {
   }
 
   /**
-   * Combined extraction: Extract entities and statements in a single LLM call
-   * This ensures only entities that form meaningful user-specific statements are extracted
+   * Comprehend + Classify: 3-step extraction pipeline
+   *
+   * Step 1: Comprehend+Evaluate — extract voice facts and graph facts from episode
+   * Step 2a: Classify Voice — classify voice facts into Directive/Preference/Habit/Belief/Goal
+   * Step 2b: Classify World — classify graph facts into Identity/Event/Relationship/Decision/Knowledge
+   *
+   * Returns voice aspects (for aspects store) and graph triples (for Neo4j).
    */
-  private async extractCombinedEntitiesAndStatements(
+  private async comprehendAndClassify(
     episode: EpisodicNode,
     previousEpisodes: EpisodeEmbedding[],
     tokenMetrics: {
@@ -376,53 +404,128 @@ export class KnowledgeGraphService {
       low: { input: number; output: number; total: number; cached: number };
     },
     userName?: string,
-  ): Promise<Triple[]> {
+  ): Promise<{
+    voiceAspects: Array<{ fact: string; aspect: VoiceAspect }>;
+    graphTriples: Triple[];
+  }> {
     const context = {
       episodeContent: episode.content,
-      previousEpisodes: previousEpisodes.map((ep) => ({
-        content: ep.content,
-        createdAt: ep.createdAt.toISOString(),
-      })),
-      referenceTime: episode.validAt.toISOString(),
       userName,
     };
 
-    const messages = extractCombined(context);
+    // Step 1: Extract world + voice in parallel (both use high model)
+    const [worldExtract, voiceExtract] = await Promise.all([
+      // Extract world facts (graph)
+      (async () => {
+        const worldMessages = extractWorldPrompt(context);
+        const { object: worldResult, usage: worldUsage } =
+          await makeStructuredModelCall(
+            ExtractWorldSchema,
+            worldMessages as ModelMessage[],
+            "high",
+            "extract-world",
+          );
+        if (worldUsage) {
+          tokenMetrics.high.input += worldUsage.promptTokens as number;
+          tokenMetrics.high.output += worldUsage.completionTokens as number;
+          tokenMetrics.high.total += worldUsage.totalTokens as number;
+          tokenMetrics.high.cached +=
+            (worldUsage.cachedInputTokens as number) || 0;
+        }
+        return worldResult;
+      })(),
 
-    // Combined extraction uses HIGH complexity
-    const { object: response, usage } = await makeStructuredModelCall(
-      CombinedExtractionSchema,
-      messages as ModelMessage[],
-      "high",
-      "combined-extraction",
+      // Extract voice facts
+      (async () => {
+        const voiceMessages = extractVoicePrompt(context);
+        const { object: voiceResult, usage: voiceUsage } =
+          await makeStructuredModelCall(
+            ExtractVoiceSchema,
+            voiceMessages as ModelMessage[],
+            "high",
+            "extract-voice",
+          );
+        if (voiceUsage) {
+          tokenMetrics.high.input += voiceUsage.promptTokens as number;
+          tokenMetrics.high.output += voiceUsage.completionTokens as number;
+          tokenMetrics.high.total += voiceUsage.totalTokens as number;
+          tokenMetrics.high.cached +=
+            (voiceUsage.cachedInputTokens as number) || 0;
+        }
+        return voiceResult;
+      })(),
+    ]);
+
+    logger.log(
+      `Extract: ${voiceExtract.voice_facts.length} voice facts, ${worldExtract.graph_facts.length} graph facts, ${worldExtract.entities.length} entities`,
     );
 
-    // Track token usage
-    if (usage) {
-      tokenMetrics.high.input += usage.promptTokens as number;
-      tokenMetrics.high.output += usage.completionTokens as number;
-      tokenMetrics.high.total += usage.totalTokens as number;
-      tokenMetrics.high.cached += (usage.cachedInputTokens as number) || 0;
-    }
+    // Step 2: Classify in parallel (both use low model)
+    const [classifiedVoice, classifiedWorld] = await Promise.all([
+      // Classify voice facts (if any)
+      voiceExtract.voice_facts.length > 0
+        ? (async () => {
+            const voiceMessages = classifyVoicePrompt(
+              voiceExtract.voice_facts,
+            );
+            const { object: voiceResult, usage: voiceUsage } =
+              await makeStructuredModelCall(
+                ClassifyVoiceSchema,
+                voiceMessages as ModelMessage[],
+                "high",
+                "classify-voice",
+              );
+            if (voiceUsage) {
+              tokenMetrics.low.input += voiceUsage.promptTokens as number;
+              tokenMetrics.low.output += voiceUsage.completionTokens as number;
+              tokenMetrics.low.total += voiceUsage.totalTokens as number;
+              tokenMetrics.low.cached +=
+                (voiceUsage.cachedInputTokens as number) || 0;
+            }
+            return voiceResult.aspects;
+          })()
+        : Promise.resolve([]),
 
-    const { entities: extractedEntities, statements: extractedStatements } =
-      response;
+      // Classify graph facts (if any)
+      worldExtract.graph_facts.length > 0
+        ? (async () => {
+            const worldMessages = classifyWorldPrompt(
+              worldExtract.graph_facts,
+              userName,
+            );
+            const { object: worldResult, usage: worldUsage } =
+              await makeStructuredModelCall(
+                ClassifyWorldSchema,
+                worldMessages as ModelMessage[],
+                "high",
+                "classify-world",
+              );
+            if (worldUsage) {
+              tokenMetrics.low.input += worldUsage.promptTokens as number;
+              tokenMetrics.low.output += worldUsage.completionTokens as number;
+              tokenMetrics.low.total += worldUsage.totalTokens as number;
+              tokenMetrics.low.cached +=
+                (worldUsage.cachedInputTokens as number) || 0;
+            }
+            return worldResult.facts;
+          })()
+        : Promise.resolve([]),
+    ]);
 
-    console.log(
-      "Combined extraction - Statements:",
-      extractedStatements.length,
+    logger.log(
+      `Classified: ${classifiedVoice.length} voice aspects, ${classifiedWorld.length} graph facts`,
     );
 
-    // Convert extracted entities to EntityNode objects
+    // Build entity map from extract-world result
     const entityMap = new Map<string, EntityNode>();
-    for (const entity of extractedEntities) {
+    for (const entity of worldExtract.entities) {
       const entityNode: EntityNode = {
         uuid: crypto.randomUUID(),
         name: entity.name,
         type: (EntityTypes as readonly string[]).includes(entity.type as string)
           ? (entity.type as EntityNode["type"])
           : undefined,
-        attributes: entity.attributes || {}, // Use extracted attributes or empty object
+        attributes: entity.attributes || {},
         nameEmbedding: [],
         createdAt: new Date(),
         userId: episode.userId,
@@ -431,9 +534,9 @@ export class KnowledgeGraphService {
       entityMap.set(entity.name.toLowerCase(), entityNode);
     }
 
-    // Create predicate map for deduplication
+    // Build predicate map
     const predicateMap = new Map<string, EntityNode>();
-    for (const stmt of extractedStatements) {
+    for (const stmt of classifiedWorld) {
       const predicateName = stmt.predicate.toLowerCase();
       if (!predicateMap.has(predicateName)) {
         predicateMap.set(predicateName, {
@@ -449,12 +552,9 @@ export class KnowledgeGraphService {
       }
     }
 
-    // Convert statements to Triple objects
-    const triples = extractedStatements.map((stmt) => {
-      // Find subject - must be in extracted entities
+    // Convert classified world facts to Triple objects
+    const graphTriples = classifiedWorld.map((stmt) => {
       let subjectNode = entityMap.get(stmt.source.toLowerCase());
-
-      // If subject not found, create it without a default type
       if (!subjectNode) {
         subjectNode = {
           uuid: crypto.randomUUID(),
@@ -469,10 +569,7 @@ export class KnowledgeGraphService {
         entityMap.set(stmt.source.toLowerCase(), subjectNode);
       }
 
-      // Find object - can be entity or literal value
       let objectNode = entityMap.get(stmt.target.toLowerCase());
-
-      // If object not found, create it without a default type
       if (!objectNode) {
         objectNode = {
           uuid: crypto.randomUUID(),
@@ -489,12 +586,6 @@ export class KnowledgeGraphService {
 
       const predicateNode = predicateMap.get(stmt.predicate.toLowerCase())!;
 
-      // IMPORTANT: validAt vs event_date distinction
-      // - validAt: When the FACT became true (when it entered the knowledge base)
-      // - event_date: When the EVENT actually occurs/occurred (past, present, or future)
-      const validAtDate = episode.validAt; // Always use episode timestamp
-
-      // Build attributes object
       const attributes: Record<string, any> = {};
       if (stmt.event_date) attributes.event_date = stmt.event_date;
 
@@ -503,7 +594,7 @@ export class KnowledgeGraphService {
         fact: stmt.fact,
         factEmbedding: [],
         createdAt: new Date(),
-        validAt: validAtDate,
+        validAt: episode.validAt,
         invalidAt: null,
         attributes,
         aspect: stmt.aspect || null,
@@ -518,9 +609,15 @@ export class KnowledgeGraphService {
         object: objectNode,
         provenance: episode,
       };
-    });
+    }) as Triple[];
 
-    return triples as Triple[];
+    // Voice aspects — ready for aspects store
+    const voiceAspects = classifiedVoice.map((va) => ({
+      fact: va.fact,
+      aspect: va.aspect as VoiceAspect,
+    }));
+
+    return { voiceAspects, graphTriples };
   }
 
   /**

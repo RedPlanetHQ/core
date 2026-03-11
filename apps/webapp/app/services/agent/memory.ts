@@ -20,6 +20,7 @@ function hasSearchResults(result: any): boolean {
       result.episodes.length > 0 ||
       (result.entity !== null && result.entity !== undefined) ||
       (result.statements && result.statements.length > 0) ||
+      (result.voiceAspects && result.voiceAspects.length > 0) ||
       (result.facets !== null && result.facets !== undefined)
     );
   }
@@ -329,6 +330,7 @@ export async function searchMemoryWithAgent(
     let entity: any = null;
     let facts: any[] = [];
     let facets: any = null;
+    let voiceAspects: any[] = [];
     let usedVersion: "v1" | "v2" = "v2";
 
     if (hasSearchResults(v2Result)) {
@@ -340,6 +342,7 @@ export async function searchMemoryWithAgent(
       entity = v2Structured.entity || null;
       facts = v2Structured.facts || [];
       facets = v2Structured.facets || null;
+      voiceAspects = v2Structured.voiceAspects || [];
     } else if (!isV3User && v1Promise) {
       // V2 empty and V1 fallback enabled - wait for V1 (already running in parallel)
       logger.info(`[MemoryAgent] V2 empty, using V1 fallback`);
@@ -362,8 +365,8 @@ export async function searchMemoryWithAgent(
     // If structured option is true, return raw JSON data for API use
     if (options.structured) {
       // For facets queries, flatten aspects into facts and promote topics/entities to top level
-      const facetFacts = facets?.aspects?.flatMap((a) =>
-        a.statements.map((s) => ({
+      const facetFacts = facets?.aspects?.flatMap((a: any) =>
+        a.statements.map((s: any) => ({
           fact: s.fact,
           validAt: s.validAt,
           attributes: {},
@@ -377,6 +380,7 @@ export async function searchMemoryWithAgent(
         facts: facets ? facetFacts : facts,
         invalidatedFacts: invalidFacts,
         entity,
+        voiceAspects,
         topics: facets?.topics ?? [],
         entities: facets?.entities ?? [],
         version: usedVersion,
@@ -407,6 +411,17 @@ export async function searchMemoryWithAgent(
         }
       }
       entityText += "\n\n";
+    }
+
+    // Format voice aspects
+    let voiceAspectsText = "";
+    if (voiceAspects.length > 0) {
+      voiceAspectsText =
+        "## Voice Aspects\n" +
+        voiceAspects
+          .map((va: any) => `- [${va.aspect}] ${va.fact}`)
+          .join("\n") +
+        "\n\n";
     }
 
     // Format facts
@@ -442,10 +457,10 @@ export async function searchMemoryWithAgent(
       .join("\n\n");
 
     const finalText =
-      `${entityText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
+      `${entityText}${voiceAspectsText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
 
     const hasContent =
-      episodeText || entityText || invalidFactsText || factsText;
+      episodeText || entityText || invalidFactsText || factsText || voiceAspectsText;
 
     return {
       content: [
