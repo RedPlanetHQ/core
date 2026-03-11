@@ -85,6 +85,7 @@ export function startTuiApp(
 	let isProcessing = false;
 	let allToolItems: ToolCallItem[] = [];
 	let conversationComponents: Component[] = [];
+	let requestId = 0;
 
 	const conversation = createConversation(baseUrl, apiKey);
 
@@ -116,6 +117,8 @@ export function startTuiApp(
 	}
 
 	function clearConversation(): void {
+		requestId++; // invalidate any in-flight callbacks
+
 		try {
 			messagesContainer.removeChild(loader);
 			loader.stop();
@@ -232,7 +235,9 @@ export function startTuiApp(
 
 						if (msg.role === 'user') {
 							addToMessages(
-								new Text(chalk.dim('\u2502 ') + chalk.white(text), 0, 0),
+								new Text(chalk.dim('\u2502 ') + chalk.white(text), 0, 0, text =>
+									chalk.bgHex('#3a3a3a').white(text),
+								),
 							);
 						} else {
 							addToMessages(new Markdown(text, 1, 0, markdownTheme));
@@ -298,6 +303,7 @@ export function startTuiApp(
 	function runMessage(message: string): void {
 		isProcessing = true;
 		editor.disableSubmit = true;
+		const myRequestId = ++requestId;
 
 		// User bubble
 		addToMessages(new Text(chalk.dim('\u2502 ') + chalk.white(message), 0, 0));
@@ -316,6 +322,7 @@ export function startTuiApp(
 		conversation
 			.send(message, {
 				onTextDelta(delta) {
+					if (requestId !== myRequestId) return;
 					accumulated += delta;
 					hadOutput = true;
 
@@ -329,6 +336,7 @@ export function startTuiApp(
 				},
 
 				onToolStart(_id, _name, item) {
+					if (requestId !== myRequestId) return;
 					hadOutput = true;
 					allToolItems.push(item);
 					insertBeforeLoader(item);
@@ -336,14 +344,17 @@ export function startTuiApp(
 				},
 
 				onRerender() {
+					if (requestId !== myRequestId) return;
 					tui.requestRender();
 				},
 
 				onStepFinish() {
+					if (requestId !== myRequestId) return;
 					tui.requestRender();
 				},
 
 				onFinish() {
+					if (requestId !== myRequestId) return;
 					// Remove loader from tracked list
 					const idx = conversationComponents.lastIndexOf(loader);
 					if (idx !== -1) conversationComponents.splice(idx, 1);
@@ -367,6 +378,7 @@ export function startTuiApp(
 				},
 
 				onError(err) {
+					if (requestId !== myRequestId) return;
 					const idx = conversationComponents.lastIndexOf(loader);
 					if (idx !== -1) conversationComponents.splice(idx, 1);
 

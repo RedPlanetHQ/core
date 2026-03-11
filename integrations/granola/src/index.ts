@@ -21,7 +21,8 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
     case IntegrationEventType.GET_TOOLS: {
       try {
-        const tools = await getTools();
+        const config = eventPayload.config as Record<string, string>;
+        const tools = await getTools(config);
         return tools;
       } catch (e: any) {
         return { message: `Error ${e.message}` };

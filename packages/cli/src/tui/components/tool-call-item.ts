@@ -49,7 +49,7 @@ export class ToolCallItem implements Component {
 	private result: string = '';
 	private children: ToolCallItem[] = [];
 	private childrenByCallId = new Map<string, ToolCallItem>();
-	public isExpanded = false;
+	public isExpanded = true;
 	public isDone = false;
 
 	constructor(toolName: string) {
@@ -108,6 +108,7 @@ export class ToolCallItem implements Component {
 
 	setDone(result?: unknown): void {
 		this.isDone = true;
+		this.isExpanded = false;
 		this.argSummary = argSummaryFromInput(undefined, this.args);
 
 		// For leaf tools (no children), store raw result
@@ -137,9 +138,11 @@ export class ToolCallItem implements Component {
 		lines.push(truncateToWidth(header, width));
 
 		const hasChildren = this.children.length > 0;
+		const isRoot = depth === 0;
 
-		// ── Still running: show children inline in real-time ──────────────────
+		// ── Still running: show children inline if not collapsed ──────────────
 		if (!this.isDone && hasChildren) {
+			if (!this.isExpanded) return lines;
 			for (const child of this.children) {
 				for (const line of child._render(width, depth + 1)) {
 					lines.push(line);
@@ -184,12 +187,14 @@ export class ToolCallItem implements Component {
 				}
 			}
 
-			lines.push(
-				truncateToWidth(
-					chalk.dim(indent + '  \u2514\u2500 ctrl+o to collapse'),
-					width,
-				),
-			);
+			if (isRoot) {
+				lines.push(
+					truncateToWidth(
+						chalk.dim(indent + '  \u2514\u2500 ctrl+o to collapse'),
+						width,
+					),
+				);
+			}
 			return lines;
 		}
 
@@ -204,18 +209,20 @@ export class ToolCallItem implements Component {
 				);
 			}
 
-			const extra = resultLines.length - PREVIEW_LINES;
-			lines.push(
-				truncateToWidth(
-					chalk.dim(
-						extra > 0
-							? `${indent}  \u2514\u2500 +${extra} lines (ctrl+o to expand)`
-							: `${indent}  \u2514\u2500 ctrl+o to expand`,
+			if (isRoot) {
+				const extra = resultLines.length - PREVIEW_LINES;
+				lines.push(
+					truncateToWidth(
+						chalk.dim(
+							extra > 0
+								? `${indent}  \u2514\u2500 +${extra} lines (ctrl+o to expand)`
+								: `${indent}  \u2514\u2500 ctrl+o to expand`,
+						),
+						width,
 					),
-					width,
-				),
-			);
-		} else {
+				);
+			}
+		} else if (isRoot) {
 			lines.push(
 				truncateToWidth(
 					chalk.dim(indent + '  \u2514\u2500 ctrl+o to expand'),
