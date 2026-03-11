@@ -21,14 +21,17 @@ interface ConnectedAccount {
 interface ConnectedAccountSectionProps {
   activeAccounts: ConnectedAccount[];
   isAutoReadAvailable?: boolean;
+  supportsAutoActivity?: boolean;
 }
 
 function AccountRow({
   account,
   isAutoReadAvailable = true,
+  supportsAutoActivity = true,
 }: {
   account: ConnectedAccount;
   isAutoReadAvailable?: boolean;
+  supportsAutoActivity?: boolean;
 }) {
   const disconnectFetcher = useFetcher();
   const autoActivityFetcher = useFetcher();
@@ -66,41 +69,43 @@ function AccountRow({
           Connected on {new Date(account.createdAt).toLocaleDateString()}
         </p>
 
-        <div className="mb-3 flex items-center justify-between">
-          <div>
-            <Label className="text-sm font-medium">Activity Auto-Read</Label>
-            <p className="text-muted-foreground text-xs">
-              Automatically send new activities from this account to your agent
-            </p>
-            {!isAutoReadAvailable && (
-              <p className="text-xs text-amber-500">
-                Upgrade to Pro or Max to enable this feature
+        {supportsAutoActivity && (
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <Label className="text-sm font-medium">Activity Auto-Read</Label>
+              <p className="text-muted-foreground text-xs">
+                Automatically send new activities from this account to your agent
               </p>
-            )}
+              {!isAutoReadAvailable && (
+                <p className="text-xs text-amber-500">
+                  Upgrade to Pro or Max to enable this feature
+                </p>
+              )}
+            </div>
+            <Select
+              value={optimisticAutoActivity ? "enabled" : "disabled"}
+              onValueChange={(value) => {
+                autoActivityFetcher.submit(
+                  {
+                    intent: "updateAutoActivityRead",
+                    integrationAccountId: account.id,
+                    autoActivityRead: String(value === "enabled"),
+                  },
+                  { method: "POST" },
+                );
+              }}
+              disabled={!isAutoReadAvailable}
+            >
+              <SelectTrigger className="w-32">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="enabled">Enabled</SelectItem>
+                <SelectItem value="disabled">Disabled</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
-          <Select
-            value={optimisticAutoActivity ? "enabled" : "disabled"}
-            onValueChange={(value) => {
-              autoActivityFetcher.submit(
-                {
-                  intent: "updateAutoActivityRead",
-                  integrationAccountId: account.id,
-                  autoActivityRead: String(value === "enabled"),
-                },
-                { method: "POST" },
-              );
-            }}
-            disabled={!isAutoReadAvailable}
-          >
-            <SelectTrigger className="w-32">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="enabled">Enabled</SelectItem>
-              <SelectItem value="disabled">Disabled</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+        )}
 
         <div className="flex w-full justify-end">
           <Button
@@ -123,6 +128,7 @@ function AccountRow({
 export function ConnectedAccountSection({
   activeAccounts,
   isAutoReadAvailable = true,
+  supportsAutoActivity = true,
 }: ConnectedAccountSectionProps) {
   if (!activeAccounts || activeAccounts.length === 0) return null;
 
@@ -137,6 +143,7 @@ export function ConnectedAccountSection({
             key={account.id}
             account={account}
             isAutoReadAvailable={isAutoReadAvailable}
+            supportsAutoActivity={supportsAutoActivity}
           />
         ))}
       </div>

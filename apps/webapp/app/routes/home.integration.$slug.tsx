@@ -5,7 +5,7 @@ import {
   type ActionFunctionArgs,
 } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
-import { requireUserId, requireWorkpace } from "~/services/session.server";
+import { requireUser, requireWorkpace } from "~/services/session.server";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getIcon, type IconType } from "~/components/icon-utils";
@@ -22,20 +22,19 @@ import { Plus } from "lucide-react";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
-  const userId = await requireUserId(request);
+  const user = await requireUser(request);
   const workspace = await requireWorkpace(request);
   const { slug } = params;
 
   const [integrationDefinitions, integrationAccounts, subscription] =
     await Promise.all([
       getIntegrationDefinitions(workspace?.id),
-      getIntegrationAccounts(userId, workspace?.id as string),
+      getIntegrationAccounts(user.id, workspace?.id as string),
       prisma.subscription.findUnique({
         where: { workspaceId: workspace?.id },
       }),
     ]);
 
-  // Combine fixed integrations with dynamic ones
   const allIntegrations = integrationDefinitions;
 
   const integration = allIntegrations.find(
@@ -50,15 +49,17 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     (acc) => acc.integrationDefinitionId === integration.id && acc.isActive,
   );
 
-  // Auto-read is available if billing is disabled OR user has a paid plan
+  // Auto-read is available if billing is disabled OR user has a paid plan OR user is an admin
   const isAutoReadAvailable =
-    !isBillingEnabled() || isPaidPlan(subscription?.planType || "FREE");
+    !isBillingEnabled() ||
+    isPaidPlan(subscription?.planType || "FREE") ||
+    user.admin;
 
   return json({
     integration,
     integrationAccounts,
     activeAccounts,
-    userId,
+    userId: user.id,
     isAutoReadAvailable,
   });
 }
@@ -123,6 +124,7 @@ export function IntegrationDetail({
   const hasMCPAuth = !!(
     specData?.mcp.type === "http" && specData?.mcp.needsAuth
   );
+  const hasAutoActivity = !!specData?.schedule && !!specData?.enableAutoRead;
   const Component = getIcon(integration.icon as IconType);
 
   return (
@@ -214,6 +216,7 @@ export function IntegrationDetail({
               <ConnectedAccountSection
                 activeAccounts={activeAccounts as any}
                 isAutoReadAvailable={isAutoReadAvailable}
+                supportsAutoActivity={hasAutoActivity}
               />
 
               {/* MCP Authentication Section */}
