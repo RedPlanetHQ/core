@@ -213,6 +213,7 @@ export class KnowledgeGraphService {
       // console.log("previousEpisodes: ", previousEpisodes);
       // console.log("previousVersionContent: ", previousVersionContent);
 
+      console.log(sessionContext, "sessionContext");
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
         params.source,
@@ -269,13 +270,12 @@ export class KnowledgeGraphService {
       );
 
       // Step 3: Comprehend + Evaluate — extract voice facts and graph facts
-      const { voiceAspects, graphTriples } =
-        await this.comprehendAndClassify(
-          episode,
-          previousEpisodes,
-          tokenMetrics,
-          params.userName,
-        );
+      const { voiceAspects, graphTriples } = await this.comprehendAndClassify(
+        episode,
+        previousEpisodes,
+        tokenMetrics,
+        params.userName,
+      );
       const extractedStatementsTime = Date.now();
       logger.log(
         `Comprehend + classify completed in ${extractedStatementsTime - episodeUpdatedTime} ms`,
@@ -355,9 +355,7 @@ export class KnowledgeGraphService {
           })),
           params.workspaceId as string,
         );
-        logger.log(
-          `Stored embeddings in ${Date.now() - embeddingEndTime} ms`,
-        );
+        logger.log(`Stored embeddings in ${Date.now() - embeddingEndTime} ms`);
       }
 
       const saveTriplesTime = Date.now();
@@ -465,9 +463,7 @@ export class KnowledgeGraphService {
       // Classify voice facts (if any)
       voiceExtract.voice_facts.length > 0
         ? (async () => {
-            const voiceMessages = classifyVoicePrompt(
-              voiceExtract.voice_facts,
-            );
+            const voiceMessages = classifyVoicePrompt(voiceExtract.voice_facts);
             const { object: voiceResult, usage: voiceUsage } =
               await makeStructuredModelCall(
                 ClassifyVoiceSchema,

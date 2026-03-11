@@ -783,7 +783,7 @@ export class PgVectorProvider implements IVectorProvider {
         ...(excludeIds && excludeIds.length > 0 && { id: { notIn: excludeIds } }),
         ...(version && { version }),
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: { createdAt: "asc" },
       take: limit,
     });
   }
