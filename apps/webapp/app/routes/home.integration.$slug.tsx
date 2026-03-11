@@ -66,6 +66,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 }
 
 export async function action({ request }: ActionFunctionArgs) {
+  const user = await requireUser(request);
+
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
 
@@ -81,7 +83,7 @@ export async function action({ request }: ActionFunctionArgs) {
     }
 
     if (value) {
-      await scheduler({ integrationAccountId });
+      await scheduler({ integrationAccountId, admin: user.admin });
     } else {
       await unschedule({ integrationAccountId });
     }

@@ -17,7 +17,7 @@ import {
 } from "~/components/ui/resizable";
 import { ScrollManagedList } from "~/components/virtualized-list";
 import { ExternalLink, Clock, X } from "lucide-react";
-import { Button } from "~/components/ui/button";
+import { Button, buttonVariants } from "~/components/ui/button";
 import {
   Select,
   SelectContent,
@@ -126,7 +126,11 @@ function ActivityDetail({
             href={activity.sourceURL}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1 hover:underline"
+            className={cn(
+              "flex w-fit items-center gap-1 hover:underline",
+              buttonVariants({ variant: "secondary" }),
+              "w-fit",
+            )}
           >
             <ExternalLink size={12} />
             Source
