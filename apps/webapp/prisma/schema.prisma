@@ -739,6 +739,53 @@ model StatementEmbedding {
   @@map("statement_embeddings")
 }
 
+model VoiceAspect {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  fact         String              
+  aspect       String              
+  episodeUuids String[]            
+
+  validAt       DateTime @default(now())
+  invalidAt     DateTime?
+  invalidatedBy String?            
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
+  @@index([userId, aspect])
+  @@index([userId, workspaceId, aspect])
+  @@index([invalidAt])
+  @@map("voice_aspects")
+}
+
+model VoiceAspectEmbedding {
+  id        String   @id
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  fact     String
+  aspect   String              
+  vector   Unsupported("vector")
+  metadata Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workspaceId])
+  @@index([userId, workspaceId, aspect])
+  @@map("voice_aspect_embeddings")
+}
+
 model Subscription {
   id        String   @id @default(uuid())
   createdAt DateTime @default(now())
@@ -831,6 +878,8 @@ model User {
   EntityEmbedding           EntityEmbedding[]
   CompactedSessionEmbedding CompactedSessionEmbedding[]
   Gateway                   Gateway[]
+  VoiceAspect               VoiceAspect[]
+  VoiceAspectEmbedding      VoiceAspectEmbedding[]
 }
 
 model UserUsage {
@@ -964,6 +1013,8 @@ model Workspace {
   gateways                Gateway[]
   reminders               Reminder[]
   backgroundTasks         BackgroundTask[]
+  voiceAspects            VoiceAspect[]
+  voiceAspectEmbeddings   VoiceAspectEmbedding[]
 }
 
 model BackgroundTask {

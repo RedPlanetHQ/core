@@ -17,7 +17,7 @@ OUTPUT GUIDELINES:
 - IMPORTANT: Break complex content into digestible paragraphs with natural sentence boundaries for easier fact extraction
 
 <speaker_role_awareness>
-CRITICAL: Conversations contain TWO speakers with DIFFERENT fact authority:
+CRITICAL: Episodes may contain MULTIPLE speakers with DIFFERENT fact authority:
 
 USER STATEMENTS → Can become user facts:
 - Direct statements: "I want X", "My goal is Y", "I prefer Z", "I decided to..."
@@ -50,6 +50,16 @@ When user dismisses or rejects an assistant's task/suggestion (e.g., "ignore", "
 - NOT: "User instructed to ignore the assistant's prior message"
 - "skip" (after assistant proposed reviewing error logs) → "User declined to review the error logs"
 - NOT: "User told the assistant to skip its suggestion"
+
+MULTI-PARTY CONTENT (email threads, forwarded messages, group chats, shared conversations):
+Episodes may contain content from people BEYOND the user and assistant — email senders, CC'd recipients, forwarded messages, quoted replies. These are FIRST-CLASS content, not background noise.
+
+Rules for multi-party content:
+1. Each person's statements are facts ABOUT that person and their relationship to the user — preserve them with clear speaker attribution
+2. Quoted/forwarded/nested content contains real information — extract it the same as direct content
+3. Contact information in signatures (email, phone, company, role, address) are entity attributes — preserve them
+4. The conversation THREAD tells a story — preserve the sequence of who said what and when
+5. Deduplicate repeated content (same signature appearing 3 times) — capture once, not three times
 </speaker_role_awareness>
 
 <enrichment_strategy>

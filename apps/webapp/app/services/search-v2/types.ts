@@ -1,4 +1,4 @@
-import { type StatementAspect, StatementAspects } from "@core/types";
+import { type StatementAspect, type VoiceAspect, StatementAspects, VOICE_ASPECTS } from "@core/types";
 import { z } from "zod";
 
 /**
@@ -248,6 +248,17 @@ export interface RecallFacets {
 }
 
 /**
+ * Voice aspect in recall results
+ * Complete non-decomposed statements from the Aspects Store
+ */
+export interface RecallVoiceAspect {
+  uuid: string;
+  fact: string;
+  aspect: VoiceAspect;
+  score?: number;
+}
+
+/**
  * Main recall result interface (structured output)
  * Matches current search output format for consistency
  */
@@ -260,6 +271,9 @@ export interface RecallResult {
 
   // Statements (for entity_lookup, relationship queries)
   statements?: RecallStatement[];
+
+  // Voice aspects from Aspects Store (for aspect_query, temporal_facets)
+  voiceAspects?: RecallVoiceAspect[];
 
   // Entity (for entity_lookup queries)
   entity?: RecallEntity | null;

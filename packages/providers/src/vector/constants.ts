@@ -35,6 +35,13 @@ export const VECTOR_NAMESPACES = {
    * Used to match semantically similar labels during extraction
    */
   LABEL: 'label',
+
+  /**
+   * Voice aspect fact embeddings (for aspect deduplication and similarity search)
+   * ID format: voice aspect UUID
+   * Used in aspect-resolution to detect duplicate/evolved voice aspects
+   */
+  ASPECT: 'voice_aspect',
 } as const;
 
 export type VectorNamespace = typeof VECTOR_NAMESPACES[keyof typeof VECTOR_NAMESPACES];
