@@ -8,7 +8,6 @@ import { labelAssignmentTask } from "../labels/label-assignment";
 import { titleGenerationTask } from "../titles/title-generation";
 import { personaGenerationTask } from "../spaces/persona-generation";
 import { graphResolutionTask } from "./graph-resolution";
-import { aspectResolutionTask } from "./aspect-resolution";
 import { initializeProvider } from "../utils/provider";
 
 const ingestionQueue = queue({
@@ -54,18 +53,10 @@ export const ingestTask = task({
           idempotencyKeyTTL: "10m",
         });
       },
-      // Callback for async graph resolution
+      // Callback for async graph resolution (includes aspect resolution)
       async (params) => {
         await graphResolutionTask.trigger(params, {
           queue: "graph-resolution-queue",
-          concurrencyKey: payload.userId,
-          tags: [payload.userId, payload.queueId],
-        });
-      },
-      // Callback for async aspect resolution (voice aspects dedup)
-      async (params) => {
-        await aspectResolutionTask.trigger(params, {
-          queue: "aspect-resolution-queue",
           concurrencyKey: payload.userId,
           tags: [payload.userId, payload.queueId],
         });

@@ -49,6 +49,7 @@ import {
 } from "~/services/vectorStorage.server";
 import { type ModelMessage } from "ai";
 import { reconcileCredits } from "../credit_utils";
+import { processAspectResolution } from "./aspect-resolution.logic";
 
 export interface GraphResolutionPayload {
   episodeUuid: string;
@@ -243,7 +244,23 @@ export async function processGraphResolution(
       );
     }
 
-    // Step 7: Update ingestion queue with resolution token usage
+    // Step 7: Voice aspect resolution (dedup/evolution)
+    try {
+      const aspectResult = await processAspectResolution({
+        episodeUuid: payload.episodeUuid,
+        userId: payload.userId,
+        workspaceId: payload.workspaceId,
+      });
+      logger.info(
+        `Aspect resolution: ${aspectResult.duplicatesSkipped} duplicates, ${aspectResult.evolutionsResolved} evolutions, ${aspectResult.newKept} new`,
+      );
+    } catch (aspectError: any) {
+      logger.warn(`Aspect resolution failed (non-blocking):`, {
+        error: aspectError.message,
+      });
+    }
+
+    // Step 8: Update ingestion queue with resolution token usage
     try {
       const queue = await prisma.ingestionQueue.findUnique({
         where: { id: payload.queueId },
