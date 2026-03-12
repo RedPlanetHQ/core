@@ -62,14 +62,11 @@ function cleanEmailContent(htmlContent: string, textContent: string): string {
 }
 
 /**
- * Convert ISO date to Gmail query format (YYYY/MM/DD)
+ * Convert ISO date to Gmail query format as Unix timestamp in seconds
+ * Using timestamp is more precise than YYYY/MM/DD which truncates to day
  */
-function toGmailDateFormat(isoDate: string): string {
-  const date = new Date(isoDate);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  return `${year}/${month}/${day}`;
+function toGmailTimestamp(isoDate: string): number {
+  return Math.floor(new Date(isoDate).getTime() / 1000);
 }
 
 /**
@@ -79,15 +76,16 @@ async function processReceivedEmails(
   gmail: any,
   lastSyncTime: string,
   emailAddress: string
-): Promise<any[]> {
+): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  const afterDate = toGmailDateFormat(lastSyncTime);
+  const afterTimestamp = toGmailTimestamp(lastSyncTime);
+  let lastEmailTime = 0;
 
   try {
     // Query for important received emails after lastSyncTime
     const response = await gmail.users.messages.list({
       userId: 'me',
-      q: `in:inbox is:important after:${afterDate}`,
+      q: `in:inbox is:important after:${afterTimestamp}`,
       maxResults: 50,
     });
 
@@ -106,6 +104,11 @@ async function processReceivedEmails(
         const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
         const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+
+        const internalDate = parseInt(fullMessage.data.internalDate || '0');
+        if (internalDate > lastEmailTime) {
+          lastEmailTime = internalDate;
+        }
 
         const sender = formatEmailSender(from);
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
@@ -143,7 +146,7 @@ ${cleanedContent}`;
     console.error('Error fetching received emails:', error);
   }
 
-  return activities;
+  return { activities, lastEmailTime };
 }
 
 /**
@@ -153,15 +156,16 @@ async function processSentEmails(
   gmail: any,
   lastSyncTime: string,
   emailAddress: string
-): Promise<any[]> {
+): Promise<{ activities: any[]; lastEmailTime: number }> {
   const activities = [];
-  const afterDate = toGmailDateFormat(lastSyncTime);
+  const afterTimestamp = toGmailTimestamp(lastSyncTime);
+  let lastEmailTime = 0;
 
   try {
     // Query for sent emails after lastSyncTime
     const response = await gmail.users.messages.list({
       userId: 'me',
-      q: `in:sent after:${afterDate}`,
+      q: `in:sent after:${afterTimestamp}`,
       maxResults: 50,
     });
 
@@ -180,6 +184,11 @@ async function processSentEmails(
         const to = headers.find((h: any) => h.name === 'To')?.value || 'Unknown';
         const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
+
+        const internalDate = parseInt(fullMessage.data.internalDate || '0');
+        if (internalDate > lastEmailTime) {
+          lastEmailTime = internalDate;
+        }
 
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
@@ -216,7 +225,7 @@ ${cleanedContent}`;
     console.error('Error fetching sent emails:', error);
   }
 
-  return activities;
+  return { activities, lastEmailTime };
 }
 
 export const handleSchedule = async (
@@ -260,33 +269,31 @@ export const handleSchedule = async (
     const messages = [];
 
     // Process received emails
-    const receivedActivities = await processReceivedEmails(
-      gmail,
-      lastSyncTime,
-      settings.emailAddress || 'user'
-    );
+    const { activities: receivedActivities, lastEmailTime: receivedLastTime } =
+      await processReceivedEmails(gmail, lastSyncTime, settings.emailAddress || 'user');
     messages.push(...receivedActivities);
 
     // Process sent emails
-    const sentActivities = await processSentEmails(
+    const { activities: sentActivities, lastEmailTime: sentLastTime } = await processSentEmails(
       gmail,
       lastSyncTime,
       settings.emailAddress || 'user'
     );
     messages.push(...sentActivities);
 
-    // Update last sync time
-    const newSyncTime = new Date().toISOString();
-
-    // Add state message for saving settings
-    messages.push({
-      type: 'state',
-      data: {
-        ...settings,
-        lastSyncTime: newSyncTime,
-        lastUserEventTime: newSyncTime,
-      },
-    });
+    // Only save state if emails were processed
+    const latestEmailTime = Math.max(receivedLastTime, sentLastTime);
+    if (latestEmailTime > 0) {
+      const newSyncTime = new Date(latestEmailTime + 20000).toISOString();
+      messages.push({
+        type: 'state',
+        data: {
+          ...settings,
+          lastSyncTime: newSyncTime,
+          lastUserEventTime: newSyncTime,
+        },
+      });
+    }
 
     return messages;
   } catch (error) {
