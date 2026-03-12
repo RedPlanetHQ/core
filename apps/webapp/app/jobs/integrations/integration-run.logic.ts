@@ -200,6 +200,10 @@ async function executeCLICommand(
         case IntegrationEventType.SYNC:
           args.push("sync");
           args.push("--config", JSON.stringify(config || {}));
+          args.push(
+            "--integration-definition",
+            JSON.stringify(integrationDefinition || {}),
+          );
           args.push("--state", JSON.stringify(state || {}));
           break;
         default:
