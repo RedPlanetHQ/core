@@ -72,7 +72,11 @@ const data = {
   ],
 };
 
-export function AppSidebar() {
+export function AppSidebar({
+  conversationSources,
+}: {
+  conversationSources: string[];
+}) {
   const user = useUser();
   const navigate = useNavigate();
   const params = useParams();
@@ -122,7 +126,10 @@ export function AppSidebar() {
             <UnreadConversations
               currentConversationId={params.conversationId}
             />
-            <ConversationList currentConversationId={params.conversationId} />
+            <ConversationList
+              currentConversationId={params.conversationId}
+              conversationSources={conversationSources}
+            />
           </div>
         </SidebarContent>
 

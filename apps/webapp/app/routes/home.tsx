@@ -10,18 +10,17 @@ import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 
 import { redirect } from "@remix-run/node";
 import { confirmBasicDetailsPath, onboardingPath } from "~/utils/pathBuilder";
-import { LabelService } from "~/services/label.server";
+import { getConversationSources } from "~/services/conversation.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   const workspace = await requireWorkpace(request);
-  const labelService = new LabelService();
 
   if (!workspace) {
-    return { labels: [] }
+    return { conversationSources: [] };
   }
 
-  const labels = await labelService.getWorkspaceLabels(workspace.id);
+  const conversationSources = await getConversationSources(workspace.id, user.id);
 
   //you have to confirm basic details before you can do anything
   if (!user.confirmedBasicDetails) {
@@ -33,7 +32,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       {
         user,
         workspace,
-        labels,
+        conversationSources,
       },
       {
         headers: {
@@ -45,7 +44,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function Home() {
-  const { labels } = useLoaderData<typeof loader>();
+  const { conversationSources } = useLoaderData<typeof loader>();
 
   return (
     <SidebarProvider
@@ -57,7 +56,7 @@ export default function Home() {
         } as React.CSSProperties
       }
     >
-      <AppSidebar labels={labels} />
+      <AppSidebar conversationSources={conversationSources} />
       <SidebarInset className="bg-background-2 h-full rounded pr-0">
         <div className="flex h-full flex-col rounded">
           <div className="@container/main flex h-full flex-col gap-2">

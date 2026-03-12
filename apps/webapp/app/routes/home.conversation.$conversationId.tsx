@@ -18,7 +18,7 @@ import { hasNeedsApprovalDeep } from "~/components/conversation/conversation-uti
 import { useTypedLoaderData } from "remix-typedjson";
 import { ScrollAreaWithAutoScroll } from "~/components/use-auto-scroll";
 import { PageHeader } from "~/components/common/page-header";
-import { Trash2 } from "lucide-react";
+import { Trash2, EyeOff } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -143,7 +143,16 @@ export default function SingleConversation() {
         title="Conversation"
         breadcrumbs={[
           { label: "Conversations", href: "/home/conversation" },
-          { label: conversation.title || "Untitled" },
+          {
+            label: (
+              <span className="flex items-center gap-1.5">
+                {conversation.title || "Untitled"}
+                {conversation.incognito && (
+                  <EyeOff size={13} className="text-muted-foreground shrink-0" />
+                )}
+              </span>
+            ),
+          },
         ]}
         actions={[
           {
