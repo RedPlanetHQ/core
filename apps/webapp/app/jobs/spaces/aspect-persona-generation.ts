@@ -26,10 +26,35 @@ import {
 } from "@core/types";
 import { ProviderFactory } from "@core/providers";
 import { getActiveVoiceAspects } from "~/services/aspectStore.server";
-import { type ModelMessage } from "ai";
+import { type ModelMessage, generateText, type LanguageModel } from "ai";
+import { getModel, getModelForBatch } from "~/lib/model.server";
+
+/**
+ * Direct LLM call helper — replaces batch for single/few requests.
+ * Returns the text content from a single prompt.
+ */
+async function directLLMCall(prompt: ModelMessage, label?: string): Promise<string | null> {
+  try {
+    const modelId = getModelForBatch();
+    const model = getModel(modelId) as LanguageModel;
+    const { text } = await generateText({
+      model,
+      messages: [prompt],
+    });
+    logger.info(`Direct LLM call completed${label ? ` [${label}]` : ""}`, {
+      responseLength: text.length,
+      preview: text.slice(0, 100),
+    });
+    return text;
+  } catch (error) {
+    logger.error(`Direct LLM call failed${label ? ` [${label}]` : ""}`, { error });
+    return null;
+  }
+}
 
 // Minimum statements required to generate a section
-const MIN_STATEMENTS_PER_SECTION = 3;
+// Set to 1 so even a single fact gets included.
+const MIN_STATEMENTS_PER_SECTION = 1;
 
 // Chunking limits for large sections
 const MAX_STATEMENTS_PER_CHUNK = 30;
@@ -46,7 +71,120 @@ const SKIPPED_ASPECTS: StatementAspect[] = [
   "Goal",
   "Decision",
   "Problem",
+  "Task",
 ];
+
+// Section separator used to reliably split persona documents in code.
+// HTML comments are invisible in rendered markdown and survive LLM round-trips.
+const SECTION_SEPARATOR_PREFIX = "<!-- section:";
+const SECTION_SEPARATOR_SUFFIX = " -->";
+
+function sectionMarker(aspect: StatementAspect): string {
+  return `${SECTION_SEPARATOR_PREFIX}${aspect.toLowerCase()}${SECTION_SEPARATOR_SUFFIX}`;
+}
+
+/**
+ * Aspect label → StatementAspect mapping for parsing section markers
+ */
+const MARKER_TO_ASPECT: Record<string, StatementAspect> = {
+  identity: "Identity",
+  preference: "Preference",
+  directive: "Directive",
+};
+
+export interface ParsedPersonaSections {
+  header: string; // Everything before the first ## section (# PERSONA, metadata)
+  sections: Map<StatementAspect, string>; // aspect → full section content (including ## header)
+}
+
+/**
+ * Parse a persona document into individual sections using <!-- section:X --> markers.
+ * Falls back to ## header splitting if markers are missing (legacy docs).
+ */
+export function parsePersonaDocument(doc: string): ParsedPersonaSections {
+  const result: ParsedPersonaSections = {
+    header: "",
+    sections: new Map(),
+  };
+
+  // Try marker-based splitting first
+  const markerRegex = /<!-- section:(\w+) -->/g;
+  const markers: { aspect: StatementAspect; index: number }[] = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = markerRegex.exec(doc)) !== null) {
+    const aspect = MARKER_TO_ASPECT[match[1]];
+    if (aspect) {
+      markers.push({ aspect, index: match.index });
+    }
+  }
+
+  if (markers.length > 0) {
+    // Find the ## header for the first section to determine where the header ends
+    // Search for ## TITLE pattern (handles both \n## and start-of-string)
+    const firstTitle = ASPECT_SECTION_MAP[markers[0].aspect].title;
+    const firstHeaderIdx = doc.indexOf(`## ${firstTitle}`);
+    result.header = doc.slice(0, firstHeaderIdx > 0 ? firstHeaderIdx : 0).trim();
+
+    for (let i = 0; i < markers.length; i++) {
+      const marker = markers[i];
+      const markerEnd = marker.index + `<!-- section:${marker.aspect.toLowerCase()} -->`.length;
+
+      // Section starts right after the previous marker ends, or at the header start for first section
+      let sectionStart: number;
+      if (i === 0) {
+        sectionStart = firstHeaderIdx > 0 ? firstHeaderIdx : 0;
+      } else {
+        const prevMarker = markers[i - 1];
+        const prevMarkerEnd = prevMarker.index + `<!-- section:${prevMarker.aspect.toLowerCase()} -->`.length;
+        sectionStart = prevMarkerEnd;
+      }
+
+      // Section ends at the marker (inclusive)
+      const sectionContent = doc.slice(sectionStart, markerEnd).trim();
+      result.sections.set(marker.aspect, sectionContent);
+    }
+
+    return result;
+  }
+
+  // Fallback: split by ## headers (legacy docs without markers)
+  // Find all ## header positions
+  const headerPositions: { title: string; index: number }[] = [];
+  const headerRegex = /^## (\w+)/gm;
+  let hMatch: RegExpExecArray | null;
+
+  while ((hMatch = headerRegex.exec(doc)) !== null) {
+    headerPositions.push({ title: hMatch[1].toUpperCase(), index: hMatch.index });
+  }
+
+  if (headerPositions.length === 0) {
+    // No sections found at all
+    result.header = doc.trim();
+    return result;
+  }
+
+  // Everything before the first ## header is the header
+  result.header = doc.slice(0, headerPositions[0].index).trim();
+
+  // Each section runs from its ## header to the next ## header (or end of doc)
+  for (let i = 0; i < headerPositions.length; i++) {
+    const start = headerPositions[i].index;
+    const end = i + 1 < headerPositions.length ? headerPositions[i + 1].index : doc.length;
+    const sectionContent = doc.slice(start, end).trim();
+    const title = headerPositions[i].title;
+
+    // Map section title to aspect
+    for (const [aspect, info] of Object.entries(ASPECT_SECTION_MAP)) {
+      if (info.title === title) {
+        result.sections.set(aspect as StatementAspect, sectionContent);
+        break;
+      }
+    }
+  }
+
+  return result;
+}
 
 // Aspect to persona section mapping with filtering guidance
 // Each section answers a specific question an AI agent might have
@@ -139,6 +277,14 @@ export const ASPECT_SECTION_MAP: Record<
     agentQuestion: "Who matters to them? (Context for names mentioned)",
     filterGuidance:
       "Include: names, roles, relationships, contact info (email, phone), collaboration notes. Any agent might need to reference or contact these people.",
+  },
+  Task: {
+    title: "TASKS",
+    description:
+      "One-time commitments, follow-ups, promises, action items",
+    agentQuestion: "What do they need to do?",
+    filterGuidance:
+      "SKIP - Transient data. Agents should query the graph directly for tasks and action items.",
   },
 };
 
@@ -395,7 +541,7 @@ ${
 - Markdown bullet points
 - Sub-headers only if genuinely needed for grouping
 - End with [Confidence: HIGH|MEDIUM|LOW]
-- Return "INSUFFICIENT_DATA" if fewer than 3 behavior-changing patterns exist
+- Even if there is only 1 fact, generate the section — do NOT return "INSUFFICIENT_DATA"
 
 Generate ONLY the section content, no title header.
   `.trim();
@@ -603,7 +749,7 @@ async function generateSectionWithChunking(
   // Split into chunks
   const chunks = chunkAspectData(aspectData);
 
-  // Generate summary for each chunk
+  // Generate summary for each chunk via batch
   const chunkRequests = chunks.map((chunk) => ({
     customId: `chunk-${aspect}-${chunk.chunkIndex}-${Date.now()}`,
     messages: [buildChunkSummaryPrompt(aspect, chunk, userContext)],
@@ -649,7 +795,7 @@ async function generateSectionWithChunking(
     return chunkSummaries[0];
   }
 
-  // Merge chunk summaries
+  // Merge chunk summaries via batch
   const mergeRequest = {
     customId: `merge-${aspect}-${Date.now()}`,
     messages: [buildMergePrompt(aspect, chunkSummaries, userContext)],
@@ -695,8 +841,8 @@ async function generateAspectSection(
     return null;
   }
 
-  // Skip if insufficient data (except Identity - always include even with 1-2 statements)
-  if (aspect !== "Identity" && statements.length < MIN_STATEMENTS_PER_SECTION) {
+  // Skip if insufficient data
+  if (statements.length < MIN_STATEMENTS_PER_SECTION) {
     logger.info(`Skipping ${aspect} section - insufficient data`, {
       statementCount: statements.length,
       minRequired: MIN_STATEMENTS_PER_SECTION,
@@ -776,11 +922,7 @@ async function generateAllAspectSections(
       continue;
     }
 
-    // Always include Identity even with 1-2 statements; others need MIN_STATEMENTS_PER_SECTION
-    if (
-      aspect === "Identity" ||
-      data.statements.length >= MIN_STATEMENTS_PER_SECTION
-    ) {
+    if (data.statements.length >= MIN_STATEMENTS_PER_SECTION) {
       aspectsToProcess.push(data);
 
       // Separate large sections that need chunking
@@ -943,15 +1085,11 @@ function combineIntoPersonaDocument(
   // Build document
   let document = "# PERSONA\n\n";
 
-  // Add metadata
-  document += `> Generated: ${new Date().toISOString().split("T")[0]}\n`;
-  document += `> Sections: ${sections.length}\n`;
-  document += `> Total statements: ${sections.reduce((sum, s) => sum + s.statementCount, 0)}\n\n`;
-
-  // Add each section
+  // Add each section with markers
   for (const section of sortedSections) {
     document += `## ${section.title}\n\n`;
     document += `${section.content}\n\n`;
+    document += `${sectionMarker(section.aspect)}\n\n`;
   }
 
   return document.trim();
@@ -1098,81 +1236,99 @@ export async function getStatementsForEpisodeByAspect(
 }
 
 /**
- * Build prompt for incremental persona update
- * Takes existing persona doc + new statements from a single episode
- * Returns the complete updated persona document
+ * Build prompt for incremental update of a SINGLE section.
+ * Only the affected section is sent to the LLM — unchanged sections are stitched back in code.
  */
-function buildIncrementalPersonaPrompt(
-  existingPersona: string,
-  newStatements: Map<StatementAspect, AspectData>,
+function buildSectionUpdatePrompt(
+  aspect: StatementAspect,
+  existingSectionContent: string,
+  newStatements: StatementNode[],
   userContext: UserContext,
 ): ModelMessage {
-  // Format new statements grouped by aspect
-  const statementsText = Array.from(newStatements.entries())
-    .map(([aspect, data]) => {
-      const sectionInfo = ASPECT_SECTION_MAP[aspect];
-      if (!sectionInfo) return "";
-      const facts = data.statements.map((s, i) => `${i + 1}. ${s.fact}`).join("\n");
-      return `### ${sectionInfo.title}\n${facts}`;
-    })
-    .filter(Boolean)
-    .join("\n\n");
+  const sectionInfo = ASPECT_SECTION_MAP[aspect];
+  const isPreferencesSection = aspect === "Preference";
 
-  // Collect filterGuidance for each persona aspect
-  const sectionRules = (["Identity", "Preference", "Directive"] as StatementAspect[])
-    .map((aspect) => {
-      const info = ASPECT_SECTION_MAP[aspect];
-      return `**${info.title}**: ${info.filterGuidance}`;
-    })
-    .join("\n\n");
+  const factsText = newStatements
+    .map((s, i) => `${i + 1}. ${s.fact}`)
+    .join("\n");
 
   const content = `
-You are performing a MINIMAL UPDATE to an existing persona document. A few new facts were learned from a recent episode. Your job is to incorporate ONLY those new facts into the existing document.
+You are performing a MINIMAL UPDATE to the **${sectionInfo.title}** section of a persona document. A few new facts were learned. Your job is to merge ONLY those new facts into this section.
 
-## CRITICAL: This is a MERGE operation, NOT a rewrite
+## CRITICAL: This is a MERGE, NOT a rewrite
 
-⚠️ You MUST preserve ALL existing content. The existing document was carefully generated from hundreds of statements. You are adding/updating a few lines, not regenerating from scratch.
+⚠️ You MUST preserve ALL existing content. You are adding/updating a few lines, not regenerating.
 
-**Rule: Start with the existing document as-is, then apply the minimum changes needed to incorporate the new facts below.**
+## Existing Section Content
 
-If a section has NO new facts below, copy that section EXACTLY as-is — do not summarize, rephrase, or remove anything.
-
-## Existing Persona Document (PRESERVE THIS)
-
-${existingPersona}
+${existingSectionContent}
 
 ## New Facts to Incorporate
 
-${statementsText}
+${factsText}
 
 ## How to Merge
 
-1. **Add** new facts that don't exist yet — insert them into the appropriate section
+1. **Add** new facts that don't exist yet — insert as new bullet points
 2. **Update** existing entries only if a new fact directly contradicts them (e.g., new role replaces old role)
 3. **Never remove** existing entries unless explicitly contradicted by a new fact above
 4. **Never rephrase** existing entries — keep them word-for-word
-5. **Keep the same section structure**: ## IDENTITY, ## PREFERENCES, ## DIRECTIVES
-6. **Keep existing confidence levels** unless the new facts significantly change a section
+5. **Keep existing confidence level** unless the new facts significantly change the section
 
 ## Section Rules
 
-${sectionRules}
+${sectionInfo.filterGuidance}
+
+## Output Requirements
+
+- Preserve all existing content verbatim — do not shorten, summarize, or rephrase existing bullets
+- Only add new bullets or update bullets that are directly contradicted by a new fact
+- The section may grow — that is expected and correct
+${
+  isPreferencesSection
+    ? "- Group related preferences under sub-headers if helpful"
+    : ""
+}
 
 ## Format
 
-- Same markdown format as the existing document
-- Keep the # PERSONA header and metadata line (update the date to today)
-- End each section with [Confidence: HIGH|MEDIUM|LOW]
-
-Return the complete document with the new facts merged in.
+Return ONLY the updated section content (including the ## ${sectionInfo.title} header).
+End with [Confidence: HIGH|MEDIUM|LOW].
+Do NOT include the section marker comment — it will be added automatically.
   `.trim();
 
   return { role: "user", content };
 }
 
 /**
- * Generate an incremental persona update using a single LLM call
- * Takes existing persona + new episode's statements → complete updated doc
+ * Reassemble a persona document from parsed sections.
+ * Updates the metadata date and preserves section order.
+ */
+function reassemblePersonaDocument(
+  parsed: ParsedPersonaSections,
+): string {
+  const sectionOrder: StatementAspect[] = ["Identity", "Preference", "Directive"];
+
+  let document = parsed.header ? parsed.header + "\n\n" : "# PERSONA\n\n";
+
+  for (const aspect of sectionOrder) {
+    const sectionContent = parsed.sections.get(aspect);
+    if (!sectionContent) continue;
+
+    // Strip any existing markers and re-add cleanly
+    const marker = sectionMarker(aspect);
+    const cleanContent = sectionContent.replace(/<!-- section:\w+ -->/g, "").trim();
+    document += cleanContent + "\n\n" + marker + "\n\n";
+  }
+
+  return document.trim();
+}
+
+/**
+ * Generate an incremental persona update using section-level merging.
+ *
+ * Only sections with new statements are sent to the LLM.
+ * Unchanged sections are preserved verbatim in code — no LLM drift.
  */
 export async function generateIncrementalPersona(
   userId: string,
@@ -1200,57 +1356,80 @@ export async function generateIncrementalPersona(
     0,
   );
 
+  const affectedAspects = Array.from(episodeStatements.keys());
+
   logger.info("Episode persona statements fetched", {
     userId,
     episodeUuid,
-    aspects: Array.from(episodeStatements.keys()),
+    aspects: affectedAspects,
     totalStatements,
   });
 
-  // Step 3: Build incremental prompt
-  const prompt = buildIncrementalPersonaPrompt(
-    existingPersonaContent,
-    episodeStatements,
-    userContext,
-  );
+  // Step 3: Parse existing document into sections
+  const parsed = parsePersonaDocument(existingPersonaContent);
 
-  // Step 4: Single batch call
-  const { batchId } = await createBatch({
-    requests: [
-      {
-        customId: `persona-incremental-${Date.now()}`,
-        messages: [prompt],
-        systemPrompt: "",
-      },
-    ],
-    outputSchema: SectionContentSchema,
-    maxRetries: 3,
-    timeoutMs: 1200000,
+  logger.info("Parsed existing persona document", {
+    userId,
+    parsedSections: Array.from(parsed.sections.keys()),
+    hasMarkers: existingPersonaContent.includes(SECTION_SEPARATOR_PREFIX),
+    headerLength: parsed.header.length,
+    sectionLengths: Object.fromEntries(
+      Array.from(parsed.sections.entries()).map(([k, v]) => [k, v.length]),
+    ),
+    existingDocLength: existingPersonaContent.length,
+    existingDocPreview: existingPersonaContent.slice(0, 300),
   });
 
-  const batch = await pollBatchCompletion(batchId, 1200000);
+  // Step 4: Build section update prompts for affected sections
+  const sectionUpdates: { aspect: StatementAspect; prompt: ModelMessage }[] = [];
 
-  if (!batch.results || batch.results.length === 0) {
-    logger.warn("No results from incremental persona batch, returning existing persona");
-    return existingPersonaContent;
+  for (const [aspect, data] of episodeStatements) {
+    const existingSection = parsed.sections.get(aspect);
+
+    // Strip the marker from existing section content before sending to LLM
+    const marker = sectionMarker(aspect);
+    const cleanSection = existingSection
+      ? existingSection.replace(marker, "").trim()
+      : "";
+
+    const prompt = buildSectionUpdatePrompt(
+      aspect,
+      cleanSection || `## ${ASPECT_SECTION_MAP[aspect].title}\n\n(No existing content)`,
+      data.statements,
+      userContext,
+    );
+
+    sectionUpdates.push({ aspect, prompt });
   }
 
-  const result = batch.results[0];
-  if (result.error || !result.response) {
-    logger.warn("Error in incremental persona generation, returning existing persona", {
-      error: result.error,
-    });
-    return existingPersonaContent;
+  // Step 5: Direct LLM calls in parallel (faster than batch for 1-3 sections)
+  const updateResults = await Promise.all(
+    sectionUpdates.map(async ({ aspect, prompt }) => {
+      const content = await directLLMCall(prompt, `incremental-${aspect}`);
+      if (!content) {
+        logger.warn(`Error updating ${aspect} section, keeping existing`);
+      }
+      return { aspect, content };
+    }),
+  );
+
+  // Step 6: Replace only affected sections, keep unchanged ones verbatim
+  for (const { aspect, content } of updateResults) {
+    if (content) {
+      parsed.sections.set(aspect, content.trim());
+    }
   }
 
-  const updatedPersona =
-    typeof result.response === "string"
-      ? result.response
-      : result.response.content || existingPersonaContent;
+  // Step 7: Reassemble document from sections
+  const updatedPersona = reassemblePersonaDocument(parsed);
 
   logger.info("Incremental persona generation completed", {
     userId,
     episodeUuid,
+    affectedSections: affectedAspects,
+    unchangedSections: Array.from(parsed.sections.keys()).filter(
+      (a) => !affectedAspects.includes(a),
+    ),
     originalLength: existingPersonaContent.length,
     updatedLength: updatedPersona.length,
   });
@@ -1285,6 +1464,48 @@ export async function generateAspectBasedPersona(
       ]),
     ),
   });
+
+  // Step 2b: Inject user table fields as synthetic Identity statements (full mode only)
+  const syntheticIdentityFacts: string[] = [];
+  if (userContext.name) syntheticIdentityFacts.push(`Name: ${userContext.name}`);
+  if (userContext.email) syntheticIdentityFacts.push(`Email: ${userContext.email}`);
+  if (userContext.phoneNumber) syntheticIdentityFacts.push(`Phone: ${userContext.phoneNumber}`);
+  if (userContext.timezone) syntheticIdentityFacts.push(`Timezone: ${userContext.timezone}`);
+  if (userContext.role) syntheticIdentityFacts.push(`Role: ${userContext.role}`);
+
+  if (syntheticIdentityFacts.length > 0) {
+    const existingIdentity = aspectDataMap.get("Identity");
+    const now = new Date();
+
+    const newStatements: StatementNode[] = syntheticIdentityFacts
+      .filter((fact) =>
+        !existingIdentity?.statements.some((s) => s.fact === fact),
+      )
+      .map((fact) => ({
+        uuid: `user-ctx-${fact.split(":")[0].toLowerCase()}`,
+        fact,
+        factEmbedding: [],
+        createdAt: now,
+        validAt: now,
+        invalidAt: null,
+        attributes: {},
+        userId,
+        aspect: "Identity" as StatementAspect,
+      }));
+
+    if (newStatements.length > 0) {
+      if (existingIdentity) {
+        existingIdentity.statements.push(...newStatements);
+      } else {
+        aspectDataMap.set("Identity", {
+          aspect: "Identity",
+          statements: newStatements,
+          episodes: [],
+        });
+      }
+      logger.info(`Injected ${newStatements.length} user context facts into Identity`);
+    }
+  }
 
   if (aspectDataMap.size === 0) {
     logger.warn("No statements with aspects found for user", { userId });

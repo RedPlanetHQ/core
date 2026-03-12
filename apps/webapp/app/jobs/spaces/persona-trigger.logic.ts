@@ -2,16 +2,16 @@ import { logger } from "~/services/logger.service";
 
 import { LabelService } from "~/services/label.server";
 import { prisma } from "~/db.server";
-import { type StatementAspect } from "@core/types";
+import { type StatementAspect, type VoiceAspect } from "@core/types";
 import { getStatementsForEpisodeByAspects } from "~/services/graphModels/statement";
 import { getWorkspacePersona } from "~/models/workspace.server";
+import { getVoiceAspectsForEpisode } from "~/services/aspectStore.server";
 
-// Only these aspects affect the persona doc
-const PERSONA_ASPECTS: StatementAspect[] = [
-  "Identity",
-  "Preference",
-  "Directive",
-];
+// Persona-relevant aspects split by storage:
+// Graph (Neo4j): Identity is stored as SPO triples
+// Voice (Postgres): Preference, Directive are stored as complete statements
+const PERSONA_GRAPH_ASPECTS: StatementAspect[] = ["Identity"];
+const PERSONA_VOICE_ASPECTS: VoiceAspect[] = ["Preference", "Directive"];
 
 interface WorkspaceMetadata {
   lastPersonaGenerationAt?: string;
@@ -117,25 +117,31 @@ export async function checkPersonaUpdateThreshold(
       };
     }
 
-    // Check if this episode produced any persona-relevant statements
-    const personaStatements = await getStatementsForEpisodeByAspects(
-      episodeUuid,
-      PERSONA_ASPECTS,
-    );
+    // Check both Neo4j graph statements AND Postgres voice aspects
+    // Identity → graph (Neo4j), Preference/Directive → voice (Postgres)
+    const [personaStatements, personaVoiceAspects] = await Promise.all([
+      getStatementsForEpisodeByAspects(episodeUuid, PERSONA_GRAPH_ASPECTS),
+      getVoiceAspectsForEpisode(episodeUuid, userId, PERSONA_VOICE_ASPECTS),
+    ]);
 
-    logger.debug("Checking persona update - episode statement aspects", {
+    const totalPersonaRelevant = personaStatements.length + personaVoiceAspects.length;
+
+    logger.debug("Checking persona update - episode aspects", {
       userId,
       episodeUuid,
-      personaStatementCount: personaStatements.length,
-      aspects: PERSONA_ASPECTS,
+      graphStatements: personaStatements.length,
+      voiceAspects: personaVoiceAspects.length,
+      totalPersonaRelevant,
     });
 
-    if (personaStatements.length > 0) {
-      logger.info("Episode has persona-relevant statements, triggering regen", {
+    if (totalPersonaRelevant > 0) {
+      logger.info("Episode has persona-relevant data, triggering regen", {
         userId,
         episodeUuid,
-        personaStatementCount: personaStatements.length,
+        graphStatements: personaStatements.length,
+        voiceAspects: personaVoiceAspects.length,
         statementAspects: personaStatements.map((s) => s.aspect),
+        voiceAspectTypes: personaVoiceAspects.map((a) => a.aspect),
       });
 
       return {
@@ -143,7 +149,7 @@ export async function checkPersonaUpdateThreshold(
         labelId: label.id,
         mode: "incremental",
         startTime: lastPersonaGenerationAt,
-        reason: `episode ${episodeUuid} has ${personaStatements.length} persona-relevant statements (Identity/Preference/Directive)`,
+        reason: `episode ${episodeUuid} has ${personaStatements.length} graph statements + ${personaVoiceAspects.length} voice aspects (Identity/Preference/Directive)`,
       };
     }
 

@@ -6,6 +6,8 @@ export interface UserContext {
   // Identity (from User table)
   name?: string;
   email?: string;
+  phoneNumber?: string;
+  timezone?: string;
 
   // Context fields
   role?: string;
@@ -39,12 +41,16 @@ export async function getUserContext(
   // Fetch user identity from database
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { name: true, email: true },
+    select: { name: true, email: true, phoneNumber: true, metadata: true },
   });
+
+  const metadata = user?.metadata as Record<string, unknown> | null;
 
   const identity = {
     name: user?.name || undefined,
     email: user?.email || undefined,
+    phoneNumber: user?.phoneNumber || undefined,
+    timezone: (metadata?.timezone as string) || undefined,
   };
 
   // Try onboarding statements first
