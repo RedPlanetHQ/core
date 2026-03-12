@@ -607,11 +607,13 @@ export class KnowledgeGraphService {
       };
     }) as Triple[];
 
-    // Voice aspects — ready for aspects store
-    const voiceAspects = classifiedVoice.map((va) => ({
-      fact: va.fact,
-      aspect: va.aspect as VoiceAspect,
-    }));
+    // Voice aspects — filter out null-classified (rejected by classifier) and send to aspects store
+    const voiceAspects = classifiedVoice
+      .filter((va) => va.aspect !== null)
+      .map((va) => ({
+        fact: va.fact,
+        aspect: va.aspect as VoiceAspect,
+      }));
 
     return { voiceAspects, graphTriples };
   }
