@@ -1,4 +1,5 @@
 import { EpisodeType } from "@core/types";
+import crypto from "crypto";
 import { logger } from "./logger.service";
 import { EpisodeChunker } from "./episodeChunker.server";
 
@@ -131,7 +132,6 @@ export class EpisodeVersioningService {
    * Generate content hash
    */
   private generateContentHash(content: string): string {
-    const crypto = require("crypto");
     return crypto.createHash("sha256").update(content, "utf8").digest("hex");
   }
 }

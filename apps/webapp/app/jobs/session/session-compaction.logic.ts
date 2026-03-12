@@ -558,13 +558,14 @@ function parseCompactionResponse(
   try {
     // Extract content from <output> tags
     const outputMatch = response.match(/<output>([\s\S]*?)<\/output>/);
+    let summaryText: string;
     if (!outputMatch) {
-      logger.warn("No <output> tags found in LLM compaction response");
-      logger.debug("Full LLM response:", { response });
-      throw new Error("Invalid LLM response format - missing <output> tags");
+      // Some local/self-hosted models won't follow the tag format; accept raw text.
+      logger.warn("No <output> tags found in LLM compaction response; using raw response");
+      summaryText = response.trim();
+    } else {
+      summaryText = outputMatch[1].trim();
     }
-
-    const summaryText = outputMatch[1].trim();
 
     // Return as schema-compliant object (confidence defaults to 1.0 since we're not scoring anymore)
     return {

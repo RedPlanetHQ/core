@@ -80,6 +80,7 @@ import {
   type ActivityCasePayload,
   processActivityCase,
 } from "~/jobs/integrations/activity-case.logic";
+import { env } from "~/env.server";
 
 /**
  * Episode preprocessing worker
@@ -90,17 +91,21 @@ export const preprocessWorker = new Worker(
   async (job) => {
     const payload = job.data as IngestEpisodePayload;
 
-    return await processEpisodePreprocessing(
+    const result = await processEpisodePreprocessing(
       payload,
       // Callback to enqueue individual chunk ingestion jobs
       enqueueIngestEpisode,
       // Callback to enqueue session compaction for conversations
       enqueueSessionCompaction,
     );
+    if (!result?.success) {
+      throw new Error(result?.error || "Episode preprocessing failed");
+    }
+    return result;
   },
   {
     connection: getRedisConnection(),
-    concurrency: 5, // Process up to 5 preprocessing jobs in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_PREPROCESS, // Process preprocessing jobs in parallel
   },
 );
 
@@ -117,7 +122,7 @@ export const ingestWorker = new Worker(
   async (job) => {
     const payload = job.data as IngestEpisodePayload;
 
-    return await processEpisodeIngestion(
+    const result = await processEpisodeIngestion(
       payload,
       // Callbacks to enqueue follow-up jobs
       enqueueLabelAssignment,
@@ -125,10 +130,14 @@ export const ingestWorker = new Worker(
       enqueuePersonaGeneration,
       enqueueGraphResolution,
     );
+    if (!result?.success) {
+      throw new Error(result?.error || "Episode ingestion failed");
+    }
+    return result;
   },
   {
     connection: getRedisConnection(),
-    concurrency: 3, // Global limit: process up to 3 jobs in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_INGEST, // Global limit for ingestion jobs
   },
 );
 
@@ -143,7 +152,7 @@ export const conversationTitleWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 10, // Process up to 10 title creations in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_CONVERSATION_TITLE, // Process title creations in parallel
   },
 );
 
@@ -158,7 +167,7 @@ export const sessionCompactionWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 3, // Process up to 3 compactions in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_SESSION_COMPACTION, // Process compactions in parallel
   },
 );
 
@@ -174,7 +183,7 @@ export const labelAssignmentWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 5, // Process up to 5 label assignments in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT, // Process label assignments in parallel
   },
 );
 
@@ -190,7 +199,7 @@ export const titleGenerationWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 10, // Process up to 10 title generations in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_TITLE_GENERATION, // Process title generations in parallel
   },
 );
 
@@ -206,7 +215,7 @@ export const personaGenerationWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 1, // Process one persona generation at a time (CPU-intensive)
+    concurrency: env.BULLMQ_CONCURRENCY_PERSONA_GENERATION, // Persona is CPU-intensive
   },
 );
 
@@ -222,7 +231,7 @@ export const graphResolutionWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 1, // Process up to 3 resolutions in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_GRAPH_RESOLUTION, // Graph resolution concurrency
   },
 );
 
@@ -247,7 +256,7 @@ export const integrationRunWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 3, // Process up to 3 integrations in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_INTEGRATION_RUN, // Process integrations in parallel
   },
 );
 
@@ -268,7 +277,7 @@ export const reminderWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 10, // Process up to 10 reminders in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_REMINDER, // Process reminders in parallel
   },
 );
 
@@ -285,7 +294,7 @@ export const followUpWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: 5, // Process up to 5 follow-ups in parallel
+    concurrency: env.BULLMQ_CONCURRENCY_FOLLOW_UP, // Process follow-ups in parallel
   },
 );
 

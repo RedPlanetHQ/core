@@ -118,7 +118,16 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
       logger.info(`OpenAI batch created: ${batch.id}`);
       return { batchId: batch.id };
     } catch (error) {
-      logger.error("OpenAI batch creation failed:", { error });
+      const message =
+        error instanceof Error ? error.message : String(error ?? "");
+      if (message.includes("405") || message.includes("Method Not Allowed")) {
+        logger.warn(
+          "OpenAI batch creation failed (method not allowed). Falling back may be possible:",
+          { error },
+        );
+      } else {
+        logger.error("OpenAI batch creation failed:", { error });
+      }
       throw new Error(
         `Failed to create OpenAI batch: ${error instanceof Error ? error.message : "Unknown error"}`,
       );
