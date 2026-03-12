@@ -1,5 +1,5 @@
 import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Ellipsis, GitBranch, Timer } from "lucide-react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
@@ -43,13 +43,24 @@ export const UnreadConversations = ({
   const readAllFetcher = useFetcher();
   const navigate = useNavigate();
   const location = useLocation();
+  const [conversations, setConversations] = useState<ConversationItem[]>([]);
 
   useEffect(() => {
     fetcher.load("/api/v1/conversations?unread=true&limit=50");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.pathname]);
 
-  const conversations = fetcher.data?.conversations ?? [];
+  useEffect(() => {
+    if (fetcher.data && fetcher.state === "idle") {
+      const newConvs = fetcher.data.conversations ?? [];
+      setConversations((prev) => {
+        const prevIds = prev.map((c) => c.id).join(",");
+        const newIds = newConvs.map((c) => c.id).join(",");
+        if (prevIds === newIds) return prev;
+        return newConvs;
+      });
+    }
+  }, [fetcher.data, fetcher.state]);
 
   if (conversations.length === 0) return null;
 

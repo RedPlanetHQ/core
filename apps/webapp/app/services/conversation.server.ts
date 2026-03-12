@@ -11,6 +11,7 @@ export const CreateConversationSchema = z.object({
   title: z.string().optional(),
   conversationId: z.string().optional(),
   source: z.string().optional(),
+  incognito: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
   asyncJobId: z.string().optional(),
   parts: z
@@ -31,7 +32,7 @@ export async function createConversation(
   userId: string,
   conversationData: CreateConversationDto,
 ) {
-  const { title, conversationId, source, asyncJobId, ...otherData } =
+  const { title, conversationId, source, asyncJobId, incognito, ...otherData } =
     conversationData;
 
   if (conversationId) {
@@ -70,6 +71,7 @@ export async function createConversation(
       userId,
       source: source || "core",
       asyncJobId: asyncJobId || null,
+      incognito: incognito ?? false,
       title:
         title?.substring(0, 100) ?? conversationData.message.substring(0, 100),
       ConversationHistory: {
@@ -256,6 +258,18 @@ export const GetConversationsListSchema = z.object({
 export type GetConversationsListDto = z.infer<
   typeof GetConversationsListSchema
 >;
+
+export async function getConversationSources(
+  workspaceId: string,
+  userId: string,
+): Promise<string[]> {
+  const rows = await prisma.conversation.findMany({
+    where: { workspaceId, userId, deleted: null },
+    select: { source: true },
+    distinct: ["source"],
+  });
+  return rows.map((r) => r.source);
+}
 
 export async function getConversationsList(
   workspaceId: string,

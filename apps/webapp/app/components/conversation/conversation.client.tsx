@@ -2,6 +2,7 @@ import { EditorRoot, EditorContent, Placeholder } from "novel";
 import { useState, useRef, useCallback } from "react";
 import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
+import { EyeOff } from "lucide-react";
 import { Document } from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
@@ -47,9 +48,9 @@ export const ConversationNew = ({
 }) => {
   const [content, setContent] = useState("");
   const [title, setTitle] = useState("");
+  const [incognito, setIncognito] = useState(false);
   const editorRef = useRef<any>(null);
   const [editor, setEditor] = useState<Editor>();
-  const [showAll, setShowAll] = useState(false);
 
   const submit = useSubmit();
 
@@ -67,25 +68,25 @@ export const ConversationNew = ({
     async (e: React.FormEvent<HTMLFormElement>) => {
       if (!content.trim()) return;
       submit(
-        { message: content, title },
+        { message: content, title, incognito },
         { action: "/home/conversation", method: "post" },
       );
       e.preventDefault();
       setContent("");
       setTitle("");
     },
-    [content],
+    [content, incognito],
   );
 
   const handleSubmitClick = useCallback(() => {
     if (!content.trim()) return;
     submit(
-      { message: content, title: content },
+      { message: content, title: content, incognito },
       { action: "/home/conversation", method: "post" },
     );
     setContent("");
     setTitle("");
-  }, [content]);
+  }, [content, incognito]);
 
   return (
     <Form
@@ -157,7 +158,7 @@ export const ConversationNew = ({
                       event.preventDefault();
                       if (content) {
                         submit(
-                          { message: content, title: content },
+                          { message: content, title: content, incognito },
                           { action: "/home/conversation", method: "post" },
                         );
                         setContent("");
@@ -176,7 +177,22 @@ export const ConversationNew = ({
                 }}
               />
             </EditorRoot>
-            <div className="flex justify-end px-3 pb-3 pt-1">
+            <div className="flex items-center justify-between px-3 pb-3 pt-1">
+              <Button
+                type="button"
+                variant={incognito ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setIncognito((v) => !v)}
+                title={
+                  incognito
+                    ? "Incognito on — not saved to memory"
+                    : "Incognito off"
+                }
+                className="gap-1.5"
+              >
+                <EyeOff size={13} />
+                {incognito && <span>Incognito</span>}
+              </Button>
               <Button
                 type="button"
                 variant="secondary"

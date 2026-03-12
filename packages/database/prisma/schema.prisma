@@ -88,8 +88,9 @@ model Conversation {
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  unread Boolean @default(false)
-  source String  @default("core")
+  unread    Boolean @default(false)
+  source    String  @default("core")
+  incognito Boolean @default(false)
 
   asyncJobId String?
 
@@ -740,17 +741,17 @@ model StatementEmbedding {
 }
 
 model VoiceAspect {
-  id        String    @id @default(uuid())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  fact         String              // Complete statement as user expressed it
-  aspect       String              // Directive | Preference | Habit | Belief | Goal
-  episodeUuids String[]            // All episode UUIDs that mention/reinforce this aspect
+  fact         String // Complete statement as user expressed it
+  aspect       String // Directive | Preference | Habit | Belief | Goal
+  episodeUuids String[] // All episode UUIDs that mention/reinforce this aspect
 
-  validAt       DateTime @default(now())
+  validAt       DateTime  @default(now())
   invalidAt     DateTime?
-  invalidatedBy String?            // Episode UUID that invalidated this
+  invalidatedBy String? // Episode UUID that invalidated this
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -771,7 +772,7 @@ model VoiceAspectEmbedding {
   updatedAt DateTime @updatedAt
 
   fact     String
-  aspect   String              // Directive | Preference | Habit | Belief | Goal
+  aspect   String // Directive | Preference | Habit | Belief | Goal
   vector   Unsupported("vector")
   metadata Json?
 

@@ -4,7 +4,7 @@ export const useLocalCommonState = <T,>(key: string, initialValue?: T) => {
   const path = "userSettings";
   const [state, setState] = useState<T>(() => {
     // Try to load from localStorage on initial render
-    const savedObject = localStorage?.getItem(path);
+    const savedObject = typeof localStorage !== "undefined" ? localStorage.getItem(path) : null;
     const parsedObject = savedObject ? JSON.parse(savedObject) : {};
     return key in parsedObject ? parsedObject[key] : initialValue;
   });

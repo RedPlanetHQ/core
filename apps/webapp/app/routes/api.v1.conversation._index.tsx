@@ -162,7 +162,7 @@ const { loader, action } = createHybridActionApiRoute(
             ?.filter((part: any) => part.type === "text" && part.text)
             .map((part: any) => part.text);
 
-          if (textParts && textParts.length > 0) {
+          if (textParts && textParts.length > 0 && !conversation?.incognito) {
             const messageText = textParts.join("\n");
 
             await addToQueue(

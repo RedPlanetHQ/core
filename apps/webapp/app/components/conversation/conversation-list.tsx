@@ -1,9 +1,11 @@
 import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { GitBranch, LoaderCircle, Timer } from "lucide-react";
 import { getIcon, type IconType } from "../icon-utils";
+import { ConversationListOptions } from "./conversation-list-options";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 
 export function getSourceIcon(source: string) {
   if (!source || source === "core") return null;
@@ -46,51 +48,74 @@ type ConversationListResponse = {
 
 export const ConversationList = ({
   currentConversationId,
+  conversationSources,
 }: {
   currentConversationId?: string;
+  conversationSources: string[];
 }) => {
   const location = useLocation();
   const navigate = useNavigate();
-  // Each pathname change gets a new fetcherKey, which resets the fetcher state
-  const fetcherKey = useMemo(
-    () => `conv-list-${location.pathname}`,
-    [location.pathname],
+  const fetcher = useFetcher<ConversationListResponse>({ key: "conv-list" });
+  const [sourceFilter, setSourceFilter] = useLocalCommonState<string>(
+    "conv-source-filter",
+    "all",
   );
-  const fetcher = useFetcher<ConversationListResponse>({ key: fetcherKey });
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const loadedConversationIds = useRef<Set<string>>(new Set());
+  const isPageReset = useRef(false);
 
   const loadPage = useCallback(
     (page: number) => {
       setIsLoading(true);
-      fetcher.load(`/api/v1/conversations?unread=false&page=${page}&limit=10`);
+      const sourceParam =
+        sourceFilter && sourceFilter !== "all" ? `&source=${sourceFilter}` : "";
+      fetcher.load(
+        `/api/v1/conversations?unread=false&page=${page}&limit=10${sourceParam}`,
+      );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetcher],
+    [fetcher, sourceFilter],
   );
 
-  // Reset + reload page 1 whenever pathname changes
+  // Reload page 1 on pathname or filter change
   useEffect(() => {
-    setConversations([]);
+    isPageReset.current = true;
     loadedConversationIds.current = new Set();
+
     setCurrentPage(1);
     setHasNextPage(true);
     loadPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname]);
+  }, [location.pathname, sourceFilter]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
       setIsLoading(false);
-      const newConversations = fetcher.data.conversations.filter(
-        (c) => !loadedConversationIds.current.has(c.id),
-      );
-      newConversations.forEach((c) => loadedConversationIds.current.add(c.id));
-      setConversations((prev) => [...prev, ...newConversations]);
+
+      if (isPageReset.current) {
+        isPageReset.current = false;
+        const newConvs = fetcher.data.conversations;
+        setConversations((prev) => {
+          // If first item is the same, nothing changed — skip update
+          if (prev[0]?.id === newConvs[0]?.id) return prev;
+          // First item differs — replace the entire list
+          loadedConversationIds.current = new Set(newConvs.map((c) => c.id));
+          return newConvs;
+        });
+      } else {
+        const newConversations = fetcher.data.conversations.filter(
+          (c) => !loadedConversationIds.current.has(c.id),
+        );
+        newConversations.forEach((c) =>
+          loadedConversationIds.current.add(c.id),
+        );
+        setConversations((prev) => [...prev, ...newConversations]);
+      }
+
       setHasNextPage(fetcher.data.pagination.hasNext);
       setCurrentPage(fetcher.data.pagination.page);
     }
@@ -99,7 +124,14 @@ export const ConversationList = ({
 
   return (
     <div className="flex w-full flex-col px-2 pt-1">
-      <p className="text-muted-foreground mb-1 px-2 text-sm">Chats</p>
+      <div className="mb-1 flex items-center justify-between px-2 pr-0">
+        <p className="text-muted-foreground text-sm">Chats</p>
+        <ConversationListOptions
+          sources={conversationSources}
+          sourceFilter={sourceFilter ?? "all"}
+          onFilterChange={setSourceFilter}
+        />
+      </div>
 
       {isLoading && conversations.length === 0 && (
         <div className="flex justify-center p-4">

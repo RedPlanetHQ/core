@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Plus, Loader2, File, MessageSquare } from "lucide-react";
+import { Plus, Loader2, File, MessageSquare, Tag } from "lucide-react";
 import {
   CommandDialog,
   CommandGroup,
@@ -33,13 +33,18 @@ interface ConversationResult {
   updatedAt: string;
 }
 
+interface LabelResult {
+  id: string;
+  name: string;
+  color: string;
+}
+
 export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const debouncedQuery = useDebounce(searchQuery, 300);
   const [documentResults, setDocumentResults] = useState<DocumentResult[]>([]);
-  const [conversationResults, setConversationResults] = useState<
-    ConversationResult[]
-  >([]);
+  const [conversationResults, setConversationResults] = useState<ConversationResult[]>([]);
+  const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const navigate = useNavigate();
 
@@ -48,18 +53,22 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     if (!debouncedQuery.trim() || debouncedQuery.length < 2) {
       setDocumentResults([]);
       setConversationResults([]);
+      setLabelResults([]);
       return;
     }
 
     const search = async () => {
       setIsSearching(true);
       try {
-        const [docsRes, convsRes] = await Promise.all([
+        const [docsRes, convsRes, labelsRes] = await Promise.all([
           fetch(
             `/api/v1/documents/search?${new URLSearchParams({ q: debouncedQuery, mode: "full", limit: "10" })}`,
           ),
           fetch(
             `/api/v1/conversations?${new URLSearchParams({ search: debouncedQuery, limit: "10" })}`,
+          ),
+          fetch(
+            `/api/v1/labels?${new URLSearchParams({ search: debouncedQuery })}`,
           ),
         ]);
         if (docsRes.ok) {
@@ -69,6 +78,10 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
         if (convsRes.ok) {
           const data = await convsRes.json();
           setConversationResults(data.conversations || []);
+        }
+        if (labelsRes.ok) {
+          const data = await labelsRes.json();
+          setLabelResults(data || []);
         }
       } catch (error) {
         console.error("Search failed:", error);
@@ -92,6 +105,11 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
 
   const handleConversationClick = (conversationId: string) => {
     navigate(`/home/conversation/${conversationId}`);
+    onOpenChange(false);
+  };
+
+  const handleLabelClick = (labelId: string) => {
+    navigate(`/home/memory/documents?label=${labelId}`);
     onOpenChange(false);
   };
 
@@ -122,6 +140,23 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               <span>Add Document</span>
             </CommandItem>
           </CommandGroup>
+
+          {/* Labels */}
+          {labelResults.length > 0 && (
+            <CommandGroup heading="Labels" className="max-w-[700px] p-2">
+              {labelResults.map((label) => (
+                <CommandItem
+                  key={label.id}
+                  value={label.id}
+                  onSelect={() => handleLabelClick(label.id)}
+                  className="flex items-center gap-2 py-2"
+                >
+                  <Tag className="h-4 w-4 flex-shrink-0" style={{ color: label.color }} />
+                  <span className="text-foreground truncate text-sm">{label.name}</span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
 
           {/* Conversations */}
           {conversationResults.length > 0 && (

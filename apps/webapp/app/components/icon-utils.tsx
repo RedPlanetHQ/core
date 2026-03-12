@@ -1,5 +1,5 @@
 import { RiGithubFill, RiMailFill, RiLinkedinFill } from "@remixicon/react";
-import { LayoutGrid } from "lucide-react";
+import { Code, LayoutGrid } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
 import { Claude } from "./icons/claude";
@@ -75,6 +75,7 @@ export const ICON_MAPPING = {
   ynab: Ynab,
   jira: Jira,
   confluence: Confluence,
+  cli: Code,
 
   // Default icon
   integration: LayoutGrid,

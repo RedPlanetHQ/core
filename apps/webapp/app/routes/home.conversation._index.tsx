@@ -49,6 +49,7 @@ export async function action({ request }: ActionFunctionArgs) {
     {
       message: submission.value.message,
       title: submission.value.title ?? "Untitled",
+      incognito: Boolean(submission.value.incognito),
       parts: [{ text: submission.value.message, type: "text" }],
     },
   );

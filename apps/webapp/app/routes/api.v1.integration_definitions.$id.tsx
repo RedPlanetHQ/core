@@ -14,26 +14,34 @@ const ParamsSchema = z.object({
 // Schema for updating an integration definition
 const UpdateIntegrationDefinitionBodySchema = z.object({
   name: z.string().min(1).optional(),
-  slug: z.string().min(1).regex(/^[a-z0-9-]+$/).optional(),
+  slug: z
+    .string()
+    .min(1)
+    .regex(/^[a-z0-9-]+$/)
+    .optional(),
   description: z.string().min(1).optional(),
   icon: z.string().min(1).optional(),
   url: z.string().url().optional().nullable(),
-  spec: z.object({
-    name: z.string(),
-    key: z.string(),
-    description: z.string(),
-    icon: z.string(),
-    mcp: z.object({
-      type: z.enum(["cli", "http"]),
-      url: z.string().optional(),
-      headers: z.record(z.string()).optional(),
-      needsAuth: z.boolean().optional(),
-    }),
-    schedule: z.object({
-      frequency: z.string(),
-    }).optional(),
-    auth: z.record(z.any()),
-  }).optional(),
+  spec: z
+    .object({
+      name: z.string(),
+      key: z.string(),
+      description: z.string(),
+      icon: z.string(),
+      mcp: z.object({
+        type: z.enum(["cli", "http"]),
+        url: z.string().optional(),
+        headers: z.record(z.string()).optional(),
+        needsAuth: z.boolean().optional(),
+      }),
+      schedule: z
+        .object({
+          frequency: z.string(),
+        })
+        .optional(),
+      auth: z.record(z.any()),
+    })
+    .optional(),
   _method: z.enum(["PUT", "DELETE"]).optional(),
 });
 
@@ -55,11 +63,17 @@ export const loader = createLoaderApiRoute(
   },
   async ({ resource: definition, authentication }) => {
     if (!definition) {
-      return json({ error: "Integration definition not found" }, { status: 404 });
+      return json(
+        { error: "Integration definition not found" },
+        { status: 404 },
+      );
     }
 
     // Check workspace access
-    if (definition.workspaceId && definition.workspaceId !== authentication.workspaceId) {
+    if (
+      definition.workspaceId &&
+      definition.workspaceId !== authentication.workspaceId
+    ) {
       return json({ error: "Access denied" }, { status: 403 });
     }
 
@@ -88,11 +102,14 @@ const { action } = createHybridActionApiRoute(
 
     // Find the integration definition
     const existing = await prisma.integrationDefinitionV2.findUnique({
-      where: { id: params.id },
+      where: { id: params.id, workspaceId },
     });
 
     if (!existing) {
-      return json({ error: "Integration definition not found" }, { status: 404 });
+      return json(
+        { error: "Integration definition not found" },
+        { status: 404 },
+      );
     }
 
     // Check workspace access - only workspace-specific definitions can be modified
@@ -117,13 +134,15 @@ const { action } = createHybridActionApiRoute(
 
         if (accountCount > 0) {
           return json(
-            { error: `Cannot delete: ${accountCount} account(s) are using this integration` },
+            {
+              error: `Cannot delete: ${accountCount} account(s) are using this integration`,
+            },
             { status: 400 },
           );
         }
 
         await prisma.integrationDefinitionV2.delete({
-          where: { id: params.id },
+          where: { id: params.id, workspaceId },
         });
 
         logger.info("Deleted integration definition", {
@@ -179,7 +198,9 @@ const { action } = createHybridActionApiRoute(
         data: {
           ...(updateData.name && { name: updateData.name }),
           ...(updateData.slug && { slug: updateData.slug }),
-          ...(updateData.description && { description: updateData.description }),
+          ...(updateData.description && {
+            description: updateData.description,
+          }),
           ...(updateData.icon && { icon: updateData.icon }),
           ...(updateData.url !== undefined && { url: updateData.url }),
           ...(updateData.spec && { spec: updateData.spec }),
