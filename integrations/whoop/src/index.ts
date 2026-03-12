@@ -63,9 +63,6 @@ class WhoopCLI extends IntegrationCLI {
       schedule: {
         frequency: '0 */6 * * *',
       },
-      mcp: {
-        type: 'cli',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://api.prod.whoop.com/oauth/oauth2/token',
