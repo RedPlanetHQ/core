@@ -196,11 +196,13 @@ export async function getActiveVoiceAspects(params: {
 export async function getVoiceAspectsForEpisode(
   episodeUuid: string,
   userId: string,
+  aspects?: VoiceAspect[],
 ): Promise<VoiceAspectNode[]> {
   const records = await prisma.voiceAspect.findMany({
     where: {
       episodeUuids: { has: episodeUuid },
       userId,
+      ...(aspects ? { aspect: { in: aspects } } : {}),
     },
   });
 
