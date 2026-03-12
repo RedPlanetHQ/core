@@ -259,11 +259,11 @@ export async function flushTelemetry(): Promise<void> {
  * Helper to determine model provider from MODEL env variable
  */
 function getModelProvider(): string {
-  const model = env.MODEL.toLowerCase();
-  if (model.includes("gpt") || model.includes("openai")) return "openai";
-  if (model.includes("claude") || model.includes("anthropic"))
-    return "anthropic";
-  if (env.OLLAMA_URL) return "ollama";
+  const provider = env.CHAT_PROVIDER;
+  if (provider === "openai") return "openai";
+  if (provider === "anthropic") return "anthropic";
+  if (provider === "google") return "google";
+  if (provider === "ollama") return "ollama";
   return "unknown";
 }
 

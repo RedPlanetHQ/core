@@ -122,7 +122,7 @@ const EnvironmentSchema = z
     MODEL_TEMPERATURE: z.coerce.number().default(1),
     LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
-    CHAT_PROVIDER: z.enum(["openai", "ollama"]).default("openai"),
+    CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama"]).default("openai"),
     EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),
 
     // Inline batch fallback (when Batch API is unavailable)

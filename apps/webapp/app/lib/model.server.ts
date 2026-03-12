@@ -94,64 +94,59 @@ export const getModel = (takeModel?: string) => {
 
   let modelInstance;
   let modelTemperature = env.MODEL_TEMPERATURE;
-  // Keep OLLAMA_URL if provided (used for self-hosted/local models)
 
-  const useOllamaForChat = chatProvider === "ollama";
-
-  // First check if Ollama URL exists and use Ollama (env-gated).
-  if (useOllamaForChat) {
-    if (!ollamaUrl) {
-      throw new Error(
-        "CHAT_PROVIDER is set to ollama but OLLAMA_URL is not set",
-      );
+  switch (chatProvider) {
+    case "ollama": {
+      if (!ollamaUrl) {
+        throw new Error(
+          "CHAT_PROVIDER is set to ollama but OLLAMA_URL is not set",
+        );
+      }
+      if (!model) {
+        throw new Error("No chat model configured for Ollama. Set MODEL.");
+      }
+      const ollama = createOllama({ baseURL: ollamaUrl });
+      modelInstance = ollama(model);
+      break;
     }
-    if (!model) {
-      throw new Error(
-        "No chat model configured for Ollama. Set MODEL.",
-      );
+    case "anthropic": {
+      if (!anthropicKey) {
+        throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
+      }
+      modelInstance = anthropic(model);
+      modelTemperature = 0.5;
+      break;
     }
-    if (/^gpt-/.test(model)) {
-      logger.warn(
-        `Using Ollama with MODEL=${model}. If this is an OpenAI model id, set MODEL to a local Ollama model (e.g. llama3.2:1b).`,
-      );
+    case "google": {
+      if (!googleKey) {
+        throw new Error(
+          "No Google API key found. Set GOOGLE_GENERATIVE_AI_API_KEY",
+        );
+      }
+      modelInstance = google(model);
+      break;
     }
-    const ollama = createOllama({ baseURL: ollamaUrl });
-    modelInstance = ollama(model);
-  } else if (model.includes("claude")) {
-    if (!anthropicKey) {
-      throw new Error("No Anthropic API key found. Set ANTHROPIC_API_KEY");
+    case "openai":
+    default: {
+      if (!openaiKey && !openaiBaseUrl) {
+        throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
+      }
+      if (openaiBaseUrl && !openaiKey) {
+        throw new Error(
+          "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
+        );
+      }
+      const openaiClient = openaiBaseUrl
+        ? createOpenAI({
+            baseURL: openaiBaseUrl,
+            apiKey: openaiKey,
+          })
+        : openai;
+      modelInstance = openaiApiMode === "chat_completions"
+        ? openaiClient.chat(model)
+        : openaiClient.responses(model);
+      break;
     }
-    modelInstance = anthropic(model);
-    modelTemperature = 0.5;
-  } else if (model.includes("gemini")) {
-    if (!googleKey) {
-      throw new Error(
-        "No Google API key found. Set GOOGLE_GENERATIVE_AI_API_KEY",
-      );
-    }
-    modelInstance = google(model);
-  } else {
-    if (!openaiKey && !openaiBaseUrl) {
-      throw new Error("No OpenAI API key found. Set OPENAI_API_KEY");
-    }
-    if (openaiBaseUrl && !openaiKey) {
-      // Many OpenAI-compatible proxies accept any non-empty value, but the SDK expects a key.
-      // Keep config explicit: require OPENAI_API_KEY even when using OPENAI_BASE_URL.
-      throw new Error(
-        "OPENAI_BASE_URL is set but OPENAI_API_KEY is missing. Set OPENAI_API_KEY (any non-empty value for proxies).",
-      );
-    }
-    const openaiClient = openaiBaseUrl
-      ? createOpenAI({
-          baseURL: openaiBaseUrl,
-          apiKey: openaiKey,
-        })
-      : openai;
-    // `responses`: preferred when calling native OpenAI (supports prompt caching, stored items, etc.).
-    // `chat_completions`: preferred for many OpenAI-compatible proxies (more widely supported, stateless).
-    modelInstance = openaiApiMode === "chat_completions"
-      ? openaiClient.chat(model)
-      : openaiClient.responses(model);
   }
 
   return modelInstance;
@@ -180,14 +175,11 @@ export async function makeModelCall(
   const generateTextOptions: any = {};
 
   const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
-  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
 
   // Add OpenAI provider options for prompt caching (Responses API only).
-  // Why: many OpenAI-compatible proxies reject these parameters on `/chat/completions`.
   if (
-    model.includes("gpt") &&
-    openaiApiMode === "responses" &&
-    !useOllamaForChat
+    env.CHAT_PROVIDER === "openai" &&
+    openaiApiMode === "responses"
   ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `ingestion-${complexity}`,
@@ -278,8 +270,9 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   cacheKey?: string,
   temperature?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
+  const chatProvider = env.CHAT_PROVIDER;
   const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
-  const useOllamaForChat = env.CHAT_PROVIDER === "ollama";
+  const useOllamaForChat = chatProvider === "ollama";
 
   // Default upstream behavior expects `generateObject()` to parse strict JSON output.
   //
@@ -288,6 +281,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   //
   // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
   // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
+  // Note: anthropic and google have native structured output support, so they don't need this.
   const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
     .trim()
     .toLowerCase();
@@ -339,9 +333,8 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
 
   // Add OpenAI provider options for prompt caching
   if (
-    model.includes("gpt") &&
-    openaiApiMode === "responses" &&
-    !useOllamaForChat
+    chatProvider === "openai" &&
+    openaiApiMode === "responses"
   ) {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `structured-${complexity}`,
@@ -541,10 +534,16 @@ export function isProprietaryModel(
   modelName?: string,
   complexity: ModelComplexity = "high",
 ): boolean {
+  const chatProvider = env.CHAT_PROVIDER;
+  // ollama is always self-hosted/open-source
+  if (chatProvider === "ollama") return false;
+  // openai, anthropic, google are proprietary providers
+  if (chatProvider === "anthropic" || chatProvider === "google") return true;
+
+  // For openai provider, check model name (could be proxying an open-source model)
   const model = modelName || getModelForTask(complexity);
   if (!model) return false;
 
-  // Proprietary model patterns
   const proprietaryPatterns = [
     /^gpt-/, // OpenAI models
     /^claude-/, // Anthropic models

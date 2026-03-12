@@ -48,7 +48,7 @@ Environment variables for the CORE webapp container.
 | `OPENAI_BASE_URL`                       | No       | —                                              | OpenAI-compatible API base URL (e.g. proxy endpoint)                                             |
 | `OPENAI_API_MODE`                       | No       | responses                                     | OpenAI API mode: `responses` (default) or `chat_completions` (common for proxies)               |
 | `MODEL`                                 | No       | gpt-4-turbo-2024-04-09                         | Default chat model                                                                               |
-| `CHAT_PROVIDER`                         | No       | openai                                        | Chat provider: `openai` (default) or `ollama`                                                    |
+| `CHAT_PROVIDER`                         | No       | openai                                        | Chat provider: `openai` (default), `anthropic`, `google`, or `ollama`                            |
 | `EMBEDDINGS_PROVIDER`                   | No       | openai                                        | Embeddings provider: `openai` (default) or `ollama`                                              |
 | `EMBEDDING_MODEL`                       | No       | text-embedding-3-small                         | Model for text embeddings                                                                        |
 | `EMBEDDING_MODEL_SIZE`                  | No       | 1536                                          | Embedding dimension (must match pgvector schema/index dimension)                                 |

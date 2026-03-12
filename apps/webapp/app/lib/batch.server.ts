@@ -48,38 +48,27 @@ function pruneInlineBatches(now = Date.now()) {
   }
 }
 
-function getProvider(modelId: string) {
-  const normalizedModelId = (modelId || "").toLowerCase();
-  const hasOpenAIBaseUrl =
-    typeof env.OPENAI_BASE_URL === "string" &&
-    env.OPENAI_BASE_URL.trim().length > 0;
+function getProvider() {
+  const chatProvider = env.CHAT_PROVIDER;
 
-  // Anthropic models
-  if (normalizedModelId.includes("claude")) {
+  // Anthropic provider
+  if (chatProvider === "anthropic") {
     if (!anthropicProvider) {
       anthropicProvider = new AnthropicBatchProvider();
     }
     return anthropicProvider;
   }
 
-  // If an OpenAI base URL is configured, assume we're using an OpenAI-compatible endpoint
-  // (often a proxy) and route batch calls through the OpenAI provider regardless of model name.
-  if (hasOpenAIBaseUrl) {
+  // OpenAI provider (also handles proxies via OPENAI_BASE_URL)
+  if (chatProvider === "openai" || chatProvider === "google") {
     if (!openaiProvider) {
       openaiProvider = new OpenAIBatchProvider();
     }
     return openaiProvider;
   }
 
-  // OpenAI models
-  if (normalizedModelId.includes("gpt") || normalizedModelId.includes("o1")) {
-    if (!openaiProvider) {
-      openaiProvider = new OpenAIBatchProvider();
-    }
-    return openaiProvider;
-  }
-
-  throw new Error(`No batch provider available for model: ${modelId}`);
+  // Ollama doesn't have a native batch API — will fall through to inline batch
+  throw new Error(`No batch provider available for chat provider: ${chatProvider}`);
 }
 
 function createInlineBatchId() {
@@ -245,15 +234,21 @@ async function runInlineBatch<T = any>(
  */
 export async function createBatch<T = any>(params: CreateBatchParams<T>) {
   try {
+    const chatProvider = env.CHAT_PROVIDER;
     const modelId = env.MODEL;
 
-    const provider = getProvider(modelId);
+    // Ollama doesn't support batch API — always use inline
+    if (chatProvider === "ollama") {
+      return await runInlineBatch(params);
+    }
+
+    const provider = getProvider();
     const openaiApiMode = env.OPENAI_API_MODE;
     const hasOpenAIBaseUrl =
       typeof env.OPENAI_BASE_URL === "string" &&
       env.OPENAI_BASE_URL.trim().length > 0;
     const forceInlineForProxy =
-      provider.providerName === "openai" &&
+      chatProvider === "openai" &&
       hasOpenAIBaseUrl &&
       openaiApiMode === "chat_completions";
 
@@ -290,9 +285,7 @@ export async function getBatch<T = any>(
       );
     }
 
-    const modelId = env.MODEL;
-
-    const provider = getProvider(modelId);
+    const provider = getProvider();
     return await provider.getBatch<T>(params);
   } catch (error) {
     logger.error("Failed to get batch:", { error });
@@ -313,9 +306,7 @@ export async function cancelBatch(
       return { success: false };
     }
 
-    const modelId = env.MODEL;
-
-    const provider = getProvider(modelId);
+    const provider = getProvider();
     if (provider.cancelBatch) {
       return await provider.cancelBatch(params);
     }
