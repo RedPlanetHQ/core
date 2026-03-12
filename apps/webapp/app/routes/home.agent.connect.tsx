@@ -4,7 +4,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useFetcher, useLoaderData } from "@remix-run/react";
+import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { Mail, Clock, Check, Star, MessageCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
 import {
@@ -66,6 +66,18 @@ export async function loader({ request }: LoaderFunctionArgs) {
     hasSlack = !!slackAccount;
   }
 
+  // Fetch active MCP sources to detect connected AI providers
+  const activeMcpSources = workspaceId
+    ? await prisma.mCPSession.findMany({
+        where: { deleted: null, workspaceId },
+        select: { source: true },
+        distinct: ["source"],
+      })
+    : [];
+  const connectedProviders = activeMcpSources
+    .map((s) => s.source?.toLowerCase() ?? "")
+    .filter(Boolean);
+
   return json({
     whatsappOptin,
     imessageOptin,
@@ -75,6 +87,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       slack: hasSlack,
       email: hasEmail,
     },
+    connectedProviders,
   });
 }
 
@@ -139,6 +152,34 @@ export async function action({ request }: ActionFunctionArgs) {
 
   return json({ error: "Invalid intent" }, { status: 400 });
 }
+
+const PROVIDER_SOURCE_MAP: Record<string, string> = {
+  claude_code: "claude-code",
+  claude: "claude",
+  cursor: "cursor",
+  codex: "codex",
+  vscode: "vscode",
+  windsurf: "windsurf",
+  zed: "zed",
+  kilo_code: "kilo-code",
+  vscode_insiders: "vscode-insiders",
+  amp: "amp",
+  augment_code: "augment-code",
+  roo_code: "roo-code",
+  opencode: "opencode",
+  qwen_coder: "qwen",
+  copilot_cli: "copilot-cli",
+  copilot_coding_agent: "copilot-agent",
+  warp: "warp",
+  rovo_dev: "rovo-dev",
+  cline: "cline",
+  kiro: "kiro",
+  trae: "trae",
+  perplexity: "perplexity",
+  qodo_gen: "qodo-gen",
+  crush: "crush",
+  factory: "factory",
+};
 
 // Direct communication channels
 const DIRECT_CHANNELS = [
@@ -214,6 +255,12 @@ function DirectChannelCard({
                 Default
               </Badge>
             )}
+            {isConnected && (
+              <Badge className="rounded bg-green-100 text-xs text-green-800">
+                <Check size={10} className="mr-1" />
+                Connected
+              </Badge>
+            )}
             {isWaitlist && !isConnected && isOptedIn && (
               <Badge className="rounded bg-green-100 text-xs text-green-800">
                 <Check size={10} />
@@ -226,7 +273,7 @@ function DirectChannelCard({
                 Waitlist
               </Badge>
             )}
-            {channel.status === "available" && !isDefault && (
+            {channel.status === "available" && !isConnected && !isDefault && (
               <Badge className="rounded bg-green-100 text-xs text-green-800">
                 Available
               </Badge>
@@ -265,19 +312,15 @@ function DirectChannelCard({
             </Button>
           )}
           {channel.id === "slack" && (
-            <Button
-              variant="secondary"
-              className="w-full rounded"
-              onClick={(e) => {
-                e.stopPropagation();
-                window.open(
-                  "https://docs.getcore.me/access-core/channels/slack",
-                  "_blank",
-                );
-              }}
+            <Link
+              to="/home/integration/slack"
+              className="w-full"
+              onClick={(e) => e.stopPropagation()}
             >
-              View Docs
-            </Button>
+              <Button variant="secondary" className="w-full rounded">
+                Connect
+              </Button>
+            </Link>
           )}
           {isConnected && !isDefault && onSetDefault && (
             <Button
@@ -348,8 +391,13 @@ function EmailModal({
 }
 
 export default function Connect() {
-  const { whatsappOptin, imessageOptin, defaultChannel, connectedChannels } =
-    useLoaderData<typeof loader>();
+  const {
+    whatsappOptin,
+    imessageOptin,
+    defaultChannel,
+    connectedChannels,
+    connectedProviders,
+  } = useLoaderData<typeof loader>();
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const fetcher = useFetcher<{ success: boolean }>();
   const imessageFetcher = useFetcher<{ success: boolean }>();
@@ -461,7 +509,9 @@ export default function Connect() {
               <ProviderCard
                 key={provider.id}
                 provider={provider}
-                isConnected={false}
+                isConnected={connectedProviders.includes(
+                  PROVIDER_SOURCE_MAP[provider.id]?.toLowerCase() ?? "",
+                )}
               />
             ))}
           </div>

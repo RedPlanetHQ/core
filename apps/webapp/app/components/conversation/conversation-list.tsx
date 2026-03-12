@@ -86,7 +86,7 @@ export const ConversationList = ({
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
       setIsLoading(false);
-      const newConversations = fetcher.data.conversations.filter(
+      const newConversations = (fetcher.data.conversations ?? []).filter(
         (c) => !loadedConversationIds.current.has(c.id),
       );
       newConversations.forEach((c) => loadedConversationIds.current.add(c.id));

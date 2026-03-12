@@ -20,6 +20,7 @@ import { PageHeader } from "~/components/common/page-header";
 import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
+import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
@@ -56,12 +57,28 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     isPaidPlan(subscription?.planType || "FREE") ||
     user.admin;
 
+  let tools: Array<{ name: string; description: string }> = [];
+  try {
+    const rawTools = await IntegrationRunner.getTools({
+      integrationDefinition: integration as any,
+    });
+    tools = rawTools
+      .filter((t: any) => t.name)
+      .map((t: any) => ({
+        name: t.name,
+        description: t.description ?? "",
+      }));
+  } catch {
+    tools = [];
+  }
+
   return json({
     integration,
     integrationAccounts,
     activeAccounts,
     userId: user.id,
     isAutoReadAvailable,
+    tools,
   });
 }
 
@@ -111,6 +128,7 @@ interface IntegrationDetailProps {
   integrationAccounts: any;
   activeAccounts: any[];
   isAutoReadAvailable: boolean;
+  tools: Array<{ name: string; description: string }>;
 }
 
 export function IntegrationDetail({
@@ -118,6 +136,7 @@ export function IntegrationDetail({
   integrationAccounts,
   activeAccounts,
   isAutoReadAvailable,
+  tools,
 }: IntegrationDetailProps) {
   const hasActiveAccounts = activeAccounts && activeAccounts.length > 0;
 
@@ -244,6 +263,30 @@ export function IntegrationDetail({
                 supportsAutoActivity={hasAutoActivity}
               />
 
+              {/* Tools Section */}
+              {tools && tools.length > 0 && (
+                <div className="mt-6 space-y-3">
+                  <h3 className="text-lg font-medium">
+                    Tools ({tools.length})
+                  </h3>
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {tools.map((tool) => (
+                      <div
+                        key={tool.name}
+                        className="bg-background-3 rounded-lg p-3"
+                      >
+                        <p className="text-sm font-medium">{tool.name}</p>
+                        {tool.description && (
+                          <p className="text-muted-foreground mt-0.5 text-xs">
+                            {tool.description}
+                          </p>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* MCP Authentication Section */}
               <MCPAuthSection
                 integration={integration}
@@ -264,6 +307,7 @@ export default function IntegrationDetailWrapper() {
     integrationAccounts,
     activeAccounts,
     isAutoReadAvailable,
+    tools,
   } = useLoaderData<typeof loader>();
 
   return (
@@ -272,6 +316,7 @@ export default function IntegrationDetailWrapper() {
       integrationAccounts={integrationAccounts}
       activeAccounts={activeAccounts}
       isAutoReadAvailable={isAutoReadAvailable}
+      tools={tools}
     />
   );
 }
