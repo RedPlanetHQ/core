@@ -131,10 +131,12 @@ export abstract class IntegrationCLI {
       .command('sync')
       .description('Perform scheduled sync')
       .requiredOption('--config <config>', 'Integration configuration JSON')
+      .requiredOption('--integration-definition <definition>', 'Integration definition JSON')
       .option('--state <state>', 'Integration state JSON', '{}')
       .action(async (options) => {
         try {
           const config = JSON.parse(options.config);
+          const integrationDefinition = JSON.parse(options.integrationDefinition);
           const state = options.state ? JSON.parse(options.state) : {};
 
           const messages: Message[] = await this.handleEvent({
@@ -142,6 +144,7 @@ export abstract class IntegrationCLI {
             eventBody: {},
             config,
             state,
+            integrationDefinition,
           });
 
           for (const message of messages) {

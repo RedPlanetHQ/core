@@ -16,7 +16,11 @@ export async function run(eventPayload: IntegrationEventPayload) {
       return await integrationCreate(eventPayload.eventBody);
 
     case IntegrationEventType.SYNC:
-      return await handleSchedule(eventPayload.config, eventPayload.state);
+      return await handleSchedule(
+        eventPayload.config,
+        eventPayload.integrationDefinition,
+        eventPayload.state
+      );
 
     case IntegrationEventType.GET_TOOLS: {
       const tools = await getTools();

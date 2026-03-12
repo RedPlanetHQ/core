@@ -58,11 +58,7 @@ function cleanEmailContent(htmlContent: string, textContent: string): string {
   }
 
   // Otherwise use text content and clean it
-  return textContent
-    .replace(/\r/g, '')
-    .replace(/\n\n+/g, '\n\n')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return textContent.replace(/\r/g, '').replace(/\n\n+/g, '\n\n').replace(/\s+/g, ' ').trim();
 }
 
 /**
@@ -225,6 +221,7 @@ ${cleanedContent}`;
 
 export const handleSchedule = async (
   config?: Record<string, string>,
+  integrationDefinition?: any,
   state?: Record<string, string>
 ) => {
   try {
@@ -243,8 +240,8 @@ export const handleSchedule = async (
     const gmailConfig: GmailConfig = {
       access_token: config.access_token,
       refresh_token: config.refresh_token || '',
-      client_id: config.client_id || '',
-      client_secret: config.client_secret || '',
+      client_id: integrationDefinition.config.clientId || '',
+      client_secret: integrationDefinition.config.clientSecret || '',
     };
 
     const gmail = await getGmailClient(gmailConfig);
