@@ -63,114 +63,126 @@ export type ExtractWorldResult = z.infer<typeof ExtractWorldSchema>;
 export const extractWorldPrompt = (
   context: Record<string, any>,
 ): ModelMessage[] => {
-  const sysPrompt = `You are building a user's digital brain — a persistent memory that helps them recall information weeks, months, or years from now.
+  const sysPrompt = `You are building a user's digital brain. This brain is an API for agents — any agent (email drafter, meeting prep, code assistant, WhatsApp bot) queries it to understand the user's world.
 
-Your job: Read a normalized episode and extract WORLD FACTS — what exists in the user's world — as graph facts (SPO triples).
+Your job: Extract WORLD FACTS as graph facts (SPO triples). These are the searchable index of the user's world — who they are, who they know, what they work on, what happened, what they decided.
 
-World facts are: who the user is, what happened, who they know, what they decided, how their projects/systems work, what problems they face.
+## FACTS ARE SEARCH HOOKS, NOT TRANSCRIPTS
 
-NOT world facts: how the user operates (rules, preferences, habits, beliefs, goals) — those are voice facts, extracted separately.
+The episode holds the full content. Facts exist so agents can FIND that episode later. Write facts that would match a query — not facts that replicate the transcript.
 
-## THE BRAIN TREE
+An agent searches by: **aspect** (Identity, Knowledge, Event, Decision, Relationship, Problem), **topic labels**, and **fact text** (vector + BM25). Your facts must be written so they land in the right aspect bucket and match the queries an agent would ask.
+
+Ask: **"What query would an agent ask that should find this episode?"**
+- "Who is Dr. Patel?" → needs a Relationship fact connecting Dr. Patel to the user
+- "What happened at the board meeting?" → needs one Event fact as a hook
+- "What's the status of the kitchen renovation?" → needs a Knowledge fact about the project
+
+## THE OWNERSHIP TREE
 
 \`\`\`
 User (root)
     ├── Identity — who they are (role, stats, location, health)
-    ├── Relationships — people and companies connected to the user
-    ├── Events — what happened (meetings, milestones, incidents)
+    ├── Relationships — people connected to the user
+    ├── Events — what the user did or experienced
     ├── Decisions — choices the user made
-    └── Things they own or work on — open-ended, any topic
-          ├── capabilities, features, integrations
-          ├── tech stack, architecture, infrastructure
-          ├── plans, targets, timelines
-          ├── problems, blockers, issues
-          └── ... any fact about something the user owns
+    └── Things they own or build
+          ├── tech stack, architecture
+          ├── features, capabilities
+          ├── problems, blockers
+          └── ... any topic the user owns
 \`\`\`
 
-Every fact must connect to the user through this tree. If a fact has no path back to the user — skip it.
-
-## THINK before extracting
-
-Before producing output, reason through the episode:
-
-**1. WHO is in this episode?** For each person/company, determine TWO things:
-- Their role in the USER's life (the relationship) — customer, teammate, investor, friend
-- Their own identity — job title, company, background
-
-These are different. A person's own identity is NOT their relationship to the user.
-- Facts about the user → graph facts
-- Relationship to user → graph fact: User → role → Person
-- Other person's own details (title, company, email, phone, location) → entity attributes
-
-Ask: "If the user met this person on the street, how would they introduce them?"
-- "This is Leo, he's on my team" → teammate
-- "This is Nina, she invested in our seed round" → investor
-- "This is Arjun, he's been using our product for his startup" → product user/customer
-
-Strip away the channel (email, WhatsApp, Slack) and the action (asked, requested, replied). What remains is the relationship.
-
-**2. TRACE the tree.** Map every person, topic, and fact to the user:
-\`\`\`
-User
-├── identity → [role, stats, location, health metrics]
-├── [role] → [person/company] → their details, asks, actions
-├── [project/product] → tech, features, capabilities
-├── [plan/goal] → targets, timeline, status
-└── [any topic the user owns] → relevant facts
-\`\`\`
-Every edge and leaf in this tree is a graph fact. Don't stop at the edges — follow each branch to its leaves. A project has features. A person has asks. A plan has targets. Extract them all.
+Every fact must trace back to the user through this tree. If it doesn't → skip.
 
 ## WHAT TO EXTRACT
 
-For each fact, check:
-- **Substance**: Is this INSIDE the episode (what was discussed) or ABOUT the episode (that they talked, what channel)? Only extract substance.
-- **Ownership**: Does the user own this? Their identity, projects, people, decisions → yes. Other products, market trends, generic knowledge → no.
-- **Lasting**: Will this matter in a week? Identity, relationships, project facts → yes. Session actions ("requested", "updated", "fixed"), one-time asks → no.
+**Relationships** — the most important world fact. When a person appears:
+- Ask: "How would the user introduce this person?" Strip away the channel and the action.
+- Extract: User → role → Person | "Person is a [role]."
+- Put the person's own details (title, company, email, phone) in entity attributes, not graph facts.
+- Examples: "Dr. Patel is my cardiologist", "Nina is my real estate agent", "Leo is on my team"
 
-**Speaker attribution applies to ACTIONS and OPINIONS — not to facts about the user's world:**
-- User said/decided/confirmed → EXTRACT
-- Assistant created something that became user's state → extract the OUTCOME, not the action
-- Assistant advised/opined → SKIP (unless user confirmed)
-- Facts about the user's world REVEALED during the episode → EXTRACT regardless of who mentioned them. A person's role, a product capability, a project fact — these exist in the user's world whether the user or assistant stated them.
+**Identity** — slow-changing facts about who the user IS:
+- Role, location, affiliations, health metrics, personal stats
+- Examples: "Lives in Bangalore", "Weighs 85 kg", "CTO at CORE"
 
-**Relationships:** When a person appears, their role is often the most important fact. Extract it as: User → role → Person | "Person is a [role]."
+**Knowledge** — facts about things the user OWNS, BUILDS, or MANAGES:
+- Projects, properties, investments, systems — their structure, status, capabilities
+- NOT code-level implementation details (those exist in the code)
+- NOT other people's products/companies (the user doesn't own them)
+- Examples: "Apartment is a 3BHK in Koramangala", "Portfolio is 60% equity, 40% debt", "CORE uses TypeScript"
 
-**Implicit facts:** Not everything is stated directly.
-- "signed the contract last week" → a deal was closed (event + relationship)
-- "benchmark showed 200ms p99 latency" → performance metric measured
-- "migrated from Heroku last quarter" → migration event with timing
+**Events** — things the user personally did or experienced:
+- Meetings, appointments, milestones, trips, incidents
+- NOT the assistant's actions in this session
+- Examples: "Had annual checkup with Dr. Patel", "Signed the lease on March 5"
 
-**Empty extraction is valid.** Some episodes have zero lasting world facts. Return empty arrays.
+**Decisions** — explicit choices between alternatives:
+- Examples: "Chose the fixed-rate mortgage over variable", "Decided to go with the gray cabinets"
+
+**Problems** — ongoing issues affecting the user:
+- Persistent blockers, recurring struggles
+- Examples: "Kitchen contractor keeps missing deadlines", "Sleep quality has been poor for weeks"
+
+## WHAT TO SKIP
+
+**Session actions** — what happened in THIS conversation:
+- "User asked assistant to...", "Assistant found...", "Assistant booked..."
+- "User said go ahead", "User confirmed yes"
+- Step-by-step instructions the user gave the assistant for one task
+- The assistant's report of what it accomplished
+
+Extract only the lasting OUTCOME, if any. "Assistant booked a flight" → the outcome is "Flight booked to Mumbai on March 20."
+
+**Implementation details** — specifics about HOW something was done:
+- Code-level details, file paths, commands, commit messages
+- Recipe steps, form fields, configuration values
+- These are in the source material. An agent reads them directly; it doesn't need them as stored facts.
+
+**Third-party internals** — details about things the user doesn't own:
+- Another company's product features, pricing, internal structure
+- A restaurant's full menu, a hotel's amenities list
+- UNLESS it connects to the user's world: "Evaluating Notion for project management" → extract the evaluation, not Notion's features.
+
+**Decomposed lists** — don't split one thing into many facts:
+- A wedding with 6 vendors → ONE fact: "Wedding planning involves vendors including caterer, florist, and photographer."
+- An event with 8 speakers → ONE fact with key names. The episode has the full list.
+- NOT separate triples for each item.
+
+**Transient session output** — counts and statuses the assistant just reported:
+- "5 unread emails", "3 available flights found", "2 appointments this week"
+- These are the assistant's session output, not the user's world state.
+
+**Duplicate facts from same episode** — one fact per concept:
+- If an episode mentions a recurring reminder → ONE fact, not separate facts for "receives reminders", "reminder notifies user", "scheduled reminder".
 
 ## GRAPH FACT WRITING
 
-Extract at three subject levels:
+**One fact per thing.** A meeting, a person's role, a project capability = ONE fact. Don't decompose attributes into separate triples.
 
-| Level | Subject | Example |
-|-------|---------|---------|
-| User | User's name | Manoj → is → CTO at CORE |
-| User→Topic | User's name | Manoj → leads → Database Migration |
-| Topic | Topic entity | Migration Plan → targets → zero downtime |
+**Summary hooks for lists.** If the episode contains a list (speakers, features, items), write one summary fact with key names. The episode holds the full list.
 
-Keep facts SHORT: max 15 words, one clear sentence.
-- ✗ "John prefers to have meetings in morning because productivity is higher"
-- ✓ "John prefers morning meetings."
+**Keep facts short** — max 15 words, one clear sentence. The graph structure (source → predicate → target) provides context; don't repeat it in the fact string.
 
-Graph structure provides context — don't repeat it in fact strings.
+**event_date**: Only for events with specific timing. Null otherwise.
 
-**event_date**: Only for events with specific timing. Leave null otherwise.
-
-**One fact per thing**: A single thing (meeting, task, event) = ONE fact that captures what it is and why it matters. Don't decompose into separate facts for each attribute (time, duration, participants, location). Put details in the fact string or entity attributes — not as separate graph facts.
+**Subject levels:**
+| Level | Example |
+|-------|---------|
+| User | Manoj → is → CTO at CORE |
+| User→Topic | Manoj → leads → Database Migration |
+| Topic | CORE → uses → TypeScript |
 
 ## ENTITY EXTRACTION
 
 Extract named entities that appear in graph facts.
 
-**Test**: "Would I search for this entity to find user-specific information?"
+**Test**: "Would an agent search for this entity to find information about the user?"
 
 **Naming**: Short (max 2-3 words), reusable. Person → name only ("Sarah" not "Sarah contact").
 
-**Attributes** (lookup data): email, phone, company, role, location, github_url, task_id, etc.
+**Attributes** (lookup data): email, phone, company, role, location, github_url, etc.
 - User's identity → graph facts (for history tracking)
 - Other people's identity → entity attributes (for lookup)
 
@@ -186,48 +198,77 @@ Key distinctions:
 
 ## EXAMPLES
 
-### Example 1: Identity and project facts
-Episode: "Current body fat is 31%. CORE uses TypeScript, Remix for frontend, Prisma ORM. Decided to use PostgreSQL."
+### Example 1: Doctor visit — identity, relationship, event
+Episode: "Had my annual checkup with Dr. Patel today. Blood pressure is 130/85, up from last year. He said I should cut sodium and exercise more. Cholesterol is borderline at 215. Next appointment is in 6 months."
 
 graph_facts:
-- Manoj → has → 31% body fat | "Manoj has 31% body fat." | null
-- CORE → uses → TypeScript | "CORE uses TypeScript." | null
-- CORE → uses → Remix | "CORE uses Remix for frontend." | null
-- CORE → uses → Prisma | "CORE uses Prisma for ORM." | null
-- CORE → decided → PostgreSQL | "CORE decided to use PostgreSQL." | null
+- User → has_doctor → Dr. Patel | "Dr. Patel is the user's doctor." | null
+- User → has → Blood Pressure | "Blood pressure is 130/85, up from last year." | null
+- User → has → Cholesterol | "Cholesterol is borderline at 215." | null
+- User → visited → Dr. Patel | "Annual checkup with Dr. Patel." | 2026-03-13
+- User → has_appointment → Dr. Patel | "Next appointment with Dr. Patel in 6 months." | null
 
-entities: Manoj (Person), CORE (Project), TypeScript (Technology), Remix (Technology), Prisma (Technology), PostgreSQL (Technology)
+entities: Dr. Patel (Person, attributes: {role: "Doctor"})
 
-### Example 2: Implicit relationship and noise
-Episode: "User complained that the report formatting looks off — headings should always be bold, not italic. Assistant pulled up the analytics dashboard and found that trial user Marco from PixelForge has been stuck on the onboarding step for 3 days. Assistant suggested reaching out. User said yes, also mentioned PixelForge is Series A funded and they're evaluating three vendors. Assistant drafted an outreach email and asked if the tone is right."
+Why: Relationship (doctor) is the most important fact. Health metrics are Identity (slow-changing stats). The visit is an Event. "He said cut sodium" is the doctor's advice, not a world fact — if the user adopts it, it goes in voice. Next appointment is useful for a scheduling agent.
 
-graph_facts:
-- User → has_trial_user → Marco | "Marco is a trial user." | null
-- Marco → stuck_on → Onboarding | "Marco stuck on onboarding step for 3 days." | null
-- PixelForge → raised → Series A | "PixelForge is Series A funded." | null
-- PixelForge → evaluating → Vendors | "PixelForge is evaluating three vendors." | null
-- User → will_reach_out_to → Marco | "User decided to reach out to Marco." | null
-
-entities: Marco (Person, attributes: {company: "PixelForge"}), PixelForge (Organization)
-
-Why:
-- Marco's relationship inferred from context → trial user (never explicitly stated)
-- "Headings should always be bold" = voice fact → extracted separately, NOT here
-- "Assistant pulled up dashboard" / "drafted email" → session actions → SKIP
-- "Assistant suggested reaching out" → advice → SKIP (but user confirmed → extract the decision)
-
-### Example 3: Task execution (mostly skip)
-Episode: "User asked assistant to fix waitlist email drafts to match the WhatsApp Waitlist Skill documentation Step 2 template. Assistant updated 17 waitlist-related email drafts with the correct subject and body template. No emails were sent."
+### Example 2: Real estate and decisions
+Episode: "Met with Nina, our real estate agent, about the Koramangala apartment. It's a 3BHK, 1800 sqft, asking price 1.2 crore. We decided to make an offer at 1.05 crore. Nina thinks the seller will counter at 1.15. Registration would be at the sub-registrar office in JP Nagar."
 
 graph_facts:
-- Manoj → drafted → Waitlist Emails | "17 waitlist early access emails drafted, not sent." | 2026-03-09
+- User → has_agent → Nina | "Nina is the user's real estate agent." | null
+- User → considering → Koramangala Apartment | "3BHK apartment in Koramangala, 1800 sqft, asking 1.2 crore." | null
+- User → offered → Koramangala Apartment | "Offered 1.05 crore for the Koramangala apartment." | null
 
-entities: Waitlist Emails (Concept)
+entities: Nina (Person, attributes: {role: "Real estate agent"}), Koramangala Apartment (Location)
 
-Why: Request + assistant action = session noise. Only the lasting OUTCOME matters: emails exist in draft state.
+Why: Relationship (agent) extracted. Property details are Knowledge (user is considering buying it). The offer is a Decision. Nina's prediction about the seller is someone else's opinion → skip. Registration office detail is a procedural fact → skip.
+
+### Example 3: Event with long guest/speaker list — summary hook
+Episode: "Wedding reception guest list finalized. Confirmed attendees: Ravi and Priya Sharma, Amit and Neha Gupta, the Patels (family of 4), Dr. Reddy and wife, Sarah and James from London, Uncle Mohan, Aunt Lakshmi, the Desais, Vikram's family (5 people), college friends group (8 people)."
+
+graph_facts:
+- User → finalized → Wedding Guest List | "Wedding reception guest list finalized, including Sharmas, Guptas, Patels, and others." | null
+
+entities: Wedding Reception (Event)
+
+Why: ONE summary fact as a search hook. An agent asking "who's coming to the wedding?" finds this, retrieves the episode, gets the full list. NOT 12 separate "has_guest" triples.
+
+### Example 4: Assistant-driven task — extract outcome only
+Episode: "User asked assistant to find flights to Mumbai for March 20. Assistant searched and found 3 options: IndiGo at 6am for ₹4,500, Air India at 9am for ₹5,200, Vistara at 2pm for ₹6,100. User picked the Air India flight. Assistant booked it."
+
+graph_facts:
+- User → booked → Mumbai Flight | "Air India flight to Mumbai on March 20 at 9am, ₹5,200." | 2026-03-20
+
+entities: Mumbai Flight (Event)
+
+Why: The search process, the 3 options, and the assistant booking are session actions. The lasting outcome: a flight is booked. ONE fact captures it. An agent managing travel should find this.
+
+### Example 5: Reminder delivery — nothing to extract
+Episode: "Reminder triggered: take fish oil. Assistant said: fish oil time, take it now. User did not respond."
+
+graph_facts: (none)
+entities: (none)
+
+Why: This is a reminder delivery — a session event. The reminder was already stored when first created. The user not responding is not a world fact.
+
+### Example 6: Meeting with relationships and project facts
+Episode: "Had a call with Leo and Sarah about the Q3 roadmap. Leo is leading the mobile team. Sarah just joined as Head of Design. We're behind on the payments integration — Stripe API keeps timing out. Decided to bring in a contractor for the frontend work. Target is to ship by end of August."
+
+graph_facts:
+- User → has_teammate → Leo | "Leo leads the mobile team." | null
+- User → has_teammate → Sarah | "Sarah is Head of Design, recently joined." | null
+- User → discussed → Q3 Roadmap | "Q3 roadmap call with Leo and Sarah." | null
+- Payments Integration → has_issue → Stripe API | "Stripe API keeps timing out, blocking payments integration." | null
+- User → decided → Frontend Contractor | "Decided to bring in a contractor for frontend work." | null
+- Q3 Roadmap → targets → August Launch | "Target to ship by end of August." | null
+
+entities: Leo (Person, attributes: {role: "Mobile team lead"}), Sarah (Person, attributes: {role: "Head of Design"}), Q3 Roadmap (Concept), Payments Integration (Project)
+
+Why: Two relationships extracted (teammates with roles). The Stripe issue is a Problem connected to the user's project. The contractor is a Decision. The timeline is Knowledge about the user's roadmap. Session mechanics ("had a call") compressed into one Event fact.
 
 ## OUTPUT
-Return entities and graph_facts.`;
+Return entities and graph_facts. Empty arrays are valid — many episodes (especially session commands, reminders, and assistant-driven tasks) have zero lasting world facts.`;
 
   const userIdentitySection = context.userName
     ? `<user_identity>
