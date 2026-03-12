@@ -661,10 +661,20 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           };
         }
 
+        const sender = message.user
+          ? `<@${message.user}>`
+          : message.username || message.bot_id || message.app_id || 'Unknown';
+
         let text = `Message in <#${validatedArgs.channel}>:\n`;
-        text += `From: <@${message.user}>\n`;
+        text += `From: ${sender}\n`;
         text += `Timestamp: ${message.ts}\n`;
         text += `Text: ${message.text}\n`;
+        if (message.blocks && message.blocks.length > 0) {
+          text += `Blocks: ${JSON.stringify(message.blocks)}\n`;
+        }
+        if (message.attachments && message.attachments.length > 0) {
+          text += `Attachments: ${JSON.stringify(message.attachments)}\n`;
+        }
         if (message.thread_ts) text += `Thread: ${message.thread_ts}\n`;
         if (message.reactions) {
           text += `Reactions: ${message.reactions.map((r: any) => `${r.name} (${r.count})`).join(', ')}\n`;
@@ -690,7 +700,16 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         messages.push(`Found ${data.messages.length} message(s) in <#${validatedArgs.channel}>:`);
 
         data.messages.forEach((msg: any) => {
-          let messageText = `[${msg.ts}] <@${msg.user}>: ${msg.text}`;
+          const sender = msg.user
+            ? `<@${msg.user}>`
+            : msg.username || msg.bot_id || msg.app_id || 'Unknown';
+          let messageText = `[${msg.ts}] ${sender}: ${msg.text}`;
+          if (msg.blocks && msg.blocks.length > 0) {
+            messageText += ` | Blocks: ${JSON.stringify(msg.blocks)}`;
+          }
+          if (msg.attachments && msg.attachments.length > 0) {
+            messageText += ` | Attachments: ${JSON.stringify(msg.attachments)}`;
+          }
 
           // Show thread information
           if (msg.reply_count && msg.reply_count > 0) {
