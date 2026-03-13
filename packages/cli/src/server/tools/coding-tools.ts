@@ -2,12 +2,13 @@ import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {existsSync} from 'node:fs';
 import type {GatewayTool} from './browser-tools';
+import {getPreferences} from '@/config/preferences';
 import {
 	getSession,
-	updateSession,
-	listSessions,
-	createSession,
-	closeSession as closeStoredSession,
+	upsertSession,
+	deleteSession,
+	listRunningSessions,
+	isProcessRunningByPid,
 } from '@/utils/coding-sessions';
 import {
 	getAgentConfig,
@@ -16,88 +17,94 @@ import {
 	startAgentProcess,
 	isProcessRunning,
 	stopProcess,
+	startIdleWatchdog,
 	type Logger,
 } from '@/utils/coding-runner';
-import {readAgentSessionOutput, agentSessionExists, getAgentReader} from '@/utils/coding-agents';
+import {
+	readAgentSessionOutput,
+	agentSessionExists,
+	getAgentReader,
+	scanAllSessions,
+	searchSessions,
+	findLatestCodexSession,
+} from '@/utils/coding-agents';
 
-// ============ Zod Schemas ============
+// ============ Schemas ============
 
-export const StartSessionSchema = zod.object({
-	agent: zod.string(),
+const AskSchema = zod.object({
+	agent: zod.string().optional(),
 	prompt: zod.string(),
 	dir: zod.string(),
+	sessionId: zod.string().optional(),
 	model: zod.string().optional(),
 	systemPrompt: zod.string().optional(),
 });
 
-export const ResumeSessionSchema = zod.object({
-	sessionId: zod.string(),
-	prompt: zod.string(),
-});
-
-export const CloseSessionSchema = zod.object({
+const CloseSessionSchema = zod.object({
 	sessionId: zod.string(),
 });
 
-export const ReadSessionSchema = zod.object({
+const ReadSessionSchema = zod.object({
 	sessionId: zod.string(),
+	dir: zod.string(),
 	lines: zod.number().optional(),
 	offset: zod.number().optional(),
 	tail: zod.boolean().optional(),
 });
 
-export const ListSessionsSchema = zod.object({});
+const ListSessionsSchema = zod.object({
+	agent: zod.string().optional(), // e.g. "claude-code" or "codex-cli"
+	since: zod.string().optional(), // ISO date string e.g. "2024-01-01"
+	dir: zod.string().optional(),
+	limit: zod.number().optional(),
+	offset: zod.number().optional(),
+});
+
+const SearchSessionsSchema = zod.object({
+	query: zod.string(),
+	dir: zod.string().optional(),
+	limit: zod.number().optional(),
+});
 
 // ============ JSON Schemas ============
 
 const jsonSchemas: Record<string, Record<string, unknown>> = {
-	coding_start_session: {
+	coding_ask: {
 		type: 'object',
 		properties: {
 			agent: {
 				type: 'string',
-				description: 'Coding agent to use (e.g., "claude-code")',
+				description:
+					'Coding agent to use (e.g., "claude-code", "codex-cli"). Omit to use the configured default.',
 			},
 			prompt: {
 				type: 'string',
-				description: 'The task/prompt to send to the agent',
+				description: 'The question or task to send to the agent',
 			},
 			dir: {
 				type: 'string',
 				description: 'Working directory for the session (must exist)',
 			},
+			sessionId: {
+				type: 'string',
+				description:
+					'Existing session ID to continue. Omit to start a new session.',
+			},
 			model: {
 				type: 'string',
-				description: 'Model to use (optional)',
+				description: 'Model override (optional)',
 			},
 			systemPrompt: {
 				type: 'string',
-				description: 'System prompt (optional)',
+				description: 'System prompt override (optional, new sessions only)',
 			},
 		},
 		required: ['agent', 'prompt', 'dir'],
 	},
-	coding_resume_session: {
-		type: 'object',
-		properties: {
-			sessionId: {
-				type: 'string',
-				description: 'Session ID to resume',
-			},
-			prompt: {
-				type: 'string',
-				description: 'The prompt to send to continue the session',
-			},
-		},
-		required: ['sessionId', 'prompt'],
-	},
 	coding_close_session: {
 		type: 'object',
 		properties: {
-			sessionId: {
-				type: 'string',
-				description: 'Session ID to close',
-			},
+			sessionId: {type: 'string', description: 'Session ID to close'},
 		},
 		required: ['sessionId'],
 	},
@@ -108,28 +115,70 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				type: 'string',
 				description: 'Session ID to read output from',
 			},
-			lines: {
-				type: 'number',
-				description: 'Number of lines to return (default: all)',
-			},
+			dir: {type: 'string', description: 'Working directory of the session'},
+			lines: {type: 'number', description: 'Number of lines to return'},
 			offset: {
 				type: 'number',
-				description:
-					'Line offset to start reading from (0-indexed, default: 0)',
+				description: 'Line offset to start from (0-indexed)',
 			},
 			tail: {
 				type: 'boolean',
-				description:
-					'If true, return the last N lines instead of first N (default: false)',
+				description: 'If true, return the last N lines instead of first N',
 			},
 		},
-		required: ['sessionId'],
+		required: ['sessionId', 'dir'],
 	},
 	coding_list_sessions: {
 		type: 'object',
+		properties: {
+			agent: {
+				type: 'string',
+				description:
+					'Filter to a specific agent (e.g. "claude-code", "codex-cli")',
+			},
+			since: {
+				type: 'string',
+				description:
+					'ISO date string to filter sessions updated after this date (e.g. "2024-03-01")',
+			},
+			dir: {
+				type: 'string',
+				description: 'Filter to a specific working directory (optional)',
+			},
+			limit: {
+				type: 'number',
+				description: 'Max sessions to return per page (default: 20)',
+			},
+			offset: {
+				type: 'number',
+				description: 'Sessions to skip for pagination (default: 0)',
+			},
+		},
+		required: [],
+	},
+	coding_search_sessions: {
+		type: 'object',
+		properties: {
+			query: {
+				type: 'string',
+				description: 'Search term to match against session titles',
+			},
+			dir: {
+				type: 'string',
+				description:
+					'Restrict search to a specific working directory (optional)',
+			},
+			limit: {
+				type: 'number',
+				description: 'Max results to return (default: 10)',
+			},
+		},
+		required: ['query'],
+	},
+	coding_list_agents: {
+		type: 'object',
 		properties: {},
 		required: [],
-		description: 'List all coding sessions',
 	},
 };
 
@@ -137,19 +186,14 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 
 export const codingTools: GatewayTool[] = [
 	{
-		name: 'coding_start_session',
+		name: 'coding_ask',
 		description:
-			'Start a new coding session with the specified agent (runs in background). After starting, the first coding_read_session call may return status="initializing" — this is normal while the agent boots. Wait a few seconds and retry before concluding failure.',
-		inputSchema: jsonSchemas.coding_start_session!,
-	},
-	{
-		name: 'coding_resume_session',
-		description: 'Resume an existing coding session',
-		inputSchema: jsonSchemas.coding_resume_session!,
+			'Send a prompt to a coding agent. Omit sessionId to start a new session; include it to continue an existing one. After calling, use coding_read_session to check output.',
+		inputSchema: jsonSchemas.coding_ask!,
 	},
 	{
 		name: 'coding_close_session',
-		description: 'Close/stop a coding session',
+		description: 'Stop a running coding session',
 		inputSchema: jsonSchemas.coding_close_session!,
 	},
 	{
@@ -160,93 +204,190 @@ export const codingTools: GatewayTool[] = [
 	},
 	{
 		name: 'coding_list_sessions',
-		description: 'List all coding sessions',
+		description:
+			"List all coding sessions from Claude's session history. Sorted by most recent. Supports date filtering.",
 		inputSchema: jsonSchemas.coding_list_sessions!,
+	},
+	{
+		name: 'coding_search_sessions',
+		description:
+			'Search past coding sessions by title or first message content',
+		inputSchema: jsonSchemas.coding_search_sessions!,
+	},
+	{
+		name: 'coding_list_agents',
+		description:
+			'List all configured coding agents and which one is the default',
+		inputSchema: jsonSchemas.coding_list_agents!,
 	},
 ];
 
-// ============ Tool Handlers ============
+// ============ Helpers ============
 
-async function handleStartSession(params: zod.infer<typeof StartSessionSchema>, logger?: Logger) {
-	// Check if directory exists
-	if (!existsSync(params.dir)) {
-		return {
-			success: false,
-			error: `Directory "${params.dir}" does not exist`,
-		};
+/**
+ * Resolve which agent to use.
+ * Priority: explicit param → defaultCodingAgent pref → only configured agent → error
+ */
+function resolveAgent(agentParam?: string): {agent: string} | {error: string} {
+	if (agentParam) return {agent: agentParam};
+
+	const prefs = getPreferences();
+	const coding = (prefs.coding ?? {}) as Record<string, unknown>;
+	const configured = Object.keys(coding);
+
+	if (configured.length === 0) {
+		return {error: 'No coding agents configured. Run: corebrain coding setup'};
 	}
 
-	// Get agent config
-	const config = getAgentConfig(params.agent);
+	if (prefs.defaultCodingAgent && coding[prefs.defaultCodingAgent]) {
+		return {agent: prefs.defaultCodingAgent};
+	}
+
+	if (configured.length === 1) {
+		return {agent: configured[0]!};
+	}
+
+	return {
+		error: `Multiple agents configured (${configured.join(
+			', ',
+		)}). Specify which to use or set a default with: corebrain coding setup`,
+	};
+}
+
+/**
+ * Auto-detect the agent for a session ID by trying all registered readers.
+ * Falls back to default agent or claude-code.
+ */
+function detectAgentForSession(sessionId: string, dir: string): string {
+	// Check running session store first
+	const stored = getSession(sessionId);
+	if (stored?.agent) return stored.agent;
+
+	// Try each reader's sessionExists
+	const readers = ['claude-code', 'codex-cli'] as const;
+	for (const agentName of readers) {
+		const reader = getAgentReader(agentName);
+		if (reader?.sessionExists(dir, sessionId)) return agentName;
+	}
+
+	// Fall back to default
+	const prefs = getPreferences();
+	return prefs.defaultCodingAgent ?? 'claude-code';
+}
+
+// ============ Handlers ============
+
+async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
+	if (!existsSync(params.dir)) {
+		return {success: false, error: `Directory "${params.dir}" does not exist`};
+	}
+
+	const resolved = resolveAgent(params.agent);
+	if ('error' in resolved) return {success: false, error: resolved.error};
+	const agentName = resolved.agent;
+
+	const config = getAgentConfig(agentName);
 	if (!config) {
 		return {
 			success: false,
-			error: `Agent "${params.agent}" not configured. Run 'corebrain coding config --agent ${params.agent}' to set up.`,
+			error: `Agent "${agentName}" not configured. Run 'corebrain coding config --agent ${agentName}' to set up.`,
 		};
 	}
 
-	// Generate session ID and create session
-	const sessionId = randomUUID();
-	const session = createSession({
-		sessionId,
-		agent: params.agent,
-		prompt: params.prompt,
-		dir: params.dir,
-	});
-	updateSession(session);
+	const isResume = Boolean(params.sessionId);
+	let sessionId = params.sessionId ?? randomUUID();
 
-	// Build command args
-	const args = buildStartArgs(config, {
-		prompt: params.prompt,
-		sessionId,
-		model: params.model,
-		systemPrompt: params.systemPrompt,
-	});
-
-	// Start process in background
-	const {pid, error} = startAgentProcess(sessionId, config, args, params.dir, logger);
-
-	if (error) {
+	// For resume, verify process is not already running
+	if (isResume && isProcessRunning(sessionId)) {
 		return {
 			success: false,
-			error: `Failed to start session: ${error}`,
+			error: `Session "${sessionId}" is already running. Wait for it to finish before sending another prompt.`,
 		};
 	}
 
-	// If this agent has a session reader, wait until the session file appears
-	// before returning — this prevents callers from seeing a false "not started" state.
-	const hasReader = getAgentReader(params.agent) !== null;
-	if (hasReader) {
-		const POLL_INTERVAL_MS = 500;
-		const STARTUP_TIMEOUT_MS = 30_000;
-		const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+	// Build args
+	const args = isResume
+		? buildResumeArgs(config, {prompt: params.prompt, sessionId})
+		: buildStartArgs(config, {
+				prompt: params.prompt,
+				sessionId,
+				model: params.model,
+				systemPrompt: params.systemPrompt,
+		  });
 
-		const sessionReady = await new Promise<boolean>((resolve) => {
+	const startedAt = Date.now();
+
+	// Upsert running session record
+	upsertSession({sessionId, agent: agentName, dir: params.dir, startedAt});
+
+	const {pid, error} = startAgentProcess(
+		sessionId,
+		config,
+		args,
+		params.dir,
+		logger,
+	);
+
+	if (error) {
+		deleteSession(sessionId);
+		return {success: false, error: `Failed to start: ${error}`};
+	}
+
+	// Store pid
+	upsertSession({sessionId, agent: agentName, dir: params.dir, pid, startedAt});
+
+	// Start idle watchdog — kills the process if stdout goes silent for 30s
+	if (pid) startIdleWatchdog(sessionId, pid);
+
+	// For agents with a session reader, wait until the session file appears
+	const hasReader = getAgentReader(agentName) !== null;
+	if (hasReader && !isResume) {
+		const deadline = Date.now() + 30_000;
+		const sessionReady = await new Promise<boolean>(resolve => {
 			function check() {
-				if (agentSessionExists(params.agent, params.dir, sessionId)) {
+				if (agentSessionExists(agentName, params.dir, sessionId))
 					return resolve(true);
-				}
-				if (!isProcessRunning(sessionId)) {
-					return resolve(false);
-				}
-				if (Date.now() >= deadline) {
-					return resolve(false);
-				}
-				setTimeout(check, POLL_INTERVAL_MS);
+				if (!isProcessRunning(sessionId)) return resolve(false);
+				if (Date.now() >= deadline) return resolve(false);
+				setTimeout(check, 500);
 			}
-			setTimeout(check, POLL_INTERVAL_MS);
+			setTimeout(check, 500);
 		});
 
 		if (!sessionReady) {
 			stopProcess(sessionId);
-			session.status = 'error';
-			session.error = 'Session failed to start within 30 seconds';
-			session.updatedAt = Date.now();
-			updateSession(session);
+			deleteSession(sessionId);
 			return {
 				success: false,
-				error: 'Session failed to start: agent did not produce output within 30 seconds',
+				error:
+					'Session failed to start: agent did not produce output within 30 seconds',
 			};
+		}
+
+		// For codex-cli: find the actual session ID codex assigned (its own UUID in the filename)
+		// and re-key our running session record to use it.
+		if (agentName === 'codex-cli') {
+			const found = await findLatestCodexSession(params.dir, startedAt);
+
+			if (found && found.sessionId !== sessionId) {
+				sessionId = found.sessionId;
+				upsertSession({
+					sessionId: found.sessionId,
+					agent: agentName,
+					dir: params.dir,
+					pid,
+					startedAt,
+				});
+				return {
+					success: true,
+					result: {
+						sessionId: found.sessionId,
+						pid,
+						resumed: isResume,
+						message: 'Use coding_read_session to check output.',
+					},
+				};
+			}
 		}
 	}
 
@@ -255,119 +396,27 @@ async function handleStartSession(params: zod.infer<typeof StartSessionSchema>, 
 		result: {
 			sessionId,
 			pid,
-			status: 'running',
-			message: 'Session started. Use coding_read_session to check output.',
-		},
-	};
-}
-
-async function handleResumeSession(params: zod.infer<typeof ResumeSessionSchema>, logger?: Logger) {
-	// Get existing session
-	const session = getSession(params.sessionId);
-	if (!session) {
-		return {
-			success: false,
-			error: `Session "${params.sessionId}" not found`,
-		};
-	}
-
-	// Check if already running
-	if (isProcessRunning(params.sessionId)) {
-		return {
-			success: false,
-			error: `Session "${params.sessionId}" is already running`,
-		};
-	}
-
-	// Check if directory still exists
-	if (!existsSync(session.dir)) {
-		return {
-			success: false,
-			error: `Session directory "${session.dir}" no longer exists`,
-		};
-	}
-
-	// Get agent config
-	const config = getAgentConfig(session.agent);
-	if (!config) {
-		return {
-			success: false,
-			error: `Agent "${session.agent}" not configured`,
-		};
-	}
-
-	// Update session status
-	session.status = 'running';
-	session.prompt = params.prompt;
-	session.updatedAt = Date.now();
-	updateSession(session);
-
-	// Build resume args
-	const args = buildResumeArgs(config, {
-		prompt: params.prompt,
-		sessionId: params.sessionId,
-	});
-
-	// Start process in background
-	const {pid, error} = startAgentProcess(params.sessionId, config, args, session.dir, logger);
-
-	if (error) {
-		return {
-			success: false,
-			error: `Failed to resume session: ${error}`,
-		};
-	}
-
-	return {
-		success: true,
-		result: {
-			sessionId: params.sessionId,
-			pid,
-			status: 'running',
-			message: 'Session resumed. Use coding_read_session to check output.',
+			resumed: isResume,
+			message: 'Use coding_read_session to check output.',
 		},
 	};
 }
 
 function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
-	const session = getSession(params.sessionId);
-	if (!session) {
-		return {
-			success: false,
-			error: `Session "${params.sessionId}" not found`,
-		};
-	}
-
-	// Stop the process if running (this triggers auto-save in runner)
-	const wasRunning = stopProcess(params.sessionId);
-
-	// Mark as closed in sessions.json
-	closeStoredSession(params.sessionId);
-
+	stopProcess(params.sessionId);
+	deleteSession(params.sessionId);
 	return {
 		success: true,
-		result: {
-			sessionId: params.sessionId,
-			wasRunning,
-			message: 'Session closed',
-		},
+		result: {sessionId: params.sessionId, message: 'Session closed'},
 	};
 }
 
 async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
-	// First check stored session exists
-	const session = getSession(params.sessionId);
-	if (!session) {
-		return {
-			success: false,
-			error: `Session "${params.sessionId}" not found`,
-		};
-	}
-
-	// Check if process is still running
 	const running = isProcessRunning(params.sessionId);
 
-	// Read from agent's session file using the appropriate reader
+	// Detect agent: running store → reader probe → default
+	const agent = detectAgentForSession(params.sessionId, params.dir);
+
 	const {
 		entries,
 		totalLines,
@@ -376,45 +425,37 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 		fileSizeBytes,
 		fileSizeHuman,
 		error: readError,
-	} = await readAgentSessionOutput(session.agent, session.dir, params.sessionId, {
+	} = await readAgentSessionOutput(agent, params.dir, params.sessionId, {
 		lines: params.lines,
 		offset: params.offset,
 		tail: params.tail,
 	});
 
-	// Determine status
-	let status = session.status;
+	let status: string;
 	let statusMessage: string | undefined;
+
 	if (running && !fileExists) {
-		// Process is alive but hasn't written its session file yet — still booting
 		status = 'initializing';
-		statusMessage =
-			'Session is starting up. The agent has not written output yet. Wait a few seconds and read again.';
+		statusMessage = 'Agent is booting. Wait a few seconds and read again.';
 	} else if (running) {
 		status = 'running';
-	} else if (fileExists && status === 'running') {
-		// Process finished, update status
+	} else {
+		// Process finished — clean up running session record
+		const stored = getSession(params.sessionId);
+		if (stored) deleteSession(params.sessionId);
 		status = 'completed';
-		session.status = 'completed';
-		session.updatedAt = Date.now();
-		updateSession(session);
 	}
 
 	return {
 		success: true,
 		result: {
-			sessionId: session.sessionId,
-			agent: session.agent,
-			prompt: session.prompt,
-			dir: session.dir,
+			sessionId: params.sessionId,
+			dir: params.dir,
 			status,
 			...(statusMessage ? {statusMessage} : {}),
 			running,
 			entries,
-			error: readError || session.error,
-			exitCode: null,
-			startedAt: session.startedAt,
-			updatedAt: session.updatedAt,
+			error: readError,
 			totalLines,
 			returnedLines,
 			fileExists,
@@ -424,30 +465,82 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	};
 }
 
-function handleListSessions() {
-	const sessions = listSessions();
+async function handleListSessions(
+	params: zod.infer<typeof ListSessionsSchema>,
+) {
+	const since = params.since ? new Date(params.since).getTime() : undefined;
+	const {sessions, total, hasMore} = await scanAllSessions({
+		agent: params.agent,
+		dir: params.dir,
+		since,
+		limit: params.limit ?? 20,
+		offset: params.offset ?? 0,
+	});
+
+	const runningIds = new Set(listRunningSessions().map(s => s.sessionId));
+
 	return {
 		success: true,
 		result: {
-			sessions: sessions.map(s => {
-				// Check if process is still running
-				const running = isProcessRunning(s.sessionId);
-				return {
-					sessionId: s.sessionId,
-					agent: s.agent,
-					dir: s.dir,
-					status: running ? 'running' : s.status,
-					running,
-					startedAt: s.startedAt,
-					updatedAt: s.updatedAt,
-				};
-			}),
+			sessions: sessions.map(s => ({
+				sessionId: s.sessionId,
+				agent: s.agent,
+				dir: s.dir,
+				title: s.title,
+				running: runningIds.has(s.sessionId),
+				createdAt: new Date(s.createdAt).toISOString(),
+				updatedAt: new Date(s.updatedAt).toISOString(),
+				fileSizeBytes: s.fileSizeBytes,
+			})),
+			total,
+			hasMore,
+			offset: params.offset ?? 0,
+		},
+	};
+}
+
+async function handleSearchSessions(
+	params: zod.infer<typeof SearchSessionsSchema>,
+) {
+	const sessions = await searchSessions(params.query, {
+		dir: params.dir,
+		limit: params.limit ?? 10,
+	});
+
+	const runningIds = new Set(listRunningSessions().map(s => s.sessionId));
+
+	return {
+		success: true,
+		result: {
+			sessions: sessions.map(s => ({
+				sessionId: s.sessionId,
+				dir: s.dir,
+				title: s.title,
+				running: runningIds.has(s.sessionId),
+				updatedAt: new Date(s.updatedAt).toISOString(),
+			})),
 			count: sessions.length,
 		},
 	};
 }
 
-// ============ Tool Execution ============
+function handleListAgents() {
+	const prefs = getPreferences();
+	const coding = (prefs.coding ?? {}) as Record<string, unknown>;
+	const agents = Object.keys(coding).map(name => ({
+		name,
+		isDefault: name === (prefs.defaultCodingAgent ?? Object.keys(coding)[0]),
+	}));
+	return {
+		success: true,
+		result: {
+			agents,
+			default: prefs.defaultCodingAgent ?? agents[0]?.name ?? null,
+		},
+	};
+}
+
+// ============ Dispatch ============
 
 export async function executeCodingTool(
 	toolName: string,
@@ -456,22 +549,18 @@ export async function executeCodingTool(
 ): Promise<{success: boolean; result?: unknown; error?: string}> {
 	try {
 		switch (toolName) {
-			case 'coding_start_session':
-				return await handleStartSession(StartSessionSchema.parse(params), logger);
-
-			case 'coding_resume_session':
-				return await handleResumeSession(ResumeSessionSchema.parse(params), logger);
-
+			case 'coding_ask':
+				return await handleAsk(AskSchema.parse(params), logger);
 			case 'coding_close_session':
 				return handleCloseSession(CloseSessionSchema.parse(params));
-
 			case 'coding_read_session':
 				return await handleReadSession(ReadSessionSchema.parse(params));
-
 			case 'coding_list_sessions':
-				ListSessionsSchema.parse(params);
-				return handleListSessions();
-
+				return await handleListSessions(ListSessionsSchema.parse(params));
+			case 'coding_search_sessions':
+				return await handleSearchSessions(SearchSessionsSchema.parse(params));
+			case 'coding_list_agents':
+				return handleListAgents();
 			default:
 				return {success: false, error: `Unknown tool: ${toolName}`};
 		}

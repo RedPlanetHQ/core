@@ -6,6 +6,10 @@ import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
 
 export const options = zod.object({
+	agent: zod.string().optional().describe('Filter to a specific agent (e.g. claude-code, codex-cli)'),
+	since: zod.string().optional().describe('Filter sessions updated after this date (e.g. 2024-03-01)'),
+	dir: zod.string().optional().describe('Filter to a specific directory'),
+	offset: zod.number().optional().describe('Skip N sessions (for pagination)'),
 	json: zod.boolean().optional().describe('Output as JSON'),
 });
 
@@ -17,67 +21,47 @@ interface SessionInfo {
 	sessionId: string;
 	agent: string;
 	dir: string;
-	status: string;
+	title: string | null;
 	running: boolean;
-	startedAt: number;
-	updatedAt: number;
-}
-
-function formatTime(timestamp: number): string {
-	const date = new Date(timestamp);
-	const now = new Date();
-	const diffMs = now.getTime() - date.getTime();
-	const diffMins = Math.floor(diffMs / 60000);
-	const diffHours = Math.floor(diffMins / 60);
-	const diffDays = Math.floor(diffHours / 24);
-
-	if (diffDays > 0) return `${diffDays}d ago`;
-	if (diffHours > 0) return `${diffHours}h ago`;
-	if (diffMins > 0) return `${diffMins}m ago`;
-	return 'just now';
+	createdAt: string;
+	updatedAt: string;
+	fileSizeBytes: number;
 }
 
 async function runListSessions(opts: zod.infer<typeof options>): Promise<void> {
-	const result = await executeCodingTool('coding_list_sessions', {});
+	const result = await executeCodingTool('coding_list_sessions', {
+		agent: opts.agent,
+		since: opts.since,
+		dir: opts.dir,
+		offset: opts.offset,
+	});
 
 	if (!result.success) {
 		p.log.error(result.error || 'Unknown error');
 		return;
 	}
 
-	const res = result.result as {sessions: SessionInfo[]; count: number};
+	const res = result.result as {sessions: SessionInfo[]; total: number; hasMore: boolean; offset: number};
 
 	if (opts.json) {
 		console.log(JSON.stringify(res, null, 2));
 		return;
 	}
 
-	if (res.count === 0) {
+	if (res.sessions.length === 0) {
 		p.log.info('No sessions found.');
 		p.log.info("Start one with: corebrain coding start");
 		return;
 	}
 
 	const lines = res.sessions.map((s) => {
-		const statusColor =
-			s.status === 'running'
-				? chalk.blue
-				: s.status === 'completed'
-					? chalk.green
-					: s.status === 'closed'
-						? chalk.gray
-						: chalk.red;
-
-		return [
-			`${chalk.bold(s.sessionId.slice(0, 8))}`,
-			chalk.cyan(s.agent),
-			statusColor(s.status),
-			chalk.dim(s.dir),
-			chalk.dim(formatTime(s.startedAt)),
-		].join('  ');
+		const status = s.running ? chalk.blue('running') : chalk.dim(s.updatedAt.slice(0, 10));
+		const title = s.title ? chalk.white(s.title.slice(0, 55)) : chalk.dim('(no title)');
+		return [chalk.bold(s.sessionId.slice(0, 8)), chalk.cyan(s.agent), title, status, chalk.dim(s.dir)].join('  ');
 	});
 
-	p.note(lines.join('\n'), `Sessions (${res.count})`);
+	const pagination = res.hasMore ? ` — showing ${res.offset + 1}–${res.offset + res.sessions.length} of ${res.total}` : '';
+	p.note(lines.join('\n'), `Sessions (${res.total})${pagination}`);
 }
 
 export default function CodingList({options: opts}: Props) {
@@ -85,12 +69,8 @@ export default function CodingList({options: opts}: Props) {
 
 	useEffect(() => {
 		runListSessions(opts)
-			.catch((err) => {
-				p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			})
-			.finally(() => {
-				setTimeout(() => exit(), 100);
-			});
+			.catch((err) => p.log.error(err instanceof Error ? err.message : 'Unknown error'))
+			.finally(() => setTimeout(() => exit(), 100));
 	}, [opts, exit]);
 
 	return null;

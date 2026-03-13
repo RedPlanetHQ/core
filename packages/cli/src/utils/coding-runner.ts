@@ -1,18 +1,11 @@
 import {spawn} from 'node:child_process';
-import {existsSync, mkdirSync, openSync} from 'node:fs';
+import {existsSync, mkdirSync, openSync, statSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
 import {getPreferences} from '@/config/preferences';
 import type {CliBackendConfig} from '@/types/config';
-import {
-	updateSession,
-	getSession,
-	isProcessRunningByPid,
-} from '@/utils/coding-sessions';
+import {getSession, deleteSession, isProcessRunningByPid} from '@/utils/coding-sessions';
 
-/**
- * Get agent configuration by name
- */
 export function getAgentConfig(agentName: string): CliBackendConfig | null {
 	const prefs = getPreferences();
 	const coding = prefs.coding as Record<string, CliBackendConfig> | undefined;
@@ -22,9 +15,6 @@ export function getAgentConfig(agentName: string): CliBackendConfig | null {
 	return coding[agentName];
 }
 
-/**
- * Build command arguments for starting a new session
- */
 export function buildStartArgs(
 	config: CliBackendConfig,
 	params: {
@@ -36,81 +26,54 @@ export function buildStartArgs(
 ): string[] {
 	const args = [...(config.args || [])];
 
-	// Add session arg
 	if (config.sessionArg && config.sessionMode === 'always') {
 		args.push(config.sessionArg, params.sessionId);
 	}
 
-	// Add allowed tools
 	if (config.allowedTools && config.allowedTools.length > 0) {
 		for (const tool of config.allowedTools) {
 			args.push('--allowedTools', tool);
 		}
 	}
 
-	// Add disallowed tools
 	if (config.disallowedTools && config.disallowedTools.length > 0) {
 		for (const tool of config.disallowedTools) {
 			args.push('--disallowedTools', tool);
 		}
 	}
 
-	// Add model
 	if (params.model && config.modelArg) {
 		args.push(config.modelArg, params.model);
 	}
 
-	// Add system prompt
 	if (params.systemPrompt && config.systemPromptArg) {
 		args.push(config.systemPromptArg, params.systemPrompt);
 	}
 
-	// Add the prompt as the last argument
 	args.push(params.prompt);
-
 	return args;
 }
 
-/**
- * Build command arguments for resuming an existing session
- */
 export function buildResumeArgs(
 	config: CliBackendConfig,
-	params: {
-		prompt: string;
-		sessionId: string;
-	},
+	params: {prompt: string; sessionId: string},
 ): string[] {
 	if (config.resumeArgs) {
-		// Use resume args and replace {sessionId} placeholder
 		const args = config.resumeArgs.map(arg =>
 			arg.replace('{sessionId}', params.sessionId),
 		);
 		args.push(params.prompt);
 		return args;
 	}
-
-	// Fallback to start args with session
 	return buildStartArgs(config, params);
 }
 
-/**
- * Get path for session stdout/stderr log files
- */
-function getSessionLogPath(
-	sessionId: string,
-	stream: 'stdout' | 'stderr',
-): string {
-	const logsDir = join(homedir(), '.corebrain', 'logs');
-	return join(logsDir, `${sessionId}.${stream}.log`);
+export function getSessionLogPath(sessionId: string, stream: 'stdout' | 'stderr'): string {
+	return join(homedir(), '.corebrain', 'logs', `${sessionId}.${stream}.log`);
 }
 
-/**
- * Ensure logs directory exists
- */
 function ensureLogsDir(): void {
 	const logsDir = join(homedir(), '.corebrain', 'logs');
-
 	if (!existsSync(logsDir)) {
 		mkdirSync(logsDir, {recursive: true});
 	}
@@ -118,11 +81,6 @@ function ensureLogsDir(): void {
 
 export type Logger = (message: string) => void;
 
-/**
- * Start an agent process in the background (detached)
- * Returns immediately, CLI can exit while process continues
- * Output is written by the agent to its own session files (e.g., Claude Code writes to ~/.claude/projects/)
- */
 export function startAgentProcess(
 	sessionId: string,
 	config: CliBackendConfig,
@@ -137,21 +95,11 @@ export function startAgentProcess(
 	log(`SPAWN_ARGS: ${JSON.stringify(args)}`);
 	log(`SPAWN_CWD: ${workingDirectory}`);
 
-	// Ensure logs directory exists
 	ensureLogsDir();
 
-	// Open log files for stdout/stderr (so we can see any errors from the process itself)
-	const stdoutPath = getSessionLogPath(sessionId, 'stdout');
-	const stderrPath = getSessionLogPath(sessionId, 'stderr');
-	log(`SPAWN_STDOUT_LOG: ${stdoutPath}`);
-	log(`SPAWN_STDERR_LOG: ${stderrPath}`);
+	const stdoutFd = openSync(getSessionLogPath(sessionId, 'stdout'), 'w');
+	const stderrFd = openSync(getSessionLogPath(sessionId, 'stderr'), 'w');
 
-	const stdoutFd = openSync(stdoutPath, 'w');
-	const stderrFd = openSync(stderrPath, 'w');
-
-	// Spawn detached process
-	// Note: shell: false is required to avoid shell metacharacter issues in prompts
-	// (parentheses, quotes, etc. would otherwise be interpreted by the shell)
 	let proc;
 	try {
 		proc = spawn(config.command, args, {
@@ -162,58 +110,31 @@ export function startAgentProcess(
 		});
 	} catch (err) {
 		const errorMsg = err instanceof Error ? err.message : String(err);
-		log(`SPAWN_ERROR: Failed to spawn process: ${errorMsg}`);
+		log(`SPAWN_ERROR: ${errorMsg}`);
 		return {pid: undefined, error: errorMsg};
 	}
 
 	const pid = proc.pid;
 	log(`SPAWN_PID: ${pid}`);
 
-	// Handle spawn errors
-	proc.on('error', (err) => {
-		log(`SPAWN_PROCESS_ERROR: ${err.message}`);
-	});
+	proc.on('error', (err) => log(`SPAWN_PROCESS_ERROR: ${err.message}`));
+	proc.on('exit', (code, signal) => log(`SPAWN_EXIT: pid=${pid} code=${code} signal=${signal}`));
 
-	// Log when process exits (useful for debugging quick failures)
-	proc.on('exit', (code, signal) => {
-		log(`SPAWN_EXIT: pid=${pid} code=${code} signal=${signal}`);
-	});
-
-	// Store PID in session
-	const session = getSession(sessionId);
-	if (session && pid) {
-		session.pid = pid;
-		session.updatedAt = Date.now();
-		updateSession(session);
-		log(`SPAWN_SESSION_UPDATED: pid stored in session`);
-	}
-
-	// Unref so parent can exit
 	proc.unref();
 	log(`SPAWN_DETACHED: process detached and running`);
 
 	return {pid};
 }
 
-/**
- * Check if a process is still running by session ID
- */
 export function isProcessRunning(sessionId: string): boolean {
 	const session = getSession(sessionId);
-	if (!session?.pid) {
-		return false;
-	}
+	if (!session?.pid) return false;
 	return isProcessRunningByPid(session.pid);
 }
 
-/**
- * Stop/kill a running process by session ID
- */
 export function stopProcess(sessionId: string): boolean {
 	const session = getSession(sessionId);
-	if (!session?.pid) {
-		return false;
-	}
+	if (!session?.pid) return false;
 
 	if (isProcessRunningByPid(session.pid)) {
 		try {
@@ -227,20 +148,46 @@ export function stopProcess(sessionId: string): boolean {
 }
 
 /**
- * Get process info from session
+ * Start a background watchdog for a running session.
+ * If the stdout log has not grown for `idleTimeoutMs` (default 30s), the process is killed.
+ * Also cleans up the running session record when the process exits naturally.
  */
-export function getProcessInfo(sessionId: string): {
-	pid: number | undefined;
-	running: boolean;
-	startedAt: number;
-} | null {
-	const session = getSession(sessionId);
-	if (!session) {
-		return null;
+export function startIdleWatchdog(
+	sessionId: string,
+	pid: number,
+	idleTimeoutMs = 30_000,
+): void {
+	const logPath = getSessionLogPath(sessionId, 'stdout');
+	const pollInterval = 5_000;
+	let lastSize = -1;
+	let lastChangedAt = Date.now();
+
+	function check() {
+		// Process already dead — clean up session record and stop
+		if (!isProcessRunningByPid(pid)) {
+			deleteSession(sessionId);
+			return;
+		}
+
+		let currentSize = 0;
+		try {
+			currentSize = statSync(logPath).size;
+		} catch { /* log not created yet */ }
+
+		if (currentSize !== lastSize) {
+			lastSize = currentSize;
+			lastChangedAt = Date.now();
+		} else if (Date.now() - lastChangedAt >= idleTimeoutMs) {
+			// Idle too long — kill and clean up
+			try {
+				process.kill(pid, 'SIGTERM');
+			} catch { /* already gone */ }
+			deleteSession(sessionId);
+			return;
+		}
+
+		setTimeout(check, pollInterval);
 	}
-	return {
-		pid: session.pid,
-		running: session.pid ? isProcessRunningByPid(session.pid) : false,
-		startedAt: session.startedAt,
-	};
+
+	setTimeout(check, pollInterval);
 }

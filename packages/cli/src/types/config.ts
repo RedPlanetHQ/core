@@ -117,6 +117,7 @@ export interface CliBackendConfig {
 	allowedTools?: string[];
 	disallowedTools?: string[];
 	modelArg?: string;
+	imageArg?: string;
 	systemPromptArg?: string;
 	workingDirArg?: string;
 }
@@ -142,6 +143,7 @@ export interface UserPreferences {
 	selectedTheme?: ThemePreset;
 	gateway?: GatewayConfig;
 	coding?: CodingConfig;
+	defaultCodingAgent?: string;
 	browser?: BrowserConfig;
 	exec?: ExecConfig;
 }

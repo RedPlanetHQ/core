@@ -1,108 +1,36 @@
-import {existsSync, statSync, createReadStream} from 'node:fs';
-import {join} from 'node:path';
+import {existsSync, statSync, readdirSync} from 'node:fs';
+import {join, basename} from 'node:path';
 import {homedir} from 'node:os';
-import {createInterface} from 'node:readline';
-import type {
-	AgentReader,
-	AgentReadResult,
-	AgentReadOptions,
-	SessionEntry,
-} from './types';
+import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type ScannedSession, type ScanOptions} from './types';
 
-// Claude Code projects directory
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
-
-// Max file size before limiting lines (5MB)
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
-// Default lines to read when file is too large
 const DEFAULT_LARGE_FILE_LINES = 100;
 
 /**
- * Convert a directory path to Claude Code's folder name format
- * /Users/harshithmullapudi/Documents/core -> -Users-harshithmullapudi-Documents-core
+ * /Users/foo/bar  →  -Users-foo-bar
  */
 function dirToProjectFolder(dir: string): string {
 	return dir.replace(/\//g, '-');
 }
 
 /**
- * Get the Claude Code session JSONL file path
+ * -Users-foo-bar  →  /Users/foo/bar
  */
+function projectFolderToDir(folder: string): string {
+	return folder.replace(/^-/, '/').replace(/-/g, '/');
+}
+
 function getSessionPath(dir: string, sessionId: string): string {
-	const projectFolder = dirToProjectFolder(dir);
-	return join(CLAUDE_PROJECTS_DIR, projectFolder, `${sessionId}.jsonl`);
+	return join(CLAUDE_PROJECTS_DIR, dirToProjectFolder(dir), `${sessionId}.jsonl`);
 }
 
-/**
- * Format bytes to human readable size
- */
-function formatBytes(bytes: number): string {
-	if (bytes === 0) return '0 B';
-	const k = 1024;
-	const sizes = ['B', 'KB', 'MB', 'GB'];
-	const i = Math.floor(Math.log(bytes) / Math.log(k));
-	return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
-}
+export class ClaudeCodeReader extends BaseCodingAgentReader {
+	readonly agentName = 'claude-code';
 
-/**
- * Read JSONL file line by line (streaming)
- */
-async function readJsonlLines(
-	filePath: string,
-	options: {lines?: number; offset?: number; tail?: boolean} = {},
-): Promise<{entries: SessionEntry[]; totalLines: number}> {
-	return new Promise((resolve, reject) => {
-		const entries: SessionEntry[] = [];
-		let lineCount = 0;
-
-		const rl = createInterface({
-			input: createReadStream(filePath),
-			crlfDelay: Infinity,
-		});
-
-		rl.on('line', (line) => {
-			if (!line.trim()) return;
-			lineCount++;
-
-			try {
-				const entry = JSON.parse(line) as SessionEntry;
-				entries.push(entry);
-			} catch {
-				// Skip malformed lines
-			}
-		});
-
-		rl.on('close', () => {
-			let resultEntries: SessionEntry[];
-			const totalLines = entries.length;
-
-			if (options.tail && options.lines) {
-				const start = Math.max(0, totalLines - options.lines);
-				resultEntries = entries.slice(start);
-			} else if (options.lines || options.offset) {
-				const offset = options.offset || 0;
-				const limit = options.lines || totalLines;
-				resultEntries = entries.slice(offset, offset + limit);
-			} else {
-				resultEntries = entries;
-			}
-
-			resolve({entries: resultEntries, totalLines});
-		});
-
-		rl.on('error', reject);
-	});
-}
-
-/**
- * Claude Code session reader
- * Reads from ~/.claude/projects/<path>/<session-id>.jsonl
- */
-export const claudeCodeReader: AgentReader = {
 	sessionExists(dir: string, sessionId: string): boolean {
-		const sessionPath = getSessionPath(dir, sessionId);
-		return existsSync(sessionPath);
-	},
+		return existsSync(getSessionPath(dir, sessionId));
+	}
 
 	async readSessionOutput(
 		dir: string,
@@ -112,61 +40,89 @@ export const claudeCodeReader: AgentReader = {
 		const sessionPath = getSessionPath(dir, sessionId);
 
 		if (!existsSync(sessionPath)) {
-			return {
-				entries: [],
-				totalLines: 0,
-				returnedLines: 0,
-				fileExists: false,
-				fileSizeBytes: 0,
-				fileSizeHuman: '0 B',
-			};
+			return {entries: [], totalLines: 0, returnedLines: 0, fileExists: false, fileSizeBytes: 0, fileSizeHuman: '0 B'};
 		}
 
-		// Get file size
 		let fileSizeBytes = 0;
 		try {
-			const stats = statSync(sessionPath);
-			fileSizeBytes = stats.size;
-		} catch {
-			// Ignore stat errors
-		}
+			fileSizeBytes = statSync(sessionPath).size;
+		} catch { /* ignore */ }
 
-		const fileSizeHuman = formatBytes(fileSizeBytes);
+		const fileSizeHuman = this.formatBytes(fileSizeBytes);
 
-		// If file is large and no explicit lines limit, auto-limit
 		let readOptions = {...options};
 		if (fileSizeBytes > MAX_FILE_SIZE_BYTES && !options.lines) {
-			readOptions = {
-				...options,
-				lines: DEFAULT_LARGE_FILE_LINES,
-				tail: true, // Get most recent entries
-			};
+			readOptions = {...options, lines: DEFAULT_LARGE_FILE_LINES, tail: true};
 		}
 
 		try {
-			const {entries, totalLines} = await readJsonlLines(
-				sessionPath,
-				readOptions,
-			);
-
-			return {
-				entries,
-				totalLines,
-				returnedLines: entries.length,
-				fileExists: true,
-				fileSizeBytes,
-				fileSizeHuman,
-			};
+			const {entries, totalLines} = await this.readJsonlLines(sessionPath, readOptions);
+			return {entries, totalLines, returnedLines: entries.length, fileExists: true, fileSizeBytes, fileSizeHuman};
 		} catch (err) {
 			return {
-				entries: [],
-				totalLines: 0,
-				returnedLines: 0,
-				fileExists: true,
-				fileSizeBytes,
-				fileSizeHuman,
+				entries: [], totalLines: 0, returnedLines: 0, fileExists: true, fileSizeBytes, fileSizeHuman,
 				error: err instanceof Error ? err.message : 'Failed to read session file',
 			};
 		}
-	},
-};
+	}
+
+	async scanSessions(options: ScanOptions = {}): Promise<ScannedSession[]> {
+		if (!existsSync(CLAUDE_PROJECTS_DIR)) return [];
+
+		let projectFolders: string[];
+		try {
+			projectFolders = readdirSync(CLAUDE_PROJECTS_DIR);
+		} catch {
+			return [];
+		}
+
+		const results: ScannedSession[] = [];
+
+		for (const folder of projectFolders) {
+			const dir = projectFolderToDir(folder);
+			if (options.dir && dir !== options.dir) continue;
+
+			const projectPath = join(CLAUDE_PROJECTS_DIR, folder);
+			let files: string[];
+			try {
+				files = readdirSync(projectPath).filter((f) => f.endsWith('.jsonl'));
+			} catch {
+				continue;
+			}
+
+			for (const file of files) {
+				const filePath = join(projectPath, file);
+				let stats;
+				try {
+					stats = statSync(filePath);
+				} catch {
+					continue;
+				}
+
+				if (options.since && stats.mtimeMs < options.since) continue;
+
+				results.push({
+					sessionId: basename(file, '.jsonl'),
+					agent: this.agentName,
+					dir,
+					title: null,
+					filePath,
+					fileSizeBytes: stats.size,
+					createdAt: stats.birthtimeMs || stats.mtimeMs,
+					updatedAt: stats.mtimeMs,
+				});
+			}
+		}
+
+		results.sort((a, b) => b.updatedAt - a.updatedAt);
+
+		// Populate titles in parallel (before slicing — titles are cheap to read)
+		await Promise.all(results.map(async (s) => {
+			s.title = await this.extractTitle(s.filePath);
+		}));
+
+		return results;
+	}
+}
+
+export const claudeCodeReader = new ClaudeCodeReader();

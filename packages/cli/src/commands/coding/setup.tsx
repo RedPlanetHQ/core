@@ -34,6 +34,17 @@ const agentTemplates: AgentTemplate[] = [
 			sessionIdFields: ['session_id'],
 		},
 	},
+	{
+		name: 'codex-cli',
+		commands: ['codex'],
+		defaultConfig: {
+			args: ['exec', '--json', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
+			resumeArgs: ['exec', 'resume', '{sessionId}', '--color', 'never', '--sandbox', 'read-only', '--skip-git-repo-check'],
+			sessionMode: 'existing',
+			modelArg: '--model',
+			imageArg: '--image',
+		},
+	},
 ];
 
 interface DetectionResult {
@@ -94,15 +105,11 @@ async function runCodingSetup(): Promise<void> {
 		}
 	}
 
-	updatePreferences({
-		coding: existingCoding,
-	});
-
 	const availableCount = detectionResults.filter((r) => r.available).length;
 
 	if (availableCount === 0) {
 		spinner.stop(chalk.yellow('No coding agents found'));
-		p.log.warning('Install:\n- claude (Anthropic Claude Code CLI)');
+		p.log.warning('Install:\n- claude (Anthropic Claude Code CLI)\n- codex  (OpenAI Codex CLI)');
 		return;
 	}
 
@@ -113,9 +120,33 @@ async function runCodingSetup(): Promise<void> {
 			? `  ${chalk.green('✓')} ${r.name}: ${r.path}`
 			: `  ${chalk.dim('✗')} ${r.name}: not found`
 	);
-
 	p.note(lines.join('\n'), 'Detected Agents');
-	p.log.info("Configuration saved. Use 'corebrain coding config --agent <name>' to customize.");
+
+	// Ask which agent to use as default
+	const availableAgents = detectionResults.filter((r) => r.available);
+	let defaultAgent = availableAgents[0]!.name;
+
+	if (availableAgents.length > 1) {
+		const currentPrefs2 = getPreferences();
+		const selected = await p.select({
+			message: 'Which agent should be used by default?',
+			options: availableAgents.map((r) => ({
+				value: r.name,
+				label: `${r.name}  ${chalk.dim(r.path ?? '')}`,
+			})),
+			initialValue: currentPrefs2.defaultCodingAgent ?? availableAgents[0]!.name,
+		});
+		if (p.isCancel(selected)) {
+			p.cancel('Cancelled');
+			return;
+		}
+		defaultAgent = selected as string;
+	}
+
+	updatePreferences({coding: existingCoding, defaultCodingAgent: defaultAgent});
+
+	p.log.success(`Default agent set to ${chalk.bold(defaultAgent)}`);
+	p.log.info("Use 'corebrain coding config --agent <name>' to customize.");
 }
 
 export default function CodingSetup(_props: Props) {
