@@ -191,7 +191,7 @@ voice_facts: (none)
 Why: This is a reminder delivery — a session event. The user's habit of taking fish oil was already extracted when they first set the reminder. No new voice expressed here.
 
 ### Example 7: Short conversational replies and session-specific observations — skip everything
-Episode: "User replied 'Go ahead.' User confirmed: 'Input is already there.' Harshith directed the assistant to the file `gmail/src/mcp/index` for implementation details. Harshith suggested adding a timestamp-based filter in addition to date-based filtering."
+Episode: "User replied 'Go ahead.' User confirmed: 'Input is already there.' Harshith directed the assistant to the file \`gmail/src/mcp/index\` for implementation details. Harshith suggested adding a timestamp-based filter in addition to date-based filtering."
 
 voice_facts: (none)
 
