@@ -1,0 +1,55 @@
+{
+  "name": "@core/attio",
+  "version": "0.1.0",
+  "description": "Attio CRM integration for Core",
+  "main": "./bin/index.js",
+  "module": "./bin/index.mjs",
+  "type": "module",
+  "files": [
+    "attio",
+    "bin"
+  ],
+  "bin": {
+    "attio": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "rimraf bin && tsup src/index.ts --format cjs --outDir bin",
+    "lint": "eslint --ext js,ts,tsx src/ --fix",
+    "prettier": "prettier --config .prettierrc --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.20",
+    "eslint": "^9.24.0",
+    "eslint-config-prettier": "^10.1.2",
+    "eslint-import-resolver-alias": "^1.1.2",
+    "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-prettier": "^5.2.1",
+    "prettier": "^3.4.2",
+    "rimraf": "^3.0.2",
+    "tsup": "^8.0.1",
+    "tsx": "4.20.6",
+    "typescript": "^4.7.2"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  },
+  "dependencies": {
+    "@redplanethq/sdk": "0.1.9",
+    "axios": "^1.7.9",
+    "commander": "^12.0.0",
+    "zod": "^3.22.4",
+    "zod-to-json-schema": "^3.22.1"
+  }
+}

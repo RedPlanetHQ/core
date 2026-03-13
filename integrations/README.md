@@ -26,6 +26,18 @@ Project management and issue tracking integration.
 - Project milestone tracking
 - Team assignments and workflows
 
+### 🗂️ [Attio](./attio/README.md)
+
+CRM integration for contacts, companies, notes, tasks, and lists.
+
+**Features:**
+
+- People (contact) and company record management
+- Notes creation and tracking
+- Task management with deadlines
+- List and pipeline access
+- Scheduled sync of recent CRM activity
+
 ### 💬 [Slack](./slack/README.md)
 
 Workspace communication and activity tracking.
