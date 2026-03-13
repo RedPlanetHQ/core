@@ -73,12 +73,25 @@ export function startTuiApp(
 				{name: 'reminders', description: 'View your reminders'},
 				{name: 'integrations', description: 'View and connect integrations'},
 				{name: 'dashboard', description: 'Open dashboard in browser'},
+				{
+					name: 'incognito',
+					description: 'Toggle incognito mode (new conversations only)',
+				},
 				{name: 'exit', description: 'Exit CORE'},
 			],
 			process.cwd(),
 		),
 	);
 	tui.addChild(editor);
+
+	// ── Incognito indicator (below editor, hidden until active) ─────────────
+	const incognitoIndicator = new Text(
+		chalk.bgHex('#3a2a00').hex('#ffcc44')(' ⊘ incognito '),
+		0,
+		0,
+	);
+	let incognitoIndicatorVisible = false;
+
 	tui.setFocus(editor);
 
 	// ── State ─────────────────────────────────────────────────────────────────
@@ -114,6 +127,43 @@ export function startTuiApp(
 
 		messagesContainer.addChild(component);
 		messagesContainer.addChild(loader);
+	}
+
+	function toggleIncognito(): void {
+		if (conversation.conversationId !== null) {
+			addToMessages(
+				new Text(
+					chalk.yellow(
+						'Incognito can only be toggled before the first message.',
+					),
+					1,
+					0,
+				),
+			);
+			tui.requestRender();
+			return;
+		}
+
+		conversation.toggleIncognito();
+
+		if (conversation.incognito) {
+			if (!incognitoIndicatorVisible) {
+				tui.addChild(incognitoIndicator);
+				incognitoIndicatorVisible = true;
+			}
+		} else {
+			if (incognitoIndicatorVisible) {
+				try {
+					tui.removeChild(incognitoIndicator);
+				} catch {
+					// not in tree
+				}
+
+				incognitoIndicatorVisible = false;
+			}
+		}
+
+		tui.requestRender();
 	}
 
 	function clearConversation(): void {
@@ -169,6 +219,11 @@ export function startTuiApp(
 
 		if (trimmed === '/dashboard') {
 			openBrowser('https://app.getcore.me');
+			return;
+		}
+
+		if (trimmed === '/incognito') {
+			toggleIncognito();
 			return;
 		}
 
@@ -419,6 +474,11 @@ export function startTuiApp(
 				tui.requestRender();
 			}
 
+			return;
+		}
+
+		if (matchesKey(data, Key.ctrl('i'))) {
+			toggleIncognito();
 			return;
 		}
 

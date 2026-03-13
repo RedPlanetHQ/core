@@ -4,11 +4,11 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
-import {listSessions} from '@/utils/coding-sessions';
+import {listRunningSessions} from '@/utils/coding-sessions';
 
 export const options = zod.object({
 	sessionId: zod.string().optional().describe('Session ID to close'),
-	all: zod.boolean().optional().describe('Close all sessions'),
+	all: zod.boolean().optional().describe('Close all running sessions'),
 });
 
 type Props = {
@@ -17,15 +17,13 @@ type Props = {
 
 async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 	if (opts.all) {
-		const sessions = listSessions();
+		const sessions = listRunningSessions();
 		if (sessions.length === 0) {
-			p.log.info('No sessions to close.');
+			p.log.info('No running sessions.');
 			return;
 		}
 
-		const confirmed = await p.confirm({
-			message: `Close all ${sessions.length} sessions?`,
-		});
+		const confirmed = await p.confirm({message: `Close all ${sessions.length} running sessions?`});
 		if (p.isCancel(confirmed) || !confirmed) {
 			p.cancel('Cancelled');
 			return;
@@ -36,9 +34,7 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 
 		let closed = 0;
 		for (const s of sessions) {
-			const result = await executeCodingTool('coding_close_session', {
-				sessionId: s.sessionId,
-			});
+			const result = await executeCodingTool('coding_close_session', {sessionId: s.sessionId});
 			if (result.success) closed++;
 		}
 
@@ -46,12 +42,11 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 		return;
 	}
 
-	// Get session ID
 	let sessionId = opts.sessionId;
 	if (!sessionId) {
-		const sessions = listSessions();
+		const sessions = listRunningSessions();
 		if (sessions.length === 0) {
-			p.log.error('No sessions found.');
+			p.log.error('No running sessions found.');
 			return;
 		}
 
@@ -59,7 +54,7 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 			message: 'Select session to close',
 			options: sessions.map((s) => ({
 				value: s.sessionId,
-				label: `${s.sessionId.slice(0, 8)}... (${s.agent}) - ${s.status}`,
+				label: `${s.sessionId.slice(0, 8)}... (${s.agent}) ${chalk.blue('running')}`,
 			})),
 		});
 		if (p.isCancel(selected)) {
@@ -72,9 +67,7 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start('Closing session...');
 
-	const result = await executeCodingTool('coding_close_session', {
-		sessionId,
-	});
+	const result = await executeCodingTool('coding_close_session', {sessionId});
 
 	if (!result.success) {
 		spinner.stop(chalk.red('Failed'));
@@ -83,15 +76,7 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 	}
 
 	spinner.stop(chalk.green('Closed'));
-
-	const res = result.result as {
-		sessionId: string;
-		wasRunning: boolean;
-		message: string;
-	};
-	p.log.success(
-		`Session ${res.sessionId.slice(0, 8)}... closed${res.wasRunning ? ' (was running)' : ''}`,
-	);
+	p.log.success(`Session ${sessionId.slice(0, 8)}... closed`);
 }
 
 export default function CodingClose({options: opts}: Props) {
@@ -99,12 +84,8 @@ export default function CodingClose({options: opts}: Props) {
 
 	useEffect(() => {
 		runCloseSession(opts)
-			.catch((err) => {
-				p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			})
-			.finally(() => {
-				setTimeout(() => exit(), 100);
-			});
+			.catch((err) => p.log.error(err instanceof Error ? err.message : 'Unknown error'))
+			.finally(() => setTimeout(() => exit(), 100));
 	}, [opts, exit]);
 
 	return null;

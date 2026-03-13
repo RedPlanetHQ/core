@@ -4,10 +4,10 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {executeCodingTool} from '@/server/tools/coding-tools';
-import {listSessions} from '@/utils/coding-sessions';
 
 export const options = zod.object({
 	sessionId: zod.string().optional().describe('Session ID to read'),
+	dir: zod.string().optional().describe('Working directory of the session'),
 	lines: zod.number().optional().describe('Number of lines to return'),
 	offset: zod.number().optional().describe('Line offset to start from'),
 	tail: zod.boolean().optional().describe('Return last N lines'),
@@ -20,24 +20,26 @@ type Props = {
 
 interface SessionEntry {
 	type: string;
-	message?: {
-		role: string;
-		content: string | Array<{type: string; text?: string}>;
-	};
+	message?: {role: string; content: string | Array<{type: string; text?: string}>};
 	timestamp?: string;
 	[key: string]: unknown;
 }
 
+interface SessionListItem {
+	sessionId: string;
+	dir: string;
+	title: string | null;
+	running: boolean;
+	updatedAt: string;
+}
+
 interface SessionReadResult {
 	sessionId: string;
-	agent: string;
-	prompt: string;
 	dir: string;
 	status: string;
 	running: boolean;
 	entries: SessionEntry[];
 	error?: string;
-	exitCode: number | null;
 	totalLines: number;
 	returnedLines: number;
 	fileSizeBytes: number;
@@ -45,10 +47,17 @@ interface SessionReadResult {
 }
 
 async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
-	// Get session ID
 	let sessionId = opts.sessionId;
+	let dir = opts.dir;
+
 	if (!sessionId) {
-		const sessions = listSessions();
+		const listResult = await executeCodingTool('coding_list_sessions', {limit: 20});
+		if (!listResult.success) {
+			p.log.error(listResult.error || 'Failed to list sessions');
+			return;
+		}
+
+		const {sessions} = listResult.result as {sessions: SessionListItem[]};
 		if (sessions.length === 0) {
 			p.log.error('No sessions found.');
 			return;
@@ -58,19 +67,35 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 			message: 'Select session',
 			options: sessions.map((s) => ({
 				value: s.sessionId,
-				label: `${s.sessionId.slice(0, 8)}... (${s.agent}) - ${s.status}`,
+				label: [
+					chalk.bold(s.sessionId.slice(0, 8)),
+					s.title ? chalk.white(s.title.slice(0, 50)) : chalk.dim('(no title)'),
+					s.running ? chalk.blue('running') : chalk.dim(s.updatedAt.slice(0, 10)),
+				].join('  '),
 			})),
 		});
 		if (p.isCancel(selected)) {
 			p.cancel('Cancelled');
 			return;
 		}
+
 		sessionId = selected as string;
+		dir = sessions.find((s) => s.sessionId === sessionId)?.dir;
+	}
+
+	if (!dir) {
+		const input = await p.text({message: 'Working directory', initialValue: process.cwd()});
+		if (p.isCancel(input)) {
+			p.cancel('Cancelled');
+			return;
+		}
+		dir = input;
 	}
 
 	const readOnce = async (): Promise<SessionReadResult | null> => {
 		const result = await executeCodingTool('coding_read_session', {
 			sessionId,
+			dir,
 			lines: opts.lines,
 			offset: opts.offset,
 			tail: opts.tail,
@@ -85,65 +110,40 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	};
 
 	if (opts.follow) {
-		// Follow mode - continuously poll
 		p.log.info(`Following session ${sessionId}... (Ctrl+C to stop)`);
 		let lastEntryCount = 0;
 
-		const poll = async () => {
+		let running = true;
+		while (running) {
 			const res = await readOnce();
-			if (!res) return false;
+			if (!res) break;
 
-			// Only print new entries
 			if (res.entries.length > lastEntryCount) {
-				const newEntries = res.entries.slice(lastEntryCount);
-				for (const entry of newEntries) {
+				for (const entry of res.entries.slice(lastEntryCount)) {
 					console.log(JSON.stringify(entry));
 				}
 				lastEntryCount = res.entries.length;
 			}
 
-			return res.running;
-		};
-
-		let running = true;
-		while (running) {
-			running = await poll();
-			if (running) {
-				await new Promise((resolve) => setTimeout(resolve, 500));
-			}
+			running = res.running;
+			if (running) await new Promise((resolve) => setTimeout(resolve, 500));
 		}
 
-		p.log.info('\nSession completed.');
+		p.log.info('Session completed.');
 		return;
 	}
 
-	// Single read
 	const res = await readOnce();
 	if (!res) return;
 
-	const statusColor =
-		res.status === 'running'
-			? chalk.blue
-			: res.status === 'completed'
-				? chalk.green
-				: chalk.red;
+	const statusColor = res.status === 'running' ? chalk.blue : res.status === 'completed' ? chalk.green : chalk.red;
 
-	console.log(
-		chalk.dim(
-			`--- Session ${res.sessionId.slice(0, 8)} | ${res.agent} | ${statusColor(res.status)} ---`,
-		),
-	);
-	console.log(
-		chalk.dim(
-			`Lines: ${res.returnedLines}/${res.totalLines} | Size: ${res.fileSizeHuman} | Dir: ${res.dir}`,
-		),
-	);
+	console.log(chalk.dim(`--- Session ${res.sessionId.slice(0, 8)} | ${statusColor(res.status)} ---`));
+	console.log(chalk.dim(`Lines: ${res.returnedLines}/${res.totalLines} | Size: ${res.fileSizeHuman} | Dir: ${res.dir}`));
 	console.log();
 
-	if (res.entries.length > 0) {
-		for (const entry of res.entries) {
-			console.log(JSON.stringify(entry));
-		}
+	for (const entry of res.entries) {
+		console.log(JSON.stringify(entry));
 	}
 
 	if (res.error) {
@@ -157,12 +157,8 @@ export default function CodingRead({options: opts}: Props) {
 
 	useEffect(() => {
 		runReadSession(opts)
-			.catch((err) => {
-				p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			})
-			.finally(() => {
-				setTimeout(() => exit(), 100);
-			});
+			.catch((err) => p.log.error(err instanceof Error ? err.message : 'Unknown error'))
+			.finally(() => setTimeout(() => exit(), 100));
 	}, [opts, exit]);
 
 	return null;

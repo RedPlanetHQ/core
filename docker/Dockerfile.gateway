@@ -1,0 +1,16 @@
+FROM node:24-slim
+
+RUN apt-get update && apt-get install -y \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install claude-code globally
+RUN npm install -g @anthropic-ai/claude-code
+
+# Install corebrain CLI globally
+RUN npm install -g @redplanethq/corebrain
+
+WORKDIR /workspace
+
+CMD ["bash"]

@@ -14,9 +14,11 @@ export interface ConversationCallbacks {
 
 export interface Conversation {
 	readonly conversationId: string | null;
+	readonly incognito: boolean;
 	send(message: string, callbacks: ConversationCallbacks): Promise<void>;
 	clear(): void;
 	resume(id: string): void;
+	toggleIncognito(): void;
 }
 
 // Tools whose sub-calls should be shown as nested children
@@ -29,10 +31,15 @@ export function createConversation(
 	apiKey: string,
 ): Conversation {
 	let conversationId: string | null = null;
+	let incognito = false;
 
 	return {
 		get conversationId() {
 			return conversationId;
+		},
+
+		get incognito() {
+			return incognito;
 		},
 
 		clear() {
@@ -43,6 +50,10 @@ export function createConversation(
 			conversationId = id;
 		},
 
+		toggleIncognito() {
+			incognito = !incognito;
+		},
+
 		async send(message: string, callbacks: ConversationCallbacks) {
 			try {
 				if (!conversationId) {
@@ -50,6 +61,7 @@ export function createConversation(
 						baseUrl,
 						apiKey,
 						message,
+						incognito,
 					);
 				}
 

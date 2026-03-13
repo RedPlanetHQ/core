@@ -1,11 +1,11 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { executeCodingTool } from '@/server/tools/coding-tools';
-import { getPreferences } from '@/config/preferences';
-import type { CliBackendConfig } from '@/types/config';
+import {executeCodingTool} from '@/server/tools/coding-tools';
+import {getPreferences} from '@/config/preferences';
+import type {CliBackendConfig} from '@/types/config';
 
 export const options = zod.object({
 	agent: zod.string().optional().describe('Coding agent to use'),
@@ -31,12 +31,11 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 
 	const availableAgents = Object.keys(coding);
 
-	// Get agent
 	let agent = opts.agent;
 	if (!agent) {
 		const selected = await p.select({
 			message: 'Select agent',
-			options: availableAgents.map((a) => ({ value: a, label: a })),
+			options: availableAgents.map(a => ({value: a, label: a})),
 		});
 		if (p.isCancel(selected)) {
 			p.cancel('Cancelled');
@@ -46,12 +45,12 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	}
 
 	if (!availableAgents.includes(agent)) {
-		p.log.error(`Agent "${agent}" not found.`);
-		p.log.info(`Available agents: ${availableAgents.join(', ')}`);
+		p.log.error(
+			`Agent "${agent}" not found. Available: ${availableAgents.join(', ')}`,
+		);
 		return;
 	}
 
-	// Get prompt
 	let prompt = opts.prompt;
 	if (!prompt) {
 		const input = await p.text({
@@ -65,7 +64,6 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 		prompt = input;
 	}
 
-	// Get directory
 	let dir = opts.dir;
 	if (!dir) {
 		const input = await p.text({
@@ -82,7 +80,7 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start('Starting session...');
 
-	const result = await executeCodingTool('coding_start_session', {
+	const result = await executeCodingTool('coding_ask', {
 		agent,
 		prompt,
 		dir,
@@ -98,7 +96,11 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 
 	spinner.stop(chalk.green('Started'));
 
-	const res = result.result as { sessionId: string; pid: number; message: string };
+	const res = result.result as {
+		sessionId: string;
+		pid: number;
+		message: string;
+	};
 	p.note(
 		[
 			`${chalk.bold('Session ID:')} ${res.sessionId}`,
@@ -110,17 +112,15 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	);
 }
 
-export default function CodingStart({ options: opts }: Props) {
-	const { exit } = useApp();
+export default function CodingStart({options: opts}: Props) {
+	const {exit} = useApp();
 
 	useEffect(() => {
 		runStartSession(opts)
-			.catch((err) => {
-				p.log.error(err instanceof Error ? err.message : 'Unknown error');
-			})
-			.finally(() => {
-				setTimeout(() => exit(), 100);
-			});
+			.catch(err =>
+				p.log.error(err instanceof Error ? err.message : 'Unknown error'),
+			)
+			.finally(() => setTimeout(() => exit(), 100));
 	}, [opts, exit]);
 
 	return null;

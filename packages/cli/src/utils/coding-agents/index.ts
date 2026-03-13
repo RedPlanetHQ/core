@@ -1,25 +1,21 @@
-import type {AgentReader, AgentReadResult, AgentReadOptions} from './types';
+import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type ScannedSession, type ScanOptions, type ScanResult} from './types';
 import {claudeCodeReader} from './claude-code';
+import {codexReader, findLatestCodexSession} from './codex';
 
-export type {AgentReader, AgentReadResult, AgentReadOptions};
+export {findLatestCodexSession};
 
-/**
- * Registry of agent readers
- */
-const agentReaders: Record<string, AgentReader> = {
+export type {AgentReadResult, AgentReadOptions, ScannedSession, ScanOptions, ScanResult};
+export {BaseCodingAgentReader};
+
+const agentReaders: Record<string, BaseCodingAgentReader> = {
 	'claude-code': claudeCodeReader,
+	'codex-cli': codexReader,
 };
 
-/**
- * Get the reader for a specific agent
- */
-export function getAgentReader(agentName: string): AgentReader | null {
+export function getAgentReader(agentName: string): BaseCodingAgentReader | null {
 	return agentReaders[agentName] || null;
 }
 
-/**
- * Read session output using the appropriate agent reader
- */
 export async function readAgentSessionOutput(
 	agentName: string,
 	dir: string,
@@ -27,33 +23,48 @@ export async function readAgentSessionOutput(
 	options?: AgentReadOptions,
 ): Promise<AgentReadResult> {
 	const reader = getAgentReader(agentName);
-
 	if (!reader) {
 		return {
-			entries: [],
-			totalLines: 0,
-			returnedLines: 0,
-			fileExists: false,
-			fileSizeBytes: 0,
-			fileSizeHuman: '0 B',
-			error: `No reader available for agent: ${agentName}`,
+			entries: [], totalLines: 0, returnedLines: 0, fileExists: false, fileSizeBytes: 0,
+			fileSizeHuman: '0 B', error: `No reader for agent: ${agentName}`,
 		};
 	}
-
 	return reader.readSessionOutput(dir, sessionId, options);
 }
 
+export function agentSessionExists(agentName: string, dir: string, sessionId: string): boolean {
+	return getAgentReader(agentName)?.sessionExists(dir, sessionId) ?? false;
+}
+
 /**
- * Check if a session exists for the given agent
+ * Scan sessions across all registered agents, merge, sort by recency, and paginate.
  */
-export function agentSessionExists(
-	agentName: string,
-	dir: string,
-	sessionId: string,
-): boolean {
-	const reader = getAgentReader(agentName);
-	if (!reader) {
-		return false;
-	}
-	return reader.sessionExists(dir, sessionId);
+export async function scanAllSessions(options: ScanOptions = {}): Promise<ScanResult> {
+	const readers = options.agent
+		? Object.values(agentReaders).filter((r) => r.agentName === options.agent)
+		: Object.values(agentReaders);
+
+	const allResults = await Promise.all(readers.map((r) => r.scanSessions(options)));
+
+	const merged = allResults.flat().sort((a, b) => b.updatedAt - a.updatedAt);
+	const total = merged.length;
+
+	const offset = options.offset ?? 0;
+	const limit = options.limit ?? 20;
+	const sessions = merged.slice(offset, offset + limit);
+
+	return {sessions, total, hasMore: offset + limit < total};
+}
+
+/**
+ * Search sessions by title across all agents.
+ */
+export async function searchSessions(
+	query: string,
+	options: Omit<ScanOptions, 'offset'> & {limit?: number} = {},
+): Promise<ScannedSession[]> {
+	const {sessions: all} = await scanAllSessions({...options, limit: undefined});
+	const q = query.toLowerCase();
+	const matched = all.filter((s) => s.title?.toLowerCase().includes(q));
+	return options.limit ? matched.slice(0, options.limit) : matched;
 }
