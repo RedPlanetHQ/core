@@ -32,16 +32,12 @@ export function startTuiApp(
 	// ── Header ───────────────────────────────────────────────────────────────
 	const c = (s: string) => chalk.hex('#c15e50')(s);
 	const logoRows = [
-		c('    ▄▄▄▄▄▄▄   '),
-		c('  ▄█████████▄ '),
-		c(' ▐███████████▌'),
-		c(' ▐██ ▄▄ ▄▄ ██▌'),
-		c(' ▐██ ██ ██ ██▌'),
-		c(' ▐██▄▄▄▄▄▄▄██▌'),
-		c('  ▀█████████▀ '),
+		c(' ▄███▄  '),
+		c(' ▐◉   ◉▌ '),
+		c(' ▐▄▄▄▄▄▌ '),
+		c('  ◉   ◉  '),
 	];
 	const infoRows: string[] = [
-		'',
 		'',
 		chalk.bold.white('CORE') + '  ' + chalk.dim('v' + version),
 		chalk.gray('ctrl+c to exit'),
