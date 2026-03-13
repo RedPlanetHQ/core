@@ -5,8 +5,9 @@
  * Removes session-specific noise — session actions, transient output, one-time
  * instructions — that slipped through extraction.
  *
- * Only filters graph_facts. Entities that are no longer referenced in the
- * filtered facts are naturally excluded when building graph triples.
+ * Receives the original episode content so it can resolve ambiguous facts
+ * (e.g., an outcome vs. a session action, a decision vs. a one-time request).
+ * Only filters graph_facts. Entities no longer referenced are excluded naturally.
  */
 
 import { type ModelMessage } from "ai";
@@ -36,10 +37,13 @@ export const reflectWorldPrompt = (
     fact: string;
     event_date: string | null;
   }>,
+  episodeContent: string,
 ): ModelMessage[] => {
   const sysPrompt = `You are a quality filter for a user's digital knowledge graph.
 
-You receive candidate graph facts extracted from a conversation. Your job: REMOVE facts that are session-specific noise. Keep only facts that represent lasting, searchable knowledge about the user's world.
+You receive candidate graph facts extracted from a conversation, along with the original episode so you can verify each fact in context. Your job: REMOVE facts that are session-specific noise. Keep only facts that represent lasting, searchable knowledge about the user's world.
+
+Use the episode to resolve ambiguity — check whether a fact describes a real outcome/decision/relationship or just what happened during this session.`;
 
 ## REMOVE — these do not belong in a knowledge graph
 
@@ -87,7 +91,7 @@ Ask: "Would this fact be meaningful and searchable to an agent next week, comple
 - "Air India flight booked to Mumbai on March 20" → lasting outcome → **KEEP**
 - "Leo leads the mobile team" → lasting relationship → **KEEP**
 
-Return only the facts that pass the test. When uncertain, REMOVE.`;
+Return only the facts that pass the test. When uncertain, check the episode — if the original text confirms a real outcome, relationship, or decision, KEEP. If it's clearly a session action or one-time request, REMOVE.`;
 
   const factsFormatted = graph_facts
     .map(
@@ -96,7 +100,11 @@ Return only the facts that pass the test. When uncertain, REMOVE.`;
     )
     .join("\n");
 
-  const userPrompt = `Review these candidate graph facts and remove any that are session-specific noise.
+  const userPrompt = `Review these candidate graph facts using the original episode as context.
+
+<episode>
+${episodeContent}
+</episode>
 
 <candidate_facts>
 ${factsFormatted}

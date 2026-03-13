@@ -5,8 +5,8 @@
  * Removes session noise — conversational replies, one-time task instructions,
  * session-specific observations — that slipped through extraction.
  *
- * The filter is intentionally conservative: when in doubt, remove.
- * False negatives (removing a real fact) are cheaper than false positives (storing noise).
+ * Receives the original episode content so it can resolve ambiguous facts
+ * (e.g., a rule stated during a task session vs. a one-time instruction).
  */
 
 import { type ModelMessage } from "ai";
@@ -28,10 +28,13 @@ export type ReflectVoiceResult = z.infer<typeof ReflectVoiceSchema>;
 
 export const reflectVoicePrompt = (
   voice_facts: Array<{ fact: string }>,
+  episodeContent: string,
 ): ModelMessage[] => {
   const sysPrompt = `You are a quality filter for a user's digital brain.
 
-You receive candidate voice facts extracted from a conversation. Your job: REMOVE facts that are session-specific noise. Keep only facts a different agent would still find useful tomorrow.
+You receive candidate voice facts extracted from a conversation, along with the original episode so you can verify each fact in context. Your job: REMOVE facts that are session-specific noise. Keep only facts a different agent would still find useful tomorrow.
+
+Use the episode to resolve ambiguity — a rule stated during a coding session may still be a standing rule, not a one-time instruction. Check the original text before deciding.
 
 ## REMOVE — these expire with the session
 
@@ -81,13 +84,17 @@ Ask: "If a DIFFERENT agent talks to this user TOMORROW with no memory of today's
 - "Prefer bullet points" → useful to any agent → **KEEP**
 - "Never schedule meetings before 10am" → useful to any agent → **KEEP**
 
-Return only the facts that pass the test. When uncertain, REMOVE.`;
+Return only the facts that pass the test. When uncertain, check the episode — if the original text shows a general statement ("always do X"), KEEP. If it's clearly tied to a specific in-progress task, REMOVE.`;
 
   const factsFormatted = voice_facts
     .map((f, i) => `${i + 1}. ${f.fact}`)
     .join("\n");
 
-  const userPrompt = `Review these candidate voice facts and remove any that are session-specific noise.
+  const userPrompt = `Review these candidate voice facts using the original episode as context.
+
+<episode>
+${episodeContent}
+</episode>
 
 <candidate_facts>
 ${factsFormatted}
