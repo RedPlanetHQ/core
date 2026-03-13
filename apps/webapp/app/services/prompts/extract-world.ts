@@ -27,7 +27,7 @@ const GraphFactSchema = z.object({
     .describe("Object entity name or literal value"),
   fact: z
     .string()
-    .describe("Concise natural language representation (max 15 words)"),
+    .describe("Natural language sentence starting with the subject (source entity). Max 15 words."),
   event_date: z
     .string()
     .nullable()
@@ -97,33 +97,35 @@ Every fact must trace back to the user through this tree. If it doesn't → skip
 
 ## WHAT TO EXTRACT
 
-**Relationships** — the most important world fact. When a person appears:
+**Relationships** — the most important world fact. Every person must be connected — either to the user directly or to a topic the user owns.
 - Ask: "How would the user introduce this person?" Strip away the channel and the action.
-- Extract: User → role → Person | "Person is a [role]."
+- Direct: User → role → Person | "Person is the user's [role]." (doctor, teammate, customer)
+- Via topic: Topic → role → Person | "James presented at the Tech Summit." (speaker, contributor, vendor)
+- Infer the relationship from context — an email thread about product setup implies a customer, a meeting about a deal implies a partner or investor.
 - Put the person's own details (title, company, email, phone) in entity attributes, not graph facts.
-- Examples: "Dr. Patel is my cardiologist", "Nina is my real estate agent", "Leo is on my team"
+- Examples: "Dr. Patel is the user's cardiologist", "Nina is the user's real estate agent", "Leo is on the user's team"
 
 **Identity** — slow-changing facts about who the user IS:
 - Role, location, affiliations, health metrics, personal stats
-- Examples: "Lives in Bangalore", "Weighs 85 kg", "CTO at CORE"
+- Examples: "User lives in Bangalore", "User weighs 85 kg", "User is CTO at CORE"
 
-**Knowledge** — facts about things the user OWNS, BUILDS, or MANAGES:
-- Projects, properties, investments, systems — their structure, status, capabilities
+**Knowledge** — facts about things the user OWNS, BUILDS, or MANAGES. Two levels:
+- **User-level**: the user's relationship to the thing — "User's apartment is a 3BHK in Koramangala", "User's portfolio is 60% equity, 40% debt"
+- **Topic-level**: facts about the thing itself — its features, capabilities, structure, status. These are just as important. "CORE Auto-Sync saves old ChatGPT conversations", "CORE extension works with Claude and ChatGPT", "Apartment has a balcony facing the park"
 - NOT code-level implementation details (those exist in the code)
 - NOT other people's products/companies (the user doesn't own them)
-- Examples: "Apartment is a 3BHK in Koramangala", "Portfolio is 60% equity, 40% debt", "CORE uses TypeScript"
 
 **Events** — things the user personally did or experienced:
 - Meetings, appointments, milestones, trips, incidents
 - NOT the assistant's actions in this session
-- Examples: "Had annual checkup with Dr. Patel", "Signed the lease on March 5"
+- Examples: "User had annual checkup with Dr. Patel", "User signed the lease on March 5"
 
 **Decisions** — explicit choices between alternatives:
-- Examples: "Chose the fixed-rate mortgage over variable", "Decided to go with the gray cabinets"
+- Examples: "User chose the fixed-rate mortgage over variable", "User decided to go with the gray cabinets"
 
 **Problems** — ongoing issues affecting the user:
 - Persistent blockers, recurring struggles
-- Examples: "Kitchen contractor keeps missing deadlines", "Sleep quality has been poor for weeks"
+- Examples: "User's kitchen contractor keeps missing deadlines", "User's sleep quality has been poor for weeks"
 
 ## WHAT TO SKIP
 
@@ -162,11 +164,13 @@ Extract only the lasting OUTCOME, if any. "Assistant booked a flight" → the ou
 
 ## GRAPH FACT WRITING
 
+**Extract what's implied, not just what's said.** Episodes rarely spell out relationships and context explicitly. "Dropped the car at Mike's garage" implies Mike is the user's mechanic — extract that even though no one said "Mike is my mechanic." "Lunch with Laura to discuss the Series A" implies Laura is an investor or advisor. Infer the structural facts that connect entities to the user's world.
+
 **One fact per thing.** A meeting, a person's role, a project capability = ONE fact. Don't decompose attributes into separate triples.
 
 **Summary hooks for lists.** If the episode contains a list (speakers, features, items), write one summary fact with key names. The episode holds the full list.
 
-**Keep facts short** — max 15 words, one clear sentence. The graph structure (source → predicate → target) provides context; don't repeat it in the fact string.
+**Fact text starts with the source entity.** The fact must read as a complete sentence with subject and object clear. e.g., "User's blood pressure is 130/85", "Payments Integration blocked by Stripe API", "Leo is the user's teammate." Max 15 words.
 
 **event_date**: Only for events with specific timing. Null otherwise.
 
@@ -201,15 +205,17 @@ Key distinctions:
 
 ## EXAMPLES
 
+Note: Examples below use "User" as a placeholder. In actual output, use the user's real name (from <user_identity>) as the source entity.
+
 ### Example 1: Doctor visit — identity, relationship, event
 Episode: "Had my annual checkup with Dr. Patel today. Blood pressure is 130/85, up from last year. He said I should cut sodium and exercise more. Cholesterol is borderline at 215. Next appointment is in 6 months."
 
 graph_facts:
 - User → has_doctor → Dr. Patel | "Dr. Patel is the user's doctor." | null
-- User → has → Blood Pressure | "Blood pressure is 130/85, up from last year." | null
-- User → has → Cholesterol | "Cholesterol is borderline at 215." | null
-- User → visited → Dr. Patel | "Annual checkup with Dr. Patel." | 2026-03-13
-- User → has_appointment → Dr. Patel | "Next appointment with Dr. Patel in 6 months." | null
+- User → has → Blood Pressure | "User's blood pressure is 130/85, up from last year." | null
+- User → has → Cholesterol | "User's cholesterol is borderline at 215." | null
+- User → visited → Dr. Patel | "User had annual checkup with Dr. Patel." | 2026-03-13
+- User → has_appointment → Dr. Patel | "User's next appointment with Dr. Patel in 6 months." | null
 
 entities: Dr. Patel (Person, attributes: {role: "Doctor"})
 
@@ -220,8 +226,8 @@ Episode: "Met with Nina, our real estate agent, about the Koramangala apartment.
 
 graph_facts:
 - User → has_agent → Nina | "Nina is the user's real estate agent." | null
-- User → considering → Koramangala Apartment | "3BHK apartment in Koramangala, 1800 sqft, asking 1.2 crore." | null
-- User → offered → Koramangala Apartment | "Offered 1.05 crore for the Koramangala apartment." | null
+- User → considering → Koramangala Apartment | "User is considering 3BHK apartment in Koramangala, 1800 sqft, asking 1.2 crore." | null
+- User → offered → Koramangala Apartment | "User offered 1.05 crore for the Koramangala apartment." | null
 
 entities: Nina (Person, attributes: {role: "Real estate agent"}), Koramangala Apartment (Location)
 
@@ -231,7 +237,7 @@ Why: Relationship (agent) extracted. Property details are Knowledge (user is con
 Episode: "Wedding reception guest list finalized. Confirmed attendees: Ravi and Priya Sharma, Amit and Neha Gupta, the Patels (family of 4), Dr. Reddy and wife, Sarah and James from London, Uncle Mohan, Aunt Lakshmi, the Desais, Vikram's family (5 people), college friends group (8 people)."
 
 graph_facts:
-- User → finalized → Wedding Guest List | "Wedding reception guest list finalized, including Sharmas, Guptas, Patels, and others." | null
+- User → finalized → Wedding Guest List | "User finalized wedding reception guest list, including Sharmas, Guptas, Patels, and others." | null
 
 entities: Wedding Reception (Event)
 
@@ -241,7 +247,7 @@ Why: ONE summary fact as a search hook. An agent asking "who's coming to the wed
 Episode: "User asked assistant to find flights to Mumbai for March 20. Assistant searched and found 3 options: IndiGo at 6am for ₹4,500, Air India at 9am for ₹5,200, Vistara at 2pm for ₹6,100. User picked the Air India flight. Assistant booked it."
 
 graph_facts:
-- User → booked → Mumbai Flight | "Air India flight to Mumbai on March 20 at 9am, ₹5,200." | 2026-03-20
+- User → booked → Mumbai Flight | "User booked Air India flight to Mumbai on March 20 at 9am, ₹5,200." | 2026-03-20
 
 entities: Mumbai Flight (Event)
 
@@ -259,12 +265,12 @@ Why: This is a reminder delivery — a session event. The reminder was already s
 Episode: "Had a call with Leo and Sarah about the Q3 roadmap. Leo is leading the mobile team. Sarah just joined as Head of Design. We're behind on the payments integration — Stripe API keeps timing out. Decided to bring in a contractor for the frontend work. Target is to ship by end of August."
 
 graph_facts:
-- User → has_teammate → Leo | "Leo leads the mobile team." | null
-- User → has_teammate → Sarah | "Sarah is Head of Design, recently joined." | null
-- User → discussed → Q3 Roadmap | "Q3 roadmap call with Leo and Sarah." | null
-- Payments Integration → has_issue → Stripe API | "Stripe API keeps timing out, blocking payments integration." | null
-- User → decided → Frontend Contractor | "Decided to bring in a contractor for frontend work." | null
-- Q3 Roadmap → targets → August Launch | "Target to ship by end of August." | null
+- User → has_teammate → Leo | "Leo is the user's teammate, leads the mobile team." | null
+- User → has_teammate → Sarah | "Sarah is the user's teammate, Head of Design, recently joined." | null
+- User → discussed → Q3 Roadmap | "User discussed Q3 roadmap with Leo and Sarah." | null
+- Payments Integration → has_issue → Stripe API | "Payments Integration blocked by Stripe API timing out." | null
+- User → decided → Frontend Contractor | "User decided to bring in a contractor for frontend work." | null
+- Q3 Roadmap → targets → August Launch | "Q3 Roadmap targets shipping by end of August." | null
 
 entities: Leo (Person, attributes: {role: "Mobile team lead"}), Sarah (Person, attributes: {role: "Head of Design"}), Q3 Roadmap (Concept), Payments Integration (Project)
 

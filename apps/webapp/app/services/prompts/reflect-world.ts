@@ -43,19 +43,19 @@ export const reflectWorldPrompt = (
 
 You receive candidate graph facts extracted from a conversation, along with the original episode so you can verify each fact in context. Your job: REMOVE facts that are session-specific noise. Keep only facts that represent lasting, searchable knowledge about the user's world.
 
-Use the episode to resolve ambiguity — check whether a fact describes a real outcome/decision/relationship or just what happened during this session.`;
+Use the episode to resolve ambiguity — check whether a fact describes a real outcome/decision/relationship or just what happened during this session.
 
 ## REMOVE — these do not belong in a knowledge graph
 
 **Session actions and process steps:**
 - "User asked assistant to find flights" (the session process)
-- "User directed attention to file X for implementation" (session navigation)
+- "User checked the warranty document in the kitchen drawer" (session navigation)
 - "User confirmed yes" / "User said go ahead" (conversational)
 - What the assistant did, searched for, or reported during the session
 
 **One-time task requests tied to in-flight work:**
-- "Harshith wants a single git commit containing the current changes"
-- "Harshith suggested adding a timestamp-based filter for this task"
+- "User wants the guest bedroom added to this weekend's cleaning schedule"
+- "User asked to include the 10% discount on this invoice"
 - Any request phrased as what the user "wanted", "asked for", or "suggested" for current work
 
 **Transient session output:**
@@ -63,12 +63,12 @@ Use the episode to resolve ambiguity — check whether a fact describes a real o
 - Session status reports and counts from this conversation
 
 **Implementation details:**
-- File paths, branch names, function names, PR numbers, commit messages
-- Specific code implementation decisions for a single task
-- API parameters, form field names, configuration values for one task
+- Specific instructions for completing one task (recipe steps, form fields, template choices)
+- Details about HOW something was done, not WHAT the outcome was
+- Configuration values, account numbers, or reference IDs for one-time use
 
 **Anything that only makes sense in today's context:**
-- Facts referencing a specific in-flight artifact (a file being edited, a branch being worked on)
+- Facts referencing a specific in-flight artifact (a draft being reviewed, a reservation being made)
 - Instructions or observations that are meaningless without knowing what this session was about
 
 ## KEEP — these belong in a knowledge graph
@@ -85,9 +85,9 @@ Use the episode to resolve ambiguity — check whether a fact describes a real o
 
 Ask: "Would this fact be meaningful and searchable to an agent next week, completely independent of today's session?"
 
-- "Harshith wants a single git commit for current changes" → tied to today's session → **REMOVE**
-- "Harshith directed attention to file gmail/src/mcp/index" → session navigation → **REMOVE**
-- "Harshith suggested adding timestamp-based filter" → one-time in-session request → **REMOVE**
+- "User wants the guest bedroom added to this weekend's cleaning" → tied to today's session → **REMOVE**
+- "User checked the warranty document in the kitchen drawer" → session navigation → **REMOVE**
+- "User asked to include the discount on this invoice" → one-time in-session request → **REMOVE**
 - "Air India flight booked to Mumbai on March 20" → lasting outcome → **KEEP**
 - "Leo leads the mobile team" → lasting relationship → **KEEP**
 

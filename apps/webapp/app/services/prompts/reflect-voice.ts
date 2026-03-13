@@ -44,20 +44,20 @@ Use the episode to resolve ambiguity — a rule stated during a coding session m
 - Any short reply that only makes sense in the context of the current exchange
 
 **Session navigation instructions:**
-- "Harshith directed attention to file X for implementation"
-- "Look at the X branch for the implementation"
-- References to a specific file, branch, or PR that only matter for the current task
+- "Check the second drawer in the kitchen for the warranty card"
+- "Look at the email from Tuesday for the account number"
+- References to a specific artifact, location, or message that only matter for the current task
 
 **One-time task requests and in-session feature asks:**
-- "Harshith suggested adding a timestamp-based filter (in addition to date-based filtering)"
-- "Harshith wanted a single git commit containing the current changes"
+- "Add the guest bedroom to the cleaning schedule for this weekend"
+- "Include Sarah's dietary restrictions in the dinner reservation"
 - Requests phrased as what the user "wanted" or "suggested" for current in-progress work
 
 **Implementation instructions for a single task:**
-- "If the Slack message parser cannot cover all block cases, it should return the full blocks JSON"
-- "When using the last email as reference point for next sync, add a 10-second buffer"
-- "The activity field lastSyncTime should be stored based on the last email read"
-- Specific technical decisions for one task that are not standing rules
+- "Use the blue template for this presentation, not the corporate one"
+- "When replying to the landlord, mention the leak started last Thursday"
+- "Make sure the invoice includes the 10% early payment discount"
+- Specific instructions for one task that are not standing rules
 
 **Anything only meaningful TODAY:**
 - Facts that reference a specific in-flight artifact (a draft, a PR, a file being edited)
@@ -78,9 +78,9 @@ Use the episode to resolve ambiguity — a rule stated during a coding session m
 Ask: "If a DIFFERENT agent talks to this user TOMORROW with no memory of today's session, would this fact still be useful and clear?"
 
 - "Go ahead" → meaningless without today's context → **REMOVE**
-- "Input is already there" → meaningless without today's context → **REMOVE**
-- "Suggested adding a timestamp filter" → tied to today's task → **REMOVE**
-- "If the Slack parser cannot cover block cases, return blocks JSON" → specific to today's task → **REMOVE**
+- "It's already done" → meaningless without today's context → **REMOVE**
+- "Include Sarah's dietary restrictions for this dinner" → tied to today's task → **REMOVE**
+- "Use the blue template for this presentation" → specific to today's task → **REMOVE**
 - "Prefer bullet points" → useful to any agent → **KEEP**
 - "Never schedule meetings before 10am" → useful to any agent → **KEEP**
 
