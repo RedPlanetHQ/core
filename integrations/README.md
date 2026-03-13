@@ -26,6 +26,19 @@ Project management and issue tracking integration.
 - Project milestone tracking
 - Team assignments and workflows
 
+### 📊 [PostHog](./posthog/README.md)
+
+Product analytics, feature flags, insights, and user tracking.
+
+**Features:**
+
+- Feature flag management and evaluation
+- Saved insights (trends, funnels, retention)
+- User person profiles and event history
+- Timeline annotations for deployments and experiments
+- Surveys and session recordings metadata
+- Scheduled sync of flag changes, new insights, and annotations
+
 ### 💬 [Slack](./slack/README.md)
 
 Workspace communication and activity tracking.
