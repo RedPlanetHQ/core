@@ -8,6 +8,7 @@ const CreateConversationRequestSchema = z.object({
   message: z.string(),
   title: z.string().optional(),
   source: z.string().default("cli"),
+  incognito: z.boolean().default(false),
 });
 
 const { loader, action } = createHybridActionApiRoute(
@@ -28,6 +29,7 @@ const { loader, action } = createHybridActionApiRoute(
         message: body.message,
         title: body.title,
         source: body.source,
+        incognito: body.incognito,
         parts: [{ text: body.message, type: "text" }],
       },
     );

@@ -28,6 +28,7 @@ const loader = createHybridLoaderApiRoute(
     return json({
       id: conversation.id,
       title: conversation.title,
+      incognito: conversation.incognito,
       ConversationHistory: conversation.ConversationHistory.map((h) => ({
         id: h.id,
         role:
