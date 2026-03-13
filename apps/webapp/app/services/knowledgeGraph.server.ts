@@ -30,6 +30,14 @@ import {
   ClassifyWorldSchema,
 } from "./prompts/classify-world";
 import {
+  reflectVoicePrompt,
+  ReflectVoiceSchema,
+} from "./prompts/reflect-voice";
+import {
+  reflectWorldPrompt,
+  ReflectWorldSchema,
+} from "./prompts/reflect-world";
+import {
   getEpisode,
   saveEpisode,
   searchEpisodesByEmbedding,
@@ -458,12 +466,61 @@ export class KnowledgeGraphService {
       `Extract: ${voiceExtract.voice_facts.length} voice facts, ${worldExtract.graph_facts.length} graph facts, ${worldExtract.entities.length} entities`,
     );
 
+    // Step 1.5: Reflect — filter session noise from extracted facts before classification
+    const [reflectedWorld, reflectedVoice] = await Promise.all([
+      worldExtract.graph_facts.length > 0
+        ? (async () => {
+            const reflectMessages = reflectWorldPrompt(worldExtract.graph_facts);
+            const { object: reflectResult, usage: reflectUsage } =
+              await makeStructuredModelCall(
+                ReflectWorldSchema,
+                reflectMessages as ModelMessage[],
+                "low",
+                "reflect-world",
+              );
+            if (reflectUsage) {
+              tokenMetrics.low.input += reflectUsage.promptTokens as number;
+              tokenMetrics.low.output += reflectUsage.completionTokens as number;
+              tokenMetrics.low.total += reflectUsage.totalTokens as number;
+              tokenMetrics.low.cached +=
+                (reflectUsage.cachedInputTokens as number) || 0;
+            }
+            return reflectResult;
+          })()
+        : Promise.resolve({ graph_facts: [] }),
+
+      voiceExtract.voice_facts.length > 0
+        ? (async () => {
+            const reflectMessages = reflectVoicePrompt(voiceExtract.voice_facts);
+            const { object: reflectResult, usage: reflectUsage } =
+              await makeStructuredModelCall(
+                ReflectVoiceSchema,
+                reflectMessages as ModelMessage[],
+                "low",
+                "reflect-voice",
+              );
+            if (reflectUsage) {
+              tokenMetrics.low.input += reflectUsage.promptTokens as number;
+              tokenMetrics.low.output += reflectUsage.completionTokens as number;
+              tokenMetrics.low.total += reflectUsage.totalTokens as number;
+              tokenMetrics.low.cached +=
+                (reflectUsage.cachedInputTokens as number) || 0;
+            }
+            return reflectResult;
+          })()
+        : Promise.resolve({ voice_facts: [] }),
+    ]);
+
+    logger.log(
+      `Reflect: ${reflectedVoice.voice_facts.length}/${voiceExtract.voice_facts.length} voice facts kept, ${reflectedWorld.graph_facts.length}/${worldExtract.graph_facts.length} graph facts kept`,
+    );
+
     // Step 2: Classify in parallel (both use low model)
     const [classifiedVoice, classifiedWorld] = await Promise.all([
       // Classify voice facts (if any)
-      voiceExtract.voice_facts.length > 0
+      reflectedVoice.voice_facts.length > 0
         ? (async () => {
-            const voiceMessages = classifyVoicePrompt(voiceExtract.voice_facts);
+            const voiceMessages = classifyVoicePrompt(reflectedVoice.voice_facts);
             const { object: voiceResult, usage: voiceUsage } =
               await makeStructuredModelCall(
                 ClassifyVoiceSchema,
@@ -483,10 +540,10 @@ export class KnowledgeGraphService {
         : Promise.resolve([]),
 
       // Classify graph facts (if any)
-      worldExtract.graph_facts.length > 0
+      reflectedWorld.graph_facts.length > 0
         ? (async () => {
             const worldMessages = classifyWorldPrompt(
-              worldExtract.graph_facts,
+              reflectedWorld.graph_facts,
               userName,
             );
             const { object: worldResult, usage: worldUsage } =

@@ -130,10 +130,13 @@ Every fact must trace back to the user through this tree. If it doesn't → skip
 **Session actions** — what happened in THIS conversation:
 - "User asked assistant to...", "Assistant found...", "Assistant booked..."
 - "User said go ahead", "User confirmed yes"
+- "User directed attention to file X", "User suggested adding feature Y for this task"
 - Step-by-step instructions the user gave the assistant for one task
 - The assistant's report of what it accomplished
+- One-time feature requests or task instructions tied to current in-progress work
 
 Extract only the lasting OUTCOME, if any. "Assistant booked a flight" → the outcome is "Flight booked to Mumbai on March 20."
+"User directed assistant to file X for implementation" → no lasting world fact (session navigation).
 
 **Implementation details** — specifics about HOW something was done:
 - Code-level details, file paths, commands, commit messages
