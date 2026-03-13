@@ -466,47 +466,58 @@ export class KnowledgeGraphService {
       `Extract: ${voiceExtract.voice_facts.length} voice facts, ${worldExtract.graph_facts.length} graph facts, ${worldExtract.entities.length} entities`,
     );
 
-    // Step 1.5: Reflect — filter session noise from extracted facts before classification
+    // Step 1.5: Reflect — filter session noise from extracted facts before classification.
+    // Falls back to original extracted facts if the reflect call fails (graceful degradation).
     const [reflectedWorld, reflectedVoice] = await Promise.all([
       worldExtract.graph_facts.length > 0
         ? (async () => {
-            const reflectMessages = reflectWorldPrompt(worldExtract.graph_facts);
-            const { object: reflectResult, usage: reflectUsage } =
-              await makeStructuredModelCall(
-                ReflectWorldSchema,
-                reflectMessages as ModelMessage[],
-                "low",
-                "reflect-world",
-              );
-            if (reflectUsage) {
-              tokenMetrics.low.input += reflectUsage.promptTokens as number;
-              tokenMetrics.low.output += reflectUsage.completionTokens as number;
-              tokenMetrics.low.total += reflectUsage.totalTokens as number;
-              tokenMetrics.low.cached +=
-                (reflectUsage.cachedInputTokens as number) || 0;
+            try {
+              const reflectMessages = reflectWorldPrompt(worldExtract.graph_facts, episode.content);
+              const { object: reflectResult, usage: reflectUsage } =
+                await makeStructuredModelCall(
+                  ReflectWorldSchema,
+                  reflectMessages as ModelMessage[],
+                  "low",
+                  "reflect-world",
+                );
+              if (reflectUsage) {
+                tokenMetrics.low.input += reflectUsage.promptTokens as number;
+                tokenMetrics.low.output += reflectUsage.completionTokens as number;
+                tokenMetrics.low.total += reflectUsage.totalTokens as number;
+                tokenMetrics.low.cached +=
+                  (reflectUsage.cachedInputTokens as number) || 0;
+              }
+              return reflectResult;
+            } catch (err) {
+              logger.warn("reflect-world failed, falling back to extracted facts", { error: err });
+              return { graph_facts: worldExtract.graph_facts };
             }
-            return reflectResult;
           })()
         : Promise.resolve({ graph_facts: [] }),
 
       voiceExtract.voice_facts.length > 0
         ? (async () => {
-            const reflectMessages = reflectVoicePrompt(voiceExtract.voice_facts);
-            const { object: reflectResult, usage: reflectUsage } =
-              await makeStructuredModelCall(
-                ReflectVoiceSchema,
-                reflectMessages as ModelMessage[],
-                "low",
-                "reflect-voice",
-              );
-            if (reflectUsage) {
-              tokenMetrics.low.input += reflectUsage.promptTokens as number;
-              tokenMetrics.low.output += reflectUsage.completionTokens as number;
-              tokenMetrics.low.total += reflectUsage.totalTokens as number;
-              tokenMetrics.low.cached +=
-                (reflectUsage.cachedInputTokens as number) || 0;
+            try {
+              const reflectMessages = reflectVoicePrompt(voiceExtract.voice_facts, episode.content);
+              const { object: reflectResult, usage: reflectUsage } =
+                await makeStructuredModelCall(
+                  ReflectVoiceSchema,
+                  reflectMessages as ModelMessage[],
+                  "low",
+                  "reflect-voice",
+                );
+              if (reflectUsage) {
+                tokenMetrics.low.input += reflectUsage.promptTokens as number;
+                tokenMetrics.low.output += reflectUsage.completionTokens as number;
+                tokenMetrics.low.total += reflectUsage.totalTokens as number;
+                tokenMetrics.low.cached +=
+                  (reflectUsage.cachedInputTokens as number) || 0;
+              }
+              return reflectResult;
+            } catch (err) {
+              logger.warn("reflect-voice failed, falling back to extracted facts", { error: err });
+              return { voice_facts: voiceExtract.voice_facts };
             }
-            return reflectResult;
           })()
         : Promise.resolve({ voice_facts: [] }),
     ]);
