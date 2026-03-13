@@ -190,6 +190,21 @@ voice_facts: (none)
 
 Why: This is a reminder delivery — a session event. The user's habit of taking fish oil was already extracted when they first set the reminder. No new voice expressed here.
 
+### Example 7: Short conversational replies and session-specific observations — skip everything
+Episode: "User replied 'Go ahead.' User confirmed: 'Input is already there.' Harshith directed the assistant to the file `gmail/src/mcp/index` for implementation details. Harshith suggested adding a timestamp-based filter in addition to date-based filtering."
+
+voice_facts: (none)
+
+Why: "Go ahead" and "Input is already there" are in-conversation acknowledgments with zero meaning outside this session. "Directed attention to file X" is a session navigation instruction — it refers to a specific file in the current task. "Suggested adding a timestamp filter" is a one-time feature request for current work, not a standing rule. None of these tell a future agent anything about how the user generally operates.
+
+### Example 8: Task-specific instructions mixed with a standing principle
+Episode: "For this task: use the existing branch, add timestamp-based filtering alongside date filtering, store the logic in a utility file, test with the existing test suite. In general, always match existing code patterns and don't introduce new dependencies without discussion."
+
+voice_facts:
+- "Always match existing code patterns and don't introduce new dependencies without discussion"
+
+Why: The task-specific steps (use this branch, add this filter, store here, test here) are one-time instructions for the current session → skip. The standing principle about code patterns and dependencies is durable — any coding agent should know it.
+
 ## OUTPUT
 Return voice_facts.`;
 
