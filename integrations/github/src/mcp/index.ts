@@ -204,6 +204,19 @@ async function handleCustomToolCall(
 
   try {
     switch (name) {
+      case 'github_get_me': {
+        const response = await githubClient.get('/user');
+        const user = response.data;
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `Username: ${user.login}\nName: ${user.name || 'N/A'}\nEmail: ${user.email || 'N/A'}\nBio: ${user.bio || 'N/A'}\nURL: ${user.html_url}`,
+            },
+          ],
+        };
+      }
+
       case 'github_list_milestones': {
         const validatedArgs = ListMilestonesSchema.parse(args);
         const { owner, repo, ...params } = validatedArgs;

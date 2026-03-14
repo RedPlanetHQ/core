@@ -37,17 +37,24 @@ const GraphFactSchema = z.object({
 /**
  * Entity extracted from the episode
  */
+// Note: `type` and `attributes` use `.nullable()` (not `.optional()`) so the LLM can
+// return null when values are unknown, while keeping the fields in the JSON schema's
+// `required` array. OpenAI's strict mode rejects schemas where `required` doesn't
+// include every property — `.optional()` removes the field from `required` and breaks it.
 const EntitySchema = z.object({
   name: z
     .string()
     .describe("Entity name — clean, without articles or qualifiers"),
   type: z
     .enum(EntityTypes)
-    .optional()
+    .nullable()
     .describe("Entity type classification"),
   attributes: z
-    .record(z.any(), z.any())
-    .optional()
+    .record(
+      z.string(),
+      z.union([z.string(), z.number(), z.boolean(), z.null()]),
+    )
+    .nullable()
     .describe("Lookup data: email, phone, company, role, etc."),
 });
 

@@ -90,6 +90,43 @@ function formatScheduleForUser(schedule: string, timezone: string): string {
 }
 
 /**
+ * Compute the effective recurrence interval in minutes from an RRule string.
+ * For BYHOUR schedules, computes the minimum gap between listed hours.
+ * Returns null if the interval cannot be determined.
+ */
+function getRecurrenceIntervalMinutes(schedule: string): number | null {
+  const freqMatch = schedule.match(/FREQ=(\w+)/);
+  const intervalMatch = schedule.match(/INTERVAL=(\d+)/);
+  const hourMatch = schedule.match(/BYHOUR=([\d,]+)/);
+
+  const freq = freqMatch?.[1];
+  const interval = intervalMatch ? parseInt(intervalMatch[1]) : 1;
+
+  if (hourMatch) {
+    const hours = hourMatch[1]
+      .split(",")
+      .map(Number)
+      .sort((a, b) => a - b);
+    if (hours.length >= 2) {
+      let minGap = 24;
+      for (let i = 1; i < hours.length; i++) {
+        minGap = Math.min(minGap, hours[i] - hours[i - 1]);
+      }
+      minGap = Math.min(minGap, 24 - hours[hours.length - 1] + hours[0]);
+      return minGap * 60;
+    }
+    return 24 * 60;
+  }
+
+  if (freq === "MINUTELY") return interval;
+  if (freq === "HOURLY") return interval * 60;
+  if (freq === "DAILY") return interval * 24 * 60;
+  if (freq === "WEEKLY") return interval * 7 * 24 * 60;
+
+  return null;
+}
+
+/**
  * Get reminder management tools for the core agent
  */
 export function getReminderTools(
@@ -97,10 +134,18 @@ export function getReminderTools(
   channel: MessageChannel = "whatsapp",
   timezone: string = "UTC",
   availableChannels: MessageChannel[] = ["email"],
+  minRecurrenceMinutes: number = 60,
 ): Record<string, Tool> {
+  const minRecurrenceLabel =
+    minRecurrenceMinutes >= 60
+      ? `${minRecurrenceMinutes / 60} hour${minRecurrenceMinutes > 60 ? "s" : ""}`
+      : `${minRecurrenceMinutes} minutes`;
+
   return {
     add_reminder: tool({
       description: `Schedule a reminder for later. Creates a trigger that will fire at the specified time.
+
+MINIMUM RECURRENCE: For recurring reminders, the minimum interval is ${minRecurrenceLabel}. Do not create recurring reminders with shorter intervals. Do not suggest background tasks or other workarounds to bypass this limit.
 
 Simple reminders (just notify):
 - "notify user: drink water"
@@ -209,6 +254,15 @@ FOLLOW-UP REMINDERS:
         skillName,
       }) => {
         try {
+          // Enforce minimum recurrence interval
+          const isRecurring = !maxOccurrences || maxOccurrences > 1;
+          if (isRecurring) {
+            const intervalMins = getRecurrenceIntervalMinutes(schedule);
+            if (intervalMins !== null && intervalMins < minRecurrenceMinutes) {
+              return `Cannot create reminder: minimum recurrence interval is ${minRecurrenceLabel}.`;
+            }
+          }
+
           // Enforce max 1 follow-up per reminder
           if (isFollowUp && parentReminderId) {
             const parentReminder = await getReminderById(parentReminderId);

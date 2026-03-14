@@ -29,6 +29,7 @@ import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { upsertConversationHistory } from "~/services/conversation.server";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
+import { deductCredits } from "~/trigger/utils/utils";
 
 // ============================================================================
 // Types
@@ -122,6 +123,19 @@ export async function runCASEPipeline(
       userPersona,
       executorTools,
     );
+
+    // Deduct credits for the CASE pipeline run (1 for decision + 1 if Sol messaged)
+    try {
+      const creditAmount = plan.shouldMessage ? 2 : 1;
+      await deductCredits(
+        userData.workspaceId,
+        userData.userId,
+        "chatMessage",
+        creditAmount,
+      );
+    } catch (error) {
+      logger.warn(`[CASE pipeline] Failed to deduct credits for ${reminderId}`, { error });
+    }
 
     logger.info(`[CASE pipeline] Successfully processed ${reminderId}`);
 

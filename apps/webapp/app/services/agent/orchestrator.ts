@@ -190,6 +190,14 @@ RULES:
 - Match tasks to gateways based on their descriptions.
 - CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
 
+DUPLICATE PREVENTION:
+- NEVER retry create/send/post operations if the first call returned a success result (URL, ID, or confirmation). If you got a success response, the action is done — do not call it again.
+- If a create/send call fails with a timeout or ambiguous error, search for the resource first (e.g. search by title/subject) before retrying to avoid duplicates.
+
+RESOLVING REFERENCES:
+- When an action references a person by name (assignee, recipient, etc.), resolve their identifier for that integration. Check user persona first, then memory_search for known usernames/handles. If not found, ask the user.
+- When an action references an entity by name (milestone, project, label, channel, etc.), look it up via get_integration_actions first to get the correct ID/number before using it in the create/update call. If not found, proceed without it and inform the user.
+
 CRITICAL - FINAL SUMMARY:
 When you have completed the action, write a clear, concise summary as your final response.
 Include: what was done, result (success/failure), relevant details (IDs, URLs, errors).`;
