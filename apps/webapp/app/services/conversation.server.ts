@@ -195,6 +195,28 @@ export const getOnboardingConversation = async (
   return conversation;
 };
 
+export async function createEmptyConversation(
+  workspaceId: string,
+  userId: string,
+  title: string,
+  asyncJobId?: string,
+) {
+  const conversation = await prisma.conversation.create({
+    data: {
+      workspaceId,
+      userId,
+      source: "task",
+      title: title.substring(0, 100),
+      asyncJobId: asyncJobId ?? null,
+    },
+    include: { ConversationHistory: true },
+  });
+
+  trackFeatureUsage("conversation_created", userId).catch(console.error);
+
+  return conversation;
+}
+
 export const upsertConversationHistory = async (
   id: string,
   parts: any,
@@ -262,13 +284,13 @@ export type GetConversationsListDto = z.infer<
 export async function getConversationSources(
   workspaceId: string,
   userId: string,
-): Promise<string[]> {
-  const rows = await prisma.conversation.findMany({
+): Promise<{ source: string; count: number }[]> {
+  const rows = await prisma.conversation.groupBy({
+    by: ["source"],
     where: { workspaceId, userId, deleted: null },
-    select: { source: true },
-    distinct: ["source"],
+    _count: { source: true },
   });
-  return rows.map((r) => r.source);
+  return rows.map((r) => ({ source: r.source, count: r._count.source }));
 }
 
 export async function getConversationsList(

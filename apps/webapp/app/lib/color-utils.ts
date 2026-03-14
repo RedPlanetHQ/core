@@ -2,6 +2,8 @@
  * Color utilities for handling both hex and OKLCH color formats
  */
 
+import { TaskStatus } from "@prisma/client";
+
 /**
  * Check if a color string is in OKLCH format
  */

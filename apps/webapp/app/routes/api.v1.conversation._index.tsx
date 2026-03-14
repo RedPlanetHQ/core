@@ -65,7 +65,11 @@ const { loader, action } = createHybridActionApiRoute(
       normalizeParts(parts).length > 0;
     const incomingUserText = body.message?.parts?.[0]?.text;
 
-    if (conversationHistory.length === 1 && !isAssistantApproval && incomingUserText) {
+    if (
+      conversationHistory.length === 1 &&
+      !isAssistantApproval &&
+      incomingUserText
+    ) {
       // Trigger conversation title task
       await enqueueCreateConversationTitle({
         conversationId: body.id,
@@ -74,6 +78,20 @@ const { loader, action } = createHybridActionApiRoute(
     }
 
     if (conversationHistory.length > 1 && !isAssistantApproval) {
+      const messageParts = body.message?.parts;
+      const normalizedMessageParts = normalizeParts(messageParts);
+
+      if (hasNonEmptyParts(normalizedMessageParts)) {
+        await upsertConversationHistory(
+          body.message?.id ?? crypto.randomUUID(),
+          normalizedMessageParts,
+          body.id,
+          UserTypeEnum.User,
+        );
+      }
+    }
+
+    if (conversationHistory.length === 0) {
       const messageParts = body.message?.parts;
       const normalizedMessageParts = normalizeParts(messageParts);
 
@@ -96,7 +114,9 @@ const { loader, action } = createHybridActionApiRoute(
       };
     });
 
-    const finalFromHistory = messages.filter((m: any) => hasNonEmptyParts(m.parts));
+    const finalFromHistory = messages.filter((m: any) =>
+      hasNonEmptyParts(m.parts),
+    );
     let finalMessages = finalFromHistory;
     const incomingMessageId = body.message?.id;
 
@@ -105,7 +125,9 @@ const { loader, action } = createHybridActionApiRoute(
       const id = body.message?.id;
 
       const last = finalFromHistory[finalFromHistory.length - 1];
-      const alreadyInHistory = !!(incomingMessageId && last?.id === incomingMessageId);
+      const alreadyInHistory = !!(
+        incomingMessageId && last?.id === incomingMessageId
+      );
 
       if (message && !alreadyInHistory) {
         finalMessages = [

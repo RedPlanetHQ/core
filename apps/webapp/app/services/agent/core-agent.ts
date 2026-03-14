@@ -8,7 +8,7 @@ import { type OrchestratorTools } from "./orchestrator-tools";
 import { logger } from "../logger.service";
 import { prisma } from "~/db.server";
 import { getReminderTools } from "./tools/reminder-tools";
-import { getBackgroundTaskTools } from "./tools/background-task-tools";
+import { getTaskTools } from "./tools/task-tools";
 import { getSkillTool } from "./tools/skill-tools";
 import { getSleepTool } from "./tools/utils-tools";
 
@@ -54,8 +54,6 @@ export const createTools = async (
   conversationId?: string,
   /** Additional channel metadata for callbacks */
   channelMetadata?: Record<string, unknown>,
-  /** When true, background task tools (spawn/list/cancel) are excluded */
-  disableBackgroundTaskTools?: boolean,
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools,
 ) => {
@@ -205,12 +203,12 @@ export const createTools = async (
   if (onMessage) {
     tools["acknowledge"] = tool({
       description:
-        "Send a quick ack ONLY when you're about to call gather_context or take_action. Do NOT call this for simple greetings, thanks, or conversational messages - just respond directly for those.",
+        "Send a brief update ONLY when you're about to call take_action. Do NOT use before gather_context. Do NOT use for greetings or conversational messages.",
       inputSchema: z.object({
         message: z
           .string()
           .describe(
-            'Brief ack referencing what you\'re about to look up. "checking your calendar." "pulling up your emails." "looking at your PRs." "on it." Keep it contextual.',
+            'One short sentence. Max 6 words. Examples: "on it.", "creating the issue.", "sending the message.", "booking the slot."',
           ),
       }),
       execute: async ({ message }) => {
@@ -248,22 +246,12 @@ export const createTools = async (
     minRecurrenceMinutes,
   );
 
-  // Add background task tools (not in readOnly mode, not when running as a background task itself)
-  const backgroundTaskTools =
-    readOnly || disableBackgroundTaskTools
-      ? {}
-      : getBackgroundTaskTools(
-          workspaceId,
-          userId,
-          source === "web" ? "web" : channel,
-          conversationId,
-          channelMetadata,
-        );
+  const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId);
 
   // Add get_skill tool when skills are available
   if (skills && skills.length > 0) {
     tools["get_skill"] = getSkillTool(workspaceId);
   }
 
-  return { ...tools, ...reminderTools, ...backgroundTaskTools };
+  return { ...tools, ...reminderTools, ...taskTools };
 };

@@ -264,19 +264,19 @@ export const activityCaseQueue = new Queue("activity-case-queue", {
 });
 
 /**
- * Background task queue
- * Handles long-running background tasks with user notification
+ * Task queue
+ * Handles long-running tasks
  */
-export const backgroundTaskQueue = new Queue("background-task-queue", {
+export const taskQueue = new Queue("task-queue", {
   connection: getRedisConnection(),
   defaultJobOptions: {
-    attempts: 1, // No retries - task handles its own state
+    attempts: 1,
     removeOnComplete: {
-      age: 7200, // Keep completed jobs for 2 hours
+      age: 7200,
       count: 100,
     },
     removeOnFail: {
-      age: 86400, // Keep failed jobs for 24 hours
+      age: 86400,
     },
   },
 });

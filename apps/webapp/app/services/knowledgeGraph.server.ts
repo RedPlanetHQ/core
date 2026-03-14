@@ -221,7 +221,6 @@ export class KnowledgeGraphService {
       // console.log("previousEpisodes: ", previousEpisodes);
       // console.log("previousVersionContent: ", previousVersionContent);
 
-      console.log(sessionContext, "sessionContext");
       const normalizedEpisodeBody = await this.normalizeEpisodeBody(
         params.episodeBody,
         params.source,
@@ -472,7 +471,10 @@ export class KnowledgeGraphService {
       worldExtract.graph_facts.length > 0
         ? (async () => {
             try {
-              const reflectMessages = reflectWorldPrompt(worldExtract.graph_facts, episode.content);
+              const reflectMessages = reflectWorldPrompt(
+                worldExtract.graph_facts,
+                episode.content,
+              );
               const { object: reflectResult, usage: reflectUsage } =
                 await makeStructuredModelCall(
                   ReflectWorldSchema,
@@ -482,14 +484,18 @@ export class KnowledgeGraphService {
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
-                tokenMetrics.low.output += reflectUsage.completionTokens as number;
+                tokenMetrics.low.output +=
+                  reflectUsage.completionTokens as number;
                 tokenMetrics.low.total += reflectUsage.totalTokens as number;
                 tokenMetrics.low.cached +=
                   (reflectUsage.cachedInputTokens as number) || 0;
               }
               return reflectResult;
             } catch (err) {
-              logger.warn("reflect-world failed, falling back to extracted facts", { error: err });
+              logger.warn(
+                "reflect-world failed, falling back to extracted facts",
+                { error: err },
+              );
               return { graph_facts: worldExtract.graph_facts };
             }
           })()
@@ -498,7 +504,10 @@ export class KnowledgeGraphService {
       voiceExtract.voice_facts.length > 0
         ? (async () => {
             try {
-              const reflectMessages = reflectVoicePrompt(voiceExtract.voice_facts, episode.content);
+              const reflectMessages = reflectVoicePrompt(
+                voiceExtract.voice_facts,
+                episode.content,
+              );
               const { object: reflectResult, usage: reflectUsage } =
                 await makeStructuredModelCall(
                   ReflectVoiceSchema,
@@ -508,14 +517,18 @@ export class KnowledgeGraphService {
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
-                tokenMetrics.low.output += reflectUsage.completionTokens as number;
+                tokenMetrics.low.output +=
+                  reflectUsage.completionTokens as number;
                 tokenMetrics.low.total += reflectUsage.totalTokens as number;
                 tokenMetrics.low.cached +=
                   (reflectUsage.cachedInputTokens as number) || 0;
               }
               return reflectResult;
             } catch (err) {
-              logger.warn("reflect-voice failed, falling back to extracted facts", { error: err });
+              logger.warn(
+                "reflect-voice failed, falling back to extracted facts",
+                { error: err },
+              );
               return { voice_facts: voiceExtract.voice_facts };
             }
           })()
@@ -531,7 +544,9 @@ export class KnowledgeGraphService {
       // Classify voice facts (if any)
       reflectedVoice.voice_facts.length > 0
         ? (async () => {
-            const voiceMessages = classifyVoicePrompt(reflectedVoice.voice_facts);
+            const voiceMessages = classifyVoicePrompt(
+              reflectedVoice.voice_facts,
+            );
             const { object: voiceResult, usage: voiceUsage } =
               await makeStructuredModelCall(
                 ClassifyVoiceSchema,

@@ -281,7 +281,7 @@ function DirectChannelCard({
           )}
           {isConnected && !isDefault && onSetDefault && (
             <Button
-              variant="outline"
+              variant="ghost"
               className="w-full rounded"
               onClick={(e) => {
                 e.stopPropagation();

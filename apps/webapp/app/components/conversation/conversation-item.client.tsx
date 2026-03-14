@@ -16,9 +16,13 @@ import {
 import StaticLogo from "../logo/logo";
 import { Button } from "../ui";
 import {
+  Bell,
   ChevronDown,
   ChevronRight,
+  Clock,
+  LayoutGrid,
   LoaderCircle,
+  Search,
   TriangleAlert,
 } from "lucide-react";
 import { ApprovalComponent } from "./approval-component";
@@ -29,10 +33,14 @@ import {
   hasNeedsApprovalDeep,
   getToolDisplayName,
 } from "./conversation-utils";
+import { ICON_MAPPING } from "../icon-utils";
+import type { IconType } from "../icon-utils";
+import { Task } from "../icons/task";
 
 interface AIConversationItemProps {
   message: UIMessage;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
+  integrationAccountMap?: Record<string, string>;
 }
 
 // Helper to get nested parts from output (checks both .parts and .content)
@@ -56,6 +64,7 @@ const Tool = ({
   allToolsFlat = [],
   firstPendingApprovalIdx = -1,
   isNested = false,
+  integrationAccountMap = {},
 }: {
   part: ToolUIPart<any>;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
@@ -63,7 +72,9 @@ const Tool = ({
   allToolsFlat?: any[];
   firstPendingApprovalIdx?: number;
   isNested?: boolean;
+  integrationAccountMap?: Record<string, string>;
 }) => {
+  const toolName = part.type.replace("tool-", "");
   const needsApproval = part.state === "approval-requested";
 
   // Get all nested parts from output (handles both .parts and .content)
@@ -117,24 +128,136 @@ const Tool = ({
     }
   }, [needsApproval, hasNestedApproval]);
 
+  // acknowledge → inline update notification, no collapsible
+  if (toolName === "acknowledge") {
+    const msg = (part as any).input?.message;
+    return (
+      <div className="flex items-center gap-1.5 py-0.5">
+        <span>{msg || "Processing..."}</span>
+      </div>
+    );
+  }
+
+  // take_action → render nested tools flat, no collapsible wrapper
+  if (toolName === "take_action") {
+    if (!hasNestedTools && part.state !== "output-available") {
+      return (
+        <div className="text-muted-foreground flex items-center gap-2 py-1">
+          <LoaderCircle className="h-4 w-4 animate-spin" />
+          <span className="text-sm">Working...</span>
+        </div>
+      );
+    }
+    return (
+      <div
+        className={cn(
+          "w-full",
+          isNested && "ml-3 border-l border-gray-300 pl-3",
+        )}
+      >
+        {nestedToolParts.map((nestedPart: any, idx: number) => {
+          const nestedDisabled = isToolDisabled(
+            nestedPart,
+            allToolsFlat,
+            firstPendingApprovalIdx,
+          );
+          return (
+            <Tool
+              key={`flat-${idx}`}
+              part={nestedPart}
+              addToolApprovalResponse={addToolApprovalResponse}
+              isDisabled={nestedDisabled}
+              allToolsFlat={allToolsFlat}
+              firstPendingApprovalIdx={firstPendingApprovalIdx}
+              isNested={false}
+              integrationAccountMap={integrationAccountMap}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
   function getIcon() {
-    if (
-      part.state === "output-available" ||
-      part.state === "approval-requested" ||
-      part.state === "approval-responded"
-    ) {
-      return <StaticLogo size={18} className="rounded-sm" />;
-    }
-
     if (part.state === "output-denied") {
-      return <TriangleAlert size={18} className="rounded-sm" />;
+      return <TriangleAlert size={16} className="rounded-sm" />;
     }
 
-    return <LoaderCircle className="h-4 w-4 animate-spin" />;
+    if (part.state === "in-progress") {
+      return <LoaderCircle className="h-4 w-4 animate-spin" />;
+    }
+
+    if (toolName === "gather_context") {
+      return <Search size={16} />;
+    }
+
+    // Task tools
+    if (
+      toolName === "create_task" ||
+      toolName === "list_tasks" ||
+      toolName === "update_task_status"
+    ) {
+      return <Task size={16} />;
+    }
+
+    // Reminder tools
+    if (
+      toolName === "add_reminder" ||
+      toolName === "update_reminder" ||
+      toolName === "delete_reminder" ||
+      toolName === "list_reminders" ||
+      toolName === "confirm_reminder" ||
+      toolName === "set_timezone"
+    ) {
+      return <Clock size={16} />;
+    }
+
+    // Integration tools — resolve slug from accountId
+    if (
+      toolName === "execute_integration_action" ||
+      toolName === "get_integration_actions"
+    ) {
+      const accountId = (part as any).input?.accountId;
+      const slug = accountId ? integrationAccountMap[accountId] : undefined;
+      if (slug) {
+        const IconComponent = ICON_MAPPING[slug as IconType];
+        if (IconComponent) {
+          return <IconComponent size={16} />;
+        }
+      }
+      return <LayoutGrid size={16} />;
+    }
+
+    return <StaticLogo size={16} className="rounded-sm" />;
   }
 
   // Get the display name for this tool
-  const displayName = getToolDisplayName(part.type);
+  const displayName = (() => {
+    const toTitleCase = (s: string) =>
+      s
+        .split("_")
+        .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+        .join(" ");
+    if (
+      toolName === "execute_integration_action" &&
+      (part as any).input?.action
+    ) {
+      return toTitleCase((part as any).input.action as string);
+    }
+
+    if (toolName === "get_integration_actions" && (part as any).input?.query) {
+      return (part as any).input.query as string;
+    }
+    if (toolName === "gather_context" && (part as any).input?.query) {
+      const q = (part as any).input.query as string;
+      const truncated = q.length > 40 ? q.slice(0, 40) + "..." : q;
+      return `Gather context · ${truncated}`;
+    }
+    return getToolDisplayName(part.type);
+  })();
+
+  const gatherContextQuery =
+    toolName === "gather_context" ? (part as any).input?.query : null;
 
   // Render leaf tool (no nested tools) - compact output
   const renderLeafContent = () => {
@@ -160,23 +283,27 @@ const Tool = ({
     const outputContent = output?.content || output;
 
     return (
-      <div className="py-1">
+      <div className="bg-grayAlpha-50 mt-1 rounded p-2">
         {hasArgs && (
-          <>
+          <div className="bg-grayAlpha-100 mb-2 rounded p-2">
             <p className="text-muted-foreground mb-1 text-xs font-medium">
               Input
             </p>
-            <pre className="bg-grayAlpha-100 mb-2 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#6B8E23]">
+            <pre className="text-success max-h-[200px] overflow-auto rounded p-2 font-mono text-xs">
               {JSON.stringify(args, null, 2)}
             </pre>
-          </>
+          </div>
         )}
-        <p className="text-muted-foreground mb-1 text-xs font-medium">Result</p>
-        <pre className="bg-grayAlpha-100 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
-          {typeof outputContent === "string"
-            ? outputContent
-            : JSON.stringify(outputContent, null, 2)}
-        </pre>
+        <div className="bg-grayAlpha-100 rounded p-2">
+          <p className="text-muted-foreground mb-1 text-xs font-medium">
+            Result
+          </p>
+          <pre className="max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
+            {typeof outputContent === "string"
+              ? outputContent
+              : JSON.stringify(outputContent, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   };
@@ -185,6 +312,11 @@ const Tool = ({
   const renderNestedContent = () => {
     return (
       <div className="mt-1">
+        {gatherContextQuery && (
+          <p className="text-muted-foreground mb-2 ml-3 whitespace-pre-wrap border-l border-gray-300 pl-3 text-sm leading-relaxed">
+            {gatherContextQuery}
+          </p>
+        )}
         {nestedToolParts.map((nestedPart: any, idx: number) => {
           const nestedDisabled = isToolDisabled(
             nestedPart,
@@ -200,6 +332,7 @@ const Tool = ({
               allToolsFlat={allToolsFlat}
               firstPendingApprovalIdx={firstPendingApprovalIdx}
               isNested={true}
+              integrationAccountMap={integrationAccountMap}
             />
           );
         })}
@@ -220,9 +353,8 @@ const Tool = ({
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        "w-full",
+        "my-1 w-full",
         isNested && "ml-3 border-l border-gray-300 pl-3",
-        !isNested && "my-1",
         isDisabled && "cursor-not-allowed opacity-50",
       )}
     >
@@ -230,7 +362,7 @@ const Tool = ({
         <Button
           variant="ghost"
           className={cn(
-            "flex items-center gap-2 py-1 text-left hover:cursor-pointer",
+            "text-muted-foreground/80 -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
             isDisabled && "cursor-not-allowed",
           )}
           disabled={isDisabled}
@@ -252,6 +384,7 @@ const Tool = ({
 const ConversationItemComponent = ({
   message,
   addToolApprovalResponse,
+  integrationAccountMap = {},
 }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
@@ -279,7 +412,7 @@ const ConversationItemComponent = ({
     [];
   let currentToolGroup: any[] = [];
 
-  message.parts.forEach((part, index) => {
+  message.parts.forEach((part) => {
     if (part.type?.includes("tool-")) {
       currentToolGroup.push(part);
     } else {
@@ -349,12 +482,12 @@ const ConversationItemComponent = ({
           isDisabled={isDisabled}
           allToolsFlat={allToolsFlat}
           firstPendingApprovalIdx={firstPendingApprovalIdx}
+          integrationAccountMap={integrationAccountMap}
         />
       );
     }
 
     if (part.type?.includes("text")) {
-      // return  <StyledMarkdown className="text-sm">{part.text}</StyledMarkdown>
       return (
         <EditorContent
           editor={editor}
@@ -387,12 +520,11 @@ const ConversationItemComponent = ({
       <div
         className={cn(
           "flex w-full flex-col",
-          isUser && "bg-primary/20 w-fit max-w-[500px] rounded-md p-3",
+          isUser && "bg-grayAlpha-100 w-fit rounded-md p-2",
         )}
       >
         {groupedParts.map((group, groupIndex) => {
           if (group.type === "single") {
-            // Render non-tool part
             return (
               <div key={`single-${groupIndex}`}>
                 {getComponent(group.parts[0])}
