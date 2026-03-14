@@ -64,14 +64,20 @@ export async function updateTaskConversationIds(
   return prisma.task.update({ where: { id }, data: { conversationIds } });
 }
 
-export async function markTaskInProcess(id: string, jobId?: string): Promise<Task> {
+export async function markTaskInProcess(
+  id: string,
+  jobId?: string,
+): Promise<Task> {
   return prisma.task.update({
     where: { id },
-    data: { status: "InProcess", ...(jobId && { jobId }) },
+    data: { status: "InProgress", ...(jobId && { jobId }) },
   });
 }
 
-export async function markTaskCompleted(id: string, result: string): Promise<Task> {
+export async function markTaskCompleted(
+  id: string,
+  result: string,
+): Promise<Task> {
   return prisma.task.update({
     where: { id },
     data: { status: "Completed", result },
@@ -85,7 +91,10 @@ export async function markTaskFailed(id: string, error: string): Promise<Task> {
   });
 }
 
-export async function deleteTask(id: string, workspaceId: string): Promise<Task> {
+export async function deleteTask(
+  id: string,
+  workspaceId: string,
+): Promise<Task> {
   const task = await prisma.task.findFirst({ where: { id, workspaceId } });
   if (!task) throw new Error(`Task ${id} not found`);
   return prisma.task.delete({ where: { id } });

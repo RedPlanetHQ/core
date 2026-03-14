@@ -25,6 +25,7 @@ import {
 import {
   createEmptyConversation,
   getConversationAndHistory,
+  readConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
@@ -99,6 +100,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
         selectedTask.conversationIds[0],
         user.id,
       );
+      if (conversation?.unread) {
+        await readConversation(conversation.id);
+      }
     }
   }
 
@@ -240,7 +244,7 @@ function HeaderRow({
   return (
     <Button
       className={cn(
-        "text-accent-foreground my-2 ml-3 flex w-fit cursor-default items-center rounded-2xl",
+        "text-accent-foreground my-2 ml-2 flex w-fit cursor-default items-center rounded-2xl",
         index === 0 && "mt-4",
       )}
       size="lg"
@@ -265,10 +269,7 @@ function TaskRowItem({
   onStatusChange: (status: string) => void;
 }) {
   return (
-    <a
-      onClick={onClick}
-      className={cn("group flex cursor-default gap-2 pl-1 pr-2")}
-    >
+    <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-2")}>
       <div className="flex w-full items-center">
         <div
           className={cn(

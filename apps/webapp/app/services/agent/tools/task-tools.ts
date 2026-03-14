@@ -1,10 +1,6 @@
 import { tool, type Tool } from "ai";
 import { z } from "zod";
-import {
-  createTask,
-  getTasks,
-  updateTaskStatus,
-} from "~/services/task.server";
+import { createTask, getTasks, updateTaskStatus } from "~/services/task.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
@@ -30,7 +26,12 @@ The task runs in the background. The conversation will be linked to the task.`,
       }),
       execute: async ({ title, description }) => {
         try {
-          const task = await createTask(workspaceId, userId, title, description);
+          const task = await createTask(
+            workspaceId,
+            userId,
+            title,
+            description,
+          );
           await enqueueTask({ taskId: task.id, workspaceId, userId });
           logger.info(`Task ${task.id} created and enqueued`);
           return `Task created: "${title}" (ID: ${task.id}). It's queued and will start shortly.`;
@@ -45,13 +46,16 @@ The task runs in the background. The conversation will be linked to the task.`,
       description: "List tasks with their current status.",
       inputSchema: z.object({
         status: z
-          .enum(["Backlog", "Todo", "InProcess", "Review", "Completed"])
+          .enum(["Backlog", "Todo", "InProgress", "Review", "Completed"])
           .optional()
           .describe("Filter by status. Omit to list all."),
       }),
       execute: async ({ status }) => {
         try {
-          const tasks = await getTasks(workspaceId, status as TaskStatus | undefined);
+          const tasks = await getTasks(
+            workspaceId,
+            status as TaskStatus | undefined,
+          );
           if (tasks.length === 0) return "No tasks found.";
           return tasks
             .map(
@@ -70,7 +74,7 @@ The task runs in the background. The conversation will be linked to the task.`,
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Backlog", "Todo", "InProcess", "Review", "Completed"])
+          .enum(["Backlog", "Todo", "InProgress", "Review", "Completed"])
           .describe("New status"),
       }),
       execute: async ({ taskId, status }) => {

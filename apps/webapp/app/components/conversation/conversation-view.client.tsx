@@ -8,6 +8,7 @@ import { UserTypeEnum } from "@core/types";
 import { ScrollAreaWithAutoScroll } from "~/components/use-auto-scroll";
 import { ConversationItem } from "./conversation-item.client";
 import { ConversationTextarea } from "./conversation-textarea.client";
+import { ThinkingIndicator } from "./thinking-indicator.client";
 import { hasNeedsApprovalDeep } from "./conversation-utils";
 import { cn } from "~/lib/utils";
 
@@ -105,6 +106,7 @@ export function ConversationView({
 
       <div className="flex w-full flex-col items-center">
         <div className="w-full max-w-[90ch] px-4">
+          <ThinkingIndicator isLoading={status === "streaming" || status === "submitted"} />
           <ConversationTextarea
             className="bg-background-3 border-1 w-full border-gray-300"
             isLoading={status === "streaming" || status === "submitted"}
