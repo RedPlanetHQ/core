@@ -6,6 +6,7 @@ import { type SkillRef } from "./types";
 import { type OrchestratorTools } from "./orchestrator-tools";
 
 import { logger } from "../logger.service";
+import { prisma } from "~/db.server";
 import { getReminderTools } from "./tools/reminder-tools";
 import { getBackgroundTaskTools } from "./tools/background-task-tools";
 import { getSkillTool } from "./tools/skill-tools";
@@ -228,11 +229,23 @@ export const createTools = async (
       : source === "slack"
         ? "slack"
         : defaultChannel || "email";
+  // Look up plan type to enforce minimum recurrence interval
+  const subscription = await prisma.subscription.findFirst({
+    where: {
+      workspace: { id: workspaceId },
+      status: "ACTIVE",
+    },
+    select: { planType: true },
+  });
+  const minRecurrenceMinutes =
+    subscription?.planType === "FREE" || !subscription ? 60 : 30;
+
   const reminderTools = getReminderTools(
     workspaceId,
     channel,
     timezone,
     availableChannels || ["email"],
+    minRecurrenceMinutes,
   );
 
   // Add background task tools (not in readOnly mode, not when running as a background task itself)
