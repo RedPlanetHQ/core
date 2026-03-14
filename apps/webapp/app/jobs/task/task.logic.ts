@@ -41,15 +41,22 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     const intent = task.description ?? task.title;
 
-    const { conversationId } = await createConversation(workspaceId, userId, {
-      message: intent,
-      parts: [{ text: intent, type: "text" }],
-      userType: UserTypeEnum.User,
-      asyncJobId: task.id,
-      source: "task",
-    });
-
-    await updateTaskConversationIds(taskId, [conversationId]);
+    // Reuse existing conversation if user already chatted in this task, otherwise create new
+    let conversationId: string;
+    if (task.conversationIds.length > 0) {
+      conversationId = task.conversationIds[task.conversationIds.length - 1];
+      logger.info(`Task ${taskId}: reusing existing conversation ${conversationId}`);
+    } else {
+      const result = await createConversation(workspaceId, userId, {
+        message: intent,
+        parts: [{ text: intent, type: "text" }],
+        userType: UserTypeEnum.User,
+        asyncJobId: task.id,
+        source: "task",
+      });
+      conversationId = result.conversationId;
+      await updateTaskConversationIds(taskId, [conversationId]);
+    }
 
     const { token } = await getOrCreatePersonalAccessToken({
       name: "task-internal",

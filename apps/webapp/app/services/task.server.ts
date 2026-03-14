@@ -50,6 +50,13 @@ export async function searchTasks(
   });
 }
 
+export async function updateTask(
+  id: string,
+  data: { status?: TaskStatus; title?: string; description?: string },
+): Promise<Task> {
+  return prisma.task.update({ where: { id }, data });
+}
+
 export async function updateTaskStatus(
   id: string,
   status: TaskStatus,

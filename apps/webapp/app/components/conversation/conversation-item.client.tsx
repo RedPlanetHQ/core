@@ -195,7 +195,7 @@ const Tool = ({
     if (
       toolName === "create_task" ||
       toolName === "list_tasks" ||
-      toolName === "update_task_status"
+      toolName === "update_task"
     ) {
       return <Task size={16} />;
     }
