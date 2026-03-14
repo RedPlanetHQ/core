@@ -1021,8 +1021,8 @@ model Workspace {
 enum TaskStatus {
   Backlog
   Todo
-  InProcess
-  Review
+  InProgress
+  Blocked
   Completed
 }
 

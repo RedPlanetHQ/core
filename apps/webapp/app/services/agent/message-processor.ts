@@ -24,8 +24,6 @@ interface ProcessInboundMessageParams {
   conversationId?: string;
   /** If true, the userMessage won't be saved to conversation history (still used as AI context) */
   skipUserMessage?: boolean;
-  /** When true, background task tools (spawn/list/cancel) are excluded */
-  disableBackgroundTaskTools?: boolean;
   /** Override message type (e.g. System for reminders). Defaults to User. */
   messageUserType?: UserTypeEnum;
   /** Action plan from Decision Agent — injected into core brain system prompt */
@@ -118,7 +116,6 @@ export async function processInboundMessage({
   actionPlan,
   onMessage,
   channelMetadata,
-  disableBackgroundTaskTools,
   executorTools,
   attachments,
 }: ProcessInboundMessageParams): Promise<ProcessInboundMessageResult> {
@@ -160,7 +157,6 @@ export async function processInboundMessage({
       actionPlan,
       onMessage,
       channelMetadata,
-      disableBackgroundTaskTools,
       executorTools,
     },
     userId,

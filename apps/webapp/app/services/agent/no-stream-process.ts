@@ -36,8 +36,6 @@ interface NoStreamProcessBody {
   channelMetadata?: Record<string, string>;
   /** If true, the user message won't be saved to conversation history (still used as AI context) */
   skipUserMessage?: boolean;
-  /** When true, background task tools (spawn/list/cancel) are excluded */
-  disableBackgroundTaskTools?: boolean;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
 }
@@ -116,7 +114,6 @@ export async function noStreamProcess(
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
     conversationId: body.id,
-    disableBackgroundTaskTools: body.disableBackgroundTaskTools,
     executorTools: body.executorTools,
   });
 

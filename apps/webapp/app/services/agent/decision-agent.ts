@@ -217,7 +217,6 @@ export async function runDecisionAgent(
       context.user.availableChannels,
       undefined, // conversationId
       undefined, // channelMetadata
-      undefined, // disableBackgroundTaskTools
       executorTools,
     );
 

@@ -40,6 +40,7 @@ import {
 
 import { useNavigate, useParams } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
+import { Task } from "../icons/task";
 
 const data = {
   navMain: [
@@ -55,7 +56,7 @@ const data = {
       icon: LayoutGrid,
     },
     {
-      title: "My mind",
+      title: "Memory",
       url: "/home/memory",
       icon: Brain,
     },
@@ -63,6 +64,11 @@ const data = {
       title: "Reminders",
       url: "/home/agent/reminders",
       icon: Clock,
+    },
+    {
+      title: "Tasks",
+      url: "/home/tasks",
+      icon: Task,
     },
     {
       title: "Skills",
@@ -75,7 +81,7 @@ const data = {
 export function AppSidebar({
   conversationSources,
 }: {
-  conversationSources: string[];
+  conversationSources: { source: string; count: number }[];
 }) {
   const user = useUser();
   const navigate = useNavigate();

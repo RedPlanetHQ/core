@@ -40,7 +40,24 @@ function argSummaryFromInput(
 	}
 }
 
+const toTitleCase = (s: string) =>
+	s
+		.split('_')
+		.map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+		.join(' ');
+
+function resolveDisplayName(toolName: string, input?: Record<string, unknown>): string {
+	if (toolName === 'execute_integration_action' && typeof input?.action === 'string') {
+		return toTitleCase(input.action);
+	}
+	if (toolName === 'get_integration_actions' && typeof input?.query === 'string') {
+		return input.query;
+	}
+	return getToolDisplayName(toolName);
+}
+
 export class ToolCallItem implements Component {
+	private toolName: string;
 	private displayName: string;
 	private args: string = '';
 	private argSummary: string = '';
@@ -53,6 +70,7 @@ export class ToolCallItem implements Component {
 	public isDone = false;
 
 	constructor(toolName: string) {
+		this.toolName = toolName;
 		this.displayName = getToolDisplayName(toolName);
 	}
 
@@ -62,6 +80,7 @@ export class ToolCallItem implements Component {
 
 	setArgs(args: Record<string, unknown>): void {
 		this.args = JSON.stringify(args);
+		this.displayName = resolveDisplayName(this.toolName, args);
 	}
 
 	/** Called on each tool-output-available — updates nested children in real-time */
@@ -93,6 +112,7 @@ export class ToolCallItem implements Component {
 			if (part.input) {
 				child.args = JSON.stringify(part.input);
 				child.argSummary = argSummaryFromInput(part.input, child.args);
+				child.displayName = resolveDisplayName(toolName, part.input);
 			}
 
 			if (part.state === 'output-available' && !child.isDone) {

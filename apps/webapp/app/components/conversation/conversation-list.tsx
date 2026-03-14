@@ -2,9 +2,19 @@ import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
 import { useEffect, useState, useCallback, useRef } from "react";
 import { cn } from "~/lib/utils";
 import { Button } from "../ui";
-import { GitBranch, LoaderCircle, Timer } from "lucide-react";
+import {
+  GitBranch,
+  LoaderCircle,
+  Timer,
+  Folder,
+  FolderOpen,
+} from "lucide-react";
 import { getIcon, type IconType } from "../icon-utils";
-import { ConversationListOptions } from "./conversation-list-options";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "../ui/collapsible";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 
 export function getSourceIcon(source: string) {
@@ -15,7 +25,18 @@ export function getSourceIcon(source: string) {
     ? source.slice("integration_".length)
     : source;
   const IconComponent = getIcon(key as IconType);
-  return <IconComponent size={16} />;
+  return <IconComponent size={14} />;
+}
+
+function getSourceLabel(source: string): string {
+  if (!source || source === "core") return "General";
+  if (source === "reminder") return "Reminders";
+  if (source === "background-task") return "Background Tasks";
+  if (source.startsWith("integration_")) {
+    const name = source.slice("integration_".length);
+    return name.charAt(0).toUpperCase() + name.slice(1);
+  }
+  return source.charAt(0).toUpperCase() + source.slice(1);
 }
 
 type ConversationItem = {
@@ -46,51 +67,56 @@ type ConversationListResponse = {
   };
 };
 
-export const ConversationList = ({
+function SourceFolder({
+  source,
+  totalCount,
   currentConversationId,
-  conversationSources,
+  locationPathname,
 }: {
+  source: string;
+  totalCount: number;
   currentConversationId?: string;
-  conversationSources: string[];
-}) => {
-  const location = useLocation();
+  locationPathname: string;
+}) {
   const navigate = useNavigate();
-  const fetcher = useFetcher<ConversationListResponse>({ key: "conv-list" });
-  const [sourceFilter, setSourceFilter] = useLocalCommonState<string>(
-    "conv-source-filter",
-    "all",
+  const fetcher = useFetcher<ConversationListResponse>({
+    key: `conv-list-${source}`,
+  });
+  const icon = getSourceIcon(source);
+  const label = getSourceLabel(source);
+  const [open, setOpen] = useLocalCommonState<boolean>(
+    `conv-folder-${source}`,
+    false,
   );
 
   const [conversations, setConversations] = useState<ConversationItem[]>([]);
   const [currentPage, setCurrentPage] = useState(1);
   const [hasNextPage, setHasNextPage] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const loadedConversationIds = useRef<Set<string>>(new Set());
+  const loadedIds = useRef<Set<string>>(new Set());
   const isPageReset = useRef(false);
 
   const loadPage = useCallback(
     (page: number) => {
       setIsLoading(true);
-      const sourceParam =
-        sourceFilter && sourceFilter !== "all" ? `&source=${sourceFilter}` : "";
+      const sourceParam = source === "core" ? "" : `&source=${source}`;
       fetcher.load(
         `/api/v1/conversations?unread=false&page=${page}&limit=10${sourceParam}`,
       );
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [fetcher, sourceFilter],
+    [fetcher, source],
   );
 
-  // Reload page 1 on pathname or filter change
+  // Reload on path change
   useEffect(() => {
     isPageReset.current = true;
-    loadedConversationIds.current = new Set();
-
+    loadedIds.current = new Set();
     setCurrentPage(1);
     setHasNextPage(true);
     loadPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.pathname, sourceFilter]);
+  }, [locationPathname]);
 
   useEffect(() => {
     if (fetcher.data && fetcher.state === "idle") {
@@ -99,21 +125,14 @@ export const ConversationList = ({
       if (isPageReset.current) {
         isPageReset.current = false;
         const newConvs = fetcher.data.conversations;
-        setConversations((prev) => {
-          // If first item is the same, nothing changed — skip update
-          if (prev[0]?.id === newConvs[0]?.id) return prev;
-          // First item differs — replace the entire list
-          loadedConversationIds.current = new Set(newConvs.map((c) => c.id));
-          return newConvs;
-        });
+        loadedIds.current = new Set(newConvs.map((c) => c.id));
+        setConversations(newConvs);
       } else {
-        const newConversations = fetcher.data.conversations.filter(
-          (c) => !loadedConversationIds.current.has(c.id),
+        const newConvs = fetcher.data.conversations.filter(
+          (c) => !loadedIds.current.has(c.id),
         );
-        newConversations.forEach((c) =>
-          loadedConversationIds.current.add(c.id),
-        );
-        setConversations((prev) => [...prev, ...newConversations]);
+        newConvs.forEach((c) => loadedIds.current.add(c.id));
+        setConversations((prev) => [...prev, ...newConvs]);
       }
 
       setHasNextPage(fetcher.data.pagination.hasNext);
@@ -122,71 +141,115 @@ export const ConversationList = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fetcher.data, fetcher.state]);
 
+  const isOpen = open ?? false;
+
   return (
-    <div className="flex w-full flex-col px-2 pt-1">
-      <div className="mb-1 flex items-center justify-between px-2 pr-0">
-        <p className="text-muted-foreground text-sm">Chats</p>
-        <ConversationListOptions
-          sources={conversationSources}
-          sourceFilter={sourceFilter ?? "all"}
-          onFilterChange={setSourceFilter}
-        />
-      </div>
-
-      {isLoading && conversations.length === 0 && (
-        <div className="flex justify-center p-4">
-          <LoaderCircle className="text-primary h-4 w-4 animate-spin" />
-        </div>
-      )}
-
-      {conversations.map((conversation) => (
-        <div key={conversation.id} className="mb-0.5 flex min-h-[28px] w-full">
-          <Button
-            variant={
-              currentConversationId === conversation.id ? "secondary" : "ghost"
-            }
-            className={cn(
-              "border-border text-foreground h-auto justify-start rounded p-2 py-1 text-left",
-            )}
-            onClick={() => navigate(`/home/conversation/${conversation.id}`)}
-            full
-            tabIndex={0}
-            isActive={currentConversationId === conversation.id}
-            aria-current={
-              currentConversationId === conversation.id ? "page" : undefined
-            }
-          >
-            <div className="flex w-full min-w-0 items-center gap-2">
-              <span className="min-w-0 grow truncate text-left text-base">
-                {conversation.title || "Untitled Conversation"}
-              </span>
-              {getSourceIcon(conversation.source) && (
-                <span className="shrink-0">
-                  {getSourceIcon(conversation.source)}
-                </span>
-              )}
-            </div>
-          </Button>
-        </div>
-      ))}
-
-      {hasNextPage && (
-        <Button
-          variant="link"
-          onClick={() => loadPage(currentPage + 1)}
-          disabled={isLoading}
-          className="w-fit underline underline-offset-4"
-        >
-          {isLoading ? (
-            <>
-              <div className="border-primary mr-2 h-4 w-4 animate-spin rounded-full border-2 border-t-transparent" />
-              Loading...
-            </>
+    <Collapsible open={isOpen} onOpenChange={setOpen}>
+      <CollapsibleTrigger asChild>
+        <Button variant="ghost" isActive={isOpen} className="mb-0.5 gap-2">
+          {isOpen ? (
+            <FolderOpen size={16} className="shrink-0" />
           ) : (
-            "Load More"
+            <Folder size={16} className="shrink-0" />
+          )}
+
+          <span className="truncate">{label}</span>
+          {icon && <span className="shrink-0">{icon}</span>}
+          {totalCount > 0 && (
+            <span className="text-muted-foreground/60 ml-auto text-sm">
+              {totalCount}
+            </span>
           )}
         </Button>
-      )}
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <div className="pl-3">
+          {isLoading && conversations.length === 0 && (
+            <div className="flex justify-center p-2">
+              <LoaderCircle className="text-primary h-3.5 w-3.5 animate-spin" />
+            </div>
+          )}
+
+          {conversations.map((conversation) => (
+            <div
+              key={conversation.id}
+              className="mb-0.5 flex min-h-[28px] w-full"
+            >
+              <Button
+                variant={
+                  currentConversationId === conversation.id
+                    ? "secondary"
+                    : "ghost"
+                }
+                className="border-border text-foreground h-auto justify-start rounded p-2 py-1 text-left"
+                onClick={() =>
+                  navigate(`/home/conversation/${conversation.id}`)
+                }
+                full
+                tabIndex={0}
+                isActive={currentConversationId === conversation.id}
+                aria-current={
+                  currentConversationId === conversation.id ? "page" : undefined
+                }
+              >
+                <span className="min-w-0 grow truncate text-left text-base">
+                  {conversation.title || "Untitled Conversation"}
+                </span>
+              </Button>
+            </div>
+          ))}
+
+          {hasNextPage && (
+            <Button
+              variant="link"
+              onClick={() => loadPage(currentPage + 1)}
+              disabled={isLoading}
+              className="w-fit underline underline-offset-4"
+            >
+              {isLoading ? (
+                <>
+                  <div className="border-primary mr-2 h-3.5 w-3.5 animate-spin rounded-full border-2 border-t-transparent" />
+                  Loading...
+                </>
+              ) : (
+                "Load More"
+              )}
+            </Button>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+export const ConversationList = ({
+  currentConversationId,
+  conversationSources,
+}: {
+  currentConversationId?: string;
+  conversationSources: { source: string; count: number }[];
+}) => {
+  const location = useLocation();
+
+  const sorted = [...conversationSources].sort((a, b) => {
+    if (a.source === "core") return -1;
+    if (b.source === "core") return 1;
+    return getSourceLabel(a.source).localeCompare(getSourceLabel(b.source));
+  });
+
+  return (
+    <div className="flex w-full flex-col px-2 pt-1">
+      <p className="text-muted-foreground mb-1 px-2 text-sm">Chats</p>
+
+      {sorted.map(({ source, count }) => (
+        <SourceFolder
+          key={source}
+          source={source}
+          totalCount={count}
+          currentConversationId={currentConversationId}
+          locationPathname={location.pathname}
+        />
+      ))}
     </div>
   );
 };

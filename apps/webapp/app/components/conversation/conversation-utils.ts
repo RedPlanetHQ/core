@@ -12,7 +12,7 @@ export const getToolDisplayName = (toolType: string): string => {
     integration_query: "Integration explorer",
     integration_action: "Integration explorer",
     memory_search: "Memory explorer",
-    execute_integration_action: "Execute integration action",
+
     get_integration_actions: "Get integration actions",
     decision: "Decision",
     silent_action: "Silent action",
@@ -21,6 +21,13 @@ export const getToolDisplayName = (toolType: string): string => {
   // Check for exact match
   if (displayNameMap[name]) {
     return displayNameMap[name];
+  }
+
+  if (name === "execute_integration_action") {
+    return name
+      .split("_")
+      .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+      .join(" ");
   }
 
   // Check for gateway_ prefix
@@ -95,7 +102,9 @@ export const findAllToolsDeep = (parts: UIMessagePart[]): any[] => {
  * Finds the index of the first tool with "approval-requested" state in flattened list
  * Returns -1 if none found
  */
-export const findFirstPendingApprovalIndex = (parts: UIMessagePart[]): number => {
+export const findFirstPendingApprovalIndex = (
+  parts: UIMessagePart[],
+): number => {
   const allTools = findAllToolsDeep(parts);
   return allTools.findIndex((part) => part.state === "approval-requested");
 };
@@ -107,11 +116,9 @@ export const findFirstPendingApprovalIndex = (parts: UIMessagePart[]): number =>
 export const isToolDisabled = (
   part: any,
   allPartsFlat: any[],
-  firstPendingIndex: number
+  firstPendingIndex: number,
 ): boolean => {
   if (firstPendingIndex === -1) return false;
   const toolIndex = allPartsFlat.indexOf(part);
-  return (
-    toolIndex > firstPendingIndex && part.state === "approval-requested"
-  );
+  return toolIndex > firstPendingIndex && part.state === "approval-requested";
 };

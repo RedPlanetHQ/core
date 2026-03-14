@@ -32,6 +32,24 @@ export async function getTasks(
   });
 }
 
+export async function searchTasks(
+  workspaceId: string,
+  search: string,
+  limit = 10,
+): Promise<Task[]> {
+  return prisma.task.findMany({
+    where: {
+      workspaceId,
+      OR: [
+        { title: { contains: search, mode: "insensitive" } },
+        { description: { contains: search, mode: "insensitive" } },
+      ],
+    },
+    orderBy: { createdAt: "desc" },
+    take: limit,
+  });
+}
+
 export async function updateTaskStatus(
   id: string,
   status: TaskStatus,

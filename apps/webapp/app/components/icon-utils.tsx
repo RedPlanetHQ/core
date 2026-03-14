@@ -32,6 +32,13 @@ import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
 import { Jira } from "./icons/jira";
 import { Confluence } from "./icons/confluence";
+import { BacklogLine } from "./icons/backlog";
+import { TodoLine } from "./icons/todo";
+import { InProgressLine } from "./icons/in-progress";
+import { BlockedLine } from "./icons/blocked";
+import { DoneFill } from "./icons/done";
+import { TaskStatus } from "@core/database";
+import { Task } from "./icons/task";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -77,6 +84,7 @@ export const ICON_MAPPING = {
   confluence: Confluence,
   cli: Code,
   "core-extension": Chromium,
+  task: Task,
 
   // Default icon
   integration: LayoutGrid,
@@ -117,4 +125,12 @@ export const getIconForAuthorise = (
   }
 
   return <LayoutGrid size={size} />;
+};
+
+export const TaskStatusIcons: Record<TaskStatus, React.ElementType> = {
+  Backlog: BacklogLine,
+  Todo: TodoLine,
+  InProgress: InProgressLine,
+  Blocked: BlockedLine,
+  Completed: DoneFill,
 };

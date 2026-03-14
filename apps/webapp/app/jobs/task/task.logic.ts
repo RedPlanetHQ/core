@@ -6,12 +6,13 @@ import {
   updateTaskConversationIds,
 } from "~/services/task.server";
 import { logger } from "~/services/logger.service";
-import { handleBackgroundMessage } from "~/services/channels/channel.service";
 import { env } from "~/env.server";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 import { createConversation } from "~/services/conversation.server";
+import { processInboundMessage } from "~/services/agent/message-processor";
+import { UserTypeEnum } from "@core/types";
 
 export interface TaskPayload {
   taskId: string;
@@ -38,12 +39,17 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const task = await getTaskById(taskId);
     if (!task) throw new Error(`Task ${taskId} not found`);
 
-    // Create a conversation for this task
-    const conversation = await createConversation(workspaceId, userId, {
-      title: task.title,
+    const intent = task.description ?? task.title;
+
+    const { conversationId } = await createConversation(workspaceId, userId, {
+      message: intent,
+      parts: [{ text: intent, type: "text" }],
+      userType: UserTypeEnum.User,
+      asyncJobId: task.id,
+      source: "task",
     });
 
-    await updateTaskConversationIds(taskId, [conversation.conversationId]);
+    await updateTaskConversationIds(taskId, [conversationId]);
 
     const { token } = await getOrCreatePersonalAccessToken({
       name: "task-internal",
@@ -58,19 +64,15 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
     try {
-      // Build a minimal BackgroundTask-compatible object from Task
-      const bgTask = {
-        ...task,
-        intent: task.description ?? task.title,
-        callbackChannel: "web",
-        callbackConversationId: conversation.conversationId,
-        callbackMetadata: {},
-        timeoutMs,
-        startedAt: new Date(),
-        completedAt: null,
-      } as any;
-
-      await handleBackgroundMessage(bgTask, executorTools);
+      await processInboundMessage({
+        userId,
+        workspaceId,
+        channel: "web",
+        userMessage: intent,
+        conversationId,
+        skipUserMessage: true,
+        executorTools,
+      });
 
       clearTimeout(timeoutId);
       await markTaskCompleted(taskId, "Task completed");
