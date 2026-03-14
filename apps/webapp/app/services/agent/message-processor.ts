@@ -142,7 +142,6 @@ export async function processInboundMessage({
     }
   }
 
-  console.log(messageParts);
   // Call the same flow as web chat no_stream
   const assistantMessage = await noStreamProcess(
     {

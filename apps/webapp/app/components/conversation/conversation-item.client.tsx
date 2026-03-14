@@ -244,11 +244,20 @@ const Tool = ({
     ) {
       return toTitleCase((part as any).input.action as string);
     }
+
     if (toolName === "get_integration_actions" && (part as any).input?.query) {
       return (part as any).input.query as string;
     }
+    if (toolName === "gather_context" && (part as any).input?.query) {
+      const q = (part as any).input.query as string;
+      const truncated = q.length > 40 ? q.slice(0, 40) + "..." : q;
+      return `Gather context · ${truncated}`;
+    }
     return getToolDisplayName(part.type);
   })();
+
+  const gatherContextQuery =
+    toolName === "gather_context" ? (part as any).input?.query : null;
 
   // Render leaf tool (no nested tools) - compact output
   const renderLeafContent = () => {
@@ -303,6 +312,11 @@ const Tool = ({
   const renderNestedContent = () => {
     return (
       <div className="mt-1">
+        {gatherContextQuery && (
+          <p className="text-muted-foreground mb-2 ml-3 whitespace-pre-wrap border-l border-gray-300 pl-3 text-sm leading-relaxed">
+            {gatherContextQuery}
+          </p>
+        )}
         {nestedToolParts.map((nestedPart: any, idx: number) => {
           const nestedDisabled = isToolDisabled(
             nestedPart,
