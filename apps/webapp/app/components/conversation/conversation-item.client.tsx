@@ -19,9 +19,10 @@ import {
   Bell,
   ChevronDown,
   ChevronRight,
+  Clock,
   LayoutGrid,
   LoaderCircle,
-  MessageCircle,
+  Search,
   TriangleAlert,
 } from "lucide-react";
 import { ApprovalComponent } from "./approval-component";
@@ -179,11 +180,15 @@ const Tool = ({
 
   function getIcon() {
     if (part.state === "output-denied") {
-      return <TriangleAlert size={18} className="rounded-sm" />;
+      return <TriangleAlert size={16} className="rounded-sm" />;
     }
 
     if (part.state === "in-progress") {
       return <LoaderCircle className="h-4 w-4 animate-spin" />;
+    }
+
+    if (toolName === "gather_context") {
+      return <Search size={16} />;
     }
 
     // Task tools
@@ -192,7 +197,7 @@ const Tool = ({
       toolName === "list_tasks" ||
       toolName === "update_task_status"
     ) {
-      return <Task size={18} />;
+      return <Task size={16} />;
     }
 
     // Reminder tools
@@ -204,7 +209,7 @@ const Tool = ({
       toolName === "confirm_reminder" ||
       toolName === "set_timezone"
     ) {
-      return <Bell size={18} />;
+      return <Clock size={16} />;
     }
 
     // Integration tools — resolve slug from accountId
@@ -217,20 +222,26 @@ const Tool = ({
       if (slug) {
         const IconComponent = ICON_MAPPING[slug as IconType];
         if (IconComponent) {
-          return <IconComponent size={18} />;
+          return <IconComponent size={16} />;
         }
       }
-      return <LayoutGrid size={18} />;
+      return <LayoutGrid size={16} />;
     }
 
-    return <StaticLogo size={18} className="rounded-sm" />;
+    return <StaticLogo size={16} className="rounded-sm" />;
   }
 
   // Get the display name for this tool
   const displayName = (() => {
     const toTitleCase = (s: string) =>
-      s.split("_").map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w)).join(" ");
-    if (toolName === "execute_integration_action" && (part as any).input?.action) {
+      s
+        .split("_")
+        .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
+        .join(" ");
+    if (
+      toolName === "execute_integration_action" &&
+      (part as any).input?.action
+    ) {
       return toTitleCase((part as any).input.action as string);
     }
     if (toolName === "get_integration_actions" && (part as any).input?.query) {
@@ -263,23 +274,27 @@ const Tool = ({
     const outputContent = output?.content || output;
 
     return (
-      <div className="py-1">
+      <div className="bg-grayAlpha-50 mt-1 rounded p-2">
         {hasArgs && (
-          <>
+          <div className="bg-grayAlpha-100 mb-2 rounded p-2">
             <p className="text-muted-foreground mb-1 text-xs font-medium">
               Input
             </p>
-            <pre className="bg-grayAlpha-100 mb-2 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#6B8E23]">
+            <pre className="text-success max-h-[200px] overflow-auto rounded p-2 font-mono text-xs">
               {JSON.stringify(args, null, 2)}
             </pre>
-          </>
+          </div>
         )}
-        <p className="text-muted-foreground mb-1 text-xs font-medium">Result</p>
-        <pre className="bg-grayAlpha-100 max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
-          {typeof outputContent === "string"
-            ? outputContent
-            : JSON.stringify(outputContent, null, 2)}
-        </pre>
+        <div className="bg-grayAlpha-100 rounded p-2">
+          <p className="text-muted-foreground mb-1 text-xs font-medium">
+            Result
+          </p>
+          <pre className="max-h-[200px] overflow-auto rounded p-2 font-mono text-xs text-[#BF4594]">
+            {typeof outputContent === "string"
+              ? outputContent
+              : JSON.stringify(outputContent, null, 2)}
+          </pre>
+        </div>
       </div>
     );
   };
@@ -333,7 +348,7 @@ const Tool = ({
         <Button
           variant="ghost"
           className={cn(
-            "text-muted-foreground -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
+            "text-muted-foreground/80 -ml-2 flex items-center gap-2 py-1 text-left hover:cursor-pointer",
             isDisabled && "cursor-not-allowed",
           )}
           disabled={isDisabled}
