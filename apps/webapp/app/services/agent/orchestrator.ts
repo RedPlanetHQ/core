@@ -410,6 +410,23 @@ export async function runOrchestrator(
     },
   });
 
+  // acknowledge - only in write mode, lets orchestrator send progress updates to the UI
+  if (mode === "write") {
+    tools.acknowledge = tool({
+      description:
+        "Send a brief progress update to the user while executing a task. Call this ONCE before starting a multi-step action. One short sentence, max 6 words. Examples: 'on it.', 'creating the issue.', 'sending the message.'",
+      inputSchema: z.object({
+        message: z
+          .string()
+          .describe("One short sentence, max 6 words describing what you're doing."),
+      }),
+      execute: async ({ message }) => {
+        logger.info(`Orchestrator: acknowledge - ${message}`);
+        return "acknowledged";
+      },
+    });
+  }
+
   // Web search - only in read mode
   if (mode === "read") {
     tools.web_search = tool({

@@ -58,7 +58,7 @@ export default function MemoryLayout() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader
-        title="My mind"
+        title="Memory"
         tabs={tabs}
         actions={actions}
         actionsNode={

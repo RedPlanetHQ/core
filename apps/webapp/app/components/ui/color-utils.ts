@@ -1,3 +1,5 @@
+import { TaskStatus } from "@prisma/client";
+
 /**
  * Generates an OKLCH color string with fixed lightness, chroma, and a random hue.
  * @returns {string} - The generated OKLCH color string.
@@ -40,4 +42,29 @@ export function getTeamColor(name: string): string {
   const index = Math.abs(hash) % 3;
 
   return `var(--team-color-${index + 1})`;
+}
+
+const TaskStatusColorNumber: Record<TaskStatus, string> = {
+  InProgress: "4",
+  Blocked: "0",
+  Todo: "3",
+  Backlog: "2",
+  Completed: "6",
+};
+
+export function getTaskStatusColor(status: TaskStatus) {
+  return getTaskStatusColorWithNumber(TaskStatusColorNumber[status]);
+}
+
+export function getTaskStatusColorWithNumber(color: string) {
+  if (/^#[0-9A-F]{6}[0-9a-f]{0,2}$/i.test(color as string)) {
+    return { background: `${color}26`, color };
+  }
+
+  const cssVar = `var(--status-pill-${color})`;
+
+  return {
+    background: cssVar,
+    color: `var(--status-icon-${color})`,
+  };
 }

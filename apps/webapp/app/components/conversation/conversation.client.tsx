@@ -170,7 +170,7 @@ export const ConversationNew = ({
                   },
                 }}
                 immediatelyRender={false}
-                className="max-h-[200px] min-h-[56px] w-full overflow-auto px-4 pt-4 text-base"
+                className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
                 onUpdate={({ editor }: { editor: any }) => {
                   setContent(editor.getHTML());
                   setTitle(editor.getText());
