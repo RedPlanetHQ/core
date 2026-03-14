@@ -167,7 +167,6 @@ export async function action({ request }: ActionFunctionArgs) {
       parsed.data.title,
       parsed.data.description,
     );
-    await enqueueTask({ taskId: task.id, workspaceId, userId: user.id });
     return json({ task });
   }
 
@@ -187,6 +186,10 @@ export async function action({ request }: ActionFunctionArgs) {
       parsed.data.taskId,
       parsed.data.status as TaskStatus,
     );
+    // When moved to Todo, enqueue the task for the agent to pick up
+    if (parsed.data.status === "Todo") {
+      await enqueueTask({ taskId: task.id, workspaceId, userId: user.id });
+    }
     return json({ task });
   }
 

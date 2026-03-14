@@ -17,9 +17,9 @@ export type TriggerType =
   | "daily_sync"
   | "integration_webhook"
   | "scheduled_check"
-  | "background_task_completed"
-  | "background_task_failed"
-  | "background_task_timeout";
+  | "task_completed"
+  | "task_failed"
+  | "task_timeout";
 
 export interface BaseTrigger {
   type: TriggerType;
