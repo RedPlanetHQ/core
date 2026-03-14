@@ -166,8 +166,6 @@ export async function callbackHandler(params: CallbackParams) {
       },
     );
 
-    console.log(JSON.stringify(tokensResponse), params);
-
     const messages = await IntegrationRunner.setup({
       eventBody: {
         oauthResponse: tokensResponse.token,
@@ -178,8 +176,6 @@ export async function callbackHandler(params: CallbackParams) {
       },
       integrationDefinition: integrationDefinition as any,
     });
-
-    console.log(messages);
 
     // Handle the setup result - process account messages
     await IntegrationRunner.handleSetupMessages(
