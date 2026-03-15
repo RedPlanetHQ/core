@@ -13,9 +13,18 @@ export const options = zod.object({
 	dir: zod.string().optional().describe('Working directory'),
 	model: zod.string().optional().describe('Model to use'),
 	systemPrompt: zod.string().optional().describe('System prompt'),
-	worktree: zod.boolean().optional().describe('Run in an isolated git worktree'),
-	baseBranch: zod.string().optional().describe('Existing branch to base the worktree from'),
-	branch: zod.string().optional().describe('New branch name to create in the worktree'),
+	worktree: zod
+		.boolean()
+		.optional()
+		.describe('Run in an isolated git worktree'),
+	baseBranch: zod
+		.string()
+		.optional()
+		.describe('Existing branch to base the worktree from'),
+	branch: zod
+		.string()
+		.optional()
+		.describe('New branch name to create in the worktree'),
 });
 
 type Props = {
@@ -85,7 +94,10 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	let branch = opts.branch;
 
 	if (opts.worktree === undefined) {
-		const useWorktree = await p.confirm({message: 'Run in an isolated git worktree?', initialValue: false});
+		const useWorktree = await p.confirm({
+			message: 'Run in an isolated git worktree?',
+			initialValue: false,
+		});
 		if (p.isCancel(useWorktree)) {
 			p.cancel('Cancelled');
 			return;
@@ -95,7 +107,9 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 
 	if (worktree) {
 		if (!baseBranch) {
-			const input = await p.text({message: 'Base branch (existing branch to start from)'});
+			const input = await p.text({
+				message: 'Base branch (existing branch to start from)',
+			});
 			if (p.isCancel(input)) {
 				p.cancel('Cancelled');
 				return;
@@ -103,7 +117,9 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 			baseBranch = input;
 		}
 		if (!branch) {
-			const input = await p.text({message: 'New branch name to create in the worktree'});
+			const input = await p.text({
+				message: 'New branch name to create in the worktree',
+			});
 			if (p.isCancel(input)) {
 				p.cancel('Cancelled');
 				return;
@@ -145,10 +161,12 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 		[
 			`${chalk.bold('Session ID:')} ${res.sessionId}`,
 			`${chalk.bold('PID:')} ${res.pid}`,
-			...(res.worktreePath ? [
-				`${chalk.bold('Worktree:')} ${res.worktreePath}`,
-				`${chalk.bold('Branch:')} ${res.worktreeBranch}`,
-			] : []),
+			...(res.worktreePath
+				? [
+						`${chalk.bold('Worktree:')} ${res.worktreePath}`,
+						`${chalk.bold('Branch:')} ${res.worktreeBranch}`,
+				  ]
+				: []),
 			'',
 			chalk.dim(res.message),
 		].join('\n'),
