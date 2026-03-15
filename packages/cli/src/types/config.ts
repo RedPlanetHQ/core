@@ -86,6 +86,7 @@ export interface GatewaySlots {
 		enabled: boolean;
 		allow?: string[]; // Glob-like patterns: "Bash(npm run *)", "Bash(git commit *)"
 		deny?: string[]; // Glob-like patterns: "Bash(git push *)"
+		allowUnsafe?: boolean; // Disable default blocked patterns
 	};
 	imessage?: {
 		enabled: boolean;
@@ -131,6 +132,7 @@ export interface ExecConfig {
 	allow?: string[]; // Glob-like patterns: "Bash(npm run *)", "Bash(git commit *)"
 	deny?: string[]; // Glob-like patterns: "Bash(git push *)"
 	defaultDir?: string; // Default working directory
+	allowUnsafe?: boolean; // Disable default blocked patterns (rm, chmod, network cmds, etc.)
 }
 
 export interface UserPreferences {

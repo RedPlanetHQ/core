@@ -324,16 +324,18 @@ const Tool = ({
             firstPendingApprovalIdx,
           );
           return (
-            <Tool
-              key={`nested-${idx}`}
-              part={nestedPart}
-              addToolApprovalResponse={addToolApprovalResponse}
-              isDisabled={nestedDisabled}
-              allToolsFlat={allToolsFlat}
-              firstPendingApprovalIdx={firstPendingApprovalIdx}
-              isNested={true}
-              integrationAccountMap={integrationAccountMap}
-            />
+            <div key={`nested-${idx}`}>
+              {idx > 0 && <div className="ml-3 border-t border-gray-200" />}
+              <Tool
+                part={nestedPart}
+                addToolApprovalResponse={addToolApprovalResponse}
+                isDisabled={nestedDisabled}
+                allToolsFlat={allToolsFlat}
+                firstPendingApprovalIdx={firstPendingApprovalIdx}
+                isNested={true}
+                integrationAccountMap={integrationAccountMap}
+              />
+            </div>
           );
         })}
         {textPart && (

@@ -4,15 +4,7 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useFetcher, useNavigate, useSearchParams } from "@remix-run/react";
-import React, { useRef, useCallback, useEffect } from "react";
-import {
-  AutoSizer,
-  CellMeasurer,
-  CellMeasurerCache,
-  List,
-  type Index,
-  type ListRowProps,
-} from "react-virtualized";
+import React, { useEffect, useState } from "react";
 import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
@@ -33,42 +25,16 @@ import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { TaskDetail } from "~/components/tasks/task-detail";
-import { cn } from "~/lib/utils";
-import { formatDistanceToNow } from "date-fns";
+import { TaskListPanel } from "~/components/tasks/task-list-panel";
+import {
+  TaskViewOptions,
+  DEFAULT_VISIBLE,
+} from "~/components/tasks/task-view-options";
 import { Plus } from "lucide-react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
-import { TaskStatusIcons } from "~/components/icon-utils";
-import { getTaskStatusColor } from "~/components/ui/color-utils";
-import {
-  TaskStatusDropdown,
-  TaskStatusDropdownVariant,
-} from "~/components/tasks/task-status-dropdown";
 import { prisma } from "~/db.server";
-import { Task } from "~/components/icons/task";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-type TaskRow =
-  | { type: "header"; status: TaskStatus; count: number }
-  | { type: "item"; task: Awaited<ReturnType<typeof getTasks>>[number] };
-
-const STATUS_ORDER: TaskStatus[] = [
-  "InProgress",
-  "Blocked",
-  "Todo",
-  "Backlog",
-  "Completed",
-];
-
-const STATUS_LABELS: Record<TaskStatus, string> = {
-  InProgress: "In Progress",
-  Blocked: "Blocked",
-  Todo: "Todo",
-  Backlog: "Backlog",
-  Completed: "Completed",
-};
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
 
@@ -222,196 +188,6 @@ export async function action({ request }: ActionFunctionArgs) {
   return json({ error: "Unknown intent" }, { status: 400 });
 }
 
-// ─── Task list helpers ────────────────────────────────────────────────────────
-
-function buildRows(tasks: Awaited<ReturnType<typeof getTasks>>): TaskRow[] {
-  const rows: TaskRow[] = [];
-  for (const status of STATUS_ORDER) {
-    const group = tasks.filter((t) => t.status === status);
-    if (group.length === 0) continue;
-    rows.push({ type: "header", status, count: group.length });
-    for (const task of group) rows.push({ type: "item", task });
-  }
-  return rows;
-}
-
-function HeaderRow({
-  status,
-  index,
-}: {
-  status: TaskStatus;
-  count: number;
-  index: number;
-}) {
-  const Icon = TaskStatusIcons[status];
-  return (
-    <Button
-      className={cn(
-        "text-accent-foreground my-2 ml-2 flex w-fit cursor-default items-center rounded-2xl",
-        index === 0 && "mt-4",
-      )}
-      size="lg"
-      style={{ backgroundColor: getTaskStatusColor(status).background }}
-      variant="ghost"
-    >
-      <Icon size={20} className="h-5 w-5" />
-      <h3 className="pl-2">{STATUS_LABELS[status]}</h3>
-    </Button>
-  );
-}
-
-function TaskRowItem({
-  task,
-  selected,
-  onClick,
-  onStatusChange,
-}: {
-  task: Awaited<ReturnType<typeof getTasks>>[number];
-  selected: boolean;
-  onClick: () => void;
-  onStatusChange: (status: string) => void;
-}) {
-  return (
-    <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-2")}>
-      <div className="flex w-full items-center">
-        <div
-          className={cn(
-            "group-hover:bg-grayAlpha-100 ml-4 flex min-w-[0px] shrink grow items-start gap-2 rounded-xl pl-2 pr-4",
-            selected && "bg-grayAlpha-100",
-          )}
-        >
-          <div className="shrink-0 pt-2">
-            <TaskStatusDropdown
-              value={task.status}
-              onChange={onStatusChange}
-              variant={TaskStatusDropdownVariant.NO_BACKGROUND}
-            />
-          </div>
-
-          <div
-            className={cn(
-              "border-border flex w-full min-w-[0px] shrink flex-col border-b py-2.5",
-            )}
-          >
-            <div className="flex w-full gap-4">
-              <div className="inline-flex min-w-[0px] shrink items-center justify-start">
-                <div className="truncate text-left">{task.title}</div>
-              </div>
-              <div className="inline-flex min-w-[0px] flex-1 shrink items-center justify-start">
-                <div className="text-muted-foreground truncate text-left text-sm">
-                  {task.description}
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center pr-1">
-                <span className="text-muted-foreground text-xs">
-                  {formatDistanceToNow(new Date(task.createdAt), {
-                    addSuffix: true,
-                  })}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </a>
-  );
-}
-
-function TaskListPanel({
-  tasks,
-  selectedTaskId,
-  onSelect,
-  onNew,
-  onStatusChange,
-}: {
-  tasks: Awaited<ReturnType<typeof getTasks>>;
-  selectedTaskId: string | null;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-  onStatusChange: (taskId: string, status: string) => void;
-}) {
-  const rows = buildRows(tasks);
-
-  const cacheRef = useRef(
-    new CellMeasurerCache({ defaultHeight: 41, fixedWidth: true }),
-  );
-  const cache = cacheRef.current;
-
-  useEffect(() => {
-    cache.clearAll();
-  }, [rows.length]);
-
-  const rowHeight = ({ index }: Index) =>
-    Math.max(
-      cache.getHeight(index, 0),
-      rows[index]?.type === "header" ? 32 : 41,
-    );
-
-  const rowRenderer = useCallback(
-    ({ index, key, style, parent }: ListRowProps) => {
-      const row = rows[index];
-      if (!row) return null;
-
-      return (
-        <CellMeasurer
-          key={key}
-          cache={cache}
-          columnIndex={0}
-          parent={parent}
-          rowIndex={index}
-        >
-          <div style={style} key={key}>
-            {row.type === "header" ? (
-              <HeaderRow status={row.status} count={row.count} index={index} />
-            ) : (
-              <TaskRowItem
-                task={row.task}
-                selected={row.task.id === selectedTaskId}
-                onClick={() => onSelect(row.task.id)}
-                onStatusChange={(status) => onStatusChange(row.task.id, status)}
-              />
-            )}
-          </div>
-        </CellMeasurer>
-      );
-    },
-    [rows, selectedTaskId, onSelect, onStatusChange, cache],
-  );
-
-  if (tasks.length === 0) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3">
-        <Task className="text-muted-foreground h-8 w-8" />
-        <p className="text-muted-foreground text-sm">No tasks yet</p>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="rounded"
-          onClick={onNew}
-        >
-          <Plus size={14} className="mr-1" /> New task
-        </Button>
-      </div>
-    );
-  }
-
-  return (
-    <AutoSizer className="h-full">
-      {({ width, height }) => (
-        <List
-          height={height}
-          width={width}
-          rowCount={rows.length}
-          rowHeight={rowHeight}
-          rowRenderer={rowRenderer}
-          deferredMeasurementCache={cache}
-          overscanRowCount={8}
-        />
-      )}
-    </AutoSizer>
-  );
-}
-
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksIndex() {
@@ -422,6 +198,12 @@ export default function TasksIndex() {
   const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newConversation, setNewConversation] = React.useState(false);
+  const [visibleStatuses, setVisibleStatuses] =
+    useState<TaskStatus[]>(DEFAULT_VISIBLE);
+
+  const filteredTasks = tasks.filter((t) =>
+    visibleStatuses.includes(t.status as TaskStatus),
+  );
 
   const selectedTaskId = searchParams.get("taskId");
   const isCreating =
@@ -488,13 +270,19 @@ export default function TasksIndex() {
       <PageHeader
         title="Tasks"
         actionsNode={
-          <Button
-            variant="secondary"
-            className="gap-2 rounded"
-            onClick={() => setDialogOpen(true)}
-          >
-            <Plus size={16} /> Add task
-          </Button>
+          <div className="flex items-center gap-2">
+            <TaskViewOptions
+              visibleStatuses={visibleStatuses}
+              onChange={setVisibleStatuses}
+            />
+            <Button
+              variant="secondary"
+              className="gap-2 rounded"
+              onClick={() => setDialogOpen(true)}
+            >
+              <Plus size={16} /> Add task
+            </Button>
+          </div>
         }
       />
 
@@ -513,7 +301,7 @@ export default function TasksIndex() {
           <ResizablePanel defaultSize={50} minSize={50} maxSize={50}>
             <div className="h-full overflow-hidden">
               <TaskListPanel
-                tasks={tasks}
+                tasks={filteredTasks}
                 selectedTaskId={selectedTaskId}
                 onSelect={handleSelect}
                 onNew={() => setDialogOpen(true)}
@@ -545,7 +333,7 @@ export default function TasksIndex() {
         <div className="flex flex-1 overflow-hidden">
           <div className="w-full shrink-0 overflow-hidden border-r">
             <TaskListPanel
-              tasks={tasks}
+              tasks={filteredTasks}
               selectedTaskId={null}
               onSelect={handleSelect}
               onNew={() => setDialogOpen(true)}

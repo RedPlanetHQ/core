@@ -94,7 +94,7 @@ export function NewTaskDialog({
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="gap-0 sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-sm font-normal">
             {mode === "edit" ? "Edit task" : "New task"}
