@@ -5,13 +5,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { getAuthHeaders } from '../utils';
 
-let confluenceClient: AxiosInstance;
-
-function initializeClient(config: Record<string, string>) {
+function createConfluenceClient(config: Record<string, string>): AxiosInstance {
   const headers = getAuthHeaders(config.access_token);
   const cloudId = config.cloud_id;
 
-  confluenceClient = axios.create({
+  return axios.create({
     baseURL: `https://api.atlassian.com/ex/confluence/${cloudId}/wiki/api/v2`,
     headers,
   });
@@ -111,7 +109,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>,
 ) {
-  initializeClient(config);
+  const confluenceClient = createConfluenceClient(config);
 
   try {
     switch (name) {

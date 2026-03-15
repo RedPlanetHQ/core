@@ -4,16 +4,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { OAuth2Client } from 'google-auth-library';
 import { generatedTools, handleGeneratedTool } from './generated-tools';
 
-// OAuth2 configuration
-let oauth2Client: OAuth2Client;
-let sheets: sheets_v4.Sheets;
-
 async function loadCredentials(
   client_id: string,
   client_secret: string,
   callback: string,
   config: Record<string, string>
-) {
+): Promise<{ oauth2Client: OAuth2Client; sheets: sheets_v4.Sheets }> {
   try {
     const credentials = {
       refresh_token: config.refresh_token,
@@ -27,9 +23,11 @@ async function loadCredentials(
       scope: config.scope,
     };
 
-    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
+    const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+    return { oauth2Client, sheets };
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
@@ -169,10 +167,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  await loadCredentials(client_id, client_secret, callback, credentials);
-
-  // Initialize Sheets API
-  sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+  const { oauth2Client, sheets } = await loadCredentials(client_id, client_secret, callback, credentials);
 
   try {
     switch (name) {

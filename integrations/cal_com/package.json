@@ -1,6 +1,6 @@
 {
   "name": "@core/cal-com",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Cal.com integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

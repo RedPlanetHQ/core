@@ -2,10 +2,8 @@
 import axios, { AxiosInstance } from 'axios';
 import { callYnabTool, getYnabTools } from './tools';
 
-let ynabClient: AxiosInstance;
-
-function initializeClient(config: Record<string, string>) {
-  ynabClient = axios.create({
+function createYnabClient(config: Record<string, string>): AxiosInstance {
+  return axios.create({
     baseURL: 'https://api.ynab.com/v1',
     headers: {
       Authorization: `Bearer ${config.api_key}`,
@@ -23,7 +21,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>
 ) {
-  initializeClient(config);
+  const ynabClient = createYnabClient(config);
 
   try {
     const result = await callYnabTool(name, args, ynabClient);

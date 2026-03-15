@@ -95,7 +95,6 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	const readOnce = async (): Promise<SessionReadResult | null> => {
 		const result = await executeCodingTool('coding_read_session', {
 			sessionId,
-			dir,
 			lines: opts.lines,
 			offset: opts.offset,
 			tail: opts.tail,

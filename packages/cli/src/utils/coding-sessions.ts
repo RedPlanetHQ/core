@@ -13,6 +13,8 @@ export interface RunningSession {
 	dir: string;
 	pid?: number;
 	startedAt: number;
+	worktreePath?: string;
+	worktreeBranch?: string;
 }
 
 interface SessionsData {

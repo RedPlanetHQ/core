@@ -1,6 +1,6 @@
 {
   "name": "@core/google-docs",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "Google docs integration for Core",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

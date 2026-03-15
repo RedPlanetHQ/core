@@ -32,13 +32,16 @@ async function runCloseSession(opts: zod.infer<typeof options>): Promise<void> {
 		const spinner = p.spinner();
 		spinner.start('Closing all sessions...');
 
-		let closed = 0;
-		for (const s of sessions) {
-			const result = await executeCodingTool('coding_close_session', {sessionId: s.sessionId});
-			if (result.success) closed++;
-		}
+		const result = await executeCodingTool('coding_close_all', {});
+		const res = result.result as {closed: number; sessions: Array<{sessionId: string; message: string; worktreePath?: string; worktreeBranch?: string}>};
 
-		spinner.stop(chalk.green(`Closed ${closed} sessions`));
+		spinner.stop(chalk.green(`Closed ${res.closed} sessions`));
+
+		for (const s of res.sessions) {
+			if (s.worktreePath) {
+				p.log.warn(`${s.sessionId.slice(0, 8)}... — ${s.message}`);
+			}
+		}
 		return;
 	}
 

@@ -3,10 +3,8 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 import * as fs from 'fs';
 
-let linkedinClient: AxiosInstance;
-
-async function initializeLinkedInClient(accessToken: string) {
-  linkedinClient = axios.create({
+function createLinkedInClient(accessToken: string): AxiosInstance {
+  return axios.create({
     baseURL: 'https://api.linkedin.com',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -101,7 +99,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>,
 ) {
-  await initializeLinkedInClient(config.access_token);
+  const linkedinClient = createLinkedInClient(config.access_token);
 
   try {
     switch (name) {

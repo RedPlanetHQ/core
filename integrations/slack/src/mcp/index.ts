@@ -2,14 +2,8 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 
-// Slack API client
-let slackClient: AxiosInstance;
-
-/**
- * Initialize Slack API client with access token
- */
-async function initializeSlackClient(accessToken: string) {
-  slackClient = axios.create({
+function createSlackClient(accessToken: string): AxiosInstance {
+  return axios.create({
     baseURL: 'https://slack.com/api',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -22,6 +16,7 @@ async function initializeSlackClient(accessToken: string) {
  * Execute a Slack API call
  */
 async function executeSlackAPI(
+  slackClient: AxiosInstance,
   method: string,
   data?: Record<string, any>,
   httpMethod: 'GET' | 'POST' = 'POST',
@@ -589,10 +584,7 @@ export async function getTools() {
 // ============================================================================
 
 export async function callTool(name: string, args: Record<string, any>, accessToken: string) {
-  // Initialize client if not already done
-  if (!slackClient) {
-    await initializeSlackClient(accessToken);
-  }
+  const slackClient = createSlackClient(accessToken);
 
   try {
     switch (name) {
@@ -601,7 +593,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_send_message': {
         const validatedArgs = SendMessageSchema.parse(args);
-        const data = await executeSlackAPI('chat.postMessage', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'chat.postMessage', validatedArgs);
 
         return {
           content: [
@@ -615,7 +607,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_update_message': {
         const validatedArgs = UpdateMessageSchema.parse(args);
-        const data = await executeSlackAPI('chat.update', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'chat.update', validatedArgs);
 
         return {
           content: [
@@ -629,7 +621,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_delete_message': {
         const validatedArgs = DeleteMessageSchema.parse(args);
-        await executeSlackAPI('chat.delete', validatedArgs);
+        await executeSlackAPI(slackClient, 'chat.delete', validatedArgs);
 
         return {
           content: [
@@ -643,7 +635,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_message': {
         const validatedArgs = GetMessageSchema.parse(args);
-        const data = await executeSlackAPI(
+        const data = await executeSlackAPI(slackClient, 
           'conversations.history',
           {
             channel: validatedArgs.channel,
@@ -687,7 +679,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_messages': {
         const validatedArgs = ListMessagesSchema.parse(args);
-        const data = await executeSlackAPI('conversations.history', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'conversations.history', validatedArgs, 'GET');
 
         if (!data.messages || data.messages.length === 0) {
           return {
@@ -735,7 +727,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_search_messages': {
         const validatedArgs = SearchMessagesSchema.parse(args);
-        const data = await executeSlackAPI('search.messages', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'search.messages', validatedArgs, 'GET');
 
         if (!data.messages || data.messages.matches.length === 0) {
           return {
@@ -758,7 +750,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         const validatedArgs = GetUnreadSchema.parse(args);
 
         // Get channel info to retrieve the last_read timestamp
-        const channelInfo = await executeSlackAPI(
+        const channelInfo = await executeSlackAPI(slackClient, 
           'conversations.info',
           {
             channel: validatedArgs.channel,
@@ -770,7 +762,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
         if (!lastRead) {
           // If there's no last_read, fetch all recent messages
-          const data = await executeSlackAPI(
+          const data = await executeSlackAPI(slackClient, 
             'conversations.history',
             {
               channel: validatedArgs.channel,
@@ -800,7 +792,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
         }
 
         // Fetch messages after last_read timestamp
-        const data = await executeSlackAPI(
+        const data = await executeSlackAPI(slackClient, 
           'conversations.history',
           {
             channel: validatedArgs.channel,
@@ -841,7 +833,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_thread_replies': {
         const validatedArgs = GetThreadRepliesSchema.parse(args);
-        const data = await executeSlackAPI(
+        const data = await executeSlackAPI(slackClient, 
           'conversations.replies',
           {
             channel: validatedArgs.channel,
@@ -896,7 +888,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_add_reaction': {
         const validatedArgs = AddReactionSchema.parse(args);
-        await executeSlackAPI('reactions.add', validatedArgs);
+        await executeSlackAPI(slackClient, 'reactions.add', validatedArgs);
 
         return {
           content: [
@@ -910,7 +902,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_remove_reaction': {
         const validatedArgs = RemoveReactionSchema.parse(args);
-        await executeSlackAPI('reactions.remove', validatedArgs);
+        await executeSlackAPI(slackClient, 'reactions.remove', validatedArgs);
 
         return {
           content: [
@@ -924,7 +916,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_reactions': {
         const validatedArgs = GetReactionsSchema.parse(args);
-        const data = await executeSlackAPI('reactions.get', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'reactions.get', validatedArgs, 'GET');
 
         const message = data.message;
         if (!message.reactions || message.reactions.length === 0) {
@@ -960,7 +952,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
           cursor: validatedArgs.cursor,
         };
 
-        const data = await executeSlackAPI('conversations.list', apiParams, 'GET');
+        const data = await executeSlackAPI(slackClient, 'conversations.list', apiParams, 'GET');
 
         if (!data.channels || data.channels.length === 0) {
           return {
@@ -1001,7 +993,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_channel': {
         const validatedArgs = GetChannelSchema.parse(args);
-        const data = await executeSlackAPI('conversations.info', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'conversations.info', validatedArgs, 'GET');
 
         const ch = data.channel;
         let text = `Channel: <#${ch.id}> (${ch.name})\n`;
@@ -1019,7 +1011,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_create_channel': {
         const validatedArgs = CreateChannelSchema.parse(args);
-        const data = await executeSlackAPI('conversations.create', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'conversations.create', validatedArgs);
 
         const ch = data.channel;
         return {
@@ -1034,7 +1026,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_archive_channel': {
         const validatedArgs = ArchiveChannelSchema.parse(args);
-        await executeSlackAPI('conversations.archive', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.archive', validatedArgs);
 
         return {
           content: [
@@ -1048,7 +1040,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_unarchive_channel': {
         const validatedArgs = UnarchiveChannelSchema.parse(args);
-        await executeSlackAPI('conversations.unarchive', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.unarchive', validatedArgs);
 
         return {
           content: [
@@ -1062,7 +1054,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_invite_to_channel': {
         const validatedArgs = InviteToChannelSchema.parse(args);
-        await executeSlackAPI('conversations.invite', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.invite', validatedArgs);
 
         return {
           content: [
@@ -1076,7 +1068,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_kick_from_channel': {
         const validatedArgs = KickFromChannelSchema.parse(args);
-        await executeSlackAPI('conversations.kick', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.kick', validatedArgs);
 
         return {
           content: [
@@ -1090,7 +1082,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_join_channel': {
         const validatedArgs = JoinChannelSchema.parse(args);
-        await executeSlackAPI('conversations.join', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.join', validatedArgs);
 
         return {
           content: [
@@ -1104,7 +1096,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_leave_channel': {
         const validatedArgs = LeaveChannelSchema.parse(args);
-        await executeSlackAPI('conversations.leave', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.leave', validatedArgs);
 
         return {
           content: [
@@ -1118,7 +1110,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_rename_channel': {
         const validatedArgs = RenameChannelSchema.parse(args);
-        const data = await executeSlackAPI('conversations.rename', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'conversations.rename', validatedArgs);
 
         return {
           content: [
@@ -1132,7 +1124,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_set_channel_topic': {
         const validatedArgs = SetChannelTopicSchema.parse(args);
-        await executeSlackAPI('conversations.setTopic', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.setTopic', validatedArgs);
 
         return {
           content: [
@@ -1146,7 +1138,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_set_channel_purpose': {
         const validatedArgs = SetChannelPurposeSchema.parse(args);
-        await executeSlackAPI('conversations.setPurpose', validatedArgs);
+        await executeSlackAPI(slackClient, 'conversations.setPurpose', validatedArgs);
 
         return {
           content: [
@@ -1163,7 +1155,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_list_users': {
         const validatedArgs = ListUsersSchema.parse(args);
-        const data = await executeSlackAPI('users.list', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'users.list', validatedArgs, 'GET');
 
         if (!data.members || data.members.length === 0) {
           return {
@@ -1188,7 +1180,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user': {
         const validatedArgs = GetUserSchema.parse(args);
-        const data = await executeSlackAPI('users.info', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'users.info', validatedArgs, 'GET');
 
         const user = data.user;
         let text = `User: <@${user.id}>\n`;
@@ -1206,7 +1198,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user_by_email': {
         const validatedArgs = GetUserByEmailSchema.parse(args);
-        const data = await executeSlackAPI('users.lookupByEmail', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'users.lookupByEmail', validatedArgs, 'GET');
 
         const user = data.user;
         let text = `User: <@${user.id}>\n`;
@@ -1221,7 +1213,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_user_presence': {
         const validatedArgs = GetUserPresenceSchema.parse(args);
-        const data = await executeSlackAPI('users.getPresence', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'users.getPresence', validatedArgs, 'GET');
 
         return {
           content: [
@@ -1235,7 +1227,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_set_user_presence': {
         const validatedArgs = SetUserPresenceSchema.parse(args);
-        await executeSlackAPI('users.setPresence', validatedArgs);
+        await executeSlackAPI(slackClient, 'users.setPresence', validatedArgs);
 
         return {
           content: [
@@ -1252,7 +1244,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_upload_file': {
         const validatedArgs = UploadFileSchema.parse(args);
-        const data = await executeSlackAPI('files.upload', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'files.upload', validatedArgs);
 
         return {
           content: [
@@ -1266,7 +1258,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_files': {
         const validatedArgs = ListFilesSchema.parse(args);
-        const data = await executeSlackAPI('files.list', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'files.list', validatedArgs, 'GET');
 
         if (!data.files || data.files.length === 0) {
           return {
@@ -1288,7 +1280,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_get_file': {
         const validatedArgs = GetFileSchema.parse(args);
-        const data = await executeSlackAPI('files.info', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'files.info', validatedArgs, 'GET');
 
         const file = data.file;
         let text = `File: ${file.name || 'Untitled'}\n`;
@@ -1305,7 +1297,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_delete_file': {
         const validatedArgs = DeleteFileSchema.parse(args);
-        await executeSlackAPI('files.delete', validatedArgs);
+        await executeSlackAPI(slackClient, 'files.delete', validatedArgs);
 
         return {
           content: [
@@ -1322,7 +1314,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_create_reminder': {
         const validatedArgs = CreateReminderSchema.parse(args);
-        const data = await executeSlackAPI('reminders.add', validatedArgs);
+        const data = await executeSlackAPI(slackClient, 'reminders.add', validatedArgs);
 
         return {
           content: [
@@ -1335,7 +1327,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       }
 
       case 'slack_list_reminders': {
-        const data = await executeSlackAPI('reminders.list', {}, 'GET');
+        const data = await executeSlackAPI(slackClient, 'reminders.list', {}, 'GET');
 
         if (!data.reminders || data.reminders.length === 0) {
           return {
@@ -1356,7 +1348,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_delete_reminder': {
         const validatedArgs = DeleteReminderSchema.parse(args);
-        await executeSlackAPI('reminders.delete', validatedArgs);
+        await executeSlackAPI(slackClient, 'reminders.delete', validatedArgs);
 
         return {
           content: [
@@ -1373,7 +1365,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // ====================================================================
       case 'slack_add_star': {
         const validatedArgs = AddStarSchema.parse(args);
-        await executeSlackAPI('stars.add', validatedArgs);
+        await executeSlackAPI(slackClient, 'stars.add', validatedArgs);
 
         return {
           content: [
@@ -1387,7 +1379,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_remove_star': {
         const validatedArgs = RemoveStarSchema.parse(args);
-        await executeSlackAPI('stars.remove', validatedArgs);
+        await executeSlackAPI(slackClient, 'stars.remove', validatedArgs);
 
         return {
           content: [
@@ -1401,7 +1393,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
 
       case 'slack_list_stars': {
         const validatedArgs = ListStarsSchema.parse(args);
-        const data = await executeSlackAPI('stars.list', validatedArgs, 'GET');
+        const data = await executeSlackAPI(slackClient, 'stars.list', validatedArgs, 'GET');
 
         if (!data.items || data.items.length === 0) {
           return {
@@ -1429,7 +1421,7 @@ export async function callTool(name: string, args: Record<string, any>, accessTo
       // WORKSPACE OPERATIONS
       // ====================================================================
       case 'slack_get_team_info': {
-        const data = await executeSlackAPI('team.info', {}, 'GET');
+        const data = await executeSlackAPI(slackClient, 'team.info', {}, 'GET');
 
         const team = data.team;
         let text = `Workspace: ${team.name}\n`;
