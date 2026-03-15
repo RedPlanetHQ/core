@@ -3,7 +3,7 @@ import { processTask, type TaskPayload } from "~/jobs/task/task.logic";
 
 const taskQueueDef = queue({
   name: "task-queue",
-  concurrencyLimit: 10,
+  concurrencyLimit: 3,
 });
 
 export const taskRunner = task({

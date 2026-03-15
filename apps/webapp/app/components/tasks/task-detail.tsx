@@ -2,11 +2,14 @@ import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { Trash2, MessageSquarePlus, X } from "lucide-react";
+import { Loader2, Trash2, MessageSquarePlus, X } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
-import { ConversationView } from "~/components/conversation";
+import { ConversationView, ConversationItem } from "~/components/conversation";
+import { ScrollAreaWithAutoScroll } from "~/components/use-auto-scroll";
 import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
+import { UserTypeEnum } from "@core/types";
+import type { UIMessage } from "ai";
 import type { getTasks } from "~/services/task.server";
 import type { getConversationAndHistory } from "~/services/conversation.server";
 
@@ -64,6 +67,8 @@ export function TaskDetail({
   isSubmitting,
   newConversation = false,
 }: TaskDetailProps) {
+  const isInProgress = task.status === "InProgress";
+
   const [title, setTitle] = React.useState(task.title);
   const [description, setDescription] = React.useState(task.description ?? "");
   const [activeTab, setActiveTab] = React.useState("info");
@@ -147,13 +152,14 @@ export function TaskDetail({
       >
         <div className="flex flex-1 flex-col gap-4">
           <input
-            className="w-full bg-transparent text-xl font-medium focus:outline-none"
+            className="w-full bg-transparent text-xl font-medium focus:outline-none disabled:opacity-60"
             value={title}
             onChange={handleTitleChange}
             placeholder="Task title"
+            disabled={isInProgress}
           />
 
-          <div className="flex flex-col gap-1">
+          <div className={`flex flex-col gap-1 ${isInProgress ? "pointer-events-none opacity-60" : ""}`}>
             <DescriptionEditor
               initialContent={task.description ?? ""}
               onChange={handleDescriptionChange}
@@ -166,7 +172,7 @@ export function TaskDetail({
               className="rounded"
               size="lg"
               onClick={() => setDeleteOpen(true)}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isInProgress}
             >
               <Trash2 size={14} className="mr-1" />
               Delete task
@@ -180,12 +186,35 @@ export function TaskDetail({
         className="mt-0 flex flex-1 flex-col overflow-hidden"
       >
         {conversation ? (
-          <ConversationView
-            key={task.id}
-            conversationId={conversation.id}
-            history={conversation.ConversationHistory}
-            integrationAccountMap={integrationAccountMap}
-          />
+          isInProgress ? (
+            <div className="flex h-full flex-col overflow-hidden">
+              <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-2 text-xs text-muted-foreground">
+                <Loader2 size={12} className="animate-spin" />
+                Agent is working…
+              </div>
+              <ScrollAreaWithAutoScroll>
+                {conversation.ConversationHistory.map((h) => (
+                  <ConversationItem
+                    key={h.id}
+                    message={{
+                      id: h.id,
+                      role: h.userType === UserTypeEnum.Agent ? "assistant" : "user",
+                      parts: h.parts ? (h.parts as UIMessage["parts"]) : [{ text: h.message, type: "text" }],
+                    } as UIMessage}
+                    addToolApprovalResponse={async () => {}}
+                    integrationAccountMap={integrationAccountMap}
+                  />
+                ))}
+              </ScrollAreaWithAutoScroll>
+            </div>
+          ) : (
+            <ConversationView
+              key={`${task.id}-${conversation.ConversationHistory.length}`}
+              conversationId={conversation.id}
+              history={conversation.ConversationHistory}
+              integrationAccountMap={integrationAccountMap}
+            />
+          )
         ) : (
           <div className="flex h-full flex-col items-center justify-center gap-3">
             <MessageSquarePlus className="text-muted-foreground h-8 w-8" />

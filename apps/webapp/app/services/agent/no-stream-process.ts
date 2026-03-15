@@ -1,6 +1,7 @@
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import {
   getConversationAndHistory,
+  updateConversationStatus,
   upsertConversationHistory,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
@@ -47,6 +48,8 @@ export async function noStreamProcess(
 ) {
   const conversation = await getConversationAndHistory(body.id, userId);
   const isAssistantApproval = body.needsApproval;
+
+  await updateConversationStatus(body.id, "running");
 
   const conversationHistory = conversation?.ConversationHistory ?? [];
 
@@ -196,6 +199,7 @@ export async function noStreamProcess(
   }
 
   await deductCredits(workspaceId, userId, "chatMessage", 1);
+  await updateConversationStatus(body.id, "completed");
 
   return { ...assistantMessage, text: result.text };
 }

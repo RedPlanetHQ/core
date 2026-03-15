@@ -246,7 +246,7 @@ const Tool = ({
     }
 
     if (toolName === "get_integration_actions" && (part as any).input?.query) {
-      return (part as any).input.query as string;
+      return `Get tool · ${(part as any).input.query as string}`;
     }
     if (toolName === "gather_context" && (part as any).input?.query) {
       const q = (part as any).input.query as string;

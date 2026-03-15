@@ -86,7 +86,7 @@ export const TaskStatusDropdown = ({
           size={18}
           color={getTaskStatusColor(value as any).color}
         />
-        {status}
+        {value}
       </Button>
     );
   }

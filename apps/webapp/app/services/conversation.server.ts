@@ -127,6 +127,16 @@ export async function readConversation(conversationId: string) {
   });
 }
 
+export async function updateConversationStatus(
+  conversationId: string,
+  status: "pending" | "running" | "completed" | "failed" | "need_attention",
+) {
+  return prisma.conversation.update({
+    where: { id: conversationId },
+    data: { status },
+  });
+}
+
 // Mark all conversations as read for a user
 export async function readAllConversations(userId: string) {
   return prisma.conversation.updateMany({

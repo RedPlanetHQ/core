@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -77,6 +77,15 @@ export function ConversationView({
       regenerate();
     }
   }, []);
+
+  const prevStatusRef = useRef(status);
+  useEffect(() => {
+    const prev = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (prev !== "ready" && status === "ready" && document.hasFocus()) {
+      fetch(`/api/v1/conversation/${conversationId}/read`, { method: "POST" });
+    }
+  }, [status, conversationId]);
 
   const lastAssistant = [...messages]
     .reverse()

@@ -64,6 +64,9 @@ const data = {
       title: "Reminders",
       url: "/home/agent/reminders",
       icon: Clock,
+      params: {
+        filter: "active",
+      },
     },
     {
       title: "Tasks",

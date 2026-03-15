@@ -10,6 +10,7 @@ import { z } from "zod";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import {
   getConversationAndHistory,
+  updateConversationStatus,
   upsertConversationHistory,
 } from "~/services/conversation.server";
 
@@ -164,6 +165,8 @@ const { loader, action } = createHybridActionApiRoute(
       conversationId: body.id,
     });
 
+    await updateConversationStatus(body.id, "running");
+
     const result = streamText({
       model: getModel() as LanguageModel,
       messages: [
@@ -225,6 +228,7 @@ const { loader, action } = createHybridActionApiRoute(
           "chatMessage",
           1,
         );
+        await updateConversationStatus(body.id, "completed");
       },
       // async consumeSseStream({ stream }) {
       //   // Create a resumable stream from the SSE stream

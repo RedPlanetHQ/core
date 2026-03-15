@@ -461,9 +461,8 @@ export async function enqueueActivityCase(
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
-    const { activityCaseTask } = await import(
-      "~/trigger/integrations/activity-case"
-    );
+    const { activityCaseTask } =
+      await import("~/trigger/integrations/activity-case");
     const handler = await activityCaseTask.trigger(payload, {
       queue: "activity-case-queue",
       concurrencyKey: payload.workspaceId,

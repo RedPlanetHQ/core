@@ -1,3 +1,4 @@
+import { Check } from "lucide-react";
 import { TaskStatusIcons } from "../icon-utils";
 import { Checkbox } from "../ui/checkbox";
 import { getTaskStatusColor } from "../ui/color-utils";
@@ -94,6 +95,9 @@ export function TaskStatusDropdownContent({
                 />
                 {status}
               </label>
+              {!multiple && value === status && (
+                <Check size={14} className="text-primary ml-auto" />
+              )}
             </div>
           </DropdownItem>
         );

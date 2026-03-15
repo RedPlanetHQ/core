@@ -3,8 +3,8 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useFetcher, useNavigate, useSearchParams } from "@remix-run/react";
-import React, { useEffect, useState } from "react";
+import { useFetcher, useNavigate, useRevalidator, useSearchParams } from "@remix-run/react";
+import React, { useEffect, useRef } from "react";
 import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
@@ -32,6 +32,7 @@ import {
 } from "~/components/tasks/task-view-options";
 import { Plus } from "lucide-react";
 import { useTypedLoaderData } from "remix-typedjson";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
 import { prisma } from "~/db.server";
@@ -198,14 +199,29 @@ export default function TasksIndex() {
   const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newConversation, setNewConversation] = React.useState(false);
-  const [visibleStatuses, setVisibleStatuses] =
-    useState<TaskStatus[]>(DEFAULT_VISIBLE);
+  const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<TaskStatus[]>(
+    "task-view-filter",
+    DEFAULT_VISIBLE,
+  );
 
   const filteredTasks = tasks.filter((t) =>
     visibleStatuses.includes(t.status as TaskStatus),
   );
 
   const selectedTaskId = searchParams.get("taskId");
+
+  // Poll loader every 3s while selected task is InProgress
+  const { revalidate } = useRevalidator();
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  useEffect(() => {
+    if (selectedTask?.status === "InProgress") {
+      pollRef.current = setInterval(() => revalidate(), 3000);
+    }
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [selectedTask?.id, selectedTask?.status]);
+
   const isCreating =
     fetcher.state !== "idle" &&
     (fetcher.formData?.get("intent") as string) === "create";

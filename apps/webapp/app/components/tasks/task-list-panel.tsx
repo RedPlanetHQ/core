@@ -88,11 +88,11 @@ function TaskRowItem({
   onStatusChange: (status: string) => void;
 }) {
   return (
-    <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-2")}>
+    <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-4")}>
       <div className="flex w-full items-center">
         <div
           className={cn(
-            "group-hover:bg-grayAlpha-100 ml-4 flex min-w-[0px] shrink grow items-start gap-2 rounded-xl pl-2 pr-4",
+            "group-hover:bg-grayAlpha-100 ml-4 flex min-w-[0px] shrink grow items-start gap-2 rounded-xl pl-2 pr-2",
             selected && "bg-grayAlpha-100",
           )}
         >
