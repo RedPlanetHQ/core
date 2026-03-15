@@ -1,6 +1,5 @@
-import { json } from "@remix-run/node";
 import { z } from "zod";
-import { generateText } from "ai";
+import { streamText, type LanguageModel } from "ai";
 
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getModel, getModelForTask } from "~/lib/model.server";
@@ -8,65 +7,10 @@ import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.s
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 
 const GenerateSkillBody = z.object({
-  userIntent: z.string().min(1, "User intent is required"),
+  prompt: z.string().min(1, "Prompt is required"),
+  existingDescription: z.string().optional(),
   connectedTools: z.array(z.string()).optional(),
 });
-
-interface SkillDraft {
-  title: string;
-  shortDescription: string;
-  description: string;
-}
-
-function stripCodeFences(text: string): string {
-  return text
-    .trim()
-    .replace(/^```(?:json)?\s*/i, "")
-    .replace(/\s*```$/, "")
-    .trim();
-}
-
-function parseSkillDraft(text: string): SkillDraft | null {
-  try {
-    const cleaned = stripCodeFences(text);
-    const parsed = JSON.parse(cleaned);
-
-    if (
-      typeof parsed.title === "string" &&
-      typeof parsed.shortDescription === "string" &&
-      typeof parsed.description === "string"
-    ) {
-      return {
-        title: parsed.title,
-        shortDescription: parsed.shortDescription,
-        description: parsed.description,
-      };
-    }
-
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-async function callLLM(userMessage: string): Promise<string> {
-  const model = getModelForTask("low");
-  const modelInstance = getModel(model);
-
-  if (!modelInstance) {
-    throw new Error("No model available");
-  }
-
-  const { text } = await generateText({
-    model: modelInstance,
-    messages: [
-      { role: "system", content: SKILL_GENERATOR_SYSTEM_PROMPT },
-      { role: "user", content: userMessage },
-    ],
-  });
-
-  return text;
-}
 
 const { action } = createHybridActionApiRoute(
   {
@@ -82,7 +26,6 @@ const { action } = createHybridActionApiRoute(
     const body = await request.json();
     const validatedData = GenerateSkillBody.parse(body);
 
-    // Fetch user's connected integrations from DB for context
     let connectedTools: string[] = validatedData.connectedTools ?? [];
 
     if (connectedTools.length === 0) {
@@ -98,26 +41,28 @@ const { action } = createHybridActionApiRoute(
         ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
         : "";
 
-    const userMessage = `User intent: ${validatedData.userIntent}${toolsContext}`;
+    const existingContext = validatedData.existingDescription
+      ? `\n\nExisting description to update:\n${validatedData.existingDescription}`
+      : "";
 
-    // First attempt
-    let rawText = await callLLM(userMessage);
-    let draft = parseSkillDraft(rawText);
+    const userMessage = `User intent: ${validatedData.prompt}${toolsContext}${existingContext}`;
 
-    // Retry once if parsing failed
-    if (!draft) {
-      rawText = await callLLM(userMessage);
-      draft = parseSkillDraft(rawText);
+    const model = getModelForTask("low");
+    const modelInstance = getModel(model);
+
+    if (!modelInstance) {
+      throw new Response("No model available", { status: 503 });
     }
 
-    if (!draft) {
-      return json(
-        { error: "Failed to generate a valid skill draft. Please try again." },
-        { status: 422 },
-      );
-    }
+    const result = streamText({
+      model: modelInstance as LanguageModel,
+      messages: [
+        { role: "system", content: SKILL_GENERATOR_SYSTEM_PROMPT },
+        { role: "user", content: userMessage },
+      ],
+    });
 
-    return json(draft);
+    return result.toTextStreamResponse();
   },
 );
 

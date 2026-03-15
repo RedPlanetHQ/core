@@ -6,11 +6,13 @@ import {
 import { Button, Input } from "../ui";
 import { Textarea } from "../ui/textarea";
 import { DeleteSkillAlert } from "../skills/delete-skill-alert";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
 import React, { useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useToast } from "~/hooks/use-toast";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Sparkles } from "lucide-react";
+import { useCompletion } from "@ai-sdk/react";
 
 interface Skill {
   id: string;
@@ -30,11 +32,24 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
     (skill?.metadata?.shortDescription as string) ?? "",
   );
   const [isLoading, setIsLoading] = useState(false);
-  const [intent, setIntent] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+
+  const [descIntent, setDescIntent] = useState("");
+  const [descOpen, setDescOpen] = useState(false);
 
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const { complete, isLoading: isGeneratingDesc } = useCompletion({
+    api: "/api/v1/skills/generate",
+    onFinish: (_prompt, completion) => {
+      editor?.commands.setContent(completion);
+      setDescOpen(false);
+      setDescIntent("");
+    },
+    onError: (err) => {
+      toast({ title: err.message || "Failed to generate", variant: "destructive" });
+    },
+  });
 
   const editor = useEditor({
     extensions: [
@@ -50,49 +65,12 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
     },
   });
 
-  const handleGenerate = async () => {
-    if (!intent.trim()) {
-      toast({
-        title: "Please describe what you want this skill to do",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    setIsGenerating(true);
-
-    try {
-      const response = await fetch("/api/v1/skills/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userIntent: intent.trim() }),
-      });
-
-      if (!response.ok) {
-        const data = await response.json().catch(() => ({}));
-        throw new Error(
-          (data as { error?: string }).error || "Failed to generate skill draft",
-        );
-      }
-
-      const draft = (await response.json()) as {
-        title: string;
-        shortDescription: string;
-        description: string;
-      };
-
-      setName(draft.title);
-      setShortDescription(draft.shortDescription);
-      editor?.commands.setContent(draft.description);
-    } catch (err) {
-      toast({
-        title:
-          err instanceof Error ? err.message : "Failed to generate skill draft",
-        variant: "destructive",
-      });
-    } finally {
-      setIsGenerating(false);
-    }
+  const handleGenerateDesc = () => {
+    if (!descIntent.trim()) return;
+    const existingDesc = editor?.storage.markdown.getMarkdown() ?? "";
+    complete(descIntent.trim(), {
+      body: { existingDescription: existingDesc.trim() || undefined },
+    });
   };
 
   const handleSubmit = async () => {
@@ -186,44 +164,9 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   };
 
   return (
-    <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
+    <div className="flex h-[calc(100vh-56px)] w-full max-w-full flex-col items-center space-y-6 pt-3">
       <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
         <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
-          <div className="mt-5 rounded-lg border border-dashed border-gray-300 p-4">
-            <label className="text-muted-foreground/80 mb-1 block text-sm">
-              Describe what you want this skill to do
-            </label>
-            <p className="text-muted-foreground/60 mb-2 text-xs">
-              Write in plain language — e.g. "Every morning, summarise my
-              unread emails and send a digest to Slack." AI will generate a
-              draft you can edit.
-            </p>
-            <Textarea
-              value={intent}
-              onChange={(e) => setIntent(e.target.value)}
-              placeholder="e.g. When I ask for a standup, pull yesterday's GitHub activity and post it to our Slack channel"
-              className="no-scrollbar text-md! min-h-[80px] resize-none border-0 bg-transparent px-0 py-0 outline-none focus-visible:ring-0"
-              disabled={isGenerating}
-            />
-            <div className="mt-2 flex justify-end">
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleGenerate}
-                disabled={isGenerating || !intent.trim()}
-              >
-                {isGenerating ? (
-                  <>
-                    <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    Generating...
-                  </>
-                ) : (
-                  "Generate Draft"
-                )}
-              </Button>
-            </div>
-          </div>
-
           <div>
             <Input
               value={name}
@@ -246,9 +189,52 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
           </div>
 
           <div>
-            <label className="text-muted-foreground/80 px-4 text-sm">
-              Description
-            </label>
+            <div className="flex items-center gap-1 px-4">
+              <label className="text-muted-foreground/80 text-sm">
+                Description
+              </label>
+              <Popover open={descOpen} onOpenChange={setDescOpen}>
+                <PopoverTrigger asChild>
+                  <button className="text-muted-foreground/50 hover:text-muted-foreground rounded p-0.5 transition-colors">
+                    <Sparkles className="h-3.5 w-3.5" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-3" align="start">
+                  <p className="text-muted-foreground mb-2 text-xs">
+                    Describe what you need
+                  </p>
+                  <Textarea
+                    value={descIntent}
+                    onChange={(e) => setDescIntent(e.target.value)}
+                    placeholder="e.g. When I ask for a standup, pull yesterday's GitHub activity and post it to Slack"
+                    className="no-scrollbar mb-2 min-h-[80px] resize-none text-sm"
+                    disabled={isGeneratingDesc}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        handleGenerateDesc();
+                      }
+                    }}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleGenerateDesc}
+                      disabled={isGeneratingDesc || !descIntent.trim()}
+                    >
+                      {isGeneratingDesc ? (
+                        <>
+                          <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Drafting...
+                        </>
+                      ) : (
+                        "Draft"
+                      )}
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
             <EditorContent editor={editor} />
           </div>
         </div>
@@ -259,10 +245,10 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
         ) : (
           <div />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            size="xl"
+            size="lg"
             onClick={() => navigate("/home/agent/skills")}
             disabled={isLoading}
           >
@@ -271,7 +257,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
           <Button
             variant="secondary"
             onClick={handleSubmit}
-            size="xl"
+            size="lg"
             isLoading={isLoading}
           >
             {isEditMode ? "Save" : "Create Skill"}

@@ -10,30 +10,9 @@ You will receive:
 
 ## What You Must Output
 
-Return a JSON object with exactly three fields:
+Output the full skill instructions as plain markdown text — no JSON, no preamble, no explanation, no code fences.
 
-{
-  "title": "...",
-  "short_description": "...",
-  "description": "..."
-}
-
-### Field Specifications
-
-**title** (5-8 words max)
-- clear, action-oriented name for the skill
-- Use the pattern: [Action] + [Object/Domain]
-- Examples: "Morning Brief", "Plan My Day", "Account Research", "Email Label Manager", "Engineering Analytics"
-
-**short_description** (1-2 sentences, under 200 characters)
-- What the skill does in plain language, written for the user (not the agent)
-- Include 3-5 natural trigger phrases the user might say to invoke this skill
-- Pattern: "[What it does]. Trigger with [phrase 1], [phrase 2], [phrase 3]."
-
-**description** (the full skill instructions — this is where the depth matters)
-- This is the complete instruction set the agent follows when executing the skill
-- Must be detailed enough that an AI agent can execute it reliably without asking clarifying questions during execution
-- Target length: 300-800 words depending on complexity
+The output is the skill description content only. Target length: 300-800 words depending on complexity.
 
 ## How to Write the Description
 
@@ -132,9 +111,7 @@ List the 3-5 most likely edge cases and how to handle them. Focus on:
 
 ## Final Check Before Returning
 
-Before returning the generated skill, verify:
-- The title is concise and action-oriented (5-8 words)
-- The short_description includes trigger phrases
+Before returning, verify:
 - The description starts with Goal and Tools
 - Every step is specific enough that the agent won't need to guess
 - Memory searches use full semantic queries
@@ -144,5 +121,5 @@ Before returning the generated skill, verify:
 - The skill is optimized for repeated use (setup runs once, execution is seamless after)
 - Connected tools from the user's setup are leveraged where relevant
 
-Return ONLY the JSON object. No preamble, no explanation, no markdown backticks.
+Return ONLY the markdown content. No preamble, no explanation, no code fences.
 `;

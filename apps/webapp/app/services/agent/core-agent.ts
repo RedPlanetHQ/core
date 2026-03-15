@@ -9,7 +9,11 @@ import { logger } from "../logger.service";
 import { prisma } from "~/db.server";
 import { getReminderTools } from "./tools/reminder-tools";
 import { getBackgroundTaskTools } from "./tools/background-task-tools";
-import { getSkillTool } from "./tools/skill-tools";
+import {
+  getSkillTool,
+  createSkillTool,
+  updateSkillTool,
+} from "./tools/skill-tools";
 import { getSleepTool } from "./tools/utils-tools";
 
 /**
@@ -263,6 +267,12 @@ export const createTools = async (
   // Add get_skill tool when skills are available
   if (skills && skills.length > 0) {
     tools["get_skill"] = getSkillTool(workspaceId);
+  }
+
+  // Skill management tools (always available, not read-only)
+  if (!readOnly) {
+    tools["create_skill"] = createSkillTool(workspaceId, userId);
+    tools["update_skill"] = updateSkillTool(workspaceId, userId);
   }
 
   return { ...tools, ...reminderTools, ...backgroundTaskTools };
