@@ -17,9 +17,9 @@ export type TriggerType =
   | "daily_sync"
   | "integration_webhook"
   | "scheduled_check"
-  | "background_task_completed"
-  | "background_task_failed"
-  | "background_task_timeout";
+  | "task_completed"
+  | "task_failed"
+  | "task_timeout";
 
 export interface BaseTrigger {
   type: TriggerType;
@@ -73,29 +73,11 @@ export interface ScheduledCheckTrigger extends BaseTrigger {
   };
 }
 
-export interface BackgroundTaskTriggerData {
-  taskId: string;
-  intent: string;
-  status: "completed" | "failed" | "timeout";
-  result?: string;
-  error?: string;
-  startedAt?: Date;
-  completedAt?: Date;
-  callbackConversationId?: string;
-  callbackMetadata?: Record<string, unknown>;
-}
-
-export interface BackgroundTaskTrigger extends BaseTrigger {
-  type: "background_task_completed" | "background_task_failed" | "background_task_timeout";
-  data: BackgroundTaskTriggerData;
-}
-
 export type Trigger =
   | ReminderTrigger
   | WebhookTrigger
   | SyncTrigger
-  | ScheduledCheckTrigger
-  | BackgroundTaskTrigger;
+  | ScheduledCheckTrigger;
 
 // ============================================================================
 // Goal & Response Types

@@ -15,6 +15,7 @@ export const NavMain = ({
     title: string;
     url: string;
     icon?: any;
+    params?: Record<string, string>;
     strict?: boolean;
   }[];
 }) => {

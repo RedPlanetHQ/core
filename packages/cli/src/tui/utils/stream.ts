@@ -316,7 +316,7 @@ export async function createConversationApi(
 	baseUrl: string,
 	apiKey: string,
 	message: string,
-	incognito?: boolean,
+	incognito: boolean,
 ): Promise<string> {
 	const response = await fetch(`${baseUrl}/api/v1/conversation/create`, {
 		method: 'POST',
@@ -324,7 +324,7 @@ export async function createConversationApi(
 			'Content-Type': 'application/json',
 			Authorization: `Bearer ${apiKey}`,
 		},
-		body: JSON.stringify({message, source: 'cli', ...(incognito ? {incognito: true} : {})}),
+		body: JSON.stringify({message, source: 'cli', incognito}),
 	});
 
 	if (!response.ok) {

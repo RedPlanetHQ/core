@@ -25,6 +25,9 @@ import { documentsPath } from "~/utils/pathBuilder";
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
 
+  const url = new URL(request.url);
+  const redirectTo = url.searchParams.get("redirectTo") ?? null;
+
   // Check if Gmail is connected
   const gmailAccount = await getIntegrationAccountBySlugAndUser(
     "gmail",
@@ -38,10 +41,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   // Get OAuth redirect URL only if Gmail is not connected
   let gmailOAuthUrl = null;
   if (!gmailAccount && gmailIntegration) {
+    const gmailRedirectBack = redirectTo
+      ? `${url.origin}/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
+      : `${url.origin}/onboarding`;
     gmailOAuthUrl = await getRedirectURL(
       {
         integrationDefinitionId: gmailIntegration.id,
-        redirectURL: `${new URL(request.url).origin}/onboarding`,
+        redirectURL: gmailRedirectBack,
       },
       user.id,
       user.workspaceId,
@@ -49,13 +55,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   if (user.onboardingComplete) {
-    return redirect(documentsPath());
+    return redirect(redirectTo ?? documentsPath());
   }
 
   return {
     user,
     hasGmail: !!gmailAccount,
     gmailOAuthUrl,
+    redirectTo,
   };
 }
 
@@ -63,6 +70,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const { id: userId, workspaceId } = await requireUser(request);
   const formData = await request.formData();
   const summary = formData.get("summary") as string;
+  const redirectTo = formData.get("redirectTo") as string | null;
 
   try {
     // Update user's onboarding status
@@ -88,6 +96,10 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    if (redirectTo) {
+      return redirect(redirectTo);
+    }
+
     // Redirect to integrations if summary exists (normal flow)
     // or to documents if skipped (no summary)
     return redirect(summary ? "/home/integrations" : "/home/memory/documents");
@@ -97,7 +109,7 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Onboarding() {
-  const { hasGmail, gmailOAuthUrl } = useTypedLoaderData<
+  const { hasGmail, gmailOAuthUrl, redirectTo: loaderRedirectTo } = useTypedLoaderData<
     typeof loader
   >() as any;
 
@@ -108,7 +120,7 @@ export default function Onboarding() {
   );
   const [summary, setSummary] = useState("");
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [redirectTo, setRedirectTo] = useState<string | null>(null);
+  const [navigateTo, setNavigateTo] = useState<string | null>(null);
 
   const handleAnalysisComplete = (generatedSummary: string) => {
     setSummary(generatedSummary);
@@ -119,22 +131,24 @@ export default function Onboarding() {
   };
 
   const handleStep2Complete = () => {
-    setRedirectTo("/home/integrations");
-    fetcher.submit({ summary }, { method: "POST", action: "/onboarding" });
+    const dest = loaderRedirectTo ?? "/home/integrations";
+    setNavigateTo(dest);
+    fetcher.submit({ summary, redirectTo: loaderRedirectTo ?? "" }, { method: "POST", action: "/onboarding" });
   };
 
   const handleSkip = () => {
-    setRedirectTo("/home/memory/documents");
-    fetcher.submit({ summary: "" }, { method: "POST", action: "/onboarding" });
+    const dest = loaderRedirectTo ?? "/home/memory/documents";
+    setNavigateTo(dest);
+    fetcher.submit({ summary: "", redirectTo: loaderRedirectTo ?? "" }, { method: "POST", action: "/onboarding" });
   };
 
   // Handle navigation after successful submission
   useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data && redirectTo) {
-      navigate(redirectTo);
-      setRedirectTo(null);
+    if (fetcher.state === "idle" && fetcher.data && navigateTo) {
+      navigate(navigateTo);
+      setNavigateTo(null);
     }
-  }, [fetcher.state, fetcher.data, redirectTo, navigate]);
+  }, [fetcher.state, fetcher.data, navigateTo, navigate]);
 
   return (
     <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">

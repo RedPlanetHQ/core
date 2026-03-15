@@ -52,7 +52,7 @@ function SkillItemRenderer(
       rowIndex={index}
     >
       <div key={key} style={style}>
-        <div className="group mx-2 flex cursor-default gap-2">
+        <div className="group flex cursor-default gap-2">
           <SkillCard skill={skill} />
         </div>
       </div>

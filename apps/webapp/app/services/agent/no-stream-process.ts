@@ -1,6 +1,7 @@
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import {
   getConversationAndHistory,
+  updateConversationStatus,
   upsertConversationHistory,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
@@ -36,8 +37,6 @@ interface NoStreamProcessBody {
   channelMetadata?: Record<string, string>;
   /** If true, the user message won't be saved to conversation history (still used as AI context) */
   skipUserMessage?: boolean;
-  /** When true, background task tools (spawn/list/cancel) are excluded */
-  disableBackgroundTaskTools?: boolean;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
 }
@@ -49,6 +48,8 @@ export async function noStreamProcess(
 ) {
   const conversation = await getConversationAndHistory(body.id, userId);
   const isAssistantApproval = body.needsApproval;
+
+  await updateConversationStatus(body.id, "running");
 
   const conversationHistory = conversation?.ConversationHistory ?? [];
 
@@ -116,7 +117,6 @@ export async function noStreamProcess(
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
     conversationId: body.id,
-    disableBackgroundTaskTools: body.disableBackgroundTaskTools,
     executorTools: body.executorTools,
   });
 
@@ -199,6 +199,7 @@ export async function noStreamProcess(
   }
 
   await deductCredits(workspaceId, userId, "chatMessage", 1);
+  await updateConversationStatus(body.id, "completed");
 
   return { ...assistantMessage, text: result.text };
 }

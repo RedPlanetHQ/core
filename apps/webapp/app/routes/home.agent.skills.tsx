@@ -11,7 +11,6 @@ import { useSkills } from "~/hooks/use-skills";
 import { VirtualSkillsList } from "~/components/skills/virtual-skills-list";
 import { LibrarySkillCard } from "~/components/skills/library-skill-card.client";
 import { Card, CardContent } from "~/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
 import { createSkill, deleteSkill } from "~/services/skills.server";
@@ -89,6 +88,9 @@ export default function Skills() {
   const fetcher = useFetcher<{ success: boolean }>();
 
   // Optimistically track pending operations
+  const [activeTab, setActiveTab] = useState<"my-skills" | "library">(
+    "my-skills",
+  );
   const [pendingInstall, setPendingInstall] = useState<string | null>(null);
   const [pendingRemove, setPendingRemove] = useState<string | null>(null);
 
@@ -120,10 +122,26 @@ export default function Skills() {
     }
   }, [fetcher.state]);
 
+  const tabs = [
+    {
+      label: "My Skills",
+      value: "my-skills",
+      isActive: activeTab === "my-skills",
+      onClick: () => setActiveTab("my-skills"),
+    },
+    {
+      label: "Library",
+      value: "library",
+      isActive: activeTab === "library",
+      onClick: () => setActiveTab("library"),
+    },
+  ];
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader
         title="Skills"
+        tabs={tabs}
         actions={[
           {
             label: "Add skill",
@@ -134,18 +152,9 @@ export default function Skills() {
         ]}
       />
 
-      <div className="flex h-[calc(100vh)] w-full flex-col space-y-4 p-4 px-5 pt-3 md:h-[calc(100vh_-_56px)]">
-        <Tabs defaultValue="my-skills" className="flex h-full flex-col">
-          <TabsList className="w-fit">
-            <TabsTrigger value="my-skills">My Skills</TabsTrigger>
-            <TabsTrigger value="library">Library</TabsTrigger>
-          </TabsList>
-
-          {/* My Skills Tab */}
-          <TabsContent
-            value="my-skills"
-            className="mt-4 flex-1 overflow-hidden"
-          >
+      <div className="flex h-[calc(100vh)] w-full flex-col space-y-4 p-3 px-2 pt-3 md:h-[calc(100vh_-_56px)]">
+        {activeTab === "my-skills" && (
+          <div className="flex-1 overflow-hidden">
             {isInitialLoad ? (
               <div className="flex w-full justify-center pt-8">
                 <LoaderCircle className="text-primary h-4 w-4 animate-spin" />
@@ -174,8 +183,10 @@ export default function Skills() {
                 />
               </div>
             )}
-          </TabsContent>
+          </div>
+        )}
 
+        {activeTab === "library" && (
           <ClientOnly
             fallback={
               <div className="flex w-full justify-center">
@@ -184,11 +195,8 @@ export default function Skills() {
             }
           >
             {() => (
-              <TabsContent
-                value="library"
-                className="mt-4 flex-1 overflow-y-auto"
-              >
-                <div className="space-y-8 pb-8">
+              <div className="flex-1 overflow-y-auto px-4">
+                <div className="space-y-5 pb-8">
                   {Object.entries(libraryByCategory).map(
                     ([category, skills]) => (
                       <div key={category} className="space-y-2">
@@ -217,11 +225,10 @@ export default function Skills() {
                     ),
                   )}
                 </div>
-              </TabsContent>
+              </div>
             )}
           </ClientOnly>
-          {/* Library Tab */}
-        </Tabs>
+        )}
       </div>
     </div>
   );

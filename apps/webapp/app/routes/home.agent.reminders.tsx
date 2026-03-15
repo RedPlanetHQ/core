@@ -28,7 +28,6 @@ import {
   type ListRowProps,
 } from "react-virtualized";
 import { PageHeader } from "~/components/common/page-header";
-import { Tabs, TabsList, TabsTrigger } from "~/components/ui/tabs";
 import { prisma } from "~/db.server";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { cn } from "~/lib/utils";
@@ -632,29 +631,17 @@ export default function Reminders() {
     navigate(`?${params.toString()}`, { replace: true });
   };
 
+  const tabs = [
+    { label: "All", value: "all", isActive: currentFilter === "all", onClick: () => handleTabChange("all") },
+    { label: "Active", value: "active", isActive: currentFilter === "active", onClick: () => handleTabChange("active") },
+    { label: "Inactive", value: "inactive", isActive: currentFilter === "inactive", onClick: () => handleTabChange("inactive") },
+  ];
+
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="Reminders" />
+      <PageHeader title="Reminders" tabs={tabs} />
 
       <div className="flex h-[calc(100vh)] w-full flex-col p-3 md:h-[calc(100vh_-_56px)]">
-        <Tabs
-          value={currentFilter}
-          onValueChange={handleTabChange}
-          className="mb-2"
-        >
-          <TabsList className="rounded">
-            <TabsTrigger value="all" className="rounded">
-              All
-            </TabsTrigger>
-            <TabsTrigger value="active" className="rounded">
-              Active
-            </TabsTrigger>
-            <TabsTrigger value="inactive" className="rounded">
-              Inactive
-            </TabsTrigger>
-          </TabsList>
-        </Tabs>
-
         {reminders.length === 0 ? (
           <div className="mt-20 flex flex-col items-center justify-center">
             <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">

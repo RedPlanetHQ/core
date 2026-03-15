@@ -9,6 +9,42 @@ import type {ExecConfig} from '@/types/config';
 // Default directory for exec commands - uses same directory as config
 const DEFAULT_EXEC_DIR = getConfigPath();
 
+// Default blocked command patterns — always enforced unless allowUnsafe is set
+const DEFAULT_BLOCKED: {pattern: RegExp; reason: string}[] = [
+	// Destructive file operations
+	{pattern: /\brm\b/, reason: 'rm is blocked by default'},
+	{pattern: /\bchmod\b/, reason: 'chmod is blocked by default'},
+	{pattern: /\bchown\b/, reason: 'chown is blocked by default'},
+	{pattern: /\bdd\b.*\bof=/, reason: 'dd with output is blocked by default'},
+	{pattern: /\bmkfs\b/, reason: 'mkfs is blocked by default'},
+	{pattern: /\bfdisk\b/, reason: 'fdisk is blocked by default'},
+	{pattern: /\bparted\b/, reason: 'parted is blocked by default'},
+	// Privilege escalation
+	{pattern: /\bsudo\b/, reason: 'sudo is blocked by default'},
+	{pattern: /\bsu\s/, reason: 'su is blocked by default'},
+	{pattern: /\bpasswd\b/, reason: 'passwd is blocked by default'},
+	// Network commands
+	{pattern: /\bcurl\b/, reason: 'curl is blocked by default'},
+	{pattern: /\bwget\b/, reason: 'wget is blocked by default'},
+	{pattern: /\bssh\b/, reason: 'ssh is blocked by default'},
+	{pattern: /\bscp\b/, reason: 'scp is blocked by default'},
+	{pattern: /\brsync\b/, reason: 'rsync is blocked by default'},
+	{pattern: /\bnc\b/, reason: 'nc (netcat) is blocked by default'},
+	{pattern: /\bnetcat\b/, reason: 'netcat is blocked by default'},
+	{pattern: /\bnmap\b/, reason: 'nmap is blocked by default'},
+	{pattern: /\btelnet\b/, reason: 'telnet is blocked by default'},
+	{pattern: /\bftp\b/, reason: 'ftp is blocked by default'},
+	{pattern: /\bsftp\b/, reason: 'sftp is blocked by default'},
+	// System commands
+	{pattern: /\bshutdown\b/, reason: 'shutdown is blocked by default'},
+	{pattern: /\breboot\b/, reason: 'reboot is blocked by default'},
+	{pattern: /\bhalt\b/, reason: 'halt is blocked by default'},
+	{pattern: /\bpoweroff\b/, reason: 'poweroff is blocked by default'},
+	// Shell injection
+	{pattern: /\|\s*(bash|sh|zsh|fish|ksh)\b/, reason: 'pipe to shell is blocked by default'},
+	{pattern: /\beval\b/, reason: 'eval is blocked by default'},
+];
+
 // ============ Zod Schemas ============
 
 export const ExecCommandSchema = zod.object({
@@ -60,6 +96,7 @@ function getExecConfig(): ExecConfig {
 		return {
 			allow: slotsExec.allow,
 			deny: slotsExec.deny,
+			allowUnsafe: slotsExec.allowUnsafe,
 			defaultDir: prefs.exec?.defaultDir,
 		};
 	}
@@ -116,7 +153,16 @@ function isCommandAllowed(command: string): {allowed: boolean; reason?: string} 
 	const allowPatterns = config.allow || [];
 	const denyPatterns = config.deny || [];
 
-	// Check deny patterns first (takes precedence)
+	// Check default blocked patterns unless allowUnsafe is explicitly set
+	if (!config.allowUnsafe) {
+		for (const {pattern, reason} of DEFAULT_BLOCKED) {
+			if (pattern.test(command)) {
+				return {allowed: false, reason};
+			}
+		}
+	}
+
+	// Check user-configured deny patterns (takes precedence over allow)
 	for (const pattern of denyPatterns) {
 		if (matchesPattern(command, pattern)) {
 			return {allowed: false, reason: `Command matches deny pattern: ${pattern}`};
