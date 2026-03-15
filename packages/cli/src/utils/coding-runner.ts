@@ -1,4 +1,4 @@
-import {spawn, execSync} from 'node:child_process';
+import {spawn} from 'node:child_process';
 import {existsSync, mkdirSync, openSync, statSync} from 'node:fs';
 import {join} from 'node:path';
 import {homedir} from 'node:os';
@@ -148,19 +148,6 @@ export function stopProcess(sessionId: string): boolean {
 }
 
 /**
- * Safely remove a git worktree — skips removal if there are uncommitted changes.
- */
-function tryRemoveWorktree(worktreePath: string, repoDir: string): void {
-	try {
-		const status = execSync(`git -C ${JSON.stringify(worktreePath)} status --porcelain`, {stdio: 'pipe'})
-			.toString()
-			.trim();
-		if (status.length > 0) return; // uncommitted changes — leave it
-		execSync(`git -C ${JSON.stringify(repoDir)} worktree remove ${JSON.stringify(worktreePath)}`, {stdio: 'pipe'});
-	} catch { /* best-effort */ }
-}
-
-/**
  * Start a background watchdog for a running session.
  * If the stdout log has not grown for `idleTimeoutMs` (default 30s), the process is killed.
  * Also cleans up the running session record when the process exits naturally.
@@ -178,10 +165,6 @@ export function startIdleWatchdog(
 	function check() {
 		// Process already dead — clean up session record and stop
 		if (!isProcessRunningByPid(pid)) {
-			const session = getSession(sessionId);
-			if (session?.worktreePath) {
-				tryRemoveWorktree(session.worktreePath, session.dir);
-			}
 			deleteSession(sessionId);
 			return;
 		}
@@ -199,10 +182,6 @@ export function startIdleWatchdog(
 			try {
 				process.kill(pid, 'SIGTERM');
 			} catch { /* already gone */ }
-			const session = getSession(sessionId);
-			if (session?.worktreePath) {
-				tryRemoveWorktree(session.worktreePath, session.dir);
-			}
 			deleteSession(sessionId);
 			return;
 		}

@@ -2,8 +2,7 @@ import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {execSync} from 'node:child_process';
 import {existsSync, mkdirSync} from 'node:fs';
-import {join} from 'node:path';
-import {homedir} from 'node:os';
+import {resolve} from 'node:path';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
 import {
@@ -52,7 +51,6 @@ const CloseSessionSchema = zod.object({
 
 const ReadSessionSchema = zod.object({
 	sessionId: zod.string(),
-	dir: zod.string(),
 	lines: zod.number().optional(),
 	offset: zod.number().optional(),
 	tail: zod.boolean().optional(),
@@ -126,6 +124,10 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 		},
 		required: ['sessionId'],
 	},
+	coding_close_all: {
+		type: 'object',
+		properties: {},
+	},
 	coding_read_session: {
 		type: 'object',
 		properties: {
@@ -133,7 +135,6 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				type: 'string',
 				description: 'Session ID to read output from',
 			},
-			dir: {type: 'string', description: 'Working directory of the session'},
 			lines: {type: 'number', description: 'Number of lines to return'},
 			offset: {
 				type: 'number',
@@ -144,7 +145,7 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				description: 'If true, return the last N lines instead of first N',
 			},
 		},
-		required: ['sessionId', 'dir'],
+		required: ['sessionId'],
 	},
 	coding_list_sessions: {
 		type: 'object',
@@ -206,13 +207,18 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_ask',
 		description:
-			'Send a prompt to a coding agent. Omit sessionId to start a new session; include it to continue an existing one. After calling, use coding_read_session to check output.',
+			'Send a prompt to a coding agent. Omit sessionId to start a new session; include it to continue an existing one. After calling, use coding_read_session to check output. When worktree=true, the tool handles branch/worktree creation automatically — do NOT include worktree setup instructions in the prompt. The prompt should only describe the task to perform.',
 		inputSchema: jsonSchemas.coding_ask!,
 	},
 	{
 		name: 'coding_close_session',
 		description: 'Stop a running coding session',
 		inputSchema: jsonSchemas.coding_close_session!,
+	},
+	{
+		name: 'coding_close_all',
+		description: 'Stop all running coding sessions and clean up their worktrees',
+		inputSchema: jsonSchemas.coding_close_all!,
 	},
 	{
 		name: 'coding_read_session',
@@ -300,12 +306,11 @@ function setupWorktree(
 	baseBranch: string,
 	branch: string,
 ): {worktreePath: string; worktreeBranch: string} | {error: string} {
-	const encodedDir = dir.replace(/\//g, '-');
-	const worktreesBase = join(homedir(), '.corebrain', 'worktrees');
-	const worktreePath = join(worktreesBase, encodedDir);
+	const encodedBranch = branch.replace(/\//g, '-');
+	const worktreePath = resolve(dir, '..', 'worktrees', encodedBranch);
 
 	try {
-		mkdirSync(worktreesBase, {recursive: true});
+		mkdirSync(worktreePath, {recursive: true});
 		execSync(
 			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
 			{stdio: 'pipe'},
@@ -347,7 +352,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	if ('error' in resolved) return {success: false, error: resolved.error};
 	const agentName = resolved.agent;
 
-	const config = getAgentConfig(agentName);
+	let config = getAgentConfig(agentName);
 	if (!config) {
 		return {
 			success: false,
@@ -377,6 +382,11 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		worktreePath = wt.worktreePath;
 		worktreeBranch = wt.worktreeBranch;
 		workingDir = wt.worktreePath;
+
+		// codex sandboxes writes to the project dir — bypass it for worktree runs
+		if (agentName === 'codex-cli') {
+			config = {...config, args: [...(config.args ?? []), '--dangerously-bypass-approvals-and-sandbox']};
+		}
 	}
 
 	// Build args
@@ -509,25 +519,60 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	};
 }
 
+function handleCloseAll() {
+	const sessions = listRunningSessions();
+	const results: Array<{sessionId: string; message: string; worktreePath?: string; worktreeBranch?: string}> = [];
+
+	for (const session of sessions) {
+		stopProcess(session.sessionId);
+		deleteSession(session.sessionId);
+
+		if (session.worktreePath) {
+			const {removed, uncommitted} = removeWorktree(session.worktreePath, session.dir);
+			if (!removed && uncommitted) {
+				results.push({
+					sessionId: session.sessionId,
+					message: `Closed. Worktree preserved — uncommitted changes detected.`,
+					worktreePath: session.worktreePath,
+					worktreeBranch: session.worktreeBranch,
+				});
+				continue;
+			}
+		}
+
+		results.push({sessionId: session.sessionId, message: 'Closed'});
+	}
+
+	return {
+		success: true,
+		result: {closed: results.length, sessions: results},
+	};
+}
+
 async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	const running = isProcessRunning(params.sessionId);
 
-	// Detect agent: running store → reader probe → default
-	const agent = detectAgentForSession(params.sessionId, params.dir);
+	// Resolve dir by scanning — most reliable since it reads the actual filesystem
+	const stored = getSession(params.sessionId);
+	const {sessions: allSessions} = await scanAllSessions({});
+	const scanned = allSessions.find(s => s.sessionId === params.sessionId);
 
-	const {
-		entries,
-		totalLines,
-		returnedLines,
-		fileExists,
-		fileSizeBytes,
-		fileSizeHuman,
-		error: readError,
-	} = await readAgentSessionOutput(agent, params.dir, params.sessionId, {
-		lines: params.lines,
-		offset: params.offset,
-		tail: params.tail,
-	});
+	// Prefer worktreePath > scanned dir > stored dir
+	const sessionDir = stored?.worktreePath ?? scanned?.dir ?? stored?.dir;
+
+	if (!sessionDir) {
+		return {success: false, error: `Session "${params.sessionId}" not found`};
+	}
+
+	// Detect agent: running store → reader probe → default
+	const agent = detectAgentForSession(params.sessionId, sessionDir);
+
+	const {entries, totalLines, returnedLines, fileExists, fileSizeBytes, fileSizeHuman, error: readError} =
+		await readAgentSessionOutput(agent, sessionDir, params.sessionId, {
+			lines: params.lines,
+			offset: params.offset,
+			tail: params.tail,
+		});
 
 	let status: string;
 	let statusMessage: string | undefined;
@@ -539,7 +584,6 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 		status = 'running';
 	} else {
 		// Process finished — clean up running session record
-		const stored = getSession(params.sessionId);
 		if (stored) deleteSession(params.sessionId);
 		status = 'completed';
 	}
@@ -548,7 +592,7 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 		success: true,
 		result: {
 			sessionId: params.sessionId,
-			dir: params.dir,
+			dir: sessionDir,
 			status,
 			...(statusMessage ? {statusMessage} : {}),
 			running,
@@ -651,6 +695,8 @@ export async function executeCodingTool(
 				return await handleAsk(AskSchema.parse(params), logger);
 			case 'coding_close_session':
 				return handleCloseSession(CloseSessionSchema.parse(params));
+			case 'coding_close_all':
+				return handleCloseAll();
 			case 'coding_read_session':
 				return await handleReadSession(ReadSessionSchema.parse(params));
 			case 'coding_list_sessions':

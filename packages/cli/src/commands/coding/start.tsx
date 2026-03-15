@@ -84,7 +84,7 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 	let baseBranch = opts.baseBranch;
 	let branch = opts.branch;
 
-	if (!opts.worktree) {
+	if (opts.worktree === undefined) {
 		const useWorktree = await p.confirm({message: 'Run in an isolated git worktree?', initialValue: false});
 		if (p.isCancel(useWorktree)) {
 			p.cancel('Cancelled');
