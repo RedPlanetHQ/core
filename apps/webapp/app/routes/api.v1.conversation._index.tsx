@@ -155,7 +155,9 @@ const { loader, action } = createHybridActionApiRoute(
     });
 
     // If onboarding and no messages yet, use empty messages for agent greeting
-    const useEmptyMessages = conversationHistory.length === 0;
+    // But not for task conversations — those always have the user's first message
+    const isTaskConversation = !!conversation?.asyncJobId;
+    const useEmptyMessages = conversationHistory.length === 0 && !isTaskConversation;
 
     const { systemPrompt, tools, modelMessages } = await buildAgentContext({
       userId: authentication.userId,
