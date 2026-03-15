@@ -32,6 +32,7 @@ import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
 import { Jira } from "./icons/jira";
 import { Confluence } from "./icons/confluence";
+import { Stripe } from "./icons/stripe";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -75,6 +76,7 @@ export const ICON_MAPPING = {
   ynab: Ynab,
   jira: Jira,
   confluence: Confluence,
+  stripe: Stripe,
   cli: Code,
   "core-extension": Chromium,
 
