@@ -10,7 +10,7 @@ import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getTasks,
   createTask,
-  updateTaskStatus,
+  changeTaskStatus,
   deleteTask,
   updateTaskConversationIds,
 } from "~/services/task.server";
@@ -20,7 +20,6 @@ import {
   readConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
-import { enqueueTask } from "~/lib/queue-adapter.server";
 import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
@@ -149,14 +148,12 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   if (parsed.data.intent === "update-status") {
-    const task = await updateTaskStatus(
+    const task = await changeTaskStatus(
       parsed.data.taskId,
       parsed.data.status as TaskStatus,
+      workspaceId,
+      user.id,
     );
-    // When moved to Todo, enqueue the task for the agent to pick up
-    if (parsed.data.status === "Todo") {
-      await enqueueTask({ taskId: task.id, workspaceId, userId: user.id });
-    }
     return json({ task });
   }
 

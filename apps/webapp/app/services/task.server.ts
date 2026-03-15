@@ -1,5 +1,6 @@
 import { prisma } from "~/db.server";
 import type { Task, TaskStatus } from "@prisma/client";
+import { enqueueTask, cancelTaskJob } from "~/lib/queue-adapter.server";
 
 export async function createTask(
   workspaceId: string,
@@ -62,6 +63,28 @@ export async function updateTaskStatus(
   status: TaskStatus,
 ): Promise<Task> {
   return prisma.task.update({ where: { id }, data: { status } });
+}
+
+/**
+ * Central lifecycle handler for task status changes.
+ * - Cancels any queued/executing job when moving away from Todo/InProgress
+ * - Updates the status
+ * - Enqueues the task when moving to Todo
+ */
+export async function changeTaskStatus(
+  taskId: string,
+  status: TaskStatus,
+  workspaceId: string,
+  userId: string,
+): Promise<Task> {
+  if (status !== "Todo" && status !== "InProgress") {
+    await cancelTaskJob(taskId);
+  }
+  const task = await updateTaskStatus(taskId, status);
+  if (status === "Todo") {
+    await enqueueTask({ taskId, workspaceId, userId });
+  }
+  return task;
 }
 
 export async function updateTaskConversationIds(

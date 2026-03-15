@@ -5,8 +5,8 @@ import {
   getTasks,
   searchTasks,
   updateTask,
+  changeTaskStatus,
 } from "~/services/task.server";
-import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 
@@ -36,7 +36,7 @@ enqueue=false: User is just capturing it for later — task goes to Backlog and 
         try {
           const task = await createTask(workspaceId, userId, title, description);
           if (enqueue) {
-            await enqueueTask({ taskId: task.id, workspaceId, userId });
+            await changeTaskStatus(task.id, "Todo", workspaceId, userId);
             logger.info(`Task ${task.id} created and enqueued`);
             return `Task created: "${title}" (ID: ${task.id}). Queued and starting shortly.`;
           }
@@ -110,14 +110,14 @@ enqueue=false: User is just capturing it for later — task goes to Backlog and 
       }),
       execute: async ({ taskId, status, title, description }) => {
         try {
-          const data: { status?: TaskStatus; title?: string; description?: string } = {};
-          if (status) data.status = status as TaskStatus;
-          if (title) data.title = title;
-          if (description !== undefined) data.description = description;
-          await updateTask(taskId, data);
-          // When moved to Todo, enqueue for the agent to pick up
-          if (status === "Todo") {
-            await enqueueTask({ taskId, workspaceId, userId });
+          if (title || description !== undefined) {
+            const data: { title?: string; description?: string } = {};
+            if (title) data.title = title;
+            if (description !== undefined) data.description = description;
+            await updateTask(taskId, data);
+          }
+          if (status) {
+            await changeTaskStatus(taskId, status as TaskStatus, workspaceId, userId);
           }
           const parts = [];
           if (status) parts.push(`status → ${status}`);
