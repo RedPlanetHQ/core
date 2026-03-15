@@ -229,7 +229,8 @@ export async function buildAgentContext({
 
   // Task context (when conversation was created from a task)
   if (linkedTask) {
-    const isExecuting = linkedTask.status === "InProgress" || linkedTask.status === "Todo";
+    const isExecuting =
+      linkedTask.status === "InProgress" || linkedTask.status === "Todo";
 
     if (isExecuting) {
       // Execution mode — mirrors <action_plan> pattern that CASE follows correctly
