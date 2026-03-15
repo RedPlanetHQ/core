@@ -295,7 +295,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	}
 
 	const isResume = Boolean(params.sessionId);
-	let sessionId = params.sessionId ?? randomUUID();
+	let sessionId = params.sessionId || randomUUID();
 
 	// For resume, verify process is not already running
 	if (isResume && isProcessRunning(sessionId)) {
@@ -347,8 +347,10 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			function check() {
 				if (agentSessionExists(agentName, params.dir, sessionId))
 					return resolve(true);
-				if (!isProcessRunning(sessionId)) return resolve(false);
-				if (Date.now() >= deadline) return resolve(false);
+				if (!isProcessRunning(sessionId))
+					return resolve(agentSessionExists(agentName, params.dir, sessionId));
+				if (Date.now() >= deadline)
+					return resolve(agentSessionExists(agentName, params.dir, sessionId));
 				setTimeout(check, 500);
 			}
 			setTimeout(check, 500);
@@ -384,7 +386,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 						sessionId: found.sessionId,
 						pid,
 						resumed: isResume,
-						message: 'Use coding_read_session to check output.',
+						message: 'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
 					},
 				};
 			}
@@ -397,7 +399,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			sessionId,
 			pid,
 			resumed: isResume,
-			message: 'Use coding_read_session to check output.',
+			message: 'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
 		},
 	};
 }

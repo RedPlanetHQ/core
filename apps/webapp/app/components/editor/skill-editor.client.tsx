@@ -6,10 +6,14 @@ import {
 import { Button, Input } from "../ui";
 import { Textarea } from "../ui/textarea";
 import { DeleteSkillAlert } from "../skills/delete-skill-alert";
+import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useToast } from "~/hooks/use-toast";
+import { LoaderCircle, Sparkles } from "lucide-react";
+import { useCompletion } from "@ai-sdk/react";
+import { AI } from "../icons/ai";
 
 interface Skill {
   id: string;
@@ -30,8 +34,25 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   );
   const [isLoading, setIsLoading] = useState(false);
 
+  const [descIntent, setDescIntent] = useState("");
+  const [descOpen, setDescOpen] = useState(false);
+
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  const {
+    complete,
+    completion,
+    isLoading: isGeneratingDesc,
+  } = useCompletion({
+    api: "/api/v1/skills/generate",
+    onError: (err) => {
+      toast({
+        title: err.message || "Failed to generate",
+        variant: "destructive",
+      });
+    },
+  });
 
   const editor = useEditor({
     extensions: [
@@ -46,6 +67,22 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
       },
     },
   });
+
+  useEffect(() => {
+    if (!isGeneratingDesc && completion) {
+      editor?.commands.setContent(completion);
+      setDescOpen(false);
+      setDescIntent("");
+    }
+  }, [isGeneratingDesc]);
+
+  const handleGenerateDesc = () => {
+    if (!descIntent.trim()) return;
+    const existingDesc = editor?.storage.markdown.getMarkdown() ?? "";
+    complete(descIntent.trim(), {
+      body: { existingDescription: existingDesc.trim() || undefined },
+    });
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -138,7 +175,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   };
 
   return (
-    <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
+    <div className="flex h-[calc(100vh-56px)] w-full max-w-full flex-col items-center space-y-6 pt-3">
       <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
         <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
           <div>
@@ -150,7 +187,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
             />
           </div>
 
-          <div className="text-md my-5">
+          <div className="my-5">
             <label className="text-muted-foreground/80 px-4 text-sm">
               Short description
             </label>
@@ -158,15 +195,61 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
               value={shortDescription}
               onChange={(e) => setShortDescription(e.target.value)}
               placeholder="Brief description of the skill, this is used by the agent to understand the skill"
-              className="no-scrollbar text-md! min-h-0 resize-none border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
+              className="no-scrollbar min-h-0 resize-none border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
             />
           </div>
 
           <div>
-            <label className="text-muted-foreground/80 px-4 text-sm">
-              Description
-            </label>
-            <EditorContent editor={editor} />
+            <div className="flex items-center gap-1 px-4">
+              <label className="text-muted-foreground/80 text-sm">
+                Description
+              </label>
+              <Popover open={descOpen} onOpenChange={setDescOpen}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="xs">
+                    <AI className="h-3 w-3" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent
+                  className="bg-background-3 w-80 p-3"
+                  align="start"
+                >
+                  <p className="text-muted-foreground mb-2 text-xs">
+                    Describe what you need
+                  </p>
+                  <Textarea
+                    value={descIntent}
+                    onChange={(e) => setDescIntent(e.target.value)}
+                    placeholder="e.g. When I ask for a standup, pull yesterday's GitHub activity and post it to Slack"
+                    className="no-scrollbar mb-2 min-h-[80px] resize-none bg-transparent p-0"
+                    disabled={isGeneratingDesc}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                        handleGenerateDesc();
+                      }
+                    }}
+                  />
+                  <div className="flex justify-end">
+                    <Button
+                      size="sm"
+                      variant="secondary"
+                      onClick={handleGenerateDesc}
+                      disabled={isGeneratingDesc || !descIntent.trim()}
+                    >
+                      {isGeneratingDesc ? (
+                        <>
+                          <LoaderCircle className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          Drafting...
+                        </>
+                      ) : (
+                        "Draft"
+                      )}
+                    </Button>
+                  </div>
+                </PopoverContent>
+              </Popover>
+            </div>
+            <EditorContent editor={editor} className="!text-base" />
           </div>
         </div>
       </div>
@@ -176,10 +259,10 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
         ) : (
           <div />
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <Button
             variant="ghost"
-            size="xl"
+            size="lg"
             onClick={() => navigate("/home/agent/skills")}
             disabled={isLoading}
           >
@@ -188,7 +271,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
           <Button
             variant="secondary"
             onClick={handleSubmit}
-            size="xl"
+            size="lg"
             isLoading={isLoading}
           >
             {isEditMode ? "Save" : "Create Skill"}

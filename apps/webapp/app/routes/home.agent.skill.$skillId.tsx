@@ -51,7 +51,7 @@ export default function SkillDetail() {
 
   return (
     <>
-      <div className="episode-details flex h-full flex-col">
+      <div className="flex h-full flex-col">
         <PageHeader title="Edit skill" />
 
         <ClientOnly

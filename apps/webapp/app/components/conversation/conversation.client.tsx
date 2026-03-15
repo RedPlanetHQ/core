@@ -43,11 +43,13 @@ const SUGGESTED = [
 
 export const ConversationNew = ({
   user,
+  defaultMessage,
 }: {
   user: { name: string | null };
+  defaultMessage?: string;
 }) => {
-  const [content, setContent] = useState("");
-  const [title, setTitle] = useState("");
+  const [content, setContent] = useState(defaultMessage ?? "");
+  const [title, setTitle] = useState(defaultMessage ?? "");
   const [incognito, setIncognito] = useState(false);
   const editorRef = useRef<any>(null);
   const [editor, setEditor] = useState<Editor>();

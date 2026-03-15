@@ -3,10 +3,12 @@ import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle } from "lucide-react";
 import { SkillEditor } from "~/components/editor/skill-editor.client";
 
+import React from "react";
+
 export default function NewSkill() {
   return (
     <>
-      <div className="episode-details flex h-full flex-col">
+      <div className="flex h-full flex-col">
         <PageHeader title="New skill" />
 
         <ClientOnly
@@ -16,9 +18,7 @@ export default function NewSkill() {
             </div>
           }
         >
-          {() => {
-            return <SkillEditor />;
-          }}
+          {() => <SkillEditor />}
         </ClientOnly>
       </div>
     </>
