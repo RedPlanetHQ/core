@@ -42,6 +42,7 @@ import { DoneFill } from "./icons/done";
 import { TaskStatus } from "@core/database";
 import { Task } from "./icons/task";
 import { Spotify } from "./icons/spotify";
+import { Stripe } from "./icons/stripe";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -88,6 +89,7 @@ export const ICON_MAPPING = {
   jira: Jira,
   confluence: Confluence,
   mixpanel: Mixpanel,
+  stripe: Stripe,
   cli: Code,
   "core-extension": Chromium,
   task: Task,
