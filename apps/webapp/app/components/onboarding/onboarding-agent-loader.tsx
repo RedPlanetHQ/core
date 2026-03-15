@@ -41,7 +41,6 @@ export function OnboardingAgentLoader({
     }
   }, [regenerate]);
 
-
   // Extract latest update and summary from messages
   useEffect(() => {
     if (messages.length > 0) {
@@ -77,7 +76,7 @@ export function OnboardingAgentLoader({
     if (status === "ready" && summary) {
       setTimeout(() => {
         onComplete(summary);
-      }, 2000)
+      }, 2000);
     }
   }, [status, summary, onComplete]);
 
@@ -88,12 +87,13 @@ export function OnboardingAgentLoader({
         className,
       )}
     >
-      <div className="flex items-center gap-2 flex-col">
+      <div className="flex flex-col items-center gap-2">
+        <h2 className="max-w-[300px] text-lg">Getting to know you</h2>
         <Loader2 className="size-5 animate-spin" />
-        <h2 className="text-lg max-w-[300px]">
+        <h2 className="max-w-[300px] text-lg">
           {status === "ready" && summary
-            ? "learned some things about you"
-            : latestUpdate || "learning about you..."}
+            ? "Got a few insights about you"
+            : latestUpdate || "Still learning..."}
         </h2>
       </div>
     </div>
