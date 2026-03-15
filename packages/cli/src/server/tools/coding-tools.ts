@@ -104,15 +104,18 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			},
 			worktree: {
 				type: 'boolean',
-				description: 'Create an isolated git worktree for this session (default: false)',
+				description:
+					'Create an isolated git worktree for this session (default: false)',
 			},
 			baseBranch: {
 				type: 'string',
-				description: 'Existing branch to base the new worktree branch from (required when worktree is true)',
+				description:
+					'Existing branch to base the new worktree branch from (required when worktree is true)',
 			},
 			branch: {
 				type: 'string',
-				description: 'New branch name to create in the worktree (required when worktree is true)',
+				description:
+					'New branch name to create in the worktree (required when worktree is true)',
 			},
 		},
 		required: ['agent', 'prompt', 'dir'],
@@ -217,7 +220,8 @@ export const codingTools: GatewayTool[] = [
 	},
 	{
 		name: 'coding_close_all',
-		description: 'Stop all running coding sessions and clean up their worktrees',
+		description:
+			'Stop all running coding sessions and clean up their worktrees',
 		inputSchema: jsonSchemas.coding_close_all!,
 	},
 	{
@@ -312,25 +316,42 @@ function setupWorktree(
 	try {
 		mkdirSync(worktreePath, {recursive: true});
 		execSync(
-			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
+			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(
+				worktreePath,
+			)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
 			{stdio: 'pipe'},
 		);
 		return {worktreePath, worktreeBranch: branch};
 	} catch (err) {
 		const stderr = (err as {stderr?: Buffer}).stderr?.toString().trim();
-		return {error: `Failed to create worktree: ${stderr || (err instanceof Error ? err.message : String(err))}`};
+		return {
+			error: `Failed to create worktree: ${
+				stderr || (err instanceof Error ? err.message : String(err))
+			}`,
+		};
 	}
 }
 
-function removeWorktree(worktreePath: string, repoDir: string): {removed: boolean; uncommitted: boolean} {
+function removeWorktree(
+	worktreePath: string,
+	repoDir: string,
+): {removed: boolean; uncommitted: boolean} {
 	try {
-		const status = execSync(`git -C ${JSON.stringify(worktreePath)} status --porcelain`, {stdio: 'pipe'})
+		const status = execSync(
+			`git -C ${JSON.stringify(worktreePath)} status --porcelain`,
+			{stdio: 'pipe'},
+		)
 			.toString()
 			.trim();
 		if (status.length > 0) {
 			return {removed: false, uncommitted: true};
 		}
-		execSync(`git -C ${JSON.stringify(repoDir)} worktree remove ${JSON.stringify(worktreePath)}`, {stdio: 'pipe'});
+		execSync(
+			`git -C ${JSON.stringify(repoDir)} worktree remove ${JSON.stringify(
+				worktreePath,
+			)}`,
+			{stdio: 'pipe'},
+		);
 		return {removed: true, uncommitted: false};
 	} catch {
 		return {removed: false, uncommitted: false};
@@ -345,7 +366,11 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	}
 
 	if (params.worktree && (!params.baseBranch || !params.branch)) {
-		return {success: false, error: 'Parameters "baseBranch" and "branch" are required when worktree is true'};
+		return {
+			success: false,
+			error:
+				'Parameters "baseBranch" and "branch" are required when worktree is true',
+		};
 	}
 
 	const resolved = resolveAgent(params.agent);
@@ -385,7 +410,13 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 
 		// codex sandboxes writes to the project dir — bypass it for worktree runs
 		if (agentName === 'codex-cli') {
-			config = {...config, args: [...(config.args ?? []), '--dangerously-bypass-approvals-and-sandbox']};
+			config = {
+				...config,
+				args: [
+					...(config.args ?? []),
+					'--dangerously-bypass-approvals-and-sandbox',
+				],
+			};
 		}
 	}
 
@@ -402,7 +433,14 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	const startedAt = Date.now();
 
 	// Upsert running session record
-	upsertSession({sessionId, agent: agentName, dir: params.dir, startedAt, worktreePath, worktreeBranch});
+	upsertSession({
+		sessionId,
+		agent: agentName,
+		dir: params.dir,
+		startedAt,
+		worktreePath,
+		worktreeBranch,
+	});
 
 	const {pid, error} = startAgentProcess(
 		sessionId,
@@ -419,7 +457,15 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	}
 
 	// Store pid
-	upsertSession({sessionId, agent: agentName, dir: params.dir, pid, startedAt, worktreePath, worktreeBranch});
+	upsertSession({
+		sessionId,
+		agent: agentName,
+		dir: params.dir,
+		pid,
+		startedAt,
+		worktreePath,
+		worktreeBranch,
+	});
 
 	// Start idle watchdog — kills the process if stdout goes silent for 30s
 	if (pid) startIdleWatchdog(sessionId, pid);
@@ -474,7 +520,8 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 						sessionId: found.sessionId,
 						pid,
 						resumed: isResume,
-						message: 'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+						message:
+							'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
 					},
 				};
 			}
@@ -487,7 +534,8 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			sessionId,
 			pid,
 			resumed: isResume,
-			message: 'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+			message:
+				'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
 			...(worktreePath ? {worktreePath, worktreeBranch} : {}),
 		},
 	};
@@ -499,7 +547,10 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 	deleteSession(params.sessionId);
 
 	if (session?.worktreePath) {
-		const {removed, uncommitted} = removeWorktree(session.worktreePath, session.dir);
+		const {removed, uncommitted} = removeWorktree(
+			session.worktreePath,
+			session.dir,
+		);
 		if (!removed && uncommitted) {
 			return {
 				success: true,
@@ -521,14 +572,22 @@ function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
 
 function handleCloseAll() {
 	const sessions = listRunningSessions();
-	const results: Array<{sessionId: string; message: string; worktreePath?: string; worktreeBranch?: string}> = [];
+	const results: Array<{
+		sessionId: string;
+		message: string;
+		worktreePath?: string;
+		worktreeBranch?: string;
+	}> = [];
 
 	for (const session of sessions) {
 		stopProcess(session.sessionId);
 		deleteSession(session.sessionId);
 
 		if (session.worktreePath) {
-			const {removed, uncommitted} = removeWorktree(session.worktreePath, session.dir);
+			const {removed, uncommitted} = removeWorktree(
+				session.worktreePath,
+				session.dir,
+			);
 			if (!removed && uncommitted) {
 				results.push({
 					sessionId: session.sessionId,
@@ -567,12 +626,19 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	// Detect agent: running store → reader probe → default
 	const agent = detectAgentForSession(params.sessionId, sessionDir);
 
-	const {entries, totalLines, returnedLines, fileExists, fileSizeBytes, fileSizeHuman, error: readError} =
-		await readAgentSessionOutput(agent, sessionDir, params.sessionId, {
-			lines: params.lines,
-			offset: params.offset,
-			tail: params.tail,
-		});
+	const {
+		entries,
+		totalLines,
+		returnedLines,
+		fileExists,
+		fileSizeBytes,
+		fileSizeHuman,
+		error: readError,
+	} = await readAgentSessionOutput(agent, sessionDir, params.sessionId, {
+		lines: params.lines,
+		offset: params.offset,
+		tail: params.tail,
+	});
 
 	let status: string;
 	let statusMessage: string | undefined;
