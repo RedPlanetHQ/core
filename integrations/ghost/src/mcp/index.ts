@@ -5,10 +5,8 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { getAuthHeaders } from '../utils';
 
-let ghostClient: AxiosInstance;
-
-function initializeClient(config: Record<string, string>) {
-  ghostClient = axios.create({
+function createGhostClient(config: Record<string, string>): AxiosInstance {
+  return axios.create({
     baseURL: `${config.ghost_url}/ghost/api/admin`,
     headers: {
       ...getAuthHeaders(config.admin_api_key),
@@ -204,7 +202,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>
 ) {
-  initializeClient(config);
+  const ghostClient = createGhostClient(config);
 
   try {
     switch (name) {

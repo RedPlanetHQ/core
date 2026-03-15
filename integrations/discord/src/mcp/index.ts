@@ -2,19 +2,15 @@ import axios, { AxiosInstance } from 'axios';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// Discord API client
-let discordClient: AxiosInstance;
-let botToken: string | null = null;
-
 /**
- * Initialize Discord client with OAuth credentials
+ * Create Discord client with OAuth credentials
  */
-async function initializeClient(
+async function createDiscordClient(
   client_id: string,
   client_secret: string,
   callback: string,
   credentials: Record<string, string>
-) {
+): Promise<AxiosInstance> {
   // Try to refresh token if refresh_token exists
   if (credentials.refresh_token) {
     try {
@@ -42,10 +38,10 @@ async function initializeClient(
     }
   }
 
-  // Store bot token if available (for bot operations)
-  botToken = credentials.bot_token || null;
+  // Use bot token if available (for bot operations)
+  const botToken = credentials.bot_token || null;
 
-  discordClient = axios.create({
+  return axios.create({
     baseURL: 'https://discord.com/api/v10',
     headers: {
       Authorization: botToken ? `Bot ${botToken}` : `Bearer ${credentials.access_token}`,
@@ -549,7 +545,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  await initializeClient(client_id, client_secret, callback, credentials);
+  const discordClient = await createDiscordClient(client_id, client_secret, callback, credentials);
 
   try {
     switch (name) {

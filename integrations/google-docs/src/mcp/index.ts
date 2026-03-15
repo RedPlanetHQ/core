@@ -7,16 +7,12 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { OAuth2Client } from 'google-auth-library';
 import { generatedTools, handleGeneratedTool } from './generated-tools';
 
-// OAuth2 configuration
-let oauth2Client: OAuth2Client;
-let docs: docs_v1.Docs;
-
 async function loadCredentials(
   client_id: string,
   client_secret: string,
   callback: string,
   config: Record<string, string>
-) {
+): Promise<{ oauth2Client: OAuth2Client; docs: docs_v1.Docs }> {
   try {
     const credentials = {
       refresh_token: config.refresh_token,
@@ -30,9 +26,11 @@ async function loadCredentials(
       scope: config.scope,
     };
 
-    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
+    const docs = google.docs({ version: 'v1', auth: oauth2Client });
+    return { oauth2Client, docs };
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
@@ -178,10 +176,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  await loadCredentials(client_id, client_secret, callback, credentials);
-
-  // Initialize Docs API
-  docs = google.docs({ version: 'v1', auth: oauth2Client });
+  const { oauth2Client, docs } = await loadCredentials(client_id, client_secret, callback, credentials);
 
   try {
     switch (name) {

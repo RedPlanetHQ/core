@@ -2,18 +2,15 @@ import axios, { AxiosInstance } from 'axios';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// HubSpot API client
-let hubspotClient: AxiosInstance;
-
 /**
- * Initialize HubSpot client with OAuth credentials
+ * Create HubSpot client with OAuth credentials
  */
-async function initializeClient(
+async function createHubspotClient(
   client_id: string,
   client_secret: string,
   callback: string,
   credentials: Record<string, string>
-) {
+): Promise<AxiosInstance> {
   // Try to refresh token if refresh_token exists
   if (credentials.refresh_token) {
     try {
@@ -35,7 +32,7 @@ async function initializeClient(
     }
   }
 
-  hubspotClient = axios.create({
+  return axios.create({
     baseURL: 'https://api.hubapi.com',
     headers: {
       Authorization: `Bearer ${credentials.access_token}`,
@@ -419,7 +416,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  await initializeClient(client_id, client_secret, callback, credentials);
+  const hubspotClient = await createHubspotClient(client_id, client_secret, callback, credentials);
 
   try {
     switch (name) {

@@ -18,10 +18,8 @@ import {
   getTopicSegmentContactPropertyTools,
 } from './topic-segment-contactproperty-tools';
 
-let resendClient: AxiosInstance;
-
-function initializeClient(config: Record<string, string>) {
-  resendClient = axios.create({
+function createResendClient(config: Record<string, string>): AxiosInstance {
+  return axios.create({
     baseURL: 'https://api.resend.com',
     headers: {
       Authorization: `Bearer ${config.api_key}`,
@@ -48,7 +46,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>
 ) {
-  initializeClient(config);
+  const resendClient = createResendClient(config);
 
   try {
     let result: any = null;

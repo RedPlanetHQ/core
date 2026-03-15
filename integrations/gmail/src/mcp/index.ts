@@ -54,7 +54,6 @@ interface EmailContent {
 }
 
 // OAuth2 configuration
-let oauth2Client: OAuth2Client;
 
 /**
  * Helper function to convert date string to seconds since epoch using timezone
@@ -163,9 +162,9 @@ async function loadCredentials(
   client_secret: string,
   callback: string,
   config: Record<string, string>
-) {
+): Promise<OAuth2Client> {
   try {
-    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
     const credentials = {
       /**
        * This field is only present if the access_type parameter was set to offline in the authentication request. For details, see Refresh tokens.
@@ -198,6 +197,7 @@ async function loadCredentials(
 
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
+    return oauth2Client;
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
@@ -586,7 +586,7 @@ export async function callTool(
   // Extract timezone from credentials before passing to OAuth
   const { timezone, ...oauthCredentials } = credentials;
 
-  await loadCredentials(client_id, client_secret, callback, oauthCredentials);
+  const oauth2Client = await loadCredentials(client_id, client_secret, callback, oauthCredentials);
 
   // Initialize Gmail API
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client });

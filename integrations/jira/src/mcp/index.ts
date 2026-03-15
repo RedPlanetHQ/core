@@ -5,13 +5,11 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { getAuthHeaders } from '../utils';
 
-let jiraClient: AxiosInstance;
-
-function initializeClient(config: Record<string, string>) {
+function createJiraClient(config: Record<string, string>): AxiosInstance {
   const headers = getAuthHeaders(config.access_token);
   const cloudId = config.cloud_id;
 
-  jiraClient = axios.create({
+  return axios.create({
     baseURL: `https://api.atlassian.com/ex/jira/${cloudId}/rest/api/3`,
     headers,
   });
@@ -151,7 +149,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>,
 ) {
-  initializeClient(config);
+  const jiraClient = createJiraClient(config);
 
   try {
     switch (name) {

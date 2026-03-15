@@ -2,12 +2,10 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 
-let notionClient: AxiosInstance;
+function createNotionClient(config: Record<string, string>): AxiosInstance {
+  const accessToken = config.access_token;
 
-async function initializeClient(config: Record<string, string>) {
-  let accessToken = config.access_token;
-
-  notionClient = axios.create({
+  return axios.create({
     baseURL: 'https://api.notion.com/v1',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -137,12 +135,12 @@ function blockToXml(block: any): string {
 }
 
 // Fetch all block children with pagination
-async function fetchAllBlockChildren(blockId: string): Promise<any[]> {
+async function fetchAllBlockChildren(client: AxiosInstance, blockId: string): Promise<any[]> {
   const allBlocks: any[] = [];
   let cursor: string | undefined;
 
   do {
-    const res = await notionClient.get(`/blocks/${blockId}/children`, {
+    const res = await client.get(`/blocks/${blockId}/children`, {
       params: { start_cursor: cursor, page_size: 100 },
     });
     allBlocks.push(...(res.data.results || []));
@@ -153,7 +151,7 @@ async function fetchAllBlockChildren(blockId: string): Promise<any[]> {
 }
 
 // Convert blocks array to XML content string (recursive)
-async function blocksToXmlContent(blocks: any[]): Promise<string> {
+async function blocksToXmlContent(client: AxiosInstance, blocks: any[]): Promise<string> {
   const lines: string[] = [];
 
   for (const block of blocks) {
@@ -163,8 +161,8 @@ async function blocksToXmlContent(blocks: any[]): Promise<string> {
     // Recursively fetch children if the block has children (but not child pages/databases)
     if (block.has_children && block.type !== 'child_page' && block.type !== 'child_database') {
       try {
-        const children = await fetchAllBlockChildren(block.id);
-        const childContent = await blocksToXmlContent(children);
+        const children = await fetchAllBlockChildren(client, block.id);
+        const childContent = await blocksToXmlContent(client, children);
         if (childContent) {
           lines.push(childContent);
         }
@@ -493,7 +491,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>,
 ) {
-  await initializeClient(config);
+  const notionClient = createNotionClient(config);
 
   try {
     switch (name) {
@@ -585,8 +583,8 @@ export async function callTool(
         // Fetch page content (blocks)
         let contentXml = '';
         try {
-          const blocks = await fetchAllBlockChildren(page_id);
-          contentXml = await blocksToXmlContent(blocks);
+          const blocks = await fetchAllBlockChildren(notionClient, page_id);
+          contentXml = await blocksToXmlContent(notionClient, blocks);
         } catch (e) {
           contentXml = '<error>Failed to fetch page content</error>';
         }
@@ -666,7 +664,7 @@ ${contentXml}
             }
 
             // Get existing children to check for child pages/databases
-            const existingBlocks = await fetchAllBlockChildren(page_id);
+            const existingBlocks = await fetchAllBlockChildren(notionClient, page_id);
             const childPages = existingBlocks.filter(
               (b: any) => b.type === 'child_page' || b.type === 'child_database',
             );

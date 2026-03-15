@@ -13,6 +13,9 @@ export const options = zod.object({
 	dir: zod.string().optional().describe('Working directory'),
 	model: zod.string().optional().describe('Model to use'),
 	systemPrompt: zod.string().optional().describe('System prompt'),
+	worktree: zod.boolean().optional().describe('Run in an isolated git worktree'),
+	baseBranch: zod.string().optional().describe('Existing branch to base the worktree from'),
+	branch: zod.string().optional().describe('New branch name to create in the worktree'),
 });
 
 type Props = {
@@ -77,6 +80,38 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 		dir = input;
 	}
 
+	let worktree = opts.worktree ?? false;
+	let baseBranch = opts.baseBranch;
+	let branch = opts.branch;
+
+	if (!opts.worktree) {
+		const useWorktree = await p.confirm({message: 'Run in an isolated git worktree?', initialValue: false});
+		if (p.isCancel(useWorktree)) {
+			p.cancel('Cancelled');
+			return;
+		}
+		worktree = useWorktree;
+	}
+
+	if (worktree) {
+		if (!baseBranch) {
+			const input = await p.text({message: 'Base branch (existing branch to start from)'});
+			if (p.isCancel(input)) {
+				p.cancel('Cancelled');
+				return;
+			}
+			baseBranch = input;
+		}
+		if (!branch) {
+			const input = await p.text({message: 'New branch name to create in the worktree'});
+			if (p.isCancel(input)) {
+				p.cancel('Cancelled');
+				return;
+			}
+			branch = input;
+		}
+	}
+
 	const spinner = p.spinner();
 	spinner.start('Starting session...');
 
@@ -86,6 +121,9 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 		dir,
 		model: opts.model,
 		systemPrompt: opts.systemPrompt,
+		worktree,
+		baseBranch,
+		branch,
 	});
 
 	if (!result.success) {
@@ -100,11 +138,17 @@ async function runStartSession(opts: zod.infer<typeof options>): Promise<void> {
 		sessionId: string;
 		pid: number;
 		message: string;
+		worktreePath?: string;
+		worktreeBranch?: string;
 	};
 	p.note(
 		[
 			`${chalk.bold('Session ID:')} ${res.sessionId}`,
 			`${chalk.bold('PID:')} ${res.pid}`,
+			...(res.worktreePath ? [
+				`${chalk.bold('Worktree:')} ${res.worktreePath}`,
+				`${chalk.bold('Branch:')} ${res.worktreeBranch}`,
+			] : []),
 			'',
 			chalk.dim(res.message),
 		].join('\n'),

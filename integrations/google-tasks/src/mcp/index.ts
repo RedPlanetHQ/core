@@ -3,18 +3,14 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { OAuth2Client } from 'google-auth-library';
 
-// OAuth2 configuration
-let oauth2Client: OAuth2Client;
-let tasks: tasks_v1.Tasks;
-
 async function loadCredentials(
   client_id: string,
   client_secret: string,
   callback: string,
   config: Record<string, string>
-) {
+): Promise<{ oauth2Client: OAuth2Client; tasks: tasks_v1.Tasks }> {
   try {
-    oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
 
     const credentials = {
       refresh_token: config.refresh_token,
@@ -30,6 +26,8 @@ async function loadCredentials(
 
     oauth2Client.setCredentials(credentials);
     oauth2Client.refreshAccessToken();
+    const tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+    return { oauth2Client, tasks };
   } catch (error) {
     console.error('Error loading credentials:', error);
     process.exit(1);
@@ -221,10 +219,7 @@ export async function callTool(
   callback: string,
   credentials: Record<string, string>
 ) {
-  await loadCredentials(client_id, client_secret, callback, credentials);
-
-  // Initialize Google Tasks API
-  tasks = google.tasks({ version: 'v1', auth: oauth2Client });
+  const { tasks } = await loadCredentials(client_id, client_secret, callback, credentials);
 
   try {
     switch (name) {

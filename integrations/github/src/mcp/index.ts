@@ -23,11 +23,8 @@ interface MCPToolCallResult {
   isError?: boolean;
 }
 
-// GitHub API client for custom tools
-let githubClient: AxiosInstance;
-
-function initializeGitHubClient(accessToken: string) {
-  githubClient = axios.create({
+function createGitHubClient(accessToken: string): AxiosInstance {
+  return axios.create({
     baseURL: 'https://api.github.com',
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -200,7 +197,7 @@ async function handleCustomToolCall(
   args: Record<string, any>,
   accessToken: string,
 ): Promise<MCPToolCallResult> {
-  initializeGitHubClient(accessToken);
+  const githubClient = createGitHubClient(accessToken);
 
   try {
     switch (name) {

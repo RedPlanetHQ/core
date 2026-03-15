@@ -3,8 +3,6 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 import { getAccountsZohoUrl, getMailZohoUrl } from '../region-config';
 
-let zohoClient: AxiosInstance;
-
 async function refreshAccessToken(
   clientId: string,
   clientSecret: string,
@@ -23,11 +21,11 @@ async function refreshAccessToken(
   return response.data.access_token;
 }
 
-async function initializeClient(
+async function createZohoClient(
   clientId: string,
   clientSecret: string,
   config: Record<string, string>
-) {
+): Promise<AxiosInstance> {
   let accessToken = config.access_token;
   const location = config.location;
   if (config.refresh_token) {
@@ -44,7 +42,7 @@ async function initializeClient(
   }
 
   const mailZohoUrl = getMailZohoUrl(location);
-  zohoClient = axios.create({
+  return axios.create({
     baseURL: `${mailZohoUrl}/api`,
     headers: {
       Authorization: `Zoho-oauthtoken ${accessToken}`,
@@ -255,7 +253,7 @@ export async function callTool(
   clientSecret: string,
   config: Record<string, string>
 ) {
-  await initializeClient(clientId, clientSecret, config);
+  const zohoClient = await createZohoClient(clientId, clientSecret, config);
 
   try {
     switch (name) {

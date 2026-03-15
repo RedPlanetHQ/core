@@ -3,13 +3,11 @@ import { zodToJsonSchema } from "zod-to-json-schema";
 import axios, { AxiosInstance } from "axios";
 
 // Codeberg API client
-let codebergClient: AxiosInstance;
-
 /**
- * Initialize Codeberg API client with OAuth token
+ * Create Codeberg API client with OAuth token
  */
-async function initializeCodebergClient(accessToken: string) {
-  codebergClient = axios.create({
+function createCodebergClient(accessToken: string): AxiosInstance {
+  return axios.create({
     baseURL: "https://codeberg.org/api/v1",
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -163,6 +161,7 @@ const ListProjectsSchema = z.object({
 // ============================================================================
 
 async function resolveLabelIds(
+  client: AxiosInstance,
   owner: string,
   repo: string,
   labels: (string | number)[]
@@ -179,7 +178,7 @@ async function resolveLabelIds(
   }
 
   if (namesToResolve.length > 0) {
-    const response = await codebergClient.get(
+    const response = await client.get(
       `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/labels?limit=1000`
     );
     const allLabels = response.data;
@@ -459,7 +458,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>
 ) {
-  await initializeCodebergClient(config.access_token);
+  const codebergClient = createCodebergClient(config.access_token);
 
   try {
     switch (name) {
@@ -576,7 +575,7 @@ URL: ${issue.html_url}`;
 
         let labelIds: number[] | undefined;
         if (labels && labels.length > 0) {
-          labelIds = await resolveLabelIds(owner, repo, labels);
+          labelIds = await resolveLabelIds(codebergClient, owner, repo, labels);
         }
 
         const response = await codebergClient.post(
@@ -633,7 +632,7 @@ URL: ${issue.html_url}`;
 
         let labelIds: number[] | undefined;
         if (labels && labels.length > 0) {
-          labelIds = await resolveLabelIds(owner, repo, labels);
+          labelIds = await resolveLabelIds(codebergClient, owner, repo, labels);
         }
 
         const response = await codebergClient.patch(
@@ -850,7 +849,7 @@ URL: ${issue.html_url}`;
         // 2. Resolve label names to IDs
         let labelIds: number[] | undefined;
         if (labels.length > 0) {
-          labelIds = await resolveLabelIds(owner, repo, labels);
+          labelIds = await resolveLabelIds(codebergClient, owner, repo, labels);
         }
 
         // 3. Construct body from field values

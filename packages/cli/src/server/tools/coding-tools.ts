@@ -1,6 +1,9 @@
 import zod from 'zod';
 import {randomUUID} from 'node:crypto';
-import {existsSync} from 'node:fs';
+import {execSync} from 'node:child_process';
+import {existsSync, mkdirSync} from 'node:fs';
+import {join} from 'node:path';
+import {homedir} from 'node:os';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
 import {
@@ -38,6 +41,9 @@ const AskSchema = zod.object({
 	sessionId: zod.string().optional(),
 	model: zod.string().optional(),
 	systemPrompt: zod.string().optional(),
+	worktree: zod.boolean().optional().default(false),
+	baseBranch: zod.string().optional(),
+	branch: zod.string().optional(),
 });
 
 const CloseSessionSchema = zod.object({
@@ -97,6 +103,18 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 			systemPrompt: {
 				type: 'string',
 				description: 'System prompt override (optional, new sessions only)',
+			},
+			worktree: {
+				type: 'boolean',
+				description: 'Create an isolated git worktree for this session (default: false)',
+			},
+			baseBranch: {
+				type: 'string',
+				description: 'Existing branch to base the new worktree branch from (required when worktree is true)',
+			},
+			branch: {
+				type: 'string',
+				description: 'New branch name to create in the worktree (required when worktree is true)',
 			},
 		},
 		required: ['agent', 'prompt', 'dir'],
@@ -275,11 +293,54 @@ function detectAgentForSession(sessionId: string, dir: string): string {
 	return prefs.defaultCodingAgent ?? 'claude-code';
 }
 
+// ============ Worktree Helpers ============
+
+function setupWorktree(
+	dir: string,
+	baseBranch: string,
+	branch: string,
+): {worktreePath: string; worktreeBranch: string} | {error: string} {
+	const encodedDir = dir.replace(/\//g, '-');
+	const worktreesBase = join(homedir(), '.corebrain', 'worktrees');
+	const worktreePath = join(worktreesBase, encodedDir);
+
+	try {
+		mkdirSync(worktreesBase, {recursive: true});
+		execSync(
+			`git -C ${JSON.stringify(dir)} worktree add ${JSON.stringify(worktreePath)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
+			{stdio: 'pipe'},
+		);
+		return {worktreePath, worktreeBranch: branch};
+	} catch (err) {
+		const stderr = (err as {stderr?: Buffer}).stderr?.toString().trim();
+		return {error: `Failed to create worktree: ${stderr || (err instanceof Error ? err.message : String(err))}`};
+	}
+}
+
+function removeWorktree(worktreePath: string, repoDir: string): {removed: boolean; uncommitted: boolean} {
+	try {
+		const status = execSync(`git -C ${JSON.stringify(worktreePath)} status --porcelain`, {stdio: 'pipe'})
+			.toString()
+			.trim();
+		if (status.length > 0) {
+			return {removed: false, uncommitted: true};
+		}
+		execSync(`git -C ${JSON.stringify(repoDir)} worktree remove ${JSON.stringify(worktreePath)}`, {stdio: 'pipe'});
+		return {removed: true, uncommitted: false};
+	} catch {
+		return {removed: false, uncommitted: false};
+	}
+}
+
 // ============ Handlers ============
 
 async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	if (!existsSync(params.dir)) {
 		return {success: false, error: `Directory "${params.dir}" does not exist`};
+	}
+
+	if (params.worktree && (!params.baseBranch || !params.branch)) {
+		return {success: false, error: 'Parameters "baseBranch" and "branch" are required when worktree is true'};
 	}
 
 	const resolved = resolveAgent(params.agent);
@@ -305,6 +366,19 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		};
 	}
 
+	// Set up worktree for new sessions when requested
+	let workingDir = params.dir;
+	let worktreePath: string | undefined;
+	let worktreeBranch: string | undefined;
+
+	if (params.worktree && !isResume) {
+		const wt = setupWorktree(params.dir, params.baseBranch!, params.branch!);
+		if ('error' in wt) return {success: false, error: wt.error};
+		worktreePath = wt.worktreePath;
+		worktreeBranch = wt.worktreeBranch;
+		workingDir = wt.worktreePath;
+	}
+
 	// Build args
 	const args = isResume
 		? buildResumeArgs(config, {prompt: params.prompt, sessionId})
@@ -318,23 +392,24 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	const startedAt = Date.now();
 
 	// Upsert running session record
-	upsertSession({sessionId, agent: agentName, dir: params.dir, startedAt});
+	upsertSession({sessionId, agent: agentName, dir: params.dir, startedAt, worktreePath, worktreeBranch});
 
 	const {pid, error} = startAgentProcess(
 		sessionId,
 		config,
 		args,
-		params.dir,
+		workingDir,
 		logger,
 	);
 
 	if (error) {
+		if (worktreePath) removeWorktree(worktreePath, params.dir);
 		deleteSession(sessionId);
 		return {success: false, error: `Failed to start: ${error}`};
 	}
 
 	// Store pid
-	upsertSession({sessionId, agent: agentName, dir: params.dir, pid, startedAt});
+	upsertSession({sessionId, agent: agentName, dir: params.dir, pid, startedAt, worktreePath, worktreeBranch});
 
 	// Start idle watchdog — kills the process if stdout goes silent for 30s
 	if (pid) startIdleWatchdog(sessionId, pid);
@@ -345,12 +420,12 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		const deadline = Date.now() + 30_000;
 		const sessionReady = await new Promise<boolean>(resolve => {
 			function check() {
-				if (agentSessionExists(agentName, params.dir, sessionId))
+				if (agentSessionExists(agentName, workingDir, sessionId))
 					return resolve(true);
 				if (!isProcessRunning(sessionId))
-					return resolve(agentSessionExists(agentName, params.dir, sessionId));
+					return resolve(agentSessionExists(agentName, workingDir, sessionId));
 				if (Date.now() >= deadline)
-					return resolve(agentSessionExists(agentName, params.dir, sessionId));
+					return resolve(agentSessionExists(agentName, workingDir, sessionId));
 				setTimeout(check, 500);
 			}
 			setTimeout(check, 500);
@@ -358,6 +433,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 
 		if (!sessionReady) {
 			stopProcess(sessionId);
+			if (worktreePath) removeWorktree(worktreePath, params.dir);
 			deleteSession(sessionId);
 			return {
 				success: false,
@@ -369,7 +445,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		// For codex-cli: find the actual session ID codex assigned (its own UUID in the filename)
 		// and re-key our running session record to use it.
 		if (agentName === 'codex-cli') {
-			const found = await findLatestCodexSession(params.dir, startedAt);
+			const found = await findLatestCodexSession(workingDir, startedAt);
 
 			if (found && found.sessionId !== sessionId) {
 				sessionId = found.sessionId;
@@ -379,6 +455,8 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 					dir: params.dir,
 					pid,
 					startedAt,
+					worktreePath,
+					worktreeBranch,
 				});
 				return {
 					success: true,
@@ -400,13 +478,31 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			pid,
 			resumed: isResume,
 			message: 'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+			...(worktreePath ? {worktreePath, worktreeBranch} : {}),
 		},
 	};
 }
 
 function handleCloseSession(params: zod.infer<typeof CloseSessionSchema>) {
+	const session = getSession(params.sessionId);
 	stopProcess(params.sessionId);
 	deleteSession(params.sessionId);
+
+	if (session?.worktreePath) {
+		const {removed, uncommitted} = removeWorktree(session.worktreePath, session.dir);
+		if (!removed && uncommitted) {
+			return {
+				success: true,
+				result: {
+					sessionId: params.sessionId,
+					message: `Session closed. Worktree preserved at ${session.worktreePath} — uncommitted changes detected.`,
+					worktreePath: session.worktreePath,
+					worktreeBranch: session.worktreeBranch,
+				},
+			};
+		}
+	}
+
 	return {
 		success: true,
 		result: {sessionId: params.sessionId, message: 'Session closed'},

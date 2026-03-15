@@ -1,6 +1,6 @@
 {
   "name": "@core/github",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "github extension for CORE",
   "main": "./bin/index.js",
   "module": "./bin/index.mjs",

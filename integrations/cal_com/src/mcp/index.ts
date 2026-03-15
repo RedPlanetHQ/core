@@ -3,12 +3,10 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 
 // Cal.com API client
-let calComClient: AxiosInstance;
-
-async function initializeClient(config: Record<string, string>) {
+function createCalComClient(config: Record<string, string>): AxiosInstance {
   const baseURL = config.cal_api_url || 'https://api.cal.com/v1';
 
-  calComClient = axios.create({
+  return axios.create({
     baseURL,
     params: {
       apiKey: config.apiKey,
@@ -155,7 +153,7 @@ export async function callTool(
   args: Record<string, any>,
   config: Record<string, string>
 ) {
-  await initializeClient(config);
+  const calComClient = createCalComClient(config);
 
   try {
     switch (name) {

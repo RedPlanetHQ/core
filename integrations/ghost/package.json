@@ -1,6 +1,6 @@
 {
   "name": "@core/ghost",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "description": "Ghost Blog integration for Core",
   "main": "./bin/index.cjs",
   "type": "module",

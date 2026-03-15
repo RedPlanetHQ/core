@@ -2,14 +2,11 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import axios, { AxiosInstance } from 'axios';
 
-// Linear GraphQL API client
-let linearClient: AxiosInstance;
-
 /**
- * Initialize Linear API client with API key
+ * Create Linear API client with API key
  */
-async function initializeLinearClient(apiKey: string) {
-  linearClient = axios.create({
+function createLinearClient(apiKey: string): AxiosInstance {
+  return axios.create({
     baseURL: 'https://api.linear.app/graphql',
     headers: {
       Authorization: apiKey,
@@ -21,9 +18,9 @@ async function initializeLinearClient(apiKey: string) {
 /**
  * Execute a GraphQL query against Linear API
  */
-async function executeQuery(query: string, variables?: Record<string, any>) {
+async function executeQuery(client: AxiosInstance, query: string, variables?: Record<string, any>) {
   try {
-    const response = await linearClient.post('', {
+    const response = await client.post('', {
       query,
       variables,
     });
@@ -368,10 +365,7 @@ export async function callTool(
   args: Record<string, any>,
   apiKey: string
 ) {
-  // Initialize client if not already done
-  if (!linearClient) {
-    await initializeLinearClient(apiKey);
-  }
+  const linearClient = createLinearClient(apiKey);
 
   try {
     switch (name) {
@@ -421,7 +415,7 @@ export async function callTool(
         if (validatedArgs.parentId) input.parentId = validatedArgs.parentId;
         if (validatedArgs.cycleId) input.cycleId = validatedArgs.cycleId;
 
-        const data = await executeQuery(mutation, { input });
+        const data = await executeQuery(linearClient, mutation, { input });
         const issue = data.issueCreate.issue;
 
         return {
@@ -471,7 +465,7 @@ export async function callTool(
         if (validatedArgs.projectId !== undefined) input.projectId = validatedArgs.projectId;
         if (validatedArgs.cycleId !== undefined) input.cycleId = validatedArgs.cycleId;
 
-        const data = await executeQuery(mutation, { id: validatedArgs.issueId, input });
+        const data = await executeQuery(linearClient, mutation, { id: validatedArgs.issueId, input });
         const issue = data.issueUpdate.issue;
 
         return {
@@ -511,7 +505,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { id: validatedArgs.issueId });
+        const data = await executeQuery(linearClient, query, { id: validatedArgs.issueId });
         const issue = data.issue;
 
         let text = `Issue: ${issue.identifier} - ${issue.title}\n`;
@@ -574,7 +568,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, {
+        const data = await executeQuery(linearClient, query, {
           filter: Object.keys(filter).length > 0 ? filter : undefined,
           first: validatedArgs.first,
         });
@@ -612,7 +606,7 @@ export async function callTool(
           }
         `;
 
-        await executeQuery(mutation, { id: validatedArgs.issueId });
+        await executeQuery(linearClient, mutation, { id: validatedArgs.issueId });
 
         return {
           content: [{
@@ -643,7 +637,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(mutation, {
+        const data = await executeQuery(linearClient, mutation, {
           input: {
             issueId: validatedArgs.issueId,
             body: validatedArgs.body,
@@ -676,7 +670,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(mutation, {
+        const data = await executeQuery(linearClient, mutation, {
           id: validatedArgs.commentId,
           input: { body: validatedArgs.body },
         });
@@ -700,7 +694,7 @@ export async function callTool(
           }
         `;
 
-        await executeQuery(mutation, { id: validatedArgs.commentId });
+        await executeQuery(linearClient, mutation, { id: validatedArgs.commentId });
 
         return {
           content: [{
@@ -746,7 +740,7 @@ export async function callTool(
         if (validatedArgs.targetDate) input.targetDate = validatedArgs.targetDate;
         if (validatedArgs.state) input.state = validatedArgs.state;
 
-        const data = await executeQuery(mutation, { input });
+        const data = await executeQuery(linearClient, mutation, { input });
         const project = data.projectCreate.project;
 
         return {
@@ -784,7 +778,7 @@ export async function callTool(
         if (validatedArgs.targetDate) input.targetDate = validatedArgs.targetDate;
         if (validatedArgs.state) input.state = validatedArgs.state;
 
-        const data = await executeQuery(mutation, { id: validatedArgs.projectId, input });
+        const data = await executeQuery(linearClient, mutation, { id: validatedArgs.projectId, input });
         const project = data.projectUpdate.project;
 
         return {
@@ -821,7 +815,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, {
+        const data = await executeQuery(linearClient, query, {
           filter: Object.keys(filter).length > 0 ? filter : undefined,
           first: validatedArgs.first,
         });
@@ -869,7 +863,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { id: validatedArgs.projectId });
+        const data = await executeQuery(linearClient, query, { id: validatedArgs.projectId });
         const project = data.project;
 
         let text = `Project: ${project.name}\n`;
@@ -915,7 +909,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { first: validatedArgs.first });
+        const data = await executeQuery(linearClient, query, { first: validatedArgs.first });
         const teams = data.teams.nodes;
 
         let text = `Found ${teams.length} team(s):\n\n`;
@@ -950,7 +944,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { id: validatedArgs.teamId });
+        const data = await executeQuery(linearClient, query, { id: validatedArgs.teamId });
         const team = data.team;
 
         let text = `Team: ${team.name} (${team.key})\n`;
@@ -992,7 +986,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { first: validatedArgs.first });
+        const data = await executeQuery(linearClient, query, { first: validatedArgs.first });
         const users = data.users.nodes;
 
         let text = `Found ${users.length} user(s):\n\n`;
@@ -1028,7 +1022,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { id: validatedArgs.userId });
+        const data = await executeQuery(linearClient, query, { id: validatedArgs.userId });
         const user = data.user;
 
         let text = `User: ${user.displayName || user.name}\n`;
@@ -1059,7 +1053,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query);
+        const data = await executeQuery(linearClient, query);
         const viewer = data.viewer;
 
         let text = `Authenticated User: ${viewer.displayName || viewer.name}\n`;
@@ -1102,7 +1096,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, {
+        const data = await executeQuery(linearClient, query, {
           filter: Object.keys(filter).length > 0 ? filter : undefined,
           first: validatedArgs.first,
         });
@@ -1152,7 +1146,7 @@ export async function callTool(
         if (validatedArgs.description) input.description = validatedArgs.description;
         if (validatedArgs.color) input.color = validatedArgs.color;
 
-        const data = await executeQuery(mutation, { input });
+        const data = await executeQuery(linearClient, mutation, { input });
         const label = data.issueLabelCreate.issueLabel;
 
         return {
@@ -1185,7 +1179,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, {
+        const data = await executeQuery(linearClient, query, {
           filter: Object.keys(filter).length > 0 ? filter : undefined,
           first: validatedArgs.first,
         });
@@ -1244,7 +1238,7 @@ export async function callTool(
 
         if (validatedArgs.description) input.description = validatedArgs.description;
 
-        const data = await executeQuery(mutation, { input });
+        const data = await executeQuery(linearClient, mutation, { input });
         const cycle = data.cycleCreate.cycle;
 
         return {
@@ -1280,7 +1274,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, {
+        const data = await executeQuery(linearClient, query, {
           filter: Object.keys(filter).length > 0 ? filter : undefined,
           first: validatedArgs.first,
         });
@@ -1326,7 +1320,7 @@ export async function callTool(
           }
         `;
 
-        const data = await executeQuery(query, { id: validatedArgs.cycleId });
+        const data = await executeQuery(linearClient, query, { id: validatedArgs.cycleId });
         const cycle = data.cycle;
 
         let text = `Cycle: ${cycle.name}\n`;
