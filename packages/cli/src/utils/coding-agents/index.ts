@@ -32,6 +32,10 @@ export async function readAgentSessionOutput(
 	return reader.readSessionOutput(dir, sessionId, options);
 }
 
+export function resolveSessionFilePath(agentName: string, dir: string, sessionId: string): string | null {
+	return getAgentReader(agentName)?.findSessionFilePath(dir, sessionId) ?? null;
+}
+
 export function agentSessionExists(agentName: string, dir: string, sessionId: string): boolean {
 	return getAgentReader(agentName)?.sessionExists(dir, sessionId) ?? false;
 }

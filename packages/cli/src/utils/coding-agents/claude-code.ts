@@ -28,6 +28,11 @@ function getSessionPath(dir: string, sessionId: string): string {
 export class ClaudeCodeReader extends BaseCodingAgentReader {
 	readonly agentName = 'claude-code';
 
+	findSessionFilePath(dir: string, sessionId: string): string | null {
+		const p = getSessionPath(dir, sessionId);
+		return existsSync(p) ? p : null;
+	}
+
 	sessionExists(dir: string, sessionId: string): boolean {
 		return existsSync(getSessionPath(dir, sessionId));
 	}

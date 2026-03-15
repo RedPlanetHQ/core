@@ -10,7 +10,6 @@ import {
 	upsertSession,
 	deleteSession,
 	listRunningSessions,
-	isProcessRunningByPid,
 } from '@/utils/coding-sessions';
 import {
 	getAgentConfig,
@@ -19,7 +18,6 @@ import {
 	startAgentProcess,
 	isProcessRunning,
 	stopProcess,
-	startIdleWatchdog,
 	type Logger,
 } from '@/utils/coding-runner';
 import {
@@ -467,8 +465,8 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 		worktreeBranch,
 	});
 
-	// Start idle watchdog — kills the process if stdout goes silent for 30s
-	if (pid) startIdleWatchdog(sessionId, pid);
+	// Start idle watchdog — kills the process if the session JSONL stops growing
+	// if (pid) startIdleWatchdog(sessionId, pid, () => resolveSessionFilePath(agentName, workingDir, sessionId));
 
 	// For agents with a session reader, wait until the session file appears
 	const hasReader = getAgentReader(agentName) !== null;
