@@ -8,11 +8,12 @@ import { Textarea } from "../ui/textarea";
 import { DeleteSkillAlert } from "../skills/delete-skill-alert";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useToast } from "~/hooks/use-toast";
 import { LoaderCircle, Sparkles } from "lucide-react";
 import { useCompletion } from "@ai-sdk/react";
+import { AI } from "../icons/ai";
 
 interface Skill {
   id: string;
@@ -39,15 +40,17 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const { complete, isLoading: isGeneratingDesc } = useCompletion({
+  const {
+    complete,
+    completion,
+    isLoading: isGeneratingDesc,
+  } = useCompletion({
     api: "/api/v1/skills/generate",
-    onFinish: (_prompt, completion) => {
-      editor?.commands.setContent(completion);
-      setDescOpen(false);
-      setDescIntent("");
-    },
     onError: (err) => {
-      toast({ title: err.message || "Failed to generate", variant: "destructive" });
+      toast({
+        title: err.message || "Failed to generate",
+        variant: "destructive",
+      });
     },
   });
 
@@ -64,6 +67,14 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
       },
     },
   });
+
+  useEffect(() => {
+    if (!isGeneratingDesc && completion) {
+      editor?.commands.setContent(completion);
+      setDescOpen(false);
+      setDescIntent("");
+    }
+  }, [isGeneratingDesc]);
 
   const handleGenerateDesc = () => {
     if (!descIntent.trim()) return;
@@ -176,7 +187,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
             />
           </div>
 
-          <div className="text-md my-5">
+          <div className="my-5">
             <label className="text-muted-foreground/80 px-4 text-sm">
               Short description
             </label>
@@ -184,7 +195,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
               value={shortDescription}
               onChange={(e) => setShortDescription(e.target.value)}
               placeholder="Brief description of the skill, this is used by the agent to understand the skill"
-              className="no-scrollbar text-md! min-h-0 resize-none border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
+              className="no-scrollbar min-h-0 resize-none border-0 bg-transparent px-4 py-0 outline-none focus-visible:ring-0"
             />
           </div>
 
@@ -195,11 +206,14 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
               </label>
               <Popover open={descOpen} onOpenChange={setDescOpen}>
                 <PopoverTrigger asChild>
-                  <button className="text-muted-foreground/50 hover:text-muted-foreground rounded p-0.5 transition-colors">
-                    <Sparkles className="h-3.5 w-3.5" />
-                  </button>
+                  <Button variant="ghost" size="xs">
+                    <AI className="h-3 w-3" />
+                  </Button>
                 </PopoverTrigger>
-                <PopoverContent className="w-80 p-3" align="start">
+                <PopoverContent
+                  className="bg-background-3 w-80 p-3"
+                  align="start"
+                >
                   <p className="text-muted-foreground mb-2 text-xs">
                     Describe what you need
                   </p>
@@ -207,7 +221,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
                     value={descIntent}
                     onChange={(e) => setDescIntent(e.target.value)}
                     placeholder="e.g. When I ask for a standup, pull yesterday's GitHub activity and post it to Slack"
-                    className="no-scrollbar mb-2 min-h-[80px] resize-none text-sm"
+                    className="no-scrollbar mb-2 min-h-[80px] resize-none bg-transparent p-0"
                     disabled={isGeneratingDesc}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -235,7 +249,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
                 </PopoverContent>
               </Popover>
             </div>
-            <EditorContent editor={editor} />
+            <EditorContent editor={editor} className="!text-base" />
           </div>
         </div>
       </div>

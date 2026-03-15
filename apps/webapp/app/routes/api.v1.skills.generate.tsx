@@ -62,7 +62,9 @@ const { action } = createHybridActionApiRoute(
       ],
     });
 
-    return result.toTextStreamResponse();
+    result.consumeStream(); // no await
+
+    return result.toUIMessageStreamResponse();
   },
 );
 
