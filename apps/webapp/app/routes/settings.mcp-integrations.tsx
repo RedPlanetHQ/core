@@ -2,6 +2,13 @@ import React from "react";
 import { SettingSection } from "~/components/setting-section";
 import { Button, Input } from "~/components/ui";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
   json,
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
@@ -22,7 +29,10 @@ import {
 type McpIntegration = {
   name: string;
   serverUrl: string;
-  apiKey?: string;
+  apiKey?: {
+    key: string;
+    headerType: "x-api-key" | "Authorization";
+  };
 };
 
 export async function loader({ request }: LoaderFunctionArgs) {
@@ -64,7 +74,8 @@ export async function action({ request }: ActionFunctionArgs) {
       case "create": {
         const name = formData.get("name") as string;
         const serverUrl = formData.get("serverUrl") as string;
-        const apiKey = formData.get("apiKey") as string | undefined;
+        const apiKeyValue = formData.get("apiKey") as string | undefined;
+        const headerType = (formData.get("headerType") as string) || "x-api-key";
 
         if (!name || !serverUrl) {
           return json(
@@ -76,7 +87,13 @@ export async function action({ request }: ActionFunctionArgs) {
         const newIntegration: McpIntegration = {
           name,
           serverUrl,
-          apiKey: apiKey || undefined,
+          apiKey:
+            apiKeyValue
+              ? {
+                  key: apiKeyValue,
+                  headerType: headerType as "x-api-key" | "Authorization",
+                }
+              : undefined,
         };
 
         const updatedIntegrations = [...currentIntegrations, newIntegration];
@@ -135,6 +152,8 @@ function NewIntegrationForm({
   onSuccess: () => void;
 }) {
   const fetcher = useFetcher<{ success: string; error?: string }>();
+  const [apiKey, setApiKey] = React.useState("");
+  const [headerType, setHeaderType] = React.useState<"x-api-key" | "Authorization">("x-api-key");
 
   React.useEffect(() => {
     if (fetcher.data?.success) {
@@ -177,12 +196,32 @@ function NewIntegrationForm({
 
           <div className="space-y-2">
             <label htmlFor="apiKey">API Key (optional)</label>
-            <Input
-              id="apiKey"
-              name="apiKey"
-              placeholder="sk-..."
-              type="password"
-            />
+            <div className="flex gap-2">
+              <Select
+                value={headerType}
+                onValueChange={(v) => setHeaderType(v as "x-api-key" | "Authorization")}
+              >
+                <SelectTrigger className="w-44">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="x-api-key">x-api-key</SelectItem>
+                  <SelectItem value="Authorization">Bearer token</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                id="apiKey"
+                name="apiKey"
+                placeholder={headerType === "Authorization" ? "Bearer token value" : "API key value"}
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                className="flex-1"
+              />
+            </div>
+            {apiKey && (
+              <input type="hidden" name="headerType" value={headerType} />
+            )}
           </div>
 
           {fetcher.data?.error && (
@@ -233,7 +272,9 @@ function IntegrationCard({
             {integration.serverUrl}
           </p>
           <p className="text-muted-foreground text-xs">
-            {integration.apiKey ? "API Key configured" : ""}
+            {integration.apiKey
+              ? `API Key (${integration.apiKey.headerType === "Authorization" ? "Bearer" : "x-api-key"})`
+              : ""}
           </p>
         </div>
         <fetcher.Form method="post">

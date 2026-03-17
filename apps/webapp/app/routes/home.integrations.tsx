@@ -23,6 +23,13 @@ import { updateUser } from "~/models/user.server";
 
 import { Button, Input } from "~/components/ui";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
   Card,
   CardContent,
   CardDescription,
@@ -89,6 +96,8 @@ export async function action({ request }: ActionFunctionArgs) {
         const name = formData.get("name") as string;
         const serverUrl = formData.get("serverUrl") as string;
         const accessToken = formData.get("accessToken") as string | undefined;
+        const apiKeyValue = formData.get("apiKey") as string | undefined;
+        const headerType = (formData.get("headerType") as string) || "x-api-key";
 
         if (!name || !serverUrl) {
           return json(
@@ -101,7 +110,13 @@ export async function action({ request }: ActionFunctionArgs) {
           id: crypto.randomUUID(),
           name,
           serverUrl,
-          ...(accessToken && {
+          ...(apiKeyValue && {
+            apiKey: {
+              key: apiKeyValue,
+              headerType: headerType as "x-api-key" | "Authorization",
+            },
+          }),
+          ...(accessToken && !apiKeyValue && {
             oauth: {
               accessToken,
             },
@@ -171,6 +186,9 @@ function NewIntegrationForm({
   const localFetcher = useFetcher<{ success: boolean; error?: string }>();
   const [isRedirecting, setIsRedirecting] = useState(false);
   const [accessToken, setAccessToken] = useState("");
+  const [authMode, setAuthMode] = useState<"oauth" | "apikey">("oauth");
+  const [apiKey, setApiKey] = useState("");
+  const [headerType, setHeaderType] = useState<"x-api-key" | "Authorization">("x-api-key");
 
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.redirectURL) {
@@ -189,7 +207,12 @@ function NewIntegrationForm({
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
 
-    if (accessToken.trim()) {
+    if (authMode === "apikey" && apiKey.trim()) {
+      formData.set("intent", "create");
+      formData.set("apiKey", apiKey);
+      formData.set("headerType", headerType);
+      localFetcher.submit(formData, { method: "post" });
+    } else if (accessToken.trim()) {
       formData.set("intent", "create");
       formData.set("accessToken", accessToken);
       localFetcher.submit(formData, { method: "post" });
@@ -241,22 +264,65 @@ function NewIntegrationForm({
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="accessToken" className="text-sm font-medium">
-              Access Token (optional)
-            </label>
-            <Input
-              id="accessToken"
-              name="accessToken"
-              placeholder="sk-..."
-              type="password"
-              value={accessToken}
-              onChange={(e) => setAccessToken(e.target.value)}
-            />
-            <p className="text-muted-foreground text-xs">
-              Provide an access token to skip OAuth, or leave empty to
-              authenticate via OAuth
-            </p>
+            <label className="text-sm font-medium">Auth</label>
+            <Select
+              value={authMode}
+              onValueChange={(v) => setAuthMode(v as "oauth" | "apikey")}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="oauth">OAuth / Access Token</SelectItem>
+                <SelectItem value="apikey">API Key</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
+
+          {authMode === "apikey" ? (
+            <div className="space-y-2">
+              <label className="text-sm font-medium">API Key</label>
+              <div className="flex gap-2">
+                <Select
+                  value={headerType}
+                  onValueChange={(v) => setHeaderType(v as "x-api-key" | "Authorization")}
+                >
+                  <SelectTrigger className="w-44">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="x-api-key">x-api-key</SelectItem>
+                    <SelectItem value="Authorization">Bearer token</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  placeholder={headerType === "Authorization" ? "Bearer token value" : "API key value"}
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <label htmlFor="accessToken" className="text-sm font-medium">
+                Access Token (optional)
+              </label>
+              <Input
+                id="accessToken"
+                name="accessToken"
+                placeholder="sk-..."
+                type="password"
+                value={accessToken}
+                onChange={(e) => setAccessToken(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                Provide an access token to skip OAuth, or leave empty to
+                authenticate via OAuth
+              </p>
+            </div>
+          )}
 
           {(fetcher.data?.error || localFetcher.data?.error) && (
             <div className="text-destructive text-sm">
@@ -277,7 +343,7 @@ function NewIntegrationForm({
                 ? "Connecting..."
                 : isRedirecting
                   ? "Redirecting..."
-                  : accessToken.trim()
+                  : authMode === "apikey" || accessToken.trim()
                     ? "Add Integration"
                     : "Connect with OAuth"}
             </Button>

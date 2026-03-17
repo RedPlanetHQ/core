@@ -24,6 +24,45 @@ export interface CustomMcpStoredCredentials {
 }
 
 /**
+ * API key authentication header type
+ */
+export type ApiKeyHeaderType = "x-api-key" | "Authorization";
+
+/**
+ * Create an MCP client connected to a custom MCP server using API key authentication.
+ * Supports both `x-api-key` header and `Authorization: Bearer` header styles.
+ */
+export async function createApiKeyMcpClient(options: {
+  serverUrl: string;
+  apiKey: string;
+  headerType?: ApiKeyHeaderType;
+}): Promise<Client> {
+  const { serverUrl, apiKey, headerType = "x-api-key" } = options;
+
+  const headers: Record<string, string> =
+    headerType === "Authorization"
+      ? { Authorization: `Bearer ${apiKey}` }
+      : { "x-api-key": apiKey };
+
+  const client = new Client(
+    {
+      name: "Core MCP Client",
+      version: "1.0.0",
+    },
+    { capabilities: {} }
+  );
+
+  const baseUrl = new URL(serverUrl);
+  const transport = new StreamableHTTPClientTransport(baseUrl, {
+    requestInit: { headers },
+  });
+
+  await client.connect(transport as any);
+
+  return client;
+}
+
+/**
  * Token provider for custom MCP integrations with automatic refresh support.
  * Use this when you have stored OAuth credentials and want to create a client.
  */

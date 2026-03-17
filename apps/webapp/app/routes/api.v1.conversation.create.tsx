@@ -21,6 +21,7 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
+    console.log(body);
     const result = await createConversation(
       authentication.workspaceId as string,
       authentication.userId,

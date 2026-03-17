@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useFetcher } from "@remix-run/react";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -44,6 +45,7 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
+    resume: true, // Ena
     messages: history.map(
       (h) =>
         ({
@@ -78,12 +80,16 @@ export function ConversationView({
     }
   }, []);
 
+  const readFetcher = useFetcher();
   const prevStatusRef = useRef(status);
   useEffect(() => {
     const prev = prevStatusRef.current;
     prevStatusRef.current = status;
-    if (prev !== "ready" && status === "ready" && document.hasFocus()) {
-      fetch(`/api/v1/conversation/${conversationId}/read`, { method: "POST" });
+    if (prev !== "ready" && status === "ready") {
+      readFetcher.submit(null, {
+        method: "GET",
+        action: `/api/v1/conversation/${conversationId}/read`,
+      });
     }
   }, [status, conversationId]);
 
@@ -115,7 +121,9 @@ export function ConversationView({
 
       <div className="flex w-full flex-col items-center">
         <div className="w-full max-w-[90ch] px-4">
-          <ThinkingIndicator isLoading={status === "streaming" || status === "submitted"} />
+          <ThinkingIndicator
+            isLoading={status === "streaming" || status === "submitted"}
+          />
           <ConversationTextarea
             className="bg-background-3 border-1 w-full border-gray-300"
             isLoading={status === "streaming" || status === "submitted"}

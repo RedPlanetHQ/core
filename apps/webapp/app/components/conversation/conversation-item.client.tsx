@@ -152,7 +152,7 @@ const Tool = ({
       <div
         className={cn(
           "w-full",
-          isNested && "ml-3 border-l border-gray-300 pl-3",
+          isNested && "ml-2 border-l border-gray-300 pl-3",
         )}
       >
         {nestedToolParts.map((nestedPart: any, idx: number) => {
@@ -313,7 +313,7 @@ const Tool = ({
     return (
       <div className="mt-1">
         {gatherContextQuery && (
-          <p className="text-muted-foreground mb-2 ml-3 whitespace-pre-wrap border-l border-gray-300 pl-3 text-sm leading-relaxed">
+          <p className="text-muted-foreground mb-2 ml-2 whitespace-pre-wrap border-l border-gray-300 pl-3 text-sm leading-relaxed">
             {gatherContextQuery}
           </p>
         )}
@@ -325,7 +325,7 @@ const Tool = ({
           );
           return (
             <div key={`nested-${idx}`}>
-              {idx > 0 && <div className="ml-3 border-t border-gray-200" />}
+              {idx > 0 && <div className="ml-3" />}
               <Tool
                 part={nestedPart}
                 addToolApprovalResponse={addToolApprovalResponse}
@@ -356,7 +356,7 @@ const Tool = ({
       onOpenChange={setIsOpen}
       className={cn(
         "my-1 w-full",
-        isNested && "ml-3 border-l border-gray-300 pl-3",
+        isNested && "ml-2 border-l border-gray-300 pl-3",
         isDisabled && "cursor-not-allowed opacity-50",
       )}
     >

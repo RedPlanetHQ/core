@@ -33,8 +33,8 @@ export function startTuiApp(
 	const c = (s: string) => chalk.hex('#c15e50')(s);
 	const logoRows = [
 		c(' ▄███▄  '),
-		c(' ▐◉   ◉▌ '),
-		c(' ▐▄▄▄▄▄▌ '),
+		c(' ▐◉███◉▌ '),
+		c(' ▐█████▌'),
 		c('  ◉   ◉  '),
 	];
 	const infoRows: string[] = [

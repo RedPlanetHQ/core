@@ -54,6 +54,7 @@ export const ICON_MAPPING = {
   cursor: Cursor,
   claude: Claude,
   "claude-code": Claude,
+  "claude-code-plugin": Claude,
   cline: Cline,
   codex: Codex,
   chatgpt: ChatGPT,

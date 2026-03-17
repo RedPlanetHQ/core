@@ -1,6 +1,8 @@
 import { json } from "@remix-run/node";
-import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-
+import {
+  createActionApiRoute,
+  createHybridLoaderApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 
 import { readConversation } from "~/services/conversation.server";
 import { z } from "zod";
@@ -9,13 +11,12 @@ export const ConversationIdSchema = z.object({
   conversationId: z.string(),
 });
 
-const { action, loader } = createActionApiRoute(
+const loader = createHybridLoaderApiRoute(
   {
     params: ConversationIdSchema,
     allowJWT: true,
-    authorization: {
-      action: "oauth",
-    },
+    findResource: async () => 1,
+
     corsStrategy: "all",
   },
   async ({ authentication, params }) => {
@@ -30,4 +31,4 @@ const { action, loader } = createActionApiRoute(
   },
 );
 
-export { action, loader };
+export { loader };

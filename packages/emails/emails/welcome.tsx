@@ -43,6 +43,7 @@ export default function WelcomeEmail() {
           style={{
             marginLeft: "auto",
             marginRight: "auto",
+            maxWidth: "800px",
             width: "100%",
             borderRadius: "2%",
             marginTop: "10px",
@@ -68,6 +69,7 @@ export default function WelcomeEmail() {
             marginLeft: "auto",
             marginRight: "auto",
             width: "100%",
+            maxWidth: "800px",
             borderRadius: "2%",
             marginTop: "10px",
           }}
@@ -104,7 +106,7 @@ export default function WelcomeEmail() {
           & get direct help from our team
         </Text>
         <Text style={paragraphLight}>
-          - we are open-source ⭐ us on {" "}
+          - we are open-source ⭐ us on{" "}
           <Link style={anchor} href="https://github.com/RedPlanetHQ/core">
             github
           </Link>
