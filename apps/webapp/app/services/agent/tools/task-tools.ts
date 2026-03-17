@@ -7,6 +7,7 @@ import {
   updateTask,
   changeTaskStatus,
 } from "~/services/task.server";
+import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 
@@ -37,6 +38,7 @@ enqueue=false: User is just capturing it for later — task goes to Backlog and 
           const task = await createTask(workspaceId, userId, title, description);
           if (enqueue) {
             await changeTaskStatus(task.id, "Todo", workspaceId, userId);
+            await enqueueTask({ taskId: task.id, workspaceId, userId });
             logger.info(`Task ${task.id} created and enqueued`);
             return `Task created: "${title}" (ID: ${task.id}). Queued and starting shortly.`;
           }
