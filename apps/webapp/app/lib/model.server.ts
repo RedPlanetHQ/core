@@ -21,9 +21,15 @@ import { env } from "~/env.server";
 export type ModelComplexity = "high" | "low";
 
 function shouldUseOllamaForEmbeddings(
-  embeddingsProvider?: "openai" | "ollama",
+  embeddingsProvider?: "openai" | "google" | "ollama",
 ): boolean {
   return embeddingsProvider === "ollama";
+}
+
+function shouldUseGoogleForEmbeddings(
+  embeddingsProvider?: "openai" | "google" | "ollama",
+): boolean {
+  return embeddingsProvider === "google";
 }
 
 /**
@@ -574,8 +580,27 @@ export async function getEmbedding(text: string) {
       const embeddingModel = model || "text-embedding-3-small";
 
       const useOllamaEmbeddings = shouldUseOllamaForEmbeddings(embeddingsProvider);
+      const useGoogleEmbeddings = shouldUseGoogleForEmbeddings(embeddingsProvider);
 
-      if (useOllamaEmbeddings) {
+      if (useGoogleEmbeddings) {
+        const googleKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
+        if (!googleKey) {
+          throw new Error(
+            "Google embeddings selected but GOOGLE_GENERATIVE_AI_API_KEY is not set.",
+          );
+        }
+        const googleEmbeddingModel = embeddingModel || "text-embedding-004";
+        const { embedding: googleEmbed } = await embed({
+          model: google.embedding(googleEmbeddingModel),
+          value: textForEmbedding,
+          ...(targetDim && {
+            providerOptions: {
+              google: { outputDimensionality: targetDim },
+            },
+          }),
+        });
+        lastEmbedding = googleEmbed;
+      } else if (useOllamaEmbeddings) {
         if (!ollamaUrl) {
           throw new Error(
             "Ollama embeddings selected but OLLAMA_URL is not set. Set OLLAMA_URL or set EMBEDDINGS_PROVIDER=openai.",

@@ -233,6 +233,7 @@
               "self-hosting/overview",
               "self-hosting/docker",
               "self-hosting/environment-variables",
+              "self-hosting/embeddings",
               "self-hosting/gateway",
               "self-hosting/ai-providers"
             ]
