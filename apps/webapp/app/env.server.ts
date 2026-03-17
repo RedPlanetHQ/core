@@ -123,7 +123,7 @@ const EnvironmentSchema = z
     LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
     CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama"]).default("openai"),
-    EMBEDDINGS_PROVIDER: z.enum(["openai", "ollama"]).optional(),
+    EMBEDDINGS_PROVIDER: z.enum(["openai", "google", "ollama"]).optional(),
 
     // Inline batch fallback (when Batch API is unavailable)
     INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),

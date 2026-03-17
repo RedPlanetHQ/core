@@ -1,0 +1,106 @@
+---
+title: "Embedding Models"
+description: "Configure embedding models for semantic search and memory retrieval"
+---
+
+CORE uses embedding models to convert text into vector representations for semantic search, memory retrieval, and knowledge graph operations. Vectors are stored in pgvector with a fixed dimension — all embeddings must match the configured `EMBEDDING_MODEL_SIZE`.
+
+## Configuration
+
+```env
+EMBEDDINGS_PROVIDER=openai          # openai | google | ollama
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_MODEL_SIZE=1536           # must match pgvector column dimension
+```
+
+## Providers
+
+### OpenAI
+
+Requires `OPENAI_API_KEY`. Works with direct API or proxies via `OPENAI_BASE_URL`.
+
+| Model | Dimensions | Notes |
+|-------|-----------|-------|
+| `text-embedding-3-small` | 1536 | Default. Good balance of cost and quality |
+| `text-embedding-3-large` | 3072 | Higher quality, higher cost |
+| `text-embedding-ada-002` | 1536 | Legacy |
+
+```env
+EMBEDDINGS_PROVIDER=openai
+EMBEDDING_MODEL=text-embedding-3-small
+EMBEDDING_MODEL_SIZE=1536
+OPENAI_API_KEY=sk-...
+```
+
+### Google Gemini
+
+Requires `GOOGLE_GENERATIVE_AI_API_KEY`. Get a free key from [Google AI Studio](https://aistudio.google.com).
+
+| Model | Default Dimensions | Configurable | Notes |
+|-------|-------------------|--------------|-------|
+| `text-embedding-004` | 768 | No | Stable, production-ready |
+| `gemini-embedding-001` | 3072 | Yes (256, 512, 768, 1024, 3072) | Higher quality |
+| `gemini-embedding-2-preview` | 3072 | Yes (256, 512, 768, 1024, 3072) | Latest, best quality |
+
+For models with configurable dimensions, `EMBEDDING_MODEL_SIZE` controls the output dimensionality. This lets you match existing pgvector columns without changing the schema.
+
+```env
+EMBEDDINGS_PROVIDER=google
+EMBEDDING_MODEL=gemini-embedding-2-preview
+EMBEDDING_MODEL_SIZE=1024
+GOOGLE_GENERATIVE_AI_API_KEY=AIza...
+```
+
+### Ollama (Self-Hosted)
+
+Requires a running Ollama instance. No API key needed — fully local and private.
+
+| Model | Dimensions | Notes |
+|-------|-----------|-------|
+| `mxbai-embed-large` | 1024 | Default for Ollama. Good general-purpose |
+| `nomic-embed-text` | 768 | Lightweight |
+| `all-minilm` | 384 | Smallest, fastest |
+| `snowflake-arctic-embed` | 1024 | High quality for retrieval |
+| `bge-large` | 1024 | Strong multilingual support |
+
+Pull the model first:
+
+```bash
+ollama pull mxbai-embed-large
+```
+
+```env
+EMBEDDINGS_PROVIDER=ollama
+EMBEDDING_MODEL=mxbai-embed-large
+EMBEDDING_MODEL_SIZE=1024
+OLLAMA_URL=http://ollama:11434
+```
+
+## Choosing a Model
+
+| Use Case | Recommended Model | Provider | Dimensions |
+|----------|------------------|----------|------------|
+| Best quality (cloud) | `gemini-embedding-2-preview` | Google | 3072 |
+| Low cost (cloud) | `text-embedding-004` | Google | 768 |
+| Balanced (cloud) | `text-embedding-3-small` | OpenAI | 1536 |
+| Fully local / air-gapped | `mxbai-embed-large` | Ollama | 1024 |
+| Minimum resources | `all-minilm` | Ollama | 384 |
+
+## Dimension Mismatch Handling
+
+pgvector columns are created with a fixed dimension. If the embedding model returns vectors that don't match `EMBEDDING_MODEL_SIZE`:
+
+- **Too short** — padded with zeros. Works but degrades retrieval quality. A warning is logged.
+- **Too long** — fails with an error. Update `EMBEDDING_MODEL_SIZE` and re-embed.
+
+## Switching Embedding Models
+
+Changing models requires re-embedding all existing vectors since different models produce incompatible vector spaces.
+
+1. Update `EMBEDDINGS_PROVIDER`, `EMBEDDING_MODEL`, and `EMBEDDING_MODEL_SIZE`
+2. If the dimension changed, update your pgvector column dimension
+3. Re-embed all existing content
+
+<Note>
+Google models with configurable dimensions (`gemini-embedding-001`, `gemini-embedding-2-preview`) can output at your existing dimension size, avoiding step 2. Re-embedding is still needed since vector spaces differ between models.
+</Note>
