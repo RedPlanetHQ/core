@@ -47,7 +47,10 @@ export const NavMain = ({
                   "bg-grayAlpha-100 text-foreground w-fit gap-1 !rounded-md",
                   isActive(item) && "!bg-accent !text-accent-foreground",
                 )}
-                onClick={() => navigate(item.url)}
+                onClick={() => {
+                  const query = new URLSearchParams(item.params).toString();
+                  navigate(`${item.url}?${query}`);
+                }}
                 variant="ghost"
               >
                 {item.icon && <item.icon size={16} />}

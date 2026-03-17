@@ -5,7 +5,7 @@ const FIREFLIES_GRAPHQL_URL = 'https://api.fireflies.ai/graphql';
 export async function callFirefliesAPI(
   config: Record<string, any>,
   query: string,
-  variables?: Record<string, any>,
+  variables?: Record<string, any>
 ): Promise<any> {
   const response = await axios.post(
     FIREFLIES_GRAPHQL_URL,
@@ -15,7 +15,7 @@ export async function callFirefliesAPI(
         Authorization: `Bearer ${config.api_key}`,
         'Content-Type': 'application/json',
       },
-    },
+    }
   );
 
   if (response.data.errors) {

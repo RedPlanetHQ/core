@@ -11,6 +11,10 @@ export interface CustomMcpIntegration {
     expiresIn?: number;
     clientId?: string;
   };
+  apiKey?: {
+    key: string;
+    headerType: "x-api-key" | "Authorization";
+  };
 }
 
 export interface CustomMcpAccount {
@@ -27,6 +31,10 @@ export interface CustomMcpAccount {
   };
   serverUrl: string;
   accessToken?: string;
+  apiKey?: {
+    key: string;
+    headerType: "x-api-key" | "Authorization";
+  };
 }
 
 export interface IntegrationAccountWithDefinition {
@@ -100,7 +108,7 @@ export class IntegrationLoader {
 
     // Convert custom MCPs to the same format as regular integration accounts
     const customMcpAccounts: CustomMcpAccount[] = customMcpIntegrations
-      .filter((mcp) => mcp.oauth?.accessToken) // Only include connected ones
+      .filter((mcp) => mcp.oauth?.accessToken || mcp.apiKey?.key) // Include OAuth or API key MCPs
       .map((mcp) => ({
         id: mcp.id,
         accountId: mcp.id,
@@ -117,6 +125,7 @@ export class IntegrationLoader {
         },
         serverUrl: mcp.serverUrl,
         accessToken: mcp.oauth?.accessToken,
+        apiKey: mcp.apiKey,
       }));
 
     return [...integrationAccounts, ...customMcpAccounts];
@@ -179,7 +188,7 @@ export class IntegrationLoader {
       []) as CustomMcpIntegration[];
 
     const mcp = customMcpIntegrations.find((m) => m.id === mcpId);
-    if (!mcp || !mcp.oauth?.accessToken) {
+    if (!mcp || (!mcp.oauth?.accessToken && !mcp.apiKey?.key)) {
       return null;
     }
 
@@ -187,10 +196,10 @@ export class IntegrationLoader {
       id: mcp.id,
       accountId: mcp.id,
       integrationConfiguration: {
-        accessToken: mcp.oauth.accessToken,
-        refreshToken: mcp.oauth.refreshToken,
-        expiresIn: mcp.oauth.expiresIn,
-        clientId: mcp.oauth.clientId,
+        accessToken: mcp.oauth?.accessToken,
+        refreshToken: mcp.oauth?.refreshToken,
+        expiresIn: mcp.oauth?.expiresIn,
+        clientId: mcp.oauth?.clientId,
       },
       isActive: true,
       isCustomMcp: true as const,
@@ -201,7 +210,8 @@ export class IntegrationLoader {
         spec: null,
       },
       serverUrl: mcp.serverUrl,
-      accessToken: mcp.oauth.accessToken,
+      accessToken: mcp.oauth?.accessToken,
+      apiKey: mcp.apiKey,
     };
   }
 

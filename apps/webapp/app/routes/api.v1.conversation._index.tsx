@@ -52,7 +52,7 @@ const { loader, action } = createHybridActionApiRoute(
     },
     corsStrategy: "all",
   },
-  async ({ body, authentication }) => {
+  async ({ body, authentication, request }) => {
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -157,7 +157,8 @@ const { loader, action } = createHybridActionApiRoute(
     // If onboarding and no messages yet, use empty messages for agent greeting
     // But not for task conversations — those always have the user's first message
     const isTaskConversation = !!conversation?.asyncJobId;
-    const useEmptyMessages = conversationHistory.length === 0 && !isTaskConversation;
+    const useEmptyMessages =
+      conversationHistory.length === 0 && !isTaskConversation;
 
     const { systemPrompt, tools, modelMessages } = await buildAgentContext({
       userId: authentication.userId,
@@ -179,7 +180,9 @@ const { loader, action } = createHybridActionApiRoute(
         ...modelMessages,
       ],
       tools,
+
       stopWhen: [stepCountIs(10)],
+
       temperature: 0.5,
     });
 

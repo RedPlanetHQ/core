@@ -55,6 +55,7 @@ export function createConversation(
 		},
 
 		async send(message: string, callbacks: ConversationCallbacks) {
+			console.log(incognito);
 			try {
 				if (!conversationId) {
 					conversationId = await createConversationApi(

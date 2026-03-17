@@ -13,6 +13,7 @@ import PQueue from "p-queue";
 import { getUserById } from "~/models/user.server";
 import {
   createCustomMcpClient,
+  createApiKeyMcpClient,
   type CustomMcpStoredCredentials,
 } from "@core/mcp-proxy";
 
@@ -167,18 +168,24 @@ export async function getIntegrationActions(
     // Check if this is a custom MCP
     if (IntegrationLoader.isCustomMcp(account)) {
       // Connect to custom MCP server and list tools
-      const client = await createCustomMcpClient({
-        serverUrl: account.serverUrl,
-        credentials: {
-          accessToken: account.accessToken!,
-          refreshToken: account.integrationConfiguration.refreshToken,
-          expiresIn: account.integrationConfiguration.expiresIn,
-          clientId: account.integrationConfiguration.clientId,
-        },
-        onTokensRefreshed: userId
-          ? createTokenRefreshCallback(userId, account.id)
-          : undefined,
-      });
+      const client = account.apiKey?.key
+        ? await createApiKeyMcpClient({
+            serverUrl: account.serverUrl,
+            apiKey: account.apiKey.key,
+            headerType: account.apiKey.headerType,
+          })
+        : await createCustomMcpClient({
+            serverUrl: account.serverUrl,
+            credentials: {
+              accessToken: account.accessToken!,
+              refreshToken: account.integrationConfiguration.refreshToken,
+              expiresIn: account.integrationConfiguration.expiresIn,
+              clientId: account.integrationConfiguration.clientId,
+            },
+            onTokensRefreshed: userId
+              ? createTokenRefreshCallback(userId, account.id)
+              : undefined,
+          });
 
       try {
         const result = await client.listTools();
@@ -277,16 +284,22 @@ export async function executeIntegrationAction(
     // Check if this is a custom MCP
     if (IntegrationLoader.isCustomMcp(account)) {
       try {
-        const client = await createCustomMcpClient({
-          serverUrl: account.serverUrl,
-          credentials: {
-            accessToken: account.accessToken!,
-            refreshToken: account.integrationConfiguration.refreshToken,
-            expiresIn: account.integrationConfiguration.expiresIn,
-            clientId: account.integrationConfiguration.clientId,
-          },
-          onTokensRefreshed: createTokenRefreshCallback(userId, account.id),
-        });
+        const client = account.apiKey?.key
+          ? await createApiKeyMcpClient({
+              serverUrl: account.serverUrl,
+              apiKey: account.apiKey.key,
+              headerType: account.apiKey.headerType,
+            })
+          : await createCustomMcpClient({
+              serverUrl: account.serverUrl,
+              credentials: {
+                accessToken: account.accessToken!,
+                refreshToken: account.integrationConfiguration.refreshToken,
+                expiresIn: account.integrationConfiguration.expiresIn,
+                clientId: account.integrationConfiguration.clientId,
+              },
+              onTokensRefreshed: createTokenRefreshCallback(userId, account.id),
+            });
 
         try {
           const callResult = await client.callTool({

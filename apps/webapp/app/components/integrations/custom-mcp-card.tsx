@@ -20,6 +20,10 @@ export type McpIntegration = {
     expiresIn?: number;
     clientId?: string;
   };
+  apiKey?: {
+    key: string;
+    headerType: "x-api-key" | "Authorization";
+  };
 };
 
 interface CustomMcpCardProps {
@@ -41,7 +45,7 @@ export function CustomMcpCard({
     }
   }, [fetcher.data, onDelete]);
 
-  const isConnected = !!integration.oauth?.accessToken;
+  const isConnected = !!integration.oauth?.accessToken || !!integration.apiKey?.key;
 
   return (
     <Card className="bg-background-3 transition-all">
