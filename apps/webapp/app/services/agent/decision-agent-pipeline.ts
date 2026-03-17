@@ -281,7 +281,13 @@ async function executePlan(
           workspaceId: userData.workspaceId,
         };
         if (channel === "email") {
-          metadata.subject = `Reminder: ${reminder.text}`;
+          // Extract subject from activity text (e.g. "**Subject:** ...")
+          // or fall back to first line, capped to avoid newlines in subject
+          const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
+          const subject = subjectMatch
+            ? subjectMatch[1].trim()
+            : reminder.text.split("\n")[0].replace(/[#*_]/g, "").trim();
+          metadata.subject = subject.slice(0, 120);
         }
         await handler.sendReply(replyTo, responseText, metadata);
         logger.info(

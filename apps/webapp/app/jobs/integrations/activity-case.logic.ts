@@ -15,8 +15,10 @@ import { getWorkspacePersona } from "~/models/workspace.server";
 import { getOrCreatePersonalAccessToken } from "~/services/personalAccessToken.server";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
 import { CoreClient } from "@redplanethq/sdk";
+import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import type { WebhookTrigger } from "~/services/agent/types/decision-agent";
+import type { MessageChannel } from "~/services/agent/types";
 
 export interface ActivityCasePayload {
   integrationAccountId: string;
@@ -42,12 +44,21 @@ export async function processActivityCase(
   } = payload;
 
   try {
+    // Fetch user's default channel preference instead of hardcoding "email"
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { metadata: true },
+    });
+    const metadata = user?.metadata as Record<string, unknown> | null;
+    const defaultChannel: MessageChannel =
+      (metadata?.defaultChannel as MessageChannel | undefined) ?? "email";
+
     const trigger: WebhookTrigger = {
       type: "integration_webhook",
       timestamp: new Date(),
       userId,
       workspaceId,
-      channel: "email",
+      channel: defaultChannel,
       data: {
         integration: integrationSlug,
         eventType: "activity_sync",
