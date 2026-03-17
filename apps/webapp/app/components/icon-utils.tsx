@@ -32,6 +32,7 @@ import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
 import { Jira } from "./icons/jira";
 import { Confluence } from "./icons/confluence";
+import { Mixpanel } from "./icons/mixpanel";
 import { BacklogLine } from "./icons/backlog";
 import { TodoLine } from "./icons/todo";
 import { InProgressLine } from "./icons/in-progress";
@@ -82,6 +83,7 @@ export const ICON_MAPPING = {
   ynab: Ynab,
   jira: Jira,
   confluence: Confluence,
+  mixpanel: Mixpanel,
   cli: Code,
   "core-extension": Chromium,
   task: Task,
