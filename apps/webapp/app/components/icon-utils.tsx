@@ -18,6 +18,7 @@ import { Gmail } from "./icons/gmail";
 import { GoogleCalendar } from "./icons/google-calendar";
 import { GoogleSheets } from "./icons/google-sheets";
 import { GoogleDocs } from "./icons/google-docs";
+import { GoogleSearchConsole } from "./icons/google-search-console";
 import { CalCom } from "./icons/cal_com";
 import { Notion } from "./icons/notion";
 import { Zoho } from "./icons/zoho";
@@ -50,6 +51,7 @@ export const ICON_MAPPING = {
   "google-calendar": GoogleCalendar,
   "google-sheets": GoogleSheets,
   "google-docs": GoogleDocs,
+  "google-search-console": GoogleSearchConsole,
   linear: LinearIcon,
   cursor: Cursor,
   claude: Claude,
