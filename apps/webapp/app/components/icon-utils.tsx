@@ -27,6 +27,7 @@ import { Todoist } from "./icons/todoist";
 import { Ghost } from "./icons/ghost";
 import { Fireflies } from "./icons/fireflies";
 import { Whatsapp } from "./icons/whatsapp";
+import { MetaAds } from "./icons/meta-ads";
 import { Metabase } from "./icons/metabase";
 import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
@@ -77,6 +78,7 @@ export const ICON_MAPPING = {
   ghost: Ghost,
   fireflies: Fireflies,
   whatsapp: Whatsapp,
+  "meta-ads": MetaAds,
   metabase: Metabase,
   resend: Resend,
   ynab: Ynab,
