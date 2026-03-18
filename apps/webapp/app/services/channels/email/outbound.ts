@@ -21,6 +21,7 @@ export async function sendReply(
     to,
     replyTo: env.FROM_EMAIL,
     subject,
-    text: html,
+    text,
+    html,
   });
 }

@@ -33,13 +33,13 @@ export class ResendMailTransport implements MailTransport {
     }
   }
 
-  async sendPlainText({ to, from, replyTo, subject, text }: PlainTextMailMessage): Promise<void> {
+  async sendPlainText({ to, from, replyTo, subject, text, html }: PlainTextMailMessage): Promise<void> {
     const result = await this.#client.emails.send({
       from: from,
       to,
       replyTo: replyTo,
       subject,
-      text,
+      ...(html ? { html, text } : { text }),
     });
 
     if (result.error) {

@@ -1,0 +1,81 @@
+---
+title: "Weekly Learning Summary"
+description: "Generate a narrative summary of what CORE learned about you over the past week. Covers topics discussed, people mentioned, new facts learned, and key conversation threads. Trigger with 'what did you learn about me', 'weekly summary', 'weekly digest', 'summarize last week', or 'what's new in my memory'."
+category: Planning
+integrations: '[]'
+---
+
+**Goal:** Produce a concise, personal recap of everything CORE learned about the user over a given time period — written like an intelligent personal assistant, not a data dump.
+
+**Tools Required:** `get_memory_summary` (built-in). No external integrations needed.
+
+**Trigger:** On-demand ("what did you learn this week") or via a weekly reminder. Deliver output in the channel this skill is triggered from.
+
+Channel constraint: If the channel has a message length limit (e.g. WhatsApp), split the summary into shorter messages. Send the overview first, then one message per major section.
+
+---
+
+### Step 1 — Fetch the Data
+
+Call `get_memory_summary` with the appropriate `days_back`:
+- Default to 7 (one week) unless the user specifies otherwise
+- If the user says "this month", use 30. "Last 3 days", use 3. Etc.
+
+If the result has zero topics AND zero new facts, respond:
+
+> "Quiet week — I didn't pick up anything new. Want me to check a longer time range?"
+
+Do not generate a summary from empty data.
+
+---
+
+### Step 2 — Write the Summary
+
+Use the structured data from `get_memory_summary` to write a narrative recap. Follow these rules:
+
+**Tone:** Write like a thoughtful personal assistant giving a debrief — warm but concise, not robotic. First person ("I learned", "I noticed", "You discussed").
+
+**Structure the output in this order:**
+
+1. **Opening line** — One sentence capturing the feel of the period. Reference the stats naturally.
+   - Example: "This was a busy week — I tracked 47 conversations across 11 topics."
+   - Example: "Lighter week. 12 conversations, mostly around two themes."
+
+2. **What you were focused on** — Walk through the top 3-5 topics by episode count. For each, use the compact session summary to add 1-2 sentences of context about what was discussed. Don't just list topic names — explain what happened.
+   - Example: "You spent the most time on **Gmail / Email Management** (12 conversations) — mostly triaging inbox, setting up filters, and handling a few urgent threads from vendors."
+
+3. **People in the picture** — Mention the top entities naturally, weaving them into the topic context where possible rather than listing separately.
+   - Example: "Matt Starfield came up 3 times, mostly around the account cancellation follow-up."
+
+4. **Things I now know about you** — List new facts grouped by aspect type. Present these as observations, not database entries.
+   - Example: "I picked up a few new things about your preferences: you prefer Slack over email for quick updates, you block Monday mornings for deep work, and you want calendar invites to always include a video link."
+
+5. **By the numbers** — End with a compact stats line.
+   - Format: `[totalEpisodes] conversations · [newFacts] new facts · [activeTopics] topics`
+
+**Writing rules:**
+- Lead with insight, not data structure. Never say "here are your topics" or "the entities are."
+- If a topic has a compact session, use it to ground your description. Don't invent details.
+- Keep the total output under 500 words for the default 7-day summary. Shorter periods should be proportionally shorter.
+- If a section has nothing meaningful (e.g. no entities), skip it entirely. Don't write "No people mentioned."
+- Group related topics if they overlap (e.g. "CORE Product" and "CORE Development" can be one thread).
+
+---
+
+### Step 3 — Present
+
+Show the summary. Don't ask for confirmation — just deliver it.
+
+**Email subject:** When delivering via email, start your response with a `**Subject:**` line before the summary body. Generate a short, descriptive subject based on the content — not the skill name or reminder text.
+- Example: `**Subject:** Your week: task lifecycle, reminders, and 213 new facts`
+- Example: `**Subject:** Quiet week — mostly CORE dev and inbox triage`
+- Keep it under 80 characters, lowercase feel, no generic titles like "Weekly Summary"
+
+---
+
+### Edge Cases
+
+- **Very few episodes (< 5)** → Keep it to 2-3 sentences. Don't pad.
+- **One dominant topic (> 70% of episodes)** → Lead with that topic, mention others briefly.
+- **No new facts but many conversations** → Focus on topics and people. Note: "No new preferences or habits picked up this week — mostly continuing existing threads."
+- **User asks for a long range (30+ days)** → Summarize at a higher level. Group weeks if needed. Mention that older details may be less precise.

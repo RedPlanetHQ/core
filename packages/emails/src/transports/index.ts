@@ -18,6 +18,7 @@ export type PlainTextMailMessage = {
   replyTo: string;
   subject: string;
   text: string;
+  html?: string;
 }
 
 export interface MailTransport {

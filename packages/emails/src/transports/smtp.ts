@@ -43,14 +43,14 @@ export class SmtpMailTransport implements MailTransport {
     }
   }
 
-  async sendPlainText({ to, from, replyTo, subject, text }: PlainTextMailMessage): Promise<void> {
+  async sendPlainText({ to, from, replyTo, subject, text, html }: PlainTextMailMessage): Promise<void> {
     try {
       await this.#client.sendMail({
         from: from,
         to,
         replyTo: replyTo,
         subject,
-        text: text,
+        ...(html ? { html, text } : { text }),
       });
     } catch (error) {
       if (error instanceof Error) {
