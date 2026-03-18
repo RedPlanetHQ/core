@@ -146,7 +146,7 @@ export default function Skills() {
           {
             label: "Add skill",
             icon: <Plus size={14} />,
-            onClick: () => navigate(`/home/agent/skill/new`),
+            onClick: () => navigate(`/home/agent/skills/new`),
             variant: "secondary",
           },
         ]}

@@ -1,4 +1,4 @@
-import { useNavigate, useFetcher } from "@remix-run/react";
+import { useFetcher, useNavigate } from "@remix-run/react";
 import {
   type ActionFunctionArgs,
   json,
@@ -8,82 +8,151 @@ import {
 import { requireUser } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import Logo from "~/components/logo/logo";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { OnboardingAgentLoader } from "~/components/onboarding/onboarding-agent-loader";
+import { OnboardingAgentName } from "~/components/onboarding/onboarding-agent-name";
 import { OnboardingStep2 } from "~/components/onboarding/onboarding-step-2";
 import { addToQueue } from "~/lib/ingest.server";
 import { EpisodeType } from "@core/types";
-
 import { Button } from "~/components/ui";
 import { useTypedLoaderData } from "remix-typedjson";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
 import { getIntegrationDefinitionWithSlug } from "~/services/integrationDefinition.server";
 import { getRedirectURL } from "~/services/oauth/oauth.server";
-
+import { prisma } from "~/db.server";
 import { documentsPath } from "~/utils/pathBuilder";
 
+// ---------------------------------------------------------------------------
+// Loader — derive step from DB state
+// ---------------------------------------------------------------------------
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
+
+  if (user.onboardingComplete) {
+    return redirect(documentsPath());
+  }
 
   const url = new URL(request.url);
   const redirectTo = url.searchParams.get("redirectTo") ?? null;
 
-  // Check if Gmail is connected
-  const gmailAccount = await getIntegrationAccountBySlugAndUser(
-    "gmail",
-    user.id,
-    user.workspaceId as string,
-  );
+  const workspace = user.workspaceId
+    ? await prisma.workspace.findFirst({
+        where: { id: user.workspaceId as string },
+        select: { id: true, name: true, slug: true, metadata: true },
+      })
+    : null;
 
-  // Get Gmail integration definition
-  const gmailIntegration = await getIntegrationDefinitionWithSlug("gmail");
+  const metadata = (workspace?.metadata ?? {}) as Record<string, unknown>;
 
-  // Get OAuth redirect URL only if Gmail is not connected
-  let gmailOAuthUrl = null;
-  if (!gmailAccount && gmailIntegration) {
-    const gmailRedirectBack = redirectTo
-      ? `${url.origin}/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
-      : `${url.origin}/onboarding`;
-    gmailOAuthUrl = await getRedirectURL(
-      {
-        integrationDefinitionId: gmailIntegration.id,
-        redirectURL: gmailRedirectBack,
-      },
-      user.id,
-      user.workspaceId,
-    );
+  // Step 1: agent name — always first, until user sets it
+  if (!metadata.agentEnabled) {
+    return json({
+      step: "agent_name" as const,
+      redirectTo,
+      gmailOAuthUrl: null,
+      workspaceId: workspace!.id,
+      defaultName: workspace!.name,
+      defaultSlug: workspace!.slug,
+    });
   }
 
-  if (user.onboardingComplete) {
-    return redirect(redirectTo ?? documentsPath());
+  // Step 2: Gmail connect (only for users without Gmail)
+  const gmailAccount = workspace
+    ? await getIntegrationAccountBySlugAndUser("gmail", user.id, workspace.id)
+    : null;
+
+  if (!gmailAccount) {
+    const gmailIntegration = await getIntegrationDefinitionWithSlug("gmail");
+    let gmailOAuthUrl = null;
+    if (gmailIntegration && workspace) {
+      const redirectBack = redirectTo
+        ? `${url.origin}/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
+        : `${url.origin}/onboarding`;
+      gmailOAuthUrl = await getRedirectURL(
+        {
+          integrationDefinitionId: gmailIntegration.id,
+          redirectURL: redirectBack,
+        },
+        user.id,
+        workspace.id,
+      );
+    }
+    return json({
+      step: "gmail_connect" as const,
+      redirectTo,
+      gmailOAuthUrl,
+      workspaceId: workspace!.id,
+      defaultName: workspace!.name,
+      defaultSlug: workspace!.slug,
+    });
   }
 
-  return {
-    user,
-    hasGmail: !!gmailAccount,
-    gmailOAuthUrl,
+  // Step 3: Gmail connected — run analysis
+  return json({
+    step: "analysis" as const,
     redirectTo,
-  };
+    gmailOAuthUrl: null,
+    workspaceId: workspace!.id,
+    defaultName: workspace!.name,
+    defaultSlug: workspace!.slug,
+  });
 }
 
+// ---------------------------------------------------------------------------
+// Action
+// ---------------------------------------------------------------------------
 export async function action({ request }: ActionFunctionArgs) {
   const { id: userId, workspaceId } = await requireUser(request);
   const formData = await request.formData();
-  const summary = formData.get("summary") as string;
-  const redirectTo = formData.get("redirectTo") as string | null;
+  const intent = formData.get("intent") as string;
 
-  try {
-    // Update user's onboarding status
+  // Save agent name → update workspace, mark agentEnabled
+  if (intent === "save_agent_name") {
+    const agentName = formData.get("agentName") as string;
+    const agentSlug = formData.get("agentSlug") as string;
+
+    if (workspaceId) {
+      const existing = await prisma.workspace.findFirst({
+        where: { id: workspaceId as string },
+        select: { metadata: true },
+      });
+      const existingMeta = (existing?.metadata ?? {}) as Record<
+        string,
+        unknown
+      >;
+
+      await prisma.workspace.update({
+        where: { id: workspaceId as string },
+        data: {
+          name: agentName,
+          slug: agentSlug,
+          metadata: { ...existingMeta, agentEnabled: true },
+        },
+      });
+    }
+
+    return redirect("/onboarding");
+  }
+
+  // Skip Gmail → complete onboarding immediately
+  if (intent === "skip") {
+    const redirectTo = formData.get("redirectTo") as string | null;
+    await updateUser({ id: userId, onboardingComplete: true, metadata: {} });
+    return redirect(redirectTo || "/home/memory/documents");
+  }
+
+  // Complete after analysis
+  if (intent === "complete") {
+    const summary = formData.get("summary") as string;
+    const redirectTo = formData.get("redirectTo") as string | null;
+
     await updateUser({
       id: userId,
       onboardingComplete: true,
-      metadata: {
-        onboardingSummary: summary,
-      },
+      metadata: { onboardingSummary: summary },
     });
 
-    if (summary) {
-      // Ingest the summary as a document
+    if (summary && workspaceId) {
       await addToQueue(
         {
           episodeBody: summary,
@@ -96,59 +165,57 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
-    if (redirectTo) {
-      return redirect(redirectTo);
-    }
-
-    // Redirect to integrations if summary exists (normal flow)
-    // or to documents if skipped (no summary)
-    return redirect(summary ? "/home/integrations" : "/home/memory/documents");
-  } catch (e: any) {
-    return json({ errors: { body: e.message } }, { status: 400 });
+    return redirect(redirectTo || "/home/integrations");
   }
+
+  return json({ error: "unknown intent" }, { status: 400 });
 }
 
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 export default function Onboarding() {
-  const { hasGmail, gmailOAuthUrl, redirectTo: loaderRedirectTo } = useTypedLoaderData<
-    typeof loader
-  >() as any;
+  const {
+    step,
+    redirectTo,
+    gmailOAuthUrl,
+    workspaceId,
+    defaultName,
+    defaultSlug,
+  } = useTypedLoaderData<typeof loader>() as any;
 
-  const navigate = useNavigate();
   const fetcher = useFetcher();
-  const [step, setStep] = useState<"analysis" | "step2" | "complete">(
-    "analysis",
-  );
   const [summary, setSummary] = useState("");
+  const [showSummary, setShowSummary] = useState(false);
   const [sessionId] = useState(() => crypto.randomUUID());
-  const [navigateTo, setNavigateTo] = useState<string | null>(null);
 
-  const handleAnalysisComplete = (generatedSummary: string) => {
-    setSummary(generatedSummary);
-    // Transition to step 2 after a brief delay
-    setTimeout(() => {
-      setStep("step2");
-    }, 200);
-  };
+  const isSubmitting = fetcher.state !== "idle";
 
-  const handleStep2Complete = () => {
-    const dest = loaderRedirectTo ?? "/home/integrations";
-    setNavigateTo(dest);
-    fetcher.submit({ summary, redirectTo: loaderRedirectTo ?? "" }, { method: "POST", action: "/onboarding" });
+  const handleAgentNameSubmit = (name: string, slug: string) => {
+    fetcher.submit(
+      { intent: "save_agent_name", agentName: name, agentSlug: slug },
+      { method: "POST" },
+    );
   };
 
   const handleSkip = () => {
-    const dest = loaderRedirectTo ?? "/home/memory/documents";
-    setNavigateTo(dest);
-    fetcher.submit({ summary: "", redirectTo: loaderRedirectTo ?? "" }, { method: "POST", action: "/onboarding" });
+    fetcher.submit(
+      { intent: "skip", redirectTo: redirectTo ?? "" },
+      { method: "POST" },
+    );
   };
 
-  // Handle navigation after successful submission
-  useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data && navigateTo) {
-      navigate(navigateTo);
-      setNavigateTo(null);
-    }
-  }, [fetcher.state, fetcher.data, navigateTo, navigate]);
+  const handleAnalysisComplete = (generatedSummary: string) => {
+    setSummary(generatedSummary);
+    setTimeout(() => setShowSummary(true), 300);
+  };
+
+  const handleComplete = () => {
+    fetcher.submit(
+      { intent: "complete", summary, redirectTo: redirectTo ?? "" },
+      { method: "POST" },
+    );
+  };
 
   return (
     <div className="flex h-[100vh] w-[100vw] flex-col overflow-hidden">
@@ -158,26 +225,36 @@ export default function Onboarding() {
           <div className="flex size-8 items-center justify-center rounded-md">
             <Logo size={60} />
           </div>
-          <span className="font-medium">C.O.R.E.</span>
+          <span className="font-mono font-medium">C.O.R.E.</span>
         </div>
-
-        <div className="flex items-center">
-          <Button variant="secondary" onClick={handleSkip}>
-            {" "}
-            skip{" "}
+        {step === "gmail_connect" && (
+          <Button variant="ghost" onClick={handleSkip} disabled={isSubmitting}>
+            skip
           </Button>
-        </div>
+        )}
       </div>
 
       {/* Main Content */}
       <div className="flex flex-1 items-center justify-center overflow-y-auto">
-        {!hasGmail ? (
+        {/* Step 1: name your agent */}
+        {step === "agent_name" && (
+          <OnboardingAgentName
+            defaultName={defaultName}
+            defaultSlug={defaultSlug}
+            workspaceId={workspaceId}
+            onComplete={handleAgentNameSubmit}
+            isSubmitting={isSubmitting}
+          />
+        )}
+
+        {/* Step 2: connect Gmail */}
+        {step === "gmail_connect" && (
           <div className="flex max-w-lg flex-col gap-6 p-6">
             <div className="space-y-3">
-              <h2 className="text-xl font-semibold">i'm core.</h2>
+              <h2 className="text-xl font-semibold">i'm {defaultName}.</h2>
               <div className="text-muted-foreground space-y-2 text-base">
                 <p>
-                  connect gmail and i'll learn about you - who you work with,
+                  connect gmail and i'll learn about you — who you work with,
                   what you're building, what matters.
                 </p>
                 <p>
@@ -191,18 +268,16 @@ export default function Onboarding() {
                 size="lg"
                 variant="ghost"
                 onClick={handleSkip}
-                disabled={fetcher.state !== "idle"}
+                disabled={isSubmitting}
               >
                 Skip
               </Button>
-              {gmailOAuthUrl && (
+              {gmailOAuthUrl?.redirectURL && (
                 <Button
                   size="lg"
                   variant="secondary"
                   onClick={() => {
-                    if (gmailOAuthUrl.redirectURL) {
-                      window.location.href = gmailOAuthUrl.redirectURL;
-                    }
+                    window.location.href = gmailOAuthUrl.redirectURL;
                   }}
                 >
                   Connect Gmail
@@ -210,21 +285,23 @@ export default function Onboarding() {
               )}
             </div>
           </div>
-        ) : (
+        )}
+
+        {/* Step 3: analysis + summary */}
+        {step === "analysis" && (
           <>
-            {step === "analysis" && (
+            {!showSummary && (
               <OnboardingAgentLoader
                 sessionId={sessionId}
                 onComplete={handleAnalysisComplete}
                 className="w-full"
               />
             )}
-
-            {step === "step2" && (
+            {showSummary && (
               <OnboardingStep2
                 summary={summary}
-                onComplete={handleStep2Complete}
-                isCompleting={fetcher.state !== "idle"}
+                onComplete={handleComplete}
+                isCompleting={isSubmitting}
               />
             )}
           </>

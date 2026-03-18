@@ -61,7 +61,7 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
         <CardContent className="pt-2">
           <Fieldset className="w-full">
             <div className="flex flex-col gap-y-4">
-              <p className="text-muted-foreground mb-2 text-center text-sm leading-relaxed">
+              <p className="text-muted-foreground mb-2 text-center leading-relaxed">
                 Core is your digital brain that remembers your context,
                 conversations, and what matters to you. Connect to get started.
               </p>
@@ -70,8 +70,8 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
               <div className="flex gap-3 text-left">
                 <Shield className="mt-1 size-6 flex-shrink-0" />
                 <div>
-                  <h2 className="mb-1 text-base font-semibold">Security</h2>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
+                  <h2 className="text-base font-semibold">Security</h2>
+                  <p className="text-muted-foreground/80 text-sm leading-relaxed">
                     We take security as our top priority and are CASA Tier II
                     certified by external auditors.
                   </p>
@@ -82,8 +82,8 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
               <div className="mb-4 flex gap-3 text-left">
                 <Lock className="mt-1 size-6 flex-shrink-0" />
                 <div>
-                  <h2 className="mb-1 text-base font-semibold">Privacy</h2>
-                  <p className="text-muted-foreground text-sm leading-relaxed">
+                  <h2 className="text-base font-semibold">Privacy</h2>
+                  <p className="text-muted-foreground/80 text-sm leading-relaxed">
                     Your digital brain is private. No human (except you) will
                     see any of your data.
                   </p>

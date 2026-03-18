@@ -160,7 +160,7 @@ export function LibrarySkillCard({
 
   const handleCardClick = () => {
     if (isInstalled) {
-      navigate(`/home/agent/skill/${installedSkillId}`);
+      navigate(`/home/agent/skills/${installedSkillId}`);
     } else {
       setIsPreviewOpen(true);
     }

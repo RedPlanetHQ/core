@@ -9,7 +9,7 @@ import { AppSidebar } from "~/components/sidebar/app-sidebar";
 import { SidebarInset, SidebarProvider } from "~/components/ui/sidebar";
 
 import { redirect } from "@remix-run/node";
-import { confirmBasicDetailsPath, onboardingPath } from "~/utils/pathBuilder";
+import { onboardingPath } from "~/utils/pathBuilder";
 import { getConversationSources } from "~/services/conversation.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -22,10 +22,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const conversationSources = await getConversationSources(workspace.id, user.id);
 
-  //you have to confirm basic details before you can do anything
-  if (!user.confirmedBasicDetails) {
-    return redirect(confirmBasicDetailsPath());
-  } else if (!user.onboardingComplete) {
+  if (!user.onboardingComplete) {
     return redirect(onboardingPath());
   } else {
     return typedjson(

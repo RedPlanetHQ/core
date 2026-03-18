@@ -3,7 +3,12 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useFetcher, useNavigate, useRevalidator, useSearchParams } from "@remix-run/react";
+import {
+  useFetcher,
+  useNavigate,
+  useRevalidator,
+  useSearchParams,
+} from "@remix-run/react";
 import React, { useEffect, useRef } from "react";
 import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
@@ -23,18 +28,19 @@ import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
-import { TaskDetail } from "~/components/tasks/task-detail";
+import { TaskDetail } from "~/components/tasks/task-detail.client";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
   TaskViewOptions,
   DEFAULT_VISIBLE,
 } from "~/components/tasks/task-view-options";
-import { Plus } from "lucide-react";
+import { LoaderCircle, Plus } from "lucide-react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
 import { prisma } from "~/db.server";
+import { ClientOnly } from "remix-utils/client-only";
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
 
@@ -196,10 +202,9 @@ export default function TasksIndex() {
   const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [newConversation, setNewConversation] = React.useState(false);
-  const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<TaskStatus[]>(
-    "task-view-filter",
-    DEFAULT_VISIBLE,
-  );
+  const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<
+    TaskStatus[]
+  >("task-view-filter", DEFAULT_VISIBLE);
 
   const filteredTasks = tasks.filter((t) =>
     visibleStatuses.includes(t.status as TaskStatus),
@@ -329,17 +334,27 @@ export default function TasksIndex() {
             maxSize={50}
             className="border-l border-gray-300"
           >
-            <TaskDetail
-              task={selectedTask}
-              conversation={conversation}
-              integrationAccountMap={integrationAccountMap}
-              onSave={handleSave}
-              onDelete={() => handleDelete(selectedTask.id)}
-              onCreateConversation={handleCreateConversation}
-              onClose={() => navigate("?", { replace: true })}
-              isSubmitting={fetcher.state !== "idle"}
-              newConversation={newConversation}
-            />
+            <ClientOnly
+              fallback={
+                <div className="flex w-full justify-center">
+                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
+                </div>
+              }
+            >
+              {() => (
+                <TaskDetail
+                  task={selectedTask}
+                  conversation={conversation}
+                  integrationAccountMap={integrationAccountMap}
+                  onSave={handleSave}
+                  onDelete={() => handleDelete(selectedTask.id)}
+                  onCreateConversation={handleCreateConversation}
+                  onClose={() => navigate("?", { replace: true })}
+                  isSubmitting={fetcher.state !== "idle"}
+                  newConversation={newConversation}
+                />
+              )}
+            </ClientOnly>
           </ResizablePanel>
         </ResizablePanelGroup>
       ) : (
