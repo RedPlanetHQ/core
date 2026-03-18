@@ -2,11 +2,13 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import {
   createTask,
+  getTaskById,
   getTasks,
   searchTasks,
   updateTask,
   changeTaskStatus,
 } from "~/services/task.server";
+import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 
@@ -16,35 +18,42 @@ export function getTaskTools(
 ): Record<string, Tool> {
   return {
     create_task: tool({
-      description: `Create a new task that doesn't already exist. Use when the user wants to capture something new to be done — not when they're referring to an existing task.
-
-enqueue=true: User wants it done now — task gets picked up and worked on in the background immediately.
-enqueue=false: User is just capturing it for later — task goes to Backlog and stays there until they're ready.`,
+      description: `Create a new task. Use when the user wants to capture something to be done — not when they're referring to an existing task. Tasks are always created in Backlog. Use enqueue_task separately to start working on a task.`,
       inputSchema: z.object({
         title: z.string().describe("Short title for the task"),
         description: z
           .string()
           .optional()
           .describe("Detailed description of what to do"),
-        enqueue: z
-          .boolean()
-          .optional()
-          .default(false)
-          .describe("true = start working on it now. false = save to Backlog for later."),
       }),
-      execute: async ({ title, description, enqueue }) => {
+      execute: async ({ title, description }) => {
         try {
           const task = await createTask(workspaceId, userId, title, description);
-          if (enqueue) {
-            await changeTaskStatus(task.id, "Todo", workspaceId, userId);
-            logger.info(`Task ${task.id} created and enqueued`);
-            return `Task created: "${title}" (ID: ${task.id}). Queued and starting shortly.`;
-          }
           logger.info(`Task ${task.id} created in Backlog`);
           return `Task created: "${title}" (ID: ${task.id}). Added to Backlog.`;
         } catch (error) {
           logger.error("Failed to create task", { error });
           return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
+        }
+      },
+    }),
+
+    enqueue_task: tool({
+      description: `Start working on a task in the background. Moves the task to InProgress and queues it for execution. Use when the user wants something done now — "do X", "start working on X", "run this task".`,
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID to enqueue"),
+      }),
+      execute: async ({ taskId }) => {
+        try {
+          const task = await getTaskById(taskId);
+          if (!task) return `Task ${taskId} not found.`;
+          await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
+          await enqueueTask({ taskId, workspaceId, userId });
+          logger.info(`Task ${taskId} enqueued`);
+          return `Task "${task.title}" (ID: ${taskId}) queued and starting shortly.`;
+        } catch (error) {
+          logger.error("Failed to enqueue task", { error });
+          return `Failed to enqueue task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),

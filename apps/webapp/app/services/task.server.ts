@@ -81,9 +81,6 @@ export async function changeTaskStatus(
     await cancelTaskJob(taskId);
   }
   const task = await updateTaskStatus(taskId, status);
-  if (status === "Todo") {
-    await enqueueTask({ taskId, workspaceId, userId });
-  }
   return task;
 }
 
