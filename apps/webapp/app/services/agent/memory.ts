@@ -365,15 +365,16 @@ export async function searchMemoryWithAgent(
     // If structured option is true, return raw JSON data for API use
     if (options.structured) {
       // For facets queries, flatten aspects into facts and promote topics/entities to top level
-      const facetFacts = facets?.aspects?.flatMap((a: any) =>
-        a.statements.map((s: any) => ({
-          fact: s.fact,
-          validAt: s.validAt,
-          attributes: {},
-          aspect: a.aspect,
-          episodeUuid: s.episodeUuid,
-        }))
-      ) ?? [];
+      const facetFacts =
+        facets?.aspects?.flatMap((a: any) =>
+          a.statements.map((s: any) => ({
+            fact: s.fact,
+            validAt: s.validAt,
+            attributes: {},
+            aspect: a.aspect,
+            episodeUuid: s.episodeUuid,
+          })),
+        ) ?? [];
 
       return {
         episodes,
@@ -393,7 +394,11 @@ export async function searchMemoryWithAgent(
         content: [
           {
             type: "text",
-            text: formatRecallAsMarkdown({ episodes: [], facets, invalidatedFacts: [] }),
+            text: formatRecallAsMarkdown({
+              episodes: [],
+              facets,
+              invalidatedFacts: [],
+            }),
           },
         ],
         isError: false,
@@ -460,7 +465,11 @@ export async function searchMemoryWithAgent(
       `${entityText}${voiceAspectsText}${invalidFactsText}${episodeText}\n\n${factsText}`.trim();
 
     const hasContent =
-      episodeText || entityText || invalidFactsText || factsText || voiceAspectsText;
+      episodeText ||
+      entityText ||
+      invalidFactsText ||
+      factsText ||
+      voiceAspectsText;
 
     return {
       content: [

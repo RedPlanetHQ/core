@@ -48,6 +48,20 @@ export function formatRecallAsMarkdown(result: RecallResult): string {
       sections.push("");
     }
 
+    if (facets.compactSessions && facets.compactSessions.length > 0) {
+      sections.push("### Conversation Highlights");
+      facets.compactSessions.forEach((s) => {
+        sections.push(`\n**${s.labelName}**`);
+        sections.push(s.content);
+      });
+      sections.push("");
+    }
+
+    if (facets.stats) {
+      const { totalEpisodes, newFacts, activeTopics } = facets.stats;
+      sections.push(`*${totalEpisodes} conversation${totalEpisodes !== 1 ? "s" : ""} · ${newFacts} new fact${newFacts !== 1 ? "s" : ""} · ${activeTopics} topic${activeTopics !== 1 ? "s" : ""}*\n`);
+    }
+
     if (!facets.topics?.length && !facets.entities?.length && !facets.aspects?.length) {
       sections.push("*No data found in the requested time range.*\n");
     }
