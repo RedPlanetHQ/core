@@ -15,7 +15,6 @@ import {
   updateSkillTool,
 } from "./tools/skill-tools";
 import { getTaskTools } from "./tools/task-tools";
-import { getSummaryTools } from "./tools/summary-tools";
 import { getSleepTool } from "./tools/utils-tools";
 
 /**
@@ -253,7 +252,6 @@ export const createTools = async (
   );
 
   const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId);
-  const summaryTools = getSummaryTools(workspaceId, userId);
 
   // Add get_skill tool when skills are available
   if (skills && skills.length > 0) {
@@ -265,5 +263,5 @@ export const createTools = async (
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
   }
 
-  return { ...tools, ...reminderTools, ...taskTools, ...summaryTools };
+  return { ...tools, ...reminderTools, ...taskTools };
 };

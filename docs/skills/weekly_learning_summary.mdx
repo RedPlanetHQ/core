@@ -7,7 +7,7 @@ integrations: '[]'
 
 **Goal:** Produce a concise, personal recap of everything CORE learned about the user over a given time period — written like an intelligent personal assistant, not a data dump.
 
-**Tools Required:** `get_memory_summary` (built-in). No external integrations needed.
+**Tools Required:** `gather_context` (memory). No external integrations needed.
 
 **Trigger:** On-demand ("what did you learn this week") or via a weekly reminder. Deliver output in the channel this skill is triggered from.
 
@@ -17,11 +17,19 @@ Channel constraint: If the channel has a message length limit (e.g. WhatsApp), s
 
 ### Step 1 — Fetch the Data
 
-Call `get_memory_summary` with the appropriate `days_back`:
-- Default to 7 (one week) unless the user specifies otherwise
-- If the user says "this month", use 30. "Last 3 days", use 3. Etc.
+Call `gather_context` with a query describing the time range. Examples:
+- Default (7 days): `"Give me an overview of the last 7 days — topics, people, and what was learned"`
+- If user says "this month": `"Give me an overview of the last 30 days — topics, people, and what was learned"`
+- If user says "last 3 days": `"Give me an overview of the last 3 days — topics, people, and what was learned"`
 
-If the result has zero topics AND zero new facts, respond:
+The response will contain these sections:
+- **Topics** — what subjects were discussed with episode counts
+- **People & Entities** — who was mentioned with mention counts
+- **By Aspect** — new facts grouped by type (Preference, Goal, Decision, etc.) with individual fact statements
+- **Conversation Highlights** — latest conversation content per top topic (up to 10 topics, truncated to 2000 chars each)
+- **Stats line** — `N conversations · N new facts · N topics`
+
+If the response contains no topics AND no facts, respond:
 
 > "Quiet week — I didn't pick up anything new. Want me to check a longer time range?"
 
@@ -31,7 +39,7 @@ Do not generate a summary from empty data.
 
 ### Step 2 — Write the Summary
 
-Use the structured data from `get_memory_summary` to write a narrative recap. Follow these rules:
+Use the data from `gather_context` to write a narrative recap. Follow these rules:
 
 **Tone:** Write like a thoughtful personal assistant giving a debrief — warm but concise, not robotic. First person ("I learned", "I noticed", "You discussed").
 

@@ -237,10 +237,23 @@ export interface RecallAspectFacet {
   }[];
 }
 
+export interface RecallFacetCompactSession {
+  labelName: string;
+  content: string;
+}
+
+export interface RecallFacetStats {
+  totalEpisodes: number;
+  newFacts: number;
+  activeTopics: number;
+}
+
 export interface RecallFacets {
   topics?: RecallTopicFacet[];
   entities?: RecallEntityFacet[];
   aspects?: RecallAspectFacet[];
+  compactSessions?: RecallFacetCompactSession[];
+  stats?: RecallFacetStats;
   dateRange: {
     startTime: Date;
     endTime?: Date;

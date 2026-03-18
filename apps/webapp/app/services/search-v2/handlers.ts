@@ -958,9 +958,55 @@ export async function handleTemporalFacets(
     }));
   }
 
+  // Fetch compact sessions for top labels
+  const MAX_COMPACT_LENGTH = 2000;
+  const TOP_LABELS_COUNT = 10;
+  let compactSessions: { labelName: string; content: string }[] = [];
+  if (topics && topics.length > 0) {
+    const topLabelIds = [...topics]
+      .sort((a, b) => b.episodeCount - a.episodeCount)
+      .slice(0, TOP_LABELS_COUNT)
+      .map((t) => t.labelId);
+
+    const documents = await prisma.document.findMany({
+      where: {
+        workspaceId: ctx.workspaceId,
+        type: "conversation",
+        deleted: null,
+        updatedAt: { gte: effectiveStart },
+        labelIds: { hasSome: topLabelIds },
+      },
+      select: { labelIds: true, content: true, updatedAt: true },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    const latestByLabel = new Map<string, string>();
+    for (const doc of documents) {
+      for (const lid of doc.labelIds) {
+        if (topLabelIds.includes(lid) && !latestByLabel.has(lid)) {
+          latestByLabel.set(lid, doc.content ?? "");
+        }
+      }
+    }
+
+    const labelNameMap = new Map(topics.map((t) => [t.labelId, t.labelName]));
+    compactSessions = Array.from(latestByLabel.entries()).map(([lid, content]) => ({
+      labelName: labelNameMap.get(lid) ?? lid,
+      content: content.length > MAX_COMPACT_LENGTH
+        ? content.slice(0, MAX_COMPACT_LENGTH) + "…"
+        : content,
+    }));
+  }
+
+  // Compute aggregate stats
+  const totalEpisodes = topics?.reduce((sum, t) => sum + t.episodeCount, 0) ?? 0;
+  const newFacts = aspectsRaw?.reduce((sum, a) => sum + a.statementCount, 0) ?? 0;
+  const activeTopics = topics?.length ?? 0;
+
   logger.debug(
     `[Handler:temporal_facets] Done in ${Date.now() - startTime}ms. ` +
-      `Topics: ${topics?.length ?? 0}, Entities: ${entitiesRaw?.length ?? 0}, Aspects: ${aspectsRaw?.length ?? 0}`,
+      `Topics: ${topics?.length ?? 0}, Entities: ${entitiesRaw?.length ?? 0}, Aspects: ${aspectsRaw?.length ?? 0}, ` +
+      `CompactSessions: ${compactSessions.length}, TotalEpisodes: ${totalEpisodes}, NewFacts: ${newFacts}`,
   );
 
   return {
@@ -975,6 +1021,8 @@ export async function handleTemporalFacets(
         episodeUuid: s.episodeUuid,
       })),
     })),
+    compactSessions,
+    stats: { totalEpisodes, newFacts, activeTopics },
     dateRange: { startTime: effectiveStart, endTime: temporalEnd },
   };
 }
