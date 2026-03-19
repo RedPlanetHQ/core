@@ -67,7 +67,7 @@ export function OnboardingAgentName({
     availability !== "checking";
 
   return (
-    <div className="flex w-full max-w-lg flex-col gap-4 p-6">
+    <div className="flex w-full max-w-lg flex-col gap-4 p-3">
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">name your butler</h2>
         <p className="text-muted-foreground text-base">
@@ -90,7 +90,7 @@ export function OnboardingAgentName({
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
             )}
             {availability === "available" && (
-              <Check className="size-4 text-green-500" />
+              <Check className="text-success size-4" />
             )}
             {availability === "taken" && (
               <X className="text-destructive size-4" />
@@ -105,7 +105,7 @@ export function OnboardingAgentName({
       </div>
 
       {slug && availability !== "taken" && (
-        <p className="text-muted-foreground">
+        <p className="text-muted-foreground text-md">
           you can email your butler at{" "}
           <span className="text-foreground font-medium">{slug}@getcore.me</span>
         </p>

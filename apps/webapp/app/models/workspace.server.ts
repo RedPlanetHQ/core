@@ -84,6 +84,15 @@ export async function getWorkspaceById(id: string) {
   });
 }
 
+export async function isOnboardingV2Done(workspaceId: string): Promise<boolean> {
+  const workspace = await prisma.workspace.findFirst({
+    where: { id: workspaceId },
+    select: { metadata: true },
+  });
+  const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
+  return meta.onboardingV2Complete === true;
+}
+
 /**
  * Resolve workspace ID for a given user.
  * If workspaceId is provided, verifies active membership.

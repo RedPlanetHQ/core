@@ -97,7 +97,8 @@ export async function action({ request }: ActionFunctionArgs) {
         const serverUrl = formData.get("serverUrl") as string;
         const accessToken = formData.get("accessToken") as string | undefined;
         const apiKeyValue = formData.get("apiKey") as string | undefined;
-        const headerType = (formData.get("headerType") as string) || "x-api-key";
+        const headerType =
+          (formData.get("headerType") as string) || "x-api-key";
 
         if (!name || !serverUrl) {
           return json(
@@ -116,11 +117,12 @@ export async function action({ request }: ActionFunctionArgs) {
               headerType: headerType as "x-api-key" | "Authorization",
             },
           }),
-          ...(accessToken && !apiKeyValue && {
-            oauth: {
-              accessToken,
-            },
-          }),
+          ...(accessToken &&
+            !apiKeyValue && {
+              oauth: {
+                accessToken,
+              },
+            }),
         };
 
         const updatedIntegrations = [...currentIntegrations, newIntegration];
@@ -188,7 +190,9 @@ function NewIntegrationForm({
   const [accessToken, setAccessToken] = useState("");
   const [authMode, setAuthMode] = useState<"oauth" | "apikey">("oauth");
   const [apiKey, setApiKey] = useState("");
-  const [headerType, setHeaderType] = useState<"x-api-key" | "Authorization">("x-api-key");
+  const [headerType, setHeaderType] = useState<"x-api-key" | "Authorization">(
+    "x-api-key",
+  );
 
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.redirectURL) {
@@ -285,7 +289,9 @@ function NewIntegrationForm({
               <div className="flex gap-2">
                 <Select
                   value={headerType}
-                  onValueChange={(v) => setHeaderType(v as "x-api-key" | "Authorization")}
+                  onValueChange={(v) =>
+                    setHeaderType(v as "x-api-key" | "Authorization")
+                  }
                 >
                   <SelectTrigger className="w-44">
                     <SelectValue />
@@ -296,7 +302,11 @@ function NewIntegrationForm({
                   </SelectContent>
                 </Select>
                 <Input
-                  placeholder={headerType === "Authorization" ? "Bearer token value" : "API key value"}
+                  placeholder={
+                    headerType === "Authorization"
+                      ? "Bearer token value"
+                      : "API key value"
+                  }
                   type="password"
                   value={apiKey}
                   onChange={(e) => setApiKey(e.target.value)}
@@ -398,57 +408,59 @@ export default function Integrations() {
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Integrations" />
-      <div className="home flex h-[calc(100vh_-_40px)] flex-col gap-6 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
-        {/* Integrations Section */}
-        <div className="space-y-3">
-          <div>
-            <h2 className="text-lg font-semibold">Integrations</h2>
-            <p className="text-muted-foreground text-sm">
-              Connect third-party apps and services to enhance your Core
-              experience.
-            </p>
-          </div>
-          <IntegrationGrid
-            integrations={integrationDefinitions}
-            activeAccountIds={activeAccountIds}
-          />
-        </div>
-
-        {/* Custom MCP Integrations Section */}
-        <div className="space-y-3">
-          <div className="flex items-start justify-between">
+      <div className="home flex h-[calc(100vh_-_40px)] justify-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+        <div className="flex w-full max-w-3xl flex-col items-center gap-6">
+          {/* Integrations Section */}
+          <div className="space-y-3">
             <div>
-              <h2 className="text-lg font-semibold">Custom Integrations</h2>
+              <h2 className="text-lg font-semibold">Integrations</h2>
               <p className="text-muted-foreground text-sm">
-                Connect external MCP servers to extend Core with custom tools
-                and data sources.
+                Connect third-party apps and services to enhance your Core
+                experience.
               </p>
             </div>
-            <Button
-              variant="secondary"
-              onClick={() => setShowNewForm(true)}
-              disabled={showNewForm}
-              className="gap-2"
-            >
-              <Plus size={14} />
-              Add Custom Integration
-            </Button>
+            <IntegrationGrid
+              integrations={integrationDefinitions}
+              activeAccountIds={activeAccountIds}
+            />
           </div>
 
-          {showNewForm && (
-            <NewIntegrationForm
-              onCancel={() => setShowNewForm(false)}
-              onSuccess={() => {
-                setShowNewForm(false);
-                revalidator.revalidate();
-              }}
-            />
-          )}
+          {/* Custom MCP Integrations Section */}
+          <div className="w-full space-y-3">
+            <div className="flex items-start justify-between">
+              <div>
+                <h2 className="text-lg font-semibold">Custom Integrations</h2>
+                <p className="text-muted-foreground text-sm">
+                  Connect external MCP servers to extend Core with custom tools
+                  and data sources.
+                </p>
+              </div>
+              <Button
+                variant="secondary"
+                onClick={() => setShowNewForm(true)}
+                disabled={showNewForm}
+                className="gap-2"
+              >
+                <Plus size={14} />
+                Add Custom Integration
+              </Button>
+            </div>
 
-          <CustomMcpGrid
-            integrations={mcpIntegrations}
-            onDelete={() => revalidator.revalidate()}
-          />
+            {showNewForm && (
+              <NewIntegrationForm
+                onCancel={() => setShowNewForm(false)}
+                onSuccess={() => {
+                  setShowNewForm(false);
+                  revalidator.revalidate();
+                }}
+              />
+            )}
+
+            <CustomMcpGrid
+              integrations={mcpIntegrations}
+              onDelete={() => revalidator.revalidate()}
+            />
+          </div>
         </div>
       </div>
     </div>

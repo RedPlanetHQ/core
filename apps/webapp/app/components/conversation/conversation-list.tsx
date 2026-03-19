@@ -99,7 +99,8 @@ function SourceFolder({
   const loadPage = useCallback(
     (page: number) => {
       setIsLoading(true);
-      const sourceParam = source === "core" ? "" : `&source=${source}`;
+      const sourceParam =
+        source === "core" ? "&source=core" : `&source=${source}`;
       fetcher.load(
         `/api/v1/conversations?unread=false&page=${page}&limit=10${sourceParam}`,
       );
@@ -156,7 +157,7 @@ function SourceFolder({
           <span className="truncate">{label}</span>
           {icon && <span className="shrink-0">{icon}</span>}
           {totalCount > 0 && (
-            <span className="text-muted-foreground/60 ml-auto text-sm">
+            <span className="text-muted-foreground ml-auto text-sm">
               {totalCount}
             </span>
           )}

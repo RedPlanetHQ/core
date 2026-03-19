@@ -180,6 +180,23 @@ export async function findOrCreateGoogleUser({
   };
 }
 
+export async function storeOnboardingSummary(id: User["id"], summary: string) {
+  const user = await prisma.user.findUnique({ where: { id }, select: { metadata: true } });
+  const existing = (user?.metadata ?? {}) as Record<string, unknown>;
+  return prisma.user.update({
+    where: { id },
+    data: { metadata: { ...existing, onboardingSummary: summary } },
+  });
+}
+
+export async function isUserOnboardingComplete(id: User["id"]): Promise<boolean> {
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { onboardingComplete: true },
+  });
+  return user?.onboardingComplete === true;
+}
+
 export async function getUserById(id: User["id"]) {
   const user = await prisma.user.findUnique({
     where: { id },

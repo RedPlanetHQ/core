@@ -5,6 +5,7 @@ import { getModel } from "~/lib/model.server";
 
 import { callMemoryTool } from "~/utils/mcp/memory";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
+import { isUserOnboardingComplete } from "~/models/user.server";
 
 /**
  * System prompt for the onboarding email analysis agent
@@ -139,13 +140,17 @@ const { loader, action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ authentication }) => {
+    const done = await isUserOnboardingComplete(authentication.userId);
+    if (done) {
+      throw new Response("Onboarding already complete", { status: 403 });
+    }
+
     // Check if Gmail is connected
     const gmailAccount = await getIntegrationAccountBySlugAndUser(
       "gmail",
       authentication.userId,
       authentication?.workspaceId as string,
     );
-
 
     let currentIteration = 0;
     let totalEmailsFetched = 0;
