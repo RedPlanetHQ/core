@@ -838,8 +838,7 @@ export interface IGraphProvider {
   getStatementsConnectingEntities(params: {
     userId: string;
     workspaceId: string;
-    entityHint1: string;
-    entityHint2: string;
+    entityUuids: string[];
     maxStatements: number;
   }): Promise<StatementNode[]>;
 

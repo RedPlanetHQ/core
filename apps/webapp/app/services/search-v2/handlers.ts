@@ -145,6 +145,92 @@ function groupByAspect(
 }
 
 /**
+ * Resolve entity hints to episode nodes via vector search on the entity namespace.
+ * Used as a parallel path alongside label-based retrieval.
+ */
+async function getEpisodesViaEntityHints(
+  entityHints: string[],
+  ctx: HandlerContext,
+  maxEpisodes: number,
+): Promise<EpisodicNode[]> {
+  if (entityHints.length === 0) return [];
+
+  const vectorProvider = ProviderFactory.getVectorProvider();
+  const graphProvider = ProviderFactory.getGraphProvider();
+
+  // Limit to top 5 hints to avoid excessive vector searches
+  const hintsToSearch = entityHints.slice(0, 5);
+
+  const entityUuidSets = await Promise.all(
+    hintsToSearch.map(async (hint) => {
+      const embedding = await getEmbedding(hint);
+      if (!embedding?.length) return [];
+      const results = await vectorProvider.search({
+        vector: embedding,
+        namespace: VECTOR_NAMESPACES.ENTITY,
+        limit: 3,
+        filter: { userId: ctx.userId },
+        threshold: 0.65,
+      });
+      return results.map((r) => r.id);
+    }),
+  );
+
+  const uniqueUuids = Array.from(new Set(entityUuidSets.flat()));
+  if (uniqueUuids.length === 0) return [];
+
+  logger.info(
+    `[EntityHints] Resolved ${hintsToSearch.length} hints → ${uniqueUuids.length} entity UUIDs`,
+  );
+
+  return graphProvider.getEpisodesForEntities({
+    entityUuids: uniqueUuids,
+    userId: ctx.userId,
+    workspaceId: ctx.workspaceId,
+    maxEpisodes,
+  });
+}
+
+/**
+ * Merge episode arrays, deduplicating by UUID.
+ */
+function mergeEpisodes(...arrays: EpisodicNode[][]): EpisodicNode[] {
+  const map = new Map<string, EpisodicNode>();
+  for (const ep of arrays.flat()) {
+    if (!map.has(ep.uuid)) map.set(ep.uuid, ep);
+  }
+  return Array.from(map.values());
+}
+
+/**
+ * Fallback: search episodes directly by embedding similarity when no labels matched.
+ */
+async function getEpisodesViaVectorSearch(
+  query: string,
+  ctx: HandlerContext,
+  maxEpisodes: number,
+): Promise<EpisodicNode[]> {
+  const queryEmbedding = await getEmbedding(query);
+  if (!queryEmbedding?.length) return [];
+
+  const vectorProvider = ProviderFactory.getVectorProvider();
+  const graphProvider = ProviderFactory.getGraphProvider();
+
+  const results = await vectorProvider.search({
+    vector: queryEmbedding,
+    namespace: VECTOR_NAMESPACES.EPISODE,
+    limit: maxEpisodes,
+    filter: { userId: ctx.userId },
+    threshold: 0.3,
+  });
+
+  if (results.length === 0) return [];
+
+  const uuids = results.map((r) => r.id);
+  return graphProvider.getEpisodes(uuids, false);
+}
+
+/**
  * Handle aspect_query - find episodes with statements matching aspects
  * Returns raw episode nodes without reranking or normalization
  * This is the most common query type
@@ -169,16 +255,24 @@ export async function handleAspectQuery(
       `Aspects: [${aspects.join(", ")}], MaxEpisodes: ${maxEpisodes}`,
   );
 
-  // Find episodes that have statements matching the aspects
-  const episodes = await graphProvider.getEpisodesForAspect({
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-    labelIds,
-    aspects,
-    temporalStart,
-    temporalEnd,
-    maxEpisodes,
-  });
+  // Run label+aspect path and entity path in parallel
+  const [labelEpisodes, entityEpisodes, vectorEpisodes] = await Promise.all([
+    graphProvider.getEpisodesForAspect({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      labelIds,
+      aspects,
+      temporalStart,
+      temporalEnd,
+      maxEpisodes,
+    }),
+    getEpisodesViaEntityHints(ctx.routerOutput.entityHints, ctx, maxEpisodes),
+    labelIds.length === 0
+      ? getEpisodesViaVectorSearch(ctx.options.query || "", ctx, maxEpisodes)
+      : Promise.resolve([]),
+  ]);
+
+  const episodes = mergeEpisodes(labelEpisodes, entityEpisodes, vectorEpisodes);
 
   if (episodes.length === 0) {
     logger.info("[Handler:aspect_query] No episodes found");
@@ -186,7 +280,7 @@ export async function handleAspectQuery(
   }
 
   logger.info(
-    `[Handler:aspect_query] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
+    `[Handler:aspect_query] Found ${episodes.length} episodes (label: ${labelEpisodes.length}, entity: ${entityEpisodes.length}, vector: ${vectorEpisodes.length}) in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -390,16 +484,38 @@ export async function handleTemporal(
     `[Handler:temporal] Time range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`,
   );
 
-  // Get episodes within time range using graph provider method
-  const episodes = await graphProvider.getEpisodesForTemporal({
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-    labelIds,
-    aspects: ctx.routerOutput.aspects,
-    startTime: effectiveStart,
-    endTime: temporalEnd,
-    maxEpisodes: limit,
-  });
+  // Run label+time path, entity path, and vector fallback in parallel
+  const [labelEpisodes, entityEpisodes, vectorEpisodes] = await Promise.all([
+    graphProvider.getEpisodesForTemporal({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      labelIds,
+      aspects: ctx.routerOutput.aspects,
+      startTime: effectiveStart,
+      endTime: temporalEnd,
+      maxEpisodes: limit,
+    }),
+    getEpisodesViaEntityHints(ctx.routerOutput.entityHints, ctx, limit),
+    labelIds.length === 0
+      ? getEpisodesViaVectorSearch(ctx.options.query || "", ctx, limit)
+      : Promise.resolve([]),
+  ]);
+
+  // Filter entity and vector episodes by time range (graph methods don't apply it)
+  const effectiveEndMs = temporalEnd?.getTime() ?? Infinity;
+  const timeFilter = (ep: EpisodicNode) => {
+    const t = new Date(ep.createdAt).getTime();
+    return t >= effectiveStart.getTime() && t <= effectiveEndMs;
+  };
+
+  const filteredEntityEpisodes = entityEpisodes.filter(timeFilter);
+  const filteredVectorEpisodes = vectorEpisodes.filter(timeFilter);
+
+  const episodes = mergeEpisodes(
+    labelEpisodes,
+    filteredEntityEpisodes,
+    filteredVectorEpisodes,
+  );
 
   if (episodes.length === 0) {
     logger.info("[Handler:temporal] No episodes found in time range");
@@ -407,7 +523,7 @@ export async function handleTemporal(
   }
 
   logger.info(
-    `[Handler:temporal] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
+    `[Handler:temporal] Found ${episodes.length} episodes (label: ${labelEpisodes.length}, entity: ${filteredEntityEpisodes.length}, vector: ${filteredVectorEpisodes.length}) in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -438,27 +554,29 @@ export async function handleExploratory(
     `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxEpisodes: ${maxEpisodes}`,
   );
 
-  if (labelIds.length === 0) {
-    logger.debug(
-      "[Handler:exploratory] No labels matched, falling back to recent episodes",
-    );
-  }
+  // Run label path, entity path, and vector fallback in parallel
+  const [labelEpisodes, entityEpisodes, vectorEpisodes] = await Promise.all([
+    graphProvider.getEpisodesForExploratory({
+      userId: ctx.userId,
+      workspaceId: ctx.workspaceId,
+      labelIds,
+      maxEpisodes,
+    }),
+    getEpisodesViaEntityHints(ctx.routerOutput.entityHints, ctx, maxEpisodes),
+    labelIds.length === 0
+      ? getEpisodesViaVectorSearch(ctx.options.query || "", ctx, maxEpisodes)
+      : Promise.resolve([]),
+  ]);
 
-  // Get episodes filtered by labels using graph provider method
-  const episodes = await graphProvider.getEpisodesForExploratory({
-    userId: ctx.userId,
-    workspaceId: ctx.workspaceId,
-    labelIds,
-    maxEpisodes,
-  });
+  const episodes = mergeEpisodes(labelEpisodes, entityEpisodes, vectorEpisodes);
 
   if (episodes.length === 0) {
-    logger.info("[Handler:exploratory] No episodes found for labels");
+    logger.info("[Handler:exploratory] No episodes found");
     return [];
   }
 
   logger.info(
-    `[Handler:exploratory] Found ${episodes.length} episodes in ${Date.now() - startTime}ms`,
+    `[Handler:exploratory] Found ${episodes.length} episodes (label: ${labelEpisodes.length}, entity: ${entityEpisodes.length}, vector: ${vectorEpisodes.length}) in ${Date.now() - startTime}ms`,
   );
 
   return episodes;
@@ -491,12 +609,37 @@ export async function handleRelationship(
     `[Handler:relationship] Finding relationships between: [${entityHints.join(", ")}]`,
   );
 
-  // Find statements that connect the hinted entities
+  // Resolve all entity hints to UUIDs via vector search
+  const vectorProvider = ProviderFactory.getVectorProvider();
+  const entityUuidSets = await Promise.all(
+    entityHints.slice(0, 5).map(async (hint) => {
+      const embedding = await getEmbedding(hint);
+      if (!embedding?.length) return [];
+      const results = await vectorProvider.search({
+        vector: embedding,
+        namespace: VECTOR_NAMESPACES.ENTITY,
+        limit: 3,
+        filter: { userId: ctx.userId },
+        threshold: 0.65,
+      });
+      return results.map((r) => r.id);
+    }),
+  );
+
+  const entityUuids = Array.from(new Set(entityUuidSets.flat()));
+
+  if (entityUuids.length < 2) {
+    logger.info(
+      "[Handler:relationship] Could not resolve enough entities from hints",
+    );
+    return [];
+  }
+
+  // Find statements connecting any two of the resolved entities
   const statements = await graphProvider.getStatementsConnectingEntities({
     userId: ctx.userId,
     workspaceId: ctx.workspaceId,
-    entityHint1: entityHints[0],
-    entityHint2: entityHints[1],
+    entityUuids,
     maxStatements: limit,
   });
 
@@ -990,17 +1133,22 @@ export async function handleTemporalFacets(
     }
 
     const labelNameMap = new Map(topics.map((t) => [t.labelId, t.labelName]));
-    compactSessions = Array.from(latestByLabel.entries()).map(([lid, content]) => ({
-      labelName: labelNameMap.get(lid) ?? lid,
-      content: content.length > MAX_COMPACT_LENGTH
-        ? content.slice(0, MAX_COMPACT_LENGTH) + "…"
-        : content,
-    }));
+    compactSessions = Array.from(latestByLabel.entries()).map(
+      ([lid, content]) => ({
+        labelName: labelNameMap.get(lid) ?? lid,
+        content:
+          content.length > MAX_COMPACT_LENGTH
+            ? content.slice(0, MAX_COMPACT_LENGTH) + "…"
+            : content,
+      }),
+    );
   }
 
   // Compute aggregate stats
-  const totalEpisodes = topics?.reduce((sum, t) => sum + t.episodeCount, 0) ?? 0;
-  const newFacts = aspectsRaw?.reduce((sum, a) => sum + a.statementCount, 0) ?? 0;
+  const totalEpisodes =
+    topics?.reduce((sum, t) => sum + t.episodeCount, 0) ?? 0;
+  const newFacts =
+    aspectsRaw?.reduce((sum, a) => sum + a.statementCount, 0) ?? 0;
   const activeTopics = topics?.length ?? 0;
 
   logger.debug(
@@ -1125,7 +1273,10 @@ export async function routeToHandler(
         searchVoiceAspectsForQuery(ctx),
       ]);
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
-      const result = await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const result = await normalizeToRecallResult(
+        { episodes: rerankedEpisodes },
+        ctx,
+      );
       if (voiceAspects.length > 0) {
         result.voiceAspects = voiceAspects;
       }
@@ -1165,9 +1316,8 @@ export async function routeToHandler(
 
     case "exploratory": {
       const episodes = await handleExploratory(ctx);
-      // Lower threshold for exploratory (broader results)
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx, {
-        threshold: 0.05,
+        threshold: 0.2,
       });
       return await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
     }
@@ -1190,7 +1340,10 @@ export async function routeToHandler(
         searchVoiceAspectsForQuery(ctx),
       ]);
       const rerankedEpisodes = await applyEpisodeReranking(episodes, ctx);
-      const result = await normalizeToRecallResult({ episodes: rerankedEpisodes }, ctx);
+      const result = await normalizeToRecallResult(
+        { episodes: rerankedEpisodes },
+        ctx,
+      );
       if (voiceAspects.length > 0) {
         result.voiceAspects = voiceAspects;
       }

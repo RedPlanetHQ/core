@@ -167,7 +167,7 @@ Query: "What's the weather like?"
 async function searchLabels(
   intent: string,
   workspaceId: string,
-  limit: number = 3,
+  limit: number = 8,
 ): Promise<LabelMatch[]> {
   const startTime = Date.now();
   const vectorProvider = ProviderFactory.getVectorProvider();

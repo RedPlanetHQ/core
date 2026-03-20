@@ -505,7 +505,7 @@ DO NOT extract labels for:
 <matching_rules>
 1. Check existing_labels first — reuse the EXACT name if it fits
 2. Create a new label only when no existing label covers the theme
-3. Prefer broader labels — use "Fitness" not "Evening Cycling" if "Fitness" already exists
+3. Assign labels across all relevant dimensions (project, domain, feature, activity)
 </matching_rules>
 
 <label_naming_rules>

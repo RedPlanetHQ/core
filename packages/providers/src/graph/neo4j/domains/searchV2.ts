@@ -175,28 +175,23 @@ export function createSearchV2Methods(core: Neo4jCore) {
     async getStatementsConnectingEntities(params: {
       userId: string;
       workspaceId?: string;
-      entityHint1: string;
-      entityHint2: string;
+      entityUuids: string[];
       maxStatements: number;
     }): Promise<StatementNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
 
       const query = `
-                // Find entities matching first hint
-                MATCH (ent1:Entity {userId: $userId${wsFilter}})
-                WHERE toLower(ent1.name) CONTAINS toLower($hint1)
+                MATCH (e1:Entity {userId: $userId${wsFilter}})
+                WHERE e1.uuid IN $entityUuids
 
-                // Find entities matching second hint
-                MATCH (ent2:Entity {userId: $userId${wsFilter}})
-                WHERE toLower(ent2.name) CONTAINS toLower($hint2)
-                AND ent1.uuid <> ent2.uuid
+                MATCH (e2:Entity {userId: $userId${wsFilter}})
+                WHERE e2.uuid IN $entityUuids AND e1.uuid <> e2.uuid
 
-                // Find statements connecting them (in either direction)
                 MATCH (s:Statement {userId: $userId${wsFilter}})
                 WHERE (
-                ((s)-[:HAS_SUBJECT]->(ent1) AND (s)-[:HAS_OBJECT]->(ent2))
-                OR
-                ((s)-[:HAS_SUBJECT]->(ent2) AND (s)-[:HAS_OBJECT]->(ent1))
+                  ((s)-[:HAS_SUBJECT]->(e1) AND (s)-[:HAS_OBJECT]->(e2))
+                  OR
+                  ((s)-[:HAS_SUBJECT]->(e2) AND (s)-[:HAS_OBJECT]->(e1))
                 )
                 AND (s.invalidAt IS NULL OR s.invalidAt > $now)
 
@@ -205,7 +200,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 MATCH (s)-[:HAS_PREDICATE]->(pred:Entity)
                 MATCH (s)-[:HAS_OBJECT]->(obj:Entity)
 
-                WITH s, sub, pred, obj, e
+                WITH DISTINCT s, sub, pred, obj, e
                 ORDER BY s.validAt DESC
                 LIMIT ${params.maxStatements}
 
@@ -216,8 +211,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
         userId: params.userId,
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
         now: new Date().toISOString(),
-        hint1: params.entityHint1,
-        hint2: params.entityHint2,
+        entityUuids: params.entityUuids,
       });
 
       return results.map((r) => r.get("statement")).filter((r: any) => r != null);
