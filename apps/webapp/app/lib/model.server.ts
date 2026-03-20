@@ -95,7 +95,8 @@ export const getModel = (takeModel?: string) => {
   const openaiBaseUrl = env.OPENAI_BASE_URL;
   const ollamaUrl = env.OLLAMA_URL;
   const chatProvider = env.CHAT_PROVIDER;
-  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const openaiApiMode =
+    env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
   model = model || env.MODEL;
 
   let modelInstance;
@@ -148,9 +149,10 @@ export const getModel = (takeModel?: string) => {
             apiKey: openaiKey,
           })
         : openai;
-      modelInstance = openaiApiMode === "chat_completions"
-        ? openaiClient.chat(model)
-        : openaiClient.responses(model);
+      modelInstance =
+        openaiApiMode === "chat_completions"
+          ? openaiClient.chat(model)
+          : openaiClient.responses(model);
       break;
     }
   }
@@ -180,13 +182,11 @@ export async function makeModelCall(
   const modelInstance = getModel(model);
   const generateTextOptions: any = {};
 
-  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const openaiApiMode =
+    env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
 
   // Add OpenAI provider options for prompt caching (Responses API only).
-  if (
-    env.CHAT_PROVIDER === "openai" &&
-    openaiApiMode === "responses"
-  ) {
+  if (env.CHAT_PROVIDER === "openai" && openaiApiMode === "responses") {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `ingestion-${complexity}`,
     };
@@ -277,7 +277,8 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   temperature?: number,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
   const chatProvider = env.CHAT_PROVIDER;
-  const openaiApiMode = env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
+  const openaiApiMode =
+    env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE;
   const useOllamaForChat = chatProvider === "ollama";
 
   // Default upstream behavior expects `generateObject()` to parse strict JSON output.
@@ -288,9 +289,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   // To preserve upstream defaults, we only apply tolerant repair when explicitly opted in
   // (LLM_TOLERANT_OUTPUT) or when running in proxy/self-hosted chat modes.
   // Note: anthropic and google have native structured output support, so they don't need this.
-  const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "")
-    .trim()
-    .toLowerCase();
+  const tolerantOverride = (env.LLM_TOLERANT_OUTPUT || "").trim().toLowerCase();
   // Proxy/self-hosted modes only (preserves upstream defaults):
   // - OPENAI_API_MODE=chat_completions + OPENAI_BASE_URL indicates an OpenAI-compatible proxy
   // - CHAT_PROVIDER=ollama indicates a self-hosted chat model
@@ -338,10 +337,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   }
 
   // Add OpenAI provider options for prompt caching
-  if (
-    chatProvider === "openai" &&
-    openaiApiMode === "responses"
-  ) {
+  if (chatProvider === "openai" && openaiApiMode === "responses") {
     const openaiOptions: OpenAIResponsesProviderOptions = {
       promptCacheKey: cacheKey || `structured-${complexity}`,
       strictJsonSchema: false,
@@ -476,22 +472,19 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       usage = result.usage;
     }
   } catch (error) {
-    if (!tolerantOutput) {
-      throw error;
-    }
-
+    // Always fallback for now until ai-sdk fixes the issue
+    // if (!tolerantOutput) {
+    //   throw error;
+    // }
     const directText = getTextFromError(error);
     const cause = getCause(error);
     const causeText = getTextFromError(cause);
     const nestedCauseText = getTextFromError(getCause(cause));
-    const rawText =
-      directText ||
-      causeText ||
-      nestedCauseText ||
-      "";
+    const rawText = directText || causeText || nestedCauseText || "";
 
     const parsed = rawText ? tryParseJsonFromText(rawText) : undefined;
     const validated = parsed ? schema.safeParse(parsed) : undefined;
+
     if (validated?.success) {
       logger.warn(
         "[Structured] Tolerant output repair: recovered JSON from non-strict model output.",
@@ -579,8 +572,10 @@ export async function getEmbedding(text: string) {
     try {
       const embeddingModel = model || "text-embedding-3-small";
 
-      const useOllamaEmbeddings = shouldUseOllamaForEmbeddings(embeddingsProvider);
-      const useGoogleEmbeddings = shouldUseGoogleForEmbeddings(embeddingsProvider);
+      const useOllamaEmbeddings =
+        shouldUseOllamaForEmbeddings(embeddingsProvider);
+      const useGoogleEmbeddings =
+        shouldUseGoogleForEmbeddings(embeddingsProvider);
 
       if (useGoogleEmbeddings) {
         const googleKey = env.GOOGLE_GENERATIVE_AI_API_KEY;
@@ -689,7 +684,8 @@ export async function getEmbedding(text: string) {
         );
       }
     } catch (error) {
-      const errorString = error instanceof Error ? error.message : String(error);
+      const errorString =
+        error instanceof Error ? error.message : String(error);
       const isContextLengthError =
         /context length/i.test(errorString) ||
         /exceeds the context length/i.test(errorString);
@@ -714,7 +710,9 @@ export async function getEmbedding(text: string) {
         continue;
       }
 
-      logger.error(`Embedding attempt ${attempt}/${maxRetries} failed: ${error}`);
+      logger.error(
+        `Embedding attempt ${attempt}/${maxRetries} failed: ${error}`,
+      );
     }
   }
 

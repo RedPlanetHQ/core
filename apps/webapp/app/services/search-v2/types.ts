@@ -1,4 +1,9 @@
-import { type StatementAspect, type VoiceAspect, StatementAspects, VOICE_ASPECTS } from "@core/types";
+import {
+  type StatementAspect,
+  type VoiceAspect,
+  StatementAspects,
+  VOICE_ASPECTS,
+} from "@core/types";
 import { z } from "zod";
 
 /**
@@ -92,7 +97,7 @@ export const AspectExtractionSchema = z.object({
 
   // Temporal filtering
   temporal: TemporalFilterSchema.describe(
-    "Temporal filter extracted from the query"
+    "Temporal filter extracted from the query",
   ),
 
   // Whether to actually search (false for greetings, meta-questions, etc.)
@@ -108,23 +113,32 @@ export const AspectExtractionSchema = z.object({
   // Selected labels to filter by (from matched labels provided in context)
   selectedLabels: z
     .array(z.string())
-    .describe("Label names from the matched topics that are relevant to this query. Only include labels that directly relate to the query intent."),
+    .describe(
+      "Label names from the matched topics that are relevant to this query. Only include labels that directly relate to the query intent.",
+    ),
 
   // For temporal_facets: which dimensions to enumerate
   facets: z
     .array(z.enum(FacetDimensions as unknown as [string, ...string[]]))
-    .describe("For temporal_facets queries: which dimensions to enumerate. Use ['topics'] for topic/label questions, ['entities'] for people/entity questions, ['aspects'] for preference/goal/decision questions. Can combine multiple. Empty for non-temporal_facets queries."),
+    .default([])
+    .describe(
+      "For temporal_facets queries: which dimensions to enumerate. Use ['topics'] for topic/label questions, ['entities'] for people/entity questions, ['aspects'] for preference/goal/decision questions. Can combine multiple. Empty for non-temporal_facets queries.",
+    ),
 
   // For entity_lookup: whether to look up a specific attribute or broad info
   lookupMode: z
     .enum(LookupModes as unknown as [string, ...string[]])
-    .describe("For entity_lookup queries: 'attribute' for specific attribute lookup (phone, email, etc.), 'broad' for general entity information"),
+    .describe(
+      "For entity_lookup queries: 'attribute' for specific attribute lookup (phone, email, etc.), 'broad' for general entity information",
+    ),
 
   // For entity_lookup with attribute mode: which attribute to look up
   attributeHint: z
     .string()
     .nullable()
-    .describe("For entity_lookup with lookupMode='attribute': the specific attribute being asked for (e.g., 'phone', 'email', 'team', 'role'). Null for broad lookups."),
+    .describe(
+      "For entity_lookup with lookupMode='attribute': the specific attribute being asked for (e.g., 'phone', 'email', 'team', 'role'). Null for broad lookups.",
+    ),
 
   // Search confidence (how well we understood the query)
   confidence: z
@@ -177,9 +191,9 @@ export interface RecallEpisode {
   content: string;
   createdAt: Date;
   labelIds: string[];
-  isCompact?: boolean;      // True if this is a compacted session
-  isDocument?: boolean;     // True if this is a document
-  relevanceScore?: number;  // From reranking
+  isCompact?: boolean; // True if this is a compacted session
+  isDocument?: boolean; // True if this is a document
+  relevanceScore?: number; // From reranking
 }
 
 /**
@@ -379,7 +393,8 @@ export const ASPECT_DEFINITIONS: Record<StatementAspect, string> = {
   Directive:
     "Rules and automation - always do X, notify when Y, remind me to Z",
   Decision: "Choices made, conclusions reached, determinations",
-  Event: "Specific occurrences with timestamps - meetings, milestones, incidents",
+  Event:
+    "Specific occurrences with timestamps - meetings, milestones, incidents",
   Problem: "Blockers, issues, challenges, obstacles, difficulties",
   Relationship: "Connections between people - who knows whom, team dynamics",
 };

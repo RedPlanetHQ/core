@@ -1,8 +1,5 @@
 import { ProviderFactory, VECTOR_NAMESPACES } from "@core/providers";
-import {
-  getEmbedding,
-  makeStructuredModelCall,
-} from "~/lib/model.server";
+import { getEmbedding, makeStructuredModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
 
@@ -27,7 +24,7 @@ import { prisma } from "~/db.server";
  */
 function buildAspectExtractionPrompt(matchedLabels: LabelMatch[] = []): string {
   const aspectList = StatementAspects.map(
-    (aspect) => `- **${aspect}**: ${ASPECT_DEFINITIONS[aspect]}`
+    (aspect) => `- **${aspect}**: ${ASPECT_DEFINITIONS[aspect]}`,
   ).join("\n");
 
   const queryTypeList = Object.entries(QUERY_TYPE_DEFINITIONS)
@@ -35,13 +32,14 @@ function buildAspectExtractionPrompt(matchedLabels: LabelMatch[] = []): string {
     .join("\n");
 
   // Add matched labels context if available
-  const labelsContext = matchedLabels.length > 0
-    ? `\n## Matched Topics (from vector search)
+  const labelsContext =
+    matchedLabels.length > 0
+      ? `\n## Matched Topics (from vector search)
 The following topics were matched for this query:
 ${matchedLabels.map((l) => `- **${l.labelName}** (score: ${l.score.toFixed(2)})`).join("\n")}
 
 You MUST select which of these topics are relevant to the query and include them in selectedLabels. ONLY use the exact label names listed above.\n`
-    : `\n## Matched Topics
+      : `\n## Matched Topics
 No topics were matched from vector search. You MUST return selectedLabels as an empty array []. DO NOT invent or hallucinate any label names.\n`;
 
   return `You are a search query analyzer for a personal knowledge graph system. Your job is to extract structured information from natural language queries.
@@ -83,7 +81,9 @@ ${matchedLabels.length > 0 ? `6. Select which matched topics are relevant (outpu
 7. For entity_lookup queries: set lookupMode to "attribute" if asking for specific attribute, "broad" otherwise. Set attributeHint to the attribute name if lookupMode is "attribute".
 
 ## Examples
-${matchedLabels.length > 0 ? `
+${
+  matchedLabels.length > 0
+    ? `
 (With matched topics: "Fitness Goals" (0.85), "Health Tracking" (0.72), "Work Projects" (0.45))
 Query: "What are my fitness goals?"
 → aspects: ["Goal"], queryType: "aspect_query", temporal: {type: "all", ...}, entityHints: [], selectedLabels: ["Fitness Goals", "Health Tracking"], lookupMode: "broad", attributeHint: null, shouldSearch: true
@@ -91,9 +91,11 @@ Query: "What are my fitness goals?"
 (With matched topics: "Email Writing Style" (0.80), "Personal Finance" (0.58), "Persona" (0.54))
 Query: "How do I write emails?"
 → aspects: ["Preference", "Knowledge"], queryType: "aspect_query", temporal: {type: "all", ...}, entityHints: [], selectedLabels: ["Email Writing Style"], lookupMode: "broad", attributeHint: null, shouldSearch: true
-` : `
+`
+    : `
 (No matched topics - selectedLabels MUST be empty array)
-`}
+`
+}
 Query: "What are my fitness goals?"
 → aspects: ["Goal"], queryType: "aspect_query", temporal: {type: "all", days: null, startDate: null, endDate: null}, entityHints: [], selectedLabels: [], lookupMode: "broad", attributeHint: null, facets: [], shouldSearch: true
 
@@ -165,7 +167,7 @@ Query: "What's the weather like?"
 async function searchLabels(
   intent: string,
   workspaceId: string,
-  limit: number = 3
+  limit: number = 3,
 ): Promise<LabelMatch[]> {
   const startTime = Date.now();
   const vectorProvider = ProviderFactory.getVectorProvider();
@@ -215,7 +217,7 @@ async function searchLabels(
   }));
 
   logger.info(
-    `[Router] Label search completed in ${Date.now() - startTime}ms. Matches: ${result.map((r) => `${r.labelName}(${r.score.toFixed(2)})`).join(", ")}`
+    `[Router] Label search completed in ${Date.now() - startTime}ms. Matches: ${result.map((r) => `${r.labelName}(${r.score.toFixed(2)})`).join(", ")}`,
   );
 
   return result;
@@ -228,7 +230,7 @@ async function searchLabels(
  */
 async function extractAspects(
   intent: string,
-  matchedLabels: LabelMatch[] = []
+  matchedLabels: LabelMatch[] = [],
 ): Promise<AspectExtraction> {
   const startTime = Date.now();
 
@@ -236,9 +238,10 @@ async function extractAspects(
 
   try {
     // Generate cache key based on whether we have labels (different prompts)
-    const cacheKey = matchedLabels.length > 0
-      ? `search-v2-router-with-labels`
-      : "search-v2-router";
+    const cacheKey =
+      matchedLabels.length > 0
+        ? `search-v2-router-with-labels`
+        : "search-v2-router";
 
     const { object } = await makeStructuredModelCall(
       AspectExtractionSchema,
@@ -247,7 +250,7 @@ async function extractAspects(
         { role: "user", content: `Query: "${intent}"` },
       ],
       "high", // Use low-complexity model for cost efficiency
-      cacheKey
+      cacheKey,
     );
 
     logger.info(
@@ -256,7 +259,7 @@ async function extractAspects(
         `SelectedLabels: [${object.selectedLabels?.join(", ") || ""}], ` +
         `Entities: [${object.entityHints.join(", ")}], ` +
         `LookupMode: ${object.lookupMode}, AttributeHint: ${object.attributeHint || "none"}, ` +
-        `Confidence: ${object.confidence}`
+        `Confidence: ${object.confidence}`,
     );
 
     return object;
@@ -286,7 +289,7 @@ async function extractAspects(
 export async function routeIntent(
   intent: string,
   userId: string,
-  workspaceId: string
+  workspaceId: string,
 ): Promise<RouterOutput> {
   const startTime = Date.now();
 
@@ -320,7 +323,7 @@ export async function routeIntent(
       `Labels: [${labelMatches.map((l) => l.labelName).join(", ")}], ` +
       `Selected: [${result.selectedLabels.join(", ")}], ` +
       `QueryType: ${result.queryType}, LookupMode: ${result.lookupMode}, ` +
-      `AttributeHint: ${result.attributeHint || "none"}, ShouldSearch: ${result.shouldSearch}`
+      `AttributeHint: ${result.attributeHint || "none"}, ShouldSearch: ${result.shouldSearch}`,
   );
 
   return result;
@@ -349,11 +352,13 @@ export function shouldProceedWithSearch(routerOutput: RouterOutput): boolean {
  */
 export function getMatchedLabelIds(
   routerOutput: RouterOutput,
-  threshold: number = 0.5
+  threshold: number = 0.5,
 ): string[] {
   // If LLM selected specific labels, use those
   if (routerOutput.selectedLabels && routerOutput.selectedLabels.length > 0) {
-    const selectedSet = new Set(routerOutput.selectedLabels.map((n) => n.toLowerCase()));
+    const selectedSet = new Set(
+      routerOutput.selectedLabels.map((n) => n.toLowerCase()),
+    );
     return routerOutput.matchedLabels
       .filter((l) => selectedSet.has(l.labelName.toLowerCase()))
       .map((l) => l.labelId);
