@@ -52,6 +52,8 @@ export interface ScanResult {
 export abstract class BaseCodingAgentReader {
 	abstract readonly agentName: string;
 
+	findSessionFilePath(_dir: string, _sessionId: string): string | null { return null; }
+
 	abstract sessionExists(dir: string, sessionId: string): boolean;
 
 	abstract readSessionOutput(

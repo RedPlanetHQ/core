@@ -168,6 +168,10 @@ export class CodexReader extends BaseCodingAgentReader {
 	 * - During live session: stdout log has content (keyed by our internal UUID).
 	 * - After re-keying to codex UUID, or for historical sessions: JSONL file exists in date dirs.
 	 */
+	findSessionFilePath(_dir: string, sessionId: string): string | null {
+		return findSessionPath(sessionId);
+	}
+
 	sessionExists(_dir: string, sessionId: string): boolean {
 		const logPath = getSessionLogPath(sessionId, 'stdout');
 		try {

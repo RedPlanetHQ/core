@@ -149,15 +149,17 @@ export function stopProcess(sessionId: string): boolean {
 
 /**
  * Start a background watchdog for a running session.
- * If the stdout log has not grown for `idleTimeoutMs` (default 30s), the process is killed.
+ * If the agent session JSONL has not grown for `idleTimeoutMs` (default 30s), the process is killed.
+ * `getLogPath` is called each poll to resolve the current session file path (supports agents like Codex
+ * where the file path is discovered lazily).
  * Also cleans up the running session record when the process exits naturally.
  */
 export function startIdleWatchdog(
 	sessionId: string,
 	pid: number,
+	getLogPath: () => string | null,
 	idleTimeoutMs = 30_000,
 ): void {
-	const logPath = getSessionLogPath(sessionId, 'stdout');
 	const pollInterval = 5_000;
 	let lastSize = -1;
 	let lastChangedAt = Date.now();
@@ -171,7 +173,8 @@ export function startIdleWatchdog(
 
 		let currentSize = 0;
 		try {
-			currentSize = statSync(logPath).size;
+			const p = getLogPath();
+			if (p) currentSize = statSync(p).size;
 		} catch { /* log not created yet */ }
 
 		if (currentSize !== lastSize) {
