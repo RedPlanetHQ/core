@@ -426,11 +426,11 @@ async function generateCompaction(
 }
 
 /**
- * System prompt for compaction - user's digital brain
+ * System prompt for compaction - butler's lasting record of a conversation
  * Replaces multiple episodes in recall, also viewable as document by user
  */
 function createCompactionSystemPrompt(): string {
-  return `You are compressing a conversation into the user's digital brain. This compact:
+  return `A good butler keeps a lasting record of what was discussed, decided, and needs follow-up. You are compressing a conversation into that record. This compact:
 1. **REPLACES** all original episodes - agents will ONLY see this summary, never the original conversations
 2. Is viewable by the user as a document in their knowledge base
 

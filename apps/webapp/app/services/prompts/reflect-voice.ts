@@ -30,9 +30,9 @@ export const reflectVoicePrompt = (
   voice_facts: Array<{ fact: string }>,
   episodeContent: string,
 ): ModelMessage[] => {
-  const sysPrompt = `You are a quality filter for a user's digital brain.
+  const sysPrompt = `A good butler remembers what lasts — not what was said in passing. You are filtering candidate voice facts extracted from a conversation, keeping only what a butler would carry forward. Remove session-specific noise. Keep only what a different agent would still find useful tomorrow.
 
-You receive candidate voice facts extracted from a conversation, along with the original episode so you can verify each fact in context. Your job: REMOVE facts that are session-specific noise. Keep only facts a different agent would still find useful tomorrow.
+You receive the original episode so you can verify each fact in context before deciding.
 
 Use the episode to resolve ambiguity — a rule stated during a coding session may still be a standing rule, not a one-time instruction. Check the original text before deciding.
 

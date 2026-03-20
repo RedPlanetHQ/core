@@ -1,4 +1,9 @@
-import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
+import {
+  json,
+  redirect,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
 import { useFetcher } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { requireUser } from "~/services/session.server";
@@ -16,7 +21,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const workspace = user.workspaceId
     ? await prisma.workspace.findFirst({
         where: { id: user.workspaceId as string },
-        select: { metadata: true },
+        select: { metadata: true, name: true },
       })
     : null;
   const workspaceMeta = (workspace?.metadata ?? {}) as Record<string, unknown>;
@@ -26,7 +31,11 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   // After OAuth callback — gmail is now connected, move to next step
   const gmailAccount = user.workspaceId
-    ? await getIntegrationAccountBySlugAndUser("gmail", user.id, user.workspaceId as string)
+    ? await getIntegrationAccountBySlugAndUser(
+        "gmail",
+        user.id,
+        user.workspaceId as string,
+      )
     : null;
 
   if (gmailAccount) {
@@ -38,7 +47,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
   if (gmailIntegration && user.workspaceId) {
     const redirectBack = `${url.origin}/onboarding/gmail`;
     gmailOAuthUrl = await getRedirectURL(
-      { integrationDefinitionId: gmailIntegration.id, redirectURL: redirectBack },
+      {
+        integrationDefinitionId: gmailIntegration.id,
+        redirectURL: redirectBack,
+      },
       user.id,
       user.workspaceId as string,
     );
@@ -46,7 +58,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   return json({
     gmailOAuthUrl,
-    defaultName: user.name,
+    defaultName: workspace?.name ?? user.name,
     redirectTo: url.searchParams.get("redirectTo") ?? null,
   });
 }
@@ -61,7 +73,8 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OnboardingGmail() {
-  const { gmailOAuthUrl, defaultName, redirectTo } = useTypedLoaderData<typeof loader>();
+  const { gmailOAuthUrl, defaultName, redirectTo } =
+    useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
   return (
@@ -71,12 +84,12 @@ export default function OnboardingGmail() {
           <h2 className="text-xl font-semibold">i'm {defaultName}.</h2>
           <div className="text-muted-foreground space-y-2 text-base">
             <p>
-              connect gmail and i'll learn about you — who you work with,
-              what you're building, what matters.
+              connect gmail and i'll learn about you — who you work with, what
+              you're building, what matters.
             </p>
             <p>
-              takes a minute. makes everything better. or skip and i'll
-              learn as we go.
+              takes a minute. makes everything better. or skip and i'll learn as
+              we go.
             </p>
           </div>
         </div>

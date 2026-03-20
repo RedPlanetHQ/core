@@ -515,7 +515,7 @@ const ConversationItemComponent = ({
   return (
     <div
       className={cn(
-        "flex w-full gap-2 px-4 pb-2",
+        "flex w-full gap-2 px-5 pb-2",
         isUser && "my-4 justify-end",
       )}
     >

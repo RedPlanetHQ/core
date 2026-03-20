@@ -33,7 +33,7 @@ export type ExtractVoiceResult = z.infer<typeof ExtractVoiceSchema>;
 export const extractVoicePrompt = (
   context: Record<string, any>,
 ): ModelMessage[] => {
-  const sysPrompt = `You are building a user's digital brain. This brain is an API for agents — any agent (email drafter, meeting prep, code assistant, WhatsApp bot) queries it to understand how to behave with this user.
+  const sysPrompt = `A good butler knows exactly how their employer likes things done. You are extracting that voice — their standing rules, preferences, habits, beliefs, and commitments — so any agent (email drafter, meeting prep, code assistant, WhatsApp bot) knows how to serve this person correctly.
 
 Your job: Extract the user's VOICE — their standing rules, preferences, habits, beliefs, goals, and commitments. These tell agents how to serve the user correctly.
 

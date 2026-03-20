@@ -11,7 +11,9 @@ export const CreateConversationSchema = z.object({
   title: z.string().optional(),
   conversationId: z.string().optional(),
   source: z.string().optional(),
-  incognito: z.preprocess((v) => v === "true" || v === true, z.boolean()).optional(),
+  incognito: z
+    .preprocess((v) => v === "true" || v === true, z.boolean())
+    .optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
   asyncJobId: z.string().optional(),
   parts: z
@@ -119,6 +121,16 @@ export async function deleteConversation(conversationId: string) {
   });
 }
 
+export async function deleteConversationsBySource(
+  userId: string,
+  source: string,
+) {
+  return prisma.conversation.updateMany({
+    where: { userId, source, deleted: null },
+    data: { deleted: new Date().toISOString() },
+  });
+}
+
 // Mark a conversation as read
 export async function readConversation(conversationId: string) {
   return prisma.conversation.update({
@@ -153,6 +165,7 @@ export const getConversationAndHistory = async (
     where: {
       id: conversationId,
       userId,
+      deleted: null,
     },
     include: {
       ConversationHistory: {

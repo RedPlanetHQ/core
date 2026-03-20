@@ -8,6 +8,7 @@ import {
   Timer,
   Folder,
   FolderOpen,
+  Ellipsis,
 } from "lucide-react";
 import { getIcon, type IconType } from "../icon-utils";
 import {
@@ -15,7 +16,14 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../ui/collapsible";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "../ui/dropdown-menu";
 import { useLocalCommonState } from "~/hooks/use-local-state";
+import { SourceFolderMenu } from "./source-folder-menu";
 
 export function getSourceIcon(source: string) {
   if (!source || source === "core") return null;
@@ -144,25 +152,41 @@ function SourceFolder({
 
   const isOpen = open ?? false;
 
+  function handleDeleted() {
+    loadedIds.current = new Set();
+    setConversations([]);
+    setHasNextPage(false);
+  }
+
   return (
     <Collapsible open={isOpen} onOpenChange={setOpen}>
-      <CollapsibleTrigger asChild>
-        <Button variant="ghost" isActive={isOpen} className="mb-0.5 gap-2">
-          {isOpen ? (
-            <FolderOpen size={16} className="shrink-0" />
-          ) : (
-            <Folder size={16} className="shrink-0" />
-          )}
+      <div className="group/folder flex items-center">
+        <CollapsibleTrigger asChild>
+          <Button
+            variant="ghost"
+            isActive={isOpen}
+            className="mb-0.5 w-full min-w-0 flex-1 gap-2"
+          >
+            {isOpen ? (
+              <FolderOpen size={16} className="shrink-0" />
+            ) : (
+              <Folder size={16} className="shrink-0" />
+            )}
 
-          <span className="truncate">{label}</span>
-          {icon && <span className="shrink-0">{icon}</span>}
-          {totalCount > 0 && (
-            <span className="text-muted-foreground ml-auto text-sm">
-              {totalCount}
+            <span className="truncate">{label}</span>
+
+            {icon && <span className="shrink-0">{icon}</span>}
+            {totalCount > 0 && (
+              <span className="text-muted-foreground text-sm">
+                {totalCount}
+              </span>
+            )}
+            <span className="ml-auto inline-flex items-center gap-2">
+              <SourceFolderMenu source={source} onDeleted={handleDeleted} />
             </span>
-          )}
-        </Button>
-      </CollapsibleTrigger>
+          </Button>
+        </CollapsibleTrigger>
+      </div>
       <CollapsibleContent>
         <div className="pl-3">
           {isLoading && conversations.length === 0 && (
@@ -231,6 +255,10 @@ export const ConversationList = ({
   conversationSources: { source: string; count: number }[];
 }) => {
   const location = useLocation();
+  const [sourceFilter, setSourceFilter] = useLocalCommonState<string>(
+    "conv-source-filter",
+    "all",
+  );
 
   const sorted = [...conversationSources].sort((a, b) => {
     if (a.source === "core") return -1;
@@ -238,11 +266,63 @@ export const ConversationList = ({
     return getSourceLabel(a.source).localeCompare(getSourceLabel(b.source));
   });
 
-  return (
-    <div className="flex w-full flex-col px-2 pt-1">
-      <p className="text-muted-foreground mb-1 px-2 text-sm">Chats</p>
+  const filtered =
+    !sourceFilter || sourceFilter === "all"
+      ? sorted
+      : sorted.filter(({ source }) => source === sourceFilter);
 
-      {sorted.map(({ source, count }) => (
+  const activeLabel =
+    !sourceFilter || sourceFilter === "all"
+      ? null
+      : getSourceLabel(sourceFilter);
+
+  return (
+    <div className="group/convo flex w-full flex-col px-2 pt-1">
+      <div className="mb-1 flex items-center justify-between px-2">
+        <p className="text-muted-foreground text-sm">
+          Chats{activeLabel ? `: ${activeLabel}` : ""}
+        </p>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="sm"
+              className={cn(
+                "h-5 w-5 rounded p-0 opacity-0 transition-opacity group-hover/convo:opacity-100 data-[state=open]:opacity-100",
+                activeLabel && "text-primary opacity-100",
+              )}
+            >
+              <Ellipsis size={12} />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-[160px]">
+            <DropdownMenuItem
+              className={cn(
+                "rounded",
+                (!sourceFilter || sourceFilter === "all") && "font-medium",
+              )}
+              onClick={() => setSourceFilter("all")}
+            >
+              All
+            </DropdownMenuItem>
+            {sorted.map(({ source }) => (
+              <DropdownMenuItem
+                key={source}
+                className={cn(
+                  "flex gap-2 rounded",
+                  sourceFilter === source && "font-medium",
+                )}
+                onClick={() => setSourceFilter(source)}
+              >
+                {getSourceIcon(source)}
+                {getSourceLabel(source)}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+
+      {filtered.map(({ source, count }) => (
         <SourceFolder
           key={source}
           source={source}

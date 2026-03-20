@@ -62,7 +62,7 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
           <Fieldset className="w-full">
             <div className="flex flex-col gap-y-4">
               <p className="text-muted-foreground mb-2 text-center leading-relaxed">
-                Core is your digital brain that remembers your context,
+                Core is your personal butler it remembers your context,
                 conversations, and what matters to you. Connect to get started.
               </p>
 
@@ -84,8 +84,7 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
                 <div>
                   <h2 className="text-base font-semibold">Privacy</h2>
                   <p className="text-muted-foreground/80 text-sm leading-relaxed">
-                    Your digital brain is private. No human (except you) will
-                    see any of your data.
+                    Everything you share stays between you and your butler. Always.
                   </p>
                 </div>
               </div>
