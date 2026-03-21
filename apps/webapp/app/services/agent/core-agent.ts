@@ -253,10 +253,8 @@ export const createTools = async (
 
   const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId);
 
-  // Add get_skill tool when skills are available
-  if (skills && skills.length > 0) {
-    tools["get_skill"] = getSkillTool(workspaceId);
-  }
+  // Skill tools — get_skill always available (skills can be created mid-conversation or referenced by ID)
+  tools["get_skill"] = getSkillTool(workspaceId);
 
   if (!readOnly) {
     tools["create_skill"] = createSkillTool(workspaceId, userId);

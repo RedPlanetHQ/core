@@ -259,13 +259,20 @@ async function executePlan(
         executorTools,
       });
 
-      // Send on channel
+      if (!responseText || responseText === "I processed your request.") {
+        logger.warn(`[CASE pipeline] Sol produced empty/generic response for ${reminder.id}`, {
+          channel,
+          responseText,
+          actionPlan: plan.message,
+        });
+      }
+
+      // Resolve delivery target for the channel
       const handler = getChannel(channel);
       let replyTo: string | undefined;
       if (channel === "whatsapp") {
         replyTo = userData.phoneNumber;
       } else if (channel === "slack") {
-        // For Slack, look up the user's Slack ID from IntegrationAccount
         const slackAccount = await prisma.integrationAccount.findFirst({
           where: {
             integratedById: userData.userId,
@@ -279,23 +286,35 @@ async function executePlan(
       } else {
         replyTo = userData.email;
       }
-      if (replyTo) {
+
+      if (!replyTo) {
+        logger.error(`[CASE pipeline] No delivery target for channel=${channel}, userId=${userData.userId}`, {
+          reminderId: reminder.id,
+          channel,
+          hasPhone: !!userData.phoneNumber,
+          hasEmail: !!userData.email,
+        });
+      } else {
         const metadata: Record<string, string> = {
           workspaceId: userData.workspaceId,
         };
         if (channel === "email") {
-          // Extract subject from activity text (e.g. "**Subject:** ...")
-          // or fall back to first line, capped to avoid newlines in subject
           const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
           const subject = subjectMatch
             ? subjectMatch[1].trim()
             : reminder.text.split("\n")[0].replace(/[#*_]/g, "").trim();
           metadata.subject = subject.slice(0, 120);
         }
+
+        logger.info(`[CASE pipeline] Sending ${channel} message`, {
+          reminderId: reminder.id,
+          replyTo,
+          responseLength: responseText.length,
+          responsePreview: responseText.slice(0, 150),
+        });
+
         await handler.sendReply(replyTo, responseText, metadata);
-        logger.info(
-          `Sent ${channel} message for ${reminder.id} to ${userData.userId}`,
-        );
+        logger.info(`[CASE pipeline] Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
 
         // Also store in the channel's conversation so user replies have context
         try {
@@ -320,13 +339,13 @@ async function executePlan(
             false,
           );
         } catch (error) {
-          logger.warn(`Failed to mirror reminder to channel conversation`, {
+          logger.warn(`[CASE pipeline] Failed to mirror to channel conversation`, {
             error,
           });
         }
       }
     } catch (error) {
-      logger.error(`Failed to execute message for ${reminder.id}`, { error });
+      logger.error(`[CASE pipeline] Failed to execute message for ${reminder.id}`, { error });
     }
   } else {
     logger.info(`CASE decided not to message for ${reminder.id}`, {
