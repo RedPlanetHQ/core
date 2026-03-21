@@ -4,11 +4,15 @@
  * Provides skill management tools: get_skill, create_skill, update_skill.
  */
 
+import { generateText, type LanguageModel } from "ai";
 import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { createSkill, updateSkill } from "~/services/skills.server";
+import { getModel, getModelForTask } from "~/lib/model.server";
+import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
+import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 
 /**
  * Get the get_skill tool for the agent
@@ -39,19 +43,22 @@ export function getSkillTool(workspaceId: string): Tool {
 
 /**
  * Create a new skill
+ *
+ * The butler provides the intent — the tool internally runs the skill generator
+ * to produce a properly structured workflow, then saves it.
  */
 export function createSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Create a new skill. IMPORTANT: Before creating, find 'Generator skill' in <skills> and use get_skill to load its instructions so you understand the proper skill structure and format. Use that structure when writing the skill content.",
+      "Create a new skill (reusable workflow). Provide the title and a description of what the workflow should do — the system will generate the structured workflow content automatically. You don't need to write the full workflow yourself.",
     inputSchema: z.object({
       title: z
         .string()
         .describe("The skill title (5-8 words, action-oriented)"),
-      content: z
+      intent: z
         .string()
         .describe(
-          "The full skill instructions in markdown. Follow the Generator skill structure.",
+          "Describe what this workflow should do — the steps, rules, tools to use, and expected output. Be specific about the workflow logic.",
         ),
       short_description: z
         .string()
@@ -60,11 +67,36 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
           "1-2 sentence description with trigger phrases (under 200 chars)",
         ),
     }),
-    execute: async ({ title, content, short_description }) => {
+    execute: async ({ title, intent, short_description }) => {
       try {
+        // Fetch connected tools for context
+        const accounts = await getConnectedIntegrationAccounts(userId, workspaceId);
+        const connectedTools = accounts.map((a) => a.integrationDefinition.name);
+        const toolsContext = connectedTools.length > 0
+          ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
+          : "";
+
+        const userMessage = `User intent: ${intent}${toolsContext}`;
+
+        // Generate structured workflow via the skill generator
+        const model = getModelForTask("low");
+        const modelInstance = getModel(model);
+
+        const { text: generatedContent } = await generateText({
+          model: modelInstance as LanguageModel,
+          messages: [
+            { role: "system", content: SKILL_GENERATOR_SYSTEM_PROMPT },
+            { role: "user", content: userMessage },
+          ],
+        });
+
+        if (!generatedContent) {
+          return "Failed to generate skill workflow — generator produced no output.";
+        }
+
         const skill = await createSkill(workspaceId, userId, {
           title,
-          content,
+          content: generatedContent,
           source: "agent",
           metadata: short_description
             ? { shortDescription: short_description }
@@ -73,7 +105,7 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
         return `Skill created. ID: ${skill.id} | Title: ${skill.title}`;
       } catch (error) {
         logger.warn("Core agent: failed to create skill", { error });
-        return "Failed to create skill";
+        return `Failed to create skill: ${error instanceof Error ? error.message : "Unknown error"}`;
       }
     },
   });

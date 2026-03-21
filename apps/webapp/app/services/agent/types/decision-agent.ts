@@ -41,6 +41,8 @@ export interface ReminderTriggerData {
 
 export interface WebhookTriggerData {
   integration: string; // "gmail" | "calendar" | "github" etc.
+  integrationAccountId: string; // internal UUID of the integration account
+  accountId: string; // human-readable external identifier (e.g. "manoj@company.com")
   eventType: string; // "new_email" | "event_starting" etc.
   payload: Record<string, unknown>;
 }

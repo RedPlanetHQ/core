@@ -38,6 +38,28 @@ export function getTaskTools(
       },
     }),
 
+    get_task: tool({
+      description: `Get full details of a task including its complete description. Use before updating a task so you can see what's already there and merge new context into it.`,
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID"),
+      }),
+      execute: async ({ taskId }) => {
+        try {
+          const task = await getTaskById(taskId);
+          if (!task) return `Task ${taskId} not found.`;
+          return [
+            `Title: ${task.title}`,
+            `Status: ${task.status}`,
+            `Description: ${task.description || "(empty)"}`,
+            `ID: ${task.id}`,
+            `Created: ${task.createdAt}`,
+          ].join("\n");
+        } catch (error) {
+          return `Failed to get task: ${error instanceof Error ? error.message : "Unknown error"}`;
+        }
+      },
+    }),
+
     enqueue_task: tool({
       description: `Start working on a task in the background. Moves the task to InProgress and queues it for execution. Use when the user wants something done now — "do X", "start working on X", "run this task".`,
       inputSchema: z.object({
@@ -107,7 +129,7 @@ export function getTaskTools(
     }),
 
     update_task: tool({
-      description: `Update an existing task — change its status, title, or description. Use when moving a task through the lifecycle or when the user provides more context about a task. The description is what the agent sees as context when executing the task, so accumulate relevant details there.`,
+      description: `Update an existing task — change its status, title, or description. When updating the description, ALWAYS call get_task first to read the current description, then write a merged version that includes both old and new context. Never blindly replace — accumulate.`,
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z

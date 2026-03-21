@@ -82,10 +82,11 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
       });
 
       clearTimeout(timeoutId);
-      await markTaskCompleted(taskId, "Task completed");
 
-      logger.info(`Task ${taskId} completed`);
-      return { success: true, status: "completed", result: "Task completed" };
+      // Agent owns task lifecycle — it decides completed/blocked/failed via update_task.
+      // We only log here. No auto-marking.
+      logger.info(`Task ${taskId} processing finished`);
+      return { success: true, status: "completed", result: "Task processing finished" };
     } catch (error) {
       clearTimeout(timeoutId);
 
@@ -104,6 +105,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     logger.error(`Task ${taskId} failed`, { error });
+    // Only mark failed on actual crashes — agent handles normal lifecycle
     await markTaskFailed(taskId, errorMsg);
     return { success: false, status: "failed", error: errorMsg };
   }

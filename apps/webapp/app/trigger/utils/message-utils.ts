@@ -187,6 +187,7 @@ export const createActivities = async ({
         const activitiesText = results.map((r) => r.text).join("\n\n");
         await enqueueActivityCase({
           integrationAccountId,
+          accountId: integrationAccount.accountId ?? integrationAccountId,
           workspaceId: integrationAccount.workspaceId,
           userId: integrationAccount.integratedById,
           userEmail: user.email,
