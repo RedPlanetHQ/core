@@ -16,10 +16,14 @@ export async function sendReply(
     : "CORE Brain";
 
   const html = await marked(text);
+  const from = metadata?.agentEmail
+    ? (metadata.agentEmail as string)
+    : env.FROM_EMAIL;
 
   await sendPlainTextEmail({
     to,
-    replyTo: env.FROM_EMAIL,
+    from,
+    replyTo: from,
     subject,
     text,
     html,
