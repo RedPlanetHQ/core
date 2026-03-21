@@ -1,3 +1,4 @@
+import { sentryVitePlugin } from "@sentry/vite-plugin";
 import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
@@ -10,23 +11,27 @@ declare module "@remix-run/node" {
 }
 
 export default defineConfig({
-  plugins: [
-    tailwindcss(),
-    remix({
-      future: {
-        v3_fetcherPersist: true,
-        v3_relativeSplatPath: true,
-        v3_throwAbortReason: true,
-        v3_singleFetch: true,
-        v3_lazyRouteDiscovery: true,
-      },
-    }),
-    tsconfigPaths(),
-  ],
+  plugins: [tailwindcss(), remix({
+    future: {
+      v3_fetcherPersist: true,
+      v3_relativeSplatPath: true,
+      v3_throwAbortReason: true,
+      v3_singleFetch: true,
+      v3_lazyRouteDiscovery: true,
+    },
+  }), tsconfigPaths(), sentryVitePlugin({
+    org: "tegon",
+    project: "core-app"
+  }), sentryVitePlugin({
+    org: "tegon",
+    project: "core-app"
+  })],
+
   server: {
     middlewareMode: true,
     allowedHosts: true,
   },
+
   ssr: {
     target: "node",
     noExternal: [
@@ -43,4 +48,8 @@ export default defineConfig({
     ],
     external: ["@prisma/client", "@redplanethq/sdk"],
   },
+
+  build: {
+    sourcemap: true
+  }
 });

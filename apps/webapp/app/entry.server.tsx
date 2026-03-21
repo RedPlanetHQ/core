@@ -1,3 +1,4 @@
+import * as Sentry from "@sentry/remix";
 /**
  * By default, Remix will handle generating the HTTP Response for you.
  * You are free to delete this file if you'd like to, but if you ever want it revealed again, you can run `npx remix reveal` ✨
@@ -12,13 +13,14 @@ import {
   createReadableStreamFromReadable,
 } from "@remix-run/node";
 import { RemixServer } from "@remix-run/react";
+
 import { isbot } from "isbot";
 import { renderToPipeableStream } from "react-dom/server";
 import { initializeStartupServices } from "./utils/startup";
 import { handleMCPRequest, handleSessionRequest } from "~/services/mcp.server";
 import { authenticateHybridRequest } from "~/services/routeBuilders/apiBuilder.server";
 import { trackError } from "~/services/telemetry.server";
-import { setupWebSocket } from '../websocket';
+import { setupWebSocket } from "../websocket";
 import {
   verifyGatewayToken,
   upsertGateway,
@@ -41,36 +43,40 @@ init();
  * This catches errors from loaders, actions, and rendering
  * Automatically tracks all errors to telemetry
  */
-export function handleError(
-  error: unknown,
-  { request }: { request: Request },
-): void {
-  // Don't track 404s or aborted requests as errors
-  if (
-    error instanceof Response &&
-    (error.status === 404 || error.status === 304)
-  ) {
-    return;
-  }
+export const handleError = Sentry.wrapHandleErrorWithSentry(
+  (error, { request }): { request: any } => {
+    // Don't track 404s or aborted requests as errors
+    if (
+      error instanceof Response &&
+      (error.status === 404 || error.status === 304)
+    ) {
+      return;
+    }
 
-  // Track error to telemetry
-  if (error instanceof Error) {
-    const url = new URL(request.url);
-    trackError(error, {
-      url: request.url,
-      path: url.pathname,
-      method: request.method,
-      userAgent: request.headers.get("user-agent") || "unknown",
-      referer: request.headers.get("referer") || undefined,
-    }).catch((trackingError) => {
-      // If telemetry tracking fails, just log it - don't break the app
-      console.error("Failed to track error:", trackingError);
-    });
-  }
+    // Capture in Sentry
+    if (error instanceof Error) {
+      Sentry.captureException(error);
+    }
 
-  // Always log to console for development/debugging
-  console.error(error);
-}
+    // Track error to telemetry
+    if (error instanceof Error) {
+      const url = new URL(request.url);
+      trackError(error, {
+        url: request.url,
+        path: url.pathname,
+        method: request.method,
+        userAgent: request.headers.get("user-agent") || "unknown",
+        referer: request.headers.get("referer") || undefined,
+      }).catch((trackingError) => {
+        // If telemetry tracking fails, just log it - don't break the app
+        console.error("Failed to track error:", trackingError);
+      });
+    }
+
+    // Always log to console for development/debugging
+    console.error(error);
+  },
+);
 
 export default function handleRequest(
   request: Request,
@@ -84,17 +90,17 @@ export default function handleRequest(
 ) {
   return isbot(request.headers.get("user-agent") || "")
     ? handleBotRequest(
-      request,
-      responseStatusCode,
-      responseHeaders,
-      remixContext,
-    )
+        request,
+        responseStatusCode,
+        responseHeaders,
+        remixContext,
+      )
     : handleBrowserRequest(
-      request,
-      responseStatusCode,
-      responseHeaders,
-      remixContext,
-    );
+        request,
+        responseStatusCode,
+        responseHeaders,
+        remixContext,
+      );
 }
 
 function handleBotRequest(
@@ -209,5 +215,5 @@ export {
   disconnectGateway,
 
   //Websocket
-  setupWebSocket
+  setupWebSocket,
 };

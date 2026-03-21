@@ -8,7 +8,6 @@ import {
   Timer,
   Folder,
   FolderOpen,
-  Ellipsis,
 } from "lucide-react";
 import { getIcon, type IconType } from "../icon-utils";
 import {
@@ -16,14 +15,9 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "../ui/collapsible";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { SourceFolderMenu } from "./source-folder-menu";
+import { ConversationListOptions } from "./conversation-list-options";
 
 export function getSourceIcon(source: string) {
   if (!source || source === "core") return null;
@@ -36,7 +30,7 @@ export function getSourceIcon(source: string) {
   return <IconComponent size={14} />;
 }
 
-function getSourceLabel(source: string): string {
+export function getSourceLabel(source: string): string {
   if (!source || source === "core") return "General";
   if (source === "reminder") return "Reminders";
   if (source === "background-task") return "Background Tasks";
@@ -255,9 +249,9 @@ export const ConversationList = ({
   conversationSources: { source: string; count: number }[];
 }) => {
   const location = useLocation();
-  const [sourceFilter, setSourceFilter] = useLocalCommonState<string>(
-    "conv-source-filter",
-    "all",
+  const [hiddenSources, setHiddenSources] = useLocalCommonState<string[]>(
+    "conv-hidden-sources",
+    [],
   );
 
   const sorted = [...conversationSources].sort((a, b) => {
@@ -266,60 +260,29 @@ export const ConversationList = ({
     return getSourceLabel(a.source).localeCompare(getSourceLabel(b.source));
   });
 
-  const filtered =
-    !sourceFilter || sourceFilter === "all"
-      ? sorted
-      : sorted.filter(({ source }) => source === sourceFilter);
+  const hidden = hiddenSources ?? [];
+  const filtered = sorted.filter(({ source }) => !hidden.includes(source));
 
-  const activeLabel =
-    !sourceFilter || sourceFilter === "all"
-      ? null
-      : getSourceLabel(sourceFilter);
+  const handleToggleSource = (source: string) => {
+    const current = hiddenSources ?? [];
+    if (current.includes(source)) {
+      setHiddenSources(current.filter((s) => s !== source));
+    } else {
+      setHiddenSources([...current, source]);
+    }
+  };
 
   return (
     <div className="group/convo flex w-full flex-col px-2 pt-1">
       <div className="mb-1 flex items-center justify-between px-2">
-        <p className="text-muted-foreground text-sm">
-          Chats{activeLabel ? `: ${activeLabel}` : ""}
-        </p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="sm"
-              className={cn(
-                "h-5 w-5 rounded p-0 opacity-0 transition-opacity group-hover/convo:opacity-100 data-[state=open]:opacity-100",
-                activeLabel && "text-primary opacity-100",
-              )}
-            >
-              <Ellipsis size={12} />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-[160px]">
-            <DropdownMenuItem
-              className={cn(
-                "rounded",
-                (!sourceFilter || sourceFilter === "all") && "font-medium",
-              )}
-              onClick={() => setSourceFilter("all")}
-            >
-              All
-            </DropdownMenuItem>
-            {sorted.map(({ source }) => (
-              <DropdownMenuItem
-                key={source}
-                className={cn(
-                  "flex gap-2 rounded",
-                  sourceFilter === source && "font-medium",
-                )}
-                onClick={() => setSourceFilter(source)}
-              >
-                {getSourceIcon(source)}
-                {getSourceLabel(source)}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <p className="text-muted-foreground text-sm">Chats</p>
+        <span className="opacity-0 transition-opacity group-hover/convo:opacity-100 has-[[data-state=open]]:opacity-100">
+          <ConversationListOptions
+            sources={sorted.map(({ source }) => source)}
+            hiddenSources={hidden}
+            onToggleSource={handleToggleSource}
+          />
+        </span>
       </div>
 
       {filtered.map(({ source, count }) => (

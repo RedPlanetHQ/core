@@ -1,3 +1,4 @@
+import { withSentry } from "@sentry/remix";
 import {
   Links,
   Meta,
@@ -57,6 +58,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const posthogProjectKey = env.POSTHOG_PROJECT_KEY;
   const telemetryEnabled = env.TELEMETRY_ENABLED;
+  const sentryDsn = env.SENTRY_DSN;
   const user = await getUser(request);
 
   // Only fetch workspace data if user is authenticated
@@ -91,6 +93,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
       userPersonaDocumentId,
       appEnv: env.APP_ENV,
       appOrigin: env.APP_ORIGIN,
+      sentryDsn,
     },
     { headers: { "Set-Cookie": await commitSession(session) } },
   );
@@ -140,7 +143,7 @@ export function ErrorBoundary() {
 }
 
 function App() {
-  const { posthogProjectKey, telemetryEnabled } =
+  const { posthogProjectKey, telemetryEnabled, sentryDsn } =
     useTypedLoaderData<typeof loader>();
 
   usePostHog(posthogProjectKey, telemetryEnabled);
@@ -155,6 +158,11 @@ function App() {
           <PreventFlashOnWrongTheme ssrTheme={Boolean(theme)} />
         </head>
         <body className="bg-background-2 h-[100vh] h-full w-[100vw] overflow-hidden font-sans">
+          <script
+            dangerouslySetInnerHTML={{
+              __html: `window.sentryDsn = ${JSON.stringify(sentryDsn ?? "")}`,
+            }}
+          />
           <Outlet />
           <Toaster />
           <ScrollRestoration />
@@ -169,7 +177,7 @@ function App() {
 // Wrap your app with ThemeProvider.
 // `specifiedTheme` is the stored theme in the session storage.
 // `themeAction` is the action name that's used to change the theme in the session storage.
-export default function AppWithProviders() {
+function AppWithProviders() {
   const { theme } = useTypedLoaderData<typeof loader>();
 
   return (
@@ -182,3 +190,5 @@ export default function AppWithProviders() {
     </ThemeProvider>
   );
 }
+
+export default withSentry(AppWithProviders);

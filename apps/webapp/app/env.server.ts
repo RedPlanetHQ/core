@@ -212,6 +212,9 @@ const EnvironmentSchema = z
 
     // Resend
     RESEND_WEBHOOK_SECRET: z.string().optional(),
+
+    // Sentry
+    SENTRY_DSN: z.string().optional(),
   })
   .refine(
     (data) => {
