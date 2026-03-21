@@ -33,9 +33,9 @@
     <img width="200px" alt="CORE logo" src="https://github.com/user-attachments/assets/bd4e5e79-05b8-4d40-9aff-f1cf9e5d70de" />
   </a>
 
-## CORE: Your Digital Brain
+## CORE
 
-**It Remembers. It Thinks. It Acts**
+**Every great person has someone who handles the rest.**
 
 <p align="center">
     <a href="https://docs.getcore.me/providers/claude-code">
@@ -66,70 +66,89 @@
 
 ---
 
-CORE is your digital brain - a unified, always-on AI that remembers your context, works with your AI agents, and acts across your tools.
+Connect your tools. Tell it what matters. Hand off the work.
 
 Open source. Self-hostable. Your data, your control.
 
 ---
 
-## What Makes a Digital Brain
+## The Handoff
 
-### It Remembers Everything
+You shouldn't be managing your inbox, chasing updates, or repeating context to every tool you use.
 
-Every conversation, decision, preference, and relationship is stored as structured knowledge in a temporal knowledge graph. Not raw text but classified facts (preferences, decisions, goals, directives) that surface exactly when you need them. Ask about something from weeks ago and the answer is there, with full context.
+CORE is a personal butler — an always-on AI that knows your tools, your preferences, and your people. You hand something off once and it handles it today, tomorrow, and next week. Without being asked again.
+
+---
+
+## What You Can Hand Off
+
+### Your Inbox
+
+CORE reads every email with the context of your relationships. It knows who this person is, how you've handled them before, and what you'd want to say. It drafts responses, flags what needs you, and handles the rest silently.
 
 [Learn more about Memory →](https://docs.getcore.me/concepts/memory/overview)
 
-### It Can Take Actions
+### Your Calendar
 
-Create GitHub issues, send Slack messages, manage your calendar without leaving the conversation. Complex multi-step workflows too: ask your coding agent to check Sentry for new errors, create a GitHub issue for each one, assign the right engineer based on git blame, and post a summary to your team's Slack channel, all from a single prompt. 200+ actions across 50+ apps through one connection point.
+Scheduling conflicts, follow-up reminders, meeting prep. CORE manages your time the way you'd expect someone who knows your work style to manage it.
+
+### Your Dev Workflow
+
+A Sentry alert fires. CORE checks it, creates a GitHub issue, assigns the right engineer based on git blame, and posts a summary to your team's Slack — without you touching any of it. 200+ actions across 50+ apps, coordinated from a single prompt.
 
 [Learn more about Toolkit →](https://docs.getcore.me/concepts/toolkit)
 
-### It Thinks and Works Across Systems
+### Your Team Updates
 
-Your tools are siloed. Claude Code can't talk to your WhatsApp. Cursor can't check your calendar. CORE's Agent breaks these walls - it's the orchestrator that ties memory, toolkit, and your apps together.
+CORE monitors what's happening across your tools and surfaces only what needs your attention. New PR merges, Linear status changes, Slack threads you're mentioned in — it watches everything so you don't have to.
 
-What the CORE Agent can do:
+### Your Recurring Ops
 
-- **Understand intent**: classifies what you need and routes to the right tools and memory
-- **Spawn other agents**: spin up a Claude Code session or browser session from WhatsApp to fix a bug or research something
-- **Coordinate multi-step workflows**: pull context from memory, act across multiple apps, and report back
-- **Work from anywhere**: message from WhatsApp, email, Slack, or the web dashboard — same brain, same context
-
-[Learn more about CORE Agent →](https://docs.getcore.me/concepts/meta-agent)
-
-### It Can Proactively Act
-
-You shouldn't have to ask for everything. CORE monitors events - new emails, GitHub alerts, calendar changes — and evaluates them against what it knows about you. A client email arrives; CORE already knows how you handle that relationship and drafts the right response. A Sentry alert fires at night; CORE spins up a Claude Code session to investigate.
+The things that happen every day that shouldn't require you. CORE monitors events — emails, GitHub alerts, calendar changes — and evaluates them against what it knows about you. It acts proactively. You only see what requires a decision.
 
 [Learn more about Concepts →](https://docs.getcore.me/concepts/overview)
 
 ---
 
+## How It Works
+
+### 1. Connect Your Tools
+
+Gmail, Slack, GitHub, Calendar, Linear — connect once. CORE scans them to understand your context, your relationships, and how you work. Your butler starts with real knowledge from day one.
+
+### 2. Tell It What Matters
+
+Your preferences, your people, your rules. Every conversation, decision, and directive is stored in a temporal knowledge graph — not raw text but classified facts that surface exactly when they're needed. Ask about something from weeks ago and the full context is there.
+
+### 3. Walk Away
+
+CORE acts. Proactively. Across everything. It understands your intent, routes to the right tools and memory, coordinates multi-step workflows, and can spawn other agents (Claude Code sessions, browser agents) to get things done. You only see what requires you.
+
+---
+
 ## Architecture
 
-CORE is built on three layers that implement these four pillars:
+CORE is built on three layers:
 
 - **Memory**: A temporal knowledge graph that stores episodes, entities, and classified facts. Every piece of information is categorized (preference, decision, directive, goal, etc.) and connected over time. This is what makes retrieval intent-driven instead of keyword-based. [Docs →](https://docs.getcore.me/concepts/memory/overview)
 
 - **Toolkit**: A unified actions layer for any MCP-compatible agent. Connect your apps once (GitHub, Linear, Slack, Gmail, Calendar, etc.) and every connected AI tool gets access to 200+ actions through a single endpoint. [Docs →](https://docs.getcore.me/toolkit/overview)
 
-- **CORE Agent**: The orchestrator that ties memory and toolkit together. It understands intent, searches memory, picks tools, spawns other agents, and can act proactively based on triggers and rules. [Docs →](https://docs.getcore.me/concepts/meta-agent)
+- **CORE Agent**: The orchestrator that ties memory and toolkit together. It understands intent, searches memory, picks tools, spawns other agents, and acts proactively based on triggers and rules. [Docs →](https://docs.getcore.me/concepts/meta-agent)
 
 ---
 
-## What You Can Do
+## Reach It From Anywhere
 
-### Use as Your Personal Assistant
+Your butler doesn't require you to be at a desk.
 
-Talk to CORE from WhatsApp, email, or the web dashboard. It takes actions across your apps, manages your schedule, drafts emails, all with memory of who you are and how you work.
+Talk to CORE from **WhatsApp**, **email**, **Slack**, or the **web dashboard** — same context, same memory, wherever you are. A message from WhatsApp can spin up a Claude Code session to fix a bug. An email can trigger a multi-step workflow across five apps. The interface changes; the intelligence doesn't.
 
 [Get started →](https://docs.getcore.me/quickstart/chief-of-staff)
 
 ### Supercharge Your AI Agents
 
-Give Claude Code, Cursor, and other AI tools persistent memory and actions. Your coding agent remembers project architecture, past decisions, and preferences across sessions. No more re-explaining context.
+Give Claude Code, Cursor, and other AI tools the same memory and toolkit your butler uses. Your coding agent remembers project architecture, past decisions, and preferences across sessions. No more re-explaining context. One connection point — every agent gets smarter.
 
 [Get started →](https://docs.getcore.me/quickstart/supercharge-ai-agents)
 
@@ -212,8 +231,9 @@ Sync your ChatGPT and Gemini conversations into CORE via browser extension. Sear
 ### Cloud
 
 1. **Sign up** at [app.getcore.me](https://app.getcore.me)
-2. **Connect Gmail & Calendar** — CORE scans them to learn about you so your digital brain starts with real context from day one
-3. **Start using** — talk to CORE Agent, connect your AI tools, or take actions in your apps
+2. **Connect Gmail & Calendar** — CORE scans them so your butler starts with real context from day one
+3. **Name your butler** — give it a name, set your preferences, tell it what matters
+4. **Hand off the work** — talk to CORE from the web, email, WhatsApp, or Slack
 
 ### Self-Host
 
@@ -232,6 +252,12 @@ docker-compose up -d
 ```
 
 [View complete self-hosting guide →](https://docs.getcore.me/self-hosting/docker)
+
+---
+
+## Yours. Completely.
+
+One workspace per context — work, personal, client. Fully isolated. Open source and self-hostable so your data never leaves your control.
 
 ---
 
@@ -262,14 +288,14 @@ CORE achieves **88.24%** average accuracy on the LoCoMo benchmark across single-
 
 ---
 
-## Security
+## Built to Be Trusted
 
-CASA Tier 2 Certified — third-party audited to meet Google's OAuth requirements.
-
-- Encryption: TLS 1.3 (transit) + AES-256 (rest)
+- **CASA Tier 2 Certified** — third-party audited to meet Google's OAuth requirements
+- **88.24% on LoCoMo benchmark** — across single-hop, multi-hop, open-domain, and temporal reasoning · [View results →](https://github.com/RedPlanetHQ/core-benchmark)
+- **TLS 1.3** in transit · **AES-256** at rest
 - Workspace-based isolation, role-based permissions
 - Your data is never used for AI model training
-- Self-hosting option for full isolation
+- Self-hosting option for full data isolation
 
 [Security Policy →](SECURITY.md) · Vulnerability Reporting: harshith@poozle.dev
 

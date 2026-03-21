@@ -133,8 +133,8 @@ export default function AccountSettings() {
 
           {/* Theme */}
           <div className="mb-8">
-            <h2 className="text-md mb-4">Theme</h2>
-            <p className="text-muted-foreground mb-4 text-sm">
+            <h2 className="text-md">Theme</h2>
+            <p className="text-muted-foreground mb-2 text-sm">
               Choose your preferred appearance
             </p>
             <div className="grid gap-4 md:grid-cols-2">

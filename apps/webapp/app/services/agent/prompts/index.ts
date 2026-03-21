@@ -6,7 +6,7 @@
  * - Orchestrator: no personality, gathers context
  */
 
-import { PERSONALITY, type PersonalityType } from "./personality";
+import { PERSONALITY, type PersonalityType, type PronounType } from "./personality";
 import { CAPABILITIES } from "./capabilities";
 import { CHANNEL_FORMATS, type ChannelType } from "./channel-formats";
 import { getChannel } from "~/services/channels";
@@ -18,6 +18,7 @@ export interface UserInfo {
   timezone: string;
   phoneNumber?: string;
   personality?: PersonalityType;
+  pronoun?: PronounType;
 }
 
 /**
@@ -61,12 +62,12 @@ ${userPersona}
   }
 
   const personalityType = userInfo?.personality || "tars";
-  return `${PERSONALITY(userInfo?.name ?? "User", personalityType)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
+  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
 }
 
 // Re-export for convenience
 export { PERSONALITY, PERSONALITY_OPTIONS } from "./personality";
-export type { PersonalityType } from "./personality";
+export type { PersonalityType, PronounType } from "./personality";
 export { CAPABILITIES } from "./capabilities";
 export { CHANNEL_FORMATS } from "./channel-formats";
 export type { ChannelType } from "./channel-formats";

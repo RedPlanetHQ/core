@@ -465,8 +465,10 @@ export function startTuiApp(
 
 		if (matchesKey(data, Key.ctrl('o'))) {
 			if (allToolItems.length > 0) {
-				const last = allToolItems[allToolItems.length - 1];
-				last.toggleExpand();
+				const anyExpanded = allToolItems.some(item => item.isExpanded);
+				for (const item of allToolItems) {
+					item.isExpanded = !anyExpanded;
+				}
 				tui.requestRender();
 			}
 

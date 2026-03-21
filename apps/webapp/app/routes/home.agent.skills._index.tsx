@@ -146,7 +146,7 @@ export default function Skills() {
           {
             label: "Add skill",
             icon: <Plus size={14} />,
-            onClick: () => navigate(`/home/agent/skill/new`),
+            onClick: () => navigate(`/home/agent/skills/new`),
             variant: "secondary",
           },
         ]}
@@ -200,7 +200,7 @@ export default function Skills() {
                   {Object.entries(libraryByCategory).map(
                     ([category, skills]) => (
                       <div key={category} className="space-y-2">
-                        <h3 className="text-muted-foreground text-sm font-medium">
+                        <h3 className="text-muted-foreground/80 text-sm font-medium">
                           {category}
                         </h3>
                         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">

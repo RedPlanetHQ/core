@@ -1,5 +1,6 @@
 import * as React from "react";
 import { useHotkeys } from "react-hotkeys-hook";
+import { tinykeys } from "tinykeys";
 
 import {
   Sidebar,
@@ -10,7 +11,6 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  LayoutGrid,
   MessageSquare,
   Plus,
   MessageCircle,
@@ -50,19 +50,19 @@ const data = {
       icon: MessageSquare,
       strict: true,
     },
-    {
-      title: "Integrations",
-      url: "/home/integrations",
-      icon: LayoutGrid,
-    },
+    // {
+    //   title: "Integrations",
+    //   url: "/home/integrations",
+    //   icon: LayoutGrid,
+    // },
     {
       title: "Memory",
       url: "/home/memory",
       icon: Brain,
     },
     {
-      title: "Reminders",
-      url: "/home/agent/reminders",
+      title: "Automations",
+      url: "/home/agent/automations",
       icon: Clock,
       params: {
         filter: "active",
@@ -96,6 +96,35 @@ export function AppSidebar({
     e.preventDefault();
     setCommandBar(true);
   });
+
+  // Linear-style go-to sequences via tinykeys
+  React.useEffect(() => {
+    const whenNotEditing =
+      (fn: () => void) => (e: KeyboardEvent) => {
+        const t = e.target as HTMLElement;
+        if (
+          t.tagName === "INPUT" ||
+          t.tagName === "TEXTAREA" ||
+          t.isContentEditable
+        )
+          return;
+        fn();
+      };
+
+    const unsub = tinykeys(window, {
+      "$mod+k": (e) => {
+        e.preventDefault();
+        setCommandBar(true);
+      },
+      "g t": whenNotEditing(() => navigate("/home/tasks")),
+      "g m": whenNotEditing(() => navigate("/home/memory")),
+      "g d": whenNotEditing(() => navigate("/home/memory/documents")),
+      "g s": whenNotEditing(() => navigate("/home/agent/skills")),
+      "g a": whenNotEditing(() => navigate("/home/agent/automations")),
+      "g c": whenNotEditing(() => navigate("/home/conversation")),
+    });
+    return unsub;
+  }, [navigate]);
 
   return (
     <>

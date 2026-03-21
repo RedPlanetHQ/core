@@ -1,5 +1,14 @@
 import { useState, useEffect } from "react";
-import { Plus, Loader2, File, MessageSquare, Tag } from "lucide-react";
+import {
+  Plus,
+  Loader2,
+  File,
+  MessageSquare,
+  Tag,
+  Brain,
+  Clock,
+  Library,
+} from "lucide-react";
 import {
   CommandDialog,
   CommandGroup,
@@ -8,12 +17,46 @@ import {
   CommandList,
   CommandEmpty,
   Command,
+  CommandSeparator,
 } from "../ui/command";
 
 import { useNavigate } from "@remix-run/react";
 import { useDebounce } from "~/hooks/use-debounce";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { Task } from "../icons/task";
+
+const NAV_ITEMS = [
+  {
+    label: "Go to Tasks",
+    url: "/home/tasks",
+    icon: Task,
+    shortcut: "G T",
+  },
+  {
+    label: "Go to Memory",
+    url: "/home/memory",
+    icon: Brain,
+    shortcut: "G M",
+  },
+  {
+    label: "Go to Documents",
+    url: "/home/memory/documents",
+    icon: File,
+    shortcut: "G D",
+  },
+  {
+    label: "Go to Skills",
+    url: "/home/agent/skills",
+    icon: Library,
+    shortcut: "G S",
+  },
+  {
+    label: "Go to Automations",
+    url: "/home/agent/automations",
+    icon: Clock,
+    shortcut: "G A",
+  },
+];
 
 interface CommandBarProps {
   open: boolean;
@@ -197,28 +240,61 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
                 : ""}
             </CommandEmpty>
 
-            <CommandGroup className="p-2">
-              <CommandItem
-                onSelect={handleNewChat}
-                className="flex items-center gap-2 py-1"
-              >
-                <MessageSquare className="mr-2 h-4 w-4" />
-                <span>New Chat</span>
-              </CommandItem>
-              <CommandItem
-                onSelect={handleAddTask}
-                className="flex items-center gap-2 py-1"
-              >
-                <Task className="mr-2 h-4 w-4" />
-                <span>Add Task</span>
-              </CommandItem>
-              <CommandItem
-                onSelect={handleAddDocument}
-                className="flex items-center gap-2 py-1"
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                <span>Add Document</span>
-              </CommandItem>
+            <CommandGroup heading="Navigate" className="p-2">
+              {NAV_ITEMS.filter(
+                (item) =>
+                  !searchQuery.trim() ||
+                  item.label
+                    .toLowerCase()
+                    .includes(searchQuery.toLowerCase()),
+              ).map((item) => (
+                <CommandItem
+                  key={item.url}
+                  onSelect={() => {
+                    navigate(item.url);
+                    onOpenChange(false);
+                  }}
+                  className="flex w-full items-center gap-2 py-1"
+                >
+                  <item.icon className="mr-2 h-4 w-4" />
+                  <span className="flex-1">{item.label}</span>
+                  <span className="text-muted-foreground ml-auto flex gap-1 text-xs">
+                    {item.shortcut.split(" ").map((key, i) => (
+                      <div
+                        key={i}
+                        className="bg-grayAlpha-100 rounded px-1.5 py-0.5 font-mono"
+                      >
+                        {key}
+                      </div>
+                    ))}
+                  </span>
+                </CommandItem>
+              ))}
+            </CommandGroup>
+
+            <CommandSeparator />
+
+            <CommandGroup heading="Actions" className="p-2">
+              {[
+                { label: "New Chat", icon: MessageSquare, onSelect: handleNewChat },
+                { label: "Add Task", icon: Task, onSelect: handleAddTask },
+                { label: "Add Document", icon: Plus, onSelect: handleAddDocument },
+              ]
+                .filter(
+                  (action) =>
+                    !searchQuery.trim() ||
+                    action.label.toLowerCase().includes(searchQuery.toLowerCase()),
+                )
+                .map((action) => (
+                  <CommandItem
+                    key={action.label}
+                    onSelect={action.onSelect}
+                    className="flex items-center gap-2 py-1"
+                  >
+                    <action.icon className="mr-2 h-4 w-4" />
+                    <span>{action.label}</span>
+                  </CommandItem>
+                ))}
             </CommandGroup>
 
             {/* Labels */}

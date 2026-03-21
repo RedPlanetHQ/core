@@ -12,6 +12,7 @@ import { UserTypeEnum } from "@core/types";
 import type { UIMessage } from "ai";
 import type { getTasks } from "~/services/task.server";
 import type { getConversationAndHistory } from "~/services/conversation.server";
+import { extensionsForConversation } from "../conversation/editor-extensions";
 
 interface TaskDetailProps {
   task: Awaited<ReturnType<typeof getTasks>>[number];
@@ -33,7 +34,7 @@ function DescriptionEditor({
   onChange: (markdown: string) => void;
 }) {
   const editor = useEditor({
-    extensions: [StarterKit, Markdown],
+    extensions: [...extensionsForConversation],
     content: initialContent,
     immediatelyRender: false,
     editorProps: {
@@ -46,12 +47,6 @@ function DescriptionEditor({
       onChange(editor.storage.markdown.getMarkdown());
     },
   });
-
-  useEffect(() => {
-    if (editor && initialContent !== editor.storage.markdown.getMarkdown()) {
-      editor.commands.setContent(initialContent);
-    }
-  }, [initialContent]);
 
   return <EditorContent editor={editor} />;
 }
@@ -159,7 +154,9 @@ export function TaskDetail({
             disabled={isInProgress}
           />
 
-          <div className={`flex flex-col gap-1 ${isInProgress ? "pointer-events-none opacity-60" : ""}`}>
+          <div
+            className={`flex flex-col gap-1 ${isInProgress ? "pointer-events-none opacity-60" : ""}`}
+          >
             <DescriptionEditor
               initialContent={task.description ?? ""}
               onChange={handleDescriptionChange}
@@ -188,7 +185,7 @@ export function TaskDetail({
         {conversation ? (
           isInProgress ? (
             <div className="flex h-full flex-col overflow-hidden">
-              <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-2 text-xs text-muted-foreground">
+              <div className="text-muted-foreground flex items-center gap-2 border-b border-gray-200 px-4 py-2 text-xs">
                 <Loader2 size={12} className="animate-spin" />
                 Agent is working…
               </div>
@@ -196,11 +193,18 @@ export function TaskDetail({
                 {conversation.ConversationHistory.map((h) => (
                   <ConversationItem
                     key={h.id}
-                    message={{
-                      id: h.id,
-                      role: h.userType === UserTypeEnum.Agent ? "assistant" : "user",
-                      parts: h.parts ? (h.parts as UIMessage["parts"]) : [{ text: h.message, type: "text" }],
-                    } as UIMessage}
+                    message={
+                      {
+                        id: h.id,
+                        role:
+                          h.userType === UserTypeEnum.Agent
+                            ? "assistant"
+                            : "user",
+                        parts: h.parts
+                          ? (h.parts as UIMessage["parts"])
+                          : [{ text: h.message, type: "text" }],
+                      } as UIMessage
+                    }
                     addToolApprovalResponse={async () => {}}
                     integrationAccountMap={integrationAccountMap}
                   />
@@ -213,6 +217,7 @@ export function TaskDetail({
               conversationId={conversation.id}
               history={conversation.ConversationHistory}
               integrationAccountMap={integrationAccountMap}
+              className="py-0"
             />
           )
         ) : (

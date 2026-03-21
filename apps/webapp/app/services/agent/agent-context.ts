@@ -17,7 +17,7 @@ import {
 } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
-import { type PersonalityType } from "~/services/agent/prompts/personality";
+import { type PersonalityType, type PronounType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
 import { type MessagePlan } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
@@ -87,6 +87,7 @@ export async function buildAgentContext({
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
   const personality = (metadata?.personality as PersonalityType) ?? "tars";
+  const pronoun = (metadata?.pronoun as PronounType) ?? undefined;
   const defaultChannel =
     (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
     "email";
@@ -138,6 +139,7 @@ export async function buildAgentContext({
     executorTools,
   );
 
+  console.log(personality);
   // Build system prompt
   let systemPrompt = getCorePrompt(
     source,
@@ -147,6 +149,7 @@ export async function buildAgentContext({
       timezone,
       phoneNumber: user?.phoneNumber ?? undefined,
       personality,
+      pronoun,
     },
     persona ?? "",
   );
@@ -229,7 +232,8 @@ export async function buildAgentContext({
 
   // Task context (when conversation was created from a task)
   if (linkedTask) {
-    const isExecuting = linkedTask.status === "InProgress" || linkedTask.status === "Todo";
+    const isExecuting =
+      linkedTask.status === "InProgress" || linkedTask.status === "Todo";
 
     if (isExecuting) {
       // Execution mode — mirrors <action_plan> pattern that CASE follows correctly

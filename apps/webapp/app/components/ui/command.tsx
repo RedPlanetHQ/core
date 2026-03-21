@@ -158,7 +158,7 @@ function CommandItem({
       {...props}
     >
       {children}
-      <CheckIcon className="group-has-data-[slot=command-shortcut]/command-item:hidden ml-auto opacity-0 group-data-[checked=true]/command-item:pb-1 group-data-[checked=true]/command-item:opacity-100" />
+      <CheckIcon className="text-foreground group-has-data-[slot=command-shortcut]/command-item:hidden group-has-data-[slot=command-shortcut]/command-item:w-0 ml-auto opacity-0 group-data-[checked=true]/command-item:pb-1 group-data-[checked=true]/command-item:opacity-100" />
     </CommandPrimitive.Item>
   );
 }

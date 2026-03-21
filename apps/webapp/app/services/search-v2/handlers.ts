@@ -542,31 +542,63 @@ export async function handleExploratory(
   ctx: HandlerContext,
 ): Promise<EpisodicNode[]> {
   const startTime = Date.now();
-  const graphProvider = ProviderFactory.getGraphProvider();
 
   const labelIds = getMatchedLabelIds(
     ctx.routerOutput,
     ctx.options.fallbackThreshold || 0.5,
   );
-  const maxEpisodes = ctx.options.maxEpisodes || 20;
+  const maxSessions = ctx.options.maxEpisodes || 40;
 
   logger.info(
-    `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxEpisodes: ${maxEpisodes}`,
+    `[Handler:exploratory] Labels: [${labelIds.join(", ")}], MaxSessions: ${maxSessions}`,
   );
 
-  // Run label path, entity path, and vector fallback in parallel
-  const [labelEpisodes, entityEpisodes, vectorEpisodes] = await Promise.all([
-    graphProvider.getEpisodesForExploratory({
-      userId: ctx.userId,
+  // Label path: query Document table directly — one compacted row per session, no grouping needed
+  const labelSessionsPromise = prisma.document.findMany({
+    where: {
       workspaceId: ctx.workspaceId,
-      labelIds,
-      maxEpisodes,
-    }),
-    getEpisodesViaEntityHints(ctx.routerOutput.entityHints, ctx, maxEpisodes),
+      type: "conversation",
+      deleted: null,
+      ...(labelIds.length > 0 ? { labelIds: { hasSome: labelIds } } : {}),
+    },
+    orderBy: { updatedAt: "desc" },
+    take: maxSessions,
+    select: {
+      id: true,
+      content: true,
+      createdAt: true,
+      source: true,
+      labelIds: true,
+      sessionId: true,
+    },
+  });
+
+  const [labelSessions, entityEpisodes, vectorEpisodes] = await Promise.all([
+    labelSessionsPromise,
+    getEpisodesViaEntityHints(ctx.routerOutput.entityHints, ctx, maxSessions),
     labelIds.length === 0
-      ? getEpisodesViaVectorSearch(ctx.options.query || "", ctx, maxEpisodes)
+      ? getEpisodesViaVectorSearch(ctx.options.query || "", ctx, maxSessions)
       : Promise.resolve([]),
   ]);
+
+  // Map Document records to EpisodicNode shape — type "DOCUMENT" passes through replaceWithCompacts unchanged
+  const labelEpisodes: EpisodicNode[] = labelSessions.map(
+    (doc) =>
+      ({
+        uuid: doc.id,
+        content: doc.content,
+        originalContent: doc.content,
+        metadata: {},
+        source: doc.source,
+        createdAt: doc.createdAt.toISOString() as any,
+        validAt: doc.createdAt.toISOString() as any,
+        labelIds: doc.labelIds,
+        sessionId: doc.sessionId ?? undefined,
+        type: "DOCUMENT",
+        userId: ctx.userId,
+        workspaceId: ctx.workspaceId,
+      }) as EpisodicNode,
+  );
 
   const episodes = mergeEpisodes(labelEpisodes, entityEpisodes, vectorEpisodes);
 
@@ -576,7 +608,7 @@ export async function handleExploratory(
   }
 
   logger.info(
-    `[Handler:exploratory] Found ${episodes.length} episodes (label: ${labelEpisodes.length}, entity: ${entityEpisodes.length}, vector: ${vectorEpisodes.length}) in ${Date.now() - startTime}ms`,
+    `[Handler:exploratory] Found ${episodes.length} episodes (sessions: ${labelEpisodes.length}, entity: ${entityEpisodes.length}, vector: ${vectorEpisodes.length}) in ${Date.now() - startTime}ms`,
   );
 
   return episodes;

@@ -43,7 +43,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   ]);
 
   if (!conversation) {
-    throw new Error("No conversation found");
+    return { conversation: null, integrationAccountMap: {} };
   }
 
   if (conversation.unread) {
@@ -65,7 +65,8 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap } = useTypedLoaderData<typeof loader>();
+  const { conversation, integrationAccountMap } =
+    useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { conversationId } = useParams();
   const fetcher = useFetcher();
@@ -79,6 +80,14 @@ export default function SingleConversation() {
 
   if (typeof window === "undefined") return null;
 
+  if (!conversation) {
+    return (
+      <div className="flex h-[calc(100vh)] w-full items-center justify-center md:h-[calc(100vh_-_16px)]">
+        <p className="text-muted-foreground text-sm">No conversation found</p>
+      </div>
+    );
+  }
+
   return (
     <>
       <PageHeader
@@ -90,7 +99,10 @@ export default function SingleConversation() {
               <span className="flex items-center gap-1.5">
                 {conversation.title || "Untitled"}
                 {conversation.incognito && (
-                  <EyeOff size={13} className="text-muted-foreground shrink-0" />
+                  <EyeOff
+                    size={13}
+                    className="text-muted-foreground shrink-0"
+                  />
                 )}
               </span>
             ),

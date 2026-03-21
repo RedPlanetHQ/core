@@ -199,12 +199,7 @@ export function TaskListPanel({
       <div className="flex h-full flex-col items-center justify-center gap-3">
         <TaskIcon className="text-muted-foreground h-8 w-8" />
         <p className="text-muted-foreground text-sm">No tasks yet</p>
-        <Button
-          size="sm"
-          variant="secondary"
-          className="rounded"
-          onClick={onNew}
-        >
+        <Button variant="secondary" className="rounded" onClick={onNew}>
           <Plus size={14} className="mr-1" /> New task
         </Button>
       </div>

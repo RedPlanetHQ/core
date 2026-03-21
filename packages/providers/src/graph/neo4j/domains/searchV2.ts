@@ -78,9 +78,8 @@ export function createSearchV2Methods(core: Neo4jCore) {
       aspects?: string[];
     }): Promise<EpisodicNode[]> {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
-      const aspectFilter = params.aspects && params.aspects.length > 0
-        ? "AND s1.aspect IN $aspects"
-        : "";
+      const aspectFilter =
+        params.aspects && params.aspects.length > 0 ? "AND s1.aspect IN $aspects" : "";
 
       const query = `
                 UNWIND $entityUuids as entityUuid
@@ -218,40 +217,6 @@ export function createSearchV2Methods(core: Neo4jCore) {
     },
 
     /**
-     * Get episodes filtered by labels (for exploratory queries)
-     * Used by handleExploratory in search-v2
-     */
-    async getEpisodesForExploratory(params: {
-      userId: string;
-      workspaceId?: string;
-      labelIds: string[];
-      maxEpisodes: number;
-    }): Promise<EpisodicNode[]> {
-      const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
-
-      const query = `
-                MATCH (e:Episode {userId: $userId${wsFilter}})
-                WHERE e.content IS NOT NULL
-                AND e.content <> ""
-                ${params.labelIds.length > 0 ? "AND ANY(lid IN e.labelIds WHERE lid IN $labelIds)" : ""}
-
-                WITH e
-                ORDER BY e.validAt DESC
-                LIMIT ${params.maxEpisodes * 2}
-
-                RETURN ${EPISODIC_NODE_PROPERTIES} as episode
-            `;
-
-      const results = await core.runQuery(query, {
-        userId: params.userId,
-        ...(params.workspaceId && { workspaceId: params.workspaceId }),
-        labelIds: params.labelIds,
-      });
-
-      return results.map((r) => r.get("episode")).filter((ep: any) => ep != null);
-    },
-
-    /**
      * Get distinct topic label IDs and episode counts in a time range
      * Used by handleTemporalFacets in search-v2
      */
@@ -342,11 +307,16 @@ export function createSearchV2Methods(core: Neo4jCore) {
       startTime: Date;
       endTime?: Date;
       aspects?: string[];
-    }): Promise<{ aspect: string; statementCount: number; statements: { fact: string; validAt: string; episodeUuid: string }[] }[]> {
+    }): Promise<
+      {
+        aspect: string;
+        statementCount: number;
+        statements: { fact: string; validAt: string; episodeUuid: string }[];
+      }[]
+    > {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
-      const aspectFilter = params.aspects && params.aspects.length > 0
-        ? "AND s.aspect IN $aspects"
-        : "";
+      const aspectFilter =
+        params.aspects && params.aspects.length > 0 ? "AND s.aspect IN $aspects" : "";
 
       // s.validAt and s.invalidAt are stored as ISO strings — use string comparison
       const query = `

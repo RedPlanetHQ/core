@@ -258,13 +258,15 @@ export class IntegrationLoader {
     const originalToolName = parts.slice(1).join("_");
 
     try {
-      return await IntegrationRunner.callTool({
+      const response = await IntegrationRunner.callTool({
         config: account.integrationConfiguration,
         integrationDefinition: account.integrationDefinition as any,
         toolName: originalToolName,
         toolArguments: args,
         timezone,
       });
+
+      return response;
     } catch (error: any) {
       const integrationSlug = account.integrationDefinition.slug;
 

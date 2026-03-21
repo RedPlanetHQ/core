@@ -88,12 +88,12 @@ export function OnboardingAgentLoader({
       )}
     >
       <div className="flex flex-col items-center gap-2">
-        <h2 className="max-w-[300px] text-lg">Getting to know you</h2>
-        <Loader2 className="size-5 animate-spin" />
-        <h2 className="max-w-[300px] text-lg">
+        <h2 className="max-w-[300px] text-xl">One moment. A good butler does his homework.</h2>
+        <Loader2 className="mb-10 size-5 animate-spin" />
+        <h2 className="text-muted-foreground max-w-[300px] text-lg">
           {status === "ready" && summary
-            ? "Got a few insights about you"
-            : latestUpdate || "Still learning..."}
+            ? "I think we shall get along rather well."
+            : latestUpdate || "Acquainting myself with your world..."}
         </h2>
       </div>
     </div>

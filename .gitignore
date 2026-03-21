@@ -69,3 +69,7 @@ AGENTS.md
 .conductor/
 
 maintenance/
+
+# Dolt database files (added by bd init)
+.dolt/
+*.db

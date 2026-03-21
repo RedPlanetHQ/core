@@ -632,14 +632,29 @@ export default function Reminders() {
   };
 
   const tabs = [
-    { label: "All", value: "all", isActive: currentFilter === "all", onClick: () => handleTabChange("all") },
-    { label: "Active", value: "active", isActive: currentFilter === "active", onClick: () => handleTabChange("active") },
-    { label: "Inactive", value: "inactive", isActive: currentFilter === "inactive", onClick: () => handleTabChange("inactive") },
+    {
+      label: "All",
+      value: "all",
+      isActive: currentFilter === "all",
+      onClick: () => handleTabChange("all"),
+    },
+    {
+      label: "Active",
+      value: "active",
+      isActive: currentFilter === "active",
+      onClick: () => handleTabChange("active"),
+    },
+    {
+      label: "Inactive",
+      value: "inactive",
+      isActive: currentFilter === "inactive",
+      onClick: () => handleTabChange("inactive"),
+    },
   ];
 
   return (
     <div className="flex h-full flex-col">
-      <PageHeader title="Reminders" tabs={tabs} />
+      <PageHeader title="Automations" tabs={tabs} />
 
       <div className="flex h-[calc(100vh)] w-full flex-col p-3 md:h-[calc(100vh_-_56px)]">
         {reminders.length === 0 ? (
@@ -647,10 +662,10 @@ export default function Reminders() {
             <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">
               <Bell className="text-primary h-6 w-6" />
             </div>
-            <h3 className="text-lg font-medium">No reminders yet</h3>
+            <h3 className="text-lg font-medium">No automations yet</h3>
             <p className="text-muted-foreground mt-1 max-w-md text-center text-sm">
-              Reminders will appear here when you create them through your agent
-              conversations.
+              Automations will appear here when you create them through your
+              agent conversations.
             </p>
           </div>
         ) : (

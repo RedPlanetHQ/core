@@ -291,15 +291,19 @@ export async function postAuthentication({
 }) {
   let workspace;
 
-  if (user.name && isNewUser && loginMethod === "GOOGLE") {
+  if (isNewUser) {
+    // Auto-create workspace for all new users with a generated name
+    const defaultName =
+      user.name || user.displayName || user.email.split("@")[0];
+
     workspace = await createWorkspace({
-      name: user.name,
+      name: defaultName,
       userId: user.id,
       integrations: [],
     });
 
-    // Auto-create Gmail and Calendar integrations if tokens are available
-    if (tokens && clientId && clientSecret) {
+    // Auto-create Gmail and Calendar integrations for Google signups
+    if (loginMethod === "GOOGLE" && tokens && clientId && clientSecret) {
       await autoCreateIntegrations({
         userId: user.id,
         workspaceId: workspace.id,
@@ -308,7 +312,6 @@ export async function postAuthentication({
         clientSecret,
       });
 
-      // Update user timezone from Google Calendar settings (only if calendar scope granted)
       if (hasRequiredScopes(tokens.scopes, CALENDAR_SCOPES)) {
         await updateUserTimezone({
           userId: user.id,
@@ -327,7 +330,7 @@ export async function postAuthentication({
         workspace: true,
       },
       orderBy: {
-        createdAt: 'asc', // Get the oldest (likely primary) workspace
+        createdAt: 'asc',
       },
     });
 

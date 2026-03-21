@@ -70,7 +70,7 @@ export type ExtractWorldResult = z.infer<typeof ExtractWorldSchema>;
 export const extractWorldPrompt = (
   context: Record<string, any>,
 ): ModelMessage[] => {
-  const sysPrompt = `You are building a user's digital brain. This brain is an API for agents — any agent (email drafter, meeting prep, code assistant, WhatsApp bot) queries it to understand the user's world.
+  const sysPrompt = `A good butler knows their employer's world completely. You are building that knowledge as graph facts — a searchable record any agent (email drafter, meeting prep, code assistant, WhatsApp bot) can query to understand who this person is, who they know, what they're working on, and what has happened.
 
 Your job: Extract WORLD FACTS as graph facts (SPO triples). These are the searchable index of the user's world — who they are, who they know, what they work on, what happened, what they decided.
 

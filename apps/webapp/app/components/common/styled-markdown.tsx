@@ -4,14 +4,14 @@ import { cn } from "~/lib/utils";
 const markdownComponents: Components = {
   h1: ({ className, ...props }) => (
     <h1
-      className={cn("mt-2 mb-1 text-3xl font-bold tracking-tight", className)}
+      className={cn("mb-1 mt-2 text-3xl font-bold tracking-tight", className)}
       {...props}
     />
   ),
   h2: ({ className, ...props }) => (
     <h2
       className={cn(
-        "mt-2 mb-1 text-2xl font-semibold tracking-tight",
+        "mb-1 mt-2 text-2xl font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -20,7 +20,7 @@ const markdownComponents: Components = {
   h3: ({ className, ...props }) => (
     <h3
       className={cn(
-        "mt-2 mb-1 text-xl font-semibold tracking-tight",
+        "mb-1 mt-2 text-xl font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -29,7 +29,7 @@ const markdownComponents: Components = {
   h4: ({ className, ...props }) => (
     <h4
       className={cn(
-        "mt-1.5 mb-0.5 text-lg font-semibold tracking-tight",
+        "mb-0.5 mt-1.5 text-lg font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -38,7 +38,7 @@ const markdownComponents: Components = {
   h5: ({ className, ...props }) => (
     <h5
       className={cn(
-        "mt-1.5 mb-0.5 text-base font-semibold tracking-tight",
+        "mb-0.5 mt-1.5 text-base font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -47,7 +47,7 @@ const markdownComponents: Components = {
   h6: ({ className, ...props }) => (
     <h6
       className={cn(
-        "mt-1.5 mb-0.5 text-sm font-semibold tracking-tight",
+        "mb-0.5 mt-1.5 text-sm font-semibold tracking-tight",
         className,
       )}
       {...props}
@@ -86,7 +86,7 @@ const markdownComponents: Components = {
   blockquote: ({ className, ...props }) => (
     <blockquote
       className={cn(
-        "mt-1 mb-1 border-l-4 border-gray-300 pl-4 text-gray-700 italic dark:border-gray-600 dark:text-gray-300",
+        "mb-1 mt-1 border-l-4 border-gray-300 pl-4 italic text-gray-700 dark:text-gray-300",
         className,
       )}
       {...props}
@@ -139,19 +139,13 @@ const markdownComponents: Components = {
     );
   },
   hr: ({ className, ...props }) => (
-    <hr
-      className={cn(
-        "my-2 border-t border-gray-300 dark:border-gray-600",
-        className,
-      )}
-      {...props}
-    />
+    <hr className={cn("my-2 border-t border-gray-300", className)} {...props} />
   ),
   table: ({ className, ...props }) => (
     <div className="mb-1 w-full overflow-auto">
       <table
         className={cn(
-          "w-full border-collapse border border-gray-300 dark:border-gray-600",
+          "w-full border-collapse border border-gray-300",
           className,
         )}
         {...props}
@@ -168,15 +162,12 @@ const markdownComponents: Components = {
     <tbody className={cn("", className)} {...props} />
   ),
   tr: ({ className, ...props }) => (
-    <tr
-      className={cn("border-b border-gray-300 dark:border-gray-600", className)}
-      {...props}
-    />
+    <tr className={cn("border-b border-gray-300", className)} {...props} />
   ),
   th: ({ className, ...props }) => (
     <th
       className={cn(
-        "border border-gray-300 px-4 py-2 text-left font-semibold dark:border-gray-600",
+        "border border-gray-300 px-4 py-2 text-left font-semibold",
         className,
       )}
       {...props}
@@ -184,10 +175,7 @@ const markdownComponents: Components = {
   ),
   td: ({ className, ...props }) => (
     <td
-      className={cn(
-        "border border-gray-300 px-4 py-2 dark:border-gray-600",
-        className,
-      )}
+      className={cn("border border-gray-300 px-4 py-2", className)}
       {...props}
     />
   ),

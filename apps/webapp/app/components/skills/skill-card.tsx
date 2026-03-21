@@ -41,7 +41,7 @@ export function SkillCard({ skill }: SkillCardProps) {
           "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow cursor-pointer items-start gap-2 rounded-md px-2",
         )}
         onClick={() => {
-          navigate(`/home/agent/skill/${skill.id}`);
+          navigate(`/home/agent/skills/${skill.id}`);
         }}
       >
         <div className="border-border flex w-full min-w-[0px] shrink flex-col gap-1 border-b py-2">
