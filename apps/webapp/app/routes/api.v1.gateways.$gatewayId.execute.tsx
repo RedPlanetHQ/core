@@ -19,6 +19,10 @@ const ExecuteGatewayBodySchema = z.union([
   }),
 ]);
 
+const ExecuteGatewayParams = z.object({
+  gatewayId: z.string(),
+});
+
 /**
  * POST /api/v1/gateways/:gatewayId/execute
  *
@@ -32,6 +36,7 @@ const ExecuteGatewayBodySchema = z.union([
 const { action } = createHybridActionApiRoute(
   {
     body: ExecuteGatewayBodySchema,
+    params: ExecuteGatewayParams,
     allowJWT: true,
     corsStrategy: "all",
   },
@@ -49,8 +54,13 @@ const { action } = createHybridActionApiRoute(
         );
         return json({ result });
       } catch (error: any) {
-        logger.warn(`Gateway tool failed: ${gatewayId}/${body.toolName}`, { error });
-        return json({ error: error.message ?? "Gateway tool failed" }, { status: 500 });
+        logger.warn(`Gateway tool failed: ${gatewayId}/${body.toolName}`, {
+          error,
+        });
+        return json(
+          { error: error.message ?? "Gateway tool failed" },
+          { status: 500 },
+        );
       }
     }
 
