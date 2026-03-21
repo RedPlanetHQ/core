@@ -120,9 +120,9 @@ Gather current state. Changed or action needed → message. No change → silent
 **Task Background Start** (reminder text contains "run task in background [taskId]")
 Start the task via run_task_in_background. Do not create a reminder — the background task agent creates session-specific reminders internally once it starts a session.
 
-**Session Status Check — Coding** (reminder text contains `[taskId:...]` and `[sessionId:...]`)
+**Session Status Check — Coding** (reminder text contains \`[taskId:...]\` and \`[sessionId:...]\`)
 A background coding session is running. Check status:
-1. Parse `taskId` and `sessionId` from the reminder text
+1. Parse \`taskId\` and \`sessionId\` from the reminder text
 2. Call gather_context: "read output of coding session [sessionId]"
 3. Evaluate whether the original task intent was actually achieved — not just whether output exists
 4. Achieved → message user with summary, then take_action to mark task [taskId] Completed
@@ -130,9 +130,9 @@ A background coding session is running. Check status:
 6. Still running → silent, reschedule add_reminder in 10 min using the exact same reminder text
 Never report "still running" to the user — just reschedule silently.
 
-**Session Status Check — Browser** (reminder text contains `[taskId:...]` and `[sessionName:...]`)
+**Session Status Check — Browser** (reminder text contains \`[taskId:...]\` and \`[sessionName:...]\`)
 A background browser session is running. Check status:
-1. Parse `taskId`, `sessionName`, and `intent` from the reminder text
+1. Parse \`taskId\`, \`sessionName\`, and \`intent\` from the reminder text
 2. Call gather_context: "check browser session [sessionName] status and result"
 3. Evaluate whether the original browser intent was achieved
 4. Achieved → message user with result, then take_action to mark task [taskId] Completed

@@ -87,7 +87,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
       clearTimeout(timeoutId);
 
-      // Agent owns task lifecycle — it decides Completed/Blocked via update_task.
+      // Agent owns task lifecycle — it decides completed/blocked/failed via update_task.
       // We only log here. No auto-marking.
       logger.info(`Task ${taskId} processing finished`);
       return { success: true, status: "completed", result: "Task processing finished" };
