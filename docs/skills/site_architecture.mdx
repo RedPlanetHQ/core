@@ -1,0 +1,194 @@
+---
+title: "Site Architecture"
+description: "Triggered when the user wants to plan, map, or restructure their website's page hierarchy, navigation, URL structure, or internal linking. Also use when the user mentions 'sitemap,' 'site map,' 'visual sitemap,' 'site structure,' 'page hierarchy,' 'information architecture,' 'IA,' 'navigation design,' 'URL structure,' or 'what pages do I need.'"
+category: "Content"
+integrations: []
+---
+
+**Goal:** Plan website structure so it's intuitive for users and optimized for search engines.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to plan or optimize site architecture.
+
+## Setup
+
+Search memory for:
+- "What are the main business goals for this site?"
+- "What's the target audience?"
+- "How many pages exist or are planned?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) New site or restructuring existing? (2) What type (SaaS / Content / E-commerce / Docs)? (3) What are your top 3 business goals?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Determine Site Type and Template
+
+Match your site to a starting template:
+
+| Site Type | Typical Depth | Key Sections | Example URLs |
+|-----------|--------------|--------------|-------------|
+| SaaS marketing | 2-3 levels | Home, Features, Pricing, Blog, Docs | `/features/analytics`, `/pricing` |
+| Content/blog | 2-3 levels | Home, Blog, Categories, About | `/blog/slug`, `/category/seo` |
+| E-commerce | 3-4 levels | Home, Categories, Products, Cart | `/shop/category/product` |
+| Documentation | 3-4 levels | Home, Guides, API Reference | `/docs/section/page` |
+| Small business | 1-2 levels | Home, Services, About, Contact | `/services/name` |
+
+## Step 2: Plan Page Hierarchy
+
+**The 3-Click Rule**: Important pages should be within 3 clicks of homepage.
+
+**Depth guidelines**:
+- Flat (2 levels): Simple but doesn't scale
+- Moderate (3 levels): Best for most sites
+- Deep (4+ levels): Only for large e-commerce or docs
+
+**Create ASCII tree structure**:
+
+```
+Homepage (/)
+├── Features (/features)
+│   ├── Analytics (/features/analytics)
+│   ├── Automation (/features/automation)
+│   └── Integrations (/features/integrations)
+├── Pricing (/pricing)
+├── Blog (/blog)
+│   └── [Category: SEO] (/blog/category/seo)
+├── Resources (/resources)
+│   ├── Case Studies (/resources/case-studies)
+│   └── Templates (/resources/templates)
+├── Docs (/docs)
+│   ├── Getting Started (/docs/getting-started)
+│   └── API Reference (/docs/api)
+├── About (/about)
+└── Contact (/contact)
+```
+
+## Step 3: Design Navigation
+
+### Header Navigation
+- 4-7 items max (more causes paralysis)
+- Order by priority/frequency
+- Logo links to homepage
+- CTA button on right (e.g., "Start Free Trial")
+
+### Footer Organization
+Group into columns:
+- **Product**: Features, Pricing, Integrations
+- **Resources**: Blog, Case Studies, Templates, Docs
+- **Company**: About, Careers, Contact, Press
+- **Legal**: Privacy, Terms, Security
+
+### Breadcrumbs
+```
+Home > Features > Analytics
+Home > Blog > SEO Category > Post Title
+```
+
+Every segment clickable except current page. Mirrors URL hierarchy.
+
+## Step 4: Define URL Structure
+
+**Best practices**:
+- Human-readable: `/features/analytics` not `/f/a123`
+- Hyphens only: `/blog/seo-guide` not `/blog/seo_guide`
+- Reflects hierarchy: URL path mirrors structure
+- Lowercase always
+- Short but descriptive
+
+**Patterns by page type**:
+
+| Page Type | Pattern | Example |
+|-----------|---------|---------|
+| Homepage | `/` | example.com |
+| Feature | `/features/{name}` | `/features/analytics` |
+| Pricing | `/pricing` | `/pricing` |
+| Blog post | `/blog/{slug}` | `/blog/seo-guide` |
+| Blog category | `/blog/category/{slug}` | `/blog/category/seo` |
+| Case study | `/customers/{slug}` | `/customers/acme-corp` |
+| Docs | `/docs/{section}/{page}` | `/docs/api/authentication` |
+| Comparison | `/compare/{competitor}` | `/compare/competitor-name` |
+
+## Step 5: Plan Internal Linking
+
+**Types**:
+- **Navigational**: Header, footer, sidebar (structural)
+- **Contextual**: Within content (related topics)
+- **Hub-and-spoke**: Pillar page to supporting content
+
+**Rules**:
+- Every page has ≥1 inbound internal link (no orphans)
+- Descriptive anchor text (not "click here")
+- 5-10 internal links per 1000 words of content
+- Link important pages more often
+- Use breadcrumbs (free links on every page)
+
+**Hub-and-spoke example**:
+- Hub: `/blog/seo-guide` (comprehensive overview)
+- Spokes link back to hub: `/blog/keyword-research`, `/blog/on-page-seo`, etc.
+- Hub links to all spokes
+- Spokes link to each other where relevant
+
+## Step 6: Avoid Common Mistakes
+
+- **Dates in URLs**: `/blog/2024/01/15/post` → Remove dates; use `/blog/post`
+- **Over-nesting**: `/products/category/subcategory/item` → Flatten to 2-3 levels max
+- **URL changes without redirects**: Every old URL needs 301 redirect
+- **IDs in URLs**: `/product/12345` → Use `/product/descriptive-name`
+- **Inconsistent patterns**: Don't mix `/features/analytics` and `/product/automation`
+
+## Output Format
+
+---
+
+**Site Architecture Plan — [Project Name]**
+
+**Site Overview**
+- Site type: [SaaS / Content / E-commerce / Other]
+- Planned page count: [Approximate]
+- Primary goal: [Conversions / Traffic / Education / Support]
+
+**Page Hierarchy (ASCII Tree)**
+[Full tree structure here]
+
+**Navigation Specification**
+- Header nav items: [Ordered list of 4-7 items with order]
+- CTA button: [Text and placement]
+- Footer sections: [Product / Resources / Company / Legal]
+- Breadcrumb: [Show how they display]
+
+**URL Mapping Table**
+| Page | URL | Parent | Priority |
+|------|-----|--------|----------|
+| Homepage | `/` | — | High |
+| Features | `/features` | Homepage | High |
+| [Page] | [URL] | [Parent] | [High/Med/Low] |
+
+**Internal Linking Plan**
+- Hub pages: [List key hubs and their spokes]
+- Contextual link opportunities: [Where to link between sections]
+- Orphan pages to fix: [Any pages with no inbound links]
+
+**Implementation Checklist**
+- [ ] Approve page hierarchy
+- [ ] Confirm URL structure
+- [ ] Plan 301 redirects (if restructuring)
+- [ ] Test navigation on desktop and mobile
+- [ ] Verify no broken links after launch
+
+---
+
+## Edge Cases
+
+- **Massive site (1000+ pages)**: Deep hierarchy necessary → Plan taxonomy carefully; use categories/tags effectively
+- **Multi-language site**: Separate `/en/`, `/es/`, `/fr/` subdirectories or subdomains
+- **Subdomain vs. subfolder**: Subfolder better for SEO; subdomains only if completely separate brand
+- **Restructuring with old URLs**: Maintain 301 redirects for 6+ months for backlink equity
+- **Mobile-specific needs**: Same structure for mobile and desktop; optimize navigation for touch
+- **Mega menu navigation**: Limit to 3-4 columns; too many options causes paralysis

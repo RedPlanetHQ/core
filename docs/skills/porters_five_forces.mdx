@@ -1,0 +1,205 @@
+---
+title: "Porter's Five Forces"
+description: "Analyze competitive forces using Porter's Five Forces framework. Triggered when users say 'analyze my competitive landscape', 'what's the competitive intensity in my market', or 'assess industry attractiveness'."
+category: Sales
+integrations: []
+---
+
+**Goal:** Evaluate industry attractiveness and competitive intensity using Porter's Five Forces framework.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+**Trigger:** Run on demand when the user asks to analyze competitive landscape, evaluate industry attractiveness, or assess strategic positioning against rivals.
+
+## Setup
+
+Search memory for any previously stored information:
+
+- "What industry or market does the user operate in?"
+- "Who are the main competitors?"
+- "What products or services does the user offer?"
+
+If nothing is found, ask once:
+
+> "To analyze competitive forces, I need to understand your industry and what you sell. What market are you in, and who are your main competitors?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Map Industry and Competitive Set
+
+Define the industry/market scope and identify the key players.
+
+Clarify:
+- Industry definition (be specific: "cloud-based HR for mid-market" not just "HR software")
+- **Threat Level:** Who are direct competitors (head-to-head), and who are indirect competitors (solving similar problems differently)?
+- Market size and growth rate (if known)
+- Major customer segments and purchasing power
+
+If the user is uncertain about competitors → ask them to name their top 3–5 closest rivals.
+
+Output: Clear definition of the competitive set and market scope.
+
+## Step 2: Assess Supplier Power
+
+Evaluate how much power suppliers have over your business.
+
+Analyze:
+- **Concentration of suppliers:** Are there many suppliers or few? If few → high supplier power
+- **Switching costs:** How easy is it for you to switch to alternative suppliers? Easy → low supplier power for them
+- **Threat of integration:** Could suppliers enter your market and compete? Yes → higher power
+- **Input criticality:** How important are these inputs to your product/service? Critical → higher supplier power
+- **Supplier alternatives:** Can you substitute inputs or suppliers easily? Yes → lower power
+
+Document 2–3 key suppliers or supplier categories and their power level (high/medium/low).
+
+If the user is unfamiliar with their supply chain → flag this as a knowledge gap and suggest a follow-up conversation.
+
+Output: Supplier power assessment with rationale.
+
+## Step 3: Assess Buyer Power
+
+Evaluate how much power customers have over your business.
+
+Analyze:
+- **Buyer concentration:** Do a few customers account for most revenue? Yes → high buyer power
+- **Switching costs:** How expensive or difficult is it for customers to switch to competitors? Easy → high buyer power for them
+- **Price sensitivity:** How price-sensitive are your customers? Very sensitive → higher power
+- **Threat of integration:** Could customers build/provide your product themselves? Yes → higher power
+- **Alternative products:** How many alternatives exist? Many → higher buyer power
+
+Document your top customer segments and their power level (high/medium/low).
+
+If you have no customer concentration data → ask: "Do any single customers or customer types represent >10% of your revenue?"
+
+Output: Buyer power assessment segmented by customer type if relevant.
+
+## Step 4: Assess Competitive Rivalry
+
+Evaluate the intensity of direct competition in your market.
+
+Analyze:
+- **Number and diversity of competitors:** Many similar-sized competitors → high rivalry. One dominant player → moderate rivalry
+- **Market growth:** High-growth markets → lower rivalry (room for all). Flat/declining → higher rivalry (zero-sum)
+- **Differentiation:** How much do competitors differ? High differentiation → moderate rivalry. Commoditized → high rivalry
+- **Fixed costs:** High fixed costs → competitors fight hard on price → higher rivalry
+- **Exit barriers:** Can unprofitable competitors exit easily? No → they stay and fight → higher rivalry
+
+Rate overall competitive rivalry (high/medium/low) with 2–3 supporting factors.
+
+Output: Competitive rivalry assessment with key dynamics.
+
+## Step 5: Assess Threat of New Entrants
+
+Evaluate how easily new competitors can enter the market.
+
+Analyze:
+- **Barriers to entry:** Capital requirements, regulatory licensing, brand moat, technology, distribution access
+- **Economies of scale:** Do incumbents have cost advantages from scale? Yes → high barrier
+- **Network effects:** Is the product more valuable with more users? Yes → high barrier for newcomers
+- **Switching costs:** Do customers have high costs to leave? Yes → high barrier
+- **Access to inputs:** Can new entrants easily secure suppliers, talent, technology? No → high barrier
+
+Assess threat level (high/medium/low). If high → expect new competitors soon. If low → you're relatively protected.
+
+Flag specific entry vectors (e.g., well-funded startups, adjacent incumbents, international entrants).
+
+Output: Threat of entry assessment with key barriers and vulnerabilities.
+
+## Step 6: Assess Threat of Substitutes
+
+Evaluate whether customers have alternatives to your product/service that serve the same need.
+
+Analyze:
+- **Functional substitutes:** Different products solving the same problem (e.g., email vs. Slack for communication)
+- **Price/value substitute:** More cost-effective alternatives (e.g., open-source vs. commercial)
+- **Behavioral substitutes:** Customers doing the job differently or in-house instead of outsourcing
+- **Switching costs:** How easy is it to switch to a substitute? Easy → high threat
+- **Performance/quality parity:** Are substitutes approaching feature/quality parity? Yes → higher threat
+
+Rate threat level (high/medium/low). Identify the top 2–3 substitute categories.
+
+If substitutes are indirect or unclear → brainstorm with the user: "What's an alternative way customers could solve this problem?"
+
+Output: Substitute threat assessment with specific examples.
+
+## Step 7: Synthesize and Recommend Strategy
+
+Combine all five forces into an overall attractiveness and strategy recommendation.
+
+- **Market attractiveness:** If most forces are high → market is unattractive (everyone's fighting). If most are low → attractive (room to grow).
+- **Strategic implications:** Which force is the biggest headwind? Focus on mitigation strategies there.
+
+Recommend positioning:
+- If **buyer power is high** → differentiate to reduce price pressure
+- If **supplier power is high** → invest in supply chain resilience or vertical integration
+- If **rivalry is high** → defend on brand, service, or niche differentiation
+- If **threat of entry is high** → invest in barriers (brand, switching costs, scale advantages)
+- If **threat of substitutes is high** → emphasize unique value and lock-in
+
+Output: Overall industry attractiveness rating and strategic recommendations.
+
+## Output Format
+
+---
+**Porter's Five Forces Analysis — [Industry/Market]**
+
+**Market Definition**
+- **Industry:** [Specific industry definition]
+- **Geographic scope:** [Regions/markets covered]
+- **Customer segments:** [Key buyer types]
+
+**Force 1: Supplier Power**
+- **Rating:** [High/Medium/Low]
+- **Key suppliers/inputs:** [2–3 critical suppliers or input categories]
+- **Rationale:** [Why suppliers have this level of power]
+- **Strategic implication:** [How this affects your business]
+
+**Force 2: Buyer Power**
+- **Rating:** [High/Medium/Low]
+- **Buyer concentration:** [Top customers represent [X]% of revenue]
+- **Switching costs:** [High/Medium/Low]
+- **Rationale:** [Why customers have this level of power]
+- **Strategic implication:** [How this affects your pricing and service]
+
+**Force 3: Competitive Rivalry**
+- **Rating:** [High/Medium/Low]
+- **Key competitors:** [2–3 direct competitors]
+- **Market growth:** [Growing/Flat/Declining]
+- **Rationale:** [Why rivalry is at this level]
+- **Strategic implication:** [Competition intensity and required differentiation]
+
+**Force 4: Threat of Entry**
+- **Rating:** [High/Medium/Low]
+- **Key barriers:** [2–3 main barriers protecting incumbents]
+- **Potential entrants:** [Types of new competitors to watch]
+- **Rationale:** [Why entry threat is at this level]
+- **Strategic implication:** [How to strengthen moats against new entrants]
+
+**Force 5: Threat of Substitutes**
+- **Rating:** [High/Medium/Low]
+- **Substitute categories:** [2–3 alternative solutions]
+- **Price/performance parity:** [Yes/No/Approaching]
+- **Rationale:** [Why substitute threat is at this level]
+- **Strategic implication:** [How to defend against substitution]
+
+**Overall Industry Attractiveness: [Attractive/Moderate/Unattractive]**
+
+**Strategic Recommendations**
+1. [Recommendation to address highest threat]
+2. [Recommendation to leverage favorable force]
+3. [Recommendation to strengthen competitive position]
+
+---
+
+## Edge Cases
+
+- **Nascent industry:** If the market is very new, some forces may be uncertain or undefined. Note which forces are speculative and recommend monitoring as the market matures.
+- **Highly regulated industry:** Regulatory entry barriers may be artificially high, limiting threat of entry. Flag this as a force unique to your industry.
+- **Horizontal/two-sided market:** If you operate a platform (e.g., app marketplace), assess each side separately (supplier = app developers, buyer = end users) and note interactions.
+- **Oligopolistic market:** If a few large players dominate, rivalry may be lower but buyer power may be concentrated. Note the dynamic explicitly.
+- **Global vs. local scope:** If the market is global, assess both global and local competitive forces; they may differ significantly.
+- **Rapid disruption:** If the industry is undergoing technological or business model change, flag which forces are in flux and recommend quarterly reassessment.

@@ -1,0 +1,101 @@
+---
+title: "Build User Stories"
+description: "Triggered when the user says 'create user stories' or 'write stories for this feature' or 'break down this into user stories'."
+category: Engineering
+integrations: []
+---
+
+**Goal:** Break a feature or requirement into well-structured, testable user stories using the 3 C's framework (Card, Conversation, Confirmation) and INVEST criteria.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Clarify the Feature or Requirement
+
+Ask the user to describe what they want to build:
+- Feature name
+- High-level goal or benefit
+- Any mockups, Figma links, or reference designs
+
+> "What are you trying to build, and what problem does it solve?"
+
+## Step 2: Break Into User Roles
+
+Identify the roles that interact with this feature:
+- Primary user
+- Supporting roles (admins, managers, etc.)
+- Any edge cases
+
+Example: For "user profile editing," roles include: regular user, admin, support agent.
+
+## Step 3: Create Stories Using the 3 C's Framework
+
+For each user role and interaction, create a story:
+
+**Card** — A written card (can be digital)
+**Conversation** — Discussion about the story with the team
+**Confirmation** — Acceptance criteria proving it's done
+
+Format each story as:
+
+```
+**Title:** [Simple feature name]
+
+**Description:**
+As a [user role], I want to [action], so that [benefit].
+
+**Design Reference:** [Link to Figma, Miro, or other visual]
+
+**Acceptance Criteria:**
+- [ ] [Testable condition covering main behavior]
+- [ ] [Edge case or error scenario]
+- [ ] [Integration point or system behavior]
+- [ ] [User-facing confirmation or feedback]
+- [ ] [Performance or data requirement, if applicable]
+```
+
+## Step 4: Apply INVEST Criteria
+
+For each story, check:
+- **Independent** — Can this be built without waiting for another story?
+- **Negotiable** — Is there room to discuss implementation details?
+- **Valuable** — Does this deliver real benefit?
+- **Estimable** — Can the team size/time estimate this?
+- **Small** — Can this fit in a single sprint?
+- **Testable** — Can you verify it's done?
+
+If a story fails any criteria, break it into smaller stories or clarify.
+
+## Step 5: Prioritize and Sequence
+
+Ask: "Which stories are dependencies for others?" Build a logical order. Mark dependencies.
+
+## Step 6: Present the Stories
+
+---
+
+**User Stories — [Feature Name]**
+
+**Story 1: [Title]**
+- Persona: [User role]
+- As a [user role], I want to [action], so that [benefit].
+- Design: [Link to mockup or reference]
+- Acceptance Criteria:
+  - [ ] [Criterion]
+  - [ ] [Criterion]
+  - [ ] [Criterion]
+- Depends on: [If any]
+- Effort estimate: [S/M/L or sprint capacity]
+
+**Story 2: [Title]**
+[Same format]
+
+---
+
+## Edge Cases
+
+- **No design provided:** Ask for a sketch or description. Suggest they create one before dev starts. Stories can proceed with rough details, but dev will need clarity later.
+- **Too broad:** Break it up. A story that takes more than one sprint is too big. Ask: "Can we do this in smaller pieces?"
+- **Unclear acceptance criteria:** Ask: "How will you know this is done? What does success look like?" Push for observable, testable outcomes.
+- **Dependent stories:** Mark clearly. Ask: "What needs to be built first?"

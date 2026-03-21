@@ -1,0 +1,205 @@
+---
+title: "Beachhead Segment"
+description: "Identify beachhead market segment for GTM strategy. Triggered when users say 'define my beachhead market', 'help me pick a target segment for launch', or 'what's my best entry market'."
+category: Sales
+integrations: []
+---
+
+**Goal:** Identify and validate the optimal market segment to target first for maximum traction and competitive advantage.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+**Trigger:** Run on demand when the user asks to identify a beachhead market, prioritize customer segments for launch, or design a segment-focused GTM strategy.
+
+## Setup
+
+Search memory for any previously stored segment analysis or go-to-market strategy:
+
+- "What customer segments are being considered?"
+- "What is the product or service?"
+- "What are the user's resources (team size, budget)?"
+
+If nothing is found, ask once:
+
+> "To find your beachhead market, I need to understand your options. What customer segments could you serve with your product or service?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: List Potential Customer Segments
+
+Enumerate all plausible customer segments the product could serve.
+
+For each segment, capture:
+- **Segment name:** Clear identifier (e.g., "Mid-market B2B SaaS," "Individual freelancers," "Fortune 500 finance teams")
+- **Size:** Estimated number of potential customers or TAM
+- **Geographic scope:** Region(s) the segment operates in
+- **Buying unit:** Who makes the purchase decision? (Individual, team lead, department head, CFO)
+- **Purchase cycle:** How long from awareness to sale? (Days, weeks, months, quarters)
+
+If the user lists vague segments → ask for examples: "Can you name 5 companies in this segment?" Specificity matters.
+
+Output: List of 4–6 potential segments with basic context.
+
+## Step 2: Assess Product-Market Fit Strength per Segment
+
+Evaluate how well the product solves the core problem for each segment.
+
+For each segment, rate:
+- **Problem acuity:** How badly does this segment experience the problem? (Scale: Critical, High, Moderate, Low)
+- **Uniqueness of fit:** Does your solution solve this problem better than alternatives? (Yes/Partially/No)
+- **Existing validation:** Have you talked to customers in this segment? Have any expressed strong interest?
+- **Defensibility:** Can you build a moat in this segment? (e.g., network effects, data, switching costs)
+
+If validation is lacking → note it and recommend: "Schedule 5 customer interviews per segment before deciding."
+
+Output: Product-market fit assessment by segment.
+
+## Step 3: Evaluate Market Attractiveness
+
+Assess the size, growth, and profitability potential of each segment.
+
+For each segment, evaluate:
+- **Market size (TAM/SAM):** Total addressable market; serviceable addressable market you can actually reach
+- **Growth rate:** Is the segment growing (expanding TAM) or flat/declining?
+- **Customer concentration:** Are customers spread out or concentrated? (Spread = easier to ignore you; concentrated = high-value buyers)
+- **Price sensitivity:** Is this segment price-sensitive (commoditized) or willing to pay premium for value?
+- **Profit margin potential:** Can you achieve healthy margins selling to this segment at scale?
+
+Rank segments by attractiveness: High (large, growing, high-margin), Medium, Low.
+
+If TAM is unknown → estimate: "How many companies fit this profile?" or research industry reports.
+
+Output: Market attractiveness ranking by segment.
+
+## Step 4: Assess Competitive Intensity
+
+Evaluate how crowded each segment is with competitors.
+
+For each segment, map:
+- **Direct competitors:** Solutions that solve the same problem the same way
+- **Indirect competitors:** Alternative approaches to the same problem
+- **Substitute products:** Different solutions to the same underlying need
+- **Competitive positioning:** Where are you vs. top 3 competitors on price, features, ease of use?
+
+Rate competitive intensity: High (crowded, low differentiation), Medium, Low (emerging or underserved).
+
+If a segment is highly competitive → note it as higher risk unless your differentiation is strong. If low competition → it may indicate low demand.
+
+Output: Competitive landscape map by segment.
+
+## Step 5: Assess Accessibility and Go-to-Market Ease
+
+Evaluate which segment is easiest and lowest-cost to reach and convert.
+
+For each segment, assess:
+- **Accessibility:** How easily can you reach customers? (Owned channels, partner networks, events, paid ads, community)
+- **Sales motion:** Can you win with self-serve, inside sales, or do you need enterprise sales? (Self-serve = faster; enterprise = slower)
+- **Customer acquisition cost (CAC):** Estimated cost to acquire one customer (known or estimated)
+- **Sales cycle:** How long from first contact to signed deal?
+- **Expansion potential:** Once you have the first customer, can you expand within the segment? (Upsell, cross-sell, enterprise expansion)
+
+Segments with low CAC and short sales cycles are easier to scale.
+
+Output: GTM accessibility and cost assessment by segment.
+
+## Step 6: Identify the Beachhead
+
+Synthesize Steps 2–5 to recommend the optimal first segment.
+
+The ideal beachhead segment has:
+- **Strong product-market fit:** Customers clearly need your solution
+- **Adequate market size:** Large enough to build a meaningful business (but not so large you need massive resources to reach)
+- **Low-to-moderate competition:** Room to gain differentiated positioning
+- **Accessibility:** Reachable with your current resources and budget
+- **Expansion path:** Customers in the segment can lead to adjacent segments later
+
+Rarely will one segment score highest across all dimensions. Trade-offs are normal.
+
+Recommended framework: "Start with the segment where you have the best product-market fit that's also accessible. Prove traction there (e.g., 10–20 paying customers). Then use that proof to expand into adjacent segments."
+
+Output: Recommended beachhead segment with rationale and risk assessment.
+
+## Step 7: Develop Beachhead-Focused GTM Plan
+
+Build a focused go-to-market strategy for the beachhead segment.
+
+Define:
+- **Customer profile:** Detailed persona for the beachhead segment (role, challenges, preferences)
+- **Messaging:** Value proposition tailored to this segment (what they care about most)
+- **Sales motion:** How will you sell? (Self-serve, free trial, direct sales, partnerships)
+- **Channels:** Top 2–3 ways to reach customers in this segment
+- **Customer acquisition goals:** How many customers do you want in the beachhead in [months]?
+- **Success metrics:** What proves the beachhead is working? (E.g., 20 paying customers, $5k MRR, <$500 CAC)
+- **Expansion triggers:** When and how will you expand to the next segment?
+
+Keep the plan focused: avoid distractions. Say "no" to requests from other segments until beachhead goals are met.
+
+Output: Beachhead-focused GTM roadmap.
+
+## Output Format
+
+---
+**Beachhead Market Analysis**
+
+**Potential Segments Evaluated**
+| Segment | Size (TAM) | Growth | PMF Strength | Competition | Accessibility | Score |
+|---------|---|---|---|---|---|---|
+| [Segment 1] | [Size] | [Growth rate] | [Strong/Moderate/Weak] | [High/Medium/Low] | [Easy/Moderate/Hard] | [Rank 1] |
+| [Segment 2] | [Size] | [Growth rate] | [Strong/Moderate/Weak] | [High/Medium/Low] | [Easy/Moderate/Hard] | [Rank 2] |
+| [Segment 3] | [Size] | [Growth rate] | [Strong/Moderate/Weak] | [High/Medium/Low] | [Easy/Moderate/Hard] | [Rank 3] |
+
+**Recommended Beachhead Segment: [Segment Name]**
+
+**Why This Segment**
+- **Product-market fit:** [Why your solution fits this segment best]
+- **Market attractiveness:** [Market size, growth, margin potential]
+- **Competitive advantage:** [Why you can win here]
+- **Accessibility:** [Why you can reach them cost-effectively]
+- **Expansion path:** [How this segment leads to others]
+
+**Beachhead Customer Profile**
+- **Title / Role:** [Primary buyer]
+- **Company:** [Typical company size, industry]
+- **Challenge:** [Core pain point you solve]
+- **Buying criteria:** [What matters most: price, speed, features, support?]
+- **Decision timeline:** [How fast do they buy?]
+
+**Beachhead GTM Strategy**
+- **Value proposition:** [Tailored message for this segment]
+- **Sales motion:** [Self-serve / Free trial / Direct sales / Partnerships]
+- **Customer acquisition channels:** 
+  1. [Channel 1]
+  2. [Channel 2]
+  3. [Channel 3]
+- **Customer acquisition cost (CAC):** $[X] (estimated or current)
+- **Sales cycle:** [Days / weeks / months]
+
+**Beachhead Goals (12-Month)**
+- **Customer count:** [X] paying customers
+- **Revenue:** $[X] MRR or ARR
+- **Churn rate:** [X]%
+- **CAC payback period:** [X] months
+
+**Success Metrics**
+- 📊 [Metric 1]: [Target by month 3]
+- 📊 [Metric 2]: [Target by month 6]
+- 📊 [Metric 3]: [Target by month 12]
+
+**Expansion Triggers**
+- After [X] customers or $[X] revenue in beachhead
+- Proceed to expand to: [Next segment]
+
+---
+
+## Edge Cases
+
+- **No clear winner:** If two segments score similarly, recommend starting with the one where you have an insider or first customer (proof of concept trumps analysis).
+- **Very small beachhead:** If the beachhead segment is small (e.g., <100 companies), validate that expansion paths exist before committing. A tiny beachhead can be a dead-end.
+- **Requires partnership to access:** If the easiest beachhead requires a partnership to reach (e.g., reseller, channel), factor partnership time-to-activation into the plan. May take 3–6 months before revenue flows.
+- **Conflicting feedback from customers:** If customers in the beachhead want different things, use frequency of requests to prioritize. If the top 3 customers want different features, ask which is blocking their purchase → prioritize that.
+- **Market shift during execution:** If a different segment suddenly becomes hot (regulatory change, competitor entry, new technology), reassess quarterly. Beachhead is not forever; be willing to pivot if data changes.
+- **Resource constraints:** If your team is very small, consider an even smaller subsegment of the beachhead (e.g., "series A software companies in the US" rather than "all mid-market SaaS companies globally"). Narrower = easier to dominate.

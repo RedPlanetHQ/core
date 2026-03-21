@@ -1,0 +1,139 @@
+---
+title: "Run Pre-Mortem"
+description: "Triggered when the user says 'run a pre-mortem', 'identify risks in this plan', or 'what could go wrong'."
+category: Execution
+integrations: []
+---
+
+**Work backward from assumed failure to identify hidden risks and prioritize mitigation before launch.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Preparation and Analysis
+
+Review the product plan thoroughly:
+- Study the PRD or feature specification in detail
+- Understand the target market and key success metrics
+- Document critical assumptions underpinning the product
+- Research competitive context and similar feature launches
+- Identify any areas of uncertainty or knowledge gaps
+
+Share relevant context with the team before the session.
+
+## Step 2: Risk Identification
+
+Run a structured brainstorming session. Use this framing: "Imagine the product launches in two weeks. It fails. What went wrong? What did we miss? Where were we overconfident?"
+
+Encourage the team to think broadly across:
+- **Product risk:** Does it actually solve the problem? Do users want it?
+- **Technical risk:** Does the implementation work as designed? Are there hidden complexity or performance issues?
+- **Market risk:** Is the go-to-market timing right? Are we overestimating demand?
+- **Organizational risk:** Do we have the team capacity and skills to execute?
+- **Operational risk:** Are there process gaps or communication breakdowns?
+
+Capture all concerns without evaluation. Quantity over quality in this phase.
+
+## Step 3: Risk Categorization
+
+Organize identified risks into three categories:
+
+**Tigers** — Legitimate, evidence-based problems that likely carry real consequences. These have supporting data or clear causal logic. **Action required.**
+
+**Paper Tigers** — Valid-sounding concerns that are unlikely to occur or have minimal impact. These feel risky but lack evidence or have low probability. **Monitor but deprioritize.**
+
+**Elephants** — Uncertain problems the team isn't discussing adequately. These are unspoken concerns or blindspots. **Investigate further.**
+
+## Step 4: Urgency Classification for Tigers
+
+For each Tiger, classify by launch readiness:
+
+- **Launch-Blocking:** Must be solved before launch. Failure is unacceptable.
+- **Fast-Follow:** Can launch but should solve within 30 days. Acceptable to ship with this risk.
+- **Track:** Monitor post-launch. Escalate only if it becomes an actual issue.
+
+## Step 5: Action Planning
+
+For each launch-blocking risk, develop:
+- **Mitigation strategy:** What will you do to reduce this risk?
+- **Owner:** Who is accountable for this risk?
+- **Decision date:** When must you make a launch/kill decision?
+
+## Step 6: Documentation
+
+Produce structured output separating each risk category with specific action plans for critical issues.
+
+## Output Format
+
+---
+
+**Pre-Mortem Analysis**
+
+**Product Overview**
+[One-sentence description of what's launching]
+
+**Critical Assumptions**
+- [Assumption 1: Expected to be true]
+- [Assumption 2: Expected to be true]
+- [Assumption 3: Expected to be true]
+
+**🚨 TIGERS: Legitimate, Addressable Risks**
+
+**Launch-Blocking Risks**
+
+**Risk 1: [Description]**
+- **Impact if true:** [Consequence of this failure]
+- **Mitigation strategy:** [What you'll do to address this]
+- **Owner:** [Responsible team member]
+- **Decision date:** [When to resolve]
+- **Validation/testing plan:** [How you'll confirm risk is mitigated]
+
+**Risk 2: [Description]**
+[Same structure]
+
+**Fast-Follow Risks**
+
+**Risk 1: [Description]**
+- **Impact if true:** [Consequence]
+- **Acceptable to ship:** [Why this won't block launch]
+- **Post-launch plan:** [30-day mitigation approach]
+
+**Track & Monitor**
+
+**Risk 1: [Description]**
+- **Why we're monitoring:** [Low probability, acceptable risk]
+- **Trigger to escalate:** [What signal indicates this became real]
+
+**📰 PAPER TIGERS: Unlikely or Low-Impact Concerns**
+
+**Concern 1: [Description]**
+- **Why it's low priority:** [Evidence or logic that deprioritizes]
+- **Decision:** [Park this / Minimal investment / Quick test]
+
+**Concern 2: [Description]**
+[Same structure]
+
+**👁️ ELEPHANTS: Unspoken or Unexplored Risks**
+
+**Elephant 1: [What the team isn't discussing]**
+- **Why it matters:** [Potential impact if true]
+- **Investigation approach:** [How to get more information]
+
+**Elephant 2: [What the team isn't discussing]**
+[Same structure]
+
+**Launch Decision**
+- **Go/No-Go:** [Yes, launch with mitigations / Delay for risk reduction / No, kill the initiative]
+- **Key success metrics:** [What we'll monitor post-launch]
+- **Escalation triggers:** [Conditions that would require post-launch course correction]
+
+---
+
+## Edge Cases
+
+- **Risk inflation:** Teams sometimes catastrophize. Push for evidence and probability estimates, not just "what if" scenarios.
+- **False confidence:** Experts can be overconfident in areas of past success. Explicitly solicit skeptics and disagreement.
+- **Organizational risk avoidance:** Some organizations kill too many initiatives based on theoretical risks. Balance thoroughness with shipping velocity.
+- **Competing priorities:** Multiple launch-blocking risks may require sequencing. Document which risks absolutely must be resolved first.
+- **Post-launch reality diverges:** Predicted risks may not materialize, or unforeseen issues emerge. Use actual market feedback to iterate on launch-day assumptions.

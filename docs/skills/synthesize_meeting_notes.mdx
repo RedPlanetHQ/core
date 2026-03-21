@@ -1,0 +1,175 @@
+---
+title: "Synthesize Meeting Notes"
+description: "Triggered when the user says 'summarize this meeting', 'synthesize these meeting notes', 'pull out the action items', or 'what did we decide in that meeting'."
+category: Execution
+integrations: []
+---
+
+**Goal:** Transform raw meeting notes into a clear, actionable summary with key decisions, action items, and next steps organized by owner and priority.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather Meeting Materials
+
+Collect the source material:
+- Raw meeting transcript or notes
+- Meeting date, attendees, and topic
+- Any supporting documents (slides, links, context)
+- Recording (if available)
+
+Ask: "What was the purpose of this meeting?" to frame the synthesis.
+
+## Step 2: Extract Key Decisions
+
+Identify all decisions made during the meeting:
+- What was decided? (Be specific, not vague)
+- Who decided it? (Was consensus or was it leadership call?)
+- What was the reasoning? (Why this decision, not the alternative?)
+- Timing: When does this take effect?
+
+List only decisions, not discussions. A discussion without a decision is a note, not a decision.
+
+## Step 3: Identify Action Items
+
+Pull out every action item explicitly stated or implied:
+- What action is needed?
+- Who is responsible? (Must be a specific person, not "the team")
+- When is it due? (Must have a date, not "soon")
+- What is success? (What does done look like?)
+
+If an action item doesn't have an owner or date, the meeting facilitation was incomplete. Flag this.
+
+## Step 4: Summarize Context and Rationale
+
+For each decision or major topic, capture:
+- Problem or context that prompted discussion
+- Alternatives considered (if any)
+- Trade-offs or risks identified
+- Who raised concerns or objections
+
+This helps future readers understand why a decision was made, not just what it was.
+
+## Step 5: Flag Open Questions and Parking Lot Items
+
+Note:
+- Questions that weren't answered
+- Topics that were deferred
+- Assumptions that need validation
+- Items to discuss in the next meeting
+
+Assign ownership for follow-up research if needed.
+
+## Step 6: Organize by Audience and Urgency
+
+Structure the output for different needs:
+- Urgent items (due this week)
+- Medium-term items (due this month)
+- Long-term items (future work)
+- FYI (people who need to know but no action)
+
+## Output Format
+
+---
+
+**Meeting Summary — [Meeting Topic]**
+
+**📅 Meeting Details**
+- **Date:** [Date and time]
+- **Attendees:** [List of people]
+- **Purpose:** [What this meeting was about]
+- **Duration:** [Minutes]
+
+---
+
+**🎯 Key Decisions**
+
+**1. [Decision Title]**
+
+What was decided: [Specific decision]
+
+Rationale: [Why this decision / problem it solves]
+
+Alternatives considered: [What else was discussed?]
+
+Owner/Approver: [Who made the final call]
+
+Timing: [When does this take effect?]
+
+---
+
+**2. [Decision Title]**
+[Same structure]
+
+---
+
+**⚡ Action Items**
+
+**URGENT (Due This Week)**
+
+| **Action** | **Owner** | **Due** | **Success Criteria** |
+|---|---|---|---|
+| [Specific action] | [Name] | [Date] | [How we'll know it's done] |
+| [Specific action] | [Name] | [Date] | [How we'll know it's done] |
+
+**THIS MONTH**
+
+| **Action** | **Owner** | **Due** | **Success Criteria** |
+|---|---|---|---|
+| [Specific action] | [Name] | [Date] | [How we'll know it's done] |
+
+**FUTURE / BACKLOG**
+
+| **Action** | **Owner** | **Target Date** | **Notes** |
+|---|---|---|---|
+| [Specific action] | [Name] | [Timeline] | [Any dependencies?] |
+
+---
+
+**📋 Context & Rationale** (for future reference)
+
+**Topic 1: [What was discussed]**
+
+Context: [What prompted this conversation?]
+
+Main points: [Key facts or data shared]
+
+Perspectives: [Who said what? Any disagreements?]
+
+---
+
+**Topic 2: [What was discussed]**
+[Same structure]
+
+---
+
+**❓ Open Questions**
+
+- [Unanswered question] — [Owner for follow-up, if any]
+- [Unanswered question] — [Owner for follow-up]
+
+---
+
+**🚀 Parking Lot** (Deferred Topics)
+
+- [Topic] — [Why deferred?] — [Next review: [When]]
+- [Topic] — [Why deferred?]
+
+---
+
+**📢 FYI / No Action Needed**
+
+- [Information shared that stakeholders should know]
+- [Announcement or update]
+
+---
+
+## Edge Cases
+
+- **No clear decisions made:** Flag this. "The meeting discussed X but didn't reach a decision. Is another meeting needed?"
+- **Action items without owner:** Escalate to the meeting organizer. Ask: "Who is responsible for this?"
+- **Action item due date is vague:** Default to the next relevant meeting or sprint. Clarify with the owner: "When do you need this?"
+- **Attendee disagreed with decision:** Note the dissent. "X raised a concern about [decision]. Here's their perspective: [Quote or paraphrase]."
+- **Partial attendees or late joiners:** Offer them a summary of decisions made before they arrived. Ask if they have input.
+- **Recording or transcript available but notes are sparse:** Use the recording to fill gaps. Prioritize decisions and action items over full transcription.

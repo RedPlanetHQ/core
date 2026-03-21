@@ -1,0 +1,176 @@
+---
+title: "Onboarding CRO"
+description: "Triggered when the user wants to optimize post-signup onboarding, user activation, first-run experience, or time-to-value. Also use when the user mentions 'onboarding flow,' 'activation rate,' 'user activation,' 'first-run experience,' 'empty states,' 'aha moment,' 'new user experience,' 'users aren't activating,' 'nobody completes setup,' 'low activation rate,' or 'time to value.'"
+category: "Activation"
+integrations: []
+---
+
+**Goal:** Help users reach their "aha moment" as quickly as possible and establish habits that lead to long-term retention.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to optimize post-signup onboarding or improve user activation.
+
+## Setup
+
+Search memory for:
+- "What's your activation event?"
+- "What's your current onboarding flow?"
+- "Where do users drop off?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) What action indicates a user 'gets' your product (aha moment)? (2) What happens right after signup? (3) Where do users currently drop off?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Define Activation
+
+Identify the single action that correlates with retention:
+
+Ask:
+- What do retained users do that churned users don't?
+- What's the earliest indicator of future engagement?
+- At what point does a user feel they've experienced value?
+
+Map to product type:
+- **Project management**: Create first project + add team member
+- **Analytics**: Install tracking + see first report
+- **Design tool**: Create first design + export/share
+- **Marketplace**: Complete first transaction
+
+This becomes your **activation metric**. Build onboarding to drive this single action.
+
+## Step 2: Design Post-Signup Moment
+
+Choose approach for immediate post-signup (first 30 seconds):
+
+- **Product-first**: Jump straight into product (best for simple, self-explanatory products)
+- **Guided setup**: Ask for personalization (adds friction, but personalizes experience)
+- **Value-first**: Show demo data or preview (fast, but may feel artificial)
+
+Whichever approach:
+- Clear single next action
+- No dead ends
+- Progress indication if multi-step
+
+## Step 3: Design Onboarding Checklist (If Applicable)
+
+If multiple setup steps needed:
+
+**Best practices**:
+- 3-7 items (not overwhelming)
+- Order by value (most impactful first)
+- Start with quick wins
+- Show progress bar or completion %
+- Celebrate on completion
+- Include dismiss option
+
+Example checklist items:
+1. Upload first dataset (2 minutes)
+2. Create first report (5 minutes)
+3. Invite team member (3 minutes)
+4. Customize settings (optional)
+
+## Step 4: Optimize Empty States
+
+Empty states are onboarding opportunities:
+
+**Good empty state**:
+- Explains what this area is for
+- Shows what it looks like with data
+- Clear primary action to add first item
+- Optional: Pre-populate with example data
+
+Bad: "No data yet" | Good: "You haven't created a report yet. [Create Your First Report]"
+
+## Step 5: Plan Email + In-App Coordination
+
+Trigger-based emails alongside in-app experience:
+
+- **Welcome email (hour 0)**: Reinforce value, point to product
+- **Incomplete onboarding (day 1, day 3)**: Gentle reminder, offer help
+- **Activation achieved (day 1-5)**: Celebrate + show next step
+- **Feature discovery (days 3, 7, 14)**: Introduce advanced features
+
+Emails should reinforce in-app actions, not duplicate them. Drive back to product with specific CTAs.
+
+## Step 6: Handle Stalled Users
+
+Define "stalled" criteria:
+- X days without logging in after signup
+- Started but didn't complete setup
+- Created initial data but didn't take next action
+
+Re-engagement tactics:
+1. Email sequence (reminder of value, address blockers, offer help)
+2. In-app recovery (welcome back message, pick up where left off)
+3. Human touch (for high-value accounts, personal outreach)
+
+## Step 7: Measure and Optimize
+
+Track key metrics:
+
+| Metric | Benchmark |
+|--------|-----------|
+| Activation rate (% reaching activation event) | 40-60% |
+| Time to activation | 15-30 minutes |
+| Onboarding completion rate | 50-80% |
+| Day 1/7/30 retention | 25-50% / 15-30% / 5-15% |
+
+Analyze funnel: Signup → Step 1 → Step 2 → Activation → Retention
+
+Identify biggest drops and focus there.
+
+## Output Format
+
+---
+
+**Onboarding Audit & Optimization — [Product Name]**
+
+**Current State**
+- Activation definition: [Specific action]
+- Current activation rate: [X%]
+- Time to activation: [X minutes/hours]
+- Biggest drop-off point: [Where users leave]
+
+**Onboarding Flow Design**
+1. Post-signup approach: [Product-first / Guided setup / Value-first]
+2. First 30 seconds: [What happens]
+3. Checklist items (if applicable): [List 3-7 items by priority]
+4. Time to activation: [Expected minutes]
+
+**Email Triggers**
+- Welcome (hour 0): [Message focus]
+- Incomplete reminder (day 1): [Message focus]
+- Activation achieved (day 1-5): [Celebration + next step]
+- Feature discovery (day 3, 7, 14): [What to introduce]
+
+**Empty State Improvements**
+- [Area]: Current → Recommended copy
+- [Area]: Current → Recommended copy
+
+**Stalled User Recovery**
+- Definition of "stalled": [Criteria]
+- Email sequence: [3-5 emails over X days]
+- In-app recovery: [Specific action/messaging]
+
+**Metrics Improvement Plan**
+- Current activation rate: [X%] → Target: [Y%]
+- Current time-to-activation: [X min] → Target: [Y min]
+- Current Day 7 retention: [X%] → Target: [Y%]
+
+---
+
+## Edge Cases
+
+- **Complex product (many features)**: Focus onboarding on ONE activation metric; advanced features later
+- **High-touch B2B (personalized demo)**: Onboarding may be guided by CSM; automate what you can
+- **Mobile app (permissions)**: Request permissions early but don't block; explain why each is needed
+- **No clear aha moment**: Gather data from active users; identify commonality in successful onboarding
+- **High activation already (>70%)**: Optimize for speed and engagement intensity; focus on Day 1-7 retention
+- **Users don't stick past Day 3**: Issue likely not onboarding; may be product-market fit or expectations mismatch

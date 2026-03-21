@@ -1,0 +1,79 @@
+---
+title: "Write Job Stories"
+description: "Triggered when the user says 'write job stories', 'create job story format requirements', or 'express this as a job story'."
+category: Execution
+integrations: []
+---
+
+**Write user narratives that focus on situation, motivation, and measurable outcomes rather than persona and features.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Identify Trigger Situations
+
+Define the specific context that prompts user action. Describe the circumstance or triggering event that makes the user seek a solution. Be concrete: "When I'm doing X..." not "When I need features..."
+
+## Step 2: Define Underlying Motivations
+
+Articulate why the situation matters. What is the user trying to achieve? What emotional or functional motivation drives the behavior? Connect to observable outcomes the user cares about.
+
+## Step 3: Clarify Desired Outcomes
+
+Document what success looks like from the user's perspective. Define observable, measurable results. Avoid describing the solution; describe the outcome they want.
+
+## Step 4: Apply JTBD Thinking
+
+Prioritize the underlying job over persona categories. The same person in different situations may have different jobs. Focus on the situation, not the person.
+
+## Step 5: Develop Acceptance Criteria
+
+Create 6-8 measurable criteria that validate the outcome has been achieved. Use concrete, observable language. Reference design materials if available (prototypes, mockups, workflows).
+
+## Step 6: Use Concrete Language
+
+Ensure all elements are specific and testable. Avoid vague language like "easy," "intuitive," or "better." Use measurable criteria that a designer or engineer can verify.
+
+## Step 7: Reference Design Materials
+
+Link stories to design artifacts when available. This clarifies expected user workflows and interaction patterns.
+
+## Step 8: Produce Finalized Job Stories
+
+Combine all elements into the standard format with detailed acceptance criteria.
+
+## Output Format
+
+---
+
+**Job Story**
+
+When [situation: the triggering context], I want to [motivation: the underlying desire], so I can [outcome: the measurable result].
+
+**Acceptance Criteria**
+
+- [ ] [Testable criterion 1]
+- [ ] [Testable criterion 2]
+- [ ] [Testable criterion 3]
+- [ ] [Testable criterion 4]
+- [ ] [Testable criterion 5]
+- [ ] [Testable criterion 6]
+- [ ] [Testable criterion 7]
+- [ ] [Testable criterion 8]
+
+**Context & Related Materials**
+
+- Design reference: [Link to Figma/prototype]
+- Related stories: [Cross-referenced job stories]
+- Priority: [Must have / Should have / Nice to have]
+
+---
+
+## Edge Cases
+
+- **Multiple jobs in one story:** If a single feature serves multiple jobs, create separate stories for each. Each job has different success criteria.
+- **Situational vs. dispositional motivation:** Be specific about the situation. "When I'm launching a new campaign..." is more actionable than "When I want to launch things."
+- **Acceptance criteria too technical:** Avoid implementation details in criteria. Focus on user-observable outcomes, not code or architecture.
+- **Outcome ambiguity:** "Feel confident" or "know more" are vague. Require measurable outcomes: "See a ranked list of options" or "Receive an alert if X happens."
+- **Missing context:** Job stories without rich situational context often become generic feature descriptions. Invest in understanding the trigger situation.

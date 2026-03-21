@@ -1,0 +1,246 @@
+---
+title: "Competitive Battlecard"
+description: "Create competitive battlecard for sales team. Triggered when users say 'create a battlecard for our sales team', 'help me build a competitive battlecard', or 'what's our positioning vs. competitor X'."
+category: Sales
+integrations: []
+---
+
+**Goal:** Build a one-page competitive battlecard that arms sales teams with positioning, messaging, and objection-handling tactics for each major competitor.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+**Trigger:** Run on demand when the user asks to create a competitive battlecard, develop sales positioning against rivals, or prepare sales team for competitive conversations.
+
+## Setup
+
+Search memory for any previously stored competitive positioning or sales enablement materials:
+
+- "What are the main competitors the user faces?"
+- "What is the user's product positioning?"
+- "What are the most common competitive objections?"
+
+If nothing is found, ask once:
+
+> "To build a battlecard, I need to know: Who are your top 3 competitors, and what is your product or service?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Identify Target Competitors
+
+List the competitors the sales team encounters most frequently.
+
+Focus on:
+- **Direct competitors:** Solutions that solve the same problem the same way
+- **Frequent encounters:** Competitors that come up in loss analysis, RFPs, or customer conversations
+- **High-risk competitors:** Competitors winning deals your team lost
+
+Avoid building battlemaps for every competitor in the market. Pick 3–5 that matter most.
+
+For each, gather:
+- Company name and founding year
+- Core product positioning
+- Typical customer profile
+- Estimated market share or customer count (if known)
+- Pricing model and rough price range
+
+If competitive data is sparse → recommend: "Request this from sales team; they know which competitors hurt most."
+
+Output: Priority list of 3–5 target competitors.
+
+## Step 2: Map Competitor Positioning and Features
+
+Document how each competitor positions and what features they highlight.
+
+For each competitor, research/gather:
+- **Positioning:** How do they describe their value to customers? (from website, pitch deck, customer calls)
+- **Target customer:** What type of buyer do they target?
+- **Core features:** What are their 5–7 headline features?
+- **Pricing:** What is their pricing model and approximate price range?
+- **Strengths:** What do they do well? Why do customers choose them?
+- **Weaknesses:** What gaps do they have? Why do customers leave them?
+
+Use multiple sources:
+- Competitor website and product tour
+- G2/Capterra reviews (genuine customer feedback)
+- Sales team feedback from lost deals ("Why did they choose Competitor X?")
+- Industry reports or analyst reviews
+
+If data is limited → note assumptions and recommend updating as you learn.
+
+Output: Competitive feature and positioning matrix.
+
+## Step 3: Define Your Differentiation
+
+Clearly articulate what you do better than each competitor.
+
+For each competitor, document:
+- **Differentiation:** On what dimension do you win? (Price, speed, features, ease of use, customer support, industry expertise, integration ecosystem, data security)
+- **Why it matters:** Why should the customer care about this difference?
+- **Proof:** What is your evidence? (Customer testimonials, case studies, product demo, benchmark data)
+
+Avoid claiming superiority without proof. If the evidence is weak → flag it and recommend gathering it.
+
+Prioritize 2–3 key differentiators per competitor. Avoid claiming you're better at everything (signals that you haven't done competitive analysis).
+
+Output: Differentiation map vs. each competitor.
+
+## Step 4: Develop Win Stories
+
+Create short customer-centric narratives showing why customers chose you over competitors.
+
+For each major competitor, write 1–2 win stories:
+- **Customer profile:** Who they are (title, company, industry)
+- **Initial consideration set:** Which competitors were they evaluating?
+- **Decision driver:** What was the key factor in choosing you? (Usually not a feature—it's an outcome, value prop, or customer experience)
+- **Result:** How has the customer benefited? (Quantified if possible)
+
+Example win story:
+> **Customer:** VP of Product at a Series B health tech startup
+>
+> **Alternatives considered:** Competitor X and Competitor Y
+>
+> **Why they chose us:** They needed a solution that integrated with their existing tech stack. Competitor X required a 6-month implementation; we had them live in 2 weeks.
+>
+> **Result:** Shipped their feature faster, reduced time to market by 1 month, won more customer deals.
+
+If you lack win stories → recommend: "Identify 2–3 recent deals you won against these competitors and document the decision drivers."
+
+Output: 1–2 win stories per competitor.
+
+## Step 5: Build Objection Handling Scripts
+
+Arm sales team with responses to common competitive objections.
+
+For each competitor, identify 2–4 objections your sales team hears:
+
+**Objection:** "Competitor X is cheaper."
+- **Root cause:** Customer is price-sensitive or doesn't yet understand your value
+- **Response:** "[Your product] costs [X]% more, but it saves you [Y hours/cost] per month through faster implementation and fewer integrations. The payback period is [Z months]."
+- **Follow-up:** "Would a free trial help you see the time savings first-hand?"
+
+**Objection:** "Competitor X has feature [Y]."
+- **Root cause:** Customer values that specific feature highly
+- **Response:** "We prioritize the features that deliver the most customer value. [Your product] focuses on [A, B, C], which deliver [outcome]. That said, [feature Y] is on our roadmap for [quarter]."
+- **Follow-up:** "Would you like to see how our current approach to [problem] compares?"
+
+Avoid defensive language. Acknowledge competitor strength and pivot to your strength.
+
+Output: Objection handling scripts with 2–4 objections per competitor.
+
+## Step 6: Identify Intelligence Gaps
+
+Flag competitive information your sales team needs but doesn't have.
+
+Ask:
+- "What questions do customers ask that you can't answer?"
+- "What competitor capabilities come up in deals you lose?"
+- "What new competitor products or features should we monitor?"
+
+Create an intelligence wish-list:
+- Feature comparisons you need to research
+- Pricing or customer count data gaps
+- Customer success stories or case studies from competitors
+- Analyst reports or industry benchmarks
+
+Assign ownership: "Sales team provides feedback monthly; we refresh the battlecard quarterly."
+
+Output: Competitive intelligence gaps and refresh plan.
+
+## Step 7: Package and Distribute
+
+Format the battlecard for easy sales use and commit to refresh cadence.
+
+Recommended formats:
+- **One-pager per competitor:** Printed or digital, easy to reference during calls
+- **Digital playbook:** Searchable document (Google Doc, Notion, or wiki) organized by competitor and objection
+- **Slack bot or sales tool integration:** Embed in CRM or sales tools for real-time access
+
+Distribution plan:
+- Train sales team on how to use the battlecard
+- Share during sales kickoff or quarterly business reviews
+- Make it searchable (e.g., "Battlecard: Competitor X" in wiki)
+- Refresh quarterly or when there's a major competitor move (new funding, feature launch, price change)
+
+If the battlecard gets out of date → it loses credibility. Assign one person to own updates.
+
+Output: Packaged battlecard and distribution/refresh plan.
+
+## Output Format
+
+---
+**Competitive Battlecard — [Your Company/Product]**
+
+**Competitor: [Competitor Name]**
+
+**At a Glance**
+- **Founded:** [Year]
+- **Target customer:** [Customer profile]
+- **Positioning:** [How they describe themselves]
+- **Pricing:** [Model] — Approx. $[X]/month or $[X]/year
+- **Est. market share:** [X]% (or "Unknown")
+
+**Their Strengths**
+- ✅ [Strength 1]
+- ✅ [Strength 2]
+- ✅ [Strength 3]
+
+**Their Weaknesses**
+- ❌ [Weakness 1]
+- ❌ [Weakness 2]
+- ❌ [Weakness 3]
+
+**How We Differentiate**
+| Dimension | Competitor | Us | Why It Matters |
+|-----------|---|---|---|
+| [Feature/capability 1] | [What they offer] | [What we offer] | [Customer impact] |
+| [Feature/capability 2] | [What they offer] | [What we offer] | [Customer impact] |
+| [Feature/capability 3] | [What they offer] | [What we offer] | [Customer impact] |
+
+**Win Story**
+> [Customer profile] was evaluating [Competitor] and us. They chose us because [decision driver]. Result: [quantified outcome].
+
+**Common Objections & Responses**
+
+**Objection:** "[Competitor] is cheaper."
+- **Response:** [Your positioning on price/value ratio]
+- **Follow-up:** [Suggested next step or demo focus]
+
+**Objection:** "[Competitor] has [feature X]."
+- **Response:** [Your positioning on this capability; roadmap if relevant]
+- **Follow-up:** [Suggested next step or demo focus]
+
+**Objection:** "[Competitor] is the market leader / has more customers."
+- **Response:** [Your positioning on why you're better for them despite incumbency]
+- **Follow-up:** [Suggested next step or demo focus]
+
+**Objection:** "[Competitor] integrates with [tool X]."
+- **Response:** [Your positioning on integrations and ecosystem]
+- **Follow-up:** [Suggested next step or demo focus]
+
+**Sales Tips**
+- 🎙 Lead with [your key differentiator], not their weakness
+- 🎙 Use [win story] when they mention [competitor objection]
+- 🎙 Ask "What matters most to you?" before defending against objections
+
+**Intelligence Gaps**
+- Need to validate: [Gap 1]
+- Need to research: [Gap 2]
+- Need case study: [Gap 3]
+
+**Last Updated:** [Date]
+**Next Review:** [Date]
+
+---
+
+## Edge Cases
+
+- **Competitor with legitimate superiority:** If a competitor genuinely beats you on a feature or price, acknowledge it. Do not claim false superiority. Instead, pivot: "They win on [X], but they lag on [Y], which most customers prioritize. Here's why [Y] matters more."
+- **Many competitors:** If you face 10+ competitors, pick the 5 that win deals against you. Build battlemaps for those only. Add others incrementally as they become relevant.
+- **Rapidly evolving competitive landscape:** If competitors launch features frequently, establish a quarterly or semi-annual refresh cadence. Assign one person to monitor competitor announcements.
+- **Competitor acquires critical capability:** If a competitor adds a feature that was a key differentiator for you, update the battlecard immediately and brief sales team. Do not let this surprise a customer call.
+- **Competitor undercuts on price:** If a competitor drops price, do not immediately follow. Understand their business model (are they sustainable?). Pivot to value-based selling instead (CAC payback, outcome-driven ROI).
+- **Sales team ignores battlecard:** If adoption is low, investigate why. Is it outdated? Hard to access? Not relevant to their deals? Collaborate with sales to refine the format and content, not just publish and abandon.

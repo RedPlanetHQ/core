@@ -1,0 +1,124 @@
+---
+title: "Analyze A/B Test"
+description: "Triggered when the user says 'analyze this A/B test', 'interpret test results', or 'should we ship this test'."
+category: Analytics
+integrations: []
+---
+
+**Evaluate A/B test results with statistical rigor and translate findings into actionable product decisions.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Understand the Experiment
+
+Clarify the test setup:
+- **Hypothesis:** What did you expect to happen?
+- **Change made:** What was different between control and variant?
+- **Primary metric:** What's the key success metric?
+- **Guardrail metrics:** What else could break (revenue, engagement, etc.)?
+- **Test duration:** How long did it run?
+- **Traffic allocation:** What % of users in control vs. variant?
+
+## Step 2: Validate Test Setup
+
+Ensure the test was run correctly:
+- **Sample size:** Is it large enough for 80%+ statistical power?
+- **Duration:** Did it run through complete business cycles (weekdays + weekends)?
+- **Randomization:** Were users randomly assigned?
+- **Stabilization:** Did initial behavior changes stabilize after Day 2-3?
+- **No peeking:** Were decisions delayed until test completed?
+
+## Step 3: Calculate Statistical Metrics
+
+For control and variant, compute:
+- **Conversion rates:** % of users taking the desired action
+- **Relative lift:** (Variant - Control) / Control × 100%
+- **P-value:** Is the result statistically significant? (< 0.05 is standard)
+- **Confidence interval:** Range of plausible true values (95% CI)
+- **Statistical significance:** Is it real, or could it be chance?
+
+## Step 4: Check Guardrail Metrics
+
+Ensure secondary metrics didn't suffer:
+- Revenue per user stable?
+- User engagement maintained?
+- Support requests unchanged?
+- Key flows still working?
+
+If guardrails degraded, investigate before shipping.
+
+## Step 5: Assess Practical Significance
+
+Beyond statistics, ask:
+- Is the improvement **meaningful** in business terms?
+- Is the **effect size large enough** to justify shipping?
+- Will **long-term retention** hold up the gain?
+- Does it **align with user research** and qualitative feedback?
+
+## Step 6: Make a Decision
+
+**Ship** if:
+- Primary metric shows significant positive lift
+- Guardrail metrics unchanged or improved
+- Practical significance justified
+
+**Investigate** if:
+- Positive lift but guardrail trade-offs exist
+- Non-obvious secondary effects
+
+**Extend** test if:
+- Showing positive trends but not yet significant
+- Need more data to reach statistical power
+
+**Stop & iterate** if:
+- Negative results or flat performance
+- Test ran to completion without reaching significance
+
+**Don't ship** if:
+- Negative impact on primary or guardrail metrics
+
+## Output Format
+
+---
+
+**A/B Test Analysis**
+
+**📊 Test Overview**
+- **Hypothesis:** [What you expected to happen]
+- **Change:** [Description of variant]
+- **Duration:** [Start to end date]
+- **Traffic allocation:** [Control % vs. Variant %]
+- **Sample size:** [Users per group]
+
+**📈 Results**
+
+| Metric | Control | Variant | Lift | P-value | Significant? |
+|--------|---------|---------|------|---------|---|
+| **Primary metric** | [%] | [%] | [+/-X%] | [p-value] | Yes / No |
+| Guardrail 1 | [Value] | [Value] | [±X%] | [p-value] | ✅ / ⚠️ |
+| Guardrail 2 | [Value] | [Value] | [±X%] | [p-value] | ✅ / ⚠️ |
+
+**🎯 Statistical Analysis**
+- **Confidence interval (95%):** [Range]
+- **Statistical significance:** [Yes / No]
+- **Practical significance:** [Large / Medium / Small effect]
+
+**💡 Recommendation**
+
+**Action:** [Ship / Investigate / Extend / Don't Ship]
+
+**Rationale:** [Why this decision. Consider both statistical and practical significance]
+
+**Next Steps:** [If extending, what to measure; if investigating, what to dig into; if shipping, rollout plan]
+
+---
+
+## Edge Cases
+
+- **Sample size too small:** Test didn't reach statistical power. Extend or accept higher error risk.
+- **Seasonal effects:** If test ran during unusual period (holiday, event), extend to normal period.
+- **Guardrail trade-off:** Positive primary, negative guardrail. Investigate which matters more to business.
+- **High variance:** Some metrics are noisy. May need longer test duration to reach significance.
+- **Multiple tests:** If running many tests, adjust p-value threshold to account for multiple comparisons.

@@ -1,0 +1,192 @@
+---
+title: "Signup Flow CRO"
+description: "Triggered when the user wants to optimize signup, registration, account creation, or trial activation flows. Also use when the user mentions 'signup conversions,' 'registration friction,' 'signup form optimization,' 'free trial signup,' 'reduce signup dropoff,' 'account creation flow,' 'people aren't signing up,' 'signup abandonment,' or 'nobody completes registration.'"
+category: "Conversion"
+integrations: []
+---
+
+**Goal:** Reduce friction in signup flows and increase completion rates.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to optimize a signup or registration flow.
+
+## Setup
+
+Search memory for:
+- "What's your current signup completion rate?"
+- "How many fields do you require?"
+- "What happens immediately after signup?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) Current completion rate if known? (2) How many steps/screens? (3) What data do you absolutely need before they can use the product?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Audit Field Requirements
+
+For each field, ask: Do we absolutely need this before they use the product?
+
+**Typical priority**:
+- Essential: Email, Password
+- Often needed: Name
+- Usually deferrable: Company, Role, Team size, Phone, Address
+
+**Rule**: Defer unnecessary fields to after signup (progressive profiling).
+
+## Step 2: Assess Current Completion Rate
+
+Establish baseline:
+- What % of visitors who start signup complete it?
+- Where do users drop off?
+- Is it field-specific (e.g., password strength) or general?
+
+Segment by:
+- Desktop vs. mobile
+- Traffic source (organic vs. paid)
+- New vs. returning
+- Device type
+
+## Step 3: Evaluate Single-Step vs. Multi-Step
+
+**Single-step works when**:
+- 3 or fewer fields
+- Simple B2C products
+- High-intent visitors
+
+**Multi-step works when**:
+- More than 3-4 fields needed
+- Complex B2B products
+- Different info types required
+
+**Multi-step best practices**:
+- Show progress indicator
+- Lead with easy questions (email, name)
+- Harder questions later (commitment increases compliance)
+- Each step feels completable in seconds
+- Allow back navigation
+- Save progress
+
+## Step 4: Optimize Key Fields
+
+### Email Field
+- Single field (no confirmation field)
+- Inline format validation
+- Check for common typos (gmial → gmail)
+- Clear error messages
+
+### Password Field
+- Show/hide toggle (eye icon)
+- Show requirements upfront
+- Real-time strength meter
+- Allow paste (don't disable)
+
+### Social Auth
+- Place prominently (often higher conversion than email)
+- Show 2-3 most relevant options
+- B2B: Google, Microsoft, SSO
+- B2C: Google, Apple, Facebook
+- "Sign up with Google" as primary
+
+### Company Name
+- Auto-suggest as you type
+- Optional if possible
+- Infer from email domain
+
+### Phone Number
+- Defer unless essential
+- Use proper input type with country code
+- Format as they type
+
+## Step 5: Handle Post-Submit
+
+**Success state**:
+- Clear confirmation message
+- Immediate next action or next step
+- If email verification required: explain, offer resend, link to spam folder
+
+**Verification flows**:
+- Consider delaying verification until necessary
+- Magic link as alternative to password
+- Let users explore product while awaiting verification
+- Auto-log-in after email confirmation
+
+## Step 6: Optimize for Mobile
+
+- Large touch targets (44px+)
+- Appropriate keyboard types (email, tel)
+- Autofill support
+- Single column layout
+- Sticky CTA button
+- Reduce typing with social auth
+
+## Step 7: Plan A/B Tests
+
+Recommended tests:
+- Single-step vs. multi-step
+- Reduce fields (email + password only)
+- Social auth prominent vs. not
+- Email verification required vs. delayed
+- CTA button text
+- Trust elements near form
+
+## Output Format
+
+---
+
+**Signup Flow CRO — [Product Name]**
+
+**Current State**
+- Flow type: [Free trial / Freemium / Paid / Waitlist]
+- Current completion rate: [X%]
+- Number of steps/screens: [N]
+- Drop-off point: [Which field or step]
+
+**Field Analysis**
+- Essential fields: [Email, Password, Name]
+- Deferrable fields: [Company, Role, Phone]
+- Fields to remove: [Why unnecessary]
+
+**Recommended Design**
+- Approach: [Single-step / Multi-step]
+- Recommended fields: [Ordered list]
+- Field labels: [Copy for each]
+- CTA button text: [Specific action]
+- Error handling: [How to display errors]
+
+**Mobile Optimization**
+- Layout: [Single column / Responsive]
+- Touch targets: [All 44px+]
+- Social auth: [Which options, prominence]
+- Keyboard: [Appropriate for each field]
+
+**Post-Submit Experience**
+- Verification: [Required / Delayed]
+- Auto-login: [Yes / No]
+- Next step: [Where they go after signup]
+
+**Test Hypotheses**
+- Test [flow variation] to improve [conversion %]
+- Test [field changes] to measure impact on completion
+- Test [social auth options] by [audience segment]
+
+**Implementation Priority**
+1. [Quick fix with highest impact]
+2. [Test [hypothesis] ]
+3. [Longer-term improvement]
+
+---
+
+## Edge Cases
+
+- **Credit card required for trial**: Increases friction; only if necessary for compliance/fraud
+- **Email verification blocking product access**: Reduce friction by allowing exploration while unverified
+- **CAPTCHA on signup**: Hurts conversion; only if spam is critical issue
+- **Too many optional fields**: Optional fields still reduce completion; make truly optional (no label shown)
+- **Complex B2B workflow**: Segment by product/use case; different signup flows for different users
+- **High signup completion but low activation**: Problem is post-signup, not signup flow itself

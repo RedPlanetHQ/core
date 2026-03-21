@@ -1,0 +1,91 @@
+---
+title: "Customer Interview Summary"
+description: "Triggered when the user says 'summarize this interview' or 'process interview transcript' or 'extract interview insights'."
+category: Research
+integrations: []
+---
+
+**Goal:** Transform customer interview transcripts into structured summaries organized by Jobs to Be Done framework, satisfaction signals, and action items.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Parse the Interview Input
+
+Accept a transcript (pasted, uploaded, or linked). Extract metadata:
+- Interview date
+- Participant name(s)
+- Product area or context
+
+If metadata is missing, ask: "When was this interview, and who did you talk to?"
+
+## Step 2: Extract Interview Sections
+
+Parse the transcript into these categories:
+
+1. **Background** — Customer context (role, company, situation)
+2. **Current Solution** — How they currently solve the problem
+3. **What They Like** — Positive aspects (rate each 1-5)
+4. **Problems** — Pain points and frustrations (list 3-5)
+5. **Key Insights** — Surprising findings or notable quotes (max 125 characters each, 3-5)
+6. **Jobs to Be Done** — What the customer is trying to accomplish (1-2 sentences)
+
+For each section, extract exact phrases from the transcript when possible. If a section is empty, note "Not discussed."
+
+## Step 3: Identify Satisfaction Signals
+
+For each problem or friction point mentioned, estimate:
+- **Severity** (1-5, where 5 is critical)
+- **Frequency** (how often they encounter it)
+- **Current workaround** (what they do instead)
+
+## Step 4: Synthesize Action Items
+
+List follow-ups with:
+- Action
+- Owner (You / Customer / Team)
+- Due date (if mentioned)
+
+## Step 5: Present the Summary
+
+Output in this format:
+
+---
+
+**Interview Summary**
+
+**📅 Date & Participants**
+- Date: [Date]
+- Interviewee: [Name, Role]
+- Interviewer(s): [Your name]
+
+**🎯 Background**
+[2-3 sentences about their context]
+
+**Current Solution**
+[How they currently solve this problem]
+
+**What They Like** (Satisfaction levels 1-5)
+- [Aspect]: [Rating] — [Quote or reason]
+
+**🚨 Problems & Pain Points**
+- [Problem]: Severity [1-5], Frequency [often/sometimes/rare] — [Workaround]
+
+**💡 Key Insights**
+- [Surprising finding or direct quote, max 125 chars]
+
+**Jobs to Be Done**
+[1-2 sentences describing what they're trying to accomplish]
+
+**⚡ Next Steps**
+- [ ] [Action] — Owner: [You/Customer/Team] — Due: [Date]
+
+---
+
+## Edge Cases
+
+- **No transcript provided:** Ask the user to paste or upload the interview recording/notes. If they only have a voice recording, offer to transcribe (note: this requires external tooling).
+- **Partial interview:** Proceed with what's available. Note sections as "Not discussed."
+- **Vague language:** Ask clarifying questions in the output ("You mentioned 'frustration'—can you tell me more about that?").
+- **Multiple interviewees:** Create one summary per person if their perspectives differ significantly; otherwise, blend insights and note where views diverged.

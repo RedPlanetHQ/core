@@ -1,0 +1,159 @@
+---
+title: "Draft PRD"
+description: "Triggered when the user says 'write a PRD' or 'create a product requirements document' or 'document this feature'."
+category: Product
+integrations: []
+---
+
+**Goal:** Guide product teams through creating a comprehensive Product Requirements Document using a structured 8-section template.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather PRD Context
+
+Ask for:
+- **Initiative name** — What are we building?
+- **Why now** — What's the business/customer driver?
+- **Key stakeholders** — Who needs to sign off or contribute?
+- **Rough timeline** — When does this need to launch?
+- **Target customer segment** — Who benefits?
+
+Store this in memory under "PRD - [Initiative Name]" so you don't ask again.
+
+## Step 2: Outline the 8 Sections
+
+Walk through each section, gathering information:
+
+1. **Summary** (2-3 sentences)
+2. **Contacts** (stakeholders, owners)
+3. **Background** (why we're doing this)
+4. **Objective** (goals and success metrics)
+5. **Market Segment** (target audience)
+6. **Value Proposition** (customer benefits)
+7. **Solution** (features, UX, tech approach)
+8. **Release** (timeline, versioning)
+
+## Step 3: Draft Section by Section
+
+For each section, gather input and guide the user toward clear, actionable language.
+
+**Section 1: Summary**
+- 2-3 sentences capturing what this feature/product does and why it matters
+- Should be readable by an executive unfamiliar with the context
+
+**Section 2: Contacts**
+- Product owner
+- Design lead
+- Engineering lead
+- Stakeholders (executives, partner teams)
+
+**Section 3: Background**
+- Context: what led to this initiative
+- Market condition or customer feedback driving it
+- Any prior attempts or related features
+- Timeline/dependencies
+
+**Section 4: Objective**
+- Primary goal (1 sentence)
+- Success metrics (OKRs or KPIs)
+- Definition of success
+- Constraints or assumptions
+
+**Section 5: Market Segment**
+- Target customer segment
+- Job-to-be-done or primary use case
+- Size of opportunity (if known)
+- Any personas or segment characteristics
+
+**Section 6: Value Proposition**
+- Customer problem being solved
+- How this solution addresses it
+- Competitive advantages or differentiation
+- Any switching costs or network effects
+
+**Section 7: Solution**
+- High-level feature set
+- User flows or screenshots/mockups (link to Figma)
+- Technical architecture (if complex)
+- Any assumptions or open questions to validate
+- Phasing or rollout plan (MVP vs. full release)
+
+**Section 8: Release**
+- Planned launch date
+- Rollout strategy (phased, beta, full)
+- Success metrics and tracking plan
+- Post-launch support or follow-ups
+
+## Step 4: Ask for Clarity on Ambiguities
+
+For any vague sections, ask:
+- "Can you give me a specific example?"
+- "What does success look like for this metric?"
+- "What's the biggest risk here?"
+- "What could go wrong?"
+
+## Step 5: Present the Full PRD
+
+---
+
+**PRD: [Initiative Name]**
+
+**Summary**
+[2-3 sentences describing the feature and its purpose]
+
+**Contacts**
+- Product Owner: [Name]
+- Design Lead: [Name]
+- Engineering Lead: [Name]
+- Stakeholders: [Names]
+
+**Background**
+[Why now? What triggered this? Customer feedback, market opportunity, strategic priority?]
+
+**Objective**
+- **Primary Goal:** [1 sentence]
+- **Success Metrics:**
+  - [Metric 1]: Target from [X] to [Y]
+  - [Metric 2]: Target from [X] to [Y]
+  - [Metric 3]: Target from [X] to [Y]
+- **Definition of Success:** [Qualitative description]
+
+**Market Segment**
+- **Target Customer:** [Segment name, size]
+- **Job to Be Done:** [1-2 sentences]
+- **Key Persona(s):** [Name, role, use case]
+
+**Value Proposition**
+- **Problem:** [What are they struggling with?]
+- **Solution:** [How we solve it]
+- **Differentiation:** [Why we're different]
+
+**Solution**
+- **Core Features:**
+  - [Feature 1]: [Brief description]
+  - [Feature 2]: [Brief description]
+- **User Flows:** [Link to Figma or description]
+- **Technical Approach:** [If complex, explain the architecture]
+- **Phasing:**
+  - MVP (v1.0): [Features]
+  - v1.1: [Follow-up features]
+- **Assumptions to Validate:**
+  - [ ] [Assumption 1]
+  - [ ] [Assumption 2]
+
+**Release Plan**
+- **Timeline:** [Launch target date]
+- **Rollout Strategy:** [Phased, beta, full]
+- **Success Metrics:** [What we'll track post-launch]
+- **Follow-ups:** [Next steps or related work]
+
+---
+
+## Edge Cases
+
+- **Not enough information:** Ask: "What's your top constraint—is it time, team capacity, or uncertainty about the approach?" Focus the PRD on what matters most.
+- **Too broad/ambitious:** Ask: "If you had to ship this in 2 weeks with minimal scope, what stays?" Build the MVP first; document future phases.
+- **Misaligned with stakeholders:** Note the disagreement explicitly in the PRD. Ask: "Let's resolve this before we build." Escalate if needed.
+- **No metrics defined:** Suggest KPIs based on similar features or industry benchmarks. Ask the team to confirm targets.

@@ -1,0 +1,327 @@
+---
+title: "Sales Pipeline Review"
+description: "Pulls deal and meeting data from the user's CRM, analyzes it across seven dimensions, and produces an executive summary and detailed diagnostic. Triggered when the user says 'review my pipeline', 'pipeline report', 'how's our pipeline looking', 'deal review', '1:1 prep', or 'weekly sales review'."
+category: Sales
+integrations:
+  - name: "Salesforce (optional)"
+    slug: "salesforce"
+  - name: "HubSpot (optional)"
+    slug: "hubspot"
+  - name: "Pipedrive (optional)"
+    slug: "pipedrive"
+  - name: "Notion (optional)"
+    slug: "notion"
+  - name: "Google Sheets (optional)"
+    slug: "google-sheets"
+---
+
+**Goal:** Pull deal and meeting data from whatever CRM the user tracks their pipeline in, analyze it over a chosen period, and produce a report that answers the questions a founder, sales leader, or AE actually cares about.
+
+| Tool | Purpose | Required |
+|------|---------|----------|
+| Salesforce / HubSpot / Pipedrive / Close | Pull deal and pipeline data via API or CSV export | No (one required) |
+| Supabase | Query deals or outreach tables directly | No (optional) |
+| Google Sheets | Read pipeline data from a spreadsheet | No (optional) |
+| Notion MCP | Query a Notion pipeline database | No (optional) |
+
+**Trigger:** Run on demand when the user asks for a pipeline review, deal review, 1:1 prep, board meeting prep, weekly sales review, or asks about meeting quality, conversion rates, or pipeline health. Also runs when an upstream workflow (Pipeline Ops, daily BDR rhythm) triggers an end-of-period review.
+
+### Setup
+
+On first run, collect and store these preferences. Skip on subsequent runs.
+
+**Data Source Config**
+
+| Question | Options | Stored As |
+|----------|---------|-----------|
+| Where do you track your pipeline? | Salesforce / HubSpot / Pipedrive / Close / Supabase / Google Sheets / CSV / Notion / Other | `crm_tool` |
+| How do we access it? | API / Export CSV / MCP tools / Direct query | `access_method` |
+| What object represents a "deal" in your system? | Opportunity / Deal / Lead / Meeting / Custom | `deal_object` |
+
+**Pipeline Stage Definitions**
+
+| Question | Purpose | Stored As |
+|----------|---------|-----------|
+| What are your pipeline stages in order? | Map data to a standard funnel | `pipeline_stages` |
+| Which stage means "qualified"? | Qualification rate calculation | `qualified_stage` |
+| Which stage means "closed won"? | Win rate calculation | `won_stage` |
+| Which stage means "closed lost"? | Loss analysis | `lost_stage` |
+| What is your expected sales cycle length? (days) | Identify stuck deals | `expected_cycle_days` |
+
+**Field Mapping**
+
+Different CRMs use different field names. Map the user's fields to standard analysis fields:
+
+| Standard Field | Purpose | Stored As | Examples |
+|---------------|---------|-----------|---------|
+| Deal name | Identification | `field_deal_name` | "Name", "Deal Name", "Opportunity Name" |
+| Company | Account grouping | `field_company` | "Company", "Account", "Organization" |
+| Stage | Funnel position | `field_stage` | "Stage", "Pipeline Stage", "Status" |
+| Owner | Rep-level analysis | `field_owner` | "Owner", "Assigned To", "Rep" |
+| Source | Channel attribution | `field_source` | "Lead Source", "Source", "Channel" |
+| Created date | Period filtering | `field_created_date` | "Created Date", "Created At", "Date Added" |
+| Close date | Velocity tracking | `field_close_date` | "Close Date", "Expected Close", "Closed At" |
+| Amount | Revenue analysis | `field_amount` | "Amount", "Deal Value", "ARR", "MRR" |
+| Last activity date | Stale deal detection | `field_last_activity` | "Last Activity", "Last Modified", "Last Touched" |
+| Loss reason | Loss analysis | `field_loss_reason` | "Loss Reason", "Closed Lost Reason" |
+
+Minimum viable data: **deal name + stage + created date**. All other fields enrich but aren't required.
+
+**Benchmarks (Optional)**
+
+| Question | Purpose | Stored As |
+|----------|---------|-----------|
+| Target meeting volume per week/month? | Compare actuals to goals | `target_meetings` |
+| Target qualification rate? | Flag if below target | `target_qual_rate` |
+| Target win rate? | Flag if below target | `target_win_rate` |
+| Target pipeline value? | Revenue gap analysis | `target_pipeline_value` |
+
+Store config in: `clients/<client-name>/config/pipeline-review.json` or equivalent.
+
+Do not ask again in future runs.
+
+## Step 1: Pull Pipeline Data
+
+Pull deal and meeting data from the configured CRM for the specified time period.
+
+Ask the user for the review period if not provided:
+
+> "What period should I analyze? Options: last 7 days, last 14 days, last 30 days, last 90 days, or a custom date range."
+
+Based on `crm_tool` and `access_method`, pull data as follows:
+
+| CRM | Access Method | How to Pull |
+|-----|--------------|-------------|
+| Salesforce | API / CSV | SOQL query or user uploads CSV export |
+| HubSpot | API / CSV | Deals API or user uploads CSV export |
+| Pipedrive | API / CSV | Deals API or CSV export |
+| Close | API / CSV | Leads/Opportunities API or CSV |
+| Supabase | Direct query | Query deals/outreach_log tables |
+| Google Sheets | Sheets API / CSV | Read sheet or user exports CSV |
+| Notion | Notion MCP | Query database |
+| CSV | File read | User provides file path |
+
+Pull two datasets:
+
+- **Current period:** All deals created or active within the specified date range
+- **Comparison period:** Same-length prior period (e.g., if reviewing last 2 weeks, also pull the 2 weeks before that)
+
+Normalize all data into a standard structure regardless of source:
+
+```
+deals: [
+  {
+    id, name, company, stage, owner, source,
+    created_date, close_date, last_activity_date,
+    meeting_date, amount, qualification_status,
+    loss_reason, days_in_current_stage, total_age_days
+  }
+]
+```
+
+Present a human checkpoint:
+
+> "**Data Pulled**
+> Source: [CRM name]
+> Current period: [start] to [end] — [N] deals
+> Comparison period: [start] to [end] — [N] deals
+> Fields available: [list]
+> Fields missing: [list — analysis will adapt]
+>
+> Data looks correct? (Y/n)"
+
+## Step 2: Analyze Pipeline
+
+Run all seven analyses on the current period data. Where comparison period exists, calculate period-over-period trends.
+
+**Analysis 1 — Volume Metrics**
+
+Calculate: total deals created, meetings booked, meetings held, no-show rate, weekly run rate, period-over-period change, vs. `target_meetings`.
+
+**Analysis 2 — Qualification Breakdown**
+
+Calculate: qualified deals, unqualified deals, pending qualification, qualification rate, top disqualification reasons, vs. prior period, vs. `target_qual_rate`.
+
+A deal is qualified if it reached or passed `qualified_stage`. A deal is unqualified if it was closed lost before reaching `qualified_stage`.
+
+**Analysis 3 — Source Attribution**
+
+Group by `field_source`: count deals, meetings, qualified deals, won deals. Calculate qualification rate and win rate per source. Flag if any single source drives more than 60% of pipeline.
+
+**Analysis 4 — Stage Distribution and Velocity**
+
+Group active deals by stage. Calculate deal count, revenue, weighted revenue, average days in stage, and stage-to-stage conversion rates.
+
+Use these stage probability defaults unless actual data is available:
+
+| Stage | Probability |
+|-------|------------|
+| Lead | 5% |
+| Meeting Booked | 10% |
+| Meeting Held | 20% |
+| Qualified | 40% |
+| Proposal Sent | 60% |
+| Negotiation | 80% |
+| Closed Won | 100% |
+| Closed Lost | 0% |
+
+**Analysis 5 — Stuck Deals and At-Risk Pipeline**
+
+A deal is "stuck" if `days_in_current_stage` exceeds 2× the average for that stage, or exceeds `expected_cycle_days` total.
+
+Default stuck thresholds (use if stage-average data is insufficient):
+
+| Stage | Expected Max Days |
+|-------|-----------------|
+| Lead | 3 |
+| Meeting Booked | 7 |
+| Meeting Held | 5 |
+| Qualified | 10 |
+| Proposal Sent | 14 |
+| Negotiation | 14 |
+
+Also flag: deals with no activity for more than 14 days; deals where `total_age_days` > 1.5× `expected_cycle_days`; any single deal > 30% of total pipeline value.
+
+**Analysis 6 — Win/Loss Analysis**
+
+Calculate: win rate overall, win rate by source, win rate by owner, average deal size (won), average days to close, top loss reasons, loss stage distribution.
+
+**Analysis 7 — Forecast and Coverage**
+
+Only run if `target_pipeline_value` or revenue targets are configured.
+
+Calculate: pipeline coverage ratio (weighted pipeline / remaining quota), commit forecast (Negotiation + Proposal stage deals), best case forecast (commit + Qualified deals × historical win rate), gap to target, required deals and meetings to close the gap.
+
+Coverage assessment:
+
+| Coverage | Assessment |
+|----------|-----------|
+| 3x+ | Healthy |
+| 2–3x | Adequate |
+| <2x | At risk |
+| <1x | Critical |
+
+## Step 3: Generate Report
+
+Generate two formats from the analysis output.
+
+**Executive Summary** — one page, numbers and trends, what a founder reads in 60 seconds:
+
+```
+# Pipeline Review — [Period Type]: [Start Date] to [End Date]
+
+## Snapshot
+
+| Metric             | This Period | Prior Period | Change   |
+| Meetings booked    | [N]         | [N]          | [+/-Z%]  |
+| Meetings held      | [N]         | [N]          | [+/-Z%]  |
+| Qualification rate | [X%]        | [Y%]         | [+/-Z pts] |
+| Win rate           | [X%]        | [Y%]         | [+/-Z pts] |
+| Pipeline value     | $[X]        | $[Y]         | [+/-Z%]  |
+| Avg deal size      | $[X]        | $[Y]         | [+/-Z%]  |
+| Avg days to close  | [X]         | [Y]          | [+/-Z]   |
+
+## Red Flags
+- [Metric trending down significantly]
+- [Stuck deals above threshold]
+- [Pipeline coverage below 2x]
+- [Single source >60% of pipeline]
+- [No-show rate above 20%]
+
+## Green Lights
+- [Metrics trending up]
+- [Sources performing well]
+- [Stages moving faster than expected]
+
+## Top 3 Actions
+1. [Most impactful action this week]
+2. [Second most impactful]
+3. [Third most impactful]
+```
+
+**Detailed Diagnostic** — full data tables, stage-by-stage breakdown, source analysis, stuck deal list, and specific recommendations. Sections: Volume, Qualification, Source Effectiveness, Stage Distribution and Velocity, Stuck Deals, Win/Loss Analysis, Forecast and Coverage (if targets set), Recommendations.
+
+Each recommendation must cite the specific data point that drives it. Apply this logic:
+
+| Pattern | Recommendation |
+|---------|---------------|
+| Qualification rate <40% | Tighten ICP targeting — top DQ reason is [X] |
+| No-show rate >20% | Implement confirmation reminders 24h and 1h before meetings |
+| One source >60% of pipeline | Diversify — if this channel underperforms, pipeline collapses |
+| High-quality source with low volume | Scale it — [source] has [X]% qual rate but only [Y]% of volume |
+| Deals stuck in a specific stage | Unblock [stage] — [N] deals averaging [Y] days (2× normal) |
+| Win rate declining | Win rate dropped from [X]% to [Y]% — top loss reason is now [Z] |
+| Pipeline coverage <2x | Need [Z] more qualified deals — requires [W] meetings at current rates |
+| Cycle lengthening | Bottleneck at [stage] — deals [X] days slower vs prior period |
+
+Present the executive summary first, then offer the detailed diagnostic:
+
+> "[Executive Summary rendered]
+>
+> ---
+> Full detailed diagnostic is also available.
+>
+> Actions from this review:
+> 1. [High priority recommendation]
+> 2. [High priority recommendation]
+> 3. [Medium priority recommendation]
+>
+> Stuck deals requiring immediate attention:
+>
+> | Deal | Company | Stage | Days Stuck | Action |
+> |------|---------|-------|------------|--------|
+>
+> Want to see the full diagnostic? Or take action on any of these recommendations?"
+
+## Step 4: Export and Share
+
+Save or share the report based on user preference:
+
+| Destination | How |
+|-------------|-----|
+| Markdown file | Save to `clients/<client>/reports/pipeline-review-[date].md` |
+| Google Sheets | Export data tables (metrics, deal list, source breakdown) |
+| Notion | Push to a Notion database page via Notion MCP |
+| Slack | Send executive summary to a specified channel |
+| Email | Send via agentmail |
+| Display only | Render inline (default) |
+
+## Output Format
+
+---
+**Pipeline Review — [Period Type]: [Start] to [End]**
+
+**Snapshot**
+| Metric | This Period | Prior Period | Change |
+|--------|------------|--------------|--------|
+| Meetings booked | [N] | [N] | [+/-Z%] |
+| Meetings held | [N] | [N] | [+/-Z%] |
+| Qualification rate | [X%] | [Y%] | [+/-Z pts] |
+| Win rate | [X%] | [Y%] | [+/-Z pts] |
+| Pipeline value | $[X] | $[Y] | [+/-Z%] |
+| Avg deal size | $[X] | $[Y] | [+/-Z%] |
+| Avg days to close | [X] | [Y] | [+/-Z] |
+
+**Red Flags:** [List or "None"]
+**Green Lights:** [List or "None"]
+**Top 3 Actions:**
+1. [Action]
+2. [Action]
+3. [Action]
+
+**Stuck Deals**
+| Deal | Company | Stage | Days Stuck | Owner | Action |
+|------|---------|-------|------------|-------|--------|
+
+---
+
+## Edge Cases
+
+- **Missing amount field:** Skip revenue metrics, weighted pipeline, and forecast. Volume and stage analysis still run.
+- **Missing source field:** Skip source attribution (Analysis 3). All other analyses still run.
+- **Missing loss reason field:** Skip loss reason breakdown. Win/loss rate still calculates.
+- **Missing last activity date:** Skip no-activity deal detection. Stuck deals are still detected via stage duration.
+- **No comparison period data:** Run single-period analysis only. Omit all period-over-period trend columns.
+- **No targets configured:** Skip forecast and coverage analysis (Analysis 7). Note in output that targets are not set.
+- **Loss reasons mostly blank or "Other":** Flag data hygiene issue in recommendations. Note that loss analysis is unreliable until reps fill in reasons consistently.
+- **CRM not connected or CSV not provided:** Ask the user to either connect the CRM via MCP or upload a CSV export before proceeding.

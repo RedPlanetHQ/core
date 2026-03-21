@@ -1,0 +1,101 @@
+---
+title: "Prioritize Assumptions"
+description: "Triggered when the user says 'prioritize our assumptions' or 'what should we test first' or 'rank these risks'."
+category: Product
+integrations: []
+---
+
+**Goal:** Rank product and business assumptions by impact and testability to focus validation efforts on the riskiest unknowns first.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather the Assumption List
+
+Ask the user to list assumptions they have about:
+- **Customer assumptions** — Who will buy? What problem will they pay for?
+- **Product assumptions** — Will this feature work the way we think?
+- **Business assumptions** — How much will it cost to build/acquire customers?
+- **Market assumptions** — Is the market big enough? Will competitors react?
+
+Accept a list (comma-separated, one per line, or pasted).
+
+## Step 2: Evaluate Each Assumption
+
+For each assumption, determine:
+- **Impact if wrong** — How much would this derail the business? (High / Medium / Low)
+- **Confidence level** — How sure are you? (High / Medium / Low)
+- **Testability** — Can this be validated cheaply and quickly? (Easy / Medium / Hard)
+- **Evidence available** — What do you already know about this?
+
+Create a scoring matrix as you go.
+
+## Step 3: Score by Risk Priority
+
+Calculate risk score for each:
+- **High impact + Low confidence** = Critical (test immediately)
+- **High impact + Medium confidence** = Important (test early)
+- **Medium impact + Low confidence** = Nice-to-know (test if capacity)
+- **Low impact** = Defer or assume correct
+
+## Step 4: Group by Testing Method
+
+Cluster assumptions by how you'd validate them:
+- **Desk research** — Can you answer with existing data? (landing page tests, analytics, user research summaries)
+- **Qualitative interviews** — Do you need to talk to customers? (1-on-1 calls, surveys)
+- **Prototype testing** — Does this need a proof-of-concept? (landing page, mockup, alpha build)
+- **Market testing** — Do you need real data? (paid ads, waitlist conversion, beta launch)
+
+## Step 5: Build a Testing Roadmap
+
+Sequence assumptions by:
+1. Which critical ones block other work
+2. Which are fastest to test
+3. Which have highest estimated payoff
+
+Create a simple roadmap: Assumption → Test method → Timeline → Success criteria.
+
+## Step 6: Present the Prioritized List
+
+---
+
+**Assumption Priority Matrix**
+
+**🚨 Critical (Test Immediately)**
+- [Assumption 1] — Impact: [High], Confidence: [Low]
+  - Test method: [Interviews / Prototype / Analytics]
+  - Timeline: [Week 1-2]
+  - Success criteria: [Clear condition for passing/failing]
+
+- [Assumption 2] — Impact: [High], Confidence: [Low]
+  - Test method: [...]
+  - Timeline: [...]
+  - Success criteria: [...]
+
+**⚡ Important (Test Next Sprint)**
+- [Assumption 3] — Impact: [High], Confidence: [Medium]
+  - Test method: [...]
+  - Timeline: [...]
+  - Success criteria: [...]
+
+**ℹ️ Nice-to-Know (Test if Capacity)**
+- [Assumption 4] — Impact: [Medium], Confidence: [Low]
+  - Test method: [...]
+  - Timeline: [...]
+  - Success criteria: [...]
+
+**Testing Roadmap**
+1. Week 1-2: [Critical test] → Owner: [Name] → Gate: [Criteria]
+2. Week 3-4: [Important test] → Owner: [Name] → Gate: [Criteria]
+3. Week 5+: [Nice-to-know test] (if bandwidth allows)
+
+---
+
+## Edge Cases
+
+- **Too many critical assumptions:** Ask: "If you had to ship in 2 weeks with only testing 3 of these, which would break the product?" Focus on deal-breakers.
+- **Assumptions are too vague:** Ask for specifics: "Instead of 'customers will pay,' rephrase as: 'B2B SaaS companies with 50+ employees will pay $500/month for this feature.'"
+- **No clear success criteria:** Suggest concrete gates: "You pass this test if 40%+ of interview participants say they'd use this. You fail if less than 20% express interest."
+- **Dependent assumptions:** Map which assumptions block others. (E.g., can't test willingness to pay before validating problem fit). Call out the sequence.
+- **Assumption proves false early:** Note it. Ask: "Does this kill the whole idea, or can we pivot the product?" Decide if you stop or iterate.

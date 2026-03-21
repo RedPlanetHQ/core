@@ -1,0 +1,216 @@
+---
+title: "Popup CRO"
+description: "Triggered when the user wants to create or optimize popups, modals, overlays, slide-ins, or banners for conversion purposes. Also use when the user mentions 'exit intent,' 'popup conversions,' 'modal optimization,' 'lead capture popup,' 'email popup,' 'announcement banner,' 'overlay,' or 'exit popup.'"
+category: "Conversion"
+integrations: []
+---
+
+**Goal:** Create popups that convert without annoying users or damaging brand perception.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to design or optimize popups and modals.
+
+## Setup
+
+Search memory for:
+- "What's the popup goal (email capture, lead magnet, discount)?"
+- "What's your current popup performance?"
+- "What triggers are you using?"
+
+If nothing found, ask once:
+
+> "What's the primary popup goal? (1) Email capture / (2) Lead magnet / (3) Discount / (4) Announcement? And what's your target audience (new / returning / both)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Choose Popup Type
+
+Select based on your goal:
+
+- **Email capture**: Newsletter subscription
+- **Lead magnet**: Exchange content for email
+- **Discount/promotion**: First purchase incentive
+- **Exit intent**: Last-chance conversion
+- **Announcement banner**: Site-wide communication
+- **Slide-in**: Less intrusive engagement
+- **Feedback/survey**: Gather user input
+
+## Step 2: Select Trigger Strategy
+
+Match trigger to goal:
+
+### Time-Based
+- 30-60 seconds is proven engagement threshold
+- Too early = annoying interruption
+- Too late = missed opportunity
+
+### Scroll-Based
+- 25-50% scroll depth indicates engagement
+- Good for blog posts, long-form content
+- Signals genuine interest
+
+### Exit Intent
+- Detects cursor moving to close/leave
+- Last chance to capture value
+- Mobile alternative: back button or scroll up
+
+### Click-Triggered
+- User initiates (click to download, etc.)
+- Zero annoyance factor
+- Best for specific offers
+
+### Behavior-Based
+- Add to cart abandonment
+- Pricing page visitors
+- Repeat page visits
+- High-intent signals
+
+### Page Count / Session-Based
+- Show after visiting X pages
+- Indicates research/comparison behavior
+
+Choose 1-2 primary triggers. Don't stack multiple triggers.
+
+## Step 3: Design Popup Layout
+
+### Visual Hierarchy
+1. Headline (largest, first seen)
+2. Value prop/offer (clear benefit)
+3. Form/CTA (obvious action)
+4. Close option (easy to find)
+
+### Sizing
+- Desktop: 400-600px wide typical
+- Mobile: Full-width bottom or center
+- Always leave space to close (visible X, click outside)
+
+### Close Button
+- Keep visible (top right is convention)
+- Large enough to tap on mobile
+- "No thanks" text link as alternative
+- Click outside to close
+
+## Step 4: Write Compelling Copy
+
+### Headlines
+- Benefit-driven: "Get [result] in [timeframe]"
+- Question: "Want [desired outcome]?"
+- Command: "Don't miss [thing]"
+- Social proof: "Join [X] people who..."
+- Curiosity: "The one thing [audience] always get wrong"
+
+### Subheadlines
+- Expand on the promise
+- Address objection ("No spam, ever")
+- Set expectations ("Weekly tips in 5 min")
+
+### CTA Buttons
+- First person works: "Get My Discount" vs. "Get Your Discount"
+- Specific over generic: "Send Me the Guide" vs. "Submit"
+- Value-focused: "Claim My 10% Off" vs. "Subscribe"
+
+### Decline Options
+- Polite, not guilt-trippy
+- "No thanks" / "Maybe later" / "I'm not interested"
+- Avoid manipulative: "No, I don't want to save money"
+
+## Step 5: Set Frequency Rules
+
+**Frequency capping**:
+- Show maximum once per session
+- Remember dismissals (cookie/localStorage)
+- 7-30 days before showing again
+- Respect user choice
+
+**Audience targeting**:
+- New vs. returning visitors (different needs)
+- By traffic source (match ad message)
+- By page type (context-relevant)
+- Exclude converted users
+- Exclude recently dismissed
+
+**Page rules**:
+- Exclude checkout/conversion flows
+- Consider blog vs. product pages
+- Match offer to page context
+
+## Step 6: Plan Multiple Popups (If Using)
+
+If using multiple popups, define conflict rules:
+
+| Popup | Goal | Trigger | Audience | Frequency |
+|-------|------|---------|----------|-----------|
+| 1 | Email capture | 30-sec delay | All visitors | Once/session |
+| 2 | Discount offer | Exit intent | New visitors | Once per visit |
+| 3 | Feature promo | Scroll 50% | Returning users | Once/7 days |
+
+Ensure they don't overlap or contradict.
+
+## Step 7: Measure and Optimize
+
+Track:
+- **Impression rate**: % of visitors who see popup
+- **Conversion rate**: Impressions → Submissions
+- **Close rate**: How many dismiss immediately
+- **Engagement**: Time before dismissal
+
+Test:
+- Trigger timing (5s vs. 30s vs. 50% scroll)
+- Copy variations (curiosity vs. benefit)
+- Design variations (centered modal vs. slide-in)
+- CTA button color and text
+- Mobile presentation
+- Form fields (email only vs. email + name)
+- Pricing display (percentage vs. dollar amount)
+
+## Output Format
+
+---
+
+**Popup Strategy — [Goal]**
+
+**Popup Design**
+- **Type**: [Email capture / Lead magnet / Discount / Other]
+- **Headline**: [Benefit or curiosity hook]
+- **Subheading**: [Extended value prop]
+- **Form fields**: [What to collect]
+- **CTA button**: [Specific action text]
+- **Decline option**: [Polite exit text]
+
+**Trigger Configuration**
+- **Primary trigger**: [Type and timing]
+- **Fallback trigger**: [Secondary trigger if applicable]
+- **Targeting**: [New / Returning / All visitors]
+- **Frequency cap**: [Once per session / 7-day cool-down]
+
+**Design Notes**
+- **Size**: [Desktop W×H / Mobile layout]
+- **Placement**: [Center modal / Slide-in / Top banner]
+- **Close button**: [Visible location]
+- **Mobile-specific**: [Any mobile adjustments]
+
+**Multiple Popup Plan** (if using 2+)
+1. Popup: [Goal] → Trigger: [Type] → Audience: [Segment]
+2. Popup: [Goal] → Trigger: [Type] → Audience: [Segment]
+- Conflict rule: [How they don't overlap]
+
+**Test Hypotheses**
+- Test [trigger timing] by comparing [Option A] vs. [Option B]
+- Test [copy variation] to improve [conversion %]
+- Test [design format] on [mobile/desktop]
+
+---
+
+## Edge Cases
+
+- **High bounce rate with popups**: Popup likely too intrusive → Use later trigger or less aggressive format
+- **Mobile traffic > 70%**: Mobile popups feel aggressive → Reduce on mobile, use different trigger
+- **Low conversion despite high traffic**: Form friction issue → Reduce fields, test copy
+- **Users complain about popups**: Frequency or placement issue → Extend cool-down, change trigger
+- **Exit-intent doesn't fire on mobile**: No desktop cursor → Use alternative mobile trigger
+- **Privacy-sensitive audience**: Trust critical → Clear data handling, compliance badges

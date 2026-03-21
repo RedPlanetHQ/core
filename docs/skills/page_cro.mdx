@@ -1,0 +1,166 @@
+---
+title: "Page CRO"
+description: "Triggered when the user wants to optimize, improve, or increase conversions on any marketing page — including homepage, landing pages, pricing pages, feature pages, or blog posts. Also use when the user says 'CRO,' 'conversion rate optimization,' 'this page isn't converting,' 'improve conversions,' 'why isn't this page working,' or 'low conversion rate.'"
+category: "Conversion"
+integrations: []
+---
+
+**Goal:** Analyze marketing pages and provide actionable recommendations to improve conversion rates.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to optimize a page for conversions.
+
+## Setup
+
+Search memory for:
+- "What's the target audience?"
+- "What's the desired action?"
+- "What's the current conversion rate?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) What's the primary conversion goal (signup/demo/purchase/download)? (2) Where does traffic come from? (3) What's your current conversion rate?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Analyze Page Against Core Dimensions
+
+Evaluate in order of impact:
+
+### 1. Value Proposition Clarity (Highest Impact)
+- Can a visitor understand what this is and why they should care within 5 seconds?
+- Is the primary benefit clear, specific, and differentiated?
+- Is it in customer language (not company jargon)?
+
+### 2. Headline Effectiveness
+- Does it communicate the core value proposition?
+- Is it specific enough to be meaningful?
+- Does it match the traffic source's messaging?
+
+### 3. CTA Placement and Copy
+- Is there one clear primary action?
+- Visible without scrolling?
+- Button copy communicates value, not just action?
+  - Weak: "Submit," "Sign Up," "Learn More"
+  - Strong: "Start Free Trial," "Get My Report," "See Pricing"
+
+### 4. Visual Hierarchy and Scannability
+- Can someone scanning get the main message?
+- Are important elements visually prominent?
+- Enough white space?
+- Do images support or distract?
+
+### 5. Trust Signals and Social Proof
+- Customer logos (especially recognizable ones)?
+- Testimonials (specific, attributed, with photos)?
+- Case study snippets with real numbers?
+- Review scores and counts?
+- Security badges (if relevant)?
+
+### 6. Objection Handling
+- Price/value concerns addressed?
+- "Will this work for my situation?"
+- Implementation difficulty?
+- "What if it doesn't work?"
+
+### 7. Friction Points
+- Too many form fields?
+- Unclear next steps?
+- Confusing navigation?
+- Mobile experience issues?
+- Slow load times?
+
+## Step 2: Identify Quick Wins
+
+Easy changes with likely immediate impact:
+
+- Change button color for better contrast
+- Simplify headline
+- Add missing social proof
+- Move CTA above the fold
+- Reduce form fields
+- Fix broken links or images
+
+## Step 3: Recommend High-Impact Changes
+
+Bigger changes requiring more effort:
+
+- Restructure page hierarchy
+- Complete copy rewrite
+- New value proposition
+- Add social proof section
+- Redesign CTA hierarchy
+- Implement trust-building section
+
+## Step 4: Generate Copy Alternatives
+
+For key elements (headline, CTA), provide 2-3 alternatives with rationale.
+
+Example:
+- **Original**: "Software Platform"
+- **Option A** (benefit-focused): "Save 5 Hours Per Week on Reporting"
+- **Option B** (curiosity-driven): "The Platform Top Companies Use to Automate Reporting"
+
+Rationale: Test which resonates with your specific audience.
+
+## Step 5: Provide Test Ideas
+
+Suggest A/B tests rather than assuming:
+
+- Hero section: Test headline variations
+- Trust signals: Test placement of testimonials
+- CTA: Test button color, copy, placement
+- Form: Test field count, ordering
+- Visual: Test with/without images
+
+## Output Format
+
+---
+
+**Page CRO Analysis — [Page Name]**
+
+**Current Performance**
+- Current conversion rate: [X%]
+- Traffic source: [Paid / Organic / Email]
+- Primary goal: [Signup / Demo / Purchase]
+
+**Quick Wins (Implement Immediately)**
+- [Change]: [Issue] → [Specific fix]
+- [Change]: [Issue] → [Specific fix]
+
+**High-Impact Changes (Prioritize)**
+- [Change]: [Issue] → [Recommendation with rationale]
+- [Change]: [Issue] → [Recommendation with rationale]
+
+**Value Prop Assessment**
+- Current: [Existing value prop]
+- Opportunity: [How to make it stronger]
+- Recommendation: [Refined version]
+
+**Copy Alternatives**
+- **Headline** - Original vs. Option A vs. Option B
+- **CTA** - Original vs. Option A vs. Option B
+
+**Test Ideas**
+- Test [variable] using [Option A] vs. [Option B] to measure [metric]
+
+**Implementation Priority**
+1. [Fix issue causing highest friction]
+2. [Improve clarity or trust signals]
+3. [Test hypothesis for incremental gains]
+
+---
+
+## Edge Cases
+
+- **New page (no baseline data)**: Use benchmarks from similar pages; collect 2 weeks of data before assuming issues
+- **B2B with long sales cycle**: Conversion might be "demo request" not "purchase"; adjust goal accordingly
+- **Mobile vs. desktop mismatch**: Test separately; mobile may need different strategy
+- **Traffic quality issues**: High bounce might indicate traffic/targeting problem, not page problem
+- **Unclear conversion goal**: Define the goal first; CRO fails without clarity on what you're optimizing
+- **Multiple audiences on one page**: Consider separate landing pages by audience; one page can't optimize for multiple personas
