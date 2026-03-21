@@ -33,7 +33,7 @@ import { Resend } from "./icons/resend";
 import { Ynab } from "./icons/ynab";
 import { Jira } from "./icons/jira";
 import { Confluence } from "./icons/confluence";
-import { Mixpanel } from "./icons/mixpanel";
+import { Mixpanel } from "./icons/mixpanel_icon";
 import { BacklogLine } from "./icons/backlog";
 import { TodoLine } from "./icons/todo";
 import { InProgressLine } from "./icons/in-progress";
