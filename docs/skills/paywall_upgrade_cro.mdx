@@ -1,0 +1,194 @@
+---
+title: "Paywall & Upgrade Screen CRO"
+description: "Triggered when the user wants to create or optimize in-app paywalls, upgrade screens, upsell modals, or feature gates. Also use when the user mentions 'paywall,' 'upgrade screen,' 'upsell,' 'feature gate,' 'convert free to paid,' 'freemium conversion,' 'trial expiration screen,' 'plan upgrade prompt,' or 'how do I get users to pay.'"
+category: "Conversion"
+integrations: []
+---
+
+**Goal:** Convert free users to paid, or upgrade users to higher tiers, at moments when they've experienced value.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to design or optimize in-app upgrade moments.
+
+## Setup
+
+Search memory for:
+- "What's your current free-to-paid conversion rate?"
+- "What's your freemium or trial model?"
+- "When do upgrade prompts appear?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) Freemium, free trial, or both? (2) What features are gated? (3) What's your current conversion rate (if known)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Understand Your Upgrade Triggers
+
+Identify when to show upgrade prompts:
+
+- **Feature gates**: User tries a paid-only feature
+- **Usage limits**: User hits a free tier limit
+- **Trial expiration**: Trial is ending (7, 3, 1 day warnings)
+- **Time-based**: After X days of free use
+- **Behavior-triggered**: After achieving certain milestones
+
+Choose which triggers matter most for your product.
+
+## Step 2: Design Paywall Components
+
+Standard structure for any paywall:
+
+1. **Headline** — Focus on what they get: "Unlock [Feature] to [Benefit]"
+2. **Value demonstration** — Preview, before/after, or "With Pro you could..."
+3. **Feature comparison** — Highlight key differences
+4. **Pricing** — Clear, simple, annual vs. monthly options
+5. **Social proof** — Customer quotes, "X teams use this"
+6. **CTA** — Specific and value-oriented: "Start Getting [Benefit]"
+7. **Escape hatch** — Clear "Not now" or "Continue with Free"
+
+## Step 3: Create Paywall Variations
+
+Vary by trigger type:
+
+### Feature Lock Paywall
+- [Lock icon] This feature is available on Pro
+- [Feature preview/screenshot]
+- [Benefits of this feature]
+- [Upgrade button]
+- [Continue with Free]
+
+### Usage Limit Paywall
+- You've reached your free limit
+- [Progress bar showing limit]
+- Free: 3 items | Pro: Unlimited
+- [Upgrade] vs. [Delete item to continue]
+
+### Trial Expiration Paywall
+- Your trial ends in X days
+- What you'll lose: [List used features]
+- What you've accomplished: [Data created, projects, etc.]
+- [Continue with Pro] vs. [Remind later]
+
+## Step 4: Optimize Timing and Frequency
+
+### When to Show
+- After value moment, before frustration
+- After activation/aha moment
+- When hitting genuine limits
+
+### When NOT to Show
+- During onboarding (too early)
+- During active flow (interrupts)
+- Repeatedly after dismissal
+
+### Frequency Rules
+- Max once per session
+- Remember dismissals (7-30 days before showing again)
+- Track annoyance signals
+- Don't show to already-upgraded users
+
+## Step 5: Optimize Copy and Design
+
+**Headlines that work**:
+- Benefit-focused: "Unlock advanced analytics"
+- Outcome-focused: "Get reports delivered weekly"
+- Problem-focused: "No more manual exports"
+
+**Avoid**:
+- Guilt-tripping: "Don't miss out"
+- Fear-based: "Your data will be deleted"
+- Vague: "Upgrade today"
+
+**Visual design**:
+- Keep modal size reasonable (don't cover entire screen)
+- Use contrasting button colors
+- Make close button obvious and large
+- Test mobile carefully (full-screen overlays feel aggressive)
+
+## Step 6: Plan Post-Upgrade Experience
+
+After user upgrades:
+- Immediate access to features
+- Confirmation and receipt
+- Guide to new features
+- Celebration moment
+
+Make the upgrade feel like a smart choice, not a trap.
+
+## Step 7: Measure and Optimize
+
+Track:
+- Paywall impression rate (% who see it)
+- Click-through to upgrade
+- Completion rate (% who finish upgrade)
+- Revenue per user
+- Churn rate post-upgrade
+
+Test:
+- Trigger timing
+- Headline/copy variations
+- Price presentation
+- Feature emphasis
+- Design/layout
+- Trial length
+
+## Output Format
+
+---
+
+**Paywall Strategy — [Product Name]**
+
+**Upgrade Model**
+- Type: [Freemium / Free trial / Feature-gated]
+- Upgrade triggers: [List main triggers]
+- Current free-to-paid rate: [X%]
+
+**Paywall Designs**
+1. **Feature lock**:
+   - Headline: [Benefit-focused]
+   - Features highlighted: [List 3-5]
+   
+2. **Usage limit**:
+   - Messaging: [Specific limit]
+   - Alternative action: [Optional downgrade vs. delete]
+   
+3. **Trial expiration**:
+   - Warning cadence: [7 days / 3 days / 1 day]
+   - Value recap: [What they've accomplished]
+
+**Copy Variations**
+- Primary CTA: [Action-focused button text]
+- Escape hatch: [Not now / Continue free / Remind me]
+- Tone: [Respectful / Helpful / Not pushy]
+
+**Timing Rules**
+- Show after: [Specific moment / milestone]
+- Don't show: [During onboarding / In flow / After dismissal]
+- Frequency cap: [Max once per session / 7-day cool-down]
+
+**Test Plan**
+- Test 1: [Trigger timing] on [Audience segment]
+- Test 2: [Copy variation] to measure [conversion %]
+- Test 3: [Price presentation] on [Segment]
+
+**Success Metrics**
+- Current free-to-paid rate: [X%] → Target: [Y%]
+- Average revenue per user: $[X] → Target: $[Y]
+- Post-upgrade churn: [X%] → Target: [Y%]
+
+---
+
+## Edge Cases
+
+- **Low initial activation**: Users aren't hitting the aha moment; paywall won't help → Improve onboarding first
+- **Free users already satisfied**: If they're happy on free, don't force upgrade → Consider freemium model acceptance
+- **High unsubscribe after upgrade**: Paywall might be too aggressive → Reduce frequency, soften copy, improve onboarding
+- **Users can complete task on free tier**: Upgrade gate feels artificial → Limit features used in task, not the task itself
+- **Long sales cycle**: Single paywall view won't convert → Build nurture with email after paywall dismissal
+- **Mobile app limitations**: Some payment processing required → Use native in-app purchase systems

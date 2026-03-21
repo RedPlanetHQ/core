@@ -1,0 +1,105 @@
+---
+title: "Build Value Proposition"
+description: "Triggered when the user says 'build a value proposition' or 'create positioning statement' or 'define value for this customer segment'."
+category: Product
+integrations: []
+---
+
+**Goal:** Develop a customer-focused value proposition using the Jobs to Be Done framework, structured from the customer's perspective outward.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Define the Target Segment
+
+Ask the user to specify:
+- **Who:** Customer segment name (e.g., "SaaS product managers", "Enterprise finance teams")
+- **Context:** Their constraints, goals, or current role
+- **Problem space:** What they're struggling with
+
+Store this in memory under "Value Proposition - [Segment]" so you don't ask again for this segment.
+
+## Step 2: Walk Through the JTBD Framework
+
+Use this 6-part structure, gathering input for each:
+
+1. **Who** — The specific customer segment and their constraints
+2. **Why** — Core problem they're facing and their desired outcomes
+3. **What Before** — Current situation and friction points they experience today
+4. **How** — Your solution features and competitive advantages
+5. **What After** — The improved outcomes and new possibilities after using your solution
+6. **Alternatives** — Other options they might consider (competitors, manual workarounds, doing nothing)
+
+For each part, ask clarifying questions:
+- "What's the biggest pain in their current approach?"
+- "What would success look like for them?"
+- "What else could they use instead?"
+
+## Step 3: Synthesize the Value Proposition
+
+Combine the 6 parts into a **Value Proposition Statement** (1-2 sentences):
+
+```
+For [Who], [What Before] is [Problem]. Unlike [Alternatives], [Your solution] [What After by doing How].
+```
+
+Example:
+"For product managers overwhelmed by scattered customer feedback, manually tracking insights in spreadsheets is time-consuming and error-prone. Unlike Slack tools or basic feedback forms, CORE automatically organizes and surfaces actionable insights from any channel, saving 5 hours per week."
+
+## Step 4: Create a Positioning Statement
+
+Adapt the value prop into marketing language (1 sentence, punchy):
+
+```
+[Product] is the only [category] that [unique benefit] for [segment].
+```
+
+## Step 5: Test Against Alternatives
+
+For each alternative they might consider, note:
+- Why they might choose the alternative
+- Why your value prop is stronger
+- Key differentiator
+
+## Step 6: Present the Output
+
+---
+
+**Value Proposition — [Segment]**
+
+**👤 Target Segment**
+[Who they are, constraints, role]
+
+**🚨 The Problem**
+[Current situation + friction points]
+
+**💡 Desired Outcomes**
+[What they want to achieve]
+
+**✨ Value Proposition Statement**
+[1-2 sentence summary]
+
+**📍 Positioning Statement**
+[1 sentence, punchy, marketing-ready]
+
+**How We Deliver It**
+[Features/approach that enable the outcomes]
+
+**🎯 What Changes After**
+[Concrete benefits and new possibilities]
+
+**Competitive Alternatives**
+| Alternative | Why They Might Use | Our Advantage |
+|---|---|---|
+| [Option 1] | [Reason] | [Why we're better] |
+| [Option 2] | [Reason] | [Why we're better] |
+
+---
+
+## Edge Cases
+
+- **Multiple segments:** Build one value proposition per segment. Ask which segment to focus on first. Store each separately in memory.
+- **No clear alternatives:** Suggest common workarounds (manual processes, competitor products, doing nothing). Let the user confirm.
+- **Weak differentiation:** Call this out. Ask: "What specifically makes this different from [alternative]?" Iterate until you have a genuine differentiator.
+- **Vague customer feedback:** Ask for concrete examples: "Can you give me a specific story or quote from a customer?"

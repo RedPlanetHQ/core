@@ -1,0 +1,142 @@
+---
+title: "Identify North Star Metric"
+description: "Triggered when the user says 'define our north star' or 'what metric should we optimize for' or 'identify key success metric'."
+category: Analytics
+integrations: []
+---
+
+**Goal:** Identify a single customer-centric key performance indicator (North Star Metric) that reflects the value customers get from the product and serves as a leading indicator of business success.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Clarify the Product
+
+Ask:
+- **What does your product do?** — Core value proposition
+- **Who uses it?** — Primary customer
+- **How do they use it?** — Frequency, workflows
+
+> "What problem does this product solve, and how often do customers use it?"
+
+## Step 2: Classify Your Business Model
+
+Ask the user to identify which "game" they're playing:
+
+**Attention Game**
+- Customers pay with time
+- Goal: Maximize daily/monthly active usage
+- Examples: Facebook, Spotify, YouTube, TikTok
+- Potential North Star: Daily active users, hours watched, sessions per user
+
+**Transaction Game**
+- Customers complete discrete transactions
+- Goal: Maximize number or value of transactions
+- Examples: Amazon, Uber, Airbnb, DoorDash
+- Potential North Star: Transactions per user, GMV, bookings completed
+
+**Productivity Game**
+- Customers use the product to accomplish a job
+- Goal: Maximize work completed or problems solved
+- Examples: Notion, Canva, Dropbox, Slack, CORE
+- Potential North Star: Tasks completed, documents created, projects shipped, time saved
+
+Ask: "Which of these best describes your business?"
+
+## Step 3: Brainstorm Candidate Metrics
+
+Based on the business game, brainstorm 5-7 candidate metrics:
+
+**Attention:** DAU, WAU, MAU, time spent, sessions, retention rate
+**Transaction:** Orders, GMV, transactions per user, repeat rate, conversion rate
+**Productivity:** Documents created, projects completed, invitations sent, tasks shipped, workflows automated
+
+Ask: "What activity/outcome truly indicates a customer is getting value?"
+
+## Step 4: Evaluate Candidates Against 7 Criteria
+
+For each candidate, rate it on these criteria (1-5 scale, 5 is best):
+
+1. **Easy to Understand** — Can anyone in the company explain it in one sentence?
+2. **Customer-Centric** — Does it reflect customer value (not just company revenue)?
+3. **Sustainable Value** — Does achieving this metric indicate long-term engagement?
+4. **Vision Alignment** — Does this support your company's mission/vision?
+5. **Quantitative** — Is it measurable and numeric (not fuzzy)?
+6. **Actionable** — Can product, design, marketing, sales ALL influence it?
+7. **Leading Indicator** — Does this predict future revenue/business success?
+
+Create a quick scoring table:
+
+| Metric | Understand | Customer-Centric | Sustainable | Vision Aligned | Quantitative | Actionable | Leading Indicator | **Total** |
+|--------|---|---|---|---|---|---|---|---|
+| [Candidate 1] | 5 | 4 | 5 | 4 | 5 | 5 | 5 | 33/35 |
+| [Candidate 2] | 3 | 5 | 4 | 5 | 5 | 3 | 4 | 29/35 |
+
+Pick the highest-scoring metric.
+
+## Step 5: Identify Input Metrics
+
+Once you have a North Star, identify 3-5 **Input Metrics** that are:
+- Easier to move in the short term
+- Direct contributors to the North Star
+- Actionable by individual teams
+
+Example for a Productivity app (North Star: Tasks completed):
+- Input Metrics:
+  - User signups
+  - Tasks created per user
+  - Task completion rate
+  - Daily active users
+  - Churn rate
+
+## Step 6: Present the Decision
+
+---
+
+**North Star Metric**
+
+**Selected Metric:** [Metric name]
+
+**Definition:** [What does this metric measure? How do we calculate it?]
+
+**Why This?**
+- **Customer Value:** [How does achieving this indicate customer success?]
+- **Business Impact:** [How does this predict revenue/growth?]
+- **Vision Alignment:** [How does this support our mission?]
+
+**Business Model Classification**
+[Attention / Transaction / Productivity game]
+
+**Scoring Summary**
+
+| Criteria | Score (1-5) | Rationale |
+|----------|---|---|
+| Easy to understand | [Score] | [Why?] |
+| Customer-centric | [Score] | [Why?] |
+| Sustainable value | [Score] | [Why?] |
+| Vision alignment | [Score] | [Why?] |
+| Quantitative | [Score] | [Why?] |
+| Actionable | [Score] | [Why?] |
+| Leading indicator | [Score] | [Why?] |
+
+**Input Metrics (Drivers)**
+
+These contribute directly to the North Star:
+- [Input metric 1]: How it drives the North Star
+- [Input metric 2]: How it drives the North Star
+- [Input metric 3]: How it drives the North Star
+
+**How We'll Track It**
+- Where/how we measure this [Dashboard link or description]
+- Frequency of review [Daily/Weekly/Monthly]
+- Target [If applicable, e.g., "Grow 20% quarter over quarter"]
+
+---
+
+## Edge Cases
+
+- **Conflicting stakeholder opinions:** Use the 7-criteria scoring to align on the decision objectively. Ask: "Which of these 7 matters most for our business?"
+- **Multiple products/segments:** Consider separate North Stars per product line if they're distinct businesses. Ask: "Are these the same customer and business?"
+- **Metric is hard to measure today:** It's okay. Pick the best metric and invest in tracking it. Note: "We need to build instrumentation for this."
+- **Current North Star isn't working:** Ask: "Why is it failing? Is it not customer-centric? Is it not actionable?" Revisit the criteria and find a better candidate.

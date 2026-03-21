@@ -1,0 +1,179 @@
+---
+title: "Schema Markup"
+description: "Triggered when the user wants to add, fix, or optimize schema markup and structured data on their site. Also use when the user mentions 'schema markup,' 'structured data,' 'JSON-LD,' 'rich snippets,' 'schema.org,' 'FAQ schema,' 'product schema,' 'review schema,' 'breadcrumb schema,' 'Google rich results,' or 'star ratings in search.'"
+category: "Technical SEO"
+integrations: []
+---
+
+**Goal:** Implement schema.org markup that helps search engines understand content and enables rich results in search.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to add or audit schema markup.
+
+## Setup
+
+Search memory for:
+- "What pages need schema?"
+- "What rich results are you targeting?"
+- "What's your tech stack?"
+
+If nothing found, ask once:
+
+> "What type of pages are you optimizing? (1) Blog / Product / FAQs / Other? (2) What rich results do you want to appear? (3) What's your tech stack?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Determine Relevant Schema Types
+
+Match page type to schema:
+
+| Page Type | Schema Type | Rich Result |
+|-----------|------------|-------------|
+| Blog post | Article | Title, image, date |
+| Product page | Product | Price, availability, rating |
+| Company page | Organization | Logo, contact, social |
+| FAQ page | FAQPage | Question/answer pairs |
+| How-to guide | HowTo | Steps with images |
+| Event | Event | Date, time, location |
+| Local business | LocalBusiness | Address, hours, phone |
+| Software/SaaS | SoftwareApplication | Offer, rating |
+
+Choose the most relevant type(s) for your page.
+
+## Step 2: Gather Required Data
+
+For your chosen schema type, collect required properties:
+
+**Article**: headline, image, datePublished, author, description
+
+**Product**: name, image, offers (price + availability), sku, brand
+
+**FAQPage**: mainEntity (array of Q&A pairs with name and text properties)
+
+**BreadcrumbList**: itemListElement (array with position, name, item URL)
+
+**Organization**: name, url, logo, contactPoint (phone/email)
+
+Not all properties are required, but more complete data produces better rich results.
+
+## Step 3: Write JSON-LD Markup
+
+Structure your schema as JSON-LD in the `<head>` or end of `<body>`:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "Article",
+  "headline": "Page Headline",
+  "image": "https://example.com/image.jpg",
+  "datePublished": "2024-01-15T12:00:00Z",
+  "author": {
+    "@type": "Person",
+    "name": "Author Name"
+  },
+  "description": "Brief description"
+}
+```
+
+For multiple schema types on one page, use `@graph`:
+
+```json
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    { "@type": "Organization", ... },
+    { "@type": "BreadcrumbList", ... }
+  ]
+}
+```
+
+## Step 4: Handle Dynamic Content
+
+If content is dynamic (React, Next.js):
+- Render schema server-side for SEO
+- Serialize page data to JSON-LD
+- Test in Rich Results Test Tool after server rendering
+
+For static sites:
+- Add JSON-LD directly in HTML template
+- Use includes/partials for reusable schema
+
+For WordPress/CMS:
+- Use plugins (Yoast, Rank Math, Schema Pro)
+- Customize via theme or custom code
+
+## Step 5: Validate and Test
+
+Use these tools:
+- **Google Rich Results Test**: https://search.google.com/test/rich-results
+- **Schema.org Validator**: https://validator.schema.org/
+- **Google Search Console**: Enhancements reports
+
+Check for:
+- ✓ All required properties included
+- ✓ Correct property types and formats
+- ✓ No validation errors or warnings
+- ✓ Dates in ISO 8601 format (YYYY-MM-DDTHH:MM:SSZ)
+- ✓ URLs fully qualified (https://example.com, not /path)
+
+## Step 6: Monitor and Maintain
+
+After deployment:
+- Check Search Console Enhancements report
+- Monitor for errors
+- Update schema when content changes
+- Avoid stale dates or deprecated properties
+
+## Output Format
+
+---
+
+**Schema Markup Implementation — [Page/Site Name]**
+
+**Page Analysis**
+- Page type: [Blog / Product / FAQ / Other]
+- Target rich results: [What should appear in search]
+- Current schema status: [None / Partial / Needs update]
+
+**Recommended Schema Types**
+1. [Type]: [Why this helps]
+2. [Type]: [Why this helps]
+
+**JSON-LD Code**
+```json
+{
+  "@context": "https://schema.org",
+  "@type": "...",
+  // [Full code block here]
+}
+```
+
+**Required Data Checklist**
+- [ ] [Property]: [Planned value or source]
+- [ ] [Property]: [Planned value or source]
+- [ ] [Property]: [Planned value or source]
+
+**Implementation Plan**
+- Static / Dynamic: [How content is delivered]
+- Placement: [<head> or end of <body>]
+- Testing: [Rich Results Test pass?]
+
+**Rich Results Expected**
+- [What should appear in search results]
+- [Examples or screenshots if helpful]
+
+---
+
+## Edge Cases
+
+- **Content changes frequently**: Update schema dynamically when content updates
+- **Multiple languages**: Add lang attribute; use hreflang for multi-language sites
+- **Multiple product prices (regional)**: Use priceCurrency to specify region
+- **No author name**: Use organization name instead; don't leave blank
+- **Future-dated content (embargo)**: Date must match actual publication; don't pre-add schema
+- **Review schema with few ratings**: Only add when >10 genuine reviews to avoid appearing artificial

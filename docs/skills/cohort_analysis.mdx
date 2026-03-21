@@ -1,0 +1,125 @@
+---
+title: "Cohort Analysis"
+description: "Analyze user cohorts and retention trends. Triggered when the user asks 'analyze user cohorts', 'show retention by cohort', or 'how are my cohorts performing'."
+category: "Analytics"
+integrations: []
+---
+
+**Goal:** Segment users into cohorts by signup period and calculate retention metrics to identify patterns in user engagement and product stickiness.
+
+This skill runs using CORE memory only. No integrations required.
+
+**Trigger:** Run on demand when the user requests cohort analysis or retention metrics.
+
+### Setup
+
+Search memory for:
+- "What date range should cohort analysis cover?"
+- "What retention metrics does the user care about?"
+- "How should users be grouped (daily, weekly, monthly cohorts)?"
+
+If not found, ask once:
+
+> "To analyze cohorts, I need to know: (1) What time period should I cover? (2) Should I group users by day, week, or month of signup? (3) Which retention milestones matter most (7-day, 30-day, 90-day)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Define Cohort Boundaries
+
+Establish the date range and cohort grouping period from memory or setup response.
+
+- **Cohort grouping:** Day, week, or month (e.g., "all users who signed up in the week of Jan 1-7")
+- **Analysis window:** Start date to end date (e.g., last 180 days)
+- **Retention milestones:** Days 7, 30, 60, 90 (or custom from memory)
+
+If memory contains previous cohort preferences → use silently. If not → use defaults (monthly cohorts, 180-day window, 7/30/90-day retention).
+
+## Step 2: Extract Cohort Data
+
+Pull user signup dates and activation status from available data sources.
+
+For each user, capture:
+- **Signup date** (to assign to cohort)
+- **First action date** (to confirm activation)
+- **Last active date** (to calculate churn)
+- **Total events or sessions** (engagement proxy)
+
+If data source is unavailable → note "No user activity data available" and skip to output.
+
+## Step 3: Assign Users to Cohorts
+
+Group users by signup period (day/week/month as defined in Step 1).
+
+For each cohort:
+- Count total users
+- Count activated users (first action within 7 days of signup)
+- Record activation rate as percentage
+
+Output format: `[Cohort Period]: [X users], [Y% activation]`
+
+## Step 4: Calculate Retention Curves
+
+For each cohort, measure how many users remain active at Day 7, Day 30, Day 60, and Day 90 post-signup.
+
+- Retention = (users still active on day N) / (total cohort size) × 100%
+- If a user has no activity on a given day, they are counted as churned
+- Round percentages to whole numbers
+
+Flag cohorts with <50% 7-day retention as high-churn.
+
+## Step 5: Identify Trends and Patterns
+
+Compare retention curves across cohorts.
+
+- **Improving trend:** Later cohorts show higher retention at comparable milestones
+- **Declining trend:** Earlier cohorts show higher retention (product regressing)
+- **Plateau:** Retention stable across all cohorts (consistent product health)
+
+If retention improves by >5% month-over-month → flag as positive. If drops by >5% → flag as concerning.
+
+## Step 6: Calculate Cohort Lifetime Value Proxy
+
+For each cohort, sum total events/sessions per user and calculate average.
+
+- Cohorts with higher average engagement tend to have stronger long-term value
+- Note early warning signs (very low engagement by Day 30)
+
+## Step 7: Compile Output
+
+Structure the analysis into a cohort table and trend summary.
+
+---
+
+## Output Format
+
+---
+**Cohort Analysis — [Start Date] to [End Date]**
+
+**Cohort Retention Table**
+
+| Cohort | Users | Activation | Day 7 | Day 30 | Day 60 | Day 90 |
+|--------|-------|------------|-------|--------|--------|--------|
+| [Period 1] | [X] | [Y%] | [Y%] | [Y%] | [Y%] | [Y%] |
+| [Period 2] | [X] | [Y%] | [Y%] | [Y%] | [Y%] | [Y%] |
+
+**Trends**
+- 📊 Activation rates: [Improving / Declining / Stable]
+- 📊 7-day retention: [Average X%, range Y–Z%]
+- 📊 30-day retention: [Average X%, range Y–Z%]
+- 🚨 High-churn cohorts: [List cohorts <50% 7-day retention, or "None"]
+
+**Key Insights**
+1. [Most recent cohort health]
+2. [Strongest cohort and why]
+3. [Weakest cohort or trend concern]
+
+---
+
+## Edge Cases
+
+- **Insufficient data:** If fewer than 3 cohorts or <100 total users exist, note "Cohort sample too small for reliable trends" and show available data only.
+- **No retention data:** If users have no activity after signup (all churn on Day 0), show 0% retention and flag data quality.
+- **Future signups:** Exclude any users with signup dates in the future; silently filter.
+- **Custom time zones:** If user has specified a time zone in memory, adjust cohort boundaries accordingly (e.g., "week starts Monday at midnight PST").
+- **Overlapping date ranges:** If user asks for cohorts that overlap the current date, only include complete cohorts; note how many users are in the partial cohort but exclude from calculations.
+- **No memory preferences:** Default to monthly cohorts, last 180 days, 7/30/90-day milestones; continue without asking again.

@@ -1,0 +1,81 @@
+---
+title: "Brainstorm Experiments for Existing Products"
+description: "Triggered when the user says 'test this feature idea', 'validate assumptions', or 'design an experiment'."
+category: Product Discovery
+integrations: []
+---
+
+**Test feature ideas and core assumptions through lightweight experiments that maximize learning while minimizing resource investment.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Clarify the Idea and Assumptions
+
+Document exactly what you intend to build. Identify which specific assumptions about user behavior, market demand, or technical feasibility require validation before committing resources.
+
+> "What's the core idea? What are you most uncertain about?"
+
+## Step 2: Suggest Targeted Experiments
+
+Choose the validation method that best matches your assumptions:
+
+- **First-click or task completion testing:** Present a clickable prototype to users and measure whether they can complete the intended job
+- **Fake door or feature stub:** Show users a disabled feature and measure how many click on it to gauge interest
+- **Technical spike:** Timebox engineering exploration to validate feasibility of complex requirements
+- **Production A/B test:** Run a limited feature flag with production traffic; include risk mitigation for uncertain outcomes
+- **Wizard of Oz approach:** Deliver the core value manually or semi-manually to validate the underlying job being done
+- **Behavioral survey:** Ask users structured questions about likelihood to use and willingness to pay
+
+## Step 3: Apply Key Principles
+
+- Prioritize observable behavior (clicking, signing up, paying) over user opinions ("I would use this")
+- Execute responsibly to avoid user frustration or business risk from half-baked experiments
+- Mitigate risks in production experiments with gradual rollouts and kill switches
+- Maximize learning per dollar spent; choose the simplest experiment that answers your core question
+
+## Step 4: Document Each Experiment
+
+For every experiment you design, specify:
+- The underlying assumption being tested
+- The specific validation method and expected user workflow
+- The measurable metric and success threshold based on expected outcomes
+- Timeline and resource requirements
+
+## Output Format
+
+---
+
+**Experiment Plan**
+
+**🎯 Assumption**
+[State the risk or belief driving this experiment]
+
+**📋 Validation Method**
+[First-click test / Fake door / Technical spike / A/B test / Wizard of Oz / Survey]
+
+**Experiment Details**
+- **User workflow:** [How users will interact with the test]
+- **Sample size:** [Target participants or traffic]
+- **Duration:** [Timeline for the experiment]
+- **Key metric:** [What you will measure]
+- **Success threshold:** [What result means the assumption was validated]
+
+**⚙️ Resource Requirements**
+- **Design effort:** [Time needed to create prototype/mockup]
+- **Engineering effort:** [Code implementation required]
+- **Analysis effort:** [Time to interpret results]
+
+**🛡️ Risk Mitigation**
+[Any steps to prevent user frustration or business harm]
+
+---
+
+## Edge Cases
+
+- **Sample size too small:** A single-user test can validate task workflows but not market demand. Scale accordingly.
+- **Placebo effect:** Users may overstate interest in response to perceived social desirability. Prioritize willingness-to-pay experiments.
+- **Technical complexity underestimated:** Spike experiments should timebox investigation rather than committing to full solutions.
+- **Production experiment risk:** A/B tests with unvalidated assumptions can harm user experience. Start with low-traffic rollouts.
+- **Conflicting signals:** User feedback often contradicts behavior data. Trust observed actions over stated preferences.

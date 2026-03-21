@@ -1,0 +1,170 @@
+---
+title: "Draft NDA"
+description: "Draft NDA agreements for business partnerships. Triggered when the user asks 'draft an NDA', 'create an NDA', or 'write a non-disclosure agreement'."
+category: "Sales"
+integrations: []
+---
+
+**Goal:** Generate a customized Non-Disclosure Agreement (NDA) that protects the user's confidential information while remaining fair and executable.
+
+This skill runs using CORE memory only. No integrations required.
+
+**Trigger:** Run on demand when the user needs a new NDA or wants to review/modify an existing one.
+
+### Setup
+
+Search memory for:
+- "What is the user's company name and jurisdiction?"
+- "What type of NDA does the user prefer (mutual or one-way)?"
+- "Are there standard clauses the user always includes?"
+
+If not found, ask once:
+
+> "To draft your NDA, I need: (1) Your company name? (2) Are you protecting information from a partner (mutual NDA) or sharing your secrets with a vendor/investor (one-way)? (3) What jurisdiction (US, UK, EU, other)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Determine NDA Type and Scope
+
+Identify whether the NDA is unilateral (one-way) or mutual (both parties exchange confidential info).
+
+- **Unilateral:** You disclose; they protect. Simpler, faster.
+- **Mutual:** Both disclose and protect. More balanced, slightly longer.
+
+Also establish scope:
+- **Duration:** How long does confidentiality last (2 years, 5 years, perpetual)?
+- **Definition of confidential info:** Oral, written, electronic?
+- **Exceptions:** Public domain, independently developed, legally required disclosure?
+
+Default to mutual NDA, 3-year duration if not specified in memory.
+
+## Step 2: Identify Parties and Jurisdiction
+
+Extract from memory or ask:
+
+- **Disclosing party:** The user's company (legal name)
+- **Receiving party:** Partner company name (or placeholder if unknown)
+- **Jurisdiction:** Governing law (e.g., State of Delaware, England, EU GDPR-compliant)
+
+If receiving party name is unknown → use placeholder "[Counterparty Company Name]" and note in output: "Replace [Counterparty Company Name] before signing."
+
+## Step 3: Define Confidential Information
+
+Establish what qualifies as "Confidential Information":
+
+- Trade secrets, business plans, technical data, financial information, customer lists, code, designs
+- Specify marking requirements (e.g., "marked CONFIDENTIAL" or "verbally identified as confidential")
+- Establish standard exceptions (public domain, independently developed, required by law)
+
+Include a clause for oral disclosures: "Oral disclosures must be confirmed in writing within 10 business days."
+
+## Step 4: Outline Key Obligations
+
+Draft the receiving party's duties:
+
+- **Use limitation:** Confidential information may only be used for the stated purpose (e.g., partnership evaluation)
+- **Secrecy:** Treat information like their own trade secrets
+- **Access control:** Limit disclosure to employees/contractors with a need to know; require them to sign NDAs too
+- **Return/destruction:** Upon termination or request, return or certify destruction of materials
+
+Make obligations clear and enforceable (not vague).
+
+## Step 5: Include Standard Clauses
+
+Add boilerplate sections:
+
+- **Non-circumvention:** Receiving party cannot use information to bypass the discloser's business (e.g., approaching customers directly)
+- **No license or partnership:** Confidentiality does not create partnership, agency, or license rights
+- **Disclaimer:** Information is provided "as-is" without warranties
+- **Survival:** Confidentiality obligations survive termination for the agreed duration
+- **No obligation to disclose:** Discloser is not obligated to share any information; NDA only covers what is shared
+
+## Step 6: Add Termination and Dispute Resolution
+
+Include:
+
+- **Effective date:** When does confidentiality start?
+- **Term:** How long it lasts (e.g., 3 years from signing)
+- **Termination clause:** Either party can terminate with notice, but confidentiality obligations continue for the stated term
+- **Dispute handling:** Specify whether disputes go to arbitration, mediation, or courts
+- **Attorney's fees:** Decide if the prevailing party recovers legal costs (common in US agreements)
+
+## Step 7: Format and Review Output
+
+Generate the final NDA document.
+
+- Use clear section numbers (1.0, 2.0, 2.1, etc.)
+- Use plain language; avoid legal jargon where possible
+- Mark all placeholders with **[BRACKETS]**
+- Include a signature block with date lines
+- Add a note: "This is a template. Review with a lawyer before signing."
+
+---
+
+## Output Format
+
+---
+**Non-Disclosure Agreement (NDA)**
+
+**Between:** [Your Company Name] ("Discloser") and [Counterparty Company Name] ("Recipient")
+
+**Effective Date:** [YYYY-MM-DD]
+
+**1. Confidential Information**
+
+Confidential Information means all non-public information disclosed by Discloser to Recipient, including but not limited to trade secrets, technical data, business plans, financial information, and customer lists. Confidential Information does not include information that: (a) is or becomes publicly available through no breach by Recipient, (b) is rightfully received by Recipient from a third party without confidentiality restrictions, or (c) is independently developed by Recipient without use of Confidential Information.
+
+**2. Obligations**
+
+Recipient shall:
+- Treat Confidential Information with the same degree of care as its own trade secrets (minimum reasonable care)
+- Limit access to employees and contractors with a need to know, each bound by written confidentiality obligations
+- Use Confidential Information only for the stated purpose: [Partnership evaluation / Product evaluation / [Purpose]]
+
+**3. Return or Destruction**
+
+Upon Discloser's request or upon termination, Recipient shall, at Discloser's election, return or certify in writing the destruction of all Confidential Information.
+
+**4. Term and Survival**
+
+This Agreement is effective as of the date above and continues for [3 years / 5 years / [Duration]]. Confidentiality obligations survive termination for the stated term.
+
+**5. No License or Partnership**
+
+This Agreement grants no license, partnership, agency, or other relationship between the parties. Discloser makes no representation regarding accuracy, completeness, or non-infringement of Confidential Information.
+
+**6. Compelled Disclosure**
+
+If Recipient is compelled by law or court order to disclose Confidential Information, Recipient shall promptly notify Discloser (except where legally prohibited) to allow Discloser to seek protective measures.
+
+**7. Non-Circumvention**
+
+Recipient shall not use Confidential Information to circumvent Discloser's business relationships or business practices.
+
+**Signatures**
+
+Discloser: _________________________ Date: _________
+Name: [Your Name]
+Title: [Your Title]
+
+Recipient: _________________________ Date: _________
+Name: [Counterparty Representative]
+Title: [Counterparty Title]
+
+---
+
+**Notes:**
+- ⚠️ This is a template. Review with a lawyer licensed in [Jurisdiction] before signing.
+- ⚠️ Customize the following before use: disclosing party, receiving party, purpose, term, jurisdiction.
+- ℹ️ Consider adding: non-solicitation clause (prevents hiring your employees), survival period for specific data types, or territory restrictions if relevant.
+
+---
+
+## Edge Cases
+
+- **Unknown receiving party:** Use placeholder "[Counterparty Company Name]" throughout; note clearly "Replace before execution."
+- **International parties:** If Discloser and Recipient are in different jurisdictions, specify choice of law (e.g., "This Agreement shall be governed by the laws of [State/Country]") and note potential conflicts with local law.
+- **Mutual NDA with unequal obligations:** If one party wants stronger protections, use a tiered structure with different terms per party (e.g., "Recipient's obligations survive for 5 years; Discloser's obligations for 3 years").
+- **Conflicting terms from memory:** If stored preferences conflict with the user's current request, honor the current request and ask if memory should be updated.
+- **Very sensitive information:** If the user mentions patented, licensed, or regulated information (medical data, source code), add: "Recipient acknowledges that Confidential Information may be protected by patent, copyright, or data protection law and agrees to respect those rights."
+- **No termination date specified:** Default to 3 years; note "If a different term is needed, modify [3 years]."

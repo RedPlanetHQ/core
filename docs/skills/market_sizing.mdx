@@ -1,0 +1,176 @@
+---
+title: "Market Sizing"
+description: "Triggered when the user says 'estimate our TAM' or 'size the market' or 'what's our addressable market'."
+category: Product
+integrations: []
+---
+
+**Goal:** Build a defensible estimate of the Total Addressable Market (TAM), Serviceable Addressable Market (SAM), and Serviceable Obtainable Market (SOM) to inform business strategy and investment decisions.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Define the Market Scope
+
+Ask:
+- **What problem are you solving?** — Be specific (e.g., "helping teams collaborate on design" not "improving productivity")
+- **What customer type?** — B2B, B2C, B2B2C? What industry/role?
+- **What geography?** — US only or global?
+- **Time horizon** — TAM in year 1, year 3, or year 5?
+
+## Step 2: Build TAM Using Top-Down Approach
+
+Start with industry benchmarks:
+1. **Define the total addressable population** — How many people/companies have this problem?
+   - Example: "There are [X] software companies globally"
+   - Source: Industry reports (Gartner, Forrester), government data (census, labor stats), analyst databases
+2. **Estimate what % have your specific problem** — Not everyone needs this solution
+   - Example: "Assume 30% of those have [specific problem]"
+   - Research: Customer surveys, interviews, market analysis, competitor data
+3. **Estimate what % can afford your solution** — Price matters
+   - Example: "Of those, 80% have sufficient budget for a $[price/year] spend"
+   - Data: Revenue/headcount data, industry spending benchmarks
+4. **Multiply:** Population × % with problem × % can afford = TAM
+
+**Sanity checks:**
+- Does this TAM make sense vs. your competition's TAM?
+- Is it bigger than your current market (good) but not implausibly bigger (red flag)?
+
+## Step 3: Build TAM Using Bottom-Up Approach
+
+Start with your current success:
+1. **Current revenue or customer count** — What's your baseline?
+2. **Estimate total available customers at that same penetration** — If you serve [X]% of your target segment, what's 100%?
+   - Example: "We've sold to 100 customers. If those represent 1% of the market, TAM = 10,000 customers"
+3. **Estimate average revenue per customer** — What's your ASP or LTV?
+4. **Multiply:** Total available customers × ASP = TAM
+
+**Compare to top-down:** Do they align? If not, investigate the gap.
+
+## Step 4: Define SAM (Serviceable Addressable Market)
+
+SAM is the portion of TAM you can realistically reach with your go-to-market strategy.
+
+Ask:
+- **What customer segments are you targeting?** (not all of TAM)
+- **What geographies can you serve?** (not all regions)
+- **What sales model?** (self-serve, sales, partnerships → each reaches different % of TAM)
+
+**Calculate SAM:** TAM × (% of segments you target) × (% of geographies you cover) = SAM
+
+Example:
+- TAM: $10B globally
+- You target SMBs in North America only: $10B × 15% (SMBs of total) × 25% (North America of global) = $375M SAM
+
+## Step 5: Define SOM (Serviceable Obtainable Market)
+
+SOM is what you realistically capture in a given timeframe (usually 3-5 years).
+
+Ask:
+- **What market share target is realistic?** (1%, 5%, 10%?)
+- **What's your go-to-market strategy?** (inbound, sales, partnerships, network effects)
+- **How fast can you scale?** (bottleneck: team, product, capital)
+
+**Calculate SOM:** SAM × (realistic market share target) = SOM
+
+Example:
+- SAM: $375M
+- Target 5% market share by year 3: $375M × 5% = $18.75M revenue opportunity
+
+## Step 6: Validate and Stress-Test
+
+Ask:
+- **What assumptions could be wrong?** — Which have the biggest impact on the number?
+- **How confident are you in each input?** (High / Medium / Low confidence)
+- **What would need to happen for SAM to be 2x bigger? 0.5x smaller?**
+- **How does your SOM target compare to similar companies at this stage?**
+
+Create ranges (conservative, base case, optimistic) instead of point estimates.
+
+## Step 7: Present Market Sizing Analysis
+
+---
+
+**Market Sizing: [Problem/Product Name]**
+
+**TAM (Total Addressable Market)**
+
+**Top-Down Approach**
+- Total addressable population: [X] [companies/users/roles globally]
+  - Source: [Gartner / Census / Analyst report]
+- % with [specific problem]: [Y]%
+  - Source: [Customer research / Industry surveys / Market analysis]
+- Population with problem: [X × Y]
+- % with sufficient budget for $[price]/year solution: [Z]%
+- **TAM:** [X × Y × Z] = **$[Dollar amount]**
+
+**Bottom-Up Approach**
+- Current customers: [X]
+- Estimated market penetration: [Y]%
+- Total addressable customers: [X / Y]
+- Average Revenue Per Customer (ARPC): $[Amount]
+- **TAM:** [Total customers × ARPC] = **$[Dollar amount]**
+
+**Top-Down vs. Bottom-Up Variance**
+- Top-Down TAM: $[X]
+- Bottom-Up TAM: $[Y]
+- Variance: [+/- Z%]
+- [If significant]: Most confident in [approach] due to [reason]
+
+---
+
+**SAM (Serviceable Addressable Market)**
+
+**Market Segmentation**
+- Total TAM: $[X]
+- Target segments: [List 2-3 segments you'll focus on]
+  - [Segment 1]: [% of TAM]
+  - [Segment 2]: [% of TAM]
+- Geographic focus: [Region(s)]
+  - [Region]: [% of global market]
+- **SAM:** $[X] × [Combined %] = **$[Dollar amount]**
+
+**Go-to-Market Approach**
+- Sales model: [Self-serve / Sales-led / Hybrid]
+- Customer acquisition channel: [Inbound / Sales / Partnerships / Other]
+- Estimated reach within SAM: [Z]%
+
+---
+
+**SOM (Serviceable Obtainable Market)**
+
+**Market Share Target**
+- Year 1 share: [X]%
+- Year 3 share: [Y]%
+- Year 5 share: [Z]%
+- **SOM (Year 3):** $[SAM] × [Y]% = **$[Dollar amount]**
+
+**Growth Drivers**
+- Market growth rate (CAGR): [X]%
+- Share gain from competitors: [Y]%
+- New use case expansion: [Z]%
+
+---
+
+**Sensitivity Analysis**
+
+| Assumption | Base Case | Conservative | Optimistic | Impact |
+|-----------|-----------|--------------|------------|--------|
+| % population with problem | [X]% | [Y]% | [Z]% | TAM shifts by [±]$ |
+| Average selling price | $[X] | $[Y] | $[Z] | TAM shifts by [±]$ |
+| Market penetration (SOM) | [X]% | [Y]% | [Z]% | SOM shifts by [±]$ |
+
+**Key Risks to Estimates**
+- [Assumption 1] — If wrong, TAM could be [X]% smaller. Mitigation: [Action]
+- [Assumption 2] — If wrong, TAM could be [X]% smaller. Mitigation: [Action]
+
+---
+
+## Edge Cases
+
+- **TAM is too big (>$100B):** Ask: "Are you really addressable to all of that?" Define SAM more tightly. Most early-stage companies should target SAM <$1B.
+- **TAM is too small (<$100M):** Ask: "Is this the right problem? Should we expand to adjacent problems?" A venture-scale business needs >$100M opportunity minimum.
+- **Approaches diverge significantly:** Something's wrong. Ask: "Which assumption is most questionable?" Dig into the gap.
+- **Market is shrinking or flat:** Ask: "Is this the right market, or should we pivot?" A declining TAM is a strategic red flag.
+- **You can't find data:** Use triangulation. Combine customer surveys, competitor financial data, industry reports, and analogous markets. Document confidence level clearly.

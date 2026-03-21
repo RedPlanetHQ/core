@@ -1,0 +1,140 @@
+---
+title: "Grammar Check"
+description: "Edit and improve writing for clarity, tone, and correctness. Triggered when the user asks 'check my grammar', 'edit this', or 'improve my writing'."
+category: "Email"
+integrations: []
+---
+
+**Goal:** Review and refine the user's written content for grammar, clarity, tone, and style—then return an edited version with explanations of changes.
+
+This skill runs using CORE memory only. No integrations required.
+
+**Trigger:** Run on demand when the user requests editing or grammar feedback on a document, email, message, or any written content.
+
+### Setup
+
+Search memory for:
+- "What writing style or tone does the user prefer?"
+- "Are there recurring grammar or style issues to watch for?"
+- "What audience is the writing aimed at (internal, customer-facing, executive, technical)?"
+
+If not found, ask once:
+
+> "To give the best feedback, I need: (1) Who is your audience (internal team, customers, investors)? (2) What tone do you prefer (formal, casual, direct)? (3) Any recurring issues you want me to focus on (passive voice, jargon, wordiness)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Receive and Assess the Content
+
+Ask the user to provide the text to edit (if not already provided).
+
+- **Length:** Is it a sentence, paragraph, email, or document?
+- **Context:** What is the purpose (persuasion, instruction, update, apology)?
+- **Audience:** Who will read this (boss, customer, team, public)?
+
+Note the content's current tone and clarity level. If tone is unclear → infer from audience and context.
+
+## Step 2: Identify Grammar and Mechanical Errors
+
+Scan for:
+
+- **Spelling:** Typos, British vs. American English (consult memory for preference)
+- **Punctuation:** Missing commas, semicolon misuse, incorrect apostrophes
+- **Subject-verb agreement:** "The team are" vs. "The team is"
+- **Tense consistency:** Don't mix past and present within a single paragraph
+- **Pronoun clarity:** Is it clear what "it" or "they" refers to?
+
+For each error, note the line/phrase and the correction.
+
+## Step 3: Assess Clarity and Structure
+
+Check for:
+
+- **Wordiness:** Can a sentence be shortened without losing meaning? (e.g., "in order to" → "to")
+- **Jargon and complexity:** Is technical language necessary, or can it be simplified?
+- **Sentence variety:** Too many short sentences? Too many long ones?
+- **Paragraph structure:** Does each paragraph have one clear idea? Does the flow make sense?
+- **Active vs. passive:** Are verbs strong and active, or weak and passive? (e.g., "The report was written" → "We wrote the report")
+
+Flag sentences or phrases that need rewording for clarity.
+
+## Step 4: Evaluate Tone and Voice
+
+Assess alignment with the established audience and tone from memory:
+
+- **Formal?** Remove contractions, casual phrases, exclamation marks
+- **Casual?** Add conversational language, use "you", relax stiffness
+- **Direct?** Prioritize action and outcomes; cut filler
+- **Empathetic?** Acknowledge the reader's perspective; soften commands
+
+Note where tone is inconsistent or misaligned.
+
+## Step 5: Suggest Specific Improvements
+
+For each issue found, create a side-by-side comparison:
+
+**Original:** [Exact phrase]
+**Suggested:** [Improved phrase]
+**Reason:** [Explanation—grammar, clarity, tone, or style]
+
+Prioritize high-impact changes (clarity, tone, professionalism) over minor nitpicks (e.g., serial comma preference).
+
+## Step 6: Generate the Edited Version
+
+Produce a clean, fully edited version of the text with all major changes incorporated.
+
+- Keep edits conservative; do not rewrite the user's voice
+- If there are multiple valid options, choose the clearest and most aligned with tone
+- If a change is significant or subjective → keep the original but note it as an optional suggestion
+
+## Step 7: Provide a Summary and Recommendations
+
+Output a summary of issues found and overall feedback.
+
+- **Grammar and mechanics:** [Count and brief overview]
+- **Clarity improvements:** [Main changes to readability]
+- **Tone adjustments:** [How it now aligns with audience]
+- **Specific strengths:** [What was well-written]
+
+---
+
+## Output Format
+
+---
+**Editing Summary — [Document type or title]**
+
+**Issues Found**
+- 🔴 Grammar/Mechanics: [X issues] (e.g., 2 comma splices, 1 subject-verb disagreement)
+- 🟡 Clarity: [X suggestions] (e.g., 3 wordy phrases, 1 ambiguous pronoun)
+- 🔵 Tone: [X adjustments] (e.g., softened language, removed jargon)
+
+**Detailed Feedback**
+
+| Original | Suggested | Reason |
+|----------|-----------|--------|
+| [Phrase] | [Improved phrase] | Grammar: missing comma / Clarity: wordiness / Tone: too formal |
+
+**Edited Version**
+
+---
+[Full edited text here, incorporating all major corrections]
+---
+
+**Summary**
+- ✓ Strengths: [What was well-written]
+- 📝 Main improvements: [1–2 key changes]
+- 💡 Optional suggestions: [Minor tweaks the user can accept or reject]
+
+**For Next Time**
+- ℹ️ Watch for: [Recurring issue, e.g., "Consider using active voice more often"]
+
+---
+
+## Edge Cases
+
+- **No explicit audience:** If audience is unclear, ask once: "Who will read this—your team, a customer, an executive?" Then proceed using that context.
+- **Conflicting feedback from memory:** If stored preferences conflict with the request (e.g., memory says "formal" but user asks "make it more casual"), honor the current request and ask if memory should be updated.
+- **Highly technical content:** For specialized fields (code, medical, legal), ask: "Should I preserve technical terminology, or simplify for a general audience?" Proceed based on response.
+- **Very short text (1–2 sentences):** Still provide structured feedback; note if no major issues are found: "No significant changes needed. This is clear and well-written."
+- **Extremely long content (>2,000 words):** Sample and edit the first 500 words, then ask: "Should I continue editing the full document, or focus on specific sections?"
+- **Multiple drafts:** If the user provides revisions, compare against the previous version and highlight what changed in response to feedback.

@@ -1,0 +1,128 @@
+---
+title: "Select Prioritization Framework"
+description: "Triggered when the user says 'prioritize these ideas', 'what should we build next', or 'rank these features'."
+category: Execution
+integrations: []
+---
+
+**Evaluate opportunities systematically using frameworks that account for impact, feasibility, confidence, and customer problems.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Select the Right Framework
+
+Choose based on your context and available data:
+
+- **Opportunity Score:** Best when you have customer satisfaction and importance data; ideal for identifying high-value customer problems
+- **ICE (Impact, Confidence, Ease):** Quick prioritization for ideas and initiatives; works with rough estimation
+- **RICE (Reach, Impact, Confidence, Effort):** Scaled prioritization for larger teams requiring more granularity; accounts for different user reach
+
+## Step 2: Gather Customer Data (for Opportunity Score)
+
+Survey customers on two dimensions for each need or feature request:
+- **Importance:** How important is this to customers? (0-1 or 1-10 scale)
+- **Satisfaction:** How satisfied are customers with current solutions? (0-1 or 1-10 scale)
+
+Normalize responses to 0-1 scale for consistent comparison.
+
+## Step 3: Calculate Scores
+
+Apply the appropriate formula based on your chosen framework:
+
+**Opportunity Score**
+```
+Opportunity Score = Importance × (1 − Satisfaction)
+```
+Highest scores indicate unmet needs with high customer importance.
+
+**ICE Score**
+```
+ICE Score = Impact × Confidence × Ease
+```
+Rate Impact (1-10), Confidence (0-1 or 0-100%), and Ease (1-10 where 10 is easiest).
+
+**RICE Score**
+```
+RICE Score = (Reach × Impact × Confidence) / Effort
+```
+Reach = number of customers/users, Impact = effect on each (1-3 scale), Confidence = 0-1, Effort = person-months.
+
+## Step 4: Visualize and Interpret Results
+
+Plot findings on relevant matrices:
+- **Opportunity Score:** Create an Importance vs. Satisfaction scatter plot; prioritize high-importance, low-satisfaction quadrant
+- **ICE/RICE:** Create an impact-effort grid; prioritize high-impact, low-effort initiatives
+- Look for clusters and outliers; use context to adjust rankings
+
+## Step 5: Make Prioritized Recommendations
+
+Rank items by score and advance the highest-scoring opportunities first. Account for:
+- Stakeholder alignment: Build support for top priorities
+- Confidence levels: High-uncertainty items may need validation before full commitment
+- Dependencies: Some items require prerequisites to complete first
+- Resource constraints: Ensure your top priorities are actually doable with available capacity
+
+## Output Format
+
+---
+
+**Prioritization Analysis**
+
+**Framework Selected**
+[Opportunity Score / ICE / RICE]
+
+**Input Data**
+[Customer research or estimation assumptions]
+
+**Scoring Results**
+
+**Opportunity Score Approach**
+
+| Opportunity | Importance | Satisfaction | Score | Rank |
+|-------------|-----------|--------------|-------|------|
+| [Item 1] | [0-1] | [0-1] | [Score] | [1] |
+| [Item 2] | [0-1] | [0-1] | [Score] | [2] |
+| [Item 3] | [0-1] | [0-1] | [Score] | [3] |
+
+**ICE Approach**
+
+| Initiative | Impact | Confidence | Ease | Score | Rank |
+|-----------|--------|-----------|------|-------|------|
+| [Item 1] | [1-10] | [0-1] | [1-10] | [Score] | [1] |
+| [Item 2] | [1-10] | [0-1] | [1-10] | [Score] | [2] |
+
+**RICE Approach**
+
+| Initiative | Reach | Impact | Confidence | Effort | Score | Rank |
+|-----------|-------|--------|-----------|--------|-------|------|
+| [Item 1] | [#] | [1-3] | [0-1] | [months] | [Score] | [1] |
+
+**Visualization**
+[Link to scatter plot or impact-effort matrix]
+
+**🎯 Top 3 Priorities**
+1. [Item with rationale]
+2. [Item with rationale]
+3. [Item with rationale]
+
+**Confidence & Risk Notes**
+- [High-uncertainty items requiring validation]
+- [Dependencies to resolve]
+- [Resource constraints affecting feasibility]
+
+**Next Steps**
+- Allocate team capacity to top 3 priorities
+- Define success metrics and tracking
+- Plan validation experiments if confidence is low
+
+---
+
+## Edge Cases
+
+- **Data quality varies:** When customer data is sparse, use ICE to move forward with estimation. Plan to gather better data as you learn.
+- **Different scales:** Comparing initiatives measured in different units (user reach vs. platform impact) requires normalization. Document your scaling assumptions.
+- **Tied scores:** When initiatives score equally, use secondary factors: team alignment, strategic fit, or risk appetite to break ties.
+- **Effort underestimation:** Engineering effort often surprises. Build in buffer or prioritize investigations upfront to reduce estimate uncertainty.
+- **Strategic override:** High-scoring items may occasionally conflict with strategic priorities. Document overrides explicitly and communicate reasoning to stakeholders.

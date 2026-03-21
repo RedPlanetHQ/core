@@ -1,0 +1,94 @@
+---
+title: "Write Release Notes"
+description: "Triggered when the user says 'write release notes', 'document this release', or 'create release notes for this version'."
+category: Execution
+integrations: []
+---
+
+**Transform technical details into clear, user-centric release notes that explain why changes matter.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather Input
+
+Ask the user to provide:
+
+- Raw materials: Tickets, PRDs, changelogs, Git logs, or product descriptions
+- Product context: What is this product? Who uses it?
+- Audience: Developers, business users, or both?
+- Version: Release version number
+- Release date (if known)
+
+Store context in memory for consistency.
+
+## Step 2: Organize by Category
+
+Group changes into these sections:
+
+- **New Features** — Entirely new capabilities
+- **Improvements** — Enhancements to existing features
+- **Bug Fixes** — Issues resolved
+- **Breaking Changes** — Backward-incompatible updates (if applicable)
+- **Deprecations** — Features being removed (if applicable)
+
+## Step 3: Translate Technical to User Benefits
+
+For each change, identify the **benefit to users**, not the implementation detail.
+
+❌ "Implemented Redis caching for dashboard APIs"
+✅ "Dashboards load 3× faster, letting you analyze data without delays"
+
+## Step 4: Write Clear, Concise Entries
+
+Each entry should be:
+
+- **1-3 sentences** max
+- **Plain language** — no jargon or internal references
+- **Benefit-forward** — explain why it matters
+- **User-centric tone** — speak to what users care about
+
+## Step 5: Order by Priority
+
+List most impactful changes first. Users often read only the first few entries.
+
+## Output Format
+
+---
+
+**Release Notes — [Product Name] v[Version]**
+_Released [Date]_
+
+**🎉 New Features**
+
+- [Feature name]: [User benefit in 1-2 sentences. Explain why this matters.]
+- [Feature name]: [User benefit in 1-2 sentences. Explain why this matters.]
+
+**✨ Improvements**
+
+- [Feature name]: [What changed and why it's better. 1-2 sentences.]
+- [Feature name]: [What changed and why it's better. 1-2 sentences.]
+
+**🐛 Bug Fixes**
+
+- [Bug description]: [User impact that's now resolved. 1 sentence.]
+- [Bug description]: [User impact that's now resolved. 1 sentence.]
+
+**⚠️ Breaking Changes** (if applicable)
+
+- [Change]: [What changed and migration required. 2 sentences.]
+
+**🗑️ Deprecations** (if applicable)
+
+- [Feature]: [What's being removed and timeline. 2 sentences.]
+
+---
+
+## Edge Cases
+
+- **Too many changes:** Group minor improvements into "Various improvements and fixes."
+- **No release date yet:** Use "Coming soon" or omit the date.
+- **Internal jargon unavoidable:** Explain technical terms in parentheses for non-technical users.
+- **Breaking changes:** Be extra clear about migration steps and deadline.
+- **Security or urgent fixes:** Lead with these, even if otherwise lower priority.

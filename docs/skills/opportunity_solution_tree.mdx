@@ -1,0 +1,109 @@
+---
+title: "Opportunity Solution Tree"
+description: "Triggered when the user says 'build an opportunity solution tree', 'map discovery opportunities', or 'structure product discovery'."
+category: Product Discovery
+integrations: []
+---
+
+**Build a visual framework connecting a desired outcome to customer opportunities, solutions, and validation experiments.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Define the Desired Outcome
+
+Confirm or help articulate a single, measurable outcome at the top of the tree. This should be a specific business or product metric you're pursuing (e.g., "increase 7-day retention to 40%"). This comes from your OKRs or product strategy.
+
+Ask: "What's the one metric or outcome we're trying to achieve? Be specific."
+
+## Step 2: Map Opportunities
+
+From customer research, identify 3-7 customer opportunities (needs, pain points, desires). Frame each from the customer's perspective: "I struggle to..." or "I wish I could..."
+
+These are **problems worth solving**, not features. Don't let customers propose solutions—extract the underlying needs.
+
+## Step 3: Prioritize Opportunities
+
+Use Opportunity Score to rank opportunities:
+```
+Opportunity Score = Importance × (1 − Satisfaction)
+```
+
+- **Importance:** How important is this to customers? (0-1 scale)
+- **Satisfaction:** How satisfied are they with current solutions? (0-1 scale)
+
+Focus on the top 2-3 opportunities.
+
+## Step 4: Generate Solutions
+
+For each prioritized opportunity, brainstorm 3+ distinct solutions. Include perspectives from Product, Design, and Engineering. Don't commit to the first idea—compare and contrast before selecting.
+
+## Step 5: Design Experiments
+
+For the most promising solutions, design 1-2 fast, cheap validation tests. Specify:
+- **Hypothesis:** What are we testing?
+- **Method:** How will we test it?
+- **Metric:** What will we measure?
+- **Success threshold:** What result validates the hypothesis?
+
+Prefer experiments with "skin in the game" (pre-orders, willingness to pay) over opinion-based validation.
+
+## Step 6: Visualize the Tree
+
+Present the full OST in a hierarchical format, showing the flow from outcome → opportunities → solutions → experiments.
+
+## Output Format
+
+---
+
+**Opportunity Solution Tree — [Desired Outcome]**
+
+**🎯 Desired Outcome**
+[Single, measurable metric or goal]
+
+**🎪 Opportunities** (Ranked by Opportunity Score)
+
+| Opportunity | Importance (0-1) | Satisfaction (0-1) | Opportunity Score | Priority |
+|---|---|---|---|---|
+| [Opportunity 1] | [0-1] | [0-1] | [Score] | High/Medium/Low |
+| [Opportunity 2] | [0-1] | [0-1] | [Score] | High/Medium/Low |
+| [Opportunity 3] | [0-1] | [0-1] | [Score] | High/Medium/Low |
+
+**💡 Top Solutions by Opportunity**
+
+**Opportunity 1: [Description]**
+- Solution A: [Description]
+- Solution B: [Description]
+- Solution C: [Description]
+- **Recommended:** [Solution] because [rationale]
+
+**Opportunity 2: [Description]**
+[Same format]
+
+**🧪 Validation Experiments**
+
+**For Opportunity 1 / Solution [X]:**
+- **Hypothesis:** [What we believe to be true]
+- **Method:** [How we'll test it]
+- **Metric:** [What we'll measure]
+- **Success threshold:** [Result that validates]
+- **Timeline:** [Days to run]
+
+**For Opportunity 2 / Solution [Y]:**
+[Same format]
+
+**Next Steps**
+1. Run experiments for top 2 solutions
+2. Kill/iterate based on results
+3. Update tree weekly as you learn
+
+---
+
+## Edge Cases
+
+- **Too many opportunities:** Prioritize ruthlessly. Focus on top 2-3; defer others.
+- **Unclear satisfaction data:** Use qualitative assessment or conduct quick survey.
+- **Multiple solutions equally strong:** Run parallel experiments; let data decide.
+- **No research data:** Conduct 5-10 customer interviews before mapping tree.
+- **Tree becomes too large:** Focus on one desired outcome at a time. Create separate trees for other outcomes.

@@ -1,0 +1,123 @@
+---
+title: "Interview Script"
+description: "Triggered when the user says 'draft an interview script' or 'create interview questions' or 'prepare customer interview'."
+category: Research
+integrations: []
+---
+
+**Goal:** Generate structured customer interview scripts with warm openers, research-backed questions, and guided probes to uncover authentic customer problems and needs.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather Interview Objectives
+
+Ask the user:
+- **Research goal** — What specific problem or behavior are you investigating?
+- **Target customer** — Who will you interview? (role, experience level, company size)
+- **Interview length** — How much time do you have? (15, 30, 60 minutes)
+- **Prior context** — What do you already know about them?
+
+Store these in memory under "Interview Script - [Date]" so you don't ask again.
+
+## Step 2: Structure the Interview Flow
+
+Outline the arc:
+1. **Warm-up & context** (2-3 minutes) — Build rapport, explain purpose
+2. **Background questions** (3-5 minutes) — Understand their role and environment
+3. **Problem exploration** (10-15 minutes) — Dig into their current approach, pain points
+4. **Solution ideation** (5-10 minutes) — Explore how they'd want to solve this
+5. **Closing** (2-3 minutes) — Thank them, ask for referrals or follow-up access
+
+## Step 3: Draft the Warm-Up Section
+
+Create an opening that:
+- Explains why you're talking to them specifically
+- Clarifies how long it will take
+- Assures confidentiality
+- Sets collaborative tone
+
+Example frame: "We're building [product], and we want to make sure we understand how [role type] like you actually work. I'm not here to pitch; I want to learn from you."
+
+## Step 4: Draft Problem-Exploration Questions
+
+Write 6-8 open-ended questions that:
+- Start broad ("Tell me about your typical day") then narrow down
+- Use Jobs to Be Done language ("What are you trying to accomplish?")
+- Avoid leading questions ("Do you struggle with X?" → "How do you handle X today?")
+- Include follow-up probes (Why? How so? Walk me through it.)
+- Assume the user has a current workaround (don't assume the problem is unsolved)
+
+Mark which questions are must-ask vs. nice-to-have.
+
+## Step 5: Draft the Solution-Exploration Section
+
+Write 3-4 questions that explore:
+- What would ideal look like for them (no constraints)
+- What would make them switch from their current approach
+- What barriers exist to adoption (cost, change management, integration)
+- How they'd measure success
+
+Avoid showing your product yet. Let them define the ideal.
+
+## Step 6: Build the Closing Section
+
+Prepare:
+- A summary of key insights to mirror back (builds trust)
+- Ask permission to follow up if clarifications arise
+- Request for referrals ("Do you know others like you I should talk to?")
+- Optional: invitation to user research program or beta
+
+## Output Format
+
+---
+
+**Interview Script: [Research Goal]**
+
+**Meta**
+- Target: [Customer role/segment]
+- Duration: [Minutes]
+- Date: [Planned date]
+
+**1. Warm-Up (2-3 minutes)**
+- [Opening statement explaining purpose and confidentiality]
+- "This should take about [X] minutes. Sound good?"
+
+**2. Background (3-5 minutes)**
+- Tell me about your role at [Company type]. What do you spend most of your time on?
+- How long have you been in this position?
+- [Follow-up probe]: What's a typical week look like?
+
+**3. Problem Exploration (10-15 minutes)**
+- How do you currently handle [key workflow]?
+- Walk me through your process step-by-step.
+- [Follow-up]: What's most frustrating about that?
+- What does success look like in this area?
+- Have you tried other tools or approaches? Why'd you stick with [current]?
+- If you could wave a magic wand, what would change?
+
+**4. Solution Exploration (5-10 minutes)**
+- Imagine the ideal solution. What would it do?
+- What would it take for you to switch?
+- How would you measure whether it's working?
+
+**5. Closing (2-3 minutes)**
+- [Mirror back 2-3 key insights]
+- Would it be okay if I follow up if I have clarifying questions?
+- Do you know anyone else like you I should talk to?
+
+**Notes**
+- [Assumptions to validate during this interview]
+- [Red flags to listen for]
+
+---
+
+## Edge Cases
+
+- **Interviewee dominates:** Gently redirect: "That's helpful context. Back to [problem area]—how do you currently handle X?"
+- **One-word answers:** Slow down, ask follow-ups: "Why is that important to you?" or "Walk me through that."
+- **Defensive about current solution:** They may feel you're criticizing their choice. Reframe: "I'm curious how you landed on this approach—what made sense at the time?"
+- **No clear problem identified:** This is a data point. Note it. Ask: "If things stay exactly as they are, would that be okay for you?" Lack of pain is information.
+- **Time running short:** Prioritize problem exploration over solution ideation. You can always ask solution questions in a follow-up.
+- **Off-topic tangents:** Listen for 30 seconds, then bridge back: "That's interesting context. I want to make sure I understand [original topic]—can we dig into that?"

@@ -1,0 +1,172 @@
+---
+title: "Ansoff Matrix"
+description: "Analyze growth strategies using the Ansoff Matrix framework. Triggered when users ask 'analyze my growth strategy', 'what are my market expansion options', or 'help me with growth planning'."
+category: Sales
+integrations: []
+---
+
+**Goal:** Map growth opportunities across market-product combinations using the Ansoff Matrix framework.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+**Trigger:** Run on demand when the user asks to analyze growth strategy, explore market expansion options, or evaluate business development opportunities.
+
+## Setup
+
+Search memory for any previously stored information:
+
+- "What products or services does the company offer?"
+- "What are the company's current markets or customer segments?"
+- "What are the company's growth objectives?"
+
+If nothing is found, ask once:
+
+> "To use the Ansoff Matrix effectively, I'll need a bit of context. What product or service do you offer, and who is your current customer base?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Define Current State
+
+Document the company's existing **Products** and **Markets** (customer segments).
+
+Extract or clarify:
+- Primary product/service lines
+- Current customer segments (by industry, geography, company size, or other dimension)
+- Current revenue or market share (if available)
+
+If the user provides vague input → ask for one concrete example per category.
+
+Output: A clear description of the current **Product-Market** position.
+
+## Step 2: Identify Market Development Opportunities
+
+Map new markets the company could serve with existing products.
+
+For each existing **Product**, brainstorm:
+- Geographic expansion (new regions, countries)
+- Customer segment expansion (new industries, company sizes, personas)
+- Channel expansion (new sales channels, distribution partners)
+- Use case expansion (new applications for the product)
+
+Document 3–5 specific opportunities per product if possible. Include confidence level (high/medium/low) based on market research hints from the user.
+
+If no market data is available → note that and suggest research areas.
+
+Output: Ranked list of market development plays.
+
+## Step 3: Identify Product Development Opportunities
+
+Map new products the company could build for existing markets.
+
+For each existing **Market**, brainstorm:
+- Product line extensions (adjacent products)
+- Feature enhancements or service upgrades
+- Complementary offerings (products that pair with existing ones)
+- New verticals within the same segment (e.g., different company sizes in the same industry)
+
+Document 3–5 opportunities. Include assumptions about customer demand based on user input.
+
+If demand signals are unclear → flag this and suggest validation steps.
+
+Output: Ranked list of product development plays.
+
+## Step 4: Identify Diversification Opportunities
+
+Map new products for new markets (highest risk, highest potential reward).
+
+Brainstorm:
+- **Related diversification:** Leverage core competencies in new markets (e.g., a logistics company moving into supply chain consulting)
+- **Unrelated diversification:** Enter entirely new business areas (typically lower priority; flag this as high-risk)
+
+For each opportunity, document:
+- Market size (estimated)
+- Barriers to entry (technical, regulatory, competitive)
+- Required new capabilities (teams, tech, partnerships)
+- Alignment with company mission/values
+
+If the company has limited bandwidth → deprioritize unrelated diversification; focus related opportunities instead.
+
+Output: Shortlist of diversification candidates with risk/reward assessment.
+
+## Step 5: Evaluate and Rank Opportunities
+
+Score all opportunities (market dev, product dev, diversification) on:
+- **Market size:** How large is the addressable market?
+- **Competitive intensity:** How crowded is the space?
+- **Strategic fit:** Does this align with company strengths and mission?
+- **Resource requirement:** Time, money, team needed to execute
+- **Time to revenue:** How quickly can this generate income?
+
+Use a simple scoring rubric (1–5 or High/Medium/Low). Weight factors based on the company's priorities.
+
+If scores are tied → recommend the option with fastest time-to-revenue or strongest strategic fit.
+
+Output: Ranked scorecard of all opportunities.
+
+## Step 6: Recommend Sequencing and Next Steps
+
+Propose an execution sequence:
+
+1. **Immediate (0–3 months):** Quick wins in market or product development (often with existing strengths)
+2. **Medium-term (3–12 months):** Larger product dev or market expansion plays
+3. **Long-term (12+ months):** Diversification or moonshot bets
+
+For each phase, suggest:
+- Key success metrics
+- Validation steps (customer research, pilot programs)
+- Resource allocation
+- Contingency if the bet doesn't pay off
+
+If the company is very resource-constrained → focus on one quadrant at a time; flag others as "parking lot" opportunities for future cycles.
+
+Output: Phased growth roadmap with milestones.
+
+## Output Format
+
+---
+**Ansoff Growth Matrix Analysis**
+
+**Current Position**
+- **Products:** [List of existing products/services]
+- **Markets:** [List of current customer segments]
+
+**Market Development Opportunities**
+| Opportunity | Market Segment | Confidence | Notes |
+|-------------|---|---|---|
+| [Opportunity name] | [New market entry point] | [High/Medium/Low] | [Key assumption or barrier] |
+
+**Product Development Opportunities**
+| Opportunity | Target Market | Confidence | Notes |
+|-------------|---|---|---|
+| [Opportunity name] | [Existing segment] | [High/Medium/Low] | [Key capability needed] |
+
+**Diversification Opportunities**
+| Opportunity | New Market | Risk/Reward | Notes |
+|-------------|---|---|---|
+| [Opportunity name] | [Market segment] | [Risk level / Reward level] | [Strategic rationale] |
+
+**Ranked Opportunity Summary**
+1. [Top opportunity] — [Quadrant] — [Score] — [Why this is first]
+2. [Second opportunity] — [Quadrant] — [Score] — [Why this is second]
+3. [Third opportunity] — [Quadrant] — [Score] — [Why this is third]
+
+**Recommended Roadmap**
+- **Phase 1 (0–3 months):** [Quick wins]
+- **Phase 2 (3–12 months):** [Medium-term bets]
+- **Phase 3 (12+ months):** [Long-term diversification]
+- **Key Metrics:** [2–3 metrics per phase]
+
+---
+
+## Edge Cases
+
+- **Incomplete product/market definition:** If the user can't articulate their current position clearly, ask one focused question per area and proceed with that answer.
+- **Very small company:** Focus market dev and product dev; deprioritize diversification until scale justifies the risk.
+- **Saturated market:** Prioritize product differentiation and market segmentation; flag market dev opportunities as lower-return unless entering adjacent niches.
+- **Highly regulated industry:** Flag compliance and regulatory barriers in every opportunity; recommend early legal/compliance review before execution.
+- **Rapid market change:** Acknowledge that the matrix is a snapshot; recommend quarterly re-evaluation, especially for long-term bets.
+- **No quantitative data:** Work with qualitative inputs (customer feedback, competitive anecdotes) and clearly flag assumptions in the output.

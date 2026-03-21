@@ -1,0 +1,116 @@
+---
+title: "Metrics Dashboard"
+description: "Triggered when the user says 'design a metrics dashboard' or 'what metrics should we track' or 'build a dashboard for [product area]'."
+category: Product
+integrations: []
+---
+
+**Goal:** Define the structure and content of a metrics dashboard that surfaces key business and product health indicators at a glance, aligned to strategy and actionable for stakeholders.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Identify Dashboard Audience and Cadence
+
+Ask:
+- **Who is this dashboard for?** (CEO, product team, marketing, finance, engineering)
+- **How often will they check it?** (daily, weekly, monthly)
+- **What decisions does it inform?** (hiring, feature prioritization, spend allocation, escalations)
+- **What's the current pain?** (missing context, spreadsheet chaos, slow updates, too many dashboards)
+
+## Step 2: Map to Strategic Goals
+
+Ask the user to list:
+- **1-3 company OKRs** — What are you trying to achieve?
+- **Financial metrics** — How do you make money? (MRR, LTV, COGS, margin, unit economics)
+- **Customer metrics** — How fast are you growing and retaining? (users, customers, signups, churn, NPS)
+- **Product metrics** — Is the product healthy? (engagement, feature adoption, incident rate)
+
+For each, identify: What metric proves progress? What's the target? What's the baseline?
+
+## Step 3: Define Metric Tiers
+
+Organize metrics into levels of detail:
+- **Tier 1 (Dashboard headline)** — 1-3 top-level metrics the CEO sees (e.g., MRR, growth rate, NPS)
+- **Tier 2 (Department view)** — Metrics each team owns (e.g., Sales: pipeline, conversion; Eng: deploy frequency, incident rate)
+- **Tier 3 (Deep dive)** — Operational metrics people drill into (feature usage, cohort retention, CSAT by segment)
+
+## Step 4: Choose Chart Types for Each Metric
+
+For each metric, decide:
+- **Trend (line chart)** — Is it going up or down over time? (e.g., MRR over 12 months)
+- **Breakdown (pie/stacked bar)** — How is this divided? (e.g., revenue by segment, signups by channel)
+- **Comparison (bar chart)** — How do we compare to target or last period? (e.g., actual vs. plan)
+- **Status (big number + context)** — What's the headline with variance? (e.g., "1,450 active users (+12% vs. last week)")
+
+## Step 5: Design the Layout
+
+Sketch the dashboard structure:
+- **Top row** — 3-4 headline metrics with current value + trend
+- **Middle section** — Drill-down by department (Product, Sales, Eng, Marketing)
+- **Bottom section** — Alerts or anomalies ("Revenue down 8% WoW" "New feature adoption 5%—below target")
+
+Map out which metrics live where. Keep above-the-fold data as signal, detailed breakdowns in drill-down sections.
+
+## Step 6: Define Update Frequency and Data Sources
+
+For each metric:
+- **Source** — Where does the data come from? (product DB, payment processor, survey tool, manual input)
+- **Refresh rate** — Daily? Weekly? Real-time? (affects tooling choice)
+- **Owner** — Who keeps it current? (eng, analyst, product ops)
+- **Calculation** — What's the exact formula? (to avoid ambiguity)
+
+## Step 7: Present the Dashboard Specification
+
+---
+
+**Metrics Dashboard: [Product/Team Name]**
+
+**Audience:** [Role/Team], Updated [Frequency]
+
+**Tier 1: Headlines**
+| Metric | Current | Target | Trend | Owner | Source |
+|--------|---------|--------|-------|-------|--------|
+| [Metric 1] | [Value] | [Target] | 📈 [+X%] | [Owner] | [Source system] |
+| [Metric 2] | [Value] | [Target] | 📉 [-X%] | [Owner] | [Source system] |
+| [Metric 3] | [Value] | [Target] | 📊 [Flat] | [Owner] | [Source system] |
+
+**Tier 2: Department Breakdowns**
+
+*Product Team*
+- Active users: [Value] (+X% vs. last week)
+- Engagement (sessions/user/week): [Value] (target: [Y])
+- Feature adoption (% using [Feature]): [Value] (target: [Y])
+- Churn rate (monthly): [Value]% (target: [Y]%)
+
+*Sales & Marketing*
+- Monthly signups: [Value] (+X% vs. last month)
+- Paid conversion rate: [Value]% (target: [Y]%)
+- CAC (customer acquisition cost): $[Value] (target: $[Y])
+- Sales pipeline: $[Value] (X deals in [stages])
+
+*Engineering*
+- Deploy frequency (per week): [Value]
+- Incident rate: [X] incidents (target: [Y] per month)
+- Build success rate: [X]% of deploys incident-free
+- Technical debt score: [Value] (track quarterly)
+
+**Tier 3: Deep Dives (linked/expandable)**
+- [Metric 1] by customer segment
+- [Metric 2] by acquisition channel
+- [Metric 3] cohort analysis (retention by signup month)
+
+**Alerts & Anomalies**
+- 🚨 [Alert]: Revenue down [X]% vs. forecast — [Possible cause] — [Recommended action]
+- ⚡ [Alert]: [Feature adoption] below target — [Possible cause] — [Recommended action]
+
+---
+
+## Edge Cases
+
+- **Too many metrics (>20):** Ask: "If you could only see 5 things on this dashboard, which would they be?" Start minimal; add detail later.
+- **Metric is hard to calculate:** Flag the effort. Ask: "Is this worth engineering time to automate, or should we track it manually for now?" Default to pragmatism.
+- **Metrics point in different directions:** (e.g., revenue up, churn up). This is real. Surface the contradiction. Ask: "Why might this be happening?" Investigate, don't hide.
+- **Data sources are fragmented:** Map integrations needed. Ask: "Should we build a unified warehouse first, or accept data pulls from multiple sources?" Decide on tool constraints early.
+- **Stakeholder wants to track everything:** Redirect: "I hear you. Let's pick 3 metrics this quarter, then add more next quarter as we get discipline around what moves the needle."

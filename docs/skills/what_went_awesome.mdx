@@ -1,0 +1,172 @@
+---
+title: "What Went Awesome"
+description: "Celebrate and document wins from a sprint or project. Triggered when the user asks 'document wins', 'celebrate wins', 'what went awesome', or 'highlight our wins'."
+category: "Planning"
+integrations: []
+---
+
+**Goal:** Capture and celebrate team wins, achievements, and positive moments from a sprint or project—then compile them into a shareable, morale-boosting summary.
+
+This skill runs using CORE memory only. No integrations required.
+
+**Trigger:** Run on demand at the end of a sprint, project, or week when the user wants to document and celebrate team wins.
+
+### Setup
+
+Search memory for:
+
+- "What team or project should the wins be attributed to?"
+- "Does the user have a preferred format for celebrating wins (emoji, tone, audience)?"
+- "Are there recurring categories of wins to highlight (shipping, culture, metrics, customer feedback)?"
+
+If not found, ask once:
+
+> "To celebrate your wins effectively, I need: (1) Which team or project are we documenting (e.g., Product, Engineering, Marketing)? (2) Who is the audience (internal team, company-wide, investors)? (3) Any categories of wins you always want to highlight (code shipped, bugs fixed, new features, team moments)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Gather Win Candidates
+
+Collect potential wins from the sprint or period.
+
+Ask the user to provide wins, or reference memory for prior submissions. Solicit wins across categories:
+
+- **Shipped/delivered:** Features, fixes, launches, releases
+- **Metrics/impact:** Performance improvements, user growth, revenue, churn reduction
+- **Problem-solved:** Blocker unblocked, tough decision made, technical debt reduced
+- **Team culture:** Onboarding completed, mentoring, collaboration, team member growth
+- **Customer feedback:** Positive review, feature request fulfilled, saved a customer
+- **Learning:** Training completed, new skill acquired, knowledge shared
+
+If the user provides few wins → prompt: "Any challenges you overcame? Any process improvements? Any team members who did great work?"
+
+## Step 2: Assess Impact and Authenticity
+
+Evaluate each win candidate:
+
+- **Is it real?** Avoid inflated or trivial claims (e.g., "attended a meeting" is not a win)
+- **Is it measurable or specific?** "Fixed critical bug affecting 500 users" > "made improvements"
+- **Is it attributable?** Credit the person(s) responsible, not the whole team generically
+- **Is it relevant to the sprint goal?** Include wins that align with sprint objectives, but also allow positive surprises (unexpected wins are great)
+
+If a win is vague → ask for specifics:
+
+> "You mentioned 'improved performance.' What was slow, what's fast now, and what's the impact (milliseconds saved, % improvement, user outcome)?"
+
+## Step 3: Categorize and Organize
+
+Group wins into logical buckets based on memory preferences (or default categories):
+
+- **Shipped & Delivered:** Code merged, features launched, bugs fixed
+- **Impact & Metrics:** Growth, performance, efficiency, retention
+- **Problem-Solving:** Unblocked teams, resolved conflicts, reduced technical debt
+- **Team & Culture:** Achievements, mentoring, collaboration moments
+- **Customer Love:** Feedback, feature fulfillment, saved/happy customers
+
+Organize from highest impact to most meaningful (not chronologically).
+
+## Step 4: Write Clear, Celebratory Descriptions
+
+For each win, write a 1–2 sentence description that:
+
+- **Is specific:** Names the achievement, not the effort (e.g., "Shipped one-click checkout" not "Worked on checkout feature")
+- **Includes impact:** "Reduced account creation time by 40%, improving signup conversion by 8%"
+- **Credits the achiever(s):** "Thanks to [Name/Team] for shipping [X]"
+- **Uses celebratory tone:** Positive, action-driven, confidence-building
+
+Avoid corporate jargon (e.g., "synergized cross-functional initiatives"). Be genuine and human.
+
+## Step 5: Quantify Impact Where Possible
+
+Add metrics to substantiate wins:
+
+- **Shipped:** Lines of code, PRs merged, features shipped, bugs fixed
+- **Metrics:** % improvement, user count, revenue, time saved
+- **Velocity:** Cycle time reduction, faster decision-making, faster resolution
+- **Team:** New skill learned, mentees trained, collaboration success
+
+If metrics are unavailable → skip and use qualitative impact instead (e.g., "Unblocked three downstream teams").
+
+## Step 6: Compile the Wins Document
+
+Organize all wins into the output format.
+
+- Prioritize top 3–5 wins (highest impact or team morale boosters)
+- List remaining wins in their categories
+- Keep tone consistent: celebratory, direct, genuine
+- Ensure each win is attributable (name names; it builds morale)
+
+## Step 7: Add Context and Forward Look
+
+Close with:
+
+- **Sprint summary:** One sentence on what the sprint accomplished overall
+- **Learning/growth:** Any team or technical growth that happened
+- **What's next:** Tease upcoming work or priorities (optional, if user provides it)
+- **Gratitude:** Thank the team or specific contributors
+
+---
+
+## Output Format
+
+---
+
+**What Went Awesome — [Team/Project Name] — [Sprint/Week/Period]**
+
+**🎉 Top Wins**
+
+1. **[Win Title]**
+   📊 Impact: [Metric or outcome]
+   👏 Thanks to [Name/Team]
+
+2. **[Win Title]**
+   📊 Impact: [Metric or outcome]
+   👏 Thanks to [Name/Team]
+
+3. **[Win Title]**
+   📊 Impact: [Metric or outcome]
+   👏 Thanks to [Name/Team]
+
+**⚡ Shipped & Delivered**
+
+- [Specific feature/fix] — [Impact, e.g., "Used by 500+ customers"] — [Achiever]
+- [Specific feature/fix] — [Impact] — [Achiever]
+
+**📊 Impact & Metrics**
+
+- [Metric improvement, e.g., "Reduced signup time by 40%"] — [Details] — [Achiever]
+- [Metric improvement] — [Details] — [Achiever]
+
+**🧠 Problem-Solving**
+
+- [Challenge overcome, e.g., "Unblocked payment integration"] — [Impact] — [Achiever]
+- [Challenge overcome] — [Impact] — [Achiever]
+
+**💪 Team & Culture**
+
+- [Achievement, e.g., "Onboarded 2 new engineers, mentored by [Name]"] — [Impact]
+- [Achievement] — [Impact]
+
+**❤️ Customer Love**
+
+- [Feedback or feature fulfilled, e.g., "Customer requested dark mode; shipped"] — [Feedback detail]
+- [Feedback or feature] — [Feedback detail]
+
+**Summary**
+
+This sprint, [Team/Project] [accomplished X, shipped Y, unblocked Z]. Special thanks to [high performer(s)] for going the extra mile.
+
+**Looking Ahead**
+
+Next sprint: [Brief teaser of upcoming priorities or focus]
+
+---
+
+## Edge Cases
+
+- **No wins to report:** If the user says "nothing went well," dig deeper: "Did you prevent a problem? Fix a bug? Help a teammate? Learn something?" Most sprints have at least small wins; help surface them. If genuinely a rough sprint, acknowledge it: "Some sprints are challenging. One thing that went well: the team is [resilient/learning/supportive]."
+- **Wins attributed to the whole team generically:** Ask for specifics: "Who specifically led that effort? Name them—it matters for morale."
+- **Company-confidential or sensitive wins:** If a win involves unreleased product or private metrics, note: "Mark this document as [INTERNAL] or [CONFIDENTIAL]" and adjust audience accordingly.
+- **Conflicting memory preferences:** If stored audience preference conflicts with the user's request (e.g., memory says "internal team" but user asks "for investors"), honor the current request and ask if memory should be updated.
+- **Very few metrics available:** Use qualitative impact instead (e.g., "Significantly improved performance," "Unblocked three teams"). Don't force metrics where they don't exist.
+- **Multi-team or multi-project sprint:** If documenting multiple teams, create separate sections per team or note "(See [Team 2] wins below)". Avoid mixing teams unless they shipped a combined win.

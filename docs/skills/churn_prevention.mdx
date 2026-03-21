@@ -1,0 +1,172 @@
+---
+title: "Churn Prevention"
+description: "Triggered when the user wants to reduce churn, build cancellation flows, set up save offers, recover failed payments, or implement retention strategies. Also use when the user mentions 'churn,' 'cancel flow,' 'offboarding,' 'save offer,' 'dunning,' 'failed payment recovery,' 'win-back,' 'retention,' 'exit survey,' 'pause subscription,' 'involuntary churn,' 'people keep canceling,' 'churn rate is too high,' or 'how do I keep users.'"
+category: "Retention"
+integrations: []
+---
+
+**Goal:** Design cancel flows, dynamic save offers, and dunning strategies to reduce voluntary and involuntary churn.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to reduce churn, optimize cancellation flows, set up payment recovery, or analyze retention metrics.
+
+## Setup
+
+Search memory for previously stored context:
+- "What's your current monthly churn rate?"
+- "What's your billing provider?"
+- "Do you have a cancel flow?"
+- "What retention tools are you using?"
+
+If nothing found, ask once:
+
+> "To get started, tell me: (1) What's your monthly churn rate? (2) What billing provider? (3) Do you have a cancel flow? (4) What's your average MRR per customer?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Define the Churn Challenge
+
+Identify whether you're addressing voluntary churn (customers choose to cancel), involuntary churn (failed payments), or both.
+
+Ask:
+- What's your current churn rate?
+- What portion is voluntary vs. involuntary?
+- What's your average customer LTV?
+- What's your current save rate (if you have a cancel flow)?
+
+Map the user's situation:
+
+If voluntary focus → Design or optimize cancel flows with exit surveys and dynamic offers
+
+If involuntary focus → Implement dunning stack (pre-dunning, smart retries, dunning emails)
+
+If both → Build comprehensive retention system
+
+## Step 2: Build Cancel Flow Architecture
+
+If designing a cancel flow, structure it as:
+
+```
+Trigger → Exit Survey → Dynamic Offer → Confirmation → Post-Cancel
+```
+
+**Exit Survey Design**
+- Single-select with 5-8 reason options
+- Most common reasons first
+- Optional free text field
+- Friendly framing
+
+**Dynamic Save Offers**
+- Too expensive → Discount (20-30% for 2-3 months)
+- Not using enough → Pause subscription (1-3 months)
+- Missing feature → Roadmap preview + timeline
+- Switching → Competitive comparison + discount
+- Technical issues → Escalate to support
+- Temporary need → Pause or downgrade
+
+## Step 3: Design Save Offer Strategy
+
+Choose which save offers to present:
+
+- Discount: 20-30% for 2-3 months (sweet spot)
+- Pause: 1-3 month pause with auto-reactivation
+- Downgrade: Lower plan instead of full cancellation
+- Feature unlock: Free trial of higher tier feature
+- Personal outreach: For high-value accounts (top 10-20% by MRR)
+
+Show the dollar amount saved, not just percentage. Set a deadline on the offer.
+
+## Step 4: Implement Proactive Retention (Optional)
+
+If targeting prevention before cancellation:
+
+**Health Score** = (Login frequency × 0.30) + (Feature usage × 0.25) + (Support sentiment × 0.15) + (Billing health × 0.15) + (Engagement × 0.15)
+
+**Intervention triggers**:
+- Usage drop >50% for 2 weeks → Re-engagement email
+- No login for 14 days → Product update email
+- NPS detractor (0-6) → Personal follow-up within 24 hours
+- Annual renewal in 30 days → Value recap email
+
+## Step 5: Design Dunning Stack (If Involuntary Churn)
+
+Address failed payments with:
+
+1. **Pre-dunning**
+   - Card expiry alerts (30, 15, 7 days)
+   - Backup payment method prompt
+   - Card updater services
+   - Pre-billing notification
+
+2. **Smart Retry Logic**
+   - Soft decline: Retry 3-5 times over 7-10 days
+   - Hard decline: Request new card immediately
+   - Authentication required: Send to update payment
+
+3. **Dunning Email Sequence** — 4 escalating emails
+   - Day 0: "Your payment didn't go through. Update your card."
+   - Day 3: "Quick reminder — update your payment."
+   - Day 7: "Your account will pause in 3 days. Update now."
+   - Day 10: "Last chance to keep your account active."
+
+## Step 6: Define Metrics and Measurement
+
+Establish baseline and target metrics:
+
+| Metric | Target |
+|--------|--------|
+| Monthly churn rate | <5% B2C / <2% B2B |
+| Revenue churn | Negative (net expansion) |
+| Cancel flow save rate | 25-35% |
+| Offer acceptance rate | 15-25% |
+| Pause reactivation rate | 60-80% |
+| Dunning recovery rate | 50-60% |
+
+Track these weekly. Segment by reason given, offer type, tenure, acquisition channel.
+
+## Output Format
+
+---
+
+**Churn Prevention Strategy — [Company Name]**
+
+**Churn Profile**
+- Current monthly churn rate: [X%]
+- Voluntary vs. involuntary split: [Y%] voluntary / [Z%] involuntary
+- Average customer LTV: $[amount]
+- Current save rate (if applicable): [X%]
+
+**Cancel Flow Design**
+- Exit survey options: [List 5-8 reasons]
+- Save offer strategy by reason: [Offer mapping]
+
+**Dunning Stack (If Applicable)**
+- Pre-dunning tactics: [List]
+- Retry schedule: [Timeline]
+- Email sequence: [4-email cadence]
+
+**Proactive Retention (If Applicable)**
+- Health score formula: [Components]
+- Intervention triggers: [Key signals]
+
+**Implementation Roadmap**
+1. Phase 1: [Design or optimize cancel flow]
+2. Phase 2: [Implement save offers]
+3. Phase 3: [Set up dunning if needed]
+4. Phase 4: [Launch proactive retention]
+
+---
+
+## Edge Cases
+
+- **No cancel flow today**: Start simple—one survey + one offer recovers 10-15% of cancellations
+- **High involuntary churn**: Prioritize dunning first; it's 30-50% of all churn and highly recoverable
+- **Low engagement before cancel**: Proactive retention matters more than save offers
+- **High-value accounts**: Personal outreach from founder/CS, not automated offers
+- **Blended B2B/B2C**: Different retention strategies per segment; test both
+- **No billing data**: Start with NPS and feature usage signals; build toward payment integration later

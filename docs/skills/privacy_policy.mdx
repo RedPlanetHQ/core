@@ -1,0 +1,221 @@
+---
+title: "Privacy Policy"
+description: "Draft privacy policy for a product or service. Triggered when the user asks 'draft privacy policy', 'create a privacy policy', or 'write my privacy policy'."
+category: "Sales"
+integrations: []
+---
+
+**Goal:** Generate a comprehensive privacy policy that complies with major regulations (GDPR, CCPA, PIPEDA) and clearly explains how the user's product handles personal data.
+
+This skill runs using CORE memory only. No integrations required.
+
+**Trigger:** Run on demand when the user needs a new privacy policy or wants to review/update an existing one.
+
+### Setup
+
+Search memory for:
+- "What is the user's company name, location, and business type?"
+- "What personal data does the product collect?"
+- "Does the user operate in GDPR, CCPA, or other regulated jurisdictions?"
+
+If not found, ask once:
+
+> "To draft your privacy policy, I need: (1) Your company name and primary location? (2) What personal data do you collect (name, email, location, payment info, usage data, health data)? (3) In which countries/regions do you operate or serve users (US, EU, Canada, other)?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Identify Applicable Regulations
+
+Determine which privacy laws apply based on the user's location and where they serve customers.
+
+- **GDPR (EU):** Applies if you collect data from EU residents, regardless of company location. Requires explicit consent, data subject rights (access, deletion), DPA.
+- **CCPA/CPRA (California):** Applies if you collect data from California residents. Requires privacy notice, opt-out rights, disclosure of data sharing.
+- **PIPEDA (Canada):** Applies if you collect data from Canadian residents. Requires consent and notice.
+- **Default (US):** If only collecting from non-GDPR/CCPA regions, use US FTC standards (notice, choice, security, access).
+
+If user operates in multiple jurisdictions → include all applicable sections and note the scope (e.g., "This section applies to EU residents under GDPR").
+
+## Step 2: Map Data Collection and Processing Activities
+
+Document what personal data is collected and why:
+
+- **Collection method:** Forms, cookies, analytics, payment processors, third-party integrations
+- **Data types:** Name, email, IP address, location, usage behavior, device info, payment info, health/sensitive data
+- **Purpose:** Account creation, service delivery, marketing, analytics, legal compliance
+- **Legal basis (GDPR):** Consent, contract, legal obligation, vital interest, public task, or legitimate interest
+- **Retention period:** How long each data type is kept (e.g., "Until account deletion or 2 years of inactivity")
+
+Create a simple table or list for clarity.
+
+## Step 3: Establish Consent and Rights Language
+
+Draft clear descriptions of user rights:
+
+- **Consent:** Explain how and when you obtain consent (opt-in checkbox, implied consent, pre-checked boxes—avoid pre-checked for GDPR).
+- **Access and portability:** Users can request a copy of their data in a readable format (GDPR, CCPA, PIPEDA)
+- **Correction:** Users can request corrections to inaccurate data
+- **Deletion (Right to be Forgotten):** Users can request deletion; note any legal retention requirements that override this
+- **Opt-out:** Users can opt out of marketing or non-essential processing
+- **Data processing agreement (DPA):** If you use processors (cloud, analytics), confirm you have DPAs in place
+
+Be specific about how users exercise these rights (e.g., "Email privacy@company.com with 'Data Request' in the subject").
+
+## Step 4: Cover Third-Party Sharing and Transfers
+
+Disclose:
+
+- **Third-party partners:** List categories of recipients (payment processors, email providers, analytics tools, legal obligations)
+- **Data location:** Where data is stored (e.g., "EU data centers" or "AWS US East")
+- **Cross-border transfers:** If transferring data outside the EU/Canada, explain legal mechanisms (Standard Contractual Clauses, Adequacy Decisions, or explicit user consent)
+- **No sale clause (if applicable):** If you don't sell data, state clearly: "We do not sell personal data to third parties."
+
+If you do share data → be transparent about recipients and purposes.
+
+## Step 5: Include Security and Data Retention
+
+Explain how you protect data:
+
+- **Security measures:** Encryption, access controls, regular security audits, staff training
+- **Data retention:** Specific timelines for each data type (e.g., "Account data retained for 2 years after account closure for legal and billing purposes")
+- **Breach notification:** Commitment to notify users of data breaches within [timeframe per applicable law, typically 30–72 hours]
+
+Be honest but avoid over-promising (don't claim "100% secure").
+
+## Step 6: Add Standard Sections
+
+Include boilerplate sections:
+
+- **Policy updates:** "We may update this policy. Significant changes will be notified via email or website notice."
+- **Contact information:** Privacy officer or contact email for questions or requests
+- **Children's privacy:** If the service may collect data from minors, explain restrictions (e.g., "We do not knowingly collect data from users under 13")
+- **California-specific (CPRA):** Explicit disclosures of data categories shared, sale/sharing practices, and user rights
+- **Links to other policies:** Reference Cookie Policy, Data Processing Agreement, Terms of Service
+
+## Step 7: Format and Review for Compliance
+
+Generate the final policy.
+
+- Use plain language; avoid overly legal terminology
+- Organize with clear headings and numbered sections
+- Mark all [PLACEHOLDERS] for company-specific information
+- Include an effective date and version number
+- Note: "This is a template. Review with a lawyer before publishing."
+
+---
+
+## Output Format
+
+---
+**Privacy Policy**
+
+**[Company Name] Privacy Policy**
+Effective Date: [YYYY-MM-DD]
+Last Updated: [YYYY-MM-DD]
+
+**1. Overview**
+
+[Company Name] ("We," "Us," "Our") is committed to protecting your privacy. This Privacy Policy explains how we collect, use, disclose, and safeguard your personal information when you use our website, app, and services (collectively, the "Service").
+
+**2. Information We Collect**
+
+We collect information you provide directly and information collected automatically:
+
+| Data Type | Collection Method | Purpose | Legal Basis |
+|-----------|-------------------|---------|------------|
+| Name, Email | Account signup form | Account creation, service delivery | Consent / Contract |
+| Device ID, IP Address | Cookies, analytics | Usage analytics, fraud prevention | Legitimate Interest / Consent |
+| Payment Information | Payment processor | Billing, subscription management | Contract |
+
+**3. How We Use Your Information**
+
+- To provide and improve the Service
+- To send transactional emails (confirmations, updates)
+- To send marketing emails (only with opt-in consent)
+- To comply with legal obligations
+- To enforce our Terms of Service
+
+**4. Data Retention**
+
+- Account data: Retained for 2 years after account closure or deletion request
+- Transactional records: Retained for 7 years (tax/legal requirement)
+- Marketing consent: Retained until opt-out
+
+**5. Your Rights**
+
+**Access:** You can request a copy of your personal data by emailing [privacy@company.com](mailto:privacy@company.com).
+
+**Correction:** You can update or correct your information in your account settings.
+
+**Deletion:** You can request deletion of your account and associated data. We will comply within 30 days unless legal retention obligations apply.
+
+**Opt-Out:** You can unsubscribe from marketing emails via the link in each email or by contacting us.
+
+**Portability (GDPR/CCPA):** You can request your data in a portable, machine-readable format.
+
+**6. Third-Party Sharing**
+
+We do not sell or rent your personal data to third parties. We may share data with:
+
+- **Service Providers:** [Stripe (payments), Sendgrid (email), Mixpanel (analytics)] under Data Processing Agreements
+- **Legal Requirements:** When required by law or to protect our legal rights
+- **Acquisition:** If our company is acquired, data may transfer to the new owner
+
+**7. Cookies and Tracking**
+
+We use cookies for authentication, preferences, and analytics. You can disable cookies in your browser settings; however, some Service features may not function.
+
+See our [Cookie Policy] for details.
+
+**8. Security**
+
+We use industry-standard encryption (SSL/TLS), access controls, and regular security audits to protect your data. However, no system is 100% secure.
+
+**9. Data Transfers (International)**
+
+If you are in the EU/EEA and we transfer data outside the region, we rely on Standard Contractual Clauses or your explicit consent.
+
+**10. Children's Privacy**
+
+We do not knowingly collect data from users under 13. If we become aware of such collection, we will delete the data promptly.
+
+**11. California Privacy Rights (CCPA/CPRA)**
+
+California residents have additional rights:
+- **Right to Know:** Request what personal data we collect, how we use it, and with whom we share it
+- **Right to Delete:** Request deletion of your personal data
+- **Right to Opt-Out:** Opt out of the "sale" or "sharing" of personal data
+- **Right to Non-Discrimination:** We will not discriminate against you for exercising your rights
+
+Submit requests to [privacy@company.com].
+
+**12. Policy Updates**
+
+We may update this policy periodically. Significant changes will be notified via email or website notice. Continued use of the Service constitutes acceptance of the updated policy.
+
+**13. Contact Us**
+
+If you have questions about this Privacy Policy or our data practices, contact:
+
+**Privacy Officer**
+[Company Name]
+Email: [privacy@company.com](mailto:privacy@company.com)
+Address: [Company Address]
+
+---
+
+**Notes:**
+- ⚠️ This is a template. Review with a privacy lawyer in your jurisdiction before publishing.
+- ⚠️ Customize: company name, data types, service providers, retention periods, contact email, applicable regulations.
+- ℹ️ Ensure consistency with your Cookie Policy and Data Processing Agreement.
+- ℹ️ Publish on your website homepage and link from your Terms of Service.
+
+---
+
+## Edge Cases
+
+- **International operations:** If serving multiple jurisdictions, include jurisdiction-specific sections (GDPR, CCPA, PIPEDA) with clear scope (e.g., "Section 11 applies to EU residents").
+- **Unknown data flows:** If the user isn't sure what data their service collects, ask: "What information do users enter or interact with?" and "What analytics tools do you use?" Then draft based on likely practices.
+- **Sensitive data (health, biometrics):** If collecting health data, payment info, or biometrics, emphasize security measures and note heightened compliance requirements. Confirm user will review with legal counsel.
+- **Third-party integrations added later:** If the user later integrates new tools (Stripe, Mixpanel, etc.), offer to update the policy section with the new provider.
+- **Conflicting data retention laws:** If retention laws conflict (e.g., EU data minimization vs. US tax records), note the conflict and recommend legal review: "EU law prefers deletion after [X]; US tax law requires retention for 7 years. Recommend legal guidance."
+- **No data processing agreement with vendors:** Flag if the user hasn't signed DPAs with processors: "GDPR requires Data Processing Agreements with [third parties]. Ensure these are in place before publishing."

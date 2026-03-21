@@ -1,0 +1,216 @@
+---
+title: "RevOps"
+description: "Triggered when the user wants help with revenue operations, lead lifecycle management, or marketing-to-sales handoff processes. Also use when the user mentions 'RevOps,' 'revenue operations,' 'lead scoring,' 'lead routing,' 'MQL,' 'SQL,' 'pipeline stages,' 'deal desk,' 'CRM automation,' 'marketing-to-sales handoff,' or 'when should marketing hand off to sales.'"
+category: "Operations"
+integrations: []
+---
+
+**Goal:** Design and optimize the systems that connect marketing, sales, and customer success into a unified revenue engine.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+Run on demand when the user wants to design RevOps processes, lead scoring, or improve handoffs.
+
+## Setup
+
+Search memory for:
+- "What CRM do you use?"
+- "What's your lead lifecycle?"
+- "Where do deals stall?"
+
+If nothing found, ask once:
+
+> "Tell me: (1) What CRM? (2) How many leads monthly? (3) What's your biggest funnel bottleneck?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Define Lead Lifecycle Stages
+
+Establish clear stages with entry/exit criteria:
+
+| Stage | Entry | Exit | Owner |
+|-------|-------|------|-------|
+| Subscriber | Opts into content | Provides company info | Marketing |
+| Lead | Basic info captured | Meets fit criteria | Marketing |
+| MQL | Passes fit + engagement | Sales accepts/rejects | Marketing |
+| SQL | Sales qualifies via call | Opportunity created | Sales |
+| Opportunity | Budget + authority confirmed | Closed-won/lost | Sales |
+| Customer | Closed-won deal | Expands/renews/churns | CS |
+
+An **MQL** requires both fit AND engagement:
+- Fit score: Does this person match your ICP?
+- Engagement score: Have they shown buying intent?
+
+Neither alone is sufficient.
+
+## Step 2: Build Lead Scoring Model
+
+Create a scoring system:
+
+**Explicit scoring (fit)**:
+- Company size, industry, revenue
+- Job title, seniority, department
+- Tech stack, geography
+
+**Implicit scoring (engagement)**:
+- Page visits (especially pricing, demo, cases)
+- Content downloads, webinar attendance
+- Email opens, clicks
+- Product usage (for PLG)
+
+**Negative scoring**:
+- Competitor domains
+- Student/personal emails
+- Unsubscribes, spam complaints
+
+Steps:
+1. Define ICP attributes and weight them
+2. Identify high-intent behavioral signals from past closed-won data
+3. Set point values for each
+4. Set MQL threshold (typically 50-80 points on 100-point scale)
+5. Test against historical data
+6. Launch, measure, recalibrate quarterly
+
+## Step 3: Design Lead Routing
+
+Choose routing method:
+
+- **Round-robin**: Distribute evenly (equal territories, similar deal sizes)
+- **Territory-based**: By geography, vertical, or segment
+- **Account-based**: Named accounts to named reps (ABM)
+- **Skill-based**: By deal complexity, product line, language
+
+**Essential rules**:
+- Route to most specific match first
+- Include fallback owner (unassigned leads go cold fast)
+- Account for rep capacity and availability (PTO, quota)
+- Log every routing decision
+
+**Speed-to-lead matters**:
+- Contact within 5 minutes = 21x more likely to qualify
+- After 30 minutes, conversion drops 10x
+- After 24 hours, lead is effectively cold
+
+## Step 4: Define Pipeline Stages
+
+| Stage | Entry | Exit | Key Fields |
+|-------|-------|------|-----------|
+| Qualified | Contact info, company, source | Discovery call scheduled | Fit score |
+| Discovery | Pain points identified | Demo scheduled | Solution fit |
+| Demo/Eval | Technical needs confirmed | Proposal requested | Evaluation feedback |
+| Proposal | Pricing, terms set | Contract sent | Value agreed |
+| Negotiation | Redlines discussed | Terms agreed | Final approval |
+| Closed Won | Signed contract | Handoff to CS | Payment terms |
+
+**Enforce stage hygiene**:
+- Required fields per stage
+- Stale deal alerts (2x average days in stage)
+- Stage skip detection
+- Close date discipline with reasons
+
+## Step 5: Set Up Essential Automations
+
+Marketing-to-sales handoffs:
+- **MQL alert**: Instant notification to assigned rep with lead context
+- **Meeting booked**: Notify AE when prospect schedules via Calendly
+- **Lead activity digest**: Daily summary of high-intent actions
+- **Re-engagement trigger**: Alert sales when dormant lead returns
+
+Pipeline management:
+- **Lifecycle stage updates**: Auto-advance when criteria met
+- **Task creation on handoff**: Follow-up task when MQL assigned
+- **SLA alerts**: Notify if rep misses response time
+- **Deal stage triggers**: Auto-send proposals, update forecasts
+
+## Step 6: Plan Metrics Dashboard
+
+Track three views:
+
+**Marketing view**:
+- Lead volume and sources
+- MQL rate and cost per MQL
+- Lead-to-MQL conversion rate
+- Source attribution
+
+**Sales view**:
+- Pipeline value by stage
+- Stage conversion rates
+- Sales cycle length
+- Win rate by source
+
+**Executive view**:
+- CAC and LTV
+- CAC:LTV ratio (target 3:1 to 5:1)
+- Pipeline coverage (target 3-4x quota)
+- Revenue vs. forecast
+
+## Step 7: Define Deal Desk Process
+
+When you need deal desk (usually >$25K ACV or non-standard terms):
+
+**Approval tiers**:
+- Standard pricing: Auto-approved
+- 10-20% discount: Sales manager
+- 20-40% discount: VP Sales
+- 40%+ discount or custom terms: Deal desk review
+- Multi-year/enterprise: Finance + Legal
+
+Document every exception. If everyone requests the same exception, make it standard and recalibrate.
+
+## Output Format
+
+---
+
+**RevOps System — [Company Name]**
+
+**Lead Lifecycle**
+- Stages: [List with entry/exit criteria]
+- MQL definition: [Fit + Engagement criteria]
+- MQL-to-SQL SLA: [Response time and qualification window]
+
+**Lead Scoring**
+- Fit attributes: [Weight each]
+- Engagement signals: [Weight each]
+- Negative scoring: [Disqualifiers]
+- MQL threshold: [X points out of 100]
+
+**Lead Routing**
+- Method: [Round-robin / Territory / Account-based / Skill-based]
+- Primary rules: [Decision tree]
+- Fallback owner: [If no match]
+- Speed-to-lead target: [X minutes]
+
+**Pipeline Stages**
+- Stages: [List with exit criteria and required fields]
+- Stage hygiene rules: [Enforcement mechanisms]
+
+**Automation Workflows**
+1. MQL alert: [What triggers, to whom]
+2. Meeting booked: [What triggers, to whom]
+3. Lead activity digest: [Frequency and recipients]
+4. Stage advancement: [Auto-advance rules]
+
+**Metrics Dashboard**
+- Marketing KPIs: [Lead volume, MQL rate, cost per MQL]
+- Sales KPIs: [Pipeline value, conversion rates, cycle length]
+- Revenue KPIs: [CAC, LTV, CAC:LTV ratio, coverage]
+
+**Data Hygiene Plan**
+- Dedup strategy: [Schedule and rules]
+- Required fields enforcement: [By stage]
+- Quarterly audit checklist: [Tasks]
+
+---
+
+## Edge Cases
+
+- **No clear ICP**: Can't score fit → Start with engagement only; build ICP from best customers
+- **Low lead volume**: Detailed routing overkill → Start simple with round-robin
+- **Long sales cycle**: Months between MQL and SQL → Extend SLA and nurture sequence
+- **Product-led growth**: No sales team for some segments → Define PLG activation instead of SQL
+- **Blended B2B/B2C**: Different rules per segment → Separate scoring and routing logic
+- **Existing CRM chaos**: Bad data quality → Fix data first before automation

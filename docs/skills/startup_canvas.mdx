@@ -1,0 +1,203 @@
+---
+title: "Startup Canvas"
+description: "Design startup strategy using Lean Canvas framework. Triggered when users say 'create my lean canvas', 'help me fill out my startup canvas', or 'design my business model'."
+category: Sales
+integrations: []
+---
+
+**Goal:** Build and refine a Lean Canvas as a single-page strategic blueprint for a startup or new business venture.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Trigger
+
+**Trigger:** Run on demand when the user asks to create or refine a Lean Canvas, design a startup strategy, or build a business model summary.
+
+## Setup
+
+Search memory for any previously stored canvas or business context:
+
+- "Does the user have an existing business idea or Lean Canvas?"
+- "What problem is the user trying to solve?"
+- "Who is the target customer?"
+
+If nothing is found, ask once:
+
+> "Let's build your Lean Canvas. Start with the basics: What problem are you solving, and who is the customer experiencing this problem?"
+
+Store the response in memory. Do not ask again in future runs.
+
+## Step 1: Identify and Articulate the Problem
+
+Define the top 1–3 customer problems your startup addresses.
+
+Gather from the user:
+- **Primary problem:** What core pain point does your solution address?
+- **Customer segment:** Who experiences this problem most acutely?
+- **Existing alternatives:** How do customers currently solve this problem? (This defines your competition)
+
+Validate that the problem is real:
+- Does the target customer acknowledge this problem unprompted? (Strongest signal)
+- Is the customer actively searching for a solution? (Medium signal)
+- Is the problem acute enough to drive purchasing behavior? (Test this)
+
+If the user struggles to articulate the problem → use the five whys: "Why is this a problem? Why do they tolerate it?" Iterate until you reach a root cause the customer cares about.
+
+Output: Clearly written problem statement with context on customer urgency.
+
+## Step 2: Define Your Solution and Key Features
+
+Articulate how your startup solves the problem. Focus on the **minimum viable product (MVP)**.
+
+For each problem identified in Step 1, describe:
+- **Core solution:** What is the core innovation or approach?
+- **Key features (MVP):** 3–5 features that directly address the problem. Not a full feature list—only the must-haves to validate the solution.
+- **Unfair advantage:** What do you have that competitors don't? (Technology, team expertise, exclusive partnerships, cost structure, brand)
+
+Avoid feature bloat. If the feature doesn't directly solve a stated problem → it's not MVP.
+
+If unfair advantage is unclear → flag it and recommend identifying it through competitive research or customer discovery.
+
+Output: Solution summary with MVP feature set and unfair advantage.
+
+## Step 3: Identify Revenue Model and Key Metrics
+
+Define how the startup makes money and what success looks like.
+
+Specify:
+- **Revenue model:** How does the customer pay? (SaaS subscription, one-time fee, freemium, marketplace commission, etc.)
+- **Pricing:** If known, what is the proposed price point and unit economics assumption?
+- **Key metrics:** What 1–3 metrics matter most to your business? (e.g., monthly recurring revenue, customer acquisition cost, lifetime value, churn rate)
+- **Financial goal:** What is the revenue or customer target for the next 12 months?
+
+If pricing is not set → note a validation placeholder: "TBD, pending customer interviews."
+
+If key metrics are not clear → recommend: monthly active users (early-stage), CAC and LTV (growth-stage), retention rate (mature-stage).
+
+Output: Revenue model and KPI targets.
+
+## Step 4: Map Channels and Customer Acquisition Strategy
+
+Define how the startup will reach and acquire customers.
+
+For each customer segment, identify:
+- **Awareness channels:** Where do customers learn about solutions like yours? (social media, industry events, referral, direct sales, content)
+- **Acquisition channels:** How will you convert them to paying customers? (freemium, direct sales, partnership, paid ads, community)
+- **Traction so far:** Have you acquired any customers? How?
+
+Prioritize 2–3 channels to focus on initially. Avoid trying all channels at once.
+
+If no traction yet → recommend starting with the lowest-cost channels (community, content, partnerships) to validate demand before paid acquisition.
+
+Output: Channel roadmap with prioritized focus areas.
+
+## Step 5: Define Unfair Advantage and Strategic Partnerships
+
+Identify defensible advantages and critical partnerships.
+
+For **unfair advantage:**
+- Proprietary technology or data
+- Team expertise or network
+- Cost structure advantage
+- Brand or community
+- Exclusive partnerships or access
+
+For **key partnerships:**
+- Who do you need to partner with to succeed? (suppliers, channels, technology platforms, investors)
+- Which partnerships are must-haves for MVP, and which are nice-to-have?
+
+If advantages are not clear → recommend competitive analysis: "What are your top 3 competitors, and what do they do that you don't?"
+
+Output: Documented unfair advantages and critical partnership list.
+
+## Step 6: Project Cost Structure and Funding Needs
+
+Estimate the financial runway and capital requirements.
+
+Define:
+- **Fixed costs:** Salaries, rent, fixed software subscriptions (monthly or annual)
+- **Variable costs:** COGS, customer acquisition costs, payment processing
+- **Burn rate:** How much cash does the startup spend monthly? (Fixed + Variable)
+- **Runway:** How many months can the startup operate with current capital?
+- **Funding need:** How much capital is needed to reach cash flow positivity or the next milestone?
+
+If the startup has no financial model yet → create a simple one: "3-person team, $15k/month burn, $50k in capital → 3.3 months of runway."
+
+Output: Cost structure summary and funding ask (if applicable).
+
+## Step 7: Synthesize and Prioritize Next Actions
+
+Combine all sections into a cohesive one-page summary and recommend the top 3 immediate actions.
+
+Recommended actions typically include:
+- **Validate assumption:** Talk to 10–20 potential customers about the problem and proposed solution
+- **Build MVP:** Design and launch a minimal version to test the core hypothesis
+- **Acquire early customers:** Get 5–10 paying customers to validate the business model
+- **Establish metrics:** Set up dashboards to track key metrics from day one
+- **Secure funding:** If needed, refine the pitch deck and fundraising strategy
+
+Sequence by dependency: validation usually comes first, then MVP, then growth.
+
+Output: Prioritized action list with timelines.
+
+## Output Format
+
+---
+**Lean Canvas — [Startup/Business Name]**
+
+**Problem**
+- **Customer:** [Target customer segment]
+- **Problems:** [Top 1–3 problems they face]
+- **Existing alternatives:** [How they currently solve this]
+
+**Solution**
+- **Approach:** [Core solution or innovation]
+- **MVP features:** [3–5 must-have features]
+
+**Unique Value Proposition**
+- **USP:** [One sentence: why you, why now]
+- **Unfair advantage:** [What competitors don't have]
+
+**Channels**
+- **Awareness:** [How customers will learn about you]
+- **Acquisition:** [How you'll convert to customers]
+- **Current traction:** [Customers or validation so far]
+
+**Revenue & Metrics**
+- **Revenue model:** [How you make money]
+- **Price point:** [$[X] per [unit]]
+- **Key metrics:** [1–3 success metrics]
+- **12-month target:** [Goal (revenue/customers/users)]
+
+**Cost Structure**
+- **Fixed costs:** $[X]/month
+- **Variable costs:** [% of revenue or cost per unit]
+- **Burn rate:** $[X]/month
+- **Runway:** [X months]
+
+**Funding & Partnerships**
+- **Capital needed:** $[X] (or "bootstrapping")
+- **Key partnerships:** [2–3 critical partnerships]
+
+**Assumptions to Validate**
+1. [Highest-risk assumption — how to test]
+2. [Second assumption — how to test]
+3. [Third assumption — how to test]
+
+**Next Actions (Priority Order)**
+1. [Action] — [Owner] — [Due date]
+2. [Action] — [Owner] — [Due date]
+3. [Action] — [Owner] — [Due date]
+
+---
+
+## Edge Cases
+
+- **Pre-problem validation:** If the user has not yet validated that customers experience the stated problem, flag this as highest priority and recommend customer interviews before filling out the rest of the canvas.
+- **Unclear product-market fit:** If the solution does not clearly solve a stated problem, ask clarifying questions: "How does this feature address the problem?" and iterate.
+- **Oversized market claim:** If the user targets "everyone" → narrow the customer segment. "How many people have this problem badly enough to pay for it?" (helps size the TAM realistically).
+- **No revenue model:** If the startup plans to monetize later, note it as a critical assumption to validate and recommend testing pricing hypothesis early.
+- **Overly ambitious MVP:** If the feature list exceeds 7–8 features, recommend cutting scope. Ask: "Which 3 features are non-negotiable for customers to solve the core problem?"
+- **Unfunded with high burn:** If burn rate exceeds available capital, recommend cost reduction, milestone-based funding, or revenue traction as the priority.

@@ -1,0 +1,131 @@
+---
+title: "Plan Outcome Roadmap"
+description: "Triggered when the user says 'plan a roadmap by outcomes', 'create outcome-driven roadmap', or 'build a roadmap focused on results not features'."
+category: Planning
+integrations: []
+---
+
+**Goal:** Build a product roadmap organized around measurable business and user outcomes rather than feature deliverables.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Define North Star Outcome
+
+Identify the single most important metric or outcome for the product:
+- What business result matters most? (Revenue, retention, user growth)
+- What user outcome matters most? (Time saved, confidence, success rate)
+- What is success in 12 months?
+
+Ask: "If you could move only one metric this year, which would it be?"
+
+Store this in memory for consistency across roadmap refinements.
+
+## Step 2: Break North Star Into Quarterly Outcomes
+
+Decompose the annual outcome into 4 quarterly milestones:
+- Q1 outcome: [What needs to move first?]
+- Q2 outcome: [What builds on Q1?]
+- Q3 outcome: [What's the next step?]
+- Q4 outcome: [What's the final push?]
+
+Each outcome should be measurable and achievable.
+
+## Step 3: Identify Enabler Outcomes
+
+For each quarterly outcome, list the underlying capabilities users need:
+- Awareness: Do users know this is possible?
+- Usability: Can they easily do it?
+- Reliability: Does it work consistently?
+- Adoption: Are they actually using it?
+
+Map features to these enabler outcomes, not as standalone items.
+
+## Step 4: Rank by Dependency and Impact
+
+Ask:
+- What must be built first?
+- What unblocks other work?
+- What delivers the most impact per effort?
+
+Visualize as a dependency graph if useful.
+
+## Step 5: Identify Risks and Assumptions
+
+For each outcome, note:
+- **Assumption:** What must be true for this to work?
+- **Risk:** What could derail progress?
+- **Mitigation:** How will you test early?
+
+## Step 6: Assign Ownership and Timeline
+
+For each quarterly outcome:
+- Owner (who's accountable)
+- Key features/initiatives (as enablers, not primary focus)
+- Success metrics (how you'll measure progress)
+- Confidence level (high/medium/low)
+
+## Output Format
+
+---
+
+**Outcome Roadmap — [Product Name]**
+
+**⭐ North Star Outcome**
+
+Move [metric] from [current] to [target] by [date].
+
+Why this matters: [Business or user impact]
+
+---
+
+**Q1 [Year]: [Outcome Title]**
+
+**Outcome:** Increase [metric] by [X]% through [high-level approach].
+
+**Enabler Outcomes:**
+- **Awareness:** [What users need to know/discover]
+- **Usability:** [What new/improved capabilities they need]
+- **Adoption:** [What will drive consistent usage]
+
+**Key Initiatives:**
+- [Initiative 1]: [Brief description of what enables the outcome]
+- [Initiative 2]: [Brief description]
+
+**Measurable Success:**
+- [Metric 1]: Target [X] by end of Q1
+- [Metric 2]: Target [Y] by end of Q1
+
+**Risks & Assumptions:**
+- Assumption: [Users will adopt if...]
+- Risk: [What could prevent progress]
+- Mitigation: [How we'll validate early]
+
+**Owner:** [Name] | **Confidence:** [High/Medium/Low]
+
+---
+
+**Q2 [Year]: [Outcome Title]**
+[Same structure]
+
+---
+
+**Q3 [Year]: [Outcome Title]**
+[Same structure]
+
+---
+
+**Q4 [Year]: [Outcome Title]**
+[Same structure]
+
+---
+
+## Edge Cases
+
+- **No clear North Star:** Run "identify_north_star_metric" skill first. Roadmap depends on alignment here.
+- **Too many outcomes per quarter:** Ruthlessly prioritize. Can you achieve 2-3 outcomes max in parallel? If not, stretch to next quarter.
+- **Outcomes feel like features:** Reframe. "We're shipping X. What outcome does that drive?" Focus on the outcome.
+- **Dependency is unclear:** Map it visually. Ask: "What needs to be true before we start this outcome?"
+- **Confidence is low:** Add a research or pilot phase. Commit to learning faster before committing full resources.
+- **Business vs. user outcomes conflict:** Note the tension. Design initiatives that serve both. If not possible, escalate prioritization.

@@ -1,0 +1,106 @@
+---
+title: "Prioritize Features"
+description: "Triggered when the user says 'rank these features' or 'prioritize our feature list' or 'what should we build first'."
+category: Product
+integrations: []
+---
+
+**Goal:** Score product features on impact and effort to identify high-leverage work and focus the roadmap on features that deliver the most value with the least resource burden.
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Gather the Feature List
+
+Ask for:
+- **Feature set** — List all features you're considering (one per line)
+- **Time horizon** — Are these for this quarter, this year, or future?
+- **Constraints** — Team size, engineering capacity, design bandwidth?
+- **Strategic priorities** — Any features that must land regardless of impact (launches, compliance, contracts)?
+
+## Step 2: Define Impact Dimensions
+
+Clarify what "impact" means for your business. Pick 2-3 that matter most:
+- **Revenue impact** — How much will this increase ARR or conversion?
+- **Customer retention** — Does this reduce churn or increase engagement?
+- **Market expansion** — Does this unlock new segments or use cases?
+- **Differentiation** — Does this create competitive moat or defensibility?
+- **Risk reduction** — Does this solve a critical blocker or technical debt?
+
+Ask: "On a scale of 1-10, how important is each of these to your success?"
+
+## Step 3: Score Each Feature on Impact
+
+For each feature, estimate:
+- **Scope of users affected** — How many customers benefit? (All / Most / Some / Niche)
+- **Magnitude of benefit** — Is it a pain-killer or a nice-to-have? (Critical / High / Medium / Low)
+- **Timeline to benefit** — How soon do users feel the impact? (Immediate / 1-3 months / Future)
+
+Combine into a single impact score (1-10).
+
+## Step 4: Score Each Feature on Effort
+
+Gather engineering input:
+- **Development effort** — Estimated days of engineering work (1, 3, 5, 10, 20+)
+- **Design effort** — New flows, research, iterations needed? (0.5, 1, 2, 5 days)
+- **Infrastructure/dependencies** — Does this require platform work or integration? (None / Light / Heavy)
+- **Risk/unknowns** — How confident is the team in the estimate? (High / Medium / Low)
+
+Combine into a single effort score (1-10, where 10 = very hard).
+
+## Step 5: Plot on Impact-vs-Effort Matrix
+
+Create quadrants:
+- **High impact, low effort** = Do first (top-left quadrant)
+- **High impact, high effort** = Plan and phase (top-right quadrant)
+- **Low impact, low effort** = Nice-to-have (bottom-left quadrant)
+- **Low impact, high effort** = Deprioritize (bottom-right quadrant)
+
+Sort the top-left quadrant by impact to find the quick wins.
+
+## Step 6: Add Strategic Overrides
+
+Ask: "Are there any features the CEO or board has mandated?" These may land in the low-impact quadrant but still must ship. Call these out explicitly and explain why they're a constraint.
+
+## Step 7: Present the Prioritized Roadmap
+
+---
+
+**Feature Prioritization Matrix**
+
+**Do First (High Impact, Low Effort)**
+1. [Feature 1] — Impact: [8/10], Effort: [2/10] — [1-line rationale]
+   - Team: [Owner], Timeline: [Weeks], Users affected: [X%]
+
+2. [Feature 2] — Impact: [7/10], Effort: [3/10] — [1-line rationale]
+   - Team: [Owner], Timeline: [Weeks], Users affected: [X%]
+
+**Invest (High Impact, Higher Effort)**
+3. [Feature 3] — Impact: [9/10], Effort: [7/10] — [1-line rationale]
+   - Team: [Owner], Timeline: [Weeks], Suggested phasing: [MVP / Full]
+
+4. [Feature 4] — Impact: [8/10], Effort: [6/10] — [1-line rationale]
+   - Team: [Owner], Timeline: [Weeks], Suggested phasing: [MVP / Full]
+
+**Consider (Medium Impact)**
+5. [Feature 5] — Impact: [5/10], Effort: [4/10] — [1-line rationale]
+   - Status: Backlog, revisit if priorities shift
+
+**Deprioritize (Low Impact or High Effort)**
+6. [Feature 6] — Impact: [3/10], Effort: [8/10]
+   - Status: Defer, revisit in [timeline]
+
+**Strategic Overrides**
+- [Mandated Feature] — Impact: [3/10], Effort: [5/10] — [Reason: Compliance/Contract/CEO priority]
+  - Timeline: [Must ship by date]
+
+---
+
+## Edge Cases
+
+- **Features have equal impact/effort:** Ask: "Which one would customers miss more if we delayed it?" Use urgency or strategic goal alignment as a tiebreaker.
+- **Effort estimates vary widely by engineer:** Flag uncertainty. Create ranges (3-8 weeks). Ask: "What's the one thing that makes this hard?" Plan a spike if risk is high.
+- **Critical feature is high effort:** Break it into smaller pieces. Ask: "What's the minimum version that solves the core problem?" Prioritize MVP first.
+- **Stakeholders disagree on impact:** Acknowledge conflict. Ask each to state one use case. Prioritize based on which serves more customers or revenue.
+- **External constraint changes timeline:** (e.g., competitor ships, customer deadline, regulation). Reassess and reprioritize. Call out the change explicitly.

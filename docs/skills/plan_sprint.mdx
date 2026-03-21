@@ -1,0 +1,102 @@
+---
+title: "Plan Sprint"
+description: "Triggered when the user says 'plan the sprint', 'prepare for sprint planning', or 'estimate sprint capacity'."
+category: Execution
+integrations: []
+---
+
+**Prepare for sprint planning by estimating capacity, selecting stories, mapping dependencies, and identifying risks.**
+
+## Tools Required
+
+This skill runs using CORE memory only. No integrations required.
+
+## Step 1: Estimate Team Capacity
+
+Calculate available team capacity for the sprint:
+- Review **team availability:** Vacations, meetings, on-call duties, etc.
+- Check **historical velocity:** Last 3 sprints' story points or hours completed
+- **Reserve buffer:** 15-20% for unexpected work and technical debt
+- **Calculate total:** Available story points or ideal hours for this sprint
+
+Ask: "What's your team size? Any vacation or commitments this sprint?"
+
+## Step 2: Prepare Backlog
+
+Ensure top-priority items are ready:
+- Check each story meets **Definition of Ready:** Acceptance criteria defined, estimated, no blockers
+- Flag stories needing **additional refinement** before commitment
+- Ensure stories are **sized appropriately** (not too large)
+
+## Step 3: Select Stories
+
+Start with highest-priority items and commit stories until capacity runs out. Stop when you hit your capacity limit—don't overcommit.
+
+## Step 4: Map Dependencies
+
+Identify stories with prerequisites or reliance on other teams:
+- Order dependent work logically to prevent bottlenecks
+- Document **external dependencies** and responsible parties
+- Highlight the **critical path** that could delay delivery
+
+## Step 5: Identify Risks
+
+Flag potential blockers:
+- High-uncertainty or complex stories
+- External handoffs that might delay delivery
+- Knowledge silos (only one person understands)
+- Develop **mitigation strategies** for each risk
+
+## Step 6: Define Sprint Goal
+
+Articulate **one clear sentence** capturing the primary value delivery for the sprint.
+
+> "This sprint, we're improving search performance so users find results 2× faster."
+
+## Output Format
+
+---
+
+**Sprint Planning Summary**
+
+**📋 Sprint Details**
+- **Sprint duration:** [# of weeks]
+- **Sprint goal:** [One sentence describing primary value]
+- **Team size:** [# of people]
+
+**💪 Capacity Estimation**
+- **Historical velocity:** [Story points from last 3 sprints]
+- **Capacity this sprint:** [Available story points, accounting for buffer]
+- **Buffer (15-20%):** [Points reserved for surprises]
+
+**✅ Committed Stories**
+
+| Story | Priority | Est. Points | Owner | Status |
+|-------|----------|---|---|---|
+| [Story 1] | P0 | [#] | [Person] | Ready |
+| [Story 2] | P1 | [#] | [Person] | Ready |
+| [Story 3] | P1 | [#] | [Person] | Ready |
+| **Total** | | [Total points] | | |
+
+**🔗 Dependencies**
+- [Story 2 depends on Story 1]: Owner [Name], due [Date]
+- [External dependency: API from Team X]: Due [Date]
+
+**⚠️ Identified Risks**
+- **Risk 1:** [Description, likelihood, mitigation]
+- **Risk 2:** [Description, likelihood, mitigation]
+
+**📅 Timeline**
+- Sprint starts: [Date]
+- Sprint ends: [Date]
+- Review/Retrospective: [Date]
+
+---
+
+## Edge Cases
+
+- **Capacity estimate too optimistic:** If team is consistently finishing below capacity, reduce estimated capacity or increase buffer.
+- **Too many dependencies:** Prioritize independent work first; defer dependent stories if possible.
+- **Urgent new requests mid-sprint:** Redirect to backlog unless true emergency; use reserve capacity only for true blockers.
+- **Story too large to fit:** Break into smaller stories or defer to next sprint.
+- **Team velocity inconsistent:** Average last 5 sprints instead of 3 for more stable estimate.
