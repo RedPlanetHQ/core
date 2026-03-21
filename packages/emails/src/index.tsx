@@ -22,7 +22,7 @@ export const DeliverEmailSchema = z
 
 export type DeliverEmail = z.infer<typeof DeliverEmailSchema>;
 
-export type SendPlainTextOptions = { to: string; subject: string; text: string; html?: string; replyTo?: string };
+export type SendPlainTextOptions = { to: string; from?: string; subject: string; text: string; html?: string; replyTo?: string };
 
 export class EmailClient {
   #transport: MailTransport;
@@ -62,7 +62,7 @@ export class EmailClient {
     await this.#transport.sendPlainText({
       replyTo: this.#replyTo,
       ...options,
-      from: this.#from,
+      from: options.from ?? this.#from,
     });
   }
 

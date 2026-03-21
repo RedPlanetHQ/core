@@ -1,5 +1,4 @@
 import { Resend } from "resend";
-import { getUserByEmail } from "~/models/user.server";
 import { prisma } from "~/db.server";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.service";
@@ -48,14 +47,14 @@ export async function parseInbound(
     return {};
   }
 
-  const email = env.FROM_EMAIL
-    ? env.FROM_EMAIL.match(/<(.+)>/)?.[1] || env.FROM_EMAIL
-    : "";
-
-  // Only process emails addressed to brain@getcore.me
-  if (env.FROM_EMAIL && (!to || !to.includes(email))) {
+  // Find the recipient address that is a getcore.me agent email
+  const agentAddress = to?.find((addr) => addr.endsWith("@getcore.me"));
+  if (!agentAddress) {
     return {};
   }
+
+  // Derive workspace slug from the agent email (e.g. "harshith@getcore.me" → "harshith")
+  const workspaceSlug = agentAddress.split("@")[0];
 
   const senderEmail = extractEmail(from);
 
@@ -70,30 +69,32 @@ export async function parseInbound(
     return {};
   }
 
-  // Look up user by email
-  const user = await getUserByEmail(senderEmail);
-  if (!user) {
-    logger.warn("Email from unknown sender", { from: senderEmail });
-    return { unknownContact: { identifier: senderEmail, channel: "email" } };
-  }
-
-  // Get user's workspace
-  const userWorkspace = await prisma.userWorkspace.findFirst({
-    where: { userId: user.id },
+  // Look up workspace by slug
+  const workspace = await prisma.workspace.findUnique({
+    where: { slug: workspaceSlug },
+    include: {
+      UserWorkspace: { take: 1 },
+    },
   });
 
+  if (!workspace) {
+    logger.warn("No workspace found for agent email", { agentAddress });
+    return {};
+  }
+
+  const userWorkspace = workspace.UserWorkspace[0];
   if (!userWorkspace) {
-    logger.warn("User has no workspace", { userId: user.id });
+    logger.warn("Workspace has no users", { workspaceSlug });
     return {};
   }
 
   return {
     message: {
-      userId: user.id,
-      workspaceId: userWorkspace.workspaceId,
+      userId: userWorkspace.userId,
+      workspaceId: workspace.id,
       userMessage: messageContent,
       replyTo: senderEmail,
-      metadata: { subject: subject ?? "" },
+      metadata: { subject: subject ?? "", agentEmail: agentAddress },
     },
   };
 }

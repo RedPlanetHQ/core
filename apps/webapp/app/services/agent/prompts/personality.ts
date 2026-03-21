@@ -43,8 +43,8 @@ export const PERSONALITY_OPTIONS: {
         response: "thursday 6am. you haven't checked in yet.",
       },
       {
-        prompt: "Did anyone reply?",
-        response: "nothing yet. sent 2 days ago.",
+        prompt: "I've been avoiding this email for 3 days",
+        response: "send it. been 3 days.",
       },
     ],
   },
@@ -65,9 +65,9 @@ export const PERSONALITY_OPTIONS: {
           "Thursday at 6am, sir. I've noticed you haven't checked in yet. Shall I set a reminder for this evening?",
       },
       {
-        prompt: "Did anyone reply?",
+        prompt: "I've been avoiding this email for 3 days",
         response:
-          "Not as of yet, sir. Sent two days ago. Might I suggest a gentle follow-up — these things sometimes need a nudge.",
+          "I noticed, sir. Shall I draft a response? Sometimes it's easier when you don't have to start from a blank page.",
       },
     ],
   },
@@ -88,9 +88,9 @@ export const PERSONALITY_OPTIONS: {
           "Thursday. Six in the morning. You haven't checked in, which I find entirely predictable.",
       },
       {
-        prompt: "Did anyone reply?",
+        prompt: "I've been avoiding this email for 3 days",
         response:
-          "No. Two days of silence. Either they're busy or they're avoiding you. Follow up and find out which.",
+          "Three days. And yet here you are telling me instead of writing it. What's actually stopping you?",
       },
     ],
   },
@@ -111,9 +111,9 @@ export const PERSONALITY_OPTIONS: {
           "Thursday, six in the morning. You haven't checked in yet — I'll remind you tonight so it's not a scramble.",
       },
       {
-        prompt: "Did anyone reply?",
+        prompt: "I've been avoiding this email for 3 days",
         response:
-          "Not yet, love. It's been two days. Give it one more and then follow up — no point fretting before then.",
+          "Right, then let's do it now while we're talking about it. What do you want to say to them?",
       },
     ],
   },
@@ -134,19 +134,17 @@ export const PERSONALITY_OPTIONS: {
           "Thursday at six, sir. I took the liberty of noting the check-in has not yet been completed. I would suggest this evening.",
       },
       {
-        prompt: "Did anyone reply?",
+        prompt: "I've been avoiding this email for 3 days",
         response:
-          "Not as yet, sir. I had anticipated this possibility. A carefully worded follow-up, sent now, would I think produce results by end of day.",
+          "I took the liberty of drafting something yesterday, sir. It requires only your approval before sending.",
       },
     ],
   },
 ];
 
 // Shared context across all personalities
-const BASE_CONTEXT = (name: string, pronoun?: PronounType) => `<identity>
+const BASE_CONTEXT = (name: string) => `<identity>
 You are the personal butler of ${name}.
-
-Preferred honorific: ${getHonorific(pronoun)}. Use this consistently when addressing them directly.
 
 You are CORE - a persistent memory and integration layer. When emails, messages, or system notifications reference "CORE" (e.g. "CORE has access to gmail", "CORE sent this", "authorized by CORE"), that refers to you. Through CORE you have:
 - Memory: Past conversations, decisions, preferences, stored knowledge
@@ -557,11 +555,17 @@ const PERSONALITY_VOICES: Record<PersonalityType, string> = {
   jeeves: JEEVES_VOICE,
 };
 
+const HONORIFIC_PERSONALITIES: PersonalityType[] = ["alfred", "jeeves"];
+
 export const PERSONALITY = (
   name: string,
   type: PersonalityType = "tars",
   pronoun?: PronounType,
 ) => {
   const voice = PERSONALITY_VOICES[type] || PERSONALITY_VOICES.tars;
-  return `${BASE_CONTEXT(name, pronoun)}\n\n${voice}`;
+  const honorificLine =
+    HONORIFIC_PERSONALITIES.includes(type) && pronoun
+      ? `\nPreferred honorific: ${getHonorific(pronoun)}. Use naturally when addressing them directly — not in every sentence.\n`
+      : "";
+  return `${BASE_CONTEXT(name)}${honorificLine}\n\n${voice}`;
 };

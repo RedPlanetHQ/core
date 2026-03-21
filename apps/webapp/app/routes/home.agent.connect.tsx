@@ -66,10 +66,15 @@ export async function loader({ request }: LoaderFunctionArgs) {
     hasSlack = !!slackAccount;
   }
 
+  const workspaceSlug = user?.UserWorkspace[0]?.workspace?.slug ?? "";
+
   return json({
     whatsappOptin,
     imessageOptin,
     defaultChannel,
+    agentEmail: workspaceSlug
+      ? `${workspaceSlug}@getcore.me`
+      : "brain@getcore.me",
     connectedChannels: {
       whatsapp: hasWhatsapp,
       slack: hasSlack,
@@ -301,9 +306,11 @@ function DirectChannelCard({
 function EmailModal({
   isOpen,
   onClose,
+  agentEmail,
 }: {
   isOpen: boolean;
   onClose: () => void;
+  agentEmail: string;
 }) {
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -321,10 +328,8 @@ function EmailModal({
           </p>
 
           <div className="bg-background rounded-lg p-2">
-            <p className="text-sm font-medium">Email Address</p>
-            <code className="text-primary text-md font-semibold">
-              brain@getcore.me
-            </code>
+            <p className="text-xs">Email Address</p>
+            <code className="text-base">{agentEmail}</code>
           </div>
 
           <div className="space-y-2">
@@ -348,8 +353,13 @@ function EmailModal({
 }
 
 export default function Connect() {
-  const { whatsappOptin, imessageOptin, defaultChannel, connectedChannels } =
-    useLoaderData<typeof loader>();
+  const {
+    whatsappOptin,
+    imessageOptin,
+    defaultChannel,
+    agentEmail,
+    connectedChannels,
+  } = useLoaderData<typeof loader>();
   const [isEmailModalOpen, setIsEmailModalOpen] = useState(false);
   const fetcher = useFetcher<{ success: boolean }>();
   const imessageFetcher = useFetcher<{ success: boolean }>();
@@ -471,6 +481,7 @@ export default function Connect() {
       <EmailModal
         isOpen={isEmailModalOpen}
         onClose={() => setIsEmailModalOpen(false)}
+        agentEmail={agentEmail}
       />
     </div>
   );
