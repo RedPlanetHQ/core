@@ -1,6 +1,5 @@
 import { json, type LoaderFunctionArgs } from "@remix-run/node";
-import { useLoaderData, useNavigate } from "@remix-run/react";
-import { type NavigateFunction } from "@remix-run/react";
+import { useLoaderData, useNavigate , type NavigateFunction } from "@remix-run/react";
 import { useRef } from "react";
 import { Tag, FileText } from "lucide-react";
 import {

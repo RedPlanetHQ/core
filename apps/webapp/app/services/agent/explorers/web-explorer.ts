@@ -5,7 +5,7 @@ import Exa from "exa-js";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
 import { getModel, getModelForTask } from "~/lib/model.server";
-import { ExplorerResult } from "../types";
+import { type ExplorerResult } from "../types";
 
 const WEB_COMPLEXITY = "high";
 

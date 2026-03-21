@@ -9,7 +9,7 @@ import { Card } from "~/components/ui/card";
 import { Button } from "~/components/ui/button";
 import { Input } from "~/components/ui/input";
 import { Label } from "~/components/ui/label";
-import { AlertTriangle, Check } from "lucide-react";
+import { AlertTriangle, Check , Moon, Sun } from "lucide-react";
 import { useState } from "react";
 import {
   AlertDialog,
@@ -24,7 +24,6 @@ import {
 import { SettingSection } from "~/components/setting-section";
 import { cn } from "~/lib/utils";
 import { Theme, useTheme } from "remix-themes";
-import { Moon, Sun } from "lucide-react";
 
 interface SuccessDataResponse {
   success: boolean;

@@ -1,4 +1,4 @@
-import { TaskStatus } from "@prisma/client";
+import { type TaskStatus } from "@prisma/client";
 
 /**
  * Generates an OKLCH color string with fixed lightness, chroma, and a random hue.

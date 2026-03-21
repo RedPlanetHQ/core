@@ -1,0 +1,39 @@
+{
+  "name": "@core/asana",
+  "version": "0.1.0",
+  "description": "Asana integration for CORE",
+  "main": "./bin/index.js",
+  "module": "./bin/index.mjs",
+  "type": "module",
+  "files": [
+    "asana",
+    "bin"
+  ],
+  "bin": {
+    "asana": "./bin/index.js"
+  },
+  "scripts": {
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
+    "lint": "eslint --ext js,ts,tsx src/ --fix",
+    "prettier": "prettier --config .prettierrc --write ."
+  },
+  "devDependencies": {
+    "@types/node": "^18.0.20",
+    "eslint": "^9.24.0",
+    "prettier": "^3.4.2",
+    "rimraf": "^3.0.2",
+    "typescript": "^4.7.2",
+    "tsup": "^8.0.1"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "commander": "^12.0.0",
+    "@redplanethq/sdk": "0.1.9",
+    "zod": "^3.25.4",
+    "zod-to-json-schema": "^3.25.1",
+    "pg": "^8.11.0"
+  }
+}

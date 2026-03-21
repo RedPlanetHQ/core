@@ -4,11 +4,9 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import { useLoaderData } from "@remix-run/react";
-import { useFetcher } from "@remix-run/react";
-import { generateObject } from "ai";
+import { useLoaderData , useFetcher } from "@remix-run/react";
+import { generateObject , type LanguageModel } from "ai";
 import { z } from "zod";
-import { type LanguageModel } from "ai";
 import { requireUser } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import { getLibrarySkills } from "~/lib/skills-library";

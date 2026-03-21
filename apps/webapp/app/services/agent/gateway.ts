@@ -11,7 +11,7 @@ import { logger } from "~/services/logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { getConnectedGateways, getGateway } from "~/services/gateway.server";
 import { callGatewayTool } from "../../../websocket";
-import { GatewayAgentInfo, type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import { type GatewayAgentInfo, type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {

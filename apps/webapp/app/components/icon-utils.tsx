@@ -39,7 +39,7 @@ import { TodoLine } from "./icons/todo";
 import { InProgressLine } from "./icons/in-progress";
 import { BlockedLine } from "./icons/blocked";
 import { DoneFill } from "./icons/done";
-import { TaskStatus } from "@core/database";
+import { type TaskStatus } from "@core/database";
 import { Task } from "./icons/task";
 
 export const ICON_MAPPING = {
