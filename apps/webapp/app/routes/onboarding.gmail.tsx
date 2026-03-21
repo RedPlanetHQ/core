@@ -84,13 +84,10 @@ export default function OnboardingGmail() {
           <h2 className="text-xl font-semibold">i'm {defaultName}.</h2>
           <div className="text-muted-foreground space-y-2 text-base">
             <p>
-              connect gmail and i'll learn about you — who you work with, what
-              you're building, what matters.
+              a good butler reads the room. connect gmail and i'll read yours,
+              your people, your projects, your priorities.
             </p>
-            <p>
-              takes a minute. makes everything better. or skip and i'll learn as
-              we go.
-            </p>
+            <p>one minute of context. considerably less fumbling later.</p>
           </div>
         </div>
         <div className="flex justify-end gap-3">

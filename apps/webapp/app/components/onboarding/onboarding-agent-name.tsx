@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Check, X } from "lucide-react";
+import { Loader2, Check, X, RefreshCw } from "lucide-react";
 import { Button } from "~/components/ui";
 import { Input } from "~/components/ui/input";
 
@@ -9,6 +9,9 @@ interface OnboardingAgentNameProps {
   workspaceId: string;
   onComplete: (name: string, slug: string) => void;
   isSubmitting?: boolean;
+  onGenerateName: (currentName: string, previousNames: string[]) => void;
+  generatedName?: string;
+  isGenerating?: boolean;
 }
 
 type AvailabilityState = "idle" | "checking" | "available" | "taken";
@@ -19,11 +22,31 @@ export function OnboardingAgentName({
   workspaceId,
   onComplete,
   isSubmitting = false,
+  onGenerateName,
+  generatedName,
+  isGenerating = false,
 }: OnboardingAgentNameProps) {
   const [name, setName] = useState(defaultName);
   const [slug, setSlug] = useState(defaultSlug);
   const [availability, setAvailability] = useState<AvailabilityState>("idle");
+  const [previousNames, setPreviousNames] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Auto-generate on first mount
+  useEffect(() => {
+    onGenerateName("", []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Apply generated name when generation completes
+  const wasGenerating = useRef(false);
+  useEffect(() => {
+    if (wasGenerating.current && !isGenerating && generatedName) {
+      setName(generatedName);
+      setPreviousNames((prev) => [...prev, generatedName]);
+    }
+    wasGenerating.current = isGenerating;
+  }, [isGenerating, generatedName]);
 
   const checkAvailability = useCallback(
     async (nameValue: string) => {
@@ -80,12 +103,26 @@ export function OnboardingAgentName({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Steven"
-            className="h-10 pr-8"
+            placeholder="e.g. Alfred"
+            className="h-10 pr-16"
             disabled={isSubmitting}
             autoFocus
           />
-          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              className="size-6"
+              onClick={() => onGenerateName(name, previousNames)}
+              disabled={isSubmitting || isGenerating}
+              aria-label="generate name"
+            >
+              {isGenerating ? (
+                <Loader2 className="text-muted-foreground size-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="text-muted-foreground size-3.5" />
+              )}
+            </Button>
             {availability === "checking" && (
               <Loader2 className="text-muted-foreground size-4 animate-spin" />
             )}

@@ -86,13 +86,14 @@ export default function Home() {
     typeof loader
   >() as any;
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
-  const needsButlerName = workspace?.version === "V3" && !meta.onboardingV2Complete;
+  const needsButlerName =
+    workspace?.version === "V3" && !meta.onboardingV2Complete;
 
   return (
     <SidebarProvider
       style={
         {
-          "--sidebar-width": "calc(var(--spacing) * 54)",
+          "--sidebar-width": "calc(var(--spacing) * 56)",
           "--header-height": "calc(var(--spacing) * 12)",
           background: "var(--background)",
         } as React.CSSProperties
