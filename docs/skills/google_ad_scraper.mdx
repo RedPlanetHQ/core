@@ -1,0 +1,104 @@
+---
+title: "Google Ads Scraper"
+description: "Scrapes competitor ads from Google's Ads Transparency Center covering Search, YouTube, Display, and Gmail formats. Triggered when the user says 'scrape Google ads for [company]', 'show me competitor ads on Google', or 'pull Google ad creatives for [domain]'."
+category: Marketing
+integrations:
+  - name: "Apify"
+    slug: "apify"
+---
+
+**Goal:** Pull competitor ad creatives, formats, and targeting data from Google's Ads Transparency Center for any company, domain, or advertiser ID.
+
+| Tool | Purpose | Required |
+|------|---------|----------|
+| Apify (xtech/google-ad-transparency-scraper) | Scrape ads from Google Ads Transparency Center | Yes |
+| Apify (apify/web-scraper) | Resolve company name or domain to a Google advertiser ID | Yes |
+
+**Trigger:** Run on demand when the user asks to research competitor Google ads, view ad creatives for a company, or analyze messaging from a domain.
+
+## Step 1: Gather Search Parameters
+
+Ask the user for the following in a single prompt:
+
+- **Target:** Company name, domain (e.g. `nike.com`), or Google Ads advertiser ID (format: `AR` + 20 digits)
+- **Region:** e.g. US, GB, DE, or "anywhere" (default: anywhere)
+- **Max ads:** Maximum number of ads to return (default: 50)
+
+> "Which company, domain, or advertiser ID do you want to scrape Google ads for? Any region or result limit?"
+
+If $ARGUMENTS are provided, extract the target from there and skip the prompt.
+
+## Step 2: Resolve Advertiser ID
+
+If the user provided a direct advertiser ID → skip to Step 3.
+
+Otherwise, use the Apify `apify/web-scraper` actor via MCP to search Google Ads Transparency Center and extract the advertiser ID:
+
+- Domain search (more reliable): `https://adstransparency.google.com/?domain=[domain]`
+- Name search: `https://adstransparency.google.com/?text=[company]`
+
+Extract the advertiser ID from the results (format: `AR` followed by 20 digits).
+
+If auto-resolution fails → ask the user to visit `https://adstransparency.google.com`, search manually, click the advertiser, and copy the ID from the URL.
+
+If multiple advertisers match → list all matches and ask the user to confirm which one to use.
+
+## Step 3: Scrape Ads
+
+Run the Apify `xtech/google-ad-transparency-scraper` actor via MCP with:
+
+- `advertiserIds`: the resolved advertiser ID(s), comma-separated if multiple
+- `region`: from user input (default: `anywhere`)
+- `maxResults`: from user input (default: 50)
+
+Poll until the run completes, then fetch the dataset.
+
+If the MCP connection fails → instruct the user to run `/mcp` to reconnect, then retry.
+
+## Step 4: Present Results
+
+Sort results by `last_shown` descending (most recent first). Group by `ad_format`.
+
+Present a summary table followed by any image or video creative URLs:
+
+| Format | Headline | Description | Display URL | Region | First Shown | Last Shown |
+|--------|----------|-------------|-------------|--------|-------------|------------|
+
+After the table include:
+
+- Total ads scraped
+- Date range (earliest `first_shown` to most recent `last_shown`)
+- Ad format breakdown (TEXT, IMAGE, VIDEO count)
+- Any image or video URLs listed separately
+
+Offer to filter by format, region, or date range if the result set is large.
+
+## Output Format
+
+---
+**Google Ads Report — [Company / Domain]**
+**Scraped:** [N] ads | **Region:** [region] | **Period:** [first_shown] to [last_shown]
+
+**Format Breakdown**
+- TEXT: [N] ads
+- IMAGE: [N] ads
+- VIDEO: [N] ads
+
+**Ad Creatives**
+| Format | Headline | Description | Display URL | Region | First Shown | Last Shown |
+|--------|----------|-------------|-------------|--------|-------------|------------|
+| [format] | [headline] | [description] | [url] | [region] | [date] | [date] |
+
+**Media Creatives**
+- [format] — [headline] — [image_url or video_url]
+
+---
+
+## Edge Cases
+
+- **Advertiser ID not found:** Ask the user to manually visit `https://adstransparency.google.com`, search for the company, and copy the ID from the URL.
+- **No ads returned:** Note that the advertiser may not run Google ads or may not be a verified advertiser. Suggest trying a different region or confirming the company name.
+- **Multiple advertisers match:** List all matches and ask the user to confirm which advertiser to scrape.
+- **MCP not connected:** Prompt the user to run `/mcp` and reconnect Apify before retrying.
+- **Run times out:** Reduce the max ads count and retry. For large advertiser accounts, scraping all ads can take several minutes.
+- **Historical data only:** Note that Google's Transparency Center primarily shows recently active ads — older campaigns may not appear.

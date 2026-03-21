@@ -1,0 +1,92 @@
+---
+title: "Meta Ads Scraper"
+description: "Scrapes competitor ads from Meta's Ad Library covering Facebook, Instagram, Messenger, Threads, and WhatsApp. Triggered when the user says 'scrape Meta ads for [company]', 'show me Facebook ads from [brand]', or 'pull Meta ad creatives for [company]'."
+category: Marketing
+integrations:
+  - name: "Apify"
+    slug: "apify"
+---
+
+**Goal:** Pull competitor ad creatives, spend estimates, reach data, and campaign details from Meta's Ad Library for any company, keyword, or Facebook Page URL.
+
+| Tool | Purpose | Required |
+|------|---------|----------|
+| Apify (apify/facebook-ads-scraper) | Scrape ads from Meta's Ad Library | Yes |
+
+**Trigger:** Run on demand when the user asks to research competitor Meta ads, view Facebook or Instagram ad creatives for a brand, or analyze ad messaging and spend for a company.
+
+## Step 1: Gather Search Parameters
+
+Ask the user for the following in a single prompt:
+
+- **Target:** Company name, keyword, or Facebook Page URL (e.g. `https://www.facebook.com/nike`)
+- **Country:** 2-letter country code (e.g. US, GB, DE) or ALL (default: ALL)
+- **Ad status:** Active ads only, or all ads including inactive (default: active)
+- **Max ads:** Maximum number of ads to return (default: 50)
+
+> "Which company, keyword, or Facebook Page URL do you want to scrape Meta ads for? Any country filter or result limit?"
+
+If $ARGUMENTS are provided, extract the target from there and skip the prompt.
+
+## Step 2: Scrape Ads
+
+Run the Apify `apify/facebook-ads-scraper` actor via MCP with:
+
+- `searchQuery` or `pageUrl`: the company name/keyword or Facebook Page URL from user input
+- `country`: from user input (default: `ALL`)
+- `adStatus`: `active` or `all` from user input (default: `active`)
+- `maxResults`: from user input (default: 50)
+
+The Apify actor resolves the advertiser internally — no manual Page ID lookup is needed.
+
+Poll until the run completes, then fetch the dataset.
+
+If the MCP connection fails → instruct the user to run `/mcp` to reconnect, then retry.
+
+## Step 3: Present Results
+
+Sort results by `ad_delivery_start_time` descending (most recent first). Group by platform.
+
+Present a summary table:
+
+| Ad ID | Page | Platforms | Ad Text (preview) | Spend Range | Impressions | Status | Active Since |
+|-------|------|-----------|-------------------|-------------|-------------|--------|--------------|
+
+After the table include:
+
+- Total ads scraped
+- Platform breakdown (Facebook, Instagram, Messenger, Threads, WhatsApp counts)
+- Spend range summary (min to max across all ads)
+- Any image or video URLs listed separately
+
+Offer to filter by platform, country, date range, or ad status if the result set is large.
+
+## Output Format
+
+---
+**Meta Ads Report — [Company / Keyword]**
+**Scraped:** [N] ads | **Country:** [country] | **Status:** [active / all]
+
+**Platform Breakdown**
+- Facebook: [N] ads
+- Instagram: [N] ads
+- Other platforms: [N] ads
+
+**Ad Creatives**
+| Page | Platforms | Ad Text | Spend Range | Impressions | Status | Active Since |
+|------|-----------|---------|-------------|-------------|--------|--------------|
+| [page_name] | [platforms] | [ad_text preview] | $[lower]–$[upper] | [lower]–[upper] | [status] | [date] |
+
+**Media Creatives**
+- [page_name] — [ad_text preview] — [image_url or video_url]
+
+---
+
+## Edge Cases
+
+- **No ads returned:** Note that EU/UK ads have the most complete coverage. For US-only advertisers, coverage may be limited to political or issue ads. Suggest switching country to `ALL` or trying EU.
+- **Company name returns multiple advertisers:** List the top matches by ad count and ask the user to confirm which page to use. Suggest passing the Facebook Page URL directly for exact matching.
+- **MCP not connected:** Prompt the user to run `/mcp` and reconnect Apify before retrying.
+- **Run times out:** Reduce the max ads count and retry. Increase timeout for large advertisers with many active campaigns.
+- **Spend and impressions show ranges:** Meta's Ad Library reports spend and impressions as ranges (e.g. $100–$499), not exact figures. Present both bounds.
+- **Active vs all:** By default only active ads are returned. If the user wants historical ad creative research, rerun with ad status set to all.

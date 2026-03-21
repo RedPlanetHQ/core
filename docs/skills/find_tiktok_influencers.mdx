@@ -1,0 +1,91 @@
+---
+title: "Find TikTok Influencers"
+description: "Searches for TikTok influencers matching a specific niche using Apify's Influencer Discovery Agent. Triggered when the user says 'find TikTok influencers for [niche]', 'search for creators in [topic]', or 'who are the top TikTok accounts for [niche]'."
+category: Marketing
+integrations:
+  - name: "Apify"
+    slug: "apify"
+---
+
+**Goal:** Find and filter TikTok influencers that match a user-defined niche, follower range, and location using Apify's Influencer Discovery Agent.
+
+| Tool | Purpose | Required |
+|------|---------|----------|
+| Apify Influencer Discovery Agent | Search and score TikTok influencer profiles by niche | Yes |
+
+**Trigger:** Run on demand when the user asks to find TikTok influencers, search for creators in a specific niche, or build an influencer outreach list.
+
+## Step 1: Gather Criteria
+
+Ask the user for all filtering criteria in a single prompt. Collect:
+
+- **Niche/Description:** What type of influencer? (use $ARGUMENTS if provided, otherwise ask)
+- **Minimum follower count:** e.g. 5K, 10K, 50K
+- **Maximum follower count:** e.g. 50K, 100K, 500K
+- **Location filter:** e.g. US only, US + Canada, any English-speaking country
+- **Sub-niche preferences:** Any specific content focus within the broader niche
+
+> "To find the right influencers, I need a few details: What niche or content type are you targeting? What follower range? Any location requirements? Any specific sub-niche focus?"
+
+## Step 2: Run the Apify Influencer Discovery Agent
+
+Use the `mcp__apify__apify-slash-influencer-discovery-agent` tool with:
+
+- `influencerDescription`: A detailed description combining the user's niche, content style preferences, and target audience. Be specific and descriptive.
+- `generatedKeywords`: 5
+- `profilesPerKeyword`: 10
+
+If the MCP connection fails → instruct the user to run `/mcp` to reconnect, then retry.
+
+## Step 3: Filter Results
+
+Apply all the user's criteria strictly to the returned profiles:
+
+- Remove profiles below minimum follower count
+- Remove profiles above maximum follower count
+- Remove profiles outside the specified location(s)
+- Remove profiles with a fit score below 0.6 or that don't match the sub-niche
+- Sort remaining results by fit score (descending), then by follower count (descending)
+
+## Step 4: Present Results
+
+Present filtered results in a markdown table:
+
+| Creator | Handle | Followers | Engagement | Location | Focus | Fit Score |
+|---------|--------|-----------|------------|----------|-------|-----------|
+
+Include:
+
+- Clickable TikTok profile links
+- Follower count formatted readably (e.g. 46.3K)
+- Engagement rate as a percentage
+- Brief description of content focus
+- AI-generated fit score
+
+After the table, include:
+
+- Total profiles analyzed vs profiles matching criteria
+- A note if very few results matched, with a suggestion to adjust criteria
+- Offer to rerun with different keywords or adjusted filters
+
+## Output Format
+
+---
+**TikTok Influencer Results — [Niche]**
+**Analyzed:** [N total] profiles | **Matched:** [N matched] profiles
+
+| Creator | Handle | Followers | Engagement | Location | Focus | Fit Score |
+|---------|--------|-----------|------------|----------|-------|-----------|
+| [Name] | [@handle](https://tiktok.com/@handle) | [N]K | [X]% | [Location] | [Content focus] | [0.00] |
+
+**Notes:** [Any notes on result quality or suggestions to adjust criteria]
+
+---
+
+## Edge Cases
+
+- **No profiles match criteria:** Widen the follower range or relax the location filter. Report how many profiles were analyzed before filtering.
+- **Fit scores all below 0.6:** Ask the user to refine the niche description, then rerun with a more specific `influencerDescription`.
+- **MCP not connected:** Prompt the user to run `/mcp` and reconnect Apify before retrying.
+- **Engagement rate above 100%:** Flag it but do not exclude the profile — this occurs when viral posts drive disproportionate interaction relative to follower count.
+- **Platform mismatch:** This skill searches TikTok only. If the user wants Instagram or YouTube influencers, let them know and suggest running a separate search for those platforms.
