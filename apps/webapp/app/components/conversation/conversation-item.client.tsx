@@ -33,8 +33,7 @@ import {
   hasNeedsApprovalDeep,
   getToolDisplayName,
 } from "./conversation-utils";
-import { ICON_MAPPING } from "../icon-utils";
-import type { IconType } from "../icon-utils";
+import { ICON_MAPPING ,type  IconType } from "../icon-utils";
 import { Task } from "../icons/task";
 
 interface AIConversationItemProps {

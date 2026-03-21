@@ -8,7 +8,7 @@
  * direct DB access is not available.
  */
 
-import { CoreClient } from "@redplanethq/sdk";
+import { type CoreClient } from "@redplanethq/sdk";
 import { UserTypeEnum } from "@core/types";
 import {
   OrchestratorTools,
