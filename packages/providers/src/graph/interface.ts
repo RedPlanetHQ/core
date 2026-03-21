@@ -393,9 +393,7 @@ export interface IGraphProvider {
     episodeUuids: string[],
     userId: string,
     workspaceId?: string
-  ): Promise<
-    { statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]
-  >;
+  ): Promise<{ statementUuid: string; fact: string; validAt: Date; invalidAt: Date }[]>;
 
   // ===== STATEMENTS =====
 
@@ -815,7 +813,13 @@ export interface IGraphProvider {
     startTime: Date;
     endTime?: Date;
     aspects?: string[];
-  }): Promise<{ aspect: string; statementCount: number; statements: { fact: string; validAt: string; episodeUuid: string }[] }[]>;
+  }): Promise<
+    {
+      aspect: string;
+      statementCount: number;
+      statements: { fact: string; validAt: string; episodeUuid: string }[];
+    }[]
+  >;
 
   /**
    * Get episodes within a time range with statement filtering
@@ -841,15 +845,4 @@ export interface IGraphProvider {
     entityUuids: string[];
     maxStatements: number;
   }): Promise<StatementNode[]>;
-
-  /**
-   * Get episodes filtered by labels (for exploratory queries)
-   * Used by handleExploratory in search-v2
-   */
-  getEpisodesForExploratory(params: {
-    userId: string;
-    workspaceId: string;
-    labelIds: string[];
-    maxEpisodes: number;
-  }): Promise<EpisodicNode[]>;
 }

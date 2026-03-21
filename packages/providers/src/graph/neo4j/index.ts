@@ -99,7 +99,6 @@ export class Neo4jGraphProvider extends Neo4jCore implements IGraphProvider {
   getEpisodesForTemporal!: IGraphProvider["getEpisodesForTemporal"];
   getEpisodesForEntities!: IGraphProvider["getEpisodesForEntities"];
   getStatementsConnectingEntities!: IGraphProvider["getStatementsConnectingEntities"];
-  getEpisodesForExploratory!: IGraphProvider["getEpisodesForExploratory"];
   getTopicsForFacets!: IGraphProvider["getTopicsForFacets"];
   getEntitiesForFacets!: IGraphProvider["getEntitiesForFacets"];
   getAspectsForFacets!: IGraphProvider["getAspectsForFacets"];
