@@ -82,12 +82,14 @@ export async function noStreamProcess(
   }
 
   const messages = conversationHistory.map((history: any) => {
-    return {
-      parts: history.parts,
-      role:
-        history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
-      id: history.id,
-    };
+    const role =
+      history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+    // For assistant messages, only inject text parts — tool call internals bloat context
+    const parts =
+      role === "assistant"
+        ? (history.parts ?? []).filter((p: any) => p.type === "text")
+        : history.parts;
+    return { parts, role, id: history.id };
   });
 
   const message = body.message?.parts[0].text;

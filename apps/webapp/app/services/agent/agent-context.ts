@@ -60,7 +60,7 @@ export async function buildAgentContext({
   executorTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord] =
+  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
     await Promise.all([
       getUserById(userId),
       getPersonaDocumentForUser(workspaceId),
@@ -73,6 +73,10 @@ export async function buildAgentContext({
       prisma.conversation.findUnique({
         where: { id: conversationId },
         select: { asyncJobId: true },
+      }),
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
       }),
     ]);
 
@@ -152,6 +156,7 @@ export async function buildAgentContext({
       pronoun,
     },
     persona ?? "",
+    workspace?.name ?? undefined,
   );
 
   // Integrations context

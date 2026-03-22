@@ -421,20 +421,23 @@ ${userPersona}
       ? `
 ## Available Skills
 
-The user has defined these skills. A reminder may have a skill attached (look for \`skillId\` and \`skillName\` in the trigger data). When a skill is attached, you MUST include it in your action plan.
+The user has defined these skills (reusable workflows). Use them in two ways:
+
+**1. Attached to a trigger:** Look for \`skillId\` and \`skillName\` in trigger data. When present, you MUST include it in your action plan.
+
+**2. Match to incoming data:** When a webhook or trigger contains data that a skill is designed to handle, include that skill in your action plan. For example, if a github webhook arrives with PR review requests and there's a "PR Triage" skill — use it. Match by intent, not just explicit attachment.
 
 **How to reference a skill in your action plan:**
-- Add \`skillId\` and \`skillName\` to the context object (copy from trigger data)
-- The intent should describe what the reminder is about naturally
-- The Core brain will load the full skill instructions and follow them
+- Add \`skillId\` and \`skillName\` to the context object
+- The intent should describe what needs to happen
+- The butler will load the full skill workflow and follow it
 
-**Example with attached skill:**
-Trigger data has: \`"skillId": "abc123", "skillName": "Morning Brief"\`
+**Example:**
 \`\`\`json
 {
   "shouldMessage": true,
   "message": {
-    "intent": "Run morning brief — check gmail, calendar, github, and AI news",
+    "intent": "Morning brief — check calendar, emails, and priorities",
     "context": { "skillId": "abc123", "skillName": "Morning Brief" },
     "tone": "neutral"
   }

@@ -29,6 +29,7 @@ export function getCorePrompt(
   channel: ChannelType,
   userInfo?: UserInfo,
   userPersona?: string,
+  butlerName?: string,
 ): string {
   let channelFormat: string;
   try {
@@ -62,7 +63,7 @@ ${userPersona}
   }
 
   const personalityType = userInfo?.personality || "tars";
-  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
+  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
 }
 
 // Re-export for convenience

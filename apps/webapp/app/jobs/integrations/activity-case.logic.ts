@@ -66,6 +66,7 @@ export async function processActivityCase(
         integrationAccountId,
         accountId,
         eventType: "activity_sync",
+        text: activitiesText,
         payload: {},
       },
     };
