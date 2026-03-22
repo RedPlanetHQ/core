@@ -1,130 +1,110 @@
 ---
 title: "Browser"
-description: "Automate browsers with pre-configured sessions for authentication and automation"
+description: "Automate browsers with pre-configured profiles and sessions for authentication and automation"
 ---
 
 ## Overview
 
-The Browser capability lets CORE control browsers on your machine using [agent-browser](https://agent-browser.dev/) under the hood. Sessions are pre-configured and limited to 5 parallel instances.
+The Browser capability lets CORE control browsers on your machine using [Playwright](https://playwright.dev/) under the hood. Profiles persist login state on disk; sessions bind a running browser instance to a profile.
 
-Login once, and CORE can access authenticated pages without re-authenticating.
-
-For the full list of available browser commands, see the [agent-browser documentation](https://agent-browser.dev/).
+Login once per profile, and CORE can access authenticated pages without re-authenticating.
 
 ---
 
-## Sessions
+## Concepts
 
-Sessions must be created before use. Each session automatically persists:
+| Concept | Description |
+|---------|-------------|
+| **Profile** | Permanent identity stored on disk (`~/.corebrain/browser-profiles/<name>/`). Holds cookies, localStorage, and auth state. |
+| **Session** | Named binding between a task and a profile. Multiple sessions can reference different profiles. |
 
-- Cookies
-- localStorage
-- Authentication state
+---
 
-Maximum **5 sessions** allowed.
+## Setup
 
-### Default Sessions
-
-Three sessions are pre-configured and ready to use immediately after install — no setup required:
-
-| Session | Purpose |
-|---------|---------|
-| `work` | Work-related browsing — company tools, work accounts, internal dashboards |
-| `personal` | Personal browsing — personal accounts, social media, personal email |
-| `misc` | Miscellaneous tasks — one-off automation, testing, anything that doesn't fit work or personal |
-
-You can start using these immediately:
+### 1. Install Playwright Chromium
 
 ```bash
-corebrain browser open https://github.com --session-name work
-corebrain browser open https://gmail.com --session-name personal
-corebrain browser open https://example.com --session-name misc
+corebrain browser install
 ```
 
+Downloads the Chromium binary and creates default profiles: `personal`, `work`, `misc`.
+
+### 2. Create a Profile
+
 ```bash
-# Create an additional session
-corebrain browser create-session dev
+corebrain browser create-profile personal
+```
+
+Maximum **5 profiles** allowed.
+
+### 3. Create a Session
+
+```bash
+corebrain browser create-session my_task --profile personal
+```
+
+Maximum **10 sessions** allowed.
+
+### 4. Open (Login)
+
+```bash
+# Open in headed mode to log in manually
+corebrain browser open my_task --headed
+
+# Open at a specific URL
+corebrain browser open my_task --url https://github.com --headed
+```
+
+Once logged in, the profile persists auth state. Future opens (headless or headed) will remain authenticated.
+
+---
+
+## CLI Reference
+
+### Profiles
+
+```bash
+# Create a profile
+corebrain browser create-profile <name>
+
+# Delete a profile (also removes bound sessions and profile directory)
+corebrain browser delete-profile <name>
+```
+
+### Sessions
+
+```bash
+# Create a session bound to a profile
+corebrain browser create-session <name> --profile <profile>
 
 # List configured sessions
 corebrain browser list-sessions
 
-# Delete a session
-corebrain browser delete-session dev
+# Delete a session (removes config only; profile data preserved)
+corebrain browser delete-session <name>
 ```
 
----
-
-## Commands
-
-### Create Session
+### Open / Close
 
 ```bash
-corebrain browser create-session <name>
-```
+# Open a session (headless by default)
+corebrain browser open <session>
 
-Session names must be alphanumeric with hyphens/underscores only.
+# Open in headed (visible) mode
+corebrain browser open <session> --headed
 
-### Open a URL
+# Open at a specific URL
+corebrain browser open <session> --url https://example.com
 
-```bash
-# Open with default session (corebrain)
-corebrain browser open https://github.com
+# Close a running session (profile data preserved)
+corebrain browser close-session <session>
 
-# Open with specific session
-corebrain browser open https://github.com --session-name work
-```
-
-### Open CORE Dashboard
-
-Quick command to open the CORE dashboard with a session selector (headed mode):
-
-```bash
-corebrain browser open-head
-```
-
-This prompts you to select a session and opens `https://app.getcore.me` in headed mode.
-
-### Run Commands
-
-Execute browser automation commands on an open session:
-
-```bash
-corebrain browser command click "#login-button" --session-name work
-corebrain browser command fill "#email" "user@example.com" --session-name work
-corebrain browser command screenshot --session-name work
-```
-
-See [agent-browser docs](https://agent-browser.dev/) for all available commands.
-
-### Close Browser
-
-```bash
-# Close a specific session
-corebrain browser close --session-name work
-
-# Close all sessions
+# Close all running sessions
 corebrain browser close --all
 ```
 
-### Manage Sessions
-
-```bash
-# List configured sessions
-corebrain browser list-sessions
-
-# Create a new session
-corebrain browser create-session <name>
-
-# Delete a session (closes browser and removes config)
-corebrain browser delete-session <name>
-
-# View status
-corebrain browser status
-```
-
-### Set Browser
-
-Configure which browser to use for automation:
+### Browser Executable
 
 ```bash
 # Interactive browser selection
@@ -136,101 +116,92 @@ corebrain browser set-browser brave
 # Use Chrome (auto-detected)
 corebrain browser set-browser chrome
 
-# Use system default
+# Use system default (bundled Chromium)
 corebrain browser set-browser default
 
 # Use custom browser path
 corebrain browser set-browser custom /path/to/browser
 ```
 
-The browser setting is stored in your config and applies to all sessions.
+### Status
+
+```bash
+corebrain browser status
+```
 
 ---
 
 ## Gateway Tools
 
-When the gateway is running, CORE can use these browser tools:
+When the gateway is running, CORE can control the browser with these tools:
 
 | Tool | Description |
 |------|-------------|
-| `browser_open` | Open a URL with a pre-configured session |
-| `browser_close` | Close a browser for a session |
-| `browser_command` | Run a browser command (click, fill, screenshot, etc.) |
-| `browser_list_sessions` | List all configured sessions |
-| `browser_close_all` | Close all browser sessions |
+| `browser_navigate` | Navigate to a URL in a session |
+| `browser_snapshot` | Get an ARIA accessibility snapshot of the current page |
+| `browser_click` | Click an element by ref |
+| `browser_fill` | Fill an input field |
+| `browser_type` | Type text into a field |
+| `browser_press_key` | Press a keyboard key |
+| `browser_select_option` | Select a dropdown option |
+| `browser_screenshot` | Take a screenshot |
+| `browser_scroll` | Scroll the page |
+| `browser_go_back` | Navigate back |
+| `browser_go_forward` | Navigate forward |
+| `browser_wait_for` | Wait for a load state |
+| `browser_evaluate` | Execute JavaScript in the page |
+| `browser_close_session` | Close a running session |
+| `browser_close_all` | Close all running sessions |
+| `browser_list_sessions` | List configured sessions |
+| `browser_create_session` | Create a session |
+| `browser_delete_session` | Delete a session |
 
-Session management (`create-session`, `delete-session`, `set-browser`) is done via CLI commands only.
+Profile and browser executable management is CLI-only.
+
+---
+
+## Agent vs Manual Control
+
+**Important:** The gateway and CLI maintain separate in-memory session maps (different processes). Do not use `corebrain browser open` for a session that the agent will also control — it will cause a profile directory lock conflict.
+
+| Use case | How to open |
+|----------|-------------|
+| Agent-controlled automation | Let the agent call `browser_navigate` — it launches the browser in-process |
+| Manual login / handoff | Use `corebrain browser open <session> --headed` |
 
 ---
 
 ## Use Cases
 
-**Authenticated scraping:** Create a `linkedin` session, login once. Now CORE can research leads on LinkedIn anytime without re-authenticating.
+**Authenticated scraping:** Create a `linkedin` session bound to your `personal` profile, log in once. CORE can research leads on LinkedIn anytime.
 
-**Form automation:** CORE fills out repetitive forms - expense reports, time tracking, support tickets - using stored login sessions.
+**Form automation:** CORE fills out repetitive forms — expense reports, time tracking, support tickets — using stored login sessions.
 
-**Visual testing:** CORE opens your staging site, navigates through flows, takes screenshots, and compares them to baselines.
-
-**Multi-account management:** Create separate sessions for different accounts (work, personal). CORE switches between them seamlessly.
+**Multi-account management:** Create separate profiles (`work`, `personal`). CORE switches between them seamlessly via different sessions.
 
 ---
 
 ## Headed Mode (Manual Handoff)
 
-By default, browsers run in headless mode (no visible window). When you need to take manual control or watch what CORE is doing, ask it to open the browser in **headed mode**.
+By default, browsers run in headless mode. To take manual control or watch what CORE is doing:
 
 **Example prompts:**
 - "Open LinkedIn in headed mode so I can take over"
 - "Start a headed browser session for the checkout flow"
-- "I need to intervene - open this in headed mode"
+- "I need to intervene — open this in headed mode"
 
 <Info>
-**Troubleshooting headed mode:** If the browser doesn't appear in headed mode, close all sessions first and then ask CORE to open a new headed session:
+**Troubleshooting headed mode:** If the browser doesn't appear, close all sessions first:
 
 1. Ask: "Close all browser sessions"
 2. Then: "Open [URL] in headed mode with session [name]"
-
-This ensures no existing headless session interferes with the headed request.
 </Info>
 
 ---
 
-## Prerequisites
+## Recommended Browser
 
-The browser capability requires `agent-browser` to be installed:
-
-```bash
-corebrain browser install
-```
-
-This installs [agent-browser](https://agent-browser.dev/) via npm and creates default sessions: `work`, `personal`, `misc`.
-
-### Verify Before Starting Gateway
-
-**Important:** Before starting the gateway, verify that `agent-browser` is accessible in your terminal:
-
-```bash
-# Check agent-browser is in PATH
-agent-browser --version
-```
-
-If `agent-browser` is not found, you may need to:
-
-1. **Reload your shell** to pick up PATH changes:
-   ```bash
-   source ~/.bashrc   # or ~/.zshrc for zsh
-   ```
-
-2. **Restart the gateway** after reloading:
-   ```bash
-   corebrain gateway stop && corebrain gateway start
-   ```
-
-The gateway captures your PATH at startup. If `agent-browser` is installed after the gateway starts, the gateway won't have access to it until restarted.
-
-### Recommended Browser
-
-We recommend installing [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, so it works seamlessly with agent-browser, and includes built-in ad blocking and privacy features that make automation cleaner and faster.
+We recommend [Brave](https://brave.com/) as your automation browser. Brave is Chromium-based, works seamlessly with Playwright, and includes built-in ad blocking that makes automation cleaner and faster.
 
 ```bash
 # macOS
@@ -241,4 +212,10 @@ sudo apt install brave-browser
 
 # Windows
 winget install Brave.Brave
+```
+
+Then configure CORE to use it:
+
+```bash
+corebrain browser set-browser brave
 ```
