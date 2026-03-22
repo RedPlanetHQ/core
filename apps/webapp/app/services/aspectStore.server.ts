@@ -252,6 +252,69 @@ export async function searchVoiceAspects(params: {
 }
 
 /**
+ * Get voice aspects in a time range grouped by aspect type (for temporal_facets)
+ * Queries Postgres directly by validAt — no vector search needed
+ */
+export async function getVoiceAspectsForTimeRange(params: {
+  userId: string;
+  workspaceId: string;
+  startTime: Date;
+  endTime?: Date;
+  aspects?: VoiceAspect[];
+}): Promise<
+  Array<{
+    aspect: string;
+    statementCount: number;
+    statements: { fact: string; validAt: string; episodeUuids: string[] }[];
+  }>
+> {
+  const ALL_VOICE_ASPECTS: VoiceAspect[] = [
+    "Directive",
+    "Preference",
+    "Habit",
+    "Belief",
+    "Goal",
+  ];
+  const aspectsToQuery =
+    params.aspects && params.aspects.length > 0
+      ? params.aspects
+      : ALL_VOICE_ASPECTS;
+
+  const results = await Promise.all(
+    aspectsToQuery.map(async (aspect) => {
+      const records = await prisma.voiceAspect.findMany({
+        where: {
+          userId: params.userId,
+          workspaceId: params.workspaceId,
+          aspect,
+          validAt: {
+            gte: params.startTime,
+            ...(params.endTime ? { lte: params.endTime } : {}),
+          },
+          invalidAt: null,
+        },
+        orderBy: { validAt: "desc" },
+        take: 20,
+        select: { id: true, fact: true, validAt: true, episodeUuids: true },
+      });
+
+      if (records.length === 0) return null;
+      return {
+        aspect,
+        statementCount: records.length,
+        statements: records.map((r) => ({
+          fact: r.fact,
+          validAt: r.validAt.toISOString(),
+          episodeUuids: r.episodeUuids,
+        })),
+      };
+    }),
+  );
+
+  return results.filter((r): r is NonNullable<typeof r> => r !== null);
+}
+
+/**
  * Delete voice aspect embeddings from vector provider
  */
 export async function deleteVoiceAspectEmbeddings(

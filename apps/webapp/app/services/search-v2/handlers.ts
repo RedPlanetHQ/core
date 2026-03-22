@@ -21,7 +21,10 @@ import {
   type VoiceAspect,
   VOICE_ASPECTS,
 } from "@core/types";
-import { searchVoiceAspects } from "~/services/aspectStore.server";
+import {
+  searchVoiceAspects,
+  getVoiceAspectsForTimeRange,
+} from "~/services/aspectStore.server";
 
 /** Episode with optional relevance score from reranking */
 type RankedEpisode = EpisodicNode & { relevanceScore?: number };
@@ -1079,42 +1082,69 @@ export async function handleTemporalFacets(
       `Range: ${effectiveStart.toISOString()} - ${temporalEnd?.toISOString() || "now"}`,
   );
 
-  const [topicsRaw, entitiesRaw, aspectsRaw] = await Promise.all([
-    facetDimensions.includes("topics")
-      ? graphProvider.getTopicsForFacets({
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-          startTime: effectiveStart,
-          endTime: temporalEnd,
-        })
-      : Promise.resolve(null),
-    facetDimensions.includes("entities")
-      ? graphProvider.getEntitiesForFacets({
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-          startTime: effectiveStart,
-          endTime: temporalEnd,
-        })
-      : Promise.resolve(null),
-    facetDimensions.includes("aspects")
-      ? graphProvider.getAspectsForFacets({
-          userId: ctx.userId,
-          workspaceId: ctx.workspaceId,
-          startTime: effectiveStart,
-          endTime: temporalEnd,
-          aspects:
-            ctx.routerOutput.aspects.length > 0
-              ? ctx.routerOutput.aspects
-              : undefined,
-        })
-      : Promise.resolve(null),
-  ]);
+  const requestedAspects =
+    ctx.routerOutput.aspects.length > 0 ? ctx.routerOutput.aspects : [];
+  const requestedVoiceAspects = requestedAspects.filter((a) =>
+    (
+      ["Directive", "Preference", "Habit", "Belief", "Goal"] as string[]
+    ).includes(a),
+  ) as VoiceAspect[];
+  const requestedGraphAspects = requestedAspects.filter(
+    (a) =>
+      !(
+        ["Directive", "Preference", "Habit", "Belief", "Goal"] as string[]
+      ).includes(a),
+  ) as StatementAspect[];
+
+  const [topicsRaw, entitiesRaw, aspectsRaw, voiceAspectsRaw] =
+    await Promise.all([
+      facetDimensions.includes("topics")
+        ? graphProvider.getTopicsForFacets({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            startTime: effectiveStart,
+            endTime: temporalEnd,
+          })
+        : Promise.resolve(null),
+      facetDimensions.includes("entities")
+        ? graphProvider.getEntitiesForFacets({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            startTime: effectiveStart,
+            endTime: temporalEnd,
+          })
+        : Promise.resolve(null),
+      facetDimensions.includes("aspects")
+        ? graphProvider.getAspectsForFacets({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            startTime: effectiveStart,
+            endTime: temporalEnd,
+            aspects:
+              requestedGraphAspects.length > 0
+                ? requestedGraphAspects
+                : undefined,
+          })
+        : Promise.resolve(null),
+      facetDimensions.includes("aspects") && ctx.workspaceId
+        ? getVoiceAspectsForTimeRange({
+            userId: ctx.userId,
+            workspaceId: ctx.workspaceId,
+            startTime: effectiveStart,
+            endTime: temporalEnd,
+            aspects:
+              requestedVoiceAspects.length > 0
+                ? requestedVoiceAspects
+                : undefined,
+          })
+        : Promise.resolve([]),
+    ]);
 
   logger.debug(
     `[Handler:temporal_facets] Raw results — ` +
       `topics: ${topicsRaw?.length ?? "skipped"}, ` +
       `entities: ${entitiesRaw?.length ?? "skipped"}, ` +
-      `aspects: ${aspectsRaw?.length ?? "skipped"}`,
+      `graph aspects: ${aspectsRaw?.length ?? "skipped"}, voice aspects: ${voiceAspectsRaw?.length ?? "skipped"}`,
   );
 
   // Resolve label names for topics
@@ -1179,8 +1209,21 @@ export async function handleTemporalFacets(
   // Compute aggregate stats
   const totalEpisodes =
     topics?.reduce((sum, t) => sum + t.episodeCount, 0) ?? 0;
-  const newFacts =
-    aspectsRaw?.reduce((sum, a) => sum + a.statementCount, 0) ?? 0;
+  // Merge graph aspects + voice aspects into a single sorted list
+  const mergedAspects = [
+    ...(aspectsRaw ?? []),
+    ...(voiceAspectsRaw ?? []).map((va) => ({
+      aspect: va.aspect,
+      statementCount: va.statementCount,
+      statements: va.statements.map((s) => ({
+        fact: s.fact,
+        validAt: s.validAt,
+        episodeUuid: s.episodeUuids[0] ?? "",
+      })),
+    })),
+  ].sort((a, b) => b.statementCount - a.statementCount);
+
+  const newFacts = mergedAspects.reduce((sum, a) => sum + a.statementCount, 0);
   const activeTopics = topics?.length ?? 0;
 
   logger.debug(
@@ -1192,7 +1235,7 @@ export async function handleTemporalFacets(
   return {
     topics,
     entities: entitiesRaw ?? undefined,
-    aspects: aspectsRaw?.map((a) => ({
+    aspects: mergedAspects.map((a) => ({
       aspect: a.aspect as StatementAspect,
       statementCount: a.statementCount,
       statements: a.statements.map((s) => ({
