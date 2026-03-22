@@ -426,7 +426,9 @@ export async function runOrchestrator(
       inputSchema: z.object({
         message: z
           .string()
-          .describe("One short sentence, max 6 words describing what you're doing."),
+          .describe(
+            "One short sentence, max 6 words describing what you're doing.",
+          ),
       }),
       execute: async ({ message }) => {
         logger.info(`Orchestrator: acknowledge - ${message}`);
@@ -526,7 +528,7 @@ export async function runOrchestrator(
     ),
     messages: [{ role: "user", content: userMessage }],
     tools,
-    stopWhen: stepCountIs(10),
+    stopWhen: stepCountIs(100),
     abortSignal,
   });
 

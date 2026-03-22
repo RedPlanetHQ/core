@@ -1,16 +1,17 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isAgentBrowserInstalled, browserCommand, isBlockedCommand } from '@/utils/agent-browser';
+import {isPlaywrightReady} from '@/utils/browser-config';
+import {getOrLaunchSession} from '@/utils/browser-manager';
 
 export const args = zod.tuple([
-	zod.string().describe('Command to run'),
-]).rest(zod.string().describe('Command arguments'));
+	zod.string().describe('JavaScript expression to evaluate'),
+]);
 
 export const options = zod.object({
-	sessionName: zod.string().optional().default('default').describe('Session name to use (default: default)'),
+	session: zod.string().describe('Session name to evaluate on'),
 });
 
 type Props = {
@@ -18,51 +19,45 @@ type Props = {
 	options: zod.infer<typeof options>;
 };
 
-async function runBrowserCommand(sessionName: string, command: string, commandArgs: string[]): Promise<void> {
+async function runBrowserCommand(sessionName: string, script: string): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking agent-browser...');
+	spinner.start('Checking Playwright...');
 
-	const installed = await isAgentBrowserInstalled();
-
-	if (!installed) {
+	const ready = await isPlaywrightReady();
+	if (!ready) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
+		p.log.error('Playwright Chromium is not installed. Run `corebrain browser install` first.');
 		return;
 	}
 
-	// Check if command is blocked
-	if (isBlockedCommand(command)) {
-		spinner.stop(chalk.red('Command blocked'));
-		p.log.error(`Command "${command}" is blocked. Use \`corebrain browser open\` or \`corebrain browser close\` for open/close operations.`);
+	spinner.message(`Evaluating on session "${sessionName}"...`);
+
+	const {session, error} = await getOrLaunchSession(sessionName);
+	if (error) {
+		spinner.stop(chalk.red('Failed to get session'));
+		p.log.error(error);
 		return;
 	}
 
-	spinner.message(`Running: ${command} ${commandArgs.join(' ')} on session "${sessionName}"`);
+	// eslint-disable-next-line no-new-func
+	const result = await session.page.evaluate(new Function(`return (${script})`) as () => unknown);
 
-	const result = await browserCommand(sessionName, command, commandArgs);
-
-	spinner.stop(result.code === 0 ? chalk.green('Command completed') : chalk.yellow(`Exit code: ${result.code}`));
-
-	if (result.stdout) {
-		console.log(result.stdout);
-	}
-	if (result.stderr) {
-		console.error(chalk.red(result.stderr));
-	}
+	spinner.stop(chalk.green('Done'));
+	console.log(JSON.stringify(result, null, 2));
 }
 
-export default function BrowserCommand({ args: [command, ...commandArgs], options }: Props) {
-	const { exit } = useApp();
+export default function BrowserCommand({args: [script], options}: Props) {
+	const {exit} = useApp();
 
 	useEffect(() => {
-		runBrowserCommand(options.sessionName, command, commandArgs)
-			.catch((err) => {
+		runBrowserCommand(options.session, script)
+			.catch(err => {
 				p.log.error(err instanceof Error ? err.message : 'Unknown error');
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [options.sessionName, command, commandArgs, exit]);
+	}, [options.session, script, exit]);
 
 	return null;
 }

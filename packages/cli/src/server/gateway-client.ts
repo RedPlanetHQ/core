@@ -5,7 +5,7 @@ import {codingTools, executeCodingTool} from '@/server/tools/coding-tools';
 import {execTools, executeExecTool} from '@/server/tools/exec-tools';
 import {utilsTools, executeUtilsTool} from '@/server/tools/utils-tools';
 import {imessageTools, executeIMessageTool} from '@/server/tools/imessage-tools';
-import {browserCloseAll} from '@/utils/agent-browser';
+import {closeAllSessions} from '@/utils/browser-manager';
 import {getPreferences} from '@/config/preferences';
 import type {GatewayTool} from '@/server/tools/browser-tools';
 
@@ -344,7 +344,7 @@ export class GatewayClient {
 		if (wasReady) {
 			this.log('Closing all browser sessions...');
 			try {
-				await browserCloseAll();
+				await closeAllSessions();
 			} catch {
 				// Ignore errors when closing browser
 			}

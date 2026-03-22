@@ -1,71 +1,35 @@
-import { useEffect } from 'react';
-import { useApp } from 'ink';
+import {useEffect} from 'react';
+import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import { isAgentBrowserInstalled, browserClose, browserCloseAll } from '@/utils/agent-browser';
+import {closeAllSessions} from '@/utils/browser-manager';
 
-export const options = zod.object({
-	sessionName: zod.string().optional().describe('Session name to close'),
-	all: zod.boolean().optional().default(false).describe('Close all sessions'),
-});
+export const options = zod.object({});
 
 type Props = {
 	options: zod.infer<typeof options>;
 };
 
-async function runBrowserClose(sessionName: string | undefined, closeAll: boolean): Promise<void> {
+async function runCloseAll(): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking agent-browser...');
-
-	const installed = await isAgentBrowserInstalled();
-
-	if (!installed) {
-		spinner.stop(chalk.red('Not installed'));
-		p.log.error('agent-browser is not installed. Run `corebrain browser install` first.');
-		return;
-	}
-
-	if (closeAll) {
-		spinner.message('Closing all browser sessions...');
-		const result = await browserCloseAll();
-
-		if (result.code !== 0) {
-			spinner.stop(chalk.red('Failed to close all browsers'));
-			p.log.error(result.stderr || 'Failed to close all browsers');
-			return;
-		}
-
-		spinner.stop(chalk.green('Closed all browser sessions'));
-		return;
-	}
-
-	const session = sessionName || 'default';
-	spinner.message(`Closing browser for session "${session}"...`);
-
-	const result = await browserClose(session);
-
-	if (result.code !== 0) {
-		spinner.stop(chalk.red('Failed to close browser'));
-		p.log.error(result.stderr || 'Failed to close browser');
-		return;
-	}
-
-	spinner.stop(chalk.green(`Closed browser for session "${session}"`));
+	spinner.start('Closing all browser sessions...');
+	await closeAllSessions();
+	spinner.stop(chalk.green('All browser sessions closed'));
 }
 
-export default function BrowserClose({ options }: Props) {
-	const { exit } = useApp();
+export default function BrowserClose(_props: Props) {
+	const {exit} = useApp();
 
 	useEffect(() => {
-		runBrowserClose(options.sessionName, options.all)
-			.catch((err) => {
-				p.log.error(`Failed to close browser: ${err instanceof Error ? err.message : 'Unknown error'}`);
+		runCloseAll()
+			.catch(err => {
+				p.log.error(`Failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [options.sessionName, options.all, exit]);
+	}, [exit]);
 
 	return null;
 }

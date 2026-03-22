@@ -4,12 +4,12 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {
-	isAgentBrowserInstalled,
-	installAgentBrowser,
-	runAgentBrowserDoctor,
-	browserGetSessions,
-	getMaxSessions,
-} from '@/utils/agent-browser';
+	isPlaywrightReady,
+	installPlaywrightChromium,
+	getPlaywrightVersion,
+	getConfiguredProfiles,
+	getMaxProfiles,
+} from '@/utils/browser-config';
 
 export const options = zod.object({});
 
@@ -19,17 +19,16 @@ type Props = {
 
 async function runBrowserInstall(): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking if agent-browser is installed...');
+	spinner.start('Checking if Playwright Chromium is installed...');
 
-	const installed = await isAgentBrowserInstalled();
+	const ready = await isPlaywrightReady();
 
-	if (installed) {
-		spinner.stop(chalk.green('agent-browser is already installed'));
+	if (ready) {
+		spinner.stop(chalk.green('Playwright Chromium is already installed'));
 
-		// Check version
 		const versionSpinner = p.spinner();
 		versionSpinner.start('Checking version...');
-		const versionResult = await runAgentBrowserDoctor();
+		const versionResult = await getPlaywrightVersion();
 
 		if (versionResult.code === 0) {
 			versionSpinner.stop(chalk.green('Installation validated'));
@@ -40,26 +39,20 @@ async function runBrowserInstall(): Promise<void> {
 			versionSpinner.stop(chalk.yellow('Could not verify version'));
 		}
 
-		// Show configured sessions
-		const sessions = browserGetSessions();
-		const maxSessions = getMaxSessions();
-		if (sessions.length > 0) {
-			p.log.info(`Configured sessions (${sessions.length}/${maxSessions}): ${sessions.join(', ')}`);
+		const profiles = getConfiguredProfiles();
+		const maxProfiles = getMaxProfiles();
+		if (profiles.length > 0) {
+			p.log.info(`Configured profiles (${profiles.length}/${maxProfiles}): ${profiles.join(', ')}`);
 		} else {
-			p.log.info('No sessions configured. Run `corebrain browser create-session <name>` to create one.');
+			p.log.info('No profiles. Run `corebrain browser create-profile <name>` to create one.');
 		}
-
-		// Recommend Brave
-		p.log.info('');
-		p.log.info(chalk.bold('Recommended browser: Brave'));
-		p.log.info('Install: brew install --cask brave-browser');
 
 		return;
 	}
 
-	spinner.message('Installing agent-browser via npm...');
+	spinner.message('Installing Playwright Chromium...');
 
-	const result = await installAgentBrowser();
+	const result = await installPlaywrightChromium();
 
 	if (result.code !== 0) {
 		spinner.stop(chalk.red('Installation failed'));
@@ -67,17 +60,11 @@ async function runBrowserInstall(): Promise<void> {
 		return;
 	}
 
-	spinner.stop(chalk.green('agent-browser installed successfully'));
+	spinner.stop(chalk.green('Playwright Chromium installed successfully'));
 
-	// Show default sessions created
-	const sessions = browserGetSessions();
-	const maxSessions = getMaxSessions();
-	p.log.info(`Default sessions created (${sessions.length}/${maxSessions}): ${sessions.join(', ')}`);
-
-	// Recommend Brave
-	p.log.info('');
-	p.log.info(chalk.bold('Recommended browser: Brave'));
-	p.log.info('Install: brew install --cask brave-browser');
+	const profiles = getConfiguredProfiles();
+	const maxProfiles = getMaxProfiles();
+	p.log.info(`Default profiles created (${profiles.length}/${maxProfiles}): ${profiles.join(', ')}`);
 }
 
 export default function BrowserInstall(_props: Props) {
@@ -87,7 +74,7 @@ export default function BrowserInstall(_props: Props) {
 		runBrowserInstall()
 			.catch(err => {
 				p.log.error(
-					`Failed to install agent-browser: ${
+					`Failed to install Playwright: ${
 						err instanceof Error ? err.message : 'Unknown error'
 					}`,
 				);

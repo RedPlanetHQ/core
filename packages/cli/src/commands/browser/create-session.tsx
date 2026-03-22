@@ -3,52 +3,65 @@ import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import {createSession, getMaxSessions, getConfiguredSessions} from '@/utils/agent-browser';
+import {
+	createSession,
+	getConfiguredSessions,
+	getConfiguredProfiles,
+	getMaxSessions,
+} from '@/utils/browser-config';
 
 export const args = zod.tuple([zod.string().describe('Session name to create')]);
 
-export const options = zod.object({});
+export const options = zod.object({
+	profile: zod.string().describe('Profile to bind this session to (e.g. personal, work)'),
+});
 
 type Props = {
 	args: zod.infer<typeof args>;
 	options: zod.infer<typeof options>;
 };
 
-async function runCreateSession(name: string): Promise<void> {
+async function runCreateSession(name: string, profile: string): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start(`Creating session "${name}"...`);
+	spinner.start(`Creating session "${name}" with profile "${profile}"...`);
 
-	const result = createSession(name);
+	const result = createSession(name, profile);
 
 	if (!result.success) {
 		spinner.stop(chalk.red('Failed'));
 		p.log.error(result.error || 'Failed to create session');
+
+		const profiles = getConfiguredProfiles();
+		if (profiles.length === 0) {
+			p.log.info('No profiles configured. Run: corebrain browser create-profile <name>');
+		} else {
+			p.log.info(`Available profiles: ${profiles.join(', ')}`);
+		}
 		return;
 	}
 
-	spinner.stop(chalk.green(`Session "${name}" created`));
+	spinner.stop(chalk.green(`Session "${name}" created (profile: ${profile})`));
 
 	const sessions = getConfiguredSessions();
 	const maxSessions = getMaxSessions();
-	p.log.info(`Sessions: ${sessions.join(', ')} (${sessions.length}/${maxSessions})`);
+	p.log.info(`Sessions: ${sessions.length}/${maxSessions}`);
+	p.log.info(`Run: corebrain browser open ${name}`);
 }
 
-export default function BrowserCreateSession({args: [name]}: Props) {
+export default function BrowserCreateSession({args: [name], options}: Props) {
 	const {exit} = useApp();
 
 	useEffect(() => {
-		runCreateSession(name)
+		runCreateSession(name, options.profile)
 			.catch(err => {
 				p.log.error(
-					`Failed to create session: ${
-						err instanceof Error ? err.message : 'Unknown error'
-					}`,
+					`Failed to create session: ${err instanceof Error ? err.message : 'Unknown error'}`,
 				);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [name, exit]);
+	}, [name, options.profile, exit]);
 
 	return null;
 }
