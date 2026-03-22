@@ -134,7 +134,10 @@ export async function runCASEPipeline(
         creditAmount,
       );
     } catch (error) {
-      logger.warn(`[CASE pipeline] Failed to deduct credits for ${reminderId}`, { error });
+      logger.warn(
+        `[CASE pipeline] Failed to deduct credits for ${reminderId}`,
+        { error },
+      );
     }
 
     logger.info(`[CASE pipeline] Successfully processed ${reminderId}`);
@@ -209,7 +212,7 @@ async function executePlan(
     userData.userId,
     reminder.id,
     conversationSource,
-    `[${conversationSource} triggered] ${reminder.text}`,
+    reminder.text,
   );
 
   // Store CASE decision as a tool-style part (matches UI format)
@@ -299,7 +302,7 @@ async function executePlan(
           const channelConversationId = await getOrCreateChannelConversation(
             userData.userId,
             userData.workspaceId,
-            `[Reminder] ${reminder.text}`,
+            reminder.text,
             channel,
           );
           await upsertConversationHistory(
@@ -307,12 +310,14 @@ async function executePlan(
             [{ text: `[Reminder] ${reminder.text}`, type: "text" }],
             channelConversationId,
             UserTypeEnum.System,
+            false,
           );
           await upsertConversationHistory(
             crypto.randomUUID(),
             [{ text: responseText, type: "text" }],
             channelConversationId,
             UserTypeEnum.Agent,
+            false,
           );
         } catch (error) {
           logger.warn(`Failed to mirror reminder to channel conversation`, {
