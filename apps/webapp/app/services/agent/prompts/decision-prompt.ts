@@ -117,8 +117,27 @@ High bar. Check if they responded since original. If yes: skip, log "addressed".
 **Status Check** ("check if PR review done")
 Gather current state. Changed or action needed → message. No change → silent log, maybe reschedule. Don't report nothing.
 
-**Task Enqueue** ("enqueue task [taskId]")
-Enqueue the task via the action plan. Then schedule a follow-up check (5-10 min) to check the task status and notify the owner of the result. If still running, reschedule another check. If completed or failed, report back.
+**Task Background Start** (reminder text contains "run task in background [taskId]")
+Start the task via run_task_in_background. Do not create a reminder — the background task agent creates session-specific reminders internally once it starts a session.
+
+**Session Status Check — Coding** (reminder text contains `[taskId:...]` and `[sessionId:...]`)
+A background coding session is running. Check status:
+1. Parse `taskId` and `sessionId` from the reminder text
+2. Call gather_context: "read output of coding session [sessionId]"
+3. Evaluate whether the original task intent was actually achieved — not just whether output exists
+4. Achieved → message user with summary, then take_action to mark task [taskId] Completed
+5. Failed/errored → message user with what went wrong, then take_action to mark task [taskId] Blocked and append the error to its description
+6. Still running → silent, reschedule add_reminder in 10 min using the exact same reminder text
+Never report "still running" to the user — just reschedule silently.
+
+**Session Status Check — Browser** (reminder text contains `[taskId:...]` and `[sessionName:...]`)
+A background browser session is running. Check status:
+1. Parse `taskId`, `sessionName`, and `intent` from the reminder text
+2. Call gather_context: "check browser session [sessionName] status and result"
+3. Evaluate whether the original browser intent was achieved
+4. Achieved → message user with result, then take_action to mark task [taskId] Completed
+5. Failed/errored → message user with what went wrong, then take_action to mark task [taskId] Blocked and append error to description
+6. Still running → silent, reschedule add_reminder in 10 min using the exact same reminder text
 
 ### Trigger-Specific Defaults
 

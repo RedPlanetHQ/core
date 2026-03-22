@@ -246,8 +246,21 @@ Task ID: ${linkedTask.id}
 - Use gather_context and take_action to do the actual work
 - If they send a message, treat it as additional direction for this task
 - This IS the task — don't create or search for other tasks about this topic
-- When done, mark task ${linkedTask.id} as Completed via update_task
-- When you need their approval or input, mark task ${linkedTask.id} as Blocked via update_task
+- Mark task ${linkedTask.id} as Completed ONLY when the user's original intent is fully achieved — not just when execution finishes
+- Mark task ${linkedTask.id} as Blocked in ALL other cases: errors, failures, partial completion, needs input, unresolvable dependency
+- When marking Blocked, always call update_task first to append a clear error/status summary to the description — what was attempted, what failed, what's needed to unblock
+
+LONG-RUNNING SESSIONS (coding, browser):
+If you start a coding session or browser session via take_action, the response will include a sessionId.
+After getting the sessionId, immediately call add_reminder with this exact format:
+  text: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
+  schedule: "FREQ=MINUTELY;INTERVAL=10"
+  maxOccurrences: 1
+
+For browser tasks, use sessionName (not sessionId) and include the intent:
+  text: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
+
+Do NOT create a reminder if the task completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
 </task_execution>`;
     } else {
       // Conversation mode — user is chatting about the task

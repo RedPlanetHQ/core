@@ -60,10 +60,20 @@ export function getTaskTools(
       },
     }),
 
-    enqueue_task: tool({
-      description: `Start working on a task in the background. Moves the task to InProgress and queues it for execution. Use when the user wants something done now — "do X", "start working on X", "run this task".`,
+    run_task_in_background: tool({
+      description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
+
+The background agent will handle the work autonomously. It will create reminders internally if it starts a long-running session (coding, browser) — you do NOT need to create a reminder yourself.
+
+After calling this:
+- Tell the user the task is running in the background
+- Say you'll notify them when it's done
+- Do NOT call take_action for the same task
+- Do NOT create a reminder yourself
+
+When the user asks to work on something, search existing tasks first (search_tasks). If a matching Backlog/Todo task exists, use its ID here instead of creating a new one.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The task ID to enqueue"),
+        taskId: z.string().describe("The task ID to run in the background"),
       }),
       execute: async ({ taskId }) => {
         try {
@@ -71,11 +81,11 @@ export function getTaskTools(
           if (!task) return `Task ${taskId} not found.`;
           await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
           await enqueueTask({ taskId, workspaceId, userId });
-          logger.info(`Task ${taskId} enqueued`);
-          return `Task "${task.title}" (ID: ${taskId}) queued and starting shortly.`;
+          logger.info(`Task ${taskId} started in background`);
+          return `Task "${task.title}" (taskId: ${taskId}) is now running in the background. The background agent will handle it. Tell the user it's running and you'll ping them when done.`;
         } catch (error) {
-          logger.error("Failed to enqueue task", { error });
-          return `Failed to enqueue task: ${error instanceof Error ? error.message : "Unknown error"}`;
+          logger.error("Failed to start background task", { error });
+          return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),
