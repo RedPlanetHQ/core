@@ -293,6 +293,20 @@ export const updateDocumentContent = async (
 ) => {
   const id = document.id;
 
+  // Persona documents should not be re-ingested when edited
+  if (document.source === "persona" || document.source === "persona-v2") {
+    await prisma.document.update({
+      where: { id, workspaceId },
+      data: { content },
+    });
+
+    return {
+      success: true,
+      message: "Document updated successfully",
+      action: "updated",
+    };
+  }
+
   // Find the latest document-type log for this session
   const latestDocumentLog = await prisma.ingestionQueue.findFirst({
     where: {
