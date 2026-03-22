@@ -14,6 +14,8 @@ import {
   confirmReminderActive,
   getReminderById,
   recalculateRemindersForTimezone,
+  rescheduleReminderAt,
+  computeNextRun,
 } from "~/services/reminder.server";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
@@ -130,8 +132,10 @@ RELATIVE TIME REMINDERS (no startDate):
 One-time: set maxOccurrences=1. Recurring with limit: set maxOccurrences=N or endDate.
 
 FOLLOW-UP REMINDERS:
-- Set isFollowUp=true and parentReminderId to create a follow-up
-- Follow-ups are one-time and check if user responded to the original`,
+- Set isFollowUp=true and parentReminderId to reschedule an existing reminder
+- Does NOT create a new reminder — reschedules the parent to fire again at the new time
+- Use this inside a reminder flow when the action needs a follow-up check (e.g. no response yet, task still running)
+- Works on any reminder, including one that is itself a follow-up`,
     inputSchema: {
       type: "object",
       properties: {
@@ -313,35 +317,37 @@ export async function callReminderTool(
           parentReminderId,
         } = args;
 
-        // Enforce max 1 follow-up per reminder
+        // For follow-ups: reschedule the parent reminder instead of creating a new row
         if (isFollowUp && parentReminderId) {
           const parentReminder = await getReminderById(parentReminderId);
-          if (parentReminder) {
-            const parentMeta = parentReminder.metadata as Record<
-              string,
-              unknown
-            > | null;
-            if (parentMeta?.isFollowUp === true) {
-              logger.info(
-                `Rejecting follow-up creation: parent ${parentReminderId} is already a follow-up`,
-              );
-              return {
-                content: [
-                  {
-                    type: "text",
-                    text: "Cannot create follow-up: this reminder is already a follow-up. Max 1 follow-up per original reminder.",
-                  },
-                ],
-              };
-            }
+          if (!parentReminder) {
+            return {
+              content: [{ type: "text", text: "Parent reminder not found." }],
+              isError: true,
+            };
           }
+
+          const followUpNextRun = computeNextRun(schedule, timezone);
+          if (!followUpNextRun) {
+            return {
+              content: [{ type: "text", text: "Could not compute follow-up time." }],
+              isError: true,
+            };
+          }
+
+          await rescheduleReminderAt(parentReminderId, workspaceId, followUpNextRun);
+          return {
+            content: [
+              {
+                type: "text",
+                text: `Follow-up scheduled: reminder fires again at ${followUpNextRun.toLocaleString()}.`,
+              },
+            ],
+          };
         }
 
-        const maxOcc = isFollowUp
-          ? 1
-          : maxOccurrences && maxOccurrences > 0
-            ? maxOccurrences
-            : null;
+        const maxOcc =
+          maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null;
 
         logger.info(
           `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${channel}`,

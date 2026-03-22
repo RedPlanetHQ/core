@@ -727,6 +727,43 @@ export async function cancelFollowUpsForParentReminder(
  * Cancel all pending follow-ups for a workspace
  * Called when user sends any message (they're active)
  */
+/**
+ * Reschedule an existing reminder to fire at a specific time.
+ * Used for follow-ups: updates nextRunAt without changing the underlying schedule.
+ */
+export async function rescheduleReminderAt(
+  reminderId: string,
+  workspaceId: string,
+  nextRunAt: Date,
+): Promise<void> {
+  const existing = await prisma.reminder.findFirst({
+    where: { id: reminderId, workspaceId },
+  });
+
+  if (!existing) {
+    throw new Error("Reminder not found or access denied");
+  }
+
+  await prisma.reminder.update({
+    where: { id: reminderId },
+    data: { nextRunAt, isActive: true },
+  });
+
+  await removeScheduledReminder(reminderId);
+  await enqueueReminder(
+    {
+      reminderId,
+      workspaceId,
+      channel: existing.channel as MessageChannel,
+    },
+    nextRunAt,
+  );
+
+  logger.info(
+    `Rescheduled reminder ${reminderId} for workspace ${workspaceId} at ${nextRunAt}`,
+  );
+}
+
 export async function cancelAllFollowUpsForWorkspace(
   workspaceId: string,
 ): Promise<number> {
