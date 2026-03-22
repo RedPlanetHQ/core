@@ -86,8 +86,7 @@ export default function Home() {
     typeof loader
   >() as any;
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
-  const needsButlerName =
-    workspace?.version === "V3" && !meta.onboardingV2Complete;
+  const needsButlerName = !meta.onboardingV2Complete;
 
   return (
     <SidebarProvider

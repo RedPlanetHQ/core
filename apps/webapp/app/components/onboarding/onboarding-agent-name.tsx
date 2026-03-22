@@ -35,7 +35,7 @@ export function OnboardingAgentName({
   // Auto-generate on first mount
   useEffect(() => {
     onGenerateName("", []);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Apply generated name when generation completes
