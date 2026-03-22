@@ -315,34 +315,68 @@ export function createSearchV2Methods(core: Neo4jCore) {
       }[]
     > {
       const wsFilter = params.workspaceId ? ", workspaceId: $workspaceId" : "";
-      const aspectFilter =
-        params.aspects && params.aspects.length > 0 ? "AND s.aspect IN $aspects" : "";
 
-      // s.validAt and s.invalidAt are stored as ISO strings — use string comparison
+      const queryParams = {
+        userId: params.userId,
+        ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        now: new Date().toISOString(),
+        startTime: params.startTime.toISOString(),
+        ...(params.endTime && { endTime: params.endTime.toISOString() }),
+      };
+
+      // If specific aspects requested, run one query per aspect with LIMIT 20 (true per-aspect cap)
+      if (params.aspects && params.aspects.length > 0) {
+        const queryForAspect = (aspect: string) => `
+          MATCH (e:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
+          WHERE s.aspect = $aspect
+            AND s.validAt >= $startTime
+            ${params.endTime ? "AND s.validAt <= $endTime" : ""}
+            AND (s.invalidAt IS NULL OR s.invalidAt > $now)
+          WITH s, e
+          ORDER BY s.validAt DESC
+          LIMIT 20
+          RETURN
+            count(s) AS statementCount,
+            collect({fact: s.fact, validAt: toString(s.validAt), episodeUuid: e.uuid}) AS statements
+        `;
+
+        const perAspectResults = await Promise.all(
+          params.aspects.map(async (aspect) => {
+            const rows = await core.runQuery(queryForAspect(aspect), { ...queryParams, aspect });
+            if (!rows.length) return null;
+            const r = rows[0];
+            const statementCount = r.get("statementCount").toNumber() as number;
+            if (statementCount === 0) return null;
+            return {
+              aspect,
+              statementCount,
+              statements: r.get("statements") as { fact: string; validAt: string; episodeUuid: string }[],
+            };
+          })
+        );
+
+        return perAspectResults
+          .filter((r): r is NonNullable<typeof r> => r !== null)
+          .sort((a, b) => b.statementCount - a.statementCount);
+      }
+
+      // No aspect filter — single query across all aspects
       const query = `
         MATCH (e:Episode {userId: $userId${wsFilter}})-[:HAS_PROVENANCE]->(s:Statement {userId: $userId${wsFilter}})
         WHERE s.validAt >= $startTime
           ${params.endTime ? "AND s.validAt <= $endTime" : ""}
           AND (s.invalidAt IS NULL OR s.invalidAt > $now)
           AND s.aspect IS NOT NULL
-          ${aspectFilter}
         WITH s.aspect AS aspect, s, e
         ORDER BY s.validAt DESC
         WITH aspect,
              count(s) AS statementCount,
-             collect({fact: s.fact, validAt: toString(s.validAt), episodeUuid: e.uuid}) AS allStatements
-        RETURN aspect, statementCount, allStatements[0..50] AS statements
+             collect({fact: s.fact, validAt: toString(s.validAt), episodeUuid: e.uuid})[0..20] AS statements
+        RETURN aspect, statementCount, statements
         ORDER BY statementCount DESC
       `;
 
-      const results = await core.runQuery(query, {
-        userId: params.userId,
-        ...(params.workspaceId && { workspaceId: params.workspaceId }),
-        now: new Date().toISOString(),
-        startTime: params.startTime.toISOString(),
-        ...(params.endTime && { endTime: params.endTime.toISOString() }),
-        ...(params.aspects && params.aspects.length > 0 && { aspects: params.aspects }),
-      });
+      const results = await core.runQuery(query, queryParams);
 
       return results.map((r) => ({
         aspect: r.get("aspect") as string,
