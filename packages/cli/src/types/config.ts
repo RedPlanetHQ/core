@@ -68,10 +68,16 @@ export type ServiceType = 'launchd' | 'systemd' | 'manual';
 // Browser executable configuration
 export type BrowserType = 'default' | 'brave' | 'chrome' | 'custom';
 
+export interface BrowserSessionConfig {
+	name: string;    // session name, e.g. "create_swiggy_order"
+	profile: string; // profile name, e.g. "personal"
+}
+
 export interface BrowserConfig {
 	browserType?: BrowserType;
 	browserExecutable?: string;
-	sessions?: string[]; // Configured session names
+	profiles?: string[];              // profile names: ["personal", "work"]
+	sessions?: BrowserSessionConfig[]; // sessions: [{ name, profile }]
 }
 
 // Gateway slot configuration

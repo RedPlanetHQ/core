@@ -9,7 +9,7 @@ import {
 	detectAvailableBrowsers,
 	detectBravePath,
 	detectChromePath,
-} from '@/utils/agent-browser';
+} from '@/utils/browser-config';
 import type {BrowserType} from '@/types/config';
 
 export const args = zod

@@ -3,17 +3,14 @@ import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import {isAgentBrowserInstalled, browserOpen} from '@/utils/agent-browser';
+import {isPlaywrightReady} from '@/utils/browser-config';
+import {launchSession} from '@/utils/browser-manager';
 
-export const args = zod.tuple([zod.string().describe('URL to open')]);
+export const args = zod.tuple([zod.string().describe('Session name to open')]);
 
 export const options = zod.object({
-	sessionName: zod
-		.string()
-		.optional()
-		.default('default')
-		.describe('Session name for persistence (default: default)'),
-	headed: zod.boolean().optional().default(false).describe('Headed session'),
+	url: zod.string().optional().describe('URL to navigate to after launch'),
+	headed: zod.boolean().optional().default(false).describe('Run in headed (visible) mode'),
 });
 
 type Props = {
@@ -22,52 +19,53 @@ type Props = {
 };
 
 async function runBrowserOpen(
-	url: string,
 	sessionName: string,
+	url: string | undefined,
 	headed: boolean,
 ): Promise<void> {
 	const spinner = p.spinner();
-	spinner.start('Checking agent-browser...');
+	spinner.start('Checking Playwright...');
 
-	const installed = await isAgentBrowserInstalled();
-
-	if (!installed) {
+	const ready = await isPlaywrightReady();
+	if (!ready) {
 		spinner.stop(chalk.red('Not installed'));
-		p.log.error(
-			'agent-browser is not installed. Run `corebrain browser install` first.',
-		);
+		p.log.error('Playwright Chromium is not installed. Run `corebrain browser install` first.');
 		return;
 	}
 
-	spinner.message(`Opening ${url} with session "${sessionName}"...`);
+	spinner.message(`Launching session "${sessionName}"${headed ? ' (headed)' : ''}...`);
 
-	const result = await browserOpen(url, sessionName, headed);
+	const {session, error} = await launchSession(sessionName, headed);
 
-	if (result.code !== 0) {
-		spinner.stop(chalk.red('Failed to open URL'));
-		p.log.error(result.stderr || 'Failed to open URL');
+	if (error) {
+		spinner.stop(chalk.red('Failed to launch'));
+		p.log.error(error);
 		return;
 	}
 
-	spinner.stop(chalk.green(`Opened ${url} (session: ${sessionName})`));
+	if (url) {
+		await session.page.goto(url);
+		const title = await session.page.title();
+		spinner.stop(chalk.green(`Session "${sessionName}" open — ${url} (${title})`));
+	} else {
+		spinner.stop(chalk.green(`Session "${sessionName}" open (profile: ${session.profile})`));
+	}
 }
 
-export default function BrowserOpen({args: [url], options}: Props) {
+export default function BrowserOpen({args: [sessionName], options}: Props) {
 	const {exit} = useApp();
 
 	useEffect(() => {
-		runBrowserOpen(url, options.sessionName, options.headed)
+		runBrowserOpen(sessionName, options.url, options.headed)
 			.catch(err => {
 				p.log.error(
-					`Failed to open URL: ${
-						err instanceof Error ? err.message : 'Unknown error'
-					}`,
+					`Failed to open session: ${err instanceof Error ? err.message : 'Unknown error'}`,
 				);
 			})
 			.finally(() => {
 				setTimeout(() => exit(), 100);
 			});
-	}, [url, options.sessionName, exit]);
+	}, [sessionName, options.url, options.headed, exit]);
 
 	return null;
 }

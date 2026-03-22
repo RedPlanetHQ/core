@@ -3,7 +3,8 @@ import {useApp} from 'ink';
 import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
-import {deleteSession, getConfiguredSessions, getMaxSessions, isAgentBrowserInstalled, browserClose} from '@/utils/agent-browser';
+import {deleteSession, getConfiguredSessions, getMaxSessions} from '@/utils/browser-config';
+import {closeSession} from '@/utils/browser-manager';
 
 export const args = zod.tuple([zod.string().describe('Session name to delete')]);
 
@@ -18,13 +19,9 @@ async function runDeleteSession(name: string): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start(`Deleting session "${name}"...`);
 
-	// First close the browser if it's running
-	const installed = await isAgentBrowserInstalled();
-	if (installed) {
-		await browserClose(name);
-	}
+	// Close the running instance if live
+	await closeSession(name);
 
-	// Then remove from config
 	const result = deleteSession(name);
 
 	if (!result.success) {
@@ -37,11 +34,7 @@ async function runDeleteSession(name: string): Promise<void> {
 
 	const sessions = getConfiguredSessions();
 	const maxSessions = getMaxSessions();
-	if (sessions.length > 0) {
-		p.log.info(`Remaining sessions: ${sessions.join(', ')} (${sessions.length}/${maxSessions})`);
-	} else {
-		p.log.info('No sessions configured. Create one with: corebrain browser create-session <name>');
-	}
+	p.log.info(`Remaining sessions: ${sessions.length}/${maxSessions}`);
 }
 
 export default function BrowserDeleteSession({args: [name]}: Props) {
@@ -51,9 +44,7 @@ export default function BrowserDeleteSession({args: [name]}: Props) {
 		runDeleteSession(name)
 			.catch(err => {
 				p.log.error(
-					`Failed to delete session: ${
-						err instanceof Error ? err.message : 'Unknown error'
-					}`,
+					`Failed to delete session: ${err instanceof Error ? err.message : 'Unknown error'}`,
 				);
 			})
 			.finally(() => {

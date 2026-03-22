@@ -1,46 +1,18 @@
 import zod from 'zod';
-import fs from 'node:fs';
 import {
-	browserOpen,
-	browserClose,
-	browserCommand,
-	browserGetSessions,
-	browserCloseAll,
-	isBlockedCommand,
+	getOrLaunchSession,
+	closeSession,
+	closeAllSessions,
+	getLiveSessions,
+} from '@/utils/browser-manager';
+import {
+	getConfiguredProfiles,
+	getConfiguredSessions,
+	getMaxProfiles,
 	getMaxSessions,
-} from '@/utils/agent-browser';
-
-// ============ Zod Schemas ============
-
-export const BrowserOpenSchema = zod.object({
-	url: zod.string().describe('URL to open'),
-	sessionName: zod
-		.string()
-		.optional()
-		.default('corebrain')
-		.describe('Session name (must be pre-configured, default: corebrain)'),
-	headed: zod.boolean().optional().default(false).describe('Headed session'),
-});
-
-export const BrowserCloseSchema = zod.object({
-	sessionName: zod.string().describe('Session name to close'),
-});
-
-export const BrowserCommandSchema = zod.object({
-	sessionName: zod.string().describe('Session name to run command on'),
-	command: zod
-		.string()
-		.describe('Command to run (e.g., click, fill, type, screenshot, etc.)'),
-	args: zod
-		.array(zod.string())
-		.optional()
-		.default([])
-		.describe('Command arguments'),
-});
-
-export const BrowserGetSessionsSchema = zod.object({});
-
-export const BrowserCloseAllSchema = zod.object({});
+	createSession,
+	deleteSession,
+} from '@/utils/browser-config';
 
 // ============ Tool Interface ============
 
@@ -50,63 +22,243 @@ export interface GatewayTool {
 	inputSchema: Record<string, unknown>;
 }
 
+// ============ Helpers ============
+
+function resolveLocator(
+	page: import('playwright').Page,
+	element: string,
+	ref?: string,
+): import('playwright').Locator {
+	if (ref) return page.locator(ref);
+	return page.getByText(element, {exact: false});
+}
+
+// ============ Zod Schemas ============
+
+const SessionParam = zod
+	.string()
+	.describe('Session name (e.g. create_swiggy_order). Use browser_list_sessions to see available sessions.');
+
+const NavigateSchema = zod.object({
+	url: zod.string().describe('URL to navigate to'),
+	session: SessionParam,
+	headed: zod.boolean().optional().default(false).describe('Launch in headed (visible) mode. Required for sites that block headless browsers (e.g. Swiggy, Amazon).'),
+});
+
+const SnapshotSchema = zod.object({session: SessionParam});
+
+const ClickSchema = zod.object({
+	element: zod.string().describe('Element description for text lookup'),
+	ref: zod.string().optional().describe('CSS/ARIA ref selector (takes priority over element)'),
+	session: SessionParam,
+});
+
+const FillSchema = zod.object({
+	element: zod.string().describe('Input element description'),
+	value: zod.string().describe('Value to fill'),
+	ref: zod.string().optional().describe('CSS/ARIA ref selector'),
+	session: SessionParam,
+});
+
+const TypeSchema = zod.object({
+	element: zod.string().describe('Element description'),
+	text: zod.string().describe('Text to type character by character'),
+	ref: zod.string().optional().describe('CSS/ARIA ref selector'),
+	session: SessionParam,
+});
+
+const PressKeySchema = zod.object({
+	key: zod.string().describe('Key to press (e.g. Enter, Tab, ArrowDown)'),
+	session: SessionParam,
+});
+
+const SelectOptionSchema = zod.object({
+	element: zod.string().describe('Select element description'),
+	value: zod.string().describe('Option value to select'),
+	ref: zod.string().optional().describe('CSS/ARIA ref selector'),
+	session: SessionParam,
+});
+
+const ScreenshotSchema = zod.object({session: SessionParam});
+
+const WaitForSchema = zod.object({
+	state: zod
+		.enum(['load', 'domcontentloaded', 'networkidle'])
+		.optional()
+		.default('load')
+		.describe('Load state to wait for'),
+	session: SessionParam,
+});
+
+const EvaluateSchema = zod.object({
+	script: zod.string().describe('JavaScript expression to evaluate in the page context'),
+	session: SessionParam,
+});
+
+const GoBackSchema = zod.object({session: SessionParam});
+const GoForwardSchema = zod.object({session: SessionParam});
+
+const ScrollSchema = zod.object({
+	deltaX: zod.number().optional().default(0).describe('Horizontal scroll amount in pixels'),
+	deltaY: zod.number().optional().default(300).describe('Vertical scroll amount in pixels'),
+	session: SessionParam,
+});
+
+const CloseSessionSchema = zod.object({session: SessionParam});
+const CloseAllSchema = zod.object({});
+const ListSessionsSchema = zod.object({});
+
+const CreateSessionSchema = zod.object({
+	session: zod.string().describe('Session name to create (e.g. swiggy_order)'),
+	profile: zod.string().describe('Profile to bind this session to (e.g. personal, work)'),
+});
+
+const DeleteSessionSchema = zod.object({
+	session: zod.string().describe('Session name to delete'),
+});
+
 // ============ JSON Schemas ============
 
+const sessionProp = {
+	type: 'string',
+	description: 'Session name (e.g. create_swiggy_order). Use browser_list_sessions to see configured sessions.',
+};
+
 const jsonSchemas: Record<string, Record<string, unknown>> = {
-	browser_open: {
+	browser_navigate: {
 		type: 'object',
 		properties: {
-			url: {type: 'string', description: 'URL to open'},
-			sessionName: {
-				type: 'string',
-				description:
-					'Session name (must be pre-configured). Default: personal. Use browser_list_sessions to see available sessions.',
-			},
-			headed: {
-				type: 'boolean',
-				description: 'Headed session. Default: false',
-			},
+			url: {type: 'string', description: 'URL to navigate to'},
+			session: sessionProp,
+			headed: {type: 'boolean', description: 'Launch in headed (visible) mode. Required for sites that block headless browsers (e.g. Swiggy, Amazon). Default: false'},
 		},
-		required: ['url'],
+		required: ['url', 'session'],
 	},
-	browser_close: {
+	browser_snapshot: {
+		type: 'object',
+		properties: {session: sessionProp},
+		required: ['session'],
+	},
+	browser_click: {
 		type: 'object',
 		properties: {
-			sessionName: {type: 'string', description: 'Session name to close'},
+			element: {type: 'string', description: 'Element text/description for lookup'},
+			ref: {type: 'string', description: 'CSS/ARIA selector (takes priority)'},
+			session: sessionProp,
 		},
-		required: ['sessionName'],
+		required: ['element', 'session'],
 	},
-	browser_command: {
+	browser_fill: {
 		type: 'object',
 		properties: {
-			sessionName: {
-				type: 'string',
-				description: 'Session name to run command on',
-			},
-			command: {
-				type: 'string',
-				description:
-					'Command to run. Available: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload. Blocked: open, close, cookies, storage, network, download, run, session, task, tunnel, state',
-			},
-			args: {
-				type: 'array',
-				items: {type: 'string'},
-				description: 'Command arguments (selector, text, etc.)',
-			},
+			element: {type: 'string', description: 'Input element text/description'},
+			value: {type: 'string', description: 'Value to fill'},
+			ref: {type: 'string', description: 'CSS/ARIA selector (takes priority)'},
+			session: sessionProp,
 		},
-		required: ['sessionName', 'command'],
+		required: ['element', 'value', 'session'],
 	},
-	browser_list_sessions: {
+	browser_type: {
 		type: 'object',
-		properties: {},
-		required: [],
-		description: 'List all configured browser sessions',
+		properties: {
+			element: {type: 'string', description: 'Element text/description'},
+			text: {type: 'string', description: 'Text to type character by character'},
+			ref: {type: 'string', description: 'CSS/ARIA selector (takes priority)'},
+			session: sessionProp,
+		},
+		required: ['element', 'text', 'session'],
+	},
+	browser_press_key: {
+		type: 'object',
+		properties: {
+			key: {type: 'string', description: 'Key to press (e.g. Enter, Tab, ArrowDown)'},
+			session: sessionProp,
+		},
+		required: ['key', 'session'],
+	},
+	browser_select_option: {
+		type: 'object',
+		properties: {
+			element: {type: 'string', description: 'Select element text/description'},
+			value: {type: 'string', description: 'Option value to select'},
+			ref: {type: 'string', description: 'CSS/ARIA selector (takes priority)'},
+			session: sessionProp,
+		},
+		required: ['element', 'value', 'session'],
+	},
+	browser_screenshot: {
+		type: 'object',
+		properties: {session: sessionProp},
+		required: ['session'],
+	},
+	browser_wait_for: {
+		type: 'object',
+		properties: {
+			state: {
+				type: 'string',
+				enum: ['load', 'domcontentloaded', 'networkidle'],
+				description: 'Load state to wait for (default: load)',
+			},
+			session: sessionProp,
+		},
+		required: ['session'],
+	},
+	browser_evaluate: {
+		type: 'object',
+		properties: {
+			script: {type: 'string', description: 'JavaScript expression to evaluate in page context'},
+			session: sessionProp,
+		},
+		required: ['script', 'session'],
+	},
+	browser_go_back: {
+		type: 'object',
+		properties: {session: sessionProp},
+		required: ['session'],
+	},
+	browser_go_forward: {
+		type: 'object',
+		properties: {session: sessionProp},
+		required: ['session'],
+	},
+	browser_scroll: {
+		type: 'object',
+		properties: {
+			deltaX: {type: 'number', description: 'Horizontal scroll pixels (default: 0)'},
+			deltaY: {type: 'number', description: 'Vertical scroll pixels (default: 300)'},
+			session: sessionProp,
+		},
+		required: ['session'],
+	},
+	browser_close_session: {
+		type: 'object',
+		properties: {session: sessionProp},
+		required: ['session'],
 	},
 	browser_close_all: {
 		type: 'object',
 		properties: {},
 		required: [],
-		description: 'Close all configured browser sessions',
+	},
+	browser_list_sessions: {
+		type: 'object',
+		properties: {},
+		required: [],
+	},
+	browser_create_session: {
+		type: 'object',
+		properties: {
+			session: {type: 'string', description: 'Session name to create (e.g. swiggy_order)'},
+			profile: {type: 'string', description: 'Profile to bind this session to (e.g. personal, work)'},
+		},
+		required: ['session', 'profile'],
+	},
+	browser_delete_session: {
+		type: 'object',
+		properties: {
+			session: {type: 'string', description: 'Session name to delete'},
+		},
+		required: ['session'],
 	},
 };
 
@@ -114,31 +266,95 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 
 export const browserTools: GatewayTool[] = [
 	{
-		name: 'browser_open',
+		name: 'browser_navigate',
+		description: 'Navigate to a URL in a named browser session.',
+		inputSchema: jsonSchemas.browser_navigate!,
+	},
+	{
+		name: 'browser_snapshot',
 		description:
-			'Open a browser with a URL using a pre-configured session. Use browser_list_sessions to see available sessions.',
-		inputSchema: jsonSchemas.browser_open!,
+			'Get an ARIA accessibility snapshot of the current page. Use this before interacting with elements to discover refs.',
+		inputSchema: jsonSchemas.browser_snapshot!,
 	},
 	{
-		name: 'browser_close',
-		description: 'Close a browser for the specified session',
-		inputSchema: jsonSchemas.browser_close!,
+		name: 'browser_click',
+		description: 'Click an element on the page by text description or ref selector.',
+		inputSchema: jsonSchemas.browser_click!,
 	},
 	{
-		name: 'browser_command',
-		description:
-			'Run a browser command on a session. Commands: click, dblclick, fill, type, press, hover, select, check, uncheck, scroll, screenshot, snapshot, eval, get, is, find, wait, mouse, set, tab, frame, back, forward, reload',
-		inputSchema: jsonSchemas.browser_command!,
+		name: 'browser_fill',
+		description: 'Fill an input field with a value (clears existing content first).',
+		inputSchema: jsonSchemas.browser_fill!,
 	},
 	{
-		name: 'browser_list_sessions',
-		description: `List all configured browser sessions. Maximum ${getMaxSessions()} sessions allowed.`,
-		inputSchema: jsonSchemas.browser_list_sessions!,
+		name: 'browser_type',
+		description: 'Type text into an element character by character (simulates real typing).',
+		inputSchema: jsonSchemas.browser_type!,
+	},
+	{
+		name: 'browser_press_key',
+		description: 'Press a keyboard key (e.g. Enter, Tab, ArrowDown, Escape).',
+		inputSchema: jsonSchemas.browser_press_key!,
+	},
+	{
+		name: 'browser_select_option',
+		description: 'Select an option from a <select> dropdown element.',
+		inputSchema: jsonSchemas.browser_select_option!,
+	},
+	{
+		name: 'browser_screenshot',
+		description: 'Take a screenshot of the current page and return it as base64.',
+		inputSchema: jsonSchemas.browser_screenshot!,
+	},
+	{
+		name: 'browser_wait_for',
+		description: 'Wait for a page load state (load, domcontentloaded, networkidle).',
+		inputSchema: jsonSchemas.browser_wait_for!,
+	},
+	{
+		name: 'browser_evaluate',
+		description: 'Evaluate a JavaScript expression in the page context and return the result.',
+		inputSchema: jsonSchemas.browser_evaluate!,
+	},
+	{
+		name: 'browser_go_back',
+		description: 'Navigate to the previous page in history.',
+		inputSchema: jsonSchemas.browser_go_back!,
+	},
+	{
+		name: 'browser_go_forward',
+		description: 'Navigate to the next page in history.',
+		inputSchema: jsonSchemas.browser_go_forward!,
+	},
+	{
+		name: 'browser_scroll',
+		description: 'Scroll the page by the specified pixel amounts.',
+		inputSchema: jsonSchemas.browser_scroll!,
+	},
+	{
+		name: 'browser_close_session',
+		description: 'Close a running browser session (profile data is preserved on disk).',
+		inputSchema: jsonSchemas.browser_close_session!,
 	},
 	{
 		name: 'browser_close_all',
-		description: 'Close all configured browser sessions at once.',
+		description: 'Close all running browser sessions.',
 		inputSchema: jsonSchemas.browser_close_all!,
+	},
+	{
+		name: 'browser_list_sessions',
+		description: `List all configured sessions with their profiles and live status. Max ${getMaxSessions()} sessions, ${getMaxProfiles()} profiles.`,
+		inputSchema: jsonSchemas.browser_list_sessions!,
+	},
+	{
+		name: 'browser_create_session',
+		description: 'Create a new browser session bound to a profile. Use browser_list_sessions to see available profiles first.',
+		inputSchema: jsonSchemas.browser_create_session!,
+	},
+	{
+		name: 'browser_delete_session',
+		description: 'Delete a browser session from config (closes it if running, profile data preserved).',
+		inputSchema: jsonSchemas.browser_delete_session!,
 	},
 ];
 
@@ -150,91 +366,177 @@ export async function executeBrowserTool(
 ): Promise<{success: boolean; result?: unknown; error?: string}> {
 	try {
 		switch (toolName) {
-			case 'browser_open': {
-				const p = BrowserOpenSchema.parse(params);
-
-				const r = await browserOpen(p.url, p.sessionName, p.headed);
-				if (r.code !== 0) {
-					return {success: false, error: r.stderr || 'Failed to open browser'};
-				}
+			case 'browser_navigate': {
+				const p = NavigateSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session, p.headed);
+				if (error) return {success: false, error};
+				const response = await session.page.goto(p.url);
 				return {
 					success: true,
 					result: {
-						message: `Opened ${p.url} with session "${p.sessionName} headed "${p.headed}"`,
-						sessionName: p.sessionName,
+						url: p.url,
+						session: p.session,
+						status: response?.status(),
+						title: await session.page.title(),
 					},
 				};
 			}
 
-			case 'browser_close': {
-				const p = BrowserCloseSchema.parse(params);
-				const r = await browserClose(p.sessionName);
-				if (r.code !== 0) {
-					return {success: false, error: r.stderr || 'Failed to close browser'};
-				}
-				return {
-					success: true,
-					result: {message: `Closed browser for session "${p.sessionName}"`},
-				};
+			case 'browser_snapshot': {
+				const p = SnapshotSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const snapshot = await session.page.locator('body').ariaSnapshot();
+				return {success: true, result: {snapshot}};
 			}
 
-			case 'browser_command': {
-				const p = BrowserCommandSchema.parse(params);
-
-				// Check if command is blocked before executing
-				if (isBlockedCommand(p.command)) {
-					return {
-						success: false,
-						error: `Command "${p.command}" is blocked. Use browser_open or browser_close instead for open/close, other blocked commands are not available.`,
-					};
-				}
-
-				const r = await browserCommand(p.sessionName, p.command, p.args);
-				if (r.code !== 0) {
-					return {
-						success: false,
-						error: r.stderr || `Failed to run "${p.command}"`,
-					};
-				}
-				return {
-					success: true,
-					result: {
-						message: `Executed "${p.command}" on session "${p.sessionName}"`,
-						output: r.stdout,
-					},
-				};
+			case 'browser_click': {
+				const p = ClickSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const locator = resolveLocator(session.page, p.element, p.ref);
+				await locator.click();
+				return {success: true, result: {message: `Clicked "${p.ref ?? p.element}"`}};
 			}
 
-			case 'browser_list_sessions': {
-				BrowserGetSessionsSchema.parse(params);
-				const sessions = browserGetSessions();
-				const maxSessions = getMaxSessions();
-				return {
-					success: true,
-					result: {
-						sessions,
-						count: sessions.length,
-						maxSessions,
-					},
-				};
+			case 'browser_fill': {
+				const p = FillSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const locator = resolveLocator(session.page, p.element, p.ref);
+				await locator.fill(p.value);
+				return {success: true, result: {message: `Filled "${p.ref ?? p.element}"`}};
+			}
+
+			case 'browser_type': {
+				const p = TypeSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const locator = resolveLocator(session.page, p.element, p.ref);
+				await locator.pressSequentially(p.text);
+				return {success: true, result: {message: `Typed into "${p.ref ?? p.element}"`}};
+			}
+
+			case 'browser_press_key': {
+				const p = PressKeySchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				await session.page.keyboard.press(p.key);
+				return {success: true, result: {message: `Pressed key "${p.key}"`}};
+			}
+
+			case 'browser_select_option': {
+				const p = SelectOptionSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const locator = resolveLocator(session.page, p.element, p.ref);
+				await locator.selectOption(p.value);
+				return {success: true, result: {message: `Selected "${p.value}" in "${p.ref ?? p.element}"`}};
+			}
+
+			case 'browser_screenshot': {
+				const p = ScreenshotSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				const buffer = await session.page.screenshot();
+				return {success: true, result: {screenshot: buffer.toString('base64'), mimeType: 'image/png'}};
+			}
+
+			case 'browser_wait_for': {
+				const p = WaitForSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				await session.page.waitForLoadState(p.state);
+				return {success: true, result: {message: `Waited for "${p.state}"`}};
+			}
+
+			case 'browser_evaluate': {
+				const p = EvaluateSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				// eslint-disable-next-line no-new-func
+				const result = await session.page.evaluate(new Function(`return (${p.script})`) as () => unknown);
+				return {success: true, result: {value: result}};
+			}
+
+			case 'browser_go_back': {
+				const p = GoBackSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				await session.page.goBack();
+				return {success: true, result: {url: session.page.url()}};
+			}
+
+			case 'browser_go_forward': {
+				const p = GoForwardSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				await session.page.goForward();
+				return {success: true, result: {url: session.page.url()}};
+			}
+
+			case 'browser_scroll': {
+				const p = ScrollSchema.parse(params);
+				const {session, error} = await getOrLaunchSession(p.session);
+				if (error) return {success: false, error};
+				await session.page.mouse.wheel(p.deltaX, p.deltaY);
+				return {success: true, result: {message: `Scrolled (${p.deltaX}, ${p.deltaY})`}};
+			}
+
+			case 'browser_close_session': {
+				const p = CloseSessionSchema.parse(params);
+				const r = await closeSession(p.session);
+				if (!r.success) return {success: false, error: r.error};
+				return {success: true, result: {message: `Closed session "${p.session}"`}};
 			}
 
 			case 'browser_close_all': {
-				BrowserCloseAllSchema.parse(params);
-				const r = await browserCloseAll();
-				if (r.code !== 0) {
-					return {
-						success: false,
-						error: r.stderr || 'Failed to close all browsers',
-					};
-				}
+				CloseAllSchema.parse(params);
+				await closeAllSessions();
+				return {success: true, result: {message: 'Closed all browser sessions'}};
+			}
+
+			case 'browser_list_sessions': {
+				ListSessionsSchema.parse(params);
+				const configured = getConfiguredSessions();
+				const live = getLiveSessions();
+				const profiles = getConfiguredProfiles();
 				return {
 					success: true,
-					result: {message: 'Closed all browser sessions', details: r.stdout},
+					result: {
+						profiles,
+						sessions: configured.map(s => ({
+							...s,
+							live: live.includes(s.name),
+						})),
+						maxProfiles: getMaxProfiles(),
+						maxSessions: getMaxSessions(),
+					},
 				};
 			}
 
-			default:
+			case 'browser_create_session': {
+			const p = CreateSessionSchema.parse(params);
+			const r = createSession(p.session, p.profile);
+			if (!r.success) return {success: false, error: r.error};
+			return {
+				success: true,
+				result: {message: `Session "${p.session}" created (profile: ${p.profile})`},
+			};
+		}
+
+		case 'browser_delete_session': {
+			const p = DeleteSessionSchema.parse(params);
+			await closeSession(p.session);
+			const r = deleteSession(p.session);
+			if (!r.success) return {success: false, error: r.error};
+			return {
+				success: true,
+				result: {message: `Session "${p.session}" deleted`},
+			};
+		}
+
+		default:
 				return {success: false, error: `Unknown tool: ${toolName}`};
 		}
 	} catch (err) {

@@ -27,9 +27,9 @@ import {fileURLToPath} from 'node:url';
 import {homedir} from 'node:os';
 import type {GatewayConfig, GatewaySlots} from '@/types/config';
 import {
-	isAgentBrowserInstalled,
-	installAgentBrowser,
-} from '@/utils/agent-browser';
+	isPlaywrightReady,
+	installPlaywrightChromium,
+} from '@/utils/browser-config';
 import {
 	createAppBundle,
 	openFullDiskAccessSettings,
@@ -488,7 +488,7 @@ async function runInteractiveConfig() {
 
 	const [claudeResult, browserInstalled, imessageResult] = await Promise.all([
 		isClaudeCodeInstalled(),
-		isAgentBrowserInstalled(),
+		isPlaywrightReady(),
 		isIMessageAvailable(),
 	]);
 
@@ -562,7 +562,7 @@ async function runInteractiveConfig() {
 			case 'browser': {
 				if (!browserInstalled) {
 					const installBrowser = await p.confirm({
-						message: 'Browser tools require agent-browser. Install now?',
+						message: 'Browser tools require Playwright Chromium. Install now?',
 						initialValue: true,
 					});
 
@@ -573,11 +573,11 @@ async function runInteractiveConfig() {
 
 					if (installBrowser) {
 						const installSpinner = p.spinner();
-						installSpinner.start('Installing agent-browser...');
+						installSpinner.start('Installing Playwright Chromium...');
 						try {
-							const result = await installAgentBrowser();
+							const result = await installPlaywrightChromium();
 							if (result.code === 0) {
-								installSpinner.stop(chalk.green('agent-browser installed'));
+								installSpinner.stop(chalk.green('Playwright Chromium installed'));
 								browserEnabled = true;
 							} else {
 								installSpinner.stop(

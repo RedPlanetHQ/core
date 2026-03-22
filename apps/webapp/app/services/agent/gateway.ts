@@ -11,7 +11,10 @@ import { logger } from "~/services/logger.service";
 import { getModel, getModelForTask } from "~/lib/model.server";
 import { getConnectedGateways, getGateway } from "~/services/gateway.server";
 import { callGatewayTool } from "../../../websocket";
-import { GatewayAgentInfo, type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import {
+  GatewayAgentInfo,
+  type OrchestratorTools,
+} from "~/services/agent/orchestrator-tools";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -103,8 +106,28 @@ function createDirectGatewayTools(
           );
 
           const result = executorTools
-            ? await executorTools.executeGatewayTool(gatewayId, gatewayTool.name, params as Record<string, unknown>)
-            : await callGatewayTool(gatewayId, gatewayTool.name, params as Record<string, unknown>, 60000);
+            ? await executorTools.executeGatewayTool(
+                gatewayId,
+                gatewayTool.name,
+                params as Record<string, unknown>,
+              )
+            : await callGatewayTool(
+                gatewayId,
+                gatewayTool.name,
+                params as Record<string, unknown>,
+                60000,
+              );
+
+          const r = result as Record<string, unknown>;
+          if (r?.screenshot && typeof r.screenshot === "string" && r.mimeType) {
+            return [
+              {
+                type: "image" as const,
+                data: r.screenshot,
+                mimeType: r.mimeType as string,
+              },
+            ];
+          }
 
           return JSON.stringify(result, null, 2);
         } catch (error: unknown) {
@@ -191,7 +214,11 @@ export async function runGatewayExplorer(
 
   // Create direct tools from the gateway's tool definitions
   // Each gateway tool becomes a real Zod-typed tool the sub-agent can call directly
-  const tools = createDirectGatewayTools(gatewayId, gatewayTools, executorTools);
+  const tools = createDirectGatewayTools(
+    gatewayId,
+    gatewayTools,
+    executorTools,
+  );
 
   const model = getModelForTask("high");
   const modelInstance = getModel(model);
@@ -209,7 +236,7 @@ export async function runGatewayExplorer(
     ),
     messages: [{ role: "user", content: intent }],
     tools,
-    stopWhen: stepCountIs(15), // Allow more steps for complex gateway operations
+    stopWhen: stepCountIs(100), // Allow more steps for complex gateway operations
     abortSignal,
   });
 

@@ -4,11 +4,13 @@ import * as p from '@clack/prompts';
 import chalk from 'chalk';
 import zod from 'zod';
 import {
-	isAgentBrowserInstalled,
-	browserGetSessions,
-	getServerStatus,
+	isPlaywrightReady,
+	getConfiguredProfiles,
+	getConfiguredSessions,
+	getMaxProfiles,
 	getMaxSessions,
-} from '@/utils/agent-browser';
+} from '@/utils/browser-config';
+import {getLiveSessions} from '@/utils/browser-manager';
 
 export const options = zod.object({});
 
@@ -20,52 +22,43 @@ async function runBrowserStatus(): Promise<void> {
 	const spinner = p.spinner();
 	spinner.start('Checking browser status...');
 
-	const installed = await isAgentBrowserInstalled();
-	const sessions = browserGetSessions();
-	const serverStatus = installed ? await getServerStatus() : null;
-	const maxSessions = getMaxSessions();
+	const ready = await isPlaywrightReady();
+	const profiles = getConfiguredProfiles();
+	const sessions = getConfiguredSessions();
+	const live = getLiveSessions();
 
 	spinner.stop(chalk.green('Status retrieved'));
 
 	const lines: string[] = [
-		`${chalk.bold('agent-browser:')} ${
-			installed ? chalk.green('installed') : chalk.red('not installed')
-		}`,
+		`${chalk.bold('Playwright Chromium:')} ${ready ? chalk.green('installed') : chalk.red('not installed')}`,
+		'',
+		`${chalk.bold('Profiles:')} ${profiles.length}/${getMaxProfiles()}`,
 	];
 
-	if (installed && serverStatus) {
-		const serverRunning = serverStatus.code === 0;
+	for (const profile of profiles) {
+		lines.push(`  ${chalk.dim('•')} ${chalk.cyan(profile)}`);
+	}
+
+	lines.push('');
+	lines.push(`${chalk.bold('Sessions:')} ${sessions.length}/${getMaxSessions()}`);
+
+	for (const session of sessions) {
+		const isLive = live.includes(session.name);
 		lines.push(
-			`${chalk.bold('Server:')} ${
-				serverRunning ? chalk.green('running') : chalk.dim('stopped')
+			`  ${chalk.dim('•')} ${chalk.cyan(session.name)} ${chalk.dim(`→ ${session.profile}`)}${
+				isLive ? chalk.green(' [live]') : ''
 			}`,
 		);
 	}
 
-	lines.push(
-		`${chalk.bold('Sessions:')} ${
-			sessions.length > 0
-				? chalk.green(`${sessions.length}/${maxSessions} configured`)
-				: chalk.dim(`0/${maxSessions}`)
-		}`,
-	);
-
-	if (sessions.length > 0) {
-		for (const session of sessions) {
-			lines.push(`  ${chalk.dim('•')} ${chalk.cyan(session)}`);
-		}
-	}
-
 	p.note(lines.join('\n'), 'Browser Status');
 
-	if (!installed) {
-		p.log.info('Run `corebrain browser install` to install agent-browser');
-	}
-
-	if (sessions.length === 0 && installed) {
-		p.log.info(
-			'Run `corebrain browser create-session <name>` to create a session',
-		);
+	if (!ready) {
+		p.log.info('Run `corebrain browser install` to install Playwright Chromium');
+	} else if (profiles.length === 0) {
+		p.log.info('Run `corebrain browser create-profile personal` to get started');
+	} else if (sessions.length === 0) {
+		p.log.info('Run `corebrain browser create-session <name> --profile personal` to create a session');
 	}
 }
 
