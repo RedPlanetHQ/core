@@ -11,6 +11,7 @@ import {
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
+import { env } from "~/env.server";
 
 export function getTaskTools(
   workspaceId: string,
@@ -30,7 +31,7 @@ export function getTaskTools(
         try {
           const task = await createTask(workspaceId, userId, title, description);
           logger.info(`Task ${task.id} created in Backlog`);
-          return `Task created: "${title}" (ID: ${task.id}). Added to Backlog.`;
+          return `Task created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
         } catch (error) {
           logger.error("Failed to create task", { error });
           return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;

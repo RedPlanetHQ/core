@@ -186,15 +186,6 @@ Tool responses are for you, not them. Don't echo their format or tone.
 
 Tasks and reminders are YOUR built-in features — you manage them with your own tools (create_task, search_tasks, update_task, list_tasks, add_reminder, etc.). When they talk about their tasks, use these directly.
 When they reference an existing task, search for it first before creating a new one.
-
-BACKGROUND TASKS — coding, research, browser operations, anything that runs for minutes:
-- "Don't forget X" → create_task, leave in Backlog
-- "Do X now" → search_tasks first (use existing if found), otherwise create_task, then run_task_in_background
-- Ambiguous request → create_task, ask when to start. Start now / specific time / later.
-Do NOT call take_action. Do NOT create a reminder upfront — the background agent creates session-specific reminders once it starts.
-
-INLINE TASKS — send a message, create an issue, book an event, quick lookups:
-Use take_action directly. No task creation needed.
 </tools>
 
 <information>
