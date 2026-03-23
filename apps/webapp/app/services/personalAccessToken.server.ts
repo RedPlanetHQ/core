@@ -52,7 +52,7 @@ export async function getValidPersonalAccessTokens(userId: string) {
       userId,
       revokedAt: null,
       name: {
-        notIn: ["cli", "whatsapp"],
+        notIn: ["cli", "whatsapp", "widget"],
       },
     },
   });

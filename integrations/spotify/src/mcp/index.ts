@@ -5,44 +5,79 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // ─── Auth & Client ────────────────────────────────────────────────────────────
 
+interface RefreshResult {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
 async function refreshAccessToken(
   clientId: string,
   clientSecret: string,
   refreshToken: string,
-): Promise<string> {
-  const response = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
-    {
-      headers: {
-        Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+): Promise<RefreshResult> {
+  try {
+    const response = await axios.post(
+      'https://accounts.spotify.com/api/token',
+      new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
+      {
+        headers: {
+          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
       },
-    },
-  );
-  return response.data.access_token as string;
+    );
+    return {
+      access_token: response.data.access_token,
+      refresh_token: response.data.refresh_token, // Spotify rotates refresh tokens with PKCE
+      expires_in: response.data.expires_in,
+    };
+  } catch (error: any) {
+    if (error.response?.data?.error === 'invalid_grant') {
+      throw new Error(
+        'Spotify refresh token has been revoked. Please reconnect your Spotify account.',
+      );
+    }
+    throw error;
+  }
+}
+
+interface BuildClientResult {
+  client: AxiosInstance;
+  configUpdate?: Record<string, string>;
 }
 
 async function buildClient(
   clientId: string,
   clientSecret: string,
   config: Record<string, string>,
-): Promise<AxiosInstance> {
+): Promise<BuildClientResult> {
   let accessToken = config.access_token;
   const expiresAt = config.expires_at ? parseInt(config.expires_at) : 0;
+  let configUpdate: Record<string, string> | undefined;
 
   // Refresh if expired or expiring within 60 seconds
   if (expiresAt && Date.now() > expiresAt - 60_000 && config.refresh_token) {
-    accessToken = await refreshAccessToken(clientId, clientSecret, config.refresh_token);
+    const tokens = await refreshAccessToken(clientId, clientSecret, config.refresh_token);
+    accessToken = tokens.access_token;
+    configUpdate = { access_token: tokens.access_token };
+    if (tokens.refresh_token) {
+      configUpdate.refresh_token = tokens.refresh_token;
+    }
+    if (tokens.expires_in) {
+      configUpdate.expires_at = String(Date.now() + tokens.expires_in * 1000);
+    }
   }
 
-  return axios.create({
+  const client = axios.create({
     baseURL: 'https://api.spotify.com/v1',
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
   });
+
+  return { client, configUpdate };
 }
 
 // ─── Schemas ──────────────────────────────────────────────────────────────────
@@ -192,12 +227,13 @@ export async function callTool(
   config: Record<string, string>,
 ) {
   let client: AxiosInstance;
+  let configUpdate: Record<string, string> | undefined;
 
   try {
-    client = await buildClient(clientId, clientSecret, config);
-  } catch {
+    ({ client, configUpdate } = await buildClient(clientId, clientSecret, config));
+  } catch (e: any) {
     return {
-      content: [{ type: 'text', text: 'Failed to authenticate with Spotify' }],
+      content: [{ type: 'text', text: e.message || 'Failed to authenticate with Spotify' }],
       isError: true,
     };
   }

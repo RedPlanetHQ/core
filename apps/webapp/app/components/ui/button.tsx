@@ -73,6 +73,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         className={cn(
           buttonVariants({ variant, size, full, className }),
           isActive && "!bg-accent !text-accent-foreground",
+          className,
         )}
         ref={ref}
         type="button"

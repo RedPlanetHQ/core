@@ -9,6 +9,7 @@ export interface ConversationCallbacks {
 	onRerender?: () => void;
 	onStepFinish?: () => void;
 	onFinish?: () => void;
+	onAbort?: () => void;
 	onError?: (err: Error) => void;
 }
 
@@ -16,6 +17,7 @@ export interface Conversation {
 	readonly conversationId: string | null;
 	readonly incognito: boolean;
 	send(message: string, callbacks: ConversationCallbacks): Promise<void>;
+	abort(): void;
 	clear(): void;
 	resume(id: string): void;
 	toggleIncognito(): void;
@@ -32,6 +34,7 @@ export function createConversation(
 ): Conversation {
 	let conversationId: string | null = null;
 	let incognito = false;
+	let activeAbortController: AbortController | null = null;
 
 	return {
 		get conversationId() {
@@ -40,6 +43,11 @@ export function createConversation(
 
 		get incognito() {
 			return incognito;
+		},
+
+		abort() {
+			activeAbortController?.abort();
+			activeAbortController = null;
 		},
 
 		clear() {
@@ -55,7 +63,9 @@ export function createConversation(
 		},
 
 		async send(message: string, callbacks: ConversationCallbacks) {
-			console.log(incognito);
+			const controller = new AbortController();
+			activeAbortController = controller;
+
 			try {
 				if (!conversationId) {
 					conversationId = await createConversationApi(
@@ -75,6 +85,7 @@ export function createConversation(
 					apiKey,
 					conversationId,
 					message,
+					controller.signal,
 				)) {
 					switch (event.type) {
 						case 'text-delta': {
@@ -186,6 +197,12 @@ export function createConversation(
 				// Stream ended — fire finish once
 				callbacks.onFinish?.();
 			} catch (err) {
+				// Aborted by user — not an error
+				if (err instanceof Error && err.name === 'AbortError') {
+					callbacks.onAbort?.();
+					return;
+				}
+
 				const message = err instanceof Error ? err.message : String(err);
 				// undici throws "terminated" when the server closes the SSE connection normally
 				if (message === 'terminated') {
@@ -194,6 +211,10 @@ export function createConversation(
 				}
 
 				callbacks.onError?.(err instanceof Error ? err : new Error(message));
+			} finally {
+				if (activeAbortController === controller) {
+					activeAbortController = null;
+				}
 			}
 		},
 	};

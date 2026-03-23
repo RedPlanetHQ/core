@@ -21,7 +21,12 @@ export interface IntegrationDefinition {
 export interface IntegrationAccount {
 	id: string;
 	integrationDefinitionId: string;
-	integrationDefinition: {name: string; slug: string};
+	integrationDefinition: {
+		name: string;
+		slug: string;
+		widgetUrl?: string | null;
+		spec?: Record<string, unknown> | null;
+	};
 	isActive: boolean;
 }
 
@@ -119,6 +124,23 @@ function parseSSELine(line: string): string | null {
 	return null;
 }
 
+// ── Fetch workspace info ──────────────────────────────────────────────────────
+
+export async function fetchWorkspace(
+	baseUrl: string,
+	apiKey: string,
+): Promise<{id: string; name: string} | null> {
+	try {
+		const res = await fetch(`${baseUrl}/api/v1/workspace`, {
+			headers: {Authorization: `Bearer ${apiKey}`},
+		});
+		if (!res.ok) return null;
+		return (await res.json()) as {id: string; name: string};
+	} catch {
+		return null;
+	}
+}
+
 // ── Stream conversation ───────────────────────────────────────────────────────
 
 export async function* streamConversation(
@@ -126,6 +148,7 @@ export async function* streamConversation(
 	apiKey: string,
 	conversationId: string,
 	message: string,
+	signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
 	const response = await fetch(`${baseUrl}/api/v1/conversation`, {
 		method: 'POST',
@@ -142,6 +165,7 @@ export async function* streamConversation(
 			},
 			source: 'cli',
 		}),
+		signal,
 	});
 
 	if (!response.ok || !response.body) {

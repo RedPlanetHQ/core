@@ -24,8 +24,8 @@
     "noImplicitThis": true,
     "noImplicitAny": true,
     "noFallthroughCasesInSwitch": true,
-    "useUnknownInCatchVariables": false
+    "useUnknownInCatchVariables": false,
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "build", "dist", "bin"]
+  "exclude": ["node_modules", "build", "dist", "bin", "src/widgets"],
 }

@@ -141,6 +141,15 @@ export interface ExecConfig {
 	allowUnsafe?: boolean; // Disable default blocked patterns (rm, chmod, network cmds, etc.)
 }
 
+export interface WidgetConfig {
+	widgetSlug: string;
+	widgetName: string;
+	widgetUrl: string;
+	accountId: string;
+	accountSlug: string;
+	accountName: string;
+}
+
 export interface UserPreferences {
 	lastProvider?: string;
 	lastModel?: string;
@@ -154,4 +163,8 @@ export interface UserPreferences {
 	defaultCodingAgent?: string;
 	browser?: BrowserConfig;
 	exec?: ExecConfig;
+	widgets?: {
+		belowInput?: WidgetConfig | null;
+		overview?: WidgetConfig[];
+	};
 }

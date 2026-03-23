@@ -337,6 +337,8 @@ model IntegrationDefinitionV2 {
   version     String?
   url         String?
 
+  widgetUrl   String?
+
   workspace   Workspace? @relation(references: [id], fields: [workspaceId], onDelete: Cascade)
   workspaceId String?
 
@@ -983,6 +985,10 @@ model Workspace {
 
   version  WorkspaceVersion @default(V3)
   metadata Json             @default("{}")
+
+  // Plain-text PAT used exclusively by remotely loaded widgets.
+  // Never returned to the UI. Created once and reused.
+  widgetPat String?
 
   // deprecated but keep until we move them
   userId String? @unique

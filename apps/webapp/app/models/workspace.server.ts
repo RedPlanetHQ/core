@@ -84,7 +84,9 @@ export async function getWorkspaceById(id: string) {
   });
 }
 
-export async function isOnboardingV2Done(workspaceId: string): Promise<boolean> {
+export async function isOnboardingV2Done(
+  workspaceId: string,
+): Promise<boolean> {
   const workspace = await prisma.workspace.findFirst({
     where: { id: workspaceId },
     select: { metadata: true },

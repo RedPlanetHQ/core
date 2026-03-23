@@ -22,6 +22,7 @@ import {
   Clock,
   Library,
   Plug,
+  LayoutDashboard,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -49,6 +50,11 @@ const data = {
       url: "/home/conversation",
       icon: MessageSquare,
       strict: true,
+    },
+    {
+      title: "Overview",
+      url: "/home/overview",
+      icon: LayoutDashboard,
     },
     // {
     //   title: "Integrations",
@@ -83,8 +89,10 @@ const data = {
 
 export function AppSidebar({
   conversationSources,
+  widgetsEnabled = false,
 }: {
   conversationSources: { source: string; count: number }[];
+  widgetsEnabled?: boolean;
 }) {
   const user = useUser();
   const navigate = useNavigate();
@@ -116,6 +124,9 @@ export function AppSidebar({
         e.preventDefault();
         setCommandBar(true);
       },
+      ...(widgetsEnabled
+        ? { "g o": whenNotEditing(() => navigate("/home/overview")) }
+        : {}),
       "g t": whenNotEditing(() => navigate("/home/tasks")),
       "g m": whenNotEditing(() => navigate("/home/memory")),
       "g d": whenNotEditing(() => navigate("/home/memory/documents")),
@@ -159,7 +170,11 @@ export function AppSidebar({
           </SidebarMenu>
         </SidebarHeader>
         <SidebarContent>
-          <NavMain items={data.navMain} />
+          <NavMain
+          items={data.navMain.filter(
+            (item) => item.url !== "/home/overview" || widgetsEnabled,
+          )}
+        />
           <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
             <UnreadConversations
               currentConversationId={params.conversationId}
