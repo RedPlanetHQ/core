@@ -49,8 +49,11 @@ export async function fetchAllPages<T>(
     }
 
     cursor = body.cursor;
+    const hasMore: boolean = body.has_more ?? !!cursor;
     pages++;
-  } while (cursor && pages < maxPages);
+
+    if (!hasMore) break;
+  } while (pages < maxPages);
 
   return results;
 }

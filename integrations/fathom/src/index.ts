@@ -7,12 +7,21 @@ import {
 } from '@redplanethq/sdk';
 
 import { integrationCreate } from './account-create';
+import { createActivityEvent } from './create-activity';
+import { identify } from './identify';
 import { callTool, getTools } from './mcp';
 import { handleSchedule } from './schedule';
+
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
+
+    case IntegrationEventType.IDENTIFY:
+      return await identify(eventPayload.integrationDefinition, eventPayload.eventBody);
+
+    case IntegrationEventType.PROCESS:
+      return createActivityEvent(eventPayload.eventBody.eventData, eventPayload.config);
 
     case IntegrationEventType.SYNC:
       return await handleSchedule(
@@ -73,6 +82,12 @@ class FathomCLI extends IntegrationCLI {
               label: 'API Key',
               placeholder: 'your-fathom-api-key',
               description: 'Found in Fathom → Settings → API Keys.',
+            },
+            {
+              name: 'webhook_secret',
+              label: 'Webhook Signing Secret',
+              placeholder: 'whsec_...',
+              description: 'Found alongside your API key in Fathom → Settings → API Keys.',
             },
           ],
         },

@@ -4,25 +4,61 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 import { callFirefliesAPI } from '../utils';
 
-// ─── Schemas ────────────────────────────────────────────────────────────────
+// ─── Shared ──────────────────────────────────────────────────────────────────
 
-const GetUserSchema = z.object({});
+const FormatSchema = z
+  .enum(['json', 'text'])
+  .optional()
+  .describe('Response format: "json" or "text" (default: "text")');
 
-const SearchTranscriptsSchema = z.object({
-  limit: z.number().optional().describe('Max number of transcripts to return'),
-  fromDate: z.string().optional().describe('Filter transcripts from this date (ISO 8601)'),
-  toDate: z.string().optional().describe('Filter transcripts up to this date (ISO 8601)'),
-  keyword: z.string().optional().describe('Search keyword to filter transcripts'),
-  mine: z
-    .boolean()
-    .optional()
-    .describe('If true, return only transcripts organized by the authenticated user'),
-  organizers: z.array(z.string()).optional().describe('Filter by organizer email addresses'),
-  participants: z.array(z.string()).optional().describe('Filter by participant email addresses'),
+// ─── Schemas ─────────────────────────────────────────────────────────────────
+
+const SearchSchema = z.object({
+  query: z
+    .string()
+    .describe(
+      'Search query with optional mini grammar. Supported tokens: keyword:"term", scope:title|sentences|all, from:YYYY-MM-DD, to:YYYY-MM-DD, limit:N, skip:N, organizers:email1,email2, participants:email1,email2, mine:true|false. If no tokens are present, the full string is treated as a keyword search.'
+    ),
+  format: FormatSchema,
+});
+
+const GetTranscriptsSchema = z.object({
+  keyword: z.string().optional().describe('Search term (max 255 chars)'),
+  fromDate: z.string().optional().describe('Filter from date (YYYY-MM-DD)'),
+  toDate: z.string().optional().describe('Filter to date (YYYY-MM-DD)'),
+  limit: z.number().optional().describe('Max results (max 50, default 10)'),
+  skip: z.number().optional().describe('Pagination offset'),
+  organizers: z.array(z.string()).optional().describe('Filter by organizer emails'),
+  participants: z.array(z.string()).optional().describe('Filter by participant emails'),
+  mine: z.boolean().optional().describe("Return only the authenticated user's meetings"),
+  format: FormatSchema,
 });
 
 const GetTranscriptSchema = z.object({
-  id: z.string().describe('The transcript ID'),
+  transcriptId: z.string().describe('Meeting ID'),
+});
+
+const FetchSchema = z.object({
+  id: z.string().describe('Meeting ID'),
+});
+
+const GetSummarySchema = z.object({
+  transcriptId: z.string().describe('Meeting ID'),
+});
+
+const GetUserSchema = z.object({
+  userId: z.string().optional().describe('User ID — omit to get the authenticated user'),
+});
+
+const GetUserGroupsSchema = z.object({
+  mine: z
+    .boolean()
+    .optional()
+    .describe('If true, return only groups the authenticated user belongs to'),
+});
+
+const GetUserContactsSchema = z.object({
+  format: FormatSchema,
 });
 
 const GetActiveMeetingsSchema = z.object({
@@ -50,26 +86,6 @@ const UploadAudioSchema = z.object({
   client_reference_id: z.string().optional().describe('Optional reference ID for tracking'),
 });
 
-const GetTranscriptByIdSchema = z.object({
-  id: z.string().describe('The transcript ID'),
-});
-
-const GetUserByIdSchema = z.object({
-  userId: z.string().describe('The Fireflies user ID (uid)'),
-});
-
-const GetUserGroupsSchema = z.object({
-  mine: z
-    .boolean()
-    .optional()
-    .describe('If true, return only groups the authenticated user belongs to'),
-});
-
-const ExecuteGraphQLSchema = z.object({
-  query: z.string().describe('A read-only GraphQL query string (must begin with "query")'),
-  variables: z.record(z.any()).optional().describe('Optional variables for the GraphQL query'),
-});
-
 const FetchAiAppOutputsSchema = z.object({
   app_id: z.string().optional().describe('Filter outputs by AI App ID'),
   transcript_id: z.string().optional().describe('Filter outputs by transcript/meeting ID'),
@@ -80,30 +96,72 @@ const UpdateMeetingTitleSchema = z.object({
   title: z.string().describe('The new title for the meeting'),
 });
 
-// ─── Tool Definitions ───────────────────────────────────────────────────────
+const ExecuteGraphQLSchema = z.object({
+  query: z.string().describe('A read-only GraphQL query string (must begin with "query")'),
+  variables: z.record(z.any()).optional().describe('Optional variables for the GraphQL query'),
+});
+
+// ─── Tool Definitions ─────────────────────────────────────────────────────────
 
 export async function getTools() {
   return [
+    // ── Official Fireflies MCP tools ──────────────────────────────────────────
     {
-      name: 'fireflies_get_user',
-      description: 'Get the authenticated Fireflies user profile and account statistics.',
-      inputSchema: zodToJsonSchema(GetUserSchema),
+      name: 'fireflies_search',
+      description:
+        'Advanced search for meeting transcripts using mini grammar syntax. Supports keyword, scope, date range, participant filters, and pagination in a single query string.',
+      inputSchema: zodToJsonSchema(SearchSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
-      name: 'fireflies_search_transcripts',
+      name: 'fireflies_get_transcripts',
       description:
-        'Search and list meeting transcripts with optional filters for date, keyword, organizer, or participants.',
-      inputSchema: zodToJsonSchema(SearchTranscriptsSchema),
+        'Query multiple meetings with structured filters. Returns meeting metadata and summaries (excludes detailed transcript sentences).',
+      inputSchema: zodToJsonSchema(GetTranscriptsSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
     {
       name: 'fireflies_get_transcript',
       description:
-        'Get full details of a meeting transcript including transcript text, speakers, summary, and action items.',
+        'Fetch detailed transcript sentences with speaker attribution and timestamps for a single meeting. Does not include summary data — use fireflies_get_summary for that.',
       inputSchema: zodToJsonSchema(GetTranscriptSchema),
       annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
     },
+    {
+      name: 'fireflies_fetch',
+      description:
+        'Retrieve complete meeting data including transcript sentences, summary, action items, and all metadata in a single call.',
+      inputSchema: zodToJsonSchema(FetchSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'fireflies_get_summary',
+      description:
+        'Fetch meeting summary by ID — keywords, action items, overview, topics discussed, and outline. Excludes transcript sentences.',
+      inputSchema: zodToJsonSchema(GetSummarySchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'fireflies_get_user',
+      description:
+        'Get user profile and account statistics. Returns the authenticated user when no userId is provided.',
+      inputSchema: zodToJsonSchema(GetUserSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'fireflies_get_usergroups',
+      description:
+        'Fetch user groups within the team, including group members. Optionally filter to only groups the authenticated user belongs to.',
+      inputSchema: zodToJsonSchema(GetUserGroupsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    {
+      name: 'fireflies_get_user_contacts',
+      description: 'Fetch contact list sorted by most recent meeting date.',
+      inputSchema: zodToJsonSchema(GetUserContactsSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    },
+    // ── Extra tools ───────────────────────────────────────────────────────────
     {
       name: 'fireflies_get_active_meetings',
       description: 'Get meetings currently in progress where Fireflies is active.',
@@ -125,34 +183,6 @@ export async function getTools() {
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false },
     },
     {
-      name: 'fireflies_get_transcript_by_id',
-      description:
-        'Fetch complete details for a specific transcript by ID, including paid-plan fields such as video URL and full meeting attendee list. Requires a paid Fireflies plan.',
-      inputSchema: zodToJsonSchema(GetTranscriptByIdSchema),
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    },
-    {
-      name: 'fireflies_get_user_by_id',
-      description:
-        'Fetch profile details for a specific Fireflies team member by their user ID (uid).',
-      inputSchema: zodToJsonSchema(GetUserByIdSchema),
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    },
-    {
-      name: 'fireflies_get_user_groups',
-      description:
-        'Fetch all user groups within the team, including group members. Optionally filter to only groups the authenticated user belongs to.',
-      inputSchema: zodToJsonSchema(GetUserGroupsSchema),
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
-    },
-    {
-      name: 'fireflies_execute_graphql',
-      description:
-        'Execute a raw read-only Fireflies GraphQL query and return the full response (data + errors). Use as a fallback when higher-level tools fail or to access fields not covered by other tools.',
-      inputSchema: zodToJsonSchema(ExecuteGraphQLSchema),
-      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false },
-    },
-    {
       name: 'fireflies_fetch_ai_app_outputs',
       description:
         'Fetch AI App outputs for specific apps or transcripts. Returns AI-generated results produced by Fireflies AI Apps for meetings.',
@@ -166,10 +196,96 @@ export async function getTools() {
       inputSchema: zodToJsonSchema(UpdateMeetingTitleSchema),
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
     },
+    {
+      name: 'fireflies_execute_graphql',
+      description:
+        'Execute a raw read-only Fireflies GraphQL query. Use as a fallback when higher-level tools fail or to access fields not covered by other tools.',
+      inputSchema: zodToJsonSchema(ExecuteGraphQLSchema),
+      annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: false },
+    },
   ];
 }
 
-// ─── Tool Dispatcher ────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(seconds: number): string {
+  if (!seconds && seconds !== 0) return '?';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60);
+  return `${m}:${s.toString().padStart(2, '0')}`;
+}
+
+function renderUser(u: any): string {
+  return [
+    `Name: ${u.name}`,
+    `Email: ${u.email}`,
+    `User ID: ${u.uid}`,
+    `Transcripts: ${u.num_transcripts ?? 'N/A'}`,
+    `Minutes logged: ${u.minutes_logged ?? 'N/A'}`,
+    `Recent transcript: ${u.recent_transcript ?? 'N/A'}`,
+    `Calendar integration: ${u.integrations?.calendar ?? 'None'}`,
+  ].join('\n');
+}
+
+function renderTranscriptMeta(t: any): string {
+  const parts = [
+    `ID: ${t.id}`,
+    `Title: ${t.title}`,
+    `Date: ${t.date_uploaded}`,
+    `Duration: ${t.duration ? `${Math.round(t.duration / 60)} min` : 'N/A'}`,
+    `Participants: ${t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A'}`,
+  ];
+  if (t.summary?.overview) parts.push(`Overview: ${t.summary.overview}`);
+  if (t.summary?.action_items) parts.push(`Action items: ${t.summary.action_items}`);
+  return parts.join('\n');
+}
+
+/**
+ * Parse mini grammar query string into transcripts query variables.
+ * Supports: keyword:"term", scope:title|sentences|all, from:YYYY-MM-DD,
+ * to:YYYY-MM-DD, limit:N, skip:N, organizers:e1,e2, participants:e1,e2, mine:true|false
+ */
+function parseSearchGrammar(query: string): Record<string, any> {
+  const result: Record<string, any> = {};
+
+  const extract = (pattern: RegExp): string | null => {
+    const m = query.match(pattern);
+    return m ? m[1] ?? m[2] ?? null : null;
+  };
+
+  const keyword = extract(/keyword:"([^"]+)"|keyword:(\S+)/);
+  if (keyword) result.keyword = keyword;
+
+  const from = extract(/from:(\S+)/);
+  if (from) result.fromDate = from;
+
+  const to = extract(/to:(\S+)/);
+  if (to) result.toDate = to;
+
+  const limit = extract(/limit:(\d+)/);
+  if (limit) result.limit = parseInt(limit, 10);
+
+  const skip = extract(/skip:(\d+)/);
+  if (skip) result.skip = parseInt(skip, 10);
+
+  const organizers = extract(/organizers:(\S+)/);
+  if (organizers) result.organizers = organizers.split(',');
+
+  const participants = extract(/participants:(\S+)/);
+  if (participants) result.participants = participants.split(',');
+
+  const mine = extract(/mine:(true|false)/);
+  if (mine) result.mine = mine === 'true';
+
+  // No tokens found — treat whole string as keyword
+  if (Object.keys(result).length === 0 && query.trim()) {
+    result.keyword = query.trim();
+  }
+
+  return result;
+}
+
+// ─── Tool Dispatcher ──────────────────────────────────────────────────────────
 
 export async function callTool(
   name: string,
@@ -178,157 +294,153 @@ export async function callTool(
 ) {
   try {
     switch (name) {
-      case 'fireflies_get_user': {
-        const query = `
-          query {
-            user {
-              uid
-              name
-              email
-              num_transcripts
-              recent_transcript
-              minutes_logged
-              integrations {
-                calendar
-              }
-            }
-          }
-        `;
+      // ── fireflies_search ───────────────────────────────────────────────────
+      case 'fireflies_search': {
+        const { query, format } = SearchSchema.parse(args);
+        const parsed = parseSearchGrammar(query);
 
-        const data = await callFirefliesAPI(config, query);
-        const u = data.user;
+        const pageLimit = parsed.limit ?? 10;
+        const pageSkip = parsed.skip ?? 0;
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: [
-                `Name: ${u.name}`,
-                `Email: ${u.email}`,
-                `User ID: ${u.uid}`,
-                `Transcripts: ${u.num_transcripts ?? 'N/A'}`,
-                `Minutes logged: ${u.minutes_logged ?? 'N/A'}`,
-                `Recent transcript: ${u.recent_transcript ?? 'N/A'}`,
-                `Calendar integration: ${u.integrations?.calendar ?? 'None'}`,
-              ].join('\n'),
-            },
-          ],
-        };
-      }
+        const params: Record<string, any> = { limit: pageLimit, skip: pageSkip };
+        if (parsed.keyword) params.keyword = parsed.keyword;
+        if (parsed.fromDate) params.fromDate = parsed.fromDate;
+        if (parsed.toDate) params.toDate = parsed.toDate;
+        if (parsed.mine !== undefined) params.mine = parsed.mine;
+        if (parsed.organizers) params.organizers = parsed.organizers;
+        if (parsed.participants) params.participants = parsed.participants;
 
-      case 'fireflies_search_transcripts': {
-        const { limit, fromDate, toDate, keyword, mine, organizers, participants } =
-          SearchTranscriptsSchema.parse(args);
-
-        const params: Record<string, any> = {};
-        if (limit !== undefined) params.limit = limit;
-        if (fromDate !== undefined) params.fromDate = fromDate;
-        if (toDate !== undefined) params.toDate = toDate;
-        if (keyword !== undefined) params.keyword = keyword;
-        if (mine !== undefined) params.mine = mine;
-        if (organizers !== undefined) params.organizers = organizers;
-        if (participants !== undefined) params.participants = participants;
-
-        const query = `
+        const gql = `
           query SearchTranscripts(
-            $limit: Int
-            $fromDate: DateTime
-            $toDate: DateTime
-            $keyword: String
-            $mine: Boolean
-            $organizers: [String]
-            $participants: [String]
+            $limit: Int $skip: Int $keyword: String
+            $fromDate: DateTime $toDate: DateTime
+            $mine: Boolean $organizers: [String] $participants: [String]
           ) {
             transcripts(
-              limit: $limit
-              fromDate: $fromDate
-              toDate: $toDate
-              keyword: $keyword
-              mine: $mine
-              organizers: $organizers
-              participants: $participants
+              limit: $limit skip: $skip keyword: $keyword
+              fromDate: $fromDate toDate: $toDate
+              mine: $mine organizers: $organizers participants: $participants
             ) {
-              id
-              title
-              date_uploaded
-              duration
-              participants {
-                displayName
-                email
-              }
-              summary {
-                action_items
-                overview
-                keywords
-              }
+              id title date_uploaded duration
+              participants { displayName email }
+              summary { action_items overview keywords }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, params);
+        const data = await callFirefliesAPI(config, gql, params);
         const transcripts = data.transcripts || [];
 
         if (transcripts.length === 0) {
           return { content: [{ type: 'text', text: 'No transcripts found.' }] };
         }
 
-        const list = transcripts
-          .map((t: any) => {
-            const parts = [
-              `ID: ${t.id}`,
-              `Title: ${t.title}`,
-              `Date: ${t.date_uploaded}`,
-              `Duration: ${t.duration ? `${Math.round(t.duration / 60)} min` : 'N/A'}`,
-              `Participants: ${t.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A'}`,
-            ];
-            if (t.summary?.overview) parts.push(`Overview: ${t.summary.overview}`);
-            if (t.summary?.action_items) parts.push(`Action items: ${t.summary.action_items}`);
-            return parts.join('\n');
-          })
-          .join('\n\n');
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(transcripts, null, 2) }] };
+        }
+
+        const hasMore = transcripts.length === pageLimit;
+        const nextSkip = pageSkip + transcripts.length;
+        const pagination = hasMore
+          ? `\n\n📄 More results available. Use skip:${nextSkip} in your query.`
+          : '';
 
         return {
           content: [
-            { type: 'text', text: `Found ${transcripts.length} transcript(s):\n\n${list}` },
+            {
+              type: 'text',
+              text:
+                `Found ${transcripts.length} transcript(s):\n\n` +
+                transcripts.map(renderTranscriptMeta).join('\n\n') +
+                pagination,
+            },
           ],
         };
       }
 
-      case 'fireflies_get_transcript': {
-        const { id } = GetTranscriptSchema.parse(args);
+      // ── fireflies_get_transcripts ──────────────────────────────────────────
+      case 'fireflies_get_transcripts': {
+        const { keyword, fromDate, toDate, limit, skip, organizers, participants, mine, format } =
+          GetTranscriptsSchema.parse(args);
 
-        const query = `
-          query GetTranscript($id: String!) {
-            transcript(id: $id) {
-              id
-              title
-              date_uploaded
-              duration
-              organizer_email
-              participants {
-                displayName
-                email
-              }
-              sentences {
-                speaker_name
-                raw_words
-                start_time
-                end_time
-              }
-              summary {
-                action_items
-                overview
-                keywords
-              }
+        const pageLimit = limit ?? 10;
+        const pageSkip = skip ?? 0;
+
+        const params: Record<string, any> = { limit: pageLimit, skip: pageSkip };
+        if (keyword) params.keyword = keyword;
+        if (fromDate) params.fromDate = fromDate;
+        if (toDate) params.toDate = toDate;
+        if (mine !== undefined) params.mine = mine;
+        if (organizers) params.organizers = organizers;
+        if (participants) params.participants = participants;
+
+        const gql = `
+          query GetTranscripts(
+            $limit: Int $skip: Int $keyword: String
+            $fromDate: DateTime $toDate: DateTime
+            $mine: Boolean $organizers: [String] $participants: [String]
+          ) {
+            transcripts(
+              limit: $limit skip: $skip keyword: $keyword
+              fromDate: $fromDate toDate: $toDate
+              mine: $mine organizers: $organizers participants: $participants
+            ) {
+              id title date_uploaded duration
+              participants { displayName email }
+              summary { action_items overview keywords }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, { id });
+        const data = await callFirefliesAPI(config, gql, params);
+        const transcripts = data.transcripts || [];
+
+        if (transcripts.length === 0) {
+          return { content: [{ type: 'text', text: 'No transcripts found.' }] };
+        }
+
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(transcripts, null, 2) }] };
+        }
+
+        const hasMore = transcripts.length === pageLimit;
+        const nextSkip = pageSkip + transcripts.length;
+        const pagination = hasMore
+          ? `\n\n📄 More results available. Use skip: ${nextSkip} to fetch the next page.`
+          : '';
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text:
+                `Found ${transcripts.length} transcript(s) (skip: ${pageSkip}, limit: ${pageLimit}):\n\n` +
+                transcripts.map(renderTranscriptMeta).join('\n\n') +
+                pagination,
+            },
+          ],
+        };
+      }
+
+      // ── fireflies_get_transcript ───────────────────────────────────────────
+      case 'fireflies_get_transcript': {
+        const { transcriptId } = GetTranscriptSchema.parse(args);
+
+        const gql = `
+          query GetTranscript($id: String!) {
+            transcript(id: $id) {
+              id title date_uploaded duration organizer_email
+              participants { displayName email }
+              sentences { speaker_name raw_words start_time end_time }
+            }
+          }
+        `;
+
+        const data = await callFirefliesAPI(config, gql, { id: transcriptId });
         const t = data.transcript;
 
         if (!t) {
-          return { content: [{ type: 'text', text: `Transcript ${id} not found.` }] };
+          return { content: [{ type: 'text', text: `Transcript ${transcriptId} not found.` }] };
         }
 
         const participants =
@@ -338,199 +450,44 @@ export async function callTool(
             ?.map((s: any) => `[${formatTime(s.start_time)}] ${s.speaker_name}: ${s.raw_words}`)
             .join('\n') || 'No transcript text available.';
 
-        const parts = [
-          `ID: ${t.id}`,
-          `Title: ${t.title}`,
-          `Date: ${t.date_uploaded}`,
-          `Duration: ${t.duration ? `${Math.round(t.duration / 60)} min` : 'N/A'}`,
-          `Organizer: ${t.organizer_email || 'N/A'}`,
-          `Participants: ${participants}`,
-        ];
-
-        if (t.summary?.overview) parts.push(`\nOverview:\n${t.summary.overview}`);
-        if (t.summary?.action_items) parts.push(`\nAction items:\n${t.summary.action_items}`);
-        if (t.summary?.keywords) parts.push(`\nKeywords: ${t.summary.keywords}`);
-        parts.push(`\nTranscript:\n${transcriptText}`);
-
-        return { content: [{ type: 'text', text: parts.join('\n') }] };
-      }
-
-      case 'fireflies_get_active_meetings': {
-        const { states } = GetActiveMeetingsSchema.parse(args);
-
-        const query = `
-          query GetActiveMeetings($states: [String]) {
-            live_meetings(states: $states) {
-              id
-              state
-              organizer
-              meeting_link
-              started_at
-              participants {
-                displayName
-                email
-              }
-            }
-          }
-        `;
-
-        const data = await callFirefliesAPI(config, query, states ? { states } : {});
-        const meetings = data.live_meetings || [];
-
-        if (meetings.length === 0) {
-          return { content: [{ type: 'text', text: 'No active meetings found.' }] };
-        }
-
-        const list = meetings
-          .map((m: any) => {
-            const participants =
-              m.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
-            return [
-              `ID: ${m.id}`,
-              `State: ${m.state}`,
-              `Organizer: ${m.organizer || 'N/A'}`,
-              `Meeting link: ${m.meeting_link || 'N/A'}`,
-              `Started at: ${m.started_at || 'N/A'}`,
-              `Participants: ${participants}`,
-            ].join('\n');
-          })
-          .join('\n\n');
-
-        return {
-          content: [
-            { type: 'text', text: `Found ${meetings.length} active meeting(s):\n\n${list}` },
-          ],
-        };
-      }
-
-      case 'fireflies_ask_fred': {
-        const {
-          query: userQuery,
-          transcript_id,
-          fromDate,
-          toDate,
-          format_mode,
-        } = AskFredSchema.parse(args);
-
-        const filters: Record<string, any> = {};
-        if (fromDate) filters.fromDate = fromDate;
-        if (toDate) filters.toDate = toDate;
-
-        const mutation = `
-          mutation AskFred(
-            $query: String!
-            $transcript_id: String
-            $filters: AskFredFilters
-            $format_mode: String
-          ) {
-            createAskFredThread(
-              query: $query
-              transcript_id: $transcript_id
-              filters: $filters
-              format_mode: $format_mode
-            ) {
-              thread_id
-              message_id
-              answer
-              suggested_queries
-            }
-          }
-        `;
-
-        const variables: Record<string, any> = { query: userQuery };
-        if (transcript_id) variables.transcript_id = transcript_id;
-        if (Object.keys(filters).length > 0) variables.filters = filters;
-        if (format_mode) variables.format_mode = format_mode;
-
-        const data = await callFirefliesAPI(config, mutation, variables);
-        const result = data.createAskFredThread;
-
-        const parts = [`Answer:\n${result.answer}`];
-        if (result.suggested_queries?.length) {
-          parts.push(
-            `\nSuggested follow-up questions:\n${result.suggested_queries.map((q: string) => `- ${q}`).join('\n')}`
-          );
-        }
-
-        return { content: [{ type: 'text', text: parts.join('\n') }] };
-      }
-
-      case 'fireflies_upload_audio': {
-        const { meeting_link, title, custom_language, client_reference_id } =
-          UploadAudioSchema.parse(args);
-
-        const input: Record<string, any> = { meeting_link, title };
-        if (custom_language) input.custom_language = custom_language;
-        if (client_reference_id) input.client_reference_id = client_reference_id;
-
-        const mutation = `
-          mutation UploadAudio($input: UploadAudioInput!) {
-            uploadAudio(input: $input) {
-              success
-              title
-              message
-            }
-          }
-        `;
-
-        const data = await callFirefliesAPI(config, mutation, { input });
-        const result = data.uploadAudio;
-
         return {
           content: [
             {
               type: 'text',
-              text: result.success
-                ? `Audio submitted for transcription.\nTitle: ${result.title}\n${result.message || ''}`
-                : `Upload failed: ${result.message || 'Unknown error'}`,
+              text: [
+                `ID: ${t.id}`,
+                `Title: ${t.title}`,
+                `Date: ${t.date_uploaded}`,
+                `Duration: ${t.duration ? `${Math.round(t.duration / 60)} min` : 'N/A'}`,
+                `Organizer: ${t.organizer_email || 'N/A'}`,
+                `Participants: ${participants}`,
+                `\nTranscript:\n${transcriptText}`,
+              ].join('\n'),
             },
           ],
         };
       }
 
-      case 'fireflies_get_transcript_by_id': {
-        const { id } = GetTranscriptByIdSchema.parse(args);
+      // ── fireflies_fetch ────────────────────────────────────────────────────
+      case 'fireflies_fetch': {
+        const { id } = FetchSchema.parse(args);
 
-        const query = `
-          query GetTranscriptById($id: String!) {
+        const gql = `
+          query FetchMeeting($id: String!) {
             transcript(id: $id) {
-              id
-              title
-              date_uploaded
-              duration
-              organizer_email
-              video_url
-              participants {
-                displayName
-                email
-              }
-              meeting_attendees {
-                displayName
-                email
-                phoneNumber
-                name
-                location
-              }
-              sentences {
-                speaker_name
-                raw_words
-                start_time
-                end_time
-              }
+              id title date_uploaded duration organizer_email video_url
+              participants { displayName email }
+              meeting_attendees { displayName email phoneNumber name location }
+              sentences { speaker_name raw_words start_time end_time }
               summary {
-                action_items
-                overview
-                keywords
-                shorthand_bullet
-                bullet_gist
-                gist
-                short_summary
+                action_items overview keywords
+                gist short_summary bullet_gist shorthand_bullet
               }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, { id });
+        const data = await callFirefliesAPI(config, gql, { id });
         const t = data.transcript;
 
         if (!t) {
@@ -569,68 +526,96 @@ export async function callTool(
         return { content: [{ type: 'text', text: parts.join('\n') }] };
       }
 
-      case 'fireflies_get_user_by_id': {
-        const { userId } = GetUserByIdSchema.parse(args);
+      // ── fireflies_get_summary ──────────────────────────────────────────────
+      case 'fireflies_get_summary': {
+        const { transcriptId } = GetSummarySchema.parse(args);
 
-        const query = `
-          query GetUserById($userId: String!) {
-            user(id: $userId) {
-              uid
-              name
-              email
-              num_transcripts
-              recent_transcript
-              minutes_logged
-              integrations {
-                calendar
+        const gql = `
+          query GetSummary($id: String!) {
+            transcript(id: $id) {
+              id title date_uploaded
+              summary {
+                action_items overview keywords
+                gist short_summary bullet_gist shorthand_bullet
               }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, { userId });
+        const data = await callFirefliesAPI(config, gql, { id: transcriptId });
+        const t = data.transcript;
+
+        if (!t) {
+          return { content: [{ type: 'text', text: `Transcript ${transcriptId} not found.` }] };
+        }
+
+        const s = t.summary;
+        if (!s) {
+          return {
+            content: [{ type: 'text', text: `No summary available for transcript ${transcriptId}.` }],
+          };
+        }
+
+        const parts = [`ID: ${t.id}`, `Title: ${t.title}`, `Date: ${t.date_uploaded}`];
+        if (s.gist) parts.push(`\nGist: ${s.gist}`);
+        if (s.overview) parts.push(`\nOverview:\n${s.overview}`);
+        if (s.short_summary) parts.push(`\nShort summary:\n${s.short_summary}`);
+        if (s.action_items) parts.push(`\nAction items:\n${s.action_items}`);
+        if (s.keywords) parts.push(`\nKeywords: ${s.keywords}`);
+        if (s.bullet_gist) parts.push(`\nKey points:\n${s.bullet_gist}`);
+        if (s.shorthand_bullet) parts.push(`\nBullet notes:\n${s.shorthand_bullet}`);
+
+        return { content: [{ type: 'text', text: parts.join('\n') }] };
+      }
+
+      // ── fireflies_get_user ─────────────────────────────────────────────────
+      case 'fireflies_get_user': {
+        const { userId } = GetUserSchema.parse(args);
+
+        const gql = userId
+          ? `
+            query GetUserById($userId: String!) {
+              user(id: $userId) {
+                uid name email num_transcripts recent_transcript minutes_logged
+                integrations { calendar }
+              }
+            }
+          `
+          : `
+            query {
+              user {
+                uid name email num_transcripts recent_transcript minutes_logged
+                integrations { calendar }
+              }
+            }
+          `;
+
+        const data = await callFirefliesAPI(config, gql, userId ? { userId } : undefined);
         const u = data.user;
 
         if (!u) {
-          return { content: [{ type: 'text', text: `User ${userId} not found.` }] };
+          return {
+            content: [{ type: 'text', text: userId ? `User ${userId} not found.` : 'User not found.' }],
+          };
         }
 
-        return {
-          content: [
-            {
-              type: 'text',
-              text: [
-                `Name: ${u.name}`,
-                `Email: ${u.email}`,
-                `User ID: ${u.uid}`,
-                `Transcripts: ${u.num_transcripts ?? 'N/A'}`,
-                `Minutes logged: ${u.minutes_logged ?? 'N/A'}`,
-                `Recent transcript: ${u.recent_transcript ?? 'N/A'}`,
-                `Calendar integration: ${u.integrations?.calendar ?? 'None'}`,
-              ].join('\n'),
-            },
-          ],
-        };
+        return { content: [{ type: 'text', text: renderUser(u) }] };
       }
 
-      case 'fireflies_get_user_groups': {
+      // ── fireflies_get_usergroups ───────────────────────────────────────────
+      case 'fireflies_get_usergroups': {
         const { mine } = GetUserGroupsSchema.parse(args);
 
-        const query = `
+        const gql = `
           query GetUserGroups($mine: Boolean) {
             userGroups(mine: $mine) {
-              id
-              name
-              members {
-                uid
-                name
-                email
-              }
+              id name
+              members { uid name email }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, mine !== undefined ? { mine } : {});
+        const data = await callFirefliesAPI(config, gql, mine !== undefined ? { mine } : {});
         const groups = data.userGroups || [];
 
         if (groups.length === 0) {
@@ -651,28 +636,158 @@ export async function callTool(
         };
       }
 
-      case 'fireflies_execute_graphql': {
-        const { query, variables } = ExecuteGraphQLSchema.parse(args);
+      // ── fireflies_get_user_contacts ────────────────────────────────────────
+      case 'fireflies_get_user_contacts': {
+        const { format } = GetUserContactsSchema.parse(args);
 
-        const trimmed = query.trim().toLowerCase();
-        if (!trimmed.startsWith('query') && !trimmed.startsWith('{')) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: 'Error: Only read-only queries are allowed. The query must start with "query" or "{".',
-              },
-            ],
-          };
+        const gql = `
+          query {
+            contacts {
+              email
+              name
+              profilePic
+              lastMeetingDate
+            }
+          }
+        `;
+
+        const data = await callFirefliesAPI(config, gql);
+        const contacts = data.contacts || [];
+
+        if (contacts.length === 0) {
+          return { content: [{ type: 'text', text: 'No contacts found.' }] };
         }
 
-        const data = await callFirefliesAPI(config, query, variables);
+        if (format === 'json') {
+          return { content: [{ type: 'text', text: JSON.stringify(contacts, null, 2) }] };
+        }
+
+        const list = contacts
+          .map(
+            (c: any) =>
+              `${c.name || '(no name)'} <${c.email}>${c.lastMeetingDate ? ` — last met: ${c.lastMeetingDate}` : ''}`
+          )
+          .join('\n');
 
         return {
-          content: [{ type: 'text', text: JSON.stringify(data, null, 2) }],
+          content: [{ type: 'text', text: `Found ${contacts.length} contact(s):\n\n${list}` }],
         };
       }
 
+      // ── fireflies_get_active_meetings ──────────────────────────────────────
+      case 'fireflies_get_active_meetings': {
+        const { states } = GetActiveMeetingsSchema.parse(args);
+
+        const gql = `
+          query GetActiveMeetings($states: [String]) {
+            live_meetings(states: $states) {
+              id state organizer meeting_link started_at
+              participants { displayName email }
+            }
+          }
+        `;
+
+        const data = await callFirefliesAPI(config, gql, states ? { states } : {});
+        const meetings = data.live_meetings || [];
+
+        if (meetings.length === 0) {
+          return { content: [{ type: 'text', text: 'No active meetings found.' }] };
+        }
+
+        const list = meetings
+          .map((m: any) => {
+            const participants =
+              m.participants?.map((p: any) => p.displayName || p.email).join(', ') || 'N/A';
+            return [
+              `ID: ${m.id}`,
+              `State: ${m.state}`,
+              `Organizer: ${m.organizer || 'N/A'}`,
+              `Meeting link: ${m.meeting_link || 'N/A'}`,
+              `Started at: ${m.started_at || 'N/A'}`,
+              `Participants: ${participants}`,
+            ].join('\n');
+          })
+          .join('\n\n');
+
+        return {
+          content: [
+            { type: 'text', text: `Found ${meetings.length} active meeting(s):\n\n${list}` },
+          ],
+        };
+      }
+
+      // ── fireflies_ask_fred ─────────────────────────────────────────────────
+      case 'fireflies_ask_fred': {
+        const { query: userQuery, transcript_id, fromDate, toDate, format_mode } =
+          AskFredSchema.parse(args);
+
+        const filters: Record<string, any> = {};
+        if (fromDate) filters.fromDate = fromDate;
+        if (toDate) filters.toDate = toDate;
+
+        const mutation = `
+          mutation AskFred(
+            $query: String! $transcript_id: String
+            $filters: AskFredFilters $format_mode: String
+          ) {
+            createAskFredThread(
+              query: $query transcript_id: $transcript_id
+              filters: $filters format_mode: $format_mode
+            ) {
+              thread_id message_id answer suggested_queries
+            }
+          }
+        `;
+
+        const variables: Record<string, any> = { query: userQuery };
+        if (transcript_id) variables.transcript_id = transcript_id;
+        if (Object.keys(filters).length > 0) variables.filters = filters;
+        if (format_mode) variables.format_mode = format_mode;
+
+        const data = await callFirefliesAPI(config, mutation, variables);
+        const result = data.createAskFredThread;
+
+        const parts = [`Answer:\n${result.answer}`];
+        if (result.suggested_queries?.length) {
+          parts.push(
+            `\nSuggested follow-up questions:\n${result.suggested_queries.map((q: string) => `- ${q}`).join('\n')}`
+          );
+        }
+
+        return { content: [{ type: 'text', text: parts.join('\n') }] };
+      }
+
+      // ── fireflies_upload_audio ─────────────────────────────────────────────
+      case 'fireflies_upload_audio': {
+        const { meeting_link, title, custom_language, client_reference_id } =
+          UploadAudioSchema.parse(args);
+
+        const input: Record<string, any> = { meeting_link, title };
+        if (custom_language) input.custom_language = custom_language;
+        if (client_reference_id) input.client_reference_id = client_reference_id;
+
+        const mutation = `
+          mutation UploadAudio($input: UploadAudioInput!) {
+            uploadAudio(input: $input) { success title message }
+          }
+        `;
+
+        const data = await callFirefliesAPI(config, mutation, { input });
+        const result = data.uploadAudio;
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: result.success
+                ? `Audio submitted for transcription.\nTitle: ${result.title}\n${result.message || ''}`
+                : `Upload failed: ${result.message || 'Unknown error'}`,
+            },
+          ],
+        };
+      }
+
+      // ── fireflies_fetch_ai_app_outputs ─────────────────────────────────────
       case 'fireflies_fetch_ai_app_outputs': {
         const { app_id, transcript_id } = FetchAiAppOutputsSchema.parse(args);
 
@@ -680,21 +795,16 @@ export async function callTool(
         if (app_id) variables.app_id = app_id;
         if (transcript_id) variables.transcript_id = transcript_id;
 
-        const query = `
+        const gql = `
           query FetchAiAppOutputs($app_id: String, $transcript_id: String) {
             aiAppOutputs(app_id: $app_id, transcript_id: $transcript_id) {
-              app_id
-              transcript_id
-              title
-              outputs {
-                prompt_title
-                response
-              }
+              app_id transcript_id title
+              outputs { prompt_title response }
             }
           }
         `;
 
-        const data = await callFirefliesAPI(config, query, variables);
+        const data = await callFirefliesAPI(config, gql, variables);
         const outputs = data.aiAppOutputs || [];
 
         if (outputs.length === 0) {
@@ -721,19 +831,19 @@ export async function callTool(
           .join('\n\n---\n\n');
 
         return {
-          content: [{ type: 'text', text: `Found ${outputs.length} AI App output(s):\n\n${list}` }],
+          content: [
+            { type: 'text', text: `Found ${outputs.length} AI App output(s):\n\n${list}` },
+          ],
         };
       }
 
+      // ── fireflies_update_meeting_title ─────────────────────────────────────
       case 'fireflies_update_meeting_title': {
         const { id, title } = UpdateMeetingTitleSchema.parse(args);
 
         const mutation = `
           mutation UpdateMeetingTitle($id: String!, $title: String!) {
-            updateMeeting(input: { id: $id, title: $title }) {
-              id
-              title
-            }
+            updateMeeting(input: { id: $id, title: $title }) { id title }
           }
         `;
 
@@ -750,6 +860,26 @@ export async function callTool(
         };
       }
 
+      // ── fireflies_execute_graphql ──────────────────────────────────────────
+      case 'fireflies_execute_graphql': {
+        const { query, variables } = ExecuteGraphQLSchema.parse(args);
+
+        const trimmed = query.trim().toLowerCase();
+        if (!trimmed.startsWith('query') && !trimmed.startsWith('{')) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Error: Only read-only queries are allowed. The query must start with "query" or "{".',
+              },
+            ],
+          };
+        }
+
+        const data = await callFirefliesAPI(config, query, variables);
+        return { content: [{ type: 'text', text: JSON.stringify(data, null, 2) }] };
+      }
+
       default:
         return { content: [{ type: 'text', text: `Unknown tool: ${name}` }] };
     }
@@ -758,11 +888,4 @@ export async function callTool(
       error.response?.data?.errors?.[0]?.message || error.response?.data?.message || error.message;
     return { content: [{ type: 'text', text: `Error: ${errorMessage}` }] };
   }
-}
-
-function formatTime(seconds: number): string {
-  if (!seconds && seconds !== 0) return '?';
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
 }

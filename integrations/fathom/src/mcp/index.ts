@@ -201,15 +201,10 @@ export async function callTool(
 
       case 'fathom_get_meeting_transcript': {
         const { meeting_id } = GetMeetingTranscriptSchema.parse(args);
-        const transcript = await fathomGet(config.api_key, `/meetings/${meeting_id}/transcript`);
-
-        if (!transcript) {
-          return {
-            content: [{ type: 'text', text: `Transcript for meeting ${meeting_id} not found.` }],
-          };
-        }
-
-        const entries = Array.isArray(transcript) ? transcript : transcript?.data ?? [];
+        const entries = await fetchAllPages<any>(
+          config.api_key,
+          `/meetings/${meeting_id}/transcript`,
+        );
 
         if (entries.length === 0) {
           return { content: [{ type: 'text', text: 'Transcript is empty.' }] };
@@ -262,20 +257,10 @@ export async function callTool(
 
       case 'fathom_get_recording_transcript': {
         const { recording_id } = GetRecordingTranscriptSchema.parse(args);
-        const transcript = await fathomGet(
+        const entries = await fetchAllPages<any>(
           config.api_key,
           `/recordings/${recording_id}/transcript`,
         );
-
-        if (!transcript) {
-          return {
-            content: [
-              { type: 'text', text: `Transcript for recording ${recording_id} not found.` },
-            ],
-          };
-        }
-
-        const entries = Array.isArray(transcript) ? transcript : transcript?.data ?? [];
 
         if (entries.length === 0) {
           return { content: [{ type: 'text', text: 'Transcript is empty.' }] };
@@ -311,8 +296,7 @@ export async function callTool(
 
       case 'fathom_list_team_members': {
         const { team_id } = ListTeamMembersSchema.parse(args);
-        const members = await fathomGet(config.api_key, `/teams/${team_id}/members`);
-        const memberList = Array.isArray(members) ? members : members?.data ?? [];
+        const memberList = await fetchAllPages<any>(config.api_key, `/teams/${team_id}/members`);
 
         if (memberList.length === 0) {
           return { content: [{ type: 'text', text: 'No team members found.' }] };
