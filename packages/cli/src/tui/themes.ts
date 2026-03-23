@@ -1,7 +1,7 @@
 import chalk from 'chalk';
 
 export const editorTheme = {
-	borderColor: (s: string) => chalk.gray(s),
+	borderColor: (s: string) => chalk.black(s),
 	selectList: {
 		selectedPrefix: (s: string) => chalk.cyan(s),
 		selectedText: (s: string) => chalk.white(s),

@@ -272,9 +272,17 @@ export function startTuiApp(
 			tui.requestRender();
 
 			fetchConversationHistory(baseUrl, apiKey, conv.id)
-				.then(messages => {
+				.then(({messages, incognito: convIncognito}) => {
 					messagesContainer.removeChild(historyLoader);
 					historyLoader.stop();
+
+					if (convIncognito && !conversation.incognito) {
+						conversation.toggleIncognito();
+						if (!incognitoIndicatorVisible) {
+							tui.addChild(incognitoIndicator);
+							incognitoIndicatorVisible = true;
+						}
+					}
 
 					for (const msg of messages) {
 						const text = msg.parts
@@ -286,8 +294,11 @@ export function startTuiApp(
 
 						if (msg.role === 'user') {
 							addToMessages(
-								new Text(chalk.dim('\u2502 ') + chalk.white(text), 0, 0, text =>
-									chalk.bgHex('#3a3a3a').white(text),
+								new Text(
+									chalk.dim('\u276f ') + chalk.white(text),
+									0,
+									0,
+									(line: string) => chalk.bgHex('#3a3a3a').white(line),
 								),
 							);
 						} else {
@@ -357,7 +368,14 @@ export function startTuiApp(
 		const myRequestId = ++requestId;
 
 		// User bubble
-		addToMessages(new Text(chalk.dim('\u2502 ') + chalk.white(message), 0, 0));
+		addToMessages(
+			new Text(
+				chalk.dim('\u276f ') + chalk.white(message),
+				0,
+				0,
+				(line: string) => chalk.bgHex('#3a3a3a').white(line),
+			),
+		);
 		addToMessages(new Spacer(1));
 
 		// Loader

@@ -60,9 +60,6 @@ class WhoopCLI extends IntegrationCLI {
       description:
         'Connect your Whoop wearable to track recovery scores, sleep performance, strain, and workouts. Get insights into your health and fitness data.',
       icon: 'whoop',
-      schedule: {
-        frequency: '0 */6 * * *',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://api.prod.whoop.com/oauth/oauth2/token',

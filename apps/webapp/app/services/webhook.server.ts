@@ -16,6 +16,7 @@ export class WebhookService {
     integrationAccountId: string | undefined,
     eventHeaders: EventHeaders,
     eventBody: EventBody,
+    rawBody?: string,
   ): Promise<{ challenge?: string; status: string }> {
     logger.debug(`Received webhook ${sourceName}`, {
       where: "WebhookService.handleEvents",
@@ -38,6 +39,7 @@ export class WebhookService {
             webhookData: {
               eventHeaders,
               event: { ...eventBody },
+              rawBody,
             },
             integrationDefinition,
           });
@@ -116,6 +118,18 @@ export class WebhookService {
     await Promise.all(
       integrationAccounts.map(async (integrationAccount) => {
         try {
+          // Skip if the user has not enabled automatic activity reading
+          const autoActivityRead = (
+            integrationAccount.settings as Record<string, unknown> | null
+          )?.autoActivityRead;
+          if (!autoActivityRead) {
+            logger.debug(
+              `Skipping webhook for ${sourceName} — autoActivityRead not enabled`,
+              { integrationAccountId: integrationAccount.id },
+            );
+            return;
+          }
+
           logger.debug(`Processing webhook for ${sourceName}`, {
             integrationAccountId: integrationAccount.id,
             integrationSlug: integrationAccount.integrationDefinition.slug,

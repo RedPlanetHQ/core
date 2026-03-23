@@ -286,11 +286,16 @@ export interface HistoryMessage {
 	parts: Array<{type: string; text?: string}>;
 }
 
+export interface ConversationDetail {
+	messages: HistoryMessage[];
+	incognito: boolean;
+}
+
 export async function fetchConversationHistory(
 	baseUrl: string,
 	apiKey: string,
 	conversationId: string,
-): Promise<HistoryMessage[]> {
+): Promise<ConversationDetail> {
 	const response = await fetch(
 		`${baseUrl}/api/v1/conversation/${conversationId}`,
 		{
@@ -306,8 +311,12 @@ export async function fetchConversationHistory(
 
 	const data = (await response.json()) as {
 		ConversationHistory: HistoryMessage[];
+		incognito: boolean;
 	};
-	return data.ConversationHistory ?? [];
+	return {
+		messages: data.ConversationHistory ?? [],
+		incognito: data.incognito ?? false,
+	};
 }
 
 // ── Create conversation ───────────────────────────────────────────────────────

@@ -32,8 +32,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
       eventHeaders[key] = value;
     });
 
-    // Parse body
-    const eventBody = await request.json();
+    // Read raw body first (needed for signature verification e.g. Stripe)
+    const rawBody = await request.text();
+    let eventBody: Record<string, unknown>;
+    try {
+      eventBody = JSON.parse(rawBody);
+    } catch {
+      eventBody = {};
+    }
 
     logger.debug(`Webhook received for ${sourceName}`, {
       integrationAccountId,
@@ -69,6 +75,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       integrationAccountId,
       eventHeaders,
       eventBody,
+      rawBody,
     );
 
     return json({ status: "acknowledged" }, { status: 200 });
