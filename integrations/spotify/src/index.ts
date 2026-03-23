@@ -35,7 +35,15 @@ export async function run(eventPayload: IntegrationEventPayload) {
       const config = eventPayload.config as any;
       const { name, arguments: args } = eventPayload.eventBody;
 
-      const result = await callTool(name, args, config);
+      const result = await callTool(
+        name,
+        args,
+        integrationDefinition.config.clientId,
+        integrationDefinition.config.clientSecret,
+        config?.redirect_uri,
+        config,
+      );
+
       return result;
     }
 
@@ -59,29 +67,27 @@ class SpotifyCLI extends IntegrationCLI {
       name: 'Spotify',
       key: 'spotify',
       description:
-        'Connect your Spotify Developer app to search tracks, artists, albums, and playlists from the Spotify catalog.',
+        'Connect your Spotify account to access your music, control playback, view currently playing tracks, recently played history, saved library, and search the Spotify catalog.',
       icon: 'spotify',
       mcp: {
         type: 'cli',
       },
       auth: {
-        api_key: {
-          fields: [
-            {
-              name: 'client_id',
-              label: 'Client ID',
-              placeholder: 'e.g. 1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d',
-              description:
-                'Your Spotify app Client ID. Found in the Spotify Developer Dashboard → Your App → Settings.',
-            },
-            {
-              name: 'client_secret',
-              label: 'Client Secret',
-              placeholder: 'e.g. a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6',
-              description:
-                'Your Spotify app Client Secret. Found in the Spotify Developer Dashboard → Your App → Settings.',
-            },
+        OAuth2: {
+          token_url: 'https://accounts.spotify.com/api/token',
+          authorization_url: 'https://accounts.spotify.com/authorize',
+          scopes: [
+            'user-read-playback-state',
+            'user-read-currently-playing',
+            'user-read-recently-played',
+            'user-library-read',
+            'playlist-read-private',
+            'playlist-read-collaborative',
+            'user-read-email',
+            'user-read-private',
           ],
+          scope_separator: ' ',
+          token_request_auth_method: 'basic',
         },
       },
     };

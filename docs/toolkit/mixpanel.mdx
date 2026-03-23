@@ -1,0 +1,91 @@
+---
+title: "Mixpanel"
+description: "Query analytics events, users, funnels, retention, and annotations from your Mixpanel project"
+---
+
+## Overview
+
+Connect Mixpanel to CORE to query your product analytics directly from your workspace. Access 10 tools covering events, user profiles, funnels, retention cohorts, and timeline annotations — all using your Mixpanel Service Account credentials.
+
+## Setup Guide
+
+- `Authentication Type`: Service Account (HTTP Basic Auth)
+
+## How to Connect
+
+1. Go to your Mixpanel project → **Settings** → **Service Accounts**
+2. Create a new Service Account and copy the **Username** and **Secret**
+3. Note your **Project ID** from **Settings** → **Project Details**
+4. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+5. Click on the **Mixpanel** card
+6. Enter your Service Account Username, Secret, Project ID, and region (US or EU)
+7. Click **Connect** — CORE validates the credentials and saves the integration
+
+## Available MCP Tools
+
+| Tool Name | Description |
+|-----------|-------------|
+| `mixpanel_get_event_counts` | Count a specific event over a date range, optionally segmented by a property |
+| `mixpanel_get_top_events` | Get the most frequently occurring events in the past 7 days |
+| `mixpanel_export_events` | Export raw event records for a date range, with optional filters |
+| `mixpanel_search_users` | Search user profiles by name, email, or distinct_id |
+| `mixpanel_get_user` | Get a specific user's full profile by distinct_id |
+| `mixpanel_list_funnels` | List all saved funnels with their IDs and names |
+| `mixpanel_get_funnel` | Get conversion data for a funnel over a date range |
+| `mixpanel_get_retention` | Get user retention cohort data over a date range |
+| `mixpanel_list_annotations` | List timeline annotations (releases, incidents, experiments) |
+| `mixpanel_create_annotation` | Add a new annotation to the project timeline |
+
+## Use Cases
+
+### Check daily signups
+
+```
+"How many users signed up each day this week?"
+```
+
+Uses `mixpanel_get_event_counts` with `event: "Signed Up"`, `unit: "day"`.
+
+### See what events are firing the most
+
+```
+"What are the top events in my Mixpanel project?"
+```
+
+Uses `mixpanel_get_top_events` — returns top 20 events by count over the last 7 days.
+
+### Look up a user
+
+```
+"Find the Mixpanel profile for user@example.com"
+```
+
+Uses `mixpanel_search_users` with the email, then `mixpanel_get_user` for full profile details.
+
+### Check funnel conversion
+
+```
+"What's the conversion rate on my Onboarding funnel this month?"
+```
+
+Uses `mixpanel_list_funnels` to get the funnel ID, then `mixpanel_get_funnel` for step-by-step conversion data.
+
+### Check retention
+
+```
+"What's our Day 7 retention for users who signed up last month?"
+```
+
+Uses `mixpanel_get_retention` with `born_event: "Signed Up"`, `unit: "day"`, `interval_count: 7`.
+
+### Mark a release
+
+```
+"Add an annotation for today's v2.0 deployment"
+```
+
+Uses `mixpanel_create_annotation` with the description and today's date.
+
+## Need Help?
+
+Join our [Discord community](https://discord.gg/dVTC3BmgEq) for support in **#core-support**

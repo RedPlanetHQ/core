@@ -3,12 +3,16 @@ import axios, { AxiosInstance } from 'axios';
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
-// ─── Client ─────────────────────────────────────────────────────────────────
+// ─── Auth & Client ────────────────────────────────────────────────────────────
 
-async function getAccessToken(clientId: string, clientSecret: string): Promise<string> {
+async function refreshAccessToken(
+  clientId: string,
+  clientSecret: string,
+  refreshToken: string,
+): Promise<string> {
   const response = await axios.post(
     'https://accounts.spotify.com/api/token',
-    new URLSearchParams({ grant_type: 'client_credentials' }),
+    new URLSearchParams({ grant_type: 'refresh_token', refresh_token: refreshToken }),
     {
       headers: {
         Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
@@ -19,19 +23,46 @@ async function getAccessToken(clientId: string, clientSecret: string): Promise<s
   return response.data.access_token as string;
 }
 
-async function buildClient(config: Record<string, string>): Promise<AxiosInstance> {
-  const token = await getAccessToken(config.client_id, config.client_secret);
+async function buildClient(
+  clientId: string,
+  clientSecret: string,
+  config: Record<string, string>,
+): Promise<AxiosInstance> {
+  let accessToken = config.access_token;
+  const expiresAt = config.expires_at ? parseInt(config.expires_at) : 0;
+
+  // Refresh if expired or expiring within 60 seconds
+  if (expiresAt && Date.now() > expiresAt - 60_000 && config.refresh_token) {
+    accessToken = await refreshAccessToken(clientId, clientSecret, config.refresh_token);
+  }
+
   return axios.create({
     baseURL: 'https://api.spotify.com/v1',
     headers: {
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
   });
 }
 
-// ─── Schemas ─────────────────────────────────────────────────────────────────
+// ─── Schemas ──────────────────────────────────────────────────────────────────
 
+// User-specific
+const GetRecentlyPlayedSchema = z.object({
+  limit: z.number().optional().default(20).describe('Number of items to return (1-50)'),
+});
+
+const GetSavedTracksSchema = z.object({
+  limit: z.number().optional().default(20).describe('Number of saved tracks to return (1-50)'),
+  offset: z.number().optional().default(0).describe('Offset for pagination'),
+});
+
+const GetUserPlaylistsSchema = z.object({
+  limit: z.number().optional().default(20).describe('Number of playlists to return (1-50)'),
+  offset: z.number().optional().default(0).describe('Offset for pagination'),
+});
+
+// Catalog
 const SearchTracksSchema = z.object({
   query: z.string().describe('Search query string (e.g. "bohemian rhapsody" or "artist:Queen")'),
   limit: z.number().optional().default(10).describe('Number of results to return (1-50)'),
@@ -70,10 +101,43 @@ const GetAlbumTracksSchema = z.object({
   limit: z.number().optional().default(20).describe('Number of tracks to return'),
 });
 
-// ─── Tool Definitions ────────────────────────────────────────────────────────
+// ─── Tool Definitions ─────────────────────────────────────────────────────────
 
 export function getTools() {
   return [
+    // User-specific tools
+    {
+      name: 'get_user_profile',
+      description: "Get the current user's Spotify profile",
+      inputSchema: zodToJsonSchema(z.object({})),
+    },
+    {
+      name: 'get_currently_playing',
+      description: "Get the track currently playing on the user's Spotify account",
+      inputSchema: zodToJsonSchema(z.object({})),
+    },
+    {
+      name: 'get_playback_state',
+      description:
+        "Get the user's current playback state including device, track, progress, shuffle, and repeat status",
+      inputSchema: zodToJsonSchema(z.object({})),
+    },
+    {
+      name: 'get_recently_played',
+      description: 'Get tracks recently played by the user',
+      inputSchema: zodToJsonSchema(GetRecentlyPlayedSchema),
+    },
+    {
+      name: 'get_saved_tracks',
+      description: "Get tracks saved in the user's Spotify library",
+      inputSchema: zodToJsonSchema(GetSavedTracksSchema),
+    },
+    {
+      name: 'get_user_playlists',
+      description: "Get the current user's playlists",
+      inputSchema: zodToJsonSchema(GetUserPlaylistsSchema),
+    },
+    // Catalog tools
     {
       name: 'search_tracks',
       description: 'Search for tracks in the Spotify catalog',
@@ -117,17 +181,20 @@ export function getTools() {
   ];
 }
 
-// ─── Tool Dispatcher ─────────────────────────────────────────────────────────
+// ─── Tool Dispatcher ──────────────────────────────────────────────────────────
 
 export async function callTool(
   name: string,
   args: Record<string, any>,
+  clientId: string,
+  clientSecret: string,
+  _redirectUri: string,
   config: Record<string, string>,
 ) {
   let client: AxiosInstance;
 
   try {
-    client = await buildClient(config);
+    client = await buildClient(clientId, clientSecret, config);
   } catch {
     return {
       content: [{ type: 'text', text: 'Failed to authenticate with Spotify' }],
@@ -139,6 +206,61 @@ export async function callTool(
     let result: any = null;
 
     switch (name) {
+      // ── User-specific ──────────────────────────────────────────────────────
+
+      case 'get_user_profile': {
+        const res = await client.get('/me');
+        result = res.data;
+        break;
+      }
+
+      case 'get_currently_playing': {
+        const res = await client.get('/me/player/currently-playing');
+        result =
+          res.status === 204
+            ? { playing: false, message: 'Nothing is currently playing' }
+            : res.data;
+        break;
+      }
+
+      case 'get_playback_state': {
+        const res = await client.get('/me/player');
+        result =
+          res.status === 204
+            ? { active: false, message: 'No active playback device found' }
+            : res.data;
+        break;
+      }
+
+      case 'get_recently_played': {
+        const parsed = GetRecentlyPlayedSchema.parse(args);
+        const res = await client.get('/me/player/recently-played', {
+          params: { limit: parsed.limit },
+        });
+        result = res.data;
+        break;
+      }
+
+      case 'get_saved_tracks': {
+        const parsed = GetSavedTracksSchema.parse(args);
+        const res = await client.get('/me/tracks', {
+          params: { limit: parsed.limit, offset: parsed.offset },
+        });
+        result = res.data;
+        break;
+      }
+
+      case 'get_user_playlists': {
+        const parsed = GetUserPlaylistsSchema.parse(args);
+        const res = await client.get('/me/playlists', {
+          params: { limit: parsed.limit, offset: parsed.offset },
+        });
+        result = res.data;
+        break;
+      }
+
+      // ── Catalog ────────────────────────────────────────────────────────────
+
       case 'search_tracks': {
         const parsed = SearchTracksSchema.parse(args);
         const res = await client.get('/search', {

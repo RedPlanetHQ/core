@@ -12,7 +12,7 @@
     "mixpanel": "./bin/index.cjs"
   },
   "scripts": {
-    "build": "rimraf bin && tsup",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
