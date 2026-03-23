@@ -7,15 +7,32 @@ import {
 import { fileURLToPath } from 'url';
 
 import { integrationCreate } from './account-create';
-import { handleSchedule } from './schedule';
+import { getTools, callTool } from './mcp';
+import { MixpanelConfig } from './utils';
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
     case IntegrationEventType.SETUP:
       return await integrationCreate(eventPayload.eventBody);
 
-    case IntegrationEventType.SYNC:
-      return await handleSchedule(eventPayload.config, eventPayload.state);
+    case IntegrationEventType.GET_TOOLS:
+      return getTools();
+
+    case IntegrationEventType.CALL_TOOL: {
+      const config = eventPayload.config as unknown as MixpanelConfig;
+
+      if (!config?.service_account_username || !config?.service_account_secret || !config?.project_id) {
+        return {
+          content: [{ type: 'text', text: 'Error: Mixpanel credentials not configured' }],
+          isError: true,
+        };
+      }
+
+      if (!config.region) config.region = 'US';
+
+      const { name, arguments: args } = eventPayload.eventBody;
+      return await callTool(name, args, config);
+    }
 
     default:
       return [
@@ -42,7 +59,7 @@ class MixpanelCLI extends IntegrationCLI {
       name: 'Mixpanel',
       key: 'mixpanel',
       description:
-        'Connect your Mixpanel project to CORE. Sync analytics events, user profiles, funnel metrics, retention cohorts, and annotations — all from your workspace.',
+        'Connect your Mixpanel project to CORE. Query analytics events, user profiles, funnels, retention, and annotations — all from your workspace.',
       icon: 'mixpanel',
       auth: {
         api_key: {
@@ -76,9 +93,6 @@ class MixpanelCLI extends IntegrationCLI {
             },
           ],
         },
-      },
-      schedule: {
-        frequency: '*/30 * * * *',
       },
     };
   }

@@ -1,29 +1,52 @@
 ---
 title: "Spotify"
-description: "Search and explore the Spotify music catalog"
+description: "Access your Spotify music, playback state, listening history, and explore the catalog"
 ---
 
 ## Overview
 
-Integrate Spotify to search and retrieve data from the Spotify catalog directly from CORE. Access 8 tools for tracks, artists, and albums using your Spotify Developer app credentials — no user OAuth flow required.
+Integrate Spotify to access your personal music data and the Spotify catalog directly from CORE. Access 14 tools covering your currently playing track, recently played history, saved library, playlists, and full catalog search.
 
 ## Setup Guide
 
-- `Authentication Type`: API Key (Client Credentials — Client ID + Client Secret)
+- `Authentication Type`: OAuth 2.0 (Spotify)
 
 ## How to Connect
 
-1. Go to the [Spotify Developer Dashboard](https://developer.spotify.com/dashboard)
-2. Create a new app (or use an existing one)
-3. Copy the **Client ID** and **Client Secret** from the app settings
-4. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
-5. Click on the **Spotify** card
-6. Enter your Client ID and Client Secret
-7. Click **Connect** — CORE validates the credentials and saves the integration
+1. Navigate to [CORE Dashboard](https://app.getcore.me) → **Integrations**
+2. Click on the **Spotify** card
+3. Click **Connect** to authorize CORE
+4. You'll be redirected to Spotify to authorize the application
+5. Grant the required permissions
+6. You'll be redirected back to CORE once connected
 
-> **Note**: Client Credentials auth provides access to the **public Spotify catalog only** (tracks, artists, albums, playlists). It does not access user-specific data such as listening history or playlists.
+## Scopes
+
+- `user-read-playback-state` - Read current playback state and device info
+- `user-read-currently-playing` - Read the currently playing track
+- `user-read-recently-played` - Read recently played tracks
+- `user-library-read` - Access saved tracks and albums
+- `playlist-read-private` - Read private playlists
+- `playlist-read-collaborative` - Read collaborative playlists
+- `user-read-email` - Read user email (used as account identifier)
+- `user-read-private` - Read user profile and subscription details
 
 ## Available MCP Tools
+
+<Tabs>
+  <Tab title="User & Playback">
+
+| Tool Name | Description |
+|-----------|-------------|
+| `get_user_profile` | Get the current user's Spotify profile (display name, followers, country) |
+| `get_currently_playing` | Get the track currently playing on the user's Spotify account |
+| `get_playback_state` | Get full playback state including device, progress, shuffle, and repeat |
+| `get_recently_played` | Get tracks recently played by the user (up to 50) |
+| `get_saved_tracks` | Get tracks saved in the user's Spotify library |
+| `get_user_playlists` | Get the current user's playlists (public and private) |
+
+  </Tab>
+  <Tab title="Catalog">
 
 | Tool Name | Description |
 |-----------|-------------|
@@ -36,31 +59,72 @@ Integrate Spotify to search and retrieve data from the Spotify catalog directly 
 | `get_album` | Get details of a specific album by Spotify album ID |
 | `get_album_tracks` | Get the tracks of a specific album |
 
+  </Tab>
+</Tabs>
+
 ## Use Cases
 
-### Search for a track
+<AccordionGroup>
+  <Accordion title="What's Playing Right Now" icon="music">
+    **Scenario**: Check the currently playing track and full playback context
 
-```
-"Find the Spotify track ID for 'Bohemian Rhapsody' by Queen"
-```
+    ```
+    "What am I listening to on Spotify right now?"
+    ```
 
-The agent will use `search_tracks` with the query `"Bohemian Rhapsody artist:Queen"` and return matching tracks with IDs, duration, and album info.
+    The agent will use `get_currently_playing` to return the track name, artist, album, progress, and whether it's playing or paused.
+  </Accordion>
 
-### Look up an artist's top tracks
+  <Accordion title="Recently Played History" icon="clock-rotate-left">
+    **Scenario**: Review your recent listening activity
 
-```
-"What are Taylor Swift's top tracks on Spotify right now?"
-```
+    ```
+    "What were the last 10 songs I listened to on Spotify?"
+    ```
 
-The agent will use `search_artists` to find Taylor Swift's artist ID, then `get_artist_top_tracks` to retrieve her current top tracks.
+    The agent will use `get_recently_played` and return each track with its played-at timestamp.
+  </Accordion>
 
-### Get album details
+  <Accordion title="Browse Your Library" icon="heart">
+    **Scenario**: Explore your saved tracks and playlists
 
-```
-"List all the tracks on Daft Punk's Random Access Memories album"
-```
+    ```
+    "Show me my saved tracks on Spotify"
+    ```
 
-The agent will use `search_albums` to find the album, then `get_album_tracks` to list all tracks with their durations.
+    The agent will use `get_saved_tracks` to list your liked songs with album and artist info, or `get_user_playlists` to list all your playlists.
+  </Accordion>
+
+  <Accordion title="Catalog Search" icon="magnifying-glass">
+    **Scenario**: Find tracks, artists, or albums from the Spotify catalog
+
+    ```
+    "Find the Spotify track ID for 'Bohemian Rhapsody' by Queen"
+    ```
+
+    The agent will use `search_tracks` with the query and return matching tracks with IDs, duration, and album info.
+  </Accordion>
+
+  <Accordion title="Artist Discovery" icon="star">
+    **Scenario**: Look up an artist's top tracks
+
+    ```
+    "What are Taylor Swift's top tracks on Spotify right now?"
+    ```
+
+    The agent will use `search_artists` to find Taylor Swift's artist ID, then `get_artist_top_tracks` to retrieve her current top tracks.
+  </Accordion>
+
+  <Accordion title="Album Details" icon="record-vinyl">
+    **Scenario**: Explore an album's track listing
+
+    ```
+    "List all the tracks on Daft Punk's Random Access Memories"
+    ```
+
+    The agent will use `search_albums` to find the album, then `get_album_tracks` to list all tracks with their durations.
+  </Accordion>
+</AccordionGroup>
 
 ## Need Help?
 

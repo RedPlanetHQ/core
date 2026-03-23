@@ -1,34 +1,49 @@
 import axios from 'axios';
 
-export async function integrationCreate(data: Record<string, string>) {
-  const { client_id, client_secret } = data;
+export async function integrationCreate(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  data: any,
+) {
+  const { oauthResponse, oauthParams } = data;
 
-  // Validate credentials via Spotify Client Credentials token endpoint
-  const response = await axios.post(
-    'https://accounts.spotify.com/api/token',
-    new URLSearchParams({ grant_type: 'client_credentials' }),
-    {
+  // Fetch Spotify user profile using the access token
+  let userEmail: string | null = null;
+  let userId: string | null = null;
+  let displayName: string | null = null;
+
+  try {
+    const profileResponse = await axios.get('https://api.spotify.com/v1/me', {
       headers: {
-        Authorization: `Basic ${Buffer.from(`${client_id}:${client_secret}`).toString('base64')}`,
-        'Content-Type': 'application/x-www-form-urlencoded',
+        Authorization: `Bearer ${oauthResponse.access_token}`,
       },
-    },
-  );
-
-  if (response.status !== 200 || !response.data.access_token) {
-    throw new Error('Invalid Spotify credentials');
+    });
+    userEmail = profileResponse.data.email;
+    userId = profileResponse.data.id;
+    displayName = profileResponse.data.display_name;
+  } catch (error) {
+    console.error('Error fetching Spotify user profile:', error);
   }
+
+  const integrationConfiguration = {
+    access_token: oauthResponse.access_token,
+    refresh_token: oauthResponse.refresh_token,
+    token_type: oauthResponse.token_type,
+    expires_in: oauthResponse.expires_in,
+    expires_at: oauthResponse.expires_at,
+    scope: oauthResponse.scope,
+    userEmail,
+    userId,
+    displayName,
+    redirect_uri: oauthParams?.redirect_uri || null,
+  };
 
   return [
     {
       type: 'account',
       data: {
         settings: {},
-        accountId: 'spotify',
-        config: {
-          client_id,
-          client_secret,
-        },
+        accountId: userEmail || userId || 'spotify',
+        config: integrationConfiguration,
       },
     },
   ];
