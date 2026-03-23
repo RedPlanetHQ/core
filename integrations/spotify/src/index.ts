@@ -66,12 +66,18 @@ class SpotifyCLI extends IntegrationCLI {
     return {
       name: 'Spotify',
       key: 'spotify',
+      widgets: [
+        {
+          name: 'Now Playing',
+          slug: 'now-playing',
+          description: 'Shows the currently playing track from your Spotify account',
+          support: ['tui', 'webapp'],
+          tuiPlacement: 'below-input',
+        },
+      ],
       description:
         'Connect your Spotify account to access your music, control playback, view currently playing tracks, recently played history, saved library, and search the Spotify catalog.',
       icon: 'spotify',
-      mcp: {
-        type: 'cli',
-      },
       auth: {
         OAuth2: {
           token_url: 'https://accounts.spotify.com/api/token',

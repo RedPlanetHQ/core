@@ -1,5 +1,43 @@
 import { APIKeyParams, AuthType, McpAuthParams, OAuth2Params } from "./oauth";
 
+export interface WidgetRenderContext {
+  placement: 'tui' | 'webapp';
+  pat: string;
+  accounts: Array<{ id: string; slug: string; name?: string }>;
+  baseUrl: string;
+  /** Call to trigger a TUI re-render after updating internal state (TUI only) */
+  requestRender?: () => void;
+}
+
+/** Metadata only — used in integration Spec (no render function) */
+export interface WidgetMeta {
+  name: string;
+  slug: string;
+  description: string;
+  support: Array<'tui' | 'webapp'>;
+  tuiPlacement?: 'overview' | 'below-input';
+}
+
+/**
+ * A zero-argument React function component (webapp placement).
+ * Context (pat, accountId, baseUrl) is baked in via closure.
+ */
+export type WebWidgetComponent = () => unknown;
+
+/**
+ * A pi-tui Component instance (tui placement).
+ * Returned by createPlayer / createList / etc. from @redplanethq/ui/tui.
+ */
+export type TuiWidgetComponent = object;
+
+/** Union of the two surface-specific component types */
+export type WidgetComponent = WebWidgetComponent | TuiWidgetComponent;
+
+/** Full widget — used in widgets/index.ts (includes render) */
+export interface WidgetSpec extends WidgetMeta {
+  render(context: WidgetRenderContext): Promise<WidgetComponent>;
+}
+
 export enum IntegrationEventType {
   /**
    * Processes authentication data and returns tokens/credentials to be saved
@@ -75,6 +113,7 @@ export class Spec {
     api_key?: APIKeyParams;
     mcp?: McpAuthParams;
   };
+  widgets?: WidgetMeta[];
 }
 
 export interface Config {

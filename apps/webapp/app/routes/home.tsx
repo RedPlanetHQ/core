@@ -105,7 +105,10 @@ export default function Home() {
           workspaceId={workspace.id}
         />
       )}
-      <AppSidebar conversationSources={conversationSources} />
+      <AppSidebar
+        conversationSources={conversationSources}
+        widgetsEnabled={!!meta.widgetsEnabled}
+      />
       <SidebarInset className="bg-background-2 h-full rounded pr-0">
         <div className="flex h-full flex-col rounded">
           <div className="flex h-full flex-col gap-2 @container/main">

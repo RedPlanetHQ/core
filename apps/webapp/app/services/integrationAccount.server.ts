@@ -75,6 +75,8 @@ export const getConnectedIntegrationAccounts = async (
           slug: true,
           description: true,
           icon: true,
+          widgetUrl: true,
+          spec: true,
         },
       },
     },
