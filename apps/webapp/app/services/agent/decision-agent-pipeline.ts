@@ -1,25 +1,23 @@
 /**
  * Decision Agent Pipeline
  *
- * Generic CASE pipeline: takes a trigger + context, runs the decision agent,
- * executes the resulting plan (message user, silent actions), and returns the result.
+ * Trigger pipeline: takes a trigger + context, runs the butler with think enabled,
+ * and optionally delivers to channel.
  *
- * This is trigger-agnostic — the caller (reminder job, webhook handler, API route)
- * is responsible for building the trigger and context before calling this.
+ * Flow:
+ * 1. Butler starts with trigger context + think tool
+ * 2. Butler calls think (subagent) → gets ActionPlan
+ * 3. Butler executes the plan (skills, integrations, tasks)
+ * 4. Pipeline extracts shouldMessage from think output → delivers to channel or not
  */
 
 import { UserTypeEnum } from "@core/types";
-import { runDecisionAgent } from "~/services/agent/decision-agent";
 import {
   processInboundMessage,
   getOrCreateChannelConversation,
 } from "~/services/agent/message-processor";
-import { runOrchestrator } from "~/services/agent/orchestrator";
 import {
-  type ActionPlan,
   type DecisionContext,
-  type MessagePlan,
-  type ReminderTrigger,
   type Trigger,
 } from "~/services/agent/types/decision-agent";
 import { getChannel } from "~/services/channels";
@@ -66,16 +64,12 @@ export interface CASEPipelineResult {
 // ============================================================================
 
 /**
- * Run the CASE decision agent pipeline.
+ * Run the trigger pipeline.
  *
- * 1. Run CASE → ActionPlan
- * 2. Execute the plan (message user via Sol, silent actions)
- * 3. Return result
- *
- * Caller is responsible for:
- * - Building the trigger and context
- * - Updating counts (incrementUnrespondedCount, incrementOccurrenceCount)
- * - Handling scheduling/deactivation
+ * 1. Butler starts with think tool enabled
+ * 2. Butler calls think → gets ActionPlan (shouldMessage, intent, etc.)
+ * 3. Butler executes (skills, integrations, tasks, crafts message)
+ * 4. Pipeline extracts shouldMessage from think output → delivers or skips
  */
 export async function runCASEPipeline(
   input: CASEPipelineInput,
@@ -93,62 +87,138 @@ export async function runCASEPipeline(
 
   try {
     // =========================================================================
-    // Step 1: Run CASE (Decision Agent)
+    // Get or create conversation for this async job
     // =========================================================================
-    logger.info(`[CASE pipeline] Running CASE for ${reminderId}`);
-    const { plan, executionTimeMs: caseTimeMs } = await runDecisionAgent(
-      trigger,
-      context,
-      userPersona,
-      executorTools,
+    const conversationSource =
+      trigger.type === "integration_webhook"
+        ? ((trigger.data as any).integration ?? "integration")
+        : "reminder";
+
+    const conversationId = await getOrCreateAsyncConversation(
+      userData.workspaceId,
+      userData.userId,
+      reminderId,
+      conversationSource,
+      reminderText,
     );
 
-    logger.info(`[CASE pipeline] Decision for ${reminderId}`, {
-      shouldMessage: plan.shouldMessage,
-      reasoning: plan.reasoning,
-      createReminders: plan.createReminders.length,
-      silentActions: plan.silentActions.length,
-      caseTimeMs,
+    // =========================================================================
+    // Run butler with think tool enabled
+    // =========================================================================
+    logger.info(`[pipeline] Running butler with think for ${reminderId}`);
+
+    const { responseText, parts } = await processInboundMessage({
+      userId: userData.userId,
+      workspaceId: userData.workspaceId,
+      channel: trigger.channel as ChannelType,
+      userMessage: `[Trigger fired] ${reminderText}`,
+      conversationId,
+      skipUserMessage: true,
+      messageUserType: UserTypeEnum.System,
+      triggerContext: {
+        trigger,
+        context,
+        reminderText,
+        userPersona,
+      },
+      executorTools,
     });
 
     // =========================================================================
-    // Step 2: Execute the plan
+    // Extract shouldMessage from think tool output
     // =========================================================================
-    await executePlan(
-      plan,
-      trigger,
-      userData,
-      { id: reminderId, text: reminderText },
-      timezone,
-      userPersona,
-      executorTools,
+    const thinkPart = parts.find(
+      (p: any) => p.toolName === "think",
     );
+    const actionPlan = thinkPart?.output;
+    const shouldMessage = actionPlan?.shouldMessage ?? true;
+    const reasoning = actionPlan?.reasoning ?? "No think output found";
 
-    // Deduct credits for the CASE pipeline run (1 for decision + 1 if Sol messaged)
+    logger.info(`[pipeline] Decision for ${reminderId}`, {
+      shouldMessage,
+      reasoning,
+      hasThinkOutput: !!thinkPart,
+    });
+
+    // =========================================================================
+    // Deliver to channel if shouldMessage
+    // =========================================================================
+    if (shouldMessage) {
+      if (!responseText || responseText === "I processed your request.") {
+        logger.warn(`[pipeline] Butler produced empty/generic response for ${reminderId}`, {
+          channel: trigger.channel,
+          responseText,
+        });
+      }
+
+      await deliverToChannel(
+        responseText,
+        trigger.channel,
+        userData,
+        { id: reminderId, text: reminderText },
+        conversationId,
+      );
+    } else {
+      logger.info(`[pipeline] Butler executed silently for ${reminderId}`, {
+        reasoning,
+        responsePreview: responseText?.slice(0, 100),
+      });
+    }
+
+    // =========================================================================
+    // Execute silent actions from think output (log, update_state)
+    // =========================================================================
+    if (actionPlan?.silentActions) {
+      for (const action of actionPlan.silentActions) {
+        try {
+          switch (action.type) {
+            case "log": {
+              logger.info(`[silent] ${action.description}`, {
+                reminderId,
+                data: action.data,
+              });
+              break;
+            }
+            case "update_state": {
+              await executeStateUpdate(action, trigger.userId, reminderId);
+              break;
+            }
+            default:
+              logger.warn(`Unknown silent action type: ${action.type}`);
+          }
+        } catch (error) {
+          logger.error(`Failed to execute silent action: ${action.type}`, {
+            reminderId,
+            error,
+          });
+        }
+      }
+    }
+
+    // Deduct credits (1 for think-only, 2 if butler also ran full execution)
     try {
-      const creditAmount = plan.shouldMessage ? 2 : 1;
       await deductCredits(
         userData.workspaceId,
         userData.userId,
         "chatMessage",
-        creditAmount,
+        1, // noStreamProcess already deducts 1, so just 1 more for the pipeline
       );
     } catch (error) {
       logger.warn(
-        `[CASE pipeline] Failed to deduct credits for ${reminderId}`,
+        `[pipeline] Failed to deduct credits for ${reminderId}`,
         { error },
       );
     }
 
-    logger.info(`[CASE pipeline] Successfully processed ${reminderId}`);
+    logger.info(`[pipeline] Successfully processed ${reminderId}`);
 
     return {
       success: true,
-      shouldMessage: plan.shouldMessage,
-      reasoning: plan.reasoning,
+      shouldMessage,
+      reasoning,
     };
   } catch (error) {
-    logger.error(`[CASE pipeline] Failed for ${reminderId}`, { error });
+    logger.error(`[pipeline] Failed for ${reminderId}`, { error });
     return {
       success: false,
       shouldMessage: false,
@@ -159,21 +229,15 @@ export async function runCASEPipeline(
 }
 
 // ============================================================================
-// Plan Execution
+// Channel Delivery
 // ============================================================================
 
 /**
- * Execute CASE's action plan
- *
- * If shouldMessage:
- *   1. Call processInboundMessage with actionPlan (Sol crafts the message)
- *   2. Send the crafted response on the channel (WhatsApp / email)
- *
- * Always: execute silent actions (log, update_state, integration_action)
+ * Deliver the butler's response to the user's channel (WhatsApp, Slack, email)
  */
-async function executePlan(
-  plan: ActionPlan,
-  trigger: Trigger,
+async function deliverToChannel(
+  responseText: string,
+  channel: string,
   userData: {
     userId: string;
     email: string;
@@ -181,315 +245,91 @@ async function executePlan(
     workspaceId: string;
   },
   reminder: { id: string; text: string },
-  timezone: string,
-  userPersona?: string,
-  executorTools?: OrchestratorTools,
+  conversationId: string,
 ) {
-  const { channel } = trigger;
+  const handler = getChannel(channel);
+  let replyTo: string | undefined;
 
-  // Fetch skills once for use in silent actions (orchestrator needs them for get_skill tool)
-  const skills = await prisma.document.findMany({
-    where: {
-      workspaceId: userData.workspaceId,
-      type: "skill",
-      deleted: null,
-    },
-    select: { id: true, title: true, metadata: true },
-    orderBy: { createdAt: "desc" },
+  if (channel === "whatsapp") {
+    replyTo = userData.phoneNumber;
+  } else if (channel === "slack") {
+    const slackAccount = await prisma.integrationAccount.findFirst({
+      where: {
+        integratedById: userData.userId,
+        integrationDefinition: { slug: "slack" },
+        isActive: true,
+        deleted: null,
+      },
+      select: { accountId: true },
+    });
+    replyTo = slackAccount?.accountId ?? undefined;
+  } else {
+    replyTo = userData.email;
+  }
+
+  if (!replyTo) {
+    logger.error(`[pipeline] No delivery target for channel=${channel}, userId=${userData.userId}`, {
+      reminderId: reminder.id,
+      channel,
+      hasPhone: !!userData.phoneNumber,
+      hasEmail: !!userData.email,
+    });
+    return;
+  }
+
+  const metadata: Record<string, string> = {
+    workspaceId: userData.workspaceId,
+  };
+  if (channel === "email") {
+    const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
+    const subject = subjectMatch
+      ? subjectMatch[1].trim()
+      : reminder.text.split("\n")[0].replace(/[#*_]/g, "").trim();
+    metadata.subject = subject.slice(0, 120);
+  }
+
+  logger.info(`[pipeline] Sending ${channel} message`, {
+    reminderId: reminder.id,
+    replyTo,
+    responseLength: responseText.length,
+    responsePreview: responseText.slice(0, 150),
   });
 
-  // =========================================================================
-  // Get or create conversation for this async job (reuse until 100 messages)
-  // =========================================================================
-  // Derive source from trigger type
-  const conversationSource =
-    trigger.type === "integration_webhook"
-      ? ((trigger.data as any).integration ?? "integration")
-      : "reminder";
+  await handler.sendReply(replyTo, responseText, metadata);
+  logger.info(`[pipeline] Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
 
-  const conversationId = await getOrCreateAsyncConversation(
-    userData.workspaceId,
-    userData.userId,
-    reminder.id,
-    conversationSource,
-    reminder.text,
-  );
-
-  // Store CASE decision as a tool-style part (matches UI format)
-  const caseToolCallId = `case_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
-  await upsertConversationHistory(
-    crypto.randomUUID(),
-    [
-      {
-        type: "tool-decision",
-        toolCallId: caseToolCallId,
-        toolName: "decision",
-        state: "output-available",
-        input: { trigger: reminder.text },
-        output: {
-          reasoning: plan.reasoning,
-          shouldMessage: plan.shouldMessage,
-          silentActions: plan.silentActions.length,
-          intent: plan.message?.intent,
-          tone: plan.message?.tone,
-          context: plan.message?.context,
-        },
-      },
-    ],
-    conversationId,
-    UserTypeEnum.Agent,
-  );
-
-  // =========================================================================
-  // shouldMessage — run Sol with action plan injected
-  // =========================================================================
-  if (plan.shouldMessage && plan.message) {
-    const actionPlan = buildActionPlanForAgent(plan.message, trigger);
-
-    try {
-      const { responseText } = await processInboundMessage({
-        userId: userData.userId,
-        workspaceId: userData.workspaceId,
-        channel: channel as ChannelType,
-        userMessage: `[Reminder triggered] ${reminder.text}`,
-        conversationId,
-        skipUserMessage: true,
-        messageUserType: UserTypeEnum.System,
-        actionPlan,
-        executorTools,
-      });
-
-      if (!responseText || responseText === "I processed your request.") {
-        logger.warn(`[CASE pipeline] Sol produced empty/generic response for ${reminder.id}`, {
-          channel,
-          responseText,
-          actionPlan: plan.message,
-        });
-      }
-
-      // Resolve delivery target for the channel
-      const handler = getChannel(channel);
-      let replyTo: string | undefined;
-      if (channel === "whatsapp") {
-        replyTo = userData.phoneNumber;
-      } else if (channel === "slack") {
-        const slackAccount = await prisma.integrationAccount.findFirst({
-          where: {
-            integratedById: userData.userId,
-            integrationDefinition: { slug: "slack" },
-            isActive: true,
-            deleted: null,
-          },
-          select: { accountId: true },
-        });
-        replyTo = slackAccount?.accountId ?? undefined;
-      } else {
-        replyTo = userData.email;
-      }
-
-      if (!replyTo) {
-        logger.error(`[CASE pipeline] No delivery target for channel=${channel}, userId=${userData.userId}`, {
-          reminderId: reminder.id,
-          channel,
-          hasPhone: !!userData.phoneNumber,
-          hasEmail: !!userData.email,
-        });
-      } else {
-        const metadata: Record<string, string> = {
-          workspaceId: userData.workspaceId,
-        };
-        if (channel === "email") {
-          const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
-          const subject = subjectMatch
-            ? subjectMatch[1].trim()
-            : reminder.text.split("\n")[0].replace(/[#*_]/g, "").trim();
-          metadata.subject = subject.slice(0, 120);
-        }
-
-        logger.info(`[CASE pipeline] Sending ${channel} message`, {
-          reminderId: reminder.id,
-          replyTo,
-          responseLength: responseText.length,
-          responsePreview: responseText.slice(0, 150),
-        });
-
-        await handler.sendReply(replyTo, responseText, metadata);
-        logger.info(`[CASE pipeline] Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
-
-        // Also store in the channel's conversation so user replies have context
-        try {
-          const channelConversationId = await getOrCreateChannelConversation(
-            userData.userId,
-            userData.workspaceId,
-            reminder.text,
-            channel,
-          );
-          await upsertConversationHistory(
-            crypto.randomUUID(),
-            [{ text: `[Reminder] ${reminder.text}`, type: "text" }],
-            channelConversationId,
-            UserTypeEnum.System,
-            false,
-          );
-          await upsertConversationHistory(
-            crypto.randomUUID(),
-            [{ text: responseText, type: "text" }],
-            channelConversationId,
-            UserTypeEnum.Agent,
-            false,
-          );
-        } catch (error) {
-          logger.warn(`[CASE pipeline] Failed to mirror to channel conversation`, {
-            error,
-          });
-        }
-      }
-    } catch (error) {
-      logger.error(`[CASE pipeline] Failed to execute message for ${reminder.id}`, { error });
-    }
-  } else {
-    logger.info(`CASE decided not to message for ${reminder.id}`, {
-      reasoning: plan.reasoning,
-    });
-  }
-
-  // =========================================================================
-  // Execute silentActions
-  // =========================================================================
-  const actionSummaries: string[] = [];
-
-  for (const action of plan.silentActions) {
-    try {
-      switch (action.type) {
-        case "log": {
-          logger.info(`[CASE silent] ${action.description}`, {
-            reminderId: reminder.id,
-            data: action.data,
-          });
-          // Store log action in conversation
-          if (!plan.shouldMessage) {
-            const logToolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
-            await upsertConversationHistory(
-              crypto.randomUUID(),
-              [
-                {
-                  type: "tool-silent_action",
-                  toolCallId: logToolCallId,
-                  toolName: "silent_action",
-                  state: "output-available",
-                  input: { action: action.description, type: "log" },
-                  output: action.data ?? "logged",
-                },
-              ],
-              conversationId,
-              UserTypeEnum.Agent,
-            );
-            actionSummaries.push(action.description);
-          }
-          break;
-        }
-        case "update_state": {
-          await executeStateUpdate(action, trigger.userId, reminder.id);
-          // Store state update in conversation
-          if (!plan.shouldMessage) {
-            const stateToolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
-            await upsertConversationHistory(
-              crypto.randomUUID(),
-              [
-                {
-                  type: "tool-silent_action",
-                  toolCallId: stateToolCallId,
-                  toolName: "silent_action",
-                  state: "output-available",
-                  input: {
-                    action: action.description,
-                    type: "update_state",
-                    data: action.data,
-                  },
-                  output: "state updated",
-                },
-              ],
-              conversationId,
-              UserTypeEnum.Agent,
-            );
-            actionSummaries.push(action.description);
-          }
-          break;
-        }
-        case "integration_action":
-          await executeIntegrationAction(
-            action,
-            userData.userId,
-            userData.workspaceId,
-            trigger.channel,
-            timezone,
-            conversationId,
-            userPersona,
-            executorTools,
-            skills,
-          );
-          actionSummaries.push(action.description);
-          break;
-        default:
-          logger.warn(`Unknown silent action type: ${action.type}`);
-      }
-    } catch (error) {
-      logger.error(`Failed to execute silent action: ${action.type}`, {
-        reminderId: reminder.id,
-        error,
-      });
-      actionSummaries.push(`${action.description} (failed)`);
-    }
-  }
-
-  // =========================================================================
-  // Store final summary text so the conversation looks complete on UI
-  // =========================================================================
-  if (actionSummaries.length > 0 && !plan.shouldMessage) {
-    const summary = actionSummaries.join(". ") + ".";
+  // Mirror to channel conversation so user replies have context
+  try {
+    const channelConversationId = await getOrCreateChannelConversation(
+      userData.userId,
+      userData.workspaceId,
+      reminder.text,
+      channel,
+    );
     await upsertConversationHistory(
       crypto.randomUUID(),
-      [{ type: "text", text: summary }],
-      conversationId,
-      UserTypeEnum.Agent,
+      [{ text: `[Reminder] ${reminder.text}`, type: "text" }],
+      channelConversationId,
+      UserTypeEnum.System,
+      false,
     );
+    await upsertConversationHistory(
+      crypto.randomUUID(),
+      [{ text: responseText, type: "text" }],
+      channelConversationId,
+      UserTypeEnum.Agent,
+      false,
+    );
+  } catch (error) {
+    logger.warn(`[pipeline] Failed to mirror to channel conversation`, {
+      error,
+    });
   }
 }
 
-/**
- * Build the action plan for Sol.
- * Adds askAboutKeeping context if high unresponded count (reminder triggers only).
- */
-function buildActionPlanForAgent(
-  message: MessagePlan,
-  trigger: Trigger,
-): MessagePlan {
-  // askAboutKeeping only applies to reminder triggers
-  if (
-    trigger.type !== "reminder_fired" &&
-    trigger.type !== "reminder_followup"
-  ) {
-    return message;
-  }
-
-  const UNRESPONDED_THRESHOLD = 5;
-  const data = (trigger as ReminderTrigger).data;
-  const shouldAsk =
-    !data.confirmedActive && data.unrespondedCount >= UNRESPONDED_THRESHOLD;
-
-  if (message.context.askAboutKeeping || shouldAsk) {
-    return {
-      ...message,
-      context: {
-        ...message.context,
-        askAboutKeeping: true,
-        unrespondedCount: data.unrespondedCount,
-      },
-    };
-  }
-
-  return message;
-}
+// ============================================================================
+// Helpers
+// ============================================================================
 
 /**
  * Execute state update — updates reminder metadata in database
@@ -503,7 +343,7 @@ async function executeStateUpdate(
   const targetReminderId =
     (data.targetReminderId as string) || defaultReminderId;
 
-  logger.info(`[CASE silent] State update: ${action.description}`, {
+  logger.info(`[silent] State update: ${action.description}`, {
     userId,
     targetReminderId,
   });
@@ -545,70 +385,6 @@ async function executeStateUpdate(
       where: { id: targetReminderId },
       data: updateData,
     });
-    logger.info(`[CASE silent] State updated for reminder ${targetReminderId}`);
+    logger.info(`[silent] State updated for reminder ${targetReminderId}`);
   }
-}
-
-/**
- * Execute integration action via orchestrator in write mode
- */
-async function executeIntegrationAction(
-  action: { description: string; data?: Record<string, unknown> },
-  userId: string,
-  workspaceId: string,
-  channel: string,
-  timezone: string,
-  conversationId: string,
-  userPersona?: string,
-  executorTools?: OrchestratorTools,
-  skills?: Array<{ id: string; title: string; metadata: unknown }>,
-) {
-  const data = action.data || {};
-  const query = (data.query as string) || action.description;
-
-  logger.info(
-    `[CASE silent] Executing integration action: ${action.description}`,
-    {
-      userId,
-      query,
-    },
-  );
-
-  const { stream } = await runOrchestrator(
-    userId,
-    workspaceId,
-    query,
-    "write",
-    timezone,
-    channel,
-    undefined,
-    userPersona,
-    skills,
-    executorTools,
-  );
-
-  // Consume the stream to completion (silent — no UI)
-  const resultText = await stream.text;
-  logger.info(`[CASE silent] Integration action completed`, {
-    userId,
-    text: resultText?.slice(0, 200),
-  });
-
-  // Store silent action result in conversation
-  const toolCallId = `silent_${crypto.randomUUID().replace(/-/g, "").slice(0, 20)}`;
-  await upsertConversationHistory(
-    crypto.randomUUID(),
-    [
-      {
-        type: "tool-silent_action",
-        toolCallId,
-        toolName: "silent_action",
-        state: "output-available",
-        input: { action: action.description, query },
-        output: resultText?.slice(0, 500) ?? "completed",
-      },
-    ],
-    conversationId,
-    UserTypeEnum.Agent,
-  );
 }

@@ -45,7 +45,7 @@ const DEFAULT_ACTION_PLAN: ActionPlan = {
 /**
  * Parse JSON from model response, handling common formatting issues
  */
-function parseActionPlan(text: string): ActionPlan | null {
+export function parseActionPlan(text: string): ActionPlan | null {
   try {
     // Try direct parse first
     const parsed = JSON.parse(text);
@@ -110,7 +110,7 @@ function isValidActionPlan(obj: unknown): obj is ActionPlan {
 /**
  * Normalize action plan to ensure all optional fields have defaults
  */
-function normalizeActionPlan(plan: ActionPlan): ActionPlan {
+export function normalizeActionPlan(plan: ActionPlan): ActionPlan {
   return {
     shouldMessage: plan.shouldMessage,
     message: plan.message,
@@ -280,7 +280,7 @@ export async function runDecisionAgent(
 /**
  * Create a contextual fallback plan based on trigger type
  */
-function createFallbackPlan(trigger: Trigger): ActionPlan {
+export function createFallbackPlan(trigger: Trigger): ActionPlan {
   switch (trigger.type) {
     case "reminder_fired":
       return {

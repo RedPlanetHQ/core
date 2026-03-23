@@ -9,7 +9,10 @@ import { type UserTypeEnum } from "@core/types";
 import { prisma } from "~/db.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
-import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import {
+  type Trigger,
+  type DecisionContext,
+} from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
 import { type InboundAttachment } from "~/services/channels/types";
@@ -26,8 +29,13 @@ interface ProcessInboundMessageParams {
   skipUserMessage?: boolean;
   /** Override message type (e.g. System for reminders). Defaults to User. */
   messageUserType?: UserTypeEnum;
-  /** Action plan from Decision Agent — injected into core brain system prompt */
-  actionPlan?: MessagePlan;
+  /** Trigger context — enables think tool for non-user triggers */
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    reminderText: string;
+    userPersona?: string;
+  };
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
@@ -41,6 +49,7 @@ interface ProcessInboundMessageParams {
 interface ProcessInboundMessageResult {
   responseText: string;
   conversationId: string;
+  parts: any[];
 }
 
 /**
@@ -113,7 +122,7 @@ export async function processInboundMessage({
   conversationId: existingConversationId,
   skipUserMessage,
   messageUserType,
-  actionPlan,
+  triggerContext,
   onMessage,
   channelMetadata,
   executorTools,
@@ -153,7 +162,7 @@ export async function processInboundMessage({
       source: channel,
       skipUserMessage,
       messageUserType,
-      actionPlan,
+      triggerContext,
       onMessage,
       channelMetadata,
       executorTools,
@@ -164,5 +173,5 @@ export async function processInboundMessage({
 
   const responseText = assistantMessage.text || "I processed your request.";
 
-  return { responseText, conversationId };
+  return { responseText, conversationId, parts: assistantMessage.parts ?? [] };
 }

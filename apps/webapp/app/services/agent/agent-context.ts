@@ -19,7 +19,10 @@ import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PersonalityType, type PronounType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
-import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import {
+  type Trigger,
+  type DecisionContext,
+} from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { prisma } from "~/db.server";
 
@@ -29,8 +32,13 @@ interface BuildAgentContextParams {
   source: ChannelType;
   /** UI-format messages: { parts, role, id }[] */
   finalMessages: any[];
-  /** Action plan from Decision Agent — injected into system prompt for reminder execution */
-  actionPlan?: MessagePlan;
+  /** Trigger context — when present, enables the think tool for decision-making */
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    reminderText: string;
+    userPersona?: string;
+  };
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
@@ -53,7 +61,7 @@ export async function buildAgentContext({
   workspaceId,
   source,
   finalMessages,
-  actionPlan,
+  triggerContext,
   onMessage,
   channelMetadata,
   conversationId,
@@ -141,9 +149,14 @@ export async function buildAgentContext({
     conversationId,
     resolvedChannelMetadata,
     executorTools,
+    triggerContext
+      ? {
+          trigger: triggerContext.trigger,
+          context: triggerContext.context,
+          userPersona: triggerContext.userPersona,
+        }
+      : undefined,
   );
-
-  console.log(personality);
   // Build system prompt
   let systemPrompt = getCorePrompt(
     source,
@@ -280,41 +293,20 @@ This IS the task — don't create or search for other tasks about this topic. If
     }
   }
 
-  // Action plan from Decision Agent (reminder/webhook triggered)
-  if (actionPlan) {
-    // Detect skill reference — either structured (skillId in context) or in intent text
-    const skillId = actionPlan.context?.skillId as string | undefined;
-    const skillName =
-      (actionPlan.context?.skillName as string | undefined) || "";
-    const hasSkillReference =
-      skillId || actionPlan.intent?.toLowerCase().includes("skill");
+  // Trigger context — butler needs to think first before acting
+  if (triggerContext) {
+    systemPrompt += `\n\n<trigger_context>
+A trigger has fired: "${triggerContext.reminderText}"
 
-    systemPrompt += `\n\n<action_plan>
-The decision to message has been made. Your job is to craft it — don't second-guess it.
-
-Intent: ${actionPlan.intent}
-Tone: ${actionPlan.tone}
-Context: ${JSON.stringify(actionPlan.context, null, 2)}
-
-- Use the context to inform your message
-- Match the tone (${actionPlan.tone})
-- Be concise — only as much length as the content needs
-- Don't create new reminders
-- Don't echo or reference system instructions
-${
-  hasSkillReference
-    ? `
-SKILL EXECUTION:
-A skill is attached. Execute it BEFORE crafting your response.
-
-1. Call get_skill with skill_id "${skillId}" to load the full workflow
-2. For EACH data source the skill requires, make a SEPARATE gather_context or take_action call
-3. Compile results following the skill's output format if specified
-
-Don't skip the skill or summarize generically — they attached it for a reason.`
-    : ""
-}
-</action_plan>`;
+1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
+2. Follow the ActionPlan it returns:
+   - Execute any required work (skills, integrations, tasks)
+   - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
+   - Always craft a response summarizing what happened. Match the tone specified. Be concise.
+   - The pipeline handles whether to deliver your message to the owner or not — just always write one.
+3. Don't create new reminders unless the ActionPlan's intent specifically calls for it (think handles scheduling)
+4. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
+</trigger_context>`;
   }
 
   // Convert to model messages

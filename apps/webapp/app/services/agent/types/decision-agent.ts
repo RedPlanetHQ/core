@@ -139,7 +139,7 @@ export interface ReminderUpdate {
 }
 
 export interface SilentAction {
-  type: "log" | "update_state" | "integration_action";
+  type: "log" | "update_state";
   description: string;
   data?: Record<string, unknown>;
 }
