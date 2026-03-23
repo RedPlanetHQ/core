@@ -13,7 +13,9 @@ export interface GAConfig {
 }
 
 const GA4_DATA_BASE = 'https://analyticsdata.googleapis.com/v1beta';
+const GA4_DATA_ALPHA_BASE = 'https://analyticsdata.googleapis.com/v1alpha';
 const GA4_ADMIN_BASE = 'https://analyticsadmin.googleapis.com/v1beta';
+const GA4_ADMIN_ALPHA_BASE = 'https://analyticsadmin.googleapis.com/v1alpha';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
 /**
@@ -79,4 +81,24 @@ export async function gaPost(url: string, config: GAConfig, body: unknown): Prom
   return res.data;
 }
 
-export { GA4_DATA_BASE, GA4_ADMIN_BASE };
+/**
+ * Make a PATCH request against the GA4 Admin API.
+ */
+export async function gaPatch(
+  url: string,
+  config: GAConfig,
+  body: unknown,
+  params?: Record<string, string>
+): Promise<unknown> {
+  const token = await getAccessToken(config);
+  const res = await axios.patch(url, body, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    params,
+  });
+  return res.data;
+}
+
+export { GA4_DATA_BASE, GA4_DATA_ALPHA_BASE, GA4_ADMIN_BASE, GA4_ADMIN_ALPHA_BASE };

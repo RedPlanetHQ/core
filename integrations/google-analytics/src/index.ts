@@ -73,6 +73,8 @@ class GoogleAnalyticsCLI extends IntegrationCLI {
           token_url: 'https://oauth2.googleapis.com/token',
           authorization_url: 'https://accounts.google.com/o/oauth2/v2/auth',
           scopes: [
+            'https://www.googleapis.com/auth/analytics',
+            'https://www.googleapis.com/auth/analytics.edit',
             'https://www.googleapis.com/auth/analytics.readonly',
             'https://www.googleapis.com/auth/userinfo.profile',
             'https://www.googleapis.com/auth/userinfo.email',
