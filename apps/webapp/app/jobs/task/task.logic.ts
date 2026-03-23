@@ -70,22 +70,27 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     const abortController = new AbortController();
     const timeoutId = setTimeout(() => abortController.abort(), timeoutMs);
 
+    // Prefix intent with task context so the agent knows its own taskId
+    // and can embed it in any reminders it creates (e.g. after starting a coding session)
+    const taskMessage = `[background-task taskId:${taskId}]\n${intent}`;
+
     try {
       await processInboundMessage({
         userId,
         workspaceId,
         channel: "web",
-        userMessage: intent,
+        userMessage: taskMessage,
         conversationId,
         skipUserMessage: true,
         executorTools,
       });
 
       clearTimeout(timeoutId);
-      await markTaskCompleted(taskId, "Task completed");
 
-      logger.info(`Task ${taskId} completed`);
-      return { success: true, status: "completed", result: "Task completed" };
+      // Agent owns task lifecycle — it decides completed/blocked/failed via update_task.
+      // We only log here. No auto-marking.
+      logger.info(`Task ${taskId} processing finished`);
+      return { success: true, status: "completed", result: "Task processing finished" };
     } catch (error) {
       clearTimeout(timeoutId);
 
@@ -104,6 +109,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
   } catch (error) {
     const errorMsg = error instanceof Error ? error.message : "Unknown error";
     logger.error(`Task ${taskId} failed`, { error });
+    // Only mark failed on actual crashes — agent handles normal lifecycle
     await markTaskFailed(taskId, errorMsg);
     return { success: false, status: "failed", error: errorMsg };
   }

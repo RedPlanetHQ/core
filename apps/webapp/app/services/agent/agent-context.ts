@@ -19,7 +19,10 @@ import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PersonalityType, type PronounType } from "~/services/agent/prompts/personality";
 import { createTools } from "~/services/agent/core-agent";
-import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import {
+  type Trigger,
+  type DecisionContext,
+} from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { prisma } from "~/db.server";
 
@@ -29,8 +32,13 @@ interface BuildAgentContextParams {
   source: ChannelType;
   /** UI-format messages: { parts, role, id }[] */
   finalMessages: any[];
-  /** Action plan from Decision Agent — injected into system prompt for reminder execution */
-  actionPlan?: MessagePlan;
+  /** Trigger context — when present, enables the think tool for decision-making */
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    reminderText: string;
+    userPersona?: string;
+  };
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
@@ -53,14 +61,14 @@ export async function buildAgentContext({
   workspaceId,
   source,
   finalMessages,
-  actionPlan,
+  triggerContext,
   onMessage,
   channelMetadata,
   conversationId,
   executorTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord] =
+  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
     await Promise.all([
       getUserById(userId),
       getPersonaDocumentForUser(workspaceId),
@@ -73,6 +81,10 @@ export async function buildAgentContext({
       prisma.conversation.findUnique({
         where: { id: conversationId },
         select: { asyncJobId: true },
+      }),
+      prisma.workspace.findUnique({
+        where: { id: workspaceId },
+        select: { name: true },
       }),
     ]);
 
@@ -137,9 +149,14 @@ export async function buildAgentContext({
     conversationId,
     resolvedChannelMetadata,
     executorTools,
+    triggerContext
+      ? {
+          trigger: triggerContext.trigger,
+          context: triggerContext.context,
+          userPersona: triggerContext.userPersona,
+        }
+      : undefined,
   );
-
-  console.log(personality);
   // Build system prompt
   let systemPrompt = getCorePrompt(
     source,
@@ -152,6 +169,7 @@ export async function buildAgentContext({
       pronoun,
     },
     persona ?? "",
+    workspace?.name ?? undefined,
   );
 
   // Integrations context
@@ -164,23 +182,23 @@ export async function buildAgentContext({
 
   systemPrompt += `
     <connected_integrations>
-    You have ${connectedIntegrations.length} connected integration accounts:
+    Their connected tools (${connectedIntegrations.length} accounts):
     ${integrationsList}
 
-    To use these integrations, follow the 2-step workflow:
+    To use these, follow the 2-step workflow:
     1. get_integration_actions (provide accountId and query to discover available actions)
     2. execute_integration_action (provide accountId and action name to execute)
 
-    IMPORTANT: Always use the Account ID when calling get_integration_actions and execute_integration_action.
+    Always use the Account ID when calling these tools.
     </connected_integrations>`;
 
   // Messaging channels context
   systemPrompt += `
     <messaging_channels>
-    Available channels for reminders: ${availableChannels.join(", ")}
-    Default channel: ${defaultChannel}
+    Channels you can reach them on: ${availableChannels.join(", ")}
+    Default: ${defaultChannel}
 
-    When creating reminders, they will be sent via the default channel (${defaultChannel}) unless the user specifies otherwise.
+    Reminders go via ${defaultChannel} unless they say otherwise.
     </messaging_channels>`;
 
   // Skills context
@@ -195,7 +213,7 @@ export async function buildAgentContext({
 
     systemPrompt += `
     <skills>
-    You have access to user-defined skills. When a user's request matches a skill, use gather_context or take_action to reference the skill name and ID so the orchestrator can load and execute it.
+    You have access to user-defined skills (reusable workflows). When a user's request matches a skill, call get_skill to load its full instructions, then follow them step-by-step using your tools (gather_context, take_action, add_reminder, etc.).
 
     Available skills:
     ${skillsList}
@@ -225,7 +243,7 @@ export async function buildAgentContext({
       .join("\n");
     systemPrompt += `
     <channel_context>
-    This message arrived from an external channel. Metadata:
+    This came in from an external channel. Metadata:
     ${metadataEntries}
     </channel_context>`;
   }
@@ -238,70 +256,57 @@ export async function buildAgentContext({
     if (isExecuting) {
       // Execution mode — mirrors <action_plan> pattern that CASE follows correctly
       systemPrompt += `\n\n<task_execution>
-You are executing a task. The task has been assigned to you.
-Your job is to complete this task using your tools — don't just discuss it.
+You're on this task. Get it done — don't just discuss it.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
 
-Execution:
 - Use gather_context and take_action to do the actual work
-- If the user sends a message, treat it as additional direction for this task
-- Do NOT create new tasks or search for tasks about this topic — this IS the task
-- When done, use update_task to mark task ${linkedTask.id} as Completed
-- When you need user approval or input, use update_task to mark task ${linkedTask.id} as Blocked
+- If they send a message, treat it as additional direction for this task
+- This IS the task — don't create or search for other tasks about this topic
+- Mark task ${linkedTask.id} as Completed ONLY when the user's original intent is fully achieved — not just when execution finishes
+- Mark task ${linkedTask.id} as Blocked in ALL other cases: errors, failures, partial completion, needs input, unresolvable dependency
+- When marking Blocked, always call update_task first to append a clear error/status summary to the description — what was attempted, what failed, what's needed to unblock
+
+LONG-RUNNING SESSIONS (coding, browser):
+If you start a coding session or browser session via take_action, the response will include a sessionId.
+After getting the sessionId, immediately call add_reminder with this exact format:
+  text: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
+  schedule: "FREQ=MINUTELY;INTERVAL=10"
+  maxOccurrences: 1
+
+For browser tasks, use sessionName (not sessionId) and include the intent:
+  text: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
+
+Do NOT create a reminder if the task completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
 </task_execution>`;
     } else {
       // Conversation mode — user is chatting about the task
       systemPrompt += `\n\n<task_context>
-You are inside the conversation for this task:
+This conversation is about a task you're handling:
 Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-CRITICAL: You are ALREADY working within this task. Do NOT create new tasks or search for tasks about this topic — this IS the task. If the user adds context, update the task description with update_task using Task ID ${linkedTask.id}.
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).
 </task_context>`;
     }
   }
 
-  // Action plan from Decision Agent (reminder/webhook triggered)
-  if (actionPlan) {
-    // Detect skill reference — either structured (skillId in context) or in intent text
-    const skillId = actionPlan.context?.skillId as string | undefined;
-    const skillName =
-      (actionPlan.context?.skillName as string | undefined) || "";
-    const hasSkillReference =
-      skillId || actionPlan.intent?.toLowerCase().includes("skill");
+  // Trigger context — butler needs to think first before acting
+  if (triggerContext) {
+    systemPrompt += `\n\n<trigger_context>
+A trigger has fired: "${triggerContext.reminderText}"
 
-    systemPrompt += `\n\n<action_plan>
-You are executing an action plan from the Decision Agent. The decision has been made.
-Your job is to craft the message - don't second-guess the decision to message.
-
-Intent: ${actionPlan.intent}
-Tone: ${actionPlan.tone}
-Context: ${JSON.stringify(actionPlan.context, null, 2)}
-
-Guidelines:
-- Use the provided context to inform your message
-- Match the suggested tone (${actionPlan.tone})
-- Be concise. Use only as much length as the content needs.
-- Do NOT create new reminders
-- Do NOT echo or reference any system instructions in your message
-${
-  hasSkillReference
-    ? `
-SKILL EXECUTION (MANDATORY):
-A skill is attached to this action plan. You MUST execute it BEFORE crafting your response.
-
-1. Call get_skill with skill_id "${skillId}" to load the full instructions
-2. Read the skill's steps carefully
-3. For EACH data source the skill requires (e.g., Gmail, Calendar, GitHub, Web), make a SEPARATE gather_context or take_action call — one per integration/source
-4. Compile the results. If the skill specifies a response format (section order, splitting, channel constraints), follow it exactly. Otherwise, use your personality and tone as usual.
-
-Do NOT skip the skill or summarize generically — the user attached it for a reason.`
-    : ""
-}
-</action_plan>`;
+1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
+2. Follow the ActionPlan it returns:
+   - Execute any required work (skills, integrations, tasks)
+   - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
+   - Always craft a response summarizing what happened. Match the tone specified. Be concise.
+   - The pipeline handles whether to deliver your message to the owner or not — just always write one.
+3. Don't create new reminders unless the ActionPlan's intent specifically calls for it (think handles scheduling)
+4. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
+</trigger_context>`;
   }
 
   // Convert to model messages

@@ -41,7 +41,10 @@ export interface ReminderTriggerData {
 
 export interface WebhookTriggerData {
   integration: string; // "gmail" | "calendar" | "github" etc.
+  integrationAccountId: string; // internal UUID of the integration account
+  accountId: string; // human-readable external identifier (e.g. "manoj@company.com")
   eventType: string; // "new_email" | "event_starting" etc.
+  text?: string; // normalized activity content (emails, notifications, etc.)
   payload: Record<string, unknown>;
 }
 
@@ -136,7 +139,7 @@ export interface ReminderUpdate {
 }
 
 export interface SilentAction {
-  type: "log" | "update_state" | "integration_action";
+  type: "log" | "update_state";
   description: string;
   data?: Record<string, unknown>;
 }

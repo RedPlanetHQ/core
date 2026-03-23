@@ -1,9 +1,20 @@
-import { type Tool, tool, readUIMessageStream, type UIMessage } from "ai";
+import { type Tool, tool, readUIMessageStream, type UIMessage, generateText, stepCountIs } from "ai";
 import { z } from "zod";
 
 import { runOrchestrator } from "./orchestrator";
 import { type SkillRef } from "./types";
 import { type OrchestratorTools } from "./orchestrator-tools";
+import {
+  type Trigger,
+  type DecisionContext,
+} from "./types/decision-agent";
+import {
+  parseActionPlan,
+  normalizeActionPlan,
+  createFallbackPlan,
+} from "./decision-agent";
+import { buildDecisionAgentPrompt } from "./prompts";
+import { getModel, getModelForTask } from "~/lib/model.server";
 
 import { logger } from "../logger.service";
 import { prisma } from "~/db.server";
@@ -61,6 +72,12 @@ export const createTools = async (
   channelMetadata?: Record<string, unknown>,
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools,
+  /** Trigger context — when present, adds the `think` tool for decision-making */
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    userPersona?: string;
+  },
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -208,12 +225,12 @@ export const createTools = async (
   if (onMessage) {
     tools["acknowledge"] = tool({
       description:
-        "Send a brief update ONLY when you're about to call take_action. Do NOT use before gather_context. Do NOT use for greetings or conversational messages.",
+        "Send a quick heads-up to the user on their channel before you start working. Call this BEFORE gather_context or take_action so they know you're on it. One short message per conversation — don't spam.",
       inputSchema: z.object({
         message: z
           .string()
           .describe(
-            'One short sentence. Max 6 words. Examples: "on it.", "creating the issue.", "sending the message.", "booking the slot."',
+            'One short sentence. Max 6 words. Examples: "on it.", "let me check.", "looking into it.", "one sec."',
           ),
       }),
       execute: async ({ message }) => {
@@ -253,14 +270,92 @@ export const createTools = async (
 
   const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId);
 
-  // Add get_skill tool when skills are available
-  if (skills && skills.length > 0) {
-    tools["get_skill"] = getSkillTool(workspaceId);
-  }
+  // Skill tools — get_skill always available (skills can be created mid-conversation or referenced by ID)
+  tools["get_skill"] = getSkillTool(workspaceId);
 
   if (!readOnly) {
     tools["create_skill"] = createSkillTool(workspaceId, userId);
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
+  }
+
+  // Think tool — butler's decision layer for non-user triggers
+  if (triggerContext) {
+    tools["think"] = tool({
+      description: `Analyze a trigger (reminder, webhook, scheduled event) and decide what needs to happen. Call this FIRST before doing anything else when a trigger fires. Returns an ActionPlan with shouldMessage, intent, tone, and context.`,
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { trigger, context, userPersona } = triggerContext;
+
+        try {
+          const currentTime = new Date().toLocaleString("en-US", {
+            timeZone: timezone,
+            dateStyle: "full",
+            timeStyle: "short",
+          });
+
+          const triggerJson = JSON.stringify(trigger, null, 2);
+          const contextJson = JSON.stringify(
+            {
+              user: context.user,
+              todayState: context.todayState,
+              relevantHistory: context.relevantHistory,
+              gatheredData: context.gatheredData,
+            },
+            null,
+            2,
+          );
+
+          const prompt = buildDecisionAgentPrompt(
+            triggerJson,
+            contextJson,
+            currentTime,
+            timezone,
+            userPersona,
+            skills,
+          );
+
+          // Think uses cheap/fast model
+          const thinkModel = getModel(getModelForTask("low"));
+
+          // Build tools for think: gather_context (read-only), get_skill, reminder tools
+          const thinkTools: Record<string, Tool> = {
+            gather_context: tools["gather_context"],
+            get_skill: tools["get_skill"],
+            ...reminderTools,
+          };
+
+          const { text } = await generateText({
+            model: thinkModel as any,
+            messages: [{ role: "user", content: prompt }],
+            tools: thinkTools,
+            stopWhen: stepCountIs(5),
+          });
+
+          const parsedPlan = parseActionPlan(text);
+
+          if (!parsedPlan) {
+            logger.warn("Think tool: invalid output, using fallback", {
+              triggerType: trigger.type,
+              responsePreview: text.substring(0, 200),
+            });
+            return createFallbackPlan(trigger);
+          }
+
+          const plan = normalizeActionPlan(parsedPlan);
+
+          logger.info("Think tool: decision made", {
+            triggerType: trigger.type,
+            shouldMessage: plan.shouldMessage,
+            reasoning: plan.reasoning,
+          });
+
+          return plan;
+        } catch (error) {
+          logger.error("Think tool: failed", { error });
+          return createFallbackPlan(triggerContext.trigger);
+        }
+      },
+    });
   }
 
   return { ...tools, ...reminderTools, ...taskTools };

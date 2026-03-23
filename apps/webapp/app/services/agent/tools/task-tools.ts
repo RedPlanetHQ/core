@@ -11,6 +11,7 @@ import {
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
+import { env } from "~/env.server";
 
 export function getTaskTools(
   workspaceId: string,
@@ -18,7 +19,7 @@ export function getTaskTools(
 ): Record<string, Tool> {
   return {
     create_task: tool({
-      description: `Create a new task. Use when the user wants to capture something to be done — not when they're referring to an existing task. Tasks are always created in Backlog. Use enqueue_task separately to start working on a task.`,
+      description: `Create a new task. Use when the user wants to capture something to be done — not when they're referring to an existing task. Tasks are always created in Backlog. Use run_task_in_background separately to start working on a task.`,
       inputSchema: z.object({
         title: z.string().describe("Short title for the task"),
         description: z
@@ -30,7 +31,7 @@ export function getTaskTools(
         try {
           const task = await createTask(workspaceId, userId, title, description);
           logger.info(`Task ${task.id} created in Backlog`);
-          return `Task created: "${title}" (ID: ${task.id}). Added to Backlog.`;
+          return `Task created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
         } catch (error) {
           logger.error("Failed to create task", { error });
           return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -38,10 +39,42 @@ export function getTaskTools(
       },
     }),
 
-    enqueue_task: tool({
-      description: `Start working on a task in the background. Moves the task to InProgress and queues it for execution. Use when the user wants something done now — "do X", "start working on X", "run this task".`,
+    get_task: tool({
+      description: `Get full details of a task including its complete description. Use before updating a task so you can see what's already there and merge new context into it.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The task ID to enqueue"),
+        taskId: z.string().describe("The task ID"),
+      }),
+      execute: async ({ taskId }) => {
+        try {
+          const task = await getTaskById(taskId);
+          if (!task) return `Task ${taskId} not found.`;
+          return [
+            `Title: ${task.title}`,
+            `Status: ${task.status}`,
+            `Description: ${task.description || "(empty)"}`,
+            `ID: ${task.id}`,
+            `Created: ${task.createdAt}`,
+          ].join("\n");
+        } catch (error) {
+          return `Failed to get task: ${error instanceof Error ? error.message : "Unknown error"}`;
+        }
+      },
+    }),
+
+    run_task_in_background: tool({
+      description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
+
+The background agent will handle the work autonomously. It will create reminders internally if it starts a long-running session (coding, browser) — you do NOT need to create a reminder yourself.
+
+After calling this:
+- Tell the user the task is running in the background
+- Say you'll notify them when it's done
+- Do NOT call take_action for the same task
+- Do NOT create a reminder yourself
+
+When the user asks to work on something, search existing tasks first (search_tasks). If a matching Backlog/Todo task exists, use its ID here instead of creating a new one.`,
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID to run in the background"),
       }),
       execute: async ({ taskId }) => {
         try {
@@ -49,11 +82,11 @@ export function getTaskTools(
           if (!task) return `Task ${taskId} not found.`;
           await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
           await enqueueTask({ taskId, workspaceId, userId });
-          logger.info(`Task ${taskId} enqueued`);
-          return `Task "${task.title}" (ID: ${taskId}) queued and starting shortly.`;
+          logger.info(`Task ${taskId} started in background`);
+          return `Task "${task.title}" (taskId: ${taskId}) is now running in the background. The background agent will handle it. Tell the user it's running and you'll ping them when done.`;
         } catch (error) {
-          logger.error("Failed to enqueue task", { error });
-          return `Failed to enqueue task: ${error instanceof Error ? error.message : "Unknown error"}`;
+          logger.error("Failed to start background task", { error });
+          return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),
@@ -107,7 +140,7 @@ export function getTaskTools(
     }),
 
     update_task: tool({
-      description: `Update an existing task — change its status, title, or description. Use when moving a task through the lifecycle or when the user provides more context about a task. The description is what the agent sees as context when executing the task, so accumulate relevant details there.`,
+      description: `Update an existing task — change its status, title, or description. When updating the description, ALWAYS call get_task first to read the current description, then write a merged version that includes both old and new context. Never blindly replace — accumulate.`,
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z

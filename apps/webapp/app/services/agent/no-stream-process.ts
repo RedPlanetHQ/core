@@ -9,7 +9,10 @@ import { generateId, generateText, type LanguageModel, stepCountIs } from "ai";
 import { buildAgentContext } from "./agent-context";
 import { getModel } from "~/lib/model.server";
 import { addToQueue } from "~/lib/ingest.server";
-import { type MessagePlan } from "~/services/agent/types/decision-agent";
+import {
+  type Trigger,
+  type DecisionContext,
+} from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { deductCredits } from "~/trigger/utils/utils";
 
@@ -29,8 +32,13 @@ interface NoStreamProcessBody {
   source: string;
   /** Override the user type for the inbound message (e.g. System for reminders) */
   messageUserType?: UserTypeEnum;
-  /** Action plan from Decision Agent — passed to buildAgentContext for system prompt injection */
-  actionPlan?: MessagePlan;
+  /** Trigger context — enables think tool for non-user triggers */
+  triggerContext?: {
+    trigger: Trigger;
+    context: DecisionContext;
+    reminderText: string;
+    userPersona?: string;
+  };
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>;
   /** Channel-specific metadata (messageSid, slackUserId, threadTs, etc.) */
@@ -82,12 +90,14 @@ export async function noStreamProcess(
   }
 
   const messages = conversationHistory.map((history: any) => {
-    return {
-      parts: history.parts,
-      role:
-        history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
-      id: history.id,
-    };
+    const role =
+      history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+    // For assistant messages, only inject text parts — tool call internals bloat context
+    const parts =
+      role === "assistant"
+        ? (history.parts ?? []).filter((p: any) => p.type === "text")
+        : history.parts;
+    return { parts, role, id: history.id };
   });
 
   const message = body.message?.parts[0].text;
@@ -113,7 +123,7 @@ export async function noStreamProcess(
     workspaceId,
     source: body.source as any,
     finalMessages,
-    actionPlan: body.actionPlan,
+    triggerContext: body.triggerContext,
     onMessage: body.onMessage,
     channelMetadata: body.channelMetadata,
     conversationId: body.id,

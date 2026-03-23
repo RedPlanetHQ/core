@@ -107,12 +107,15 @@ const { loader, action } = createHybridActionApiRoute(
     }
 
     const messages = conversationHistory.map((history: any) => {
-      return {
-        parts: normalizeParts(history.parts),
-        role:
-          history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
-        id: history.id,
-      };
+      const role =
+        history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+      // For assistant messages, only inject text parts — tool call internals bloat context
+      const normalizedParts = normalizeParts(history.parts);
+      const parts =
+        role === "assistant"
+          ? normalizedParts.filter((p: any) => p.type === "text")
+          : normalizedParts;
+      return { parts, role, id: history.id };
     });
 
     const finalFromHistory = messages.filter((m: any) =>

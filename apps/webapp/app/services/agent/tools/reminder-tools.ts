@@ -16,6 +16,8 @@ import {
   confirmReminderActive,
   getReminderById,
   recalculateRemindersForTimezone,
+  rescheduleReminderAt,
+  computeNextRun,
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/db.server";
@@ -187,8 +189,10 @@ RELATIVE TIME REMINDERS (no startDate):
 One-time: set maxOccurrences=1. Recurring with limit: set maxOccurrences=N or endDate.
 
 FOLLOW-UP REMINDERS:
-- Set isFollowUp=true and parentReminderId to create a follow-up
-- Follow-ups are one-time and check if user responded to the original`,
+- Set isFollowUp=true and parentReminderId to reschedule an existing reminder
+- Does NOT create a new reminder — reschedules the parent to fire again at the new time
+- Use this inside a reminder flow when the action needs a follow-up check (e.g. no response yet, task still running)
+- Works on any reminder, including one that is itself a follow-up`,
       inputSchema: z.object({
         text: z.string().describe("The action to perform when triggered."),
         schedule: z
@@ -263,28 +267,36 @@ FOLLOW-UP REMINDERS:
             }
           }
 
-          // Enforce max 1 follow-up per reminder
+          // For follow-ups: reschedule the parent reminder instead of creating a new row
           if (isFollowUp && parentReminderId) {
             const parentReminder = await getReminderById(parentReminderId);
-            if (parentReminder) {
-              const parentMeta = parentReminder.metadata as Record<
-                string,
-                unknown
-              > | null;
-              if (parentMeta?.isFollowUp === true) {
-                logger.info(
-                  `Rejecting follow-up creation: parent ${parentReminderId} is already a follow-up`,
-                );
-                return "Cannot create follow-up: this reminder is already a follow-up. Max 1 follow-up per original reminder.";
-              }
+            if (!parentReminder) {
+              return "Parent reminder not found.";
             }
+
+            // Get user's timezone
+            const workspace = await prisma.workspace.findUnique({
+              where: { id: workspaceId },
+              include: { UserWorkspace: { include: { user: true }, take: 1 } },
+            });
+            const user = workspace?.UserWorkspace[0]?.user;
+            const userMeta = user?.metadata as Record<string, unknown> | null;
+            const tz = (userMeta?.timezone as string) ?? timezone ?? "UTC";
+
+            const followUpNextRun = computeNextRun(schedule, tz);
+            if (!followUpNextRun) {
+              return "Could not compute follow-up time.";
+            }
+
+            await rescheduleReminderAt(parentReminderId, workspaceId, followUpNextRun);
+            logger.info(
+              `Rescheduled reminder ${parentReminderId} as follow-up at ${followUpNextRun}`,
+            );
+            return `Follow-up scheduled: reminder fires again at ${followUpNextRun.toLocaleString()}.`;
           }
 
-          const maxOcc = isFollowUp
-            ? 1
-            : maxOccurrences && maxOccurrences > 0
-              ? maxOccurrences
-              : null;
+          const maxOcc =
+            maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null;
 
           // Use specified channel or fall back to default
           const targetChannel = reminderChannel || channel;

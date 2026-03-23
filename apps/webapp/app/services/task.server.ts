@@ -112,9 +112,16 @@ export async function markTaskCompleted(
 }
 
 export async function markTaskFailed(id: string, error: string): Promise<Task> {
+  const task = await prisma.task.findUnique({ where: { id } });
+  const existingDescription = task?.description ?? "";
+  const errorEntry = `\n\n[Error] ${new Date().toISOString()}: ${error}`;
   return prisma.task.update({
     where: { id },
-    data: { status: "Backlog", error },
+    data: {
+      status: "Blocked",
+      error,
+      description: existingDescription + errorEntry,
+    },
   });
 }
 

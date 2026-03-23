@@ -22,6 +22,7 @@ import type { MessageChannel } from "~/services/agent/types";
 
 export interface ActivityCasePayload {
   integrationAccountId: string;
+  accountId: string; // human-readable external identifier (e.g. email address, username)
   workspaceId: string;
   userId: string;
   userEmail: string;
@@ -35,6 +36,7 @@ export async function processActivityCase(
 ): Promise<{ success: boolean; error?: string }> {
   const {
     integrationAccountId,
+    accountId,
     workspaceId,
     userId,
     userEmail,
@@ -61,7 +63,10 @@ export async function processActivityCase(
       channel: defaultChannel,
       data: {
         integration: integrationSlug,
+        integrationAccountId,
+        accountId,
         eventType: "activity_sync",
+        text: activitiesText,
         payload: {},
       },
     };
