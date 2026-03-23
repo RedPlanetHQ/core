@@ -17,7 +17,7 @@ import { IntegrationGrid } from "~/components/integrations/integration-grid";
 import { CustomMcpGrid } from "~/components/integrations/custom-mcp-grid";
 import { type McpIntegration } from "~/components/integrations/custom-mcp-card";
 import { PageHeader } from "~/components/common/page-header";
-import { Plus } from "lucide-react";
+import { Plus, Search } from "lucide-react";
 import { prisma } from "~/db.server";
 import { updateUser } from "~/models/user.server";
 
@@ -370,6 +370,7 @@ export default function Integrations() {
   const revalidator = useRevalidator();
   const [showNewForm, setShowNewForm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -405,22 +406,43 @@ export default function Integrations() {
     [integrationAccounts],
   );
 
+  const filteredIntegrations = useMemo(() => {
+    if (!searchQuery.trim()) return integrationDefinitions;
+    const q = searchQuery.toLowerCase();
+    return integrationDefinitions.filter(
+      (i) =>
+        i.name.toLowerCase().includes(q) ||
+        (i.description && i.description.toLowerCase().includes(q)),
+    );
+  }, [integrationDefinitions, searchQuery]);
+
   return (
     <div className="flex h-full flex-col">
       <PageHeader title="Integrations" />
       <div className="home flex h-[calc(100vh_-_40px)] justify-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
         <div className="flex w-full max-w-3xl flex-col items-center gap-6">
           {/* Integrations Section */}
-          <div className="space-y-3">
-            <div>
-              <h2 className="text-lg font-semibold">Integrations</h2>
-              <p className="text-muted-foreground text-sm">
-                Connect third-party apps and services to enhance your Core
-                experience.
-              </p>
+          <div className="w-full space-y-3">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="text-lg font-semibold">Integrations</h2>
+                <p className="text-muted-foreground text-sm">
+                  Connect third-party apps and services to enhance your Core
+                  experience.
+                </p>
+              </div>
+              <div className="relative w-56 shrink-0">
+                <Search className="text-muted-foreground absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" />
+                <Input
+                  placeholder="Search integrations..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-8 text-sm"
+                />
+              </div>
             </div>
             <IntegrationGrid
-              integrations={integrationDefinitions}
+              integrations={filteredIntegrations}
               activeAccountIds={activeAccountIds}
             />
           </div>

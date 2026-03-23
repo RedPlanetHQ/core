@@ -295,10 +295,9 @@ export function startTuiApp(
 						if (msg.role === 'user') {
 							addToMessages(
 								new Text(
-									chalk.dim('\u276f ') + chalk.white(text),
+									chalk.bgHex('#3a3a3a').white(' \u276f ' + text + ' '),
 									0,
 									0,
-									(line: string) => chalk.bgHex('#3a3a3a').white(line),
 								),
 							);
 						} else {
@@ -370,10 +369,9 @@ export function startTuiApp(
 		// User bubble
 		addToMessages(
 			new Text(
-				chalk.dim('\u276f ') + chalk.white(message),
+				chalk.bgHex('#3a3a3a').white(' \u276f ' + message + ' '),
 				0,
 				0,
-				(line: string) => chalk.bgHex('#3a3a3a').white(line),
 			),
 		);
 		addToMessages(new Spacer(1));

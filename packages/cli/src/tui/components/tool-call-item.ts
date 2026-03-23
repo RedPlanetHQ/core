@@ -66,7 +66,7 @@ export class ToolCallItem implements Component {
 	private result: string = '';
 	private children: ToolCallItem[] = [];
 	private childrenByCallId = new Map<string, ToolCallItem>();
-	public isExpanded = true;
+	public isExpanded = false;
 	public isDone = false;
 
 	constructor(toolName: string) {
@@ -152,9 +152,19 @@ export class ToolCallItem implements Component {
 		const lines: string[] = [];
 
 		const dot = this.isDone ? chalk.green('●') : chalk.yellow('◌');
-		const header = this.isDone
-			? `${indent}${dot} ${chalk.bold(this.displayName)}${this.argSummary ? chalk.dim('(' + this.argSummary + ')') : ''}`
-			: `${indent}${dot} ${chalk.bold(this.displayName)} ${chalk.dim('(running...)')}`;
+		let header: string;
+		if (this.isDone) {
+			header = `${indent}${dot} ${chalk.bold(this.displayName)}${this.argSummary ? chalk.dim('(' + this.argSummary + ')') : ''}`;
+		} else if (!this.isExpanded && this.children.length > 0) {
+			const activeChild =
+				[...this.children].reverse().find(c => !c.isDone) ??
+				this.children[this.children.length - 1];
+			const childDot = activeChild.isDone ? chalk.green('●') : chalk.yellow('◌');
+			header = `${indent}${dot} ${chalk.bold(this.displayName)} ${chalk.dim('›')} ${childDot} ${chalk.dim(activeChild.displayName)}`;
+		} else {
+			header = `${indent}${dot} ${chalk.bold(this.displayName)} ${chalk.dim('(running...)')}`;
+		}
+
 		lines.push(truncateToWidth(header, width));
 
 		const hasChildren = this.children.length > 0;

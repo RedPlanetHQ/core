@@ -12,7 +12,7 @@
     "fathom": "./dist/index.js"
   },
   "scripts": {
-    "build": "rimraf dist && npx esbuild src/index.ts --bundle --platform=node --format=cjs --outfile=dist/index.js --minify",
+    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
