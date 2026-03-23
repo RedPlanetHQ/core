@@ -18,7 +18,7 @@ export function getTaskTools(
 ): Record<string, Tool> {
   return {
     create_task: tool({
-      description: `Create a new task. Use when the user wants to capture something to be done — not when they're referring to an existing task. Tasks are always created in Backlog. Use enqueue_task separately to start working on a task.`,
+      description: `Create a new task. Use when the user wants to capture something to be done — not when they're referring to an existing task. Tasks are always created in Backlog. Use run_task_in_background separately to start working on a task.`,
       inputSchema: z.object({
         title: z.string().describe("Short title for the task"),
         description: z
