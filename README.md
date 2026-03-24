@@ -113,55 +113,32 @@ Two paths into CORE — messages from you, and triggers that fire automatically.
 
 ```mermaid
 flowchart TD
-    subgraph channels["  Your Channels  "]
-        CH["WhatsApp · Slack · Email · Web · API"]
-    end
+    MSG["💬 Your message\nWhatsApp · Slack · Email · Web · API"]
+    TRG["⏰ Automated trigger\nReminder · Webhook · Scheduled job"]
 
-    subgraph auto["  Automated Triggers  "]
-        TR["Reminders · Webhooks · Scheduled Jobs"]
-    end
+    AGENT["🤖 CORE Agent\nUnderstands intent · decides what to do"]
 
-    subgraph decision["  CASE — Decision Agent  "]
-        CASE["Reasons about what happened\nBuilds an ActionPlan\n— no personality, pure logic —"]
-    end
+    PERSONA["📋 Persona\nYour rules, preferences & directives"]
+    MEM["🧠 Memory\nContext, relationships & past decisions"]
 
-    subgraph core["  CORE Agent — The Butler  "]
-        AGENT["Understands your intent\nRoutes to tools · streams response"]
-    end
-
-    subgraph orchestrator["  Orchestrator  "]
-        ORC["Coordinates all reads and writes\nManages tool routing and concurrency"]
-    end
-
-    subgraph execution["  Execution Layer  "]
-        MEM["🧠 Memory\nKnowledge Graph"]
-        TK["🔧 Toolkit\n1000+ actions/tools · 50+ apps"]
+    subgraph action["What it does"]
+        TK["🔧 Toolkit\n1000+ actions · 50+ apps"]
         GW["⚡ Gateways\nClaude Code · Browser · Custom agents"]
+        SK["📚 Skills\n100+ templates · your custom workflows"]
     end
 
-    subgraph reuse["  Reusable Logic  "]
-        SK["Skills\n100+ templates · user-defined workflows\nattached to reminders or called directly"]
-    end
+    MSG --> AGENT
+    TRG -->|"CASE reasons about\nwhat to do — no prompt needed"| AGENT
 
-    PERSONA["📋 Persona\nYour preferences · rules · directives\nloaded into every session"]
+    PERSONA --> AGENT
+    MEM --> AGENT
 
-    CH -->|"message"| AGENT
-    TR -->|"trigger fires"| CASE
-    CASE -->|"ActionPlan + persona context"| AGENT
+    AGENT --> TK
+    AGENT --> GW
+    TK --> SK
 
-    MEM -->|"loaded at session start"| PERSONA
-    PERSONA -->|"injected into system prompt"| AGENT
-
-    AGENT -->|"gather_context  ·  READ"| ORC
-    AGENT -->|"take_action  ·  WRITE"| ORC
-
-    ORC --> MEM
-    ORC --> TK
-    ORC --> GW
-    TK -. "load & execute" .-> SK
-
-    AGENT -->|"response"| CH
-    AGENT -. "ingest conversation" .-> MEM
+    AGENT -->|"response"| MSG
+    AGENT -.->|"stores in memory"| MEM
 ```
 
 ### How Memory Works
