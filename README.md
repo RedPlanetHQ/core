@@ -116,29 +116,35 @@ flowchart TD
     MSG["💬 Your message\nWhatsApp · Slack · Email · Web · API"]
     TRG["⏰ Automated trigger\nReminder · Webhook · Scheduled job"]
 
-    AGENT["🤖 CORE Agent\nUnderstands intent · decides what to do"]
+    CASE["① CASE — Decision Agent\nAnalyses trigger · builds ActionPlan\nwhat to do · tone · whether to message"]
 
-    PERSONA["📋 Persona\nYour rules, preferences & directives"]
-    MEM["🧠 Memory\nContext, relationships & past decisions"]
+    AGENT["② CORE Agent\nReads ActionPlan · loads Persona\ndecides which tools to call"]
 
-    subgraph action["What it does"]
-        TK["🔧 Toolkit\n1000+ actions · 50+ apps"]
-        GW["⚡ Gateways\nClaude Code · Browser · Custom agents"]
-        SK["📚 Skills\n100+ templates · your custom workflows"]
+    subgraph orch["Orchestrator — routes & coordinates all tool calls"]
+        MEMR["③ memory_explorer\nSearch knowledge graph for\nrelevant context · past decisions · relationships"]
+        TOOLS["④ Toolkit\nExecute the specific actions\nsearch_emails · get_calendar · create_issue · …"]
+        GW["④ Gateways  (if needed)\nClaude Code · Browser · Custom agents"]
     end
 
+    MEM[("🧠 Memory\nKnowledge Graph")]
+
+    SYNTH["⑤ CORE Agent synthesizes\nCombines memory context + tool results\ncrafts response"]
+
+    RESP["Response delivered\nvia your preferred channel"]
+
+    INGEST["⑥ memory_ingest\nSummarised conversation stored\nback to knowledge graph"]
+
     MSG --> AGENT
-    TRG -->|"CASE reasons about\nwhat to do — no prompt needed"| AGENT
+    TRG --> CASE
+    CASE -->|"ActionPlan"| AGENT
 
-    PERSONA --> AGENT
-    MEM --> AGENT
+    AGENT --> orch
+    MEMR <-->|"read"| MEM
 
-    AGENT --> TK
-    AGENT --> GW
-    TK --> SK
-
-    AGENT -->|"response"| MSG
-    AGENT -.->|"stores in memory"| MEM
+    orch --> SYNTH
+    SYNTH --> RESP
+    SYNTH --> INGEST
+    INGEST -->|"write"| MEM
 ```
 
 ### How Memory Works
