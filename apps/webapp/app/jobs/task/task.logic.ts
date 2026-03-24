@@ -41,22 +41,20 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     const intent = task.description ?? task.title;
 
-    // Reuse existing conversation if user already chatted in this task, otherwise create new
-    let conversationId: string;
-    if (task.conversationIds.length > 0) {
-      conversationId = task.conversationIds[task.conversationIds.length - 1];
-      logger.info(`Task ${taskId}: reusing existing conversation ${conversationId}`);
-    } else {
-      const result = await createConversation(workspaceId, userId, {
-        message: intent,
-        parts: [{ text: intent, type: "text" }],
-        userType: UserTypeEnum.User,
-        asyncJobId: task.id,
-        source: "task",
-      });
-      conversationId = result.conversationId;
-      await updateTaskConversationIds(taskId, [conversationId]);
-    }
+    // Always create a new conversation for each background run
+    const result = await createConversation(workspaceId, userId, {
+      message: intent,
+      parts: [{ text: intent, type: "text" }],
+      userType: UserTypeEnum.User,
+      asyncJobId: task.id,
+      source: "task",
+    });
+    const conversationId = result.conversationId;
+    // Append to existing conversation history for this task
+    await updateTaskConversationIds(taskId, [
+      ...(task.conversationIds ?? []),
+      conversationId,
+    ]);
 
     const { token } = await getOrCreatePersonalAccessToken({
       name: "task-internal",

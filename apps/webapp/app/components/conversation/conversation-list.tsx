@@ -159,7 +159,7 @@ function SourceFolder({
           <Button
             variant="ghost"
             isActive={isOpen}
-            className="mb-0.5 w-full min-w-0 flex-1 gap-2"
+            className="mb-0.5 w-full min-w-0 flex-1 items-center gap-2"
           >
             {isOpen ? (
               <FolderOpen size={16} className="shrink-0" />
@@ -171,7 +171,7 @@ function SourceFolder({
 
             {icon && <span className="shrink-0">{icon}</span>}
             {totalCount > 0 && (
-              <span className="text-muted-foreground text-sm">
+              <span className="text-muted-foreground self-center">
                 {totalCount}
               </span>
             )}

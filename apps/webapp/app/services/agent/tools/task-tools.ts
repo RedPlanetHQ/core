@@ -16,6 +16,7 @@ import { env } from "~/env.server";
 export function getTaskTools(
   workspaceId: string,
   userId: string,
+  isBackgroundExecution?: boolean,
 ): Record<string, Tool> {
   return {
     create_task: tool({
@@ -61,7 +62,7 @@ export function getTaskTools(
       },
     }),
 
-    run_task_in_background: tool({
+    ...(!isBackgroundExecution && { run_task_in_background: tool({
       description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
 
 The background agent will handle the work autonomously. It will create reminders internally if it starts a long-running session (coding, browser) — you do NOT need to create a reminder yourself.
@@ -89,7 +90,7 @@ When the user asks to work on something, search existing tasks first (search_tas
           return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
-    }),
+    })}),
 
     list_tasks: tool({
       description: "List tasks with their current status.",

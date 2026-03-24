@@ -145,6 +145,14 @@ export async function getWorkspacePersona(workspaceId: string) {
   });
 }
 
+export async function getButlerName(workspaceId: string): Promise<string> {
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: workspaceId },
+    select: { name: true },
+  });
+  return workspace?.name ?? "Core";
+}
+
 export async function getUserWorkspaces(userId: string) {
   const userWorkspaces = await prisma.userWorkspace.findMany({
     where: {
