@@ -28,7 +28,11 @@ if (args[0] === 'tui') {
 
 	// startTuiApp is synchronous — pi-tui manages the process lifecycle
 	// via its stdin listener. tui.addInputListener handles Ctrl+C → process.exit(0)
-	startTuiApp(baseUrl, apiKey, pkg.version);
+	startTuiApp(
+		baseUrl
+		apiKey,
+		pkg.version,
+	);
 } else {
 	const app = new Pastel({
 		importMeta: import.meta,

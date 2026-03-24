@@ -45,7 +45,10 @@ class NowPlayingTuiComponent {
   private timer: ReturnType<typeof setInterval> | null = null;
   private _player: { render: (w: number) => string[] } | null = null;
   // undefined = not tried yet, null = tried but unavailable
-  private createPlayer: ((opts: TrackData) => { render: (w: number) => string[] }) | null | undefined = undefined;
+  private createPlayer:
+    | ((opts: TrackData) => { render: (w: number) => string[] })
+    | null
+    | undefined = undefined;
 
   constructor(
     private baseUrl: string,
@@ -93,7 +96,7 @@ class NowPlayingTuiComponent {
 
   render(width: number): string[] {
     const raw = this._player ? this._player.render(width) : this.lines;
-    return raw.map(line => {
+    return raw.map((line) => {
       const visible = line.replace(/\x1b\[[0-9;]*m/g, '').length;
       const pad = Math.max(0, width - visible);
       return ' '.repeat(pad) + line;
@@ -128,12 +131,7 @@ export const nowPlayingWidget: WidgetSpec = {
       if (!account) {
         return { render: (_w: number) => ['♫  Spotify not connected'] };
       }
-      return new NowPlayingTuiComponent(
-        baseUrl,
-        account.id,
-        pat,
-        requestRender ?? (() => {}),
-      );
+      return new NowPlayingTuiComponent(baseUrl, account.id, pat, requestRender ?? (() => {}));
     }
 
     // webapp — return a bound React component
