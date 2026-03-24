@@ -147,32 +147,51 @@ flowchart TD
     INGEST -->|"write"| MEM
 ```
 
-### How Memory Works
+### How New Memory Is Stored
 
-Memory isn't stored as raw text. Every conversation is processed into structured facts — classified, connected, and retrievable by intent.
+Every conversation is processed into structured facts — not saved as raw text.
 
 ```mermaid
-flowchart LR
-    subgraph ingest["  Ingestion  "]
-        direction TB
-        CONV["Conversation or Event"]
-        EXTRACT["Extract entities\n& relationships"]
-        CLASSIFY["Classify each fact\npreference · decision · goal\ndirective · rule · observation"]
-        GRAPH["Write to Knowledge Graph\nepisodes · entities · statements\nwith timestamps & source links"]
-        CONV --> EXTRACT --> CLASSIFY --> GRAPH
+flowchart TD
+    CONV["Conversation or event completes\nchat · reminder execution · email processed"]
+
+    EXTRACT["① Extract entities & relationships\nPeople · projects · companies · concepts\nand how they connect to each other"]
+
+    CLASSIFY["② Classify each fact by type\npreference · decision · goal\ndirective · rule · observation"]
+
+    EPISODE["③ Create an episode\nGroup related facts under a\ntimestamped conversation record"]
+
+    GRAPH["④ Write to Knowledge Graph\nEpisodes · entities · statements\nlinked with timestamps & source"]
+
+    MEM[("🧠 Memory\nKnowledge Graph")]
+
+    CONV --> EXTRACT --> CLASSIFY --> EPISODE --> GRAPH --> MEM
+```
+
+### How Relevant Info Is Searched
+
+Retrieval is intent-driven — not keyword matching.
+
+```mermaid
+flowchart TD
+    QUERY["User message or ActionPlan\narrives at CORE Agent"]
+
+    DECOMP["① Memory Agent decomposes intent\nBreaks the request into\nmultiple targeted sub-queries"]
+
+    subgraph search["② Run searches in parallel"]
+        S1["Entity-centric\nwho is involved"]
+        S2["Relational\nhow things connect"]
+        S3["Semantic\nwhat was meant"]
+        S4["Temporal\nwhen it happened"]
     end
 
-    subgraph retrieve["  Retrieval  "]
-        direction TB
-        QUERY["Intent or question\narrives at CORE Agent"]
-        DECOMP["Memory Agent\ndecomposes intent into\nmultiple targeted queries"]
-        SEARCH["Multi-pattern search\nentity-centric · relational\nsemantic · temporal"]
-        CONTEXT["Rich context returned\nwith provenance & time-awareness"]
-        QUERY --> DECOMP --> SEARCH --> CONTEXT
-    end
+    RANK["③ Rank & merge results\nDeduplicate · score by relevance\nand recency"]
 
-    GRAPH -->|"knowledge graph"| SEARCH
-    CONTEXT -->|"grounds the agent's response"| QUERY
+    CONTEXT["④ Return rich context\nStructured facts with timestamps\nprovenance & relationship links"]
+
+    AGENT["CORE Agent uses context\nto ground its response"]
+
+    QUERY --> DECOMP --> search --> RANK --> CONTEXT --> AGENT
 ```
 
 **What gets stored:** preferences, decisions, goals, directives, relationships between people and topics — not just facts but the *when* and *why* behind them.
