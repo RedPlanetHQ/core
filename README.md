@@ -152,7 +152,7 @@ flowchart TD
 Every conversation is processed into structured facts — not saved as raw text.
 
 ```mermaid
-flowchart TD
+flowchart LR
     CONV["Conversation or event completes\nchat · reminder execution · email processed"]
 
     EXTRACT["① Extract entities & relationships\nPeople · projects · companies · concepts\nand how they connect to each other"]
@@ -173,7 +173,7 @@ flowchart TD
 Retrieval is intent-driven — not keyword matching.
 
 ```mermaid
-flowchart TD
+flowchart LR
     QUERY["User message or ActionPlan\narrives at CORE Agent"]
 
     DECOMP["① Memory Agent decomposes intent\nBreaks the request into\nmultiple targeted sub-queries"]
