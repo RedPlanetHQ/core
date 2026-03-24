@@ -1,7 +1,10 @@
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import type { MessageChannel } from "~/services/agent/types";
-import { setTelegramWebhook, deleteTelegramWebhook } from "~/services/channels/telegram/client";
+import {
+  setTelegramWebhook,
+  deleteTelegramWebhook,
+} from "~/services/channels/telegram/client";
 
 export const DEFAULT_EMAIL_DOMAIN = "getcore.me";
 
@@ -85,12 +88,6 @@ export async function createChannel(
     });
   }
 
-  // For Telegram: register webhook on creation
-  if (data.type === "telegram") {
-    const origin = process.env.APP_URL || "https://app.core.redplanethq.com";
-    await setTelegramWebhook(data.config.bot_token, `${origin}/webhooks/telegram`);
-  }
-
   const channel = await prisma.channel.create({
     data: {
       workspaceId,
@@ -101,7 +98,20 @@ export async function createChannel(
     },
   });
 
-  logger.info("Channel created", { channelId: channel.id, type: data.type, workspaceId });
+  // For Telegram: register webhook after creation so channelId is included in the URL
+  if (data.type === "telegram") {
+    const origin = process.env.APP_URL || "https://app.getcore.me";
+    await setTelegramWebhook(
+      data.config.bot_token,
+      `${origin}/webhooks/telegram?channelId=${channel.id}`,
+    );
+  }
+
+  logger.info("Channel created", {
+    channelId: channel.id,
+    type: data.type,
+    workspaceId,
+  });
   return { id: channel.id };
 }
 
