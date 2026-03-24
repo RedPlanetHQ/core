@@ -15,6 +15,7 @@ export interface SlackFile {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export interface SlackEventPayload {
   type: string;
+  team_id?: string;
   authorizations?: Array<{
     user_id?: string;
     is_bot?: boolean;
@@ -64,36 +65,47 @@ export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
 }
 
 /**
+ * Find the Slack Channel record for this event using the bot_user_id
+ * from authorizations — uniquely identifies which workspace/installation
+ * received the event even when multiple workspaces share the same Slack team.
+ */
+async function findChannelByAuthorization(
+  eventBody: SlackEventPayload,
+) {
+  const botUserId = eventBody.authorizations?.find((a) => a.is_bot)?.user_id;
+  if (!botUserId) return null;
+
+  return prisma.channel.findFirst({
+    where: {
+      type: "slack",
+      isActive: true,
+      config: { path: ["bot_user_id"], equals: botUserId },
+    },
+  });
+}
+
+/**
  * Check if a DM channel includes the CORE bot as a member.
- * Uses the sending user's IntegrationAccount to get a bot token for the API call.
- * Returns true if bot_user_id is not in the integration config (skip check).
+ * Looks up the Channel record via bot_user_id from authorizations.
+ * Returns true if bot_user_id is not configured (skip check).
  */
 async function isDMWithBot(
-  channelId: string,
-  slackUserId: string,
+  slackChannelId: string,
+  eventBody: SlackEventPayload,
 ): Promise<boolean> {
-  const account = await prisma.integrationAccount.findFirst({
-    where: {
-      accountId: slackUserId,
-      integrationDefinition: { slug: "slack" },
-      isActive: true,
-      deleted: null,
-    },
-    select: { integrationConfiguration: true },
-  });
+  const channel = await findChannelByAuthorization(eventBody);
+  if (!channel) return false;
 
-  if (!account) return false;
-
-  const config = account.integrationConfiguration as Record<string, string>;
-  const botToken = config?.bot_token;
+  const config = channel.config as Record<string, string>;
+  const botToken = config.bot_token;
   if (!botToken) return false;
 
-  const botUserId = config?.bot_user_id;
+  const botUserId = config.bot_user_id;
   if (!botUserId) return true;
 
   try {
     const res = await fetch(
-      `https://slack.com/api/conversations.members?channel=${channelId}`,
+      `https://slack.com/api/conversations.members?channel=${slackChannelId}`,
       {
         headers: { Authorization: `Bearer ${botToken}` },
       },
@@ -102,7 +114,7 @@ async function isDMWithBot(
     if (!data.ok) {
       logger.warn("Failed to check DM members", {
         error: data.error,
-        channelId,
+        slackChannelId,
       });
       return false;
     }
@@ -132,7 +144,9 @@ async function downloadSlackFile(
 
 /**
  * Parse a pre-parsed Slack event body into an InboundParseResult.
- * Called from the webhook route which already has the JSON.
+ * Looks up the Channel record via user_id (sender's Slack ID) for precise
+ * per-user routing. Falls back to bot_user_id authorization match if no
+ * user_id is stored (e.g. manually configured channels).
  */
 export async function parseSlackDMEvent(
   eventBody: SlackEventPayload,
@@ -146,9 +160,9 @@ export async function parseSlackDMEvent(
   if (!slackUserId) return {};
   if (!text && (!event.files || event.files.length === 0)) return {};
 
-  // For DMs, verify the channel is with the CORE bot (not some other DM)
+  // For DMs, verify the channel is with the CORE bot
   if (event.channel_type === "im" && event.channel) {
-    const botDM = await isDMWithBot(event.channel, slackUserId);
+    const botDM = await isDMWithBot(event.channel, eventBody);
     if (!botDM) {
       logger.info("Ignoring DM not directed at CORE bot", {
         channel: event.channel,
@@ -157,54 +171,61 @@ export async function parseSlackDMEvent(
     }
   }
 
-  // Look up CORE user via IntegrationAccount
-  const account = await prisma.integrationAccount.findFirst({
+  // Look up Channel by the sender's Slack user_id stored in config.
+  // This is set on OAuth connect (account.accountId) and optionally on manual config.
+  let channel = await prisma.channel.findFirst({
     where: {
-      accountId: slackUserId,
-      integrationDefinition: { slug: "slack" },
+      type: "slack",
       isActive: true,
-      deleted: null,
-    },
-    select: {
-      integratedById: true,
-      workspaceId: true,
-      integrationConfiguration: true,
+      config: { path: ["user_id"], equals: slackUserId },
     },
   });
 
-  if (!account) {
-    logger.warn("Slack message from unknown user", { slackUserId });
+  // Fallback: match by bot_user_id from authorizations (covers manual channels
+  // where user_id is not set, single-user workspaces)
+  if (!channel) {
+    channel = await findChannelByAuthorization(eventBody);
+  }
+
+  if (!channel) {
+    logger.warn("No Slack channel found for inbound message", { slackUserId });
     return {};
   }
 
-  const config = account.integrationConfiguration as Record<
-    string,
-    string
-  > | null;
-  const botToken = config?.bot_token;
+  const config = channel.config as Record<string, string>;
+  const botToken = config.bot_token;
 
-  // Include channel context for typing indicators and integration queries
+  // Resolve the CORE user for this workspace
+  const workspace = await prisma.workspace.findUnique({
+    where: { id: channel.workspaceId },
+    include: { UserWorkspace: { include: { user: true }, take: 1 } },
+  });
+
+  const workspaceUser = workspace?.UserWorkspace[0];
+  if (!workspaceUser) {
+    logger.warn("No user found for workspace", {
+      workspaceId: channel.workspaceId,
+    });
+    return {};
+  }
+
   const metadata: Record<string, string> = {
     channel: "slack",
     slackUserId,
   };
-  // Always capture the Slack channel ID (DM or channel) and message timestamp
+
   if (event.channel) {
     metadata.eventChannel = event.channel;
   }
   if (event.ts) {
     metadata.messageTs = event.ts;
   }
-  // Capture thread_ts for all message types (DMs and @mentions)
-  // Set as sessionId so message-processor creates a separate conversation per thread
   if (event.thread_ts) {
     metadata.threadTs = event.thread_ts;
     metadata.sessionId = event.thread_ts;
   }
   if (event.type === "app_mention" && event.channel) {
-    // For @mentions, also set slackChannel for reply routing
     metadata.slackChannel = event.channel;
-    // Use thread_ts or message ts as threadTs for reply routing
     if (!metadata.threadTs && event.ts) {
       metadata.threadTs = event.ts;
       metadata.sessionId = event.ts;
@@ -231,8 +252,8 @@ export async function parseSlackDMEvent(
 
   return {
     message: {
-      userId: account.integratedById,
-      workspaceId: account.workspaceId,
+      userId: workspaceUser.userId,
+      workspaceId: channel.workspaceId,
       userMessage: text,
       replyTo: slackUserId,
       ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
@@ -243,7 +264,6 @@ export async function parseSlackDMEvent(
 
 /**
  * Parse a raw Slack Events API request into an InboundParseResult.
- * ChannelHandler interface — used if events arrive at /api/v1/channels/slack.
  */
 export async function parseInbound(
   request: Request,

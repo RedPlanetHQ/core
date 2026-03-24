@@ -20,11 +20,54 @@ import {
 import type { ServiceConfig } from '@/utils/service-manager';
 import { initializeDefaultProfiles } from '@/utils/browser-config';
 
-export const options = zod.object({});
+export const options = zod.object({
+	alwaysOn: zod.boolean().default(false).describe('Prevent mac from sleeping while gateway is running (macOS only)'),
+});
 
 type Props = {
 	options: zod.infer<typeof options>;
 };
+
+function buildServiceCommand(
+	nodeExec: string,
+	entryPath: string,
+	alwaysOn: boolean,
+): { command: string; args: string[] } {
+	if (alwaysOn) {
+		if (process.platform === 'darwin') {
+			// caffeinate -i: prevent idle sleep while child process runs
+			return { command: '/usr/bin/caffeinate', args: ['-i', nodeExec, entryPath] };
+		}
+		if (process.platform === 'linux') {
+			// systemd-inhibit: hold a sleep+idle inhibitor lock while child runs
+			return {
+				command: 'systemd-inhibit',
+				args: [
+					'--what=sleep:idle',
+					'--who=CoreBrain Gateway',
+					'--why=Gateway is running',
+					'--mode=block',
+					nodeExec,
+					entryPath,
+				],
+			};
+		}
+		if (process.platform === 'win32') {
+			// SetThreadExecutionState via PowerShell: prevents sleep while node runs
+			const psScript = [
+				'Add-Type -Name Power -Namespace Win32 -MemberDefinition \'[DllImport("kernel32.dll")] public static extern uint SetThreadExecutionState(uint s);\';',
+				'[Win32.Power]::SetThreadExecutionState(0x80000003) | Out-Null;', // ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED
+				`& '${nodeExec}' '${entryPath}';`,
+				'[Win32.Power]::SetThreadExecutionState(0x80000000) | Out-Null;', // ES_CONTINUOUS (clear)
+			].join(' ');
+			return {
+				command: 'powershell.exe',
+				args: ['-NoProfile', '-NonInteractive', '-Command', psScript],
+			};
+		}
+	}
+	return { command: nodeExec, args: [entryPath] };
+}
 
 function getGatewayEntryPath(): string {
 	const __filename = fileURLToPath(import.meta.url);
@@ -32,7 +75,7 @@ function getGatewayEntryPath(): string {
 	return join(__dirname, '..', '..', 'server', 'gateway-entry.js');
 }
 
-async function runGatewayStart(): Promise<void> {
+async function runGatewayStart(alwaysOn: boolean): Promise<void> {
 	const spinner = p.spinner();
 
 	// Check platform support
@@ -77,12 +120,13 @@ async function runGatewayStart(): Promise<void> {
 
 	const gatewayEntryPath = getGatewayEntryPath();
 	const logDir = join(getConfigPath(), 'logs');
+	const { command, args } = buildServiceCommand(process.execPath, gatewayEntryPath, alwaysOn);
 
 	const serviceConfig: ServiceConfig = {
 		name: serviceName,
 		displayName: 'CoreBrain Gateway',
-		command: process.execPath,
-		args: [gatewayEntryPath],
+		command,
+		args,
 		port: 0,
 		workingDirectory: homedir(),
 		logPath: join(logDir, 'gateway-stdout.log'),
@@ -112,6 +156,7 @@ async function runGatewayStart(): Promise<void> {
 			serviceInstalled: true,
 			serviceType: serviceType,
 			serviceName: serviceName,
+			alwaysOn,
 		},
 	});
 
@@ -127,11 +172,11 @@ async function runGatewayStart(): Promise<void> {
 	);
 }
 
-export default function GatewayStart(_props: Props) {
+export default function GatewayStart({ options: { alwaysOn } }: Props) {
 	const { exit } = useApp();
 
 	useEffect(() => {
-		runGatewayStart()
+		runGatewayStart(alwaysOn)
 			.catch((err) => {
 				p.log.error(`Gateway error: ${err instanceof Error ? err.message : 'Unknown error'}`);
 				process.exitCode = 1;

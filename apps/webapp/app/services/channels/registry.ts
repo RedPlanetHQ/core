@@ -2,11 +2,13 @@ import type { ChannelHandler } from "./types";
 import { whatsappChannel } from "./whatsapp";
 import { emailChannel } from "./email";
 import { slackChannel } from "./slack";
+import { telegramChannel } from "./telegram";
 
 const channels: Record<string, ChannelHandler> = {
   whatsapp: whatsappChannel,
   email: emailChannel,
   slack: slackChannel,
+  telegram: telegramChannel,
 };
 
 export type ChannelSlug = keyof typeof channels;

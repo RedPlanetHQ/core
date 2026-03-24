@@ -3,8 +3,8 @@ import { useFetcher } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
-import { generateButlerName } from "~/models/onboarding.server";
 import { OnboardingAgentName } from "~/components/onboarding/onboarding-agent-name";
+import { ensureDefaultEmailChannel } from "~/services/channel.server";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -31,16 +31,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 export async function action({ request }: ActionFunctionArgs) {
   const { workspaceId } = await requireUser(request);
   const formData = await request.formData();
-  const intent = formData.get("intent") as string;
-
-  if (intent === "generate_name") {
-    const currentName = formData.get("currentName") as string | null;
-    const previousNames = JSON.parse((formData.get("previousNames") as string) || "[]") as string[];
-    const excluded = [...previousNames, currentName].filter(Boolean) as string[];
-    const name = await generateButlerName(excluded);
-    return json({ name });
-  }
-
   const agentName = formData.get("agentName") as string;
   const agentSlug = formData.get("agentSlug") as string;
 
@@ -59,6 +49,8 @@ export async function action({ request }: ActionFunctionArgs) {
         metadata: { ...existingMeta, onboardingV2Complete: true },
       },
     });
+
+    await ensureDefaultEmailChannel(workspaceId as string, agentSlug);
   }
 
   return redirect("/onboarding");
@@ -67,17 +59,9 @@ export async function action({ request }: ActionFunctionArgs) {
 export default function OnboardingName() {
   const { workspaceId, defaultName, defaultSlug } = useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher();
-  const nameFetcher = useFetcher<{ name: string }>();
 
   const handleComplete = (name: string, slug: string) => {
     fetcher.submit({ agentName: name, agentSlug: slug }, { method: "POST" });
-  };
-
-  const handleGenerateName = (currentName: string, previousNames: string[]) => {
-    nameFetcher.submit(
-      { intent: "generate_name", currentName, previousNames: JSON.stringify(previousNames) },
-      { method: "POST" },
-    );
   };
 
   return (
@@ -88,9 +72,6 @@ export default function OnboardingName() {
         workspaceId={workspaceId}
         onComplete={handleComplete}
         isSubmitting={fetcher.state !== "idle"}
-        onGenerateName={handleGenerateName}
-        generatedName={nameFetcher.data?.name}
-        isGenerating={nameFetcher.state !== "idle"}
       />
     </div>
   );

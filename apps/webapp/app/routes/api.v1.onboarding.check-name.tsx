@@ -13,13 +13,9 @@ function slugify(name: string): string {
 export async function action({ request }: ActionFunctionArgs) {
   await requireUser(request);
 
-  const { name, currentWorkspaceId } = await request.json();
+  const { name, slug: rawSlug, currentWorkspaceId } = await request.json();
 
-  if (!name || typeof name !== "string") {
-    return json({ slug: "", available: false });
-  }
-
-  const slug = slugify(name);
+  const slug = rawSlug ? slugify(rawSlug as string) : slugify((name as string) ?? "");
 
   if (!slug) {
     return json({ slug: "", available: false });

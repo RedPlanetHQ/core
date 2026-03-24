@@ -263,6 +263,16 @@ async function deliverToChannel(
       select: { accountId: true },
     });
     replyTo = slackAccount?.accountId ?? undefined;
+  } else if (channel === "telegram") {
+    const telegramChannel = await prisma.channel.findFirst({
+      where: { workspaceId: userData.workspaceId, type: "telegram", isActive: true },
+      orderBy: { isDefault: "desc" },
+    });
+    const config = telegramChannel?.config as Record<string, string> | undefined;
+    replyTo = config?.chat_id;
+    if (telegramChannel) {
+      (metadata as Record<string, string>).channelId = telegramChannel.id;
+    }
   } else {
     replyTo = userData.email;
   }

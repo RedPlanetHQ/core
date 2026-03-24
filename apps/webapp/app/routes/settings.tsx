@@ -9,6 +9,7 @@ import {
   Activity,
   Bot,
   Server,
+  MessageSquare,
 } from "lucide-react";
 
 import {
@@ -68,6 +69,7 @@ export default function Settings() {
       { name: "Activity", icon: Activity, path: "/settings/activity" },
       { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
       { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
+      { name: "Channels", icon: MessageSquare, path: "/settings/workspace/channels" },
     ],
   };
   const navigate = useNavigate();

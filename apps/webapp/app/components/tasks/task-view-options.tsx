@@ -70,12 +70,12 @@ export function TaskViewOptions({
               <button
                 key={status}
                 onClick={() => toggle(status)}
-                className="hover:bg-grayAlpha-100 flex w-full items-center gap-2 rounded px-2 py-1.5 text-sm"
+                className="hover:bg-grayAlpha-100 flex w-full items-center gap-1 rounded px-2 py-1.5 text-sm"
               >
                 <div className="flex h-4 w-4 items-center justify-center">
                   {checked && <Check size={12} />}
                 </div>
-                <Icon size={14} />
+                <Icon size={16} />
                 {STATUS_LABELS[status]}
               </button>
             );

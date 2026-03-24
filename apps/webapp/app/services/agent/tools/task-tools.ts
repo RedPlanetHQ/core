@@ -30,7 +30,12 @@ export function getTaskTools(
       }),
       execute: async ({ title, description }) => {
         try {
-          const task = await createTask(workspaceId, userId, title, description);
+          const task = await createTask(
+            workspaceId,
+            userId,
+            title,
+            description,
+          );
           logger.info(`Task ${task.id} created in Backlog`);
           return `Task created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
         } catch (error) {
@@ -62,8 +67,9 @@ export function getTaskTools(
       },
     }),
 
-    ...(!isBackgroundExecution && { run_task_in_background: tool({
-      description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
+    ...(!isBackgroundExecution && {
+      run_task_in_background: tool({
+        description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
 
 The background agent will handle the work autonomously. It will create reminders internally if it starts a long-running session (coding, browser) — you do NOT need to create a reminder yourself.
 
@@ -74,23 +80,24 @@ After calling this:
 - Do NOT create a reminder yourself
 
 When the user asks to work on something, search existing tasks first (search_tasks). If a matching Backlog/Todo task exists, use its ID here instead of creating a new one.`,
-      inputSchema: z.object({
-        taskId: z.string().describe("The task ID to run in the background"),
+        inputSchema: z.object({
+          taskId: z.string().describe("The task ID to run in the background"),
+        }),
+        execute: async ({ taskId }) => {
+          try {
+            const task = await getTaskById(taskId);
+            if (!task) return `Task ${taskId} not found.`;
+            await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
+            await enqueueTask({ taskId, workspaceId, userId });
+            logger.info(`Task ${taskId} started in background`);
+            return `Task "${task.title}" (taskId: ${taskId}) is now running in the background. The background agent will handle it. Tell the user it's running and you'll ping them when done.`;
+          } catch (error) {
+            logger.error("Failed to start background task", { error });
+            return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
+          }
+        },
       }),
-      execute: async ({ taskId }) => {
-        try {
-          const task = await getTaskById(taskId);
-          if (!task) return `Task ${taskId} not found.`;
-          await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
-          await enqueueTask({ taskId, workspaceId, userId });
-          logger.info(`Task ${taskId} started in background`);
-          return `Task "${task.title}" (taskId: ${taskId}) is now running in the background. The background agent will handle it. Tell the user it's running and you'll ping them when done.`;
-        } catch (error) {
-          logger.error("Failed to start background task", { error });
-          return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
-        }
-      },
-    })}),
+    }),
 
     list_tasks: tool({
       description: "List tasks with their current status.",
@@ -122,7 +129,11 @@ When the user asks to work on something, search existing tasks first (search_tas
     search_tasks: tool({
       description: `Find an existing task by keyword. Use when the user is referring to a task that already exists and you need to locate it. Searches across task titles and descriptions.`,
       inputSchema: z.object({
-        query: z.string().describe("Search keyword to match against task title and description"),
+        query: z
+          .string()
+          .describe(
+            "Search keyword to match against task title and description",
+          ),
       }),
       execute: async ({ query }) => {
         try {
@@ -149,7 +160,12 @@ When the user asks to work on something, search existing tasks first (search_tas
           .optional()
           .describe("New status"),
         title: z.string().optional().describe("Updated title"),
-        description: z.string().optional().describe("Updated description — this becomes context when the agent executes the task"),
+        description: z
+          .string()
+          .optional()
+          .describe(
+            "Updated description — this becomes context when the agent executes the task",
+          ),
       }),
       execute: async ({ taskId, status, title, description }) => {
         try {
@@ -160,7 +176,12 @@ When the user asks to work on something, search existing tasks first (search_tas
             await updateTask(taskId, data);
           }
           if (status) {
-            await changeTaskStatus(taskId, status as TaskStatus, workspaceId, userId);
+            await changeTaskStatus(
+              taskId,
+              status as TaskStatus,
+              workspaceId,
+              userId,
+            );
           }
           const parts = [];
           if (status) parts.push(`status → ${status}`);

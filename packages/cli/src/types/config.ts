@@ -111,6 +111,7 @@ export interface GatewayConfig {
 	serviceType?: ServiceType;
 	serviceName?: string;
 	slots?: GatewaySlots; // Which tool slots are enabled
+	alwaysOn?: boolean; // Prevent mac sleep while gateway is running (macOS only)
 }
 
 // CLI Backend configuration for coding agents

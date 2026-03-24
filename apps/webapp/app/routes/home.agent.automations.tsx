@@ -128,7 +128,7 @@ const ActionSchema = z.object({
   intent: z.enum(["toggle", "delete", "change-channel"]),
   reminderId: z.string(),
   isActive: z.string().nullish(),
-  channel: z.enum(["whatsapp", "slack", "email"]).nullish(),
+  channel: z.enum(["whatsapp", "slack", "email", "telegram"]).nullish(),
 });
 
 export async function action({ request }: ActionFunctionArgs) {

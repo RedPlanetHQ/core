@@ -14,6 +14,7 @@ export interface ReminderData {
   text: string;
   schedule: string; // RRule string (in user's local timezone)
   channel: MessageChannel;
+  channelId?: string | null; // Optional FK to Channel table for explicit routing
   isActive?: boolean;
   maxOccurrences?: number | null;
   endDate?: Date | null;

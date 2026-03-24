@@ -7,7 +7,7 @@ import {
   deleteReminder,
 } from "~/services/reminder.server";
 import { logger } from "~/services/logger.service";
-import type { MessageChannel } from "~/services/agent/types";
+import { getAvailableChannels } from "~/services/channel.server";
 
 const ParamsSchema = z.object({
   reminderId: z.string(),
@@ -16,34 +16,11 @@ const ParamsSchema = z.object({
 const ReminderUpdateSchema = z.object({
   text: z.string().optional(),
   schedule: z.string().optional(),
-  channel: z.enum(["whatsapp", "email", "slack"]).optional(),
+  channel: z.enum(["whatsapp", "email", "slack", "telegram"]).optional(),
   isActive: z.boolean().optional(),
   maxOccurrences: z.number().optional().nullable(),
   endDate: z.string().optional().nullable(),
 });
-
-async function getAvailableChannels(
-  workspaceId: string
-): Promise<MessageChannel[]> {
-  const [workspace, slackAccount] = await Promise.all([
-    prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { UserWorkspace: { include: { user: true }, take: 1 } },
-    }),
-    prisma.integrationAccount.findFirst({
-      where: {
-        workspaceId,
-        integrationDefinition: { slug: "slack" },
-      },
-    }),
-  ]);
-
-  const user = workspace?.UserWorkspace[0]?.user;
-  const channels: MessageChannel[] = ["email"];
-  if (user?.phoneNumber) channels.push("whatsapp");
-  if (slackAccount) channels.push("slack");
-  return channels;
-}
 
 const { action, loader } = createActionApiRoute(
   {
