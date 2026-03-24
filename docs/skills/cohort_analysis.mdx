@@ -65,7 +65,7 @@ For each cohort, measure how many users remain active at Day 7, Day 30, Day 60, 
 - If a user has no activity on a given day, they are counted as churned
 - Round percentages to whole numbers
 
-Flag cohorts with <50% 7-day retention as high-churn.
+Flag cohorts with \<50% 7-day retention as high-churn.
 
 ## Step 5: Identify Trends and Patterns
 
@@ -106,7 +106,7 @@ Structure the analysis into a cohort table and trend summary.
 - 📊 Activation rates: [Improving / Declining / Stable]
 - 📊 7-day retention: [Average X%, range Y–Z%]
 - 📊 30-day retention: [Average X%, range Y–Z%]
-- 🚨 High-churn cohorts: [List cohorts <50% 7-day retention, or "None"]
+- 🚨 High-churn cohorts: [List cohorts \<50% 7-day retention, or "None"]
 
 **Key Insights**
 1. [Most recent cohort health]
@@ -117,7 +117,7 @@ Structure the analysis into a cohort table and trend summary.
 
 ## Edge Cases
 
-- **Insufficient data:** If fewer than 3 cohorts or <100 total users exist, note "Cohort sample too small for reliable trends" and show available data only.
+- **Insufficient data:** If fewer than 3 cohorts or \<100 total users exist, note "Cohort sample too small for reliable trends" and show available data only.
 - **No retention data:** If users have no activity after signup (all churn on Day 0), show 0% retention and flag data quality.
 - **Future signups:** Exclude any users with signup dates in the future; silently filter.
 - **Custom time zones:** If user has specified a time zone in memory, adjust cohort boundaries accordingly (e.g., "week starts Monday at midnight PST").
