@@ -69,17 +69,14 @@ export function isSlackDMOrMention(eventBody: SlackEventPayload): boolean {
  * from authorizations — uniquely identifies which workspace/installation
  * received the event even when multiple workspaces share the same Slack team.
  */
-async function findChannelByAuthorization(
-  eventBody: SlackEventPayload,
-) {
-  const botUserId = eventBody.authorizations?.find((a) => a.is_bot)?.user_id;
-  if (!botUserId) return null;
+async function findChannelByAuthorization(slackUserId: string) {
+  if (!slackUserId) return null;
 
   return prisma.channel.findFirst({
     where: {
       type: "slack",
       isActive: true,
-      config: { path: ["bot_user_id"], equals: botUserId },
+      config: { path: ["user_id"], equals: slackUserId },
     },
   });
 }
@@ -91,9 +88,9 @@ async function findChannelByAuthorization(
  */
 async function isDMWithBot(
   slackChannelId: string,
-  eventBody: SlackEventPayload,
+  slackUserId: string,
 ): Promise<boolean> {
-  const channel = await findChannelByAuthorization(eventBody);
+  const channel = await findChannelByAuthorization(slackUserId);
   if (!channel) return false;
 
   const config = channel.config as Record<string, string>;
@@ -162,7 +159,8 @@ export async function parseSlackDMEvent(
 
   // For DMs, verify the channel is with the CORE bot
   if (event.channel_type === "im" && event.channel) {
-    const botDM = await isDMWithBot(event.channel, eventBody);
+    console.log(event.channel, JSON.stringify(eventBody));
+    const botDM = await isDMWithBot(event.channel, slackUserId);
     if (!botDM) {
       logger.info("Ignoring DM not directed at CORE bot", {
         channel: event.channel,

@@ -32,6 +32,8 @@
     "@core/providers": "workspace:*",
     "@core/types": "workspace:*",
     "@mjackson/headers": "0.11.1",
+    "mastra": "1.3.14",
+    "@mastra/core": "1.15.0",
     "@modelcontextprotocol/sdk": "1.27.1",
     "@nichtsam/remix-auth-email-link": "3.0.0",
     "@opentelemetry/api": "1.9.0",

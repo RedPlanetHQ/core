@@ -13,6 +13,7 @@ import {
   updateConversationStatus,
   upsertConversationHistory,
 } from "~/services/conversation.server";
+import { Agent } from "@mastra/core/agent";
 
 import { getModel } from "~/lib/model.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";

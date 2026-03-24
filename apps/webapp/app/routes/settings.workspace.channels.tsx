@@ -61,34 +61,34 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "create") {
     const name = formData.get("name") as string;
-    const type = formData.get("type") as "slack" | "telegram";
+    const type = formData.get("type") as "slack" | "telegram" | "whatsapp";
     const botToken = formData.get("bot_token") as string;
     const chatId = formData.get("chat_id") as string;
     const botUserId = formData.get("bot_user_id") as string;
     const userId = formData.get("user_id") as string;
+    const accountSid = formData.get("account_sid") as string;
+    const authToken = formData.get("auth_token") as string;
+    const whatsappNumber = formData.get("whatsapp_number") as string;
     const isDefault = formData.get("isDefault") === "true";
 
-    if (!name || !type || !botToken) {
-      return json(
-        { error: "Name, type, and bot token are required" },
-        { status: 400 },
-      );
+    if (!name || !type) {
+      return json({ error: "Name and type are required" }, { status: 400 });
     }
 
-    let config: Record<string, string> = { bot_token: botToken };
+    let config: Record<string, string> = {};
 
     if (type === "telegram") {
-      if (!chatId) {
+      if (!botToken || !chatId) {
         return json(
-          { error: "Chat ID is required for Telegram" },
+          { error: "Bot Token and Chat ID are required for Telegram" },
           { status: 400 },
         );
       }
       config = { bot_token: botToken, chat_id: chatId };
     } else if (type === "slack") {
-      if (!botUserId) {
+      if (!botToken || !botUserId) {
         return json(
-          { error: "Bot User ID is required for Slack" },
+          { error: "Bot Token and Bot User ID are required for Slack" },
           { status: 400 },
         );
       }
@@ -96,6 +96,18 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         bot_token: botToken,
         bot_user_id: botUserId,
         ...(userId ? { user_id: userId } : {}),
+      };
+    } else if (type === "whatsapp") {
+      if (!accountSid || !authToken || !whatsappNumber) {
+        return json(
+          { error: "Account SID, Auth Token, and WhatsApp Number are required" },
+          { status: 400 },
+        );
+      }
+      config = {
+        account_sid: accountSid,
+        auth_token: authToken,
+        whatsapp_number: whatsappNumber,
       };
     }
 
@@ -135,7 +147,7 @@ const CHANNEL_ICON: Record<string, React.ReactNode> = {
 
 function AddChannelModal({ onClose }: { onClose: () => void }) {
   const fetcher = useFetcher<{ success?: boolean; error?: string }>();
-  const [type, setType] = useState<"slack" | "telegram">("telegram");
+  const [type, setType] = useState<"slack" | "telegram" | "whatsapp">("telegram");
   const isSubmitting = fetcher.state === "submitting";
 
   if (fetcher.data?.success && !isSubmitting) {
@@ -150,7 +162,7 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
           <Label>Type</Label>
           <Select
             value={type}
-            onValueChange={(v) => setType(v as "slack" | "telegram")}
+            onValueChange={(v) => setType(v as "slack" | "telegram" | "whatsapp")}
             name="type"
           >
             <SelectTrigger>
@@ -159,6 +171,7 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
             <SelectContent>
               <SelectItem value="telegram">Telegram</SelectItem>
               <SelectItem value="slack">Slack</SelectItem>
+              <SelectItem value="whatsapp">WhatsApp (Twilio)</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -168,28 +181,47 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
           <Input name="name" placeholder="e.g. My Slack Bot" required />
         </div>
 
-        <div className="space-y-1.5">
-          <Label>Bot Token</Label>
-          <Input
-            name="bot_token"
-            placeholder={
-              type === "telegram"
-                ? "1234567890:AAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
-                : "xoxb-..."
-            }
-            required
-          />
-        </div>
+        {type !== "whatsapp" && (
+          <div className="space-y-1.5">
+            <Label>Bot Token</Label>
+            <Input
+              name="bot_token"
+              placeholder={
+                type === "telegram"
+                  ? "1234567890:AAXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                  : "xoxb-..."
+              }
+              required
+            />
+          </div>
+        )}
 
         {type === "telegram" && (
           <div className="space-y-1.5">
             <Label>Chat ID</Label>
             <Input name="chat_id" placeholder="e.g. 123456789" required />
-            <p className="text-muted-foreground text-xs">
-              Send a message to your bot, then use{" "}
-              <code className="bg-muted rounded px-1 text-xs">getUpdates</code>{" "}
-              to find your chat_id.
-            </p>
+            <div className="space-y-1.5 rounded-md p-2 text-xs">
+              <p className="font-medium">How to get your Chat ID:</p>
+              <ol className="text-muted-foreground list-inside list-decimal space-y-1">
+                <li>
+                  Start a conversation with your bot (or add it to a group)
+                </li>
+                <li>Send any message to the bot</li>
+                <li>
+                  Open in browser:{" "}
+                  <code className="bg-background rounded px-1">
+                    https://api.telegram.org/bot&lt;YOUR_BOT_TOKEN&gt;/getUpdates
+                  </code>
+                </li>
+                <li>
+                  Look for{" "}
+                  <code className="bg-background rounded px-1">
+                    "chat": {"{"} "id": 123456789 {"}"}
+                  </code>{" "}
+                  — that number is your Chat ID
+                </li>
+              </ol>
+            </div>
           </div>
         )}
 
@@ -197,7 +229,11 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
           <>
             <div className="space-y-1.5">
               <Label>Bot User ID</Label>
-              <Input name="bot_user_id" placeholder="e.g. U0123456789" required />
+              <Input
+                name="bot_user_id"
+                placeholder="e.g. U0123456789"
+                required
+              />
               <p className="text-muted-foreground text-xs">
                 Your Slack app's Bot User ID — found in the app's OAuth &amp;
                 Permissions page.
@@ -208,6 +244,39 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
               <Input name="user_id" placeholder="e.g. U0987654321" />
               <p className="text-muted-foreground text-xs">
                 Your personal Slack user ID. Required for inbound DM routing.
+              </p>
+            </div>
+          </>
+        )}
+
+        {type === "whatsapp" && (
+          <>
+            <div className="space-y-1.5">
+              <Label>Account SID</Label>
+              <Input
+                name="account_sid"
+                placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Auth Token</Label>
+              <Input
+                name="auth_token"
+                type="password"
+                placeholder="Your Twilio Auth Token"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>WhatsApp Number</Label>
+              <Input
+                name="whatsapp_number"
+                placeholder="+14155238886"
+                required
+              />
+              <p className="text-muted-foreground text-xs">
+                Your Twilio WhatsApp-enabled number (from the Twilio console).
               </p>
             </div>
           </>
@@ -246,7 +315,7 @@ export default function ChannelsSettings() {
   }
 
   return (
-    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
+    <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
       <SettingSection
         title="Channels"
         description="Configure notification channels for reminders and agent replies."
@@ -264,7 +333,10 @@ export default function ChannelsSettings() {
                 <DialogHeader>
                   <DialogTitle>Add Channel</DialogTitle>
                 </DialogHeader>
-                <AddChannelModal key={modalKey} onClose={() => handleOpenChange(false)} />
+                <AddChannelModal
+                  key={modalKey}
+                  onClose={() => handleOpenChange(false)}
+                />
               </DialogContent>
             </Dialog>
           </div>
@@ -279,7 +351,7 @@ export default function ChannelsSettings() {
             {channels.map((channel) => (
               <div
                 key={channel.id}
-                className="group bg-background-3 mb-2 flex justify-between rounded-lg p-2 px-4"
+                className="bg-background-3 group mb-2 flex justify-between rounded-lg p-2 px-4"
               >
                 <div className="flex items-center gap-3">
                   <span className="text-muted-foreground">
@@ -287,7 +359,7 @@ export default function ChannelsSettings() {
                   </span>
                   <div>
                     <p className="text-sm font-medium">{channel.name}</p>
-                    <p className="text-muted-foreground text-xs capitalize">
+                    <p className="text-muted-foreground text-xs">
                       {channel.type === "email"
                         ? (channel.config as Record<string, string>).address
                         : channel.type}
@@ -296,31 +368,37 @@ export default function ChannelsSettings() {
                 </div>
 
                 <div className="flex items-center gap-2">
-                  {channel.isDefault && (
+                  {channel.isDefault ? (
                     <Badge variant="secondary" className="text-xs">
                       Default
                     </Badge>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 px-2 text-xs opacity-0 group-hover:opacity-100"
+                      onClick={() => {
+                        fetcher.submit(
+                          { intent: "setDefault", channelId: channel.id },
+                          { method: "post" },
+                        );
+                      }}
+                    >
+                      Set as Default
+                    </Button>
                   )}
                   {channel.type !== "email" && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 w-7 p-0"
+                        >
                           <MoreHorizontal size={14} />
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        {!channel.isDefault && (
-                          <DropdownMenuItem
-                            onSelect={() => {
-                              fetcher.submit(
-                                { intent: "setDefault", channelId: channel.id },
-                                { method: "post" },
-                              );
-                            }}
-                          >
-                            Set as default
-                          </DropdownMenuItem>
-                        )}
                         <DropdownMenuItem
                           className="text-destructive"
                           onSelect={() => {
