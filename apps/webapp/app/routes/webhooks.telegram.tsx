@@ -10,7 +10,6 @@
 import { json } from "@remix-run/node";
 import type { ActionFunctionArgs } from "@remix-run/node";
 import { handleChannelMessage } from "~/services/channels";
-import { verifyTelegramUpdate } from "~/services/channels/telegram/client";
 import { parseTelegramUpdate } from "~/services/channels/telegram/inbound";
 import { logger } from "~/services/logger.service";
 
@@ -21,15 +20,6 @@ export async function action({ request }: ActionFunctionArgs) {
 
   const url = new URL(request.url);
   const channelId = url.searchParams.get("channelId") ?? undefined;
-
-  // Verify Telegram secret token header (configured when calling setWebhook)
-  const secretToken = request.headers.get("X-Telegram-Bot-Api-Secret-Token");
-  const configuredSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
-
-  if (!verifyTelegramUpdate(secretToken, configuredSecret)) {
-    logger.warn("Invalid Telegram webhook secret token");
-    return json({ error: "Unauthorized" }, { status: 401 });
-  }
 
   let body;
   try {

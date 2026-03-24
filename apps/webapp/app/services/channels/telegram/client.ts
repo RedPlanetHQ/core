@@ -1,5 +1,3 @@
-import crypto from "crypto";
-
 const BASE = (token: string) => `https://api.telegram.org/bot${token}`;
 
 export async function sendTelegramMessage(
@@ -52,18 +50,3 @@ export async function deleteTelegramWebhook(token: string): Promise<void> {
   }
 }
 
-/**
- * Verify a Telegram webhook request using the X-Telegram-Bot-Api-Secret-Token header.
- * Returns true if secretToken is not configured (skip check).
- */
-export function verifyTelegramUpdate(
-  secretTokenHeader: string | null,
-  configuredSecret: string | undefined,
-): boolean {
-  if (!configuredSecret) return true;
-  if (!secretTokenHeader) return false;
-  return crypto.timingSafeEqual(
-    Buffer.from(secretTokenHeader),
-    Buffer.from(configuredSecret),
-  );
-}
