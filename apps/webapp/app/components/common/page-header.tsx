@@ -2,6 +2,7 @@ import { useNavigate, useNavigation } from "@remix-run/react";
 import { Button } from "~/components/ui/button";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { SidebarTrigger } from "~/components/ui/sidebar";
+import { cn } from "~/lib/utils";
 
 export interface BreadcrumbItem {
   label: string | React.ReactNode;
@@ -102,9 +103,18 @@ export function PageHeader({
           {breadcrumbs && breadcrumbs.length > 0 ? (
             <nav className="mt-0.5 flex min-w-[0px] shrink items-center space-x-1">
               {breadcrumbs.map((breadcrumb, index) => (
-                <div key={index} className="flex items-center truncate">
+                <div
+                  key={index}
+                  className={cn(
+                    "flex items-center truncate",
+                    // On mobile hide all but the last breadcrumb
+                    index < breadcrumbs.length - 1 && "hidden md:flex",
+                  )}
+                >
                   {index > 0 && (
-                    <span className="text-muted-foreground mx-1">/</span>
+                    <span className="text-muted-foreground mx-1 hidden md:inline">
+                      /
+                    </span>
                   )}
                   {breadcrumb.href ? (
                     <a
@@ -157,7 +167,7 @@ export function PageHeader({
                   disabled={action.disabled}
                 >
                   {action.icon}
-                  {action.label}
+                  <span className="hidden md:inline">{action.label}</span>
                 </Button>
               ))}
             </div>

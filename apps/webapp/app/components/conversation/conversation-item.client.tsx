@@ -250,7 +250,7 @@ const Tool = ({
     }
     if (toolName === "gather_context" && (part as any).input?.query) {
       const q = (part as any).input.query as string;
-      const truncated = q.length > 40 ? q.slice(0, 40) + "..." : q;
+      const truncated = q.length > 30 ? q.slice(0, 30) + "..." : q;
       return `Gather context · ${truncated}`;
     }
     return getToolDisplayName(part.type);
@@ -355,7 +355,7 @@ const Tool = ({
       open={isOpen}
       onOpenChange={setIsOpen}
       className={cn(
-        "my-1 w-full",
+        "mt-1 w-full",
         isNested && "ml-2 border-l border-gray-300 pl-3",
         isDisabled && "cursor-not-allowed opacity-50",
       )}
@@ -493,7 +493,7 @@ const ConversationItemComponent = ({
       return (
         <EditorContent
           editor={editor}
-          className="editor-container"
+          className="editor-container pt-1"
           defaultValue={part.content}
         />
       );

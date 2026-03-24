@@ -74,7 +74,7 @@ export const StreamingConversation = ({
           {message ? (
             <EditorContent
               editor={messagesEditor}
-              className="text-foreground editor-container"
+              className="text-foreground editor-container pt-1"
             />
           ) : (
             <div className="text-foreground italic">{loadingText}</div>
