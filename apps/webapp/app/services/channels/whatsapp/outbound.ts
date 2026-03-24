@@ -1,7 +1,8 @@
 import { prisma } from "~/db.server";
-import { sendWhatsAppMessage } from "./client";
+import { sendWhatsAppMessage, type TwilioCredentials } from "./client";
 import { logger } from "~/services/logger.service";
 import type { ReplyMetadata } from "../types";
+import { env } from "~/env.server";
 
 /**
  * Check whether the workspace has a user message within the last 24 hours
@@ -38,6 +39,41 @@ async function isWithin24hWindow(workspaceId: string): Promise<boolean> {
 }
 
 /**
+ * Resolve Twilio credentials for a workspace.
+ * Uses channel config if a custom WhatsApp channel exists, else falls back to env vars.
+ */
+async function resolveCredentials(
+  workspaceId: string,
+): Promise<TwilioCredentials | null> {
+  const channel = await prisma.channel.findFirst({
+    where: { workspaceId, type: "whatsapp", isActive: true },
+    orderBy: { isDefault: "desc" },
+  });
+
+  if (channel) {
+    const config = channel.config as Record<string, string>;
+    if (config.account_sid && config.auth_token && config.whatsapp_number) {
+      return {
+        accountSid: config.account_sid,
+        authToken: config.auth_token,
+        whatsappNumber: config.whatsapp_number,
+      };
+    }
+  }
+
+  // Fallback to env vars
+  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_WHATSAPP_NUMBER) {
+    return {
+      accountSid: env.TWILIO_ACCOUNT_SID,
+      authToken: env.TWILIO_AUTH_TOKEN,
+      whatsappNumber: env.TWILIO_WHATSAPP_NUMBER,
+    };
+  }
+
+  return null;
+}
+
+/**
  * Send a WhatsApp reply.
  * Checks the 24-hour window policy before sending — silently skips if outside.
  */
@@ -55,7 +91,14 @@ export async function sendReply(
       });
       return;
     }
+
+    const creds = await resolveCredentials(metadata.workspaceId);
+    if (creds) {
+      await sendWhatsAppMessage(to, text, creds);
+      return;
+    }
   }
 
+  // No workspaceId or no channel found — use env vars (no creds arg = env fallback)
   await sendWhatsAppMessage(to, text);
 }

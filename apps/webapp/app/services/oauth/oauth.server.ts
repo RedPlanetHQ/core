@@ -196,23 +196,21 @@ export async function callbackHandler(params: CallbackParams) {
 
       if (botToken) {
         const exists = teamId
-          ? await prisma.channel.findFirst({
-              where: {
-                workspaceId: sessionRecord.workspaceId,
-                type: "slack",
-              },
-            }).then((ch) => {
-              if (!ch) return false;
-              const cfg = ch.config as Record<string, string>;
-              return cfg?.team_id === teamId;
-            })
+          ? await prisma.channel
+              .findFirst({
+                where: {
+                  workspaceId: sessionRecord.workspaceId,
+                  type: "slack",
+                },
+              })
+              .then((ch) => {
+                if (!ch) return false;
+                const cfg = ch.config as Record<string, string>;
+                return cfg?.team_id === teamId;
+              })
           : false;
 
         if (!exists) {
-          const isFirstSlack = !(await prisma.channel.findFirst({
-            where: { workspaceId: sessionRecord.workspaceId, type: "slack" },
-          }));
-
           await createChannel(sessionRecord.workspaceId, {
             name: `${teamName} (Slack)`,
             type: "slack",
@@ -221,13 +219,17 @@ export async function callbackHandler(params: CallbackParams) {
               ...(config?.user_token ? { user_token: config.user_token } : {}),
               ...(teamId ? { team_id: teamId } : {}),
               ...(teamName ? { team_name: teamName } : {}),
-              ...(config?.bot_user_id ? { bot_user_id: config.bot_user_id } : {}),
+              ...(config?.bot_user_id
+                ? { bot_user_id: config.bot_user_id }
+                : {}),
               // account.accountId is the Slack user ID of the person who connected — used for inbound DM routing
               ...(account.accountId ? { user_id: account.accountId } : {}),
             },
-            isDefault: isFirstSlack,
+            isDefault: false,
           }).catch((err) => {
-            logger.warn("Failed to auto-create Slack channel", { error: String(err) });
+            logger.warn("Failed to auto-create Slack channel", {
+              error: String(err),
+            });
           });
         }
       }

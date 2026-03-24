@@ -5,6 +5,7 @@ import {
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { z } from "zod";
 import { setPhoneNumber } from "~/models/user.server";
+import { ensureWhatsAppChannel } from "~/services/channel.server";
 import { logger } from "~/services/logger.service";
 import { createPersonalAccessTokenFromAuthorizationCode } from "~/services/personalAccessToken.server";
 import { requireUser, getWorkspaceId } from "~/services/session.server";
@@ -77,6 +78,7 @@ export const loader = async ({ request, params }: LoaderFunctionArgs) => {
       );
 
       await setPhoneNumber(codeDetails.identifier, userId);
+      await ensureWhatsAppChannel(workspaceId as string, codeDetails.identifier);
 
       return typedjson({
         status: "success" as const,

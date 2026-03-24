@@ -23,6 +23,51 @@ export interface ChannelUpdateData {
 }
 
 // ---------------------------------------------------------------------------
+// WhatsApp channel
+// ---------------------------------------------------------------------------
+
+/**
+ * Called after the user connects WhatsApp via the verify token flow.
+ * Attaches phone_number + workspaceId to an existing custom WhatsApp channel
+ * (one with account_sid already configured), or creates a minimal one that
+ * falls back to env-var Twilio credentials at send time.
+ */
+export async function ensureWhatsAppChannel(
+  workspaceId: string,
+  phoneNumber: string,
+): Promise<void> {
+  const existing = await prisma.channel.findFirst({
+    where: { workspaceId, type: "whatsapp" },
+    orderBy: { createdAt: "asc" },
+  });
+
+  if (existing) {
+    const config = existing.config as Record<string, string>;
+    await prisma.channel.update({
+      where: { id: existing.id },
+      data: {
+        config: { ...config, phone_number: phoneNumber, workspaceId },
+        isActive: true,
+      },
+    });
+    return;
+  }
+
+  await prisma.channel.create({
+    data: {
+      workspaceId,
+      name: "WhatsApp",
+      type: "whatsapp",
+      config: { phone_number: phoneNumber, workspaceId },
+      isDefault: false,
+      isActive: true,
+    },
+  });
+
+  logger.info("Created WhatsApp channel", { workspaceId, phoneNumber });
+}
+
+// ---------------------------------------------------------------------------
 // Default email channel
 // ---------------------------------------------------------------------------
 
@@ -210,7 +255,7 @@ export async function getAvailableChannels(
 
   for (const ch of channels) {
     const type = ch.type as MessageChannel;
-    if (type === "slack" || type === "telegram") {
+    if (type === "slack" || type === "telegram" || type === "whatsapp") {
       available.add(type);
     }
   }

@@ -2,17 +2,25 @@ import Twilio from "twilio";
 import { env } from "~/env.server";
 import { logger } from "~/services/logger.service";
 
-// Lazy-init Twilio client singleton
-let twilioClient: Twilio.Twilio | null = null;
+export interface TwilioCredentials {
+  accountSid: string;
+  authToken: string;
+  whatsappNumber: string;
+}
 
-function getClient(): Twilio.Twilio {
-  if (!twilioClient) {
-    if (!env.TWILIO_ACCOUNT_SID || !env.TWILIO_AUTH_TOKEN) {
-      throw new Error("Twilio credentials not configured");
-    }
-    twilioClient = Twilio(env.TWILIO_ACCOUNT_SID, env.TWILIO_AUTH_TOKEN);
+function getEnvCredentials(): TwilioCredentials | null {
+  if (
+    !env.TWILIO_ACCOUNT_SID ||
+    !env.TWILIO_AUTH_TOKEN ||
+    !env.TWILIO_WHATSAPP_NUMBER
+  ) {
+    return null;
   }
-  return twilioClient;
+  return {
+    accountSid: env.TWILIO_ACCOUNT_SID,
+    authToken: env.TWILIO_AUTH_TOKEN,
+    whatsappNumber: env.TWILIO_WHATSAPP_NUMBER,
+  };
 }
 
 const MESSAGE_CHAR_LIMIT = 1550;
@@ -59,13 +67,20 @@ export function splitMessage(
 /**
  * Send a WhatsApp message via Twilio.
  * Automatically splits long messages.
+ * Accepts explicit credentials or falls back to env vars.
  */
 export async function sendWhatsAppMessage(
   to: string,
   body: string,
+  credentials?: TwilioCredentials,
 ): Promise<void> {
-  const client = getClient();
-  const from = `whatsapp:${env.TWILIO_WHATSAPP_NUMBER}`;
+  const creds = credentials ?? getEnvCredentials();
+  if (!creds) {
+    throw new Error("Twilio credentials not configured");
+  }
+
+  const client = Twilio(creds.accountSid, creds.authToken);
+  const from = `whatsapp:${creds.whatsappNumber}`;
   const toFormatted = to.startsWith("whatsapp:") ? to : `whatsapp:${to}`;
 
   const chunks = splitMessage(body);
@@ -89,14 +104,18 @@ export async function sendWhatsAppMessage(
 
 /**
  * Send a typing indicator via the Twilio Messaging API.
- * Requires the incoming MessageSid so Twilio knows which conversation.
+ * Accepts explicit credentials or falls back to env vars.
  */
 export async function sendWhatsAppTypingIndicator(
   messageSid: string,
+  credentials?: TwilioCredentials,
 ): Promise<void> {
   try {
+    const creds = credentials ?? getEnvCredentials();
+    if (!creds) return;
+
     const auth = Buffer.from(
-      `${env.TWILIO_ACCOUNT_SID}:${env.TWILIO_AUTH_TOKEN}`,
+      `${creds.accountSid}:${creds.authToken}`,
     ).toString("base64");
 
     await fetch("https://messaging.twilio.com/v2/Indicators/Typing.json", {
@@ -119,16 +138,19 @@ export async function sendWhatsAppTypingIndicator(
 }
 
 /**
- * Verify Twilio webhook signature
+ * Verify Twilio webhook signature.
+ * Accepts explicit authToken or falls back to env var.
  */
 export function verifyTwilioSignature(
   url: string,
   params: Record<string, string>,
   signature: string,
+  authToken?: string,
 ): boolean {
-  if (!env.TWILIO_AUTH_TOKEN) {
+  const token = authToken ?? env.TWILIO_AUTH_TOKEN;
+  if (!token) {
     logger.warn("Twilio auth token not configured, skipping signature verification");
     return false;
   }
-  return Twilio.validateRequest(env.TWILIO_AUTH_TOKEN, signature, url, params);
+  return Twilio.validateRequest(token, signature, url, params);
 }

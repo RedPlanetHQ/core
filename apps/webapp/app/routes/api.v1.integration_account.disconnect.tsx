@@ -23,11 +23,32 @@ export async function action({ request }: ActionFunctionArgs) {
       );
     }
 
+    // Fetch before deletion so we can use its config for cleanup
+    const account = await prisma.integrationAccount.findUnique({
+      where: { id: integrationAccountId },
+      include: { integrationDefinition: { select: { slug: true } } },
+    });
+
     const updatedAccount = await prisma.integrationAccount.delete({
       where: {
         id: integrationAccountId,
       },
     });
+
+    // Delete the associated Slack channel if this is a Slack integration
+    if (account?.integrationDefinition?.slug === "slack") {
+      const config = account.integrationConfiguration as Record<string, string>;
+      const teamId = config?.team_id;
+      if (teamId) {
+        await prisma.channel.deleteMany({
+          where: {
+            workspaceId: updatedAccount.workspaceId,
+            type: "slack",
+            config: { path: ["team_id"], equals: teamId },
+          },
+        });
+      }
+    }
 
     const integrationAccountSettings = updatedAccount.settings as any;
 

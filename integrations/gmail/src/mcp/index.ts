@@ -163,45 +163,40 @@ async function loadCredentials(
   callback: string,
   config: Record<string, string>
 ): Promise<OAuth2Client> {
-  try {
-    const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
-    const credentials = {
-      /**
-       * This field is only present if the access_type parameter was set to offline in the authentication request. For details, see Refresh tokens.
-       */
-      refresh_token: config.refresh_token,
-      /**
-       * The time in ms at which this token is thought to expire.
-       */
-      expiry_date:
-        typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
-      expires_in: config.expires_in,
-      expires_at: config.expires_at,
-      /**
-       * A token that can be sent to a Google API.
-       */
-      access_token: config.access_token,
-      /**
-       * Identifies the type of token returned. At this time, this field always has the value Bearer.
-       */
-      token_type: config.token_type,
-      /**
-       * A JWT that contains identity information about the user that is digitally signed by Google.
-       */
-      id_token: config.id_token,
-      /**
-       * The scopes of access granted by the access_token expressed as a list of space-delimited, case-sensitive strings.
-       */
-      scope: config.scope,
-    };
+  const oauth2Client = new OAuth2Client(client_id, client_secret, callback);
+  const credentials = {
+    /**
+     * This field is only present if the access_type parameter was set to offline in the authentication request. For details, see Refresh tokens.
+     */
+    refresh_token: config.refresh_token,
+    /**
+     * The time in ms at which this token is thought to expire.
+     */
+    expiry_date:
+      typeof config.expires_at === 'string' ? parseInt(config.expires_at) : config.expires_at,
+    expires_in: config.expires_in,
+    expires_at: config.expires_at,
+    /**
+     * A token that can be sent to a Google API.
+     */
+    access_token: config.access_token,
+    /**
+     * Identifies the type of token returned. At this time, this field always has the value Bearer.
+     */
+    token_type: config.token_type,
+    /**
+     * A JWT that contains identity information about the user that is digitally signed by Google.
+     */
+    id_token: config.id_token,
+    /**
+     * The scopes of access granted by the access_token expressed as a list of space-delimited, case-sensitive strings.
+     */
+    scope: config.scope,
+  };
 
-    oauth2Client.setCredentials(credentials);
-    oauth2Client.refreshAccessToken();
-    return oauth2Client;
-  } catch (error) {
-    console.error('Error loading credentials:', error);
-    process.exit(1);
-  }
+  oauth2Client.setCredentials(credentials);
+
+  return oauth2Client;
 }
 
 // Schema definitions

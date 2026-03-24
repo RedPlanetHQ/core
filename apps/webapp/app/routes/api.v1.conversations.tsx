@@ -11,7 +11,6 @@ const loader = createHybridLoaderApiRoute(
     searchParams: GetConversationsListSchema,
     allowJWT: true,
     findResource: async () => 1,
-
     corsStrategy: "all",
   },
   async ({ authentication, searchParams }) => {
