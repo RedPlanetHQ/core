@@ -90,8 +90,27 @@ export async function callTool(
       arguments: args,
     });
 
+    const content = result.content as MCPToolCallResult['content'];
+
+    // If this is a task creation call, parse the response and append the task URL
+    if (!result.isError && name.toLowerCase().includes('create')) {
+      for (const item of content) {
+        if (item.type === 'text' && item.text) {
+          try {
+            const parsed = JSON.parse(item.text);
+            if (parsed?.id) {
+              parsed.url = `https://app.todoist.com/app/task/${parsed.id}`;
+              item.text = JSON.stringify(parsed);
+            }
+          } catch {
+            // not JSON, leave as-is
+          }
+        }
+      }
+    }
+
     return {
-      content: result.content as MCPToolCallResult['content'],
+      content,
       isError: result.isError as boolean,
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

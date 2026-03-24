@@ -111,6 +111,8 @@ async function processReceivedEmails(
         }
 
         const sender = formatEmailSender(from);
+        const fromEmail = from.match(/^.+?\s*<(.+?)>$/)?.[1]?.trim() ?? from.trim();
+        const threadId = fullMessage.data.threadId || message.id;
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
@@ -127,7 +129,10 @@ async function processReceivedEmails(
         // Format activity text with full email content as markdown
         const text = `## 📧 Email from ${sender}
 
+**From:** ${fromEmail}
 **Subject:** ${subject}
+**Date:** ${date}
+**Thread ID:** ${threadId}
 
 ${cleanedContent}`;
 
@@ -190,6 +195,7 @@ async function processSentEmails(
           lastEmailTime = internalDate;
         }
 
+        const threadId = fullMessage.data.threadId || message.id;
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
@@ -206,7 +212,11 @@ async function processSentEmails(
         // Format activity text with full email content as markdown
         const text = `## 📤 Sent to ${to}
 
+**From:** ${emailAddress}
+**To:** ${to}
 **Subject:** ${subject}
+**Date:** ${date}
+**Thread ID:** ${threadId}
 
 ${cleanedContent}`;
 
