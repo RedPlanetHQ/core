@@ -109,24 +109,90 @@ OPENAI_BASE_URL=https://your-proxy.com  # Any OpenAI-compatible endpoint
 
 ## How it works
 
+Two paths into CORE — messages from you, and triggers that fire automatically. Both converge on the same intelligence.
+
+```mermaid
+flowchart TD
+    subgraph channels["  Your Channels  "]
+        CH["WhatsApp · Slack · Email · Web · API"]
+    end
+
+    subgraph auto["  Automated Triggers  "]
+        TR["Reminders · Webhooks · Scheduled Jobs"]
+    end
+
+    subgraph decision["  CASE — Decision Agent  "]
+        CASE["Reasons about what happened\nBuilds an ActionPlan\n— no personality, pure logic —"]
+    end
+
+    subgraph core["  CORE Agent — The Butler  "]
+        AGENT["Understands your intent\nRoutes to tools · streams response"]
+    end
+
+    subgraph orchestrator["  Orchestrator  "]
+        ORC["Coordinates all reads and writes\nManages tool routing and concurrency"]
+    end
+
+    subgraph execution["  Execution Layer  "]
+        MEM["🧠 Memory\nKnowledge Graph"]
+        TK["🔧 Toolkit\n1000+ actions/tools · 50+ apps"]
+        GW["⚡ Gateways\nClaude Code · Browser · Custom agents"]
+    end
+
+    subgraph reuse["  Reusable Logic  "]
+        SK["Skills\n100+ templates · user-defined workflows\nattached to reminders or called directly"]
+    end
+
+    PERSONA["📋 Persona\nYour preferences · rules · directives\nloaded into every session"]
+
+    CH -->|"message"| AGENT
+    TR -->|"trigger fires"| CASE
+    CASE -->|"ActionPlan + persona context"| AGENT
+
+    MEM -->|"loaded at session start"| PERSONA
+    PERSONA -->|"injected into system prompt"| AGENT
+
+    AGENT -->|"gather_context  ·  READ"| ORC
+    AGENT -->|"take_action  ·  WRITE"| ORC
+
+    ORC --> MEM
+    ORC --> TK
+    ORC --> GW
+    TK -. "load & execute" .-> SK
+
+    AGENT -->|"response"| CH
+    AGENT -. "ingest conversation" .-> MEM
 ```
-┌────────────────────────────────────────────────────┐
-│  Gateway — WhatsApp · Slack · Email · Web · API    │
-└──────────────────────┬─────────────────────────────┘
-                       │  triggers + messages
-               ┌───────▼────────┐
-               │   CORE Agent   │◄──── Memory (Temporal Knowledge Graph)
-               └───────┬────────┘
-                        │  picks tools, spawns agents
-               ┌───────▼────────┐
-               │    Toolkit     │  200+ actions across 50+ apps
-               └───────┬────────┘
-                        │
-          ┌─────────────▼──────────────┐
-          │       Spawned Agents        │
-          │  Claude Code / Browser / …  │
-          └─────────────────────────────┘
+
+### How Memory Works
+
+Memory isn't stored as raw text. Every conversation is processed into structured facts — classified, connected, and retrievable by intent.
+
+```mermaid
+flowchart LR
+    subgraph ingest["  Ingestion  "]
+        direction TB
+        CONV["Conversation or Event"]
+        EXTRACT["Extract entities\n& relationships"]
+        CLASSIFY["Classify each fact\npreference · decision · goal\ndirective · rule · observation"]
+        GRAPH["Write to Knowledge Graph\nepisodes · entities · statements\nwith timestamps & source links"]
+        CONV --> EXTRACT --> CLASSIFY --> GRAPH
+    end
+
+    subgraph retrieve["  Retrieval  "]
+        direction TB
+        QUERY["Intent or question\narrives at CORE Agent"]
+        DECOMP["Memory Agent\ndecomposes intent into\nmultiple targeted queries"]
+        SEARCH["Multi-pattern search\nentity-centric · relational\nsemantic · temporal"]
+        CONTEXT["Rich context returned\nwith provenance & time-awareness"]
+        QUERY --> DECOMP --> SEARCH --> CONTEXT
+    end
+
+    GRAPH -->|"knowledge graph"| SEARCH
+    CONTEXT -->|"grounds the agent's response"| QUERY
 ```
+
+**What gets stored:** preferences, decisions, goals, directives, relationships between people and topics — not just facts but the *when* and *why* behind them.
 
 ---
 
@@ -134,7 +200,7 @@ OPENAI_BASE_URL=https://your-proxy.com  # Any OpenAI-compatible endpoint
 
 **[Memory](https://docs.getcore.me/concepts/memory/overview)** — Temporal knowledge graph (Neo4j). Classifies every fact — preference, decision, directive, relationship — and connects it over time. Retrieval is intent-driven, not keyword-based.
 
-**[Toolkit](https://docs.getcore.me/concepts/toolkit)** — Unified MCP actions layer. Connect your apps once; CORE and every agent you connect gets 200+ actions through a single endpoint.
+**[Toolkit](https://docs.getcore.me/concepts/toolkit)** — Unified MCP actions layer. Connect your apps once; CORE and every agent you connect gets 1000+ actions/tools through a single endpoint.
 
 **[CORE Agent](https://docs.getcore.me/concepts/meta-agent)** — The orchestrator. Evaluates incoming triggers against memory, picks tools, coordinates multi-step workflows, and spawns sub-agents.
 
