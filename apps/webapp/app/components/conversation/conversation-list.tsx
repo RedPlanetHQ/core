@@ -1,6 +1,5 @@
 import { useFetcher, useNavigate, useLocation } from "@remix-run/react";
 import { useEffect, useState, useCallback, useRef } from "react";
-import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import {
   GitBranch,
@@ -192,7 +191,7 @@ function SourceFolder({
           {conversations.map((conversation) => (
             <div
               key={conversation.id}
-              className="mb-0.5 flex min-h-[28px] w-full"
+              className="mb-0.5 flex min-h-[var(--btn-h-default)] w-full"
             >
               <Button
                 variant={
@@ -212,7 +211,10 @@ function SourceFolder({
                 }
               >
                 <span className="min-w-0 grow truncate text-left text-base">
-                  {conversation.title || "Untitled Conversation"}
+                  {conversation.title
+                    ? conversation.title.replace(/<[^>]*>/g, "").trim() ||
+                      "Untitled Conversation"
+                    : "Untitled Conversation"}
                 </span>
               </Button>
             </div>

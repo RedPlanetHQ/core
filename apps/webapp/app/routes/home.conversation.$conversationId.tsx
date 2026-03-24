@@ -97,7 +97,10 @@ export default function SingleConversation() {
           {
             label: (
               <span className="flex items-center gap-1.5">
-                {conversation.title || "Untitled"}
+                {conversation.title
+                  ? conversation.title.replace(/<[^>]*>/g, "").trim() ||
+                    "Untitled"
+                  : "Untitled"}
                 {conversation.incognito && (
                   <EyeOff
                     size={13}

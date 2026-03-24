@@ -312,13 +312,24 @@
   --color-yellow-900: #6b4118;
   --color-yellow-950: #3e220a;
 
-  --text-xs: 11px;
-  --text-sm: 12px;
-  --text-base: 13px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
   --text-md: 15px;
-  --text-lg: 17px;
-  --text-xl: 22px;
+  --text-lg: 18px;
+  --text-xl: 24px;
   --text-2xl: 26px;
+
+  --btn-h-xs: 20px;
+  --btn-h-sm: 24px;
+  --btn-h-default: 28px;
+  --btn-h-lg: 32px;
+  --btn-h-xl: 36px;
+  --btn-h-2xl: 48px;
+  --btn-h-icon: 36px;
+  --btn-w-icon: 36px;
+
+  --input-h: 32px;
 
   --radius-none: 0px;
   --radius: 0.375rem;
@@ -351,10 +362,37 @@
   --color-sidebar: var(--sidebar);
 }
 
+@media (max-width: 768px) {
+  :root {
+    --text-xs: 13px;
+    --text-sm: 14px;
+    --text-base: 16px;
+    --text-md: 17px;
+    --text-lg: 19px;
+    --text-xl: 24px;
+    --text-2xl: 28px;
+
+    --btn-h-xs: 32px;
+    --btn-h-sm: 36px;
+    --btn-h-default: 40px;
+    --btn-h-lg: 44px;
+    --btn-h-xl: 44px;
+    --btn-h-2xl: 52px;
+    --btn-h-icon: 44px;
+    --btn-w-icon: 44px;
+
+    --input-h: 44px;
+  }
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
     --header-height: 40px;
+
+    @media (max-width: 768px) {
+      --header-height: 56px;
+    }
   }
 
   html {
@@ -431,7 +469,8 @@
 }
 
 .editor-container p {
-  line-height: 22px;
+  font-size: var(--text-base);
+  line-height: 1.6;
 }
 
 .editor-container .heading-node:first-child {

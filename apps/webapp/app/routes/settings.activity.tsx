@@ -56,9 +56,7 @@ function ActivityRow({
   onClick: () => void;
 }) {
   const definition = activity.integrationAccount?.integrationDefinition;
-  const icon = definition
-    ? getIconForAuthorise(definition.slug, 16, definition.icon)
-    : null;
+  const icon = definition ? getIconForAuthorise(definition.slug, 16) : null;
   const plainText = activity.text.replace(/[#*_`[\]()]/g, "").trim();
 
   return (
