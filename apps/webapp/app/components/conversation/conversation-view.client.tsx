@@ -27,6 +27,8 @@ interface ConversationViewProps {
   integrationAccountMap?: Record<string, string>;
   /** When true, auto-triggers regenerate if history has only 1 message */
   autoRegenerate?: boolean;
+  /** DB conversation status — input is disabled when "running" */
+  conversationStatus?: string;
 }
 
 export function ConversationView({
@@ -35,6 +37,7 @@ export function ConversationView({
   className,
   integrationAccountMap = {},
   autoRegenerate = false,
+  conversationStatus,
 }: ConversationViewProps) {
   const {
     sendMessage,
@@ -127,7 +130,7 @@ export function ConversationView({
           <ConversationTextarea
             className="bg-background-3 border-1 w-full border-gray-300"
             isLoading={status === "streaming" || status === "submitted"}
-            disabled={needsApproval}
+            disabled={needsApproval || conversationStatus === "running"}
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
             }}

@@ -78,6 +78,8 @@ export const createTools = async (
     context: DecisionContext;
     userPersona?: string;
   },
+  /** When true, removes run_task_in_background to prevent infinite loops */
+  isBackgroundExecution?: boolean,
 ) => {
   const tools: Record<string, Tool> = {
     gather_context: tool({
@@ -167,10 +169,12 @@ export const createTools = async (
     tools["take_action"] = tool({
       description: `Execute actions on user's connected integrations AND gateways (connected devices).
       Use this to CREATE/SEND/UPDATE/DELETE: gmail filters/labels, calendar events, github issues, slack messages, notion pages.
-      Also use this for tasks on user's connected devices/agents: coding tasks via Claude Code, browser actions, file operations on their machine.
-      Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout", "fix the auth bug in the core repo" (gateway task)
+      Gateways (e.g. Claude Code on their laptop, browser agent) are also available here for device/machine operations.
+      Examples: "post message to slack #team-updates saying deployment complete", "block friday 3pm on calendar for 1:1 with sarah", "create github issue in core repo titled fix auth timeout"
       When user confirms they want something done, use this tool to do it.
-      For SKILLS: when executing a skill, include the skill name and ID. Example: "Execute skill 'Plan My Day' (skill_id: abc123)"`,
+      For SKILLS: when executing a skill, include the skill name and ID. Example: "Execute skill 'Plan My Day' (skill_id: abc123)"
+
+      NOTE: For coding tasks, research, browser automation, or anything that takes time — default to create_task + run_task_in_background. Only use take_action directly for these if the user explicitly says to run it inline (e.g. "do it here", "don't background it").`,
       inputSchema: z.object({
         action: z
           .string()
@@ -268,7 +272,7 @@ export const createTools = async (
     minRecurrenceMinutes,
   );
 
-  const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId);
+  const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId, isBackgroundExecution);
 
   // Skill tools — get_skill always available (skills can be created mid-conversation or referenced by ID)
   tools["get_skill"] = getSkillTool(workspaceId);

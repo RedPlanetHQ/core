@@ -77,7 +77,7 @@ export async function changeTaskStatus(
   workspaceId: string,
   userId: string,
 ): Promise<Task> {
-  if (status !== "Todo" && status !== "InProgress") {
+  if (status === "Backlog") {
     await cancelTaskJob(taskId);
   }
   const task = await updateTaskStatus(taskId, status);

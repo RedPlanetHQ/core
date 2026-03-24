@@ -143,6 +143,7 @@ export default function SingleConversation() {
           conversationId={conversationId as string}
           history={conversation.ConversationHistory}
           integrationAccountMap={integrationAccountMap}
+          conversationStatus={conversation.status}
           autoRegenerate
         />
       </div>

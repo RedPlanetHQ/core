@@ -310,7 +310,7 @@ export async function getConversationSources(
 ): Promise<{ source: string; count: number }[]> {
   const rows = await prisma.conversation.groupBy({
     by: ["source"],
-    where: { workspaceId, userId, deleted: null },
+    where: { workspaceId, userId, deleted: null, NOT: { source: "task" } },
     _count: { source: true },
   });
   return rows.map((r) => ({ source: r.source, count: r._count.source }));

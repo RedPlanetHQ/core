@@ -17,10 +17,9 @@ import {
   createTask,
   changeTaskStatus,
   deleteTask,
-  updateTaskConversationIds,
 } from "~/services/task.server";
+import { getButlerName } from "~/models/workspace.server";
 import {
-  createEmptyConversation,
   getConversationAndHistory,
   readConversation,
 } from "~/services/conversation.server";
@@ -55,26 +54,30 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const selectedTaskId = url.searchParams.get("taskId");
 
-  const [tasks, integrationAccounts] = await Promise.all([
+  const [tasks, integrationAccounts, butlerName] = await Promise.all([
     getTasks(workspaceId),
     getIntegrationAccounts(user.id, workspaceId),
+    getButlerName(workspaceId),
   ]);
 
   let selectedTask: (typeof tasks)[number] | null = null;
-  let conversation: Awaited<
-    ReturnType<typeof getConversationAndHistory>
-  > | null = null;
+  let taskConversations: Awaited<ReturnType<typeof getConversationAndHistory>>[] = [];
 
   if (selectedTaskId) {
     selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
-    if (selectedTask?.conversationIds?.[0]) {
-      conversation = await getConversationAndHistory(
-        selectedTask.conversationIds[0],
-        user.id,
+    if (selectedTask?.conversationIds?.length) {
+      const results = await Promise.all(
+        selectedTask.conversationIds.map((id) =>
+          getConversationAndHistory(id, user.id),
+        ),
       );
-      if (conversation?.unread) {
-        await readConversation(conversation.id);
-      }
+      taskConversations = results.filter(Boolean) as typeof taskConversations;
+      // Mark all unread as read
+      await Promise.all(
+        taskConversations
+          .filter((c) => c?.unread)
+          .map((c) => readConversation(c!.id)),
+      );
     }
   }
 
@@ -83,7 +86,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
   }
 
-  return { tasks, selectedTask, conversation, integrationAccountMap };
+  return { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName };
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
@@ -105,10 +108,6 @@ const ActionSchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("delete"),
-    taskId: z.string(),
-  }),
-  z.object({
-    intent: z.literal("create-conversation"),
     taskId: z.string(),
   }),
 ]);
@@ -168,40 +167,18 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ deleted: true });
   }
 
-  if (parsed.data.intent === "create-conversation") {
-    const task = await prisma.task.findFirst({
-      where: { id: parsed.data.taskId, workspaceId },
-    });
-    if (!task) return json({ error: "Task not found" }, { status: 404 });
-
-    const conversation = await createEmptyConversation(
-      workspaceId,
-      user.id,
-      task.title,
-      task.id,
-    );
-
-    await updateTaskConversationIds(task.id, [
-      ...(task.conversationIds ?? []),
-      conversation.id,
-    ]);
-
-    return json({ conversationId: conversation.id });
-  }
-
   return json({ error: "Unknown intent" }, { status: 400 });
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksIndex() {
-  const { tasks, selectedTask, conversation, integrationAccountMap } =
+  const { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName } =
     useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [newConversation, setNewConversation] = React.useState(false);
   const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<
     TaskStatus[]
   >("task-view-filter", DEFAULT_VISIBLE);
@@ -260,23 +237,12 @@ export default function TasksIndex() {
     );
   };
 
-  const handleCreateConversation = () => {
-    if (!selectedTask) return;
-    fetcher.submit(
-      { intent: "create-conversation", taskId: selectedTask.id },
-      { method: "POST" },
-    );
-  };
-
-  // Navigate to newly created task; track new conversation
+  // Navigate to newly created task
   useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       const data = fetcher.data as any;
       if (data.task?.id) {
         navigate(`?taskId=${data.task.id}`, { replace: true });
-      }
-      if (data.conversationId) {
-        setNewConversation(true);
       }
     }
   }, [fetcher.state, fetcher.data]);
@@ -344,14 +310,13 @@ export default function TasksIndex() {
               {() => (
                 <TaskDetail
                   task={selectedTask}
-                  conversation={conversation}
+                  conversations={taskConversations}
                   integrationAccountMap={integrationAccountMap}
                   onSave={handleSave}
                   onDelete={() => handleDelete(selectedTask.id)}
-                  onCreateConversation={handleCreateConversation}
                   onClose={() => navigate("?", { replace: true })}
                   isSubmitting={fetcher.state !== "idle"}
-                  newConversation={newConversation}
+                  butlerName={butlerName}
                 />
               )}
             </ClientOnly>

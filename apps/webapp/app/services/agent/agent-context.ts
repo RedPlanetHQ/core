@@ -135,6 +135,8 @@ export async function buildAgentContext({
     ...(replyTo ? { replyTo } : {}),
   };
 
+  const isBackgroundExecution = !!linkedTask;
+
   const tools = await createTools(
     userId,
     workspaceId,
@@ -156,6 +158,7 @@ export async function buildAgentContext({
           userPersona: triggerContext.userPersona,
         }
       : undefined,
+    isBackgroundExecution,
   );
   // Build system prompt
   let systemPrompt = getCorePrompt(

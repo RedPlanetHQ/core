@@ -131,19 +131,25 @@ export async function noStreamProcess(
   });
 
   // Generate response using generateText (non-streaming)
-  const result = await generateText({
-    model: getModel() as LanguageModel,
-    messages: [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      ...modelMessages,
-    ],
-    tools,
-    stopWhen: [stepCountIs(10)],
-    temperature: 0.5,
-  });
+  let result: Awaited<ReturnType<typeof generateText>>;
+  try {
+    result = await generateText({
+      model: getModel() as LanguageModel,
+      messages: [
+        {
+          role: "system",
+          content: systemPrompt,
+        },
+        ...modelMessages,
+      ],
+      tools,
+      stopWhen: [stepCountIs(10)],
+      temperature: 0.5,
+    });
+  } catch (error) {
+    await updateConversationStatus(body.id, "failed");
+    throw error;
+  }
 
   // Create assistant message with UI-compatible parts
   // (must match the format expected by convertToModelMessages on reload)

@@ -2,28 +2,38 @@ import React, { useEffect, useRef } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { Loader2, Trash2, MessageSquarePlus, X } from "lucide-react";
+import { Trash2, X } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
-import { ConversationView, ConversationItem } from "~/components/conversation";
-import { ScrollAreaWithAutoScroll } from "~/components/use-auto-scroll";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import {
+  TaskConversationsSelect,
+  formatRunLabel,
+} from "~/components/tasks/task-conversations-select";
 import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
-import { UserTypeEnum } from "@core/types";
-import type { UIMessage } from "ai";
 import type { getTasks } from "~/services/task.server";
 import type { getConversationAndHistory } from "~/services/conversation.server";
 import { extensionsForConversation } from "../conversation/editor-extensions";
 
+type ConversationItem = NonNullable<
+  Awaited<ReturnType<typeof getConversationAndHistory>>
+>;
+
 interface TaskDetailProps {
   task: Awaited<ReturnType<typeof getTasks>>[number];
-  conversation: Awaited<ReturnType<typeof getConversationAndHistory>> | null;
+  conversations: ConversationItem[];
   integrationAccountMap?: Record<string, string>;
   onSave: (title: string, description: string) => void;
   onDelete: () => void;
-  onCreateConversation: () => void;
   onClose: () => void;
   isSubmitting: boolean;
-  newConversation?: boolean;
+  butlerName?: string;
 }
 
 function DescriptionEditor({
@@ -53,21 +63,21 @@ function DescriptionEditor({
 
 export function TaskDetail({
   task,
-  conversation,
+  conversations,
   integrationAccountMap = {},
   onSave,
   onDelete,
-  onCreateConversation,
   onClose,
   isSubmitting,
-  newConversation = false,
+  butlerName = "Core",
 }: TaskDetailProps) {
-  const isInProgress = task.status === "InProgress";
-
   const [title, setTitle] = React.useState(task.title);
   const [description, setDescription] = React.useState(task.description ?? "");
   const [activeTab, setActiveTab] = React.useState("info");
   const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [selectedConversationId, setSelectedConversationId] = React.useState(
+    () => conversations[conversations.length - 1]?.id ?? "",
+  );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef({
     title: task.title,
@@ -82,14 +92,8 @@ export function TaskDetail({
       title: task.title,
       description: task.description ?? "",
     };
+    setSelectedConversationId(conversations[conversations.length - 1]?.id ?? "");
   }, [task.id]);
-
-  // Auto-switch to conversation tab when a new conversation is created
-  useEffect(() => {
-    if (newConversation && conversation) {
-      setActiveTab("conversation");
-    }
-  }, [newConversation, conversation]);
 
   const triggerSave = (nextTitle: string, nextDesc: string) => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -121,24 +125,43 @@ export function TaskDetail({
       onValueChange={setActiveTab}
       className="flex h-full flex-col"
     >
-      <div className="flex justify-between px-3 pt-2">
+      <div className="flex items-center justify-between px-3 pt-2">
         <TabsList className="rounded">
           <TabsTrigger value="info" className="rounded">
             Info
           </TabsTrigger>
           <TabsTrigger value="conversation" className="rounded">
-            Conversation
+            Conversations
           </TabsTrigger>
         </TabsList>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 rounded"
-          onClick={onClose}
-        >
-          <X size={16} />
-        </Button>
+        <div className="flex items-center gap-1">
+          {activeTab === "conversation" && conversations.length > 1 && (
+            <Select
+              value={selectedConversationId}
+              onValueChange={setSelectedConversationId}
+            >
+              <SelectTrigger className="h-7 w-auto rounded border-none bg-transparent text-xs shadow-none focus:ring-0">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent align="end">
+                {[...conversations].reverse().map((conv, i) => (
+                  <SelectItem key={conv.id} value={conv.id} className="text-xs">
+                    {formatRunLabel(conv, conversations.length - 1 - i)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded"
+            onClick={onClose}
+          >
+            <X size={16} />
+          </Button>
+        </div>
       </div>
 
       <TabsContent
@@ -147,16 +170,13 @@ export function TaskDetail({
       >
         <div className="flex flex-1 flex-col gap-4">
           <input
-            className="w-full bg-transparent text-xl font-medium focus:outline-none disabled:opacity-60"
+            className="w-full bg-transparent text-xl font-medium focus:outline-none"
             value={title}
             onChange={handleTitleChange}
             placeholder="Task title"
-            disabled={isInProgress}
           />
 
-          <div
-            className={`flex flex-col gap-1 ${isInProgress ? "pointer-events-none opacity-60" : ""}`}
-          >
+          <div className="flex flex-col gap-1">
             <DescriptionEditor
               initialContent={task.description ?? ""}
               onChange={handleDescriptionChange}
@@ -169,7 +189,7 @@ export function TaskDetail({
               className="rounded"
               size="lg"
               onClick={() => setDeleteOpen(true)}
-              disabled={isSubmitting || isInProgress}
+              disabled={isSubmitting}
             >
               <Trash2 size={14} className="mr-1" />
               Delete task
@@ -182,64 +202,12 @@ export function TaskDetail({
         value="conversation"
         className="mt-0 flex flex-1 flex-col overflow-hidden"
       >
-        {conversation ? (
-          isInProgress ? (
-            <div className="flex h-full flex-col overflow-hidden">
-              <div className="text-muted-foreground flex items-center gap-2 border-b border-gray-200 px-4 py-2 text-xs">
-                <Loader2 size={12} className="animate-spin" />
-                Agent is working…
-              </div>
-              <ScrollAreaWithAutoScroll>
-                {conversation.ConversationHistory.map((h) => (
-                  <ConversationItem
-                    key={h.id}
-                    message={
-                      {
-                        id: h.id,
-                        role:
-                          h.userType === UserTypeEnum.Agent
-                            ? "assistant"
-                            : "user",
-                        parts: h.parts
-                          ? (h.parts as UIMessage["parts"])
-                          : [{ text: h.message, type: "text" }],
-                      } as UIMessage
-                    }
-                    addToolApprovalResponse={async () => {}}
-                    integrationAccountMap={integrationAccountMap}
-                  />
-                ))}
-              </ScrollAreaWithAutoScroll>
-            </div>
-          ) : (
-            <ConversationView
-              key={`${task.id}-${conversation.ConversationHistory.length}`}
-              conversationId={conversation.id}
-              history={conversation.ConversationHistory}
-              integrationAccountMap={integrationAccountMap}
-              className="py-0"
-            />
-          )
-        ) : (
-          <div className="flex h-full flex-col items-center justify-center gap-3">
-            <MessageSquarePlus className="text-muted-foreground h-8 w-8" />
-            <p className="text-muted-foreground">
-              {task.status === "Backlog" || task.status === "Todo"
-                ? "Task is queued — conversation will appear once it starts."
-                : "No conversation yet."}
-            </p>
-            <Button
-              size="lg"
-              variant="secondary"
-              className="rounded"
-              onClick={onCreateConversation}
-              disabled={isSubmitting}
-            >
-              <MessageSquarePlus size={14} className="mr-1" />
-              Start conversation
-            </Button>
-          </div>
-        )}
+        <TaskConversationsSelect
+          conversations={conversations}
+          selectedId={selectedConversationId}
+          integrationAccountMap={integrationAccountMap}
+          butlerName={butlerName}
+        />
       </TabsContent>
       <DeleteTaskDialog
         open={deleteOpen}
