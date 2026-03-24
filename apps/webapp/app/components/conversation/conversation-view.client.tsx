@@ -39,6 +39,8 @@ export function ConversationView({
   autoRegenerate = false,
   conversationStatus,
 }: ConversationViewProps) {
+  const readFetcher = useFetcher();
+
   const {
     sendMessage,
     messages,
@@ -48,7 +50,12 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
-    resume: true, // Ena
+    onFinish: () => {
+      readFetcher.submit(null, {
+        method: "GET",
+        action: `/api/v1/conversation/${conversationId}/read`,
+      });
+    },
     messages: history.map(
       (h) =>
         ({
@@ -82,19 +89,6 @@ export function ConversationView({
       regenerate();
     }
   }, []);
-
-  const readFetcher = useFetcher();
-  const prevStatusRef = useRef(status);
-  useEffect(() => {
-    const prev = prevStatusRef.current;
-    prevStatusRef.current = status;
-    if (prev !== "ready" && status === "ready") {
-      readFetcher.submit(null, {
-        method: "GET",
-        action: `/api/v1/conversation/${conversationId}/read`,
-      });
-    }
-  }, [status, conversationId]);
 
   const lastAssistant = [...messages]
     .reverse()
