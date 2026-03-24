@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { Loader2, Check, X, RefreshCw } from "lucide-react";
+import { Loader2, Check, X } from "lucide-react";
 import { Button } from "~/components/ui";
 import { Input } from "~/components/ui/input";
 
@@ -9,12 +9,17 @@ interface OnboardingAgentNameProps {
   workspaceId: string;
   onComplete: (name: string, slug: string) => void;
   isSubmitting?: boolean;
-  onGenerateName: (currentName: string, previousNames: string[]) => void;
-  generatedName?: string;
-  isGenerating?: boolean;
 }
 
 type AvailabilityState = "idle" | "checking" | "available" | "taken";
+
+function slugify(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
 
 export function OnboardingAgentName({
   defaultName,
@@ -22,46 +27,26 @@ export function OnboardingAgentName({
   workspaceId,
   onComplete,
   isSubmitting = false,
-  onGenerateName,
-  generatedName,
-  isGenerating = false,
 }: OnboardingAgentNameProps) {
   const [name, setName] = useState(defaultName);
   const [slug, setSlug] = useState(defaultSlug);
+  const [slugManuallyEdited, setSlugManuallyEdited] = useState(false);
   const [availability, setAvailability] = useState<AvailabilityState>("idle");
-  const [previousNames, setPreviousNames] = useState<string[]>([]);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Auto-generate on first mount
-  useEffect(() => {
-    onGenerateName("", []);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Apply generated name when generation completes
-  const wasGenerating = useRef(false);
-  useEffect(() => {
-    if (wasGenerating.current && !isGenerating && generatedName) {
-      setName(generatedName);
-      setPreviousNames((prev) => [...prev, generatedName]);
-    }
-    wasGenerating.current = isGenerating;
-  }, [isGenerating, generatedName]);
-
   const checkAvailability = useCallback(
-    async (nameValue: string) => {
+    async (slugValue: string) => {
       setAvailability("checking");
       try {
         const res = await fetch("/api/v1/onboarding/check-name", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            name: nameValue,
+            slug: slugValue,
             currentWorkspaceId: workspaceId,
           }),
         });
         const data = await res.json();
-        setSlug(data.slug || "");
         setAvailability(data.available ? "available" : "taken");
       } catch {
         setAvailability("idle");
@@ -70,18 +55,25 @@ export function OnboardingAgentName({
     [workspaceId],
   );
 
+  // Auto-derive slug from name unless user has manually edited it
   useEffect(() => {
-    if (!name.trim()) {
+    if (!slugManuallyEdited) {
+      setSlug(slugify(name));
+    }
+  }, [name, slugManuallyEdited]);
+
+  // Debounced availability check on slug
+  useEffect(() => {
+    if (!slug.trim()) {
       setAvailability("idle");
-      setSlug("");
       return;
     }
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => checkAvailability(name), 500);
+    debounceRef.current = setTimeout(() => checkAvailability(slug), 500);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [name, checkAvailability]);
+  }, [slug, checkAvailability]);
 
   const canContinue =
     name.trim() &&
@@ -98,55 +90,52 @@ export function OnboardingAgentName({
         </p>
       </div>
 
-      <div className="space-y-1">
-        <div className="relative">
-          <Input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Alfred"
-            className="h-10 pr-16"
-            disabled={isSubmitting}
-            autoFocus
-          />
-          <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-6"
-              onClick={() => onGenerateName(name, previousNames)}
-              disabled={isSubmitting || isGenerating}
-              aria-label="generate name"
-            >
-              {isGenerating ? (
-                <Loader2 className="text-muted-foreground size-3.5 animate-spin" />
-              ) : (
-                <RefreshCw className="text-muted-foreground size-3.5" />
-              )}
-            </Button>
-            {availability === "checking" && (
-              <Loader2 className="text-muted-foreground size-4 animate-spin" />
-            )}
-            {availability === "available" && (
-              <Check className="text-success size-4" />
-            )}
-            {availability === "taken" && (
-              <X className="text-destructive size-4" />
-            )}
-          </div>
-        </div>
-        {availability === "taken" && (
-          <p className="text-destructive text-xs">
-            "{slug}" is already taken. try a different name.
-          </p>
-        )}
-      </div>
+      <div className="space-y-3">
+        <Input
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Alfred"
+          className="h-10"
+          disabled={isSubmitting}
+          autoFocus
+        />
 
-      {slug && availability !== "taken" && (
-        <p className="text-muted-foreground text-md">
-          you can email your butler at{" "}
-          <span className="text-foreground font-medium">{slug}@getcore.me</span>
-        </p>
-      )}
+        <div className="space-y-1">
+          <div className="relative">
+            <Input
+              value={slug}
+              onChange={(e) => {
+                setSlugManuallyEdited(true);
+                setSlug(slugify(e.target.value));
+              }}
+              placeholder="email slug"
+              className="h-10 pr-10"
+              disabled={isSubmitting}
+            />
+            <div className="absolute right-2 top-1/2 flex -translate-y-1/2 items-center">
+              {availability === "checking" && (
+                <Loader2 className="text-muted-foreground size-4 animate-spin" />
+              )}
+              {availability === "available" && (
+                <Check className="text-success size-4" />
+              )}
+              {availability === "taken" && (
+                <X className="text-destructive size-4" />
+              )}
+            </div>
+          </div>
+          {availability === "taken" ? (
+            <p className="text-destructive text-xs">
+              "{slug}@getcore.me" is already taken.
+            </p>
+          ) : slug ? (
+            <p className="text-muted-foreground text-xs">
+              your butler's email:{" "}
+              <span className="text-foreground font-medium">{slug}@getcore.me</span>
+            </p>
+          ) : null}
+        </div>
+      </div>
 
       <div className="flex justify-end">
         <Button

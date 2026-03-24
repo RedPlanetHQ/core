@@ -1,13 +1,13 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import { prisma } from "~/db.server";
 import {
   createHybridLoaderApiRoute,
   createActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { addReminder } from "~/services/reminder.server";
 import { logger } from "~/services/logger.service";
-import type { MessageChannel } from "~/services/agent/types";
+import { getAvailableChannels } from "~/services/channel.server";
+import { prisma } from "~/db.server";
 
 // Schema for list search parameters
 const RemindersSearchParams = z.object({
@@ -21,35 +21,12 @@ const RemindersSearchParams = z.object({
 const ReminderCreateSchema = z.object({
   text: z.string().min(1, "Text is required"),
   schedule: z.string().min(1, "Schedule is required"),
-  channel: z.enum(["whatsapp", "email", "slack"]).default("email"),
+  channel: z.enum(["whatsapp", "email", "slack", "telegram"]).default("email"),
   maxOccurrences: z.number().optional().nullable(),
   endDate: z.string().optional().nullable(),
   startDate: z.string().optional().nullable(),
   metadata: z.record(z.any()).optional().nullable(),
 });
-
-async function getAvailableChannels(
-  workspaceId: string
-): Promise<MessageChannel[]> {
-  const [workspace, slackAccount] = await Promise.all([
-    prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { UserWorkspace: { include: { user: true }, take: 1 } },
-    }),
-    prisma.integrationAccount.findFirst({
-      where: {
-        workspaceId,
-        integrationDefinition: { slug: "slack" },
-      },
-    }),
-  ]);
-
-  const user = workspace?.UserWorkspace[0]?.user;
-  const channels: MessageChannel[] = ["email"];
-  if (user?.phoneNumber) channels.push("whatsapp");
-  if (slackAccount) channels.push("slack");
-  return channels;
-}
 
 // GET - List reminders
 export const loader = createHybridLoaderApiRoute(

@@ -201,7 +201,7 @@ FOLLOW-UP REMINDERS:
             "RRule schedule string (e.g., 'FREQ=DAILY;BYHOUR=9' for 9am daily)",
           ),
         channel: z
-          .enum(["whatsapp", "slack", "email"])
+          .enum(["whatsapp", "slack", "email", "telegram"])
           .optional()
           .describe(
             "Channel to send the reminder on. Defaults to user's default channel if not specified.",

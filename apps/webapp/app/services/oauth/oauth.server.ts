@@ -14,6 +14,8 @@ import { logger } from "../logger.service";
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
 import type { IntegrationDefinitionV2 } from "@core/database";
 import { env } from "~/env.server";
+import { prisma } from "~/db.server";
+import { createChannel } from "~/services/channel.server";
 
 // PKCE utilities
 function generateCodeVerifier(): string {
@@ -178,12 +180,58 @@ export async function callbackHandler(params: CallbackParams) {
     });
 
     // Handle the setup result - process account messages
-    await IntegrationRunner.handleSetupMessages(
+    const { account } = await IntegrationRunner.handleSetupMessages(
       messages,
       integrationDefinition as any,
       sessionRecord.workspaceId,
       sessionRecord.userId as string,
     );
+
+    // Auto-create a Slack Channel record when Slack OAuth completes
+    if (integrationDefinition.slug === "slack" && account) {
+      const config = account.integrationConfiguration as Record<string, string>;
+      const teamId = config?.team_id;
+      const teamName = config?.team_name ?? "Slack";
+      const botToken = config?.bot_token;
+
+      if (botToken) {
+        const exists = teamId
+          ? await prisma.channel.findFirst({
+              where: {
+                workspaceId: sessionRecord.workspaceId,
+                type: "slack",
+              },
+            }).then((ch) => {
+              if (!ch) return false;
+              const cfg = ch.config as Record<string, string>;
+              return cfg?.team_id === teamId;
+            })
+          : false;
+
+        if (!exists) {
+          const isFirstSlack = !(await prisma.channel.findFirst({
+            where: { workspaceId: sessionRecord.workspaceId, type: "slack" },
+          }));
+
+          await createChannel(sessionRecord.workspaceId, {
+            name: `${teamName} (Slack)`,
+            type: "slack",
+            config: {
+              bot_token: botToken,
+              ...(config?.user_token ? { user_token: config.user_token } : {}),
+              ...(teamId ? { team_id: teamId } : {}),
+              ...(teamName ? { team_name: teamName } : {}),
+              ...(config?.bot_user_id ? { bot_user_id: config.bot_user_id } : {}),
+              // account.accountId is the Slack user ID of the person who connected — used for inbound DM routing
+              ...(account.accountId ? { user_id: account.accountId } : {}),
+            },
+            isDefault: isFirstSlack,
+          }).catch((err) => {
+            logger.warn("Failed to auto-create Slack channel", { error: String(err) });
+          });
+        }
+      }
+    }
 
     return new Response(null, {
       status: 302,

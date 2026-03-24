@@ -1,0 +1,1 @@
+export const TELEGRAM_FORMAT = `You are replying via Telegram. Keep messages concise and clear. Use plain text; avoid complex markdown tables. Use *bold* and _italic_ sparingly. Keep responses under 4000 characters where possible.`;

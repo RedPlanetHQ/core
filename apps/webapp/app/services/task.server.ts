@@ -1,6 +1,6 @@
 import { prisma } from "~/db.server";
 import type { Task, TaskStatus } from "@prisma/client";
-import { enqueueTask, cancelTaskJob } from "~/lib/queue-adapter.server";
+import { cancelTaskJob } from "~/lib/queue-adapter.server";
 
 export async function createTask(
   workspaceId: string,
