@@ -111,8 +111,12 @@ async function processReceivedEmails(
         }
 
         const sender = formatEmailSender(from);
+<<<<<<< HEAD
         const fromEmail = from.match(/^.+?\s*<(.+?)>$/)?.[1]?.trim() ?? from.trim();
         const threadId = fullMessage.data.threadId || message.id;
+=======
+        const threadId = fullMessage.data.threadId || '';
+>>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
@@ -129,7 +133,11 @@ async function processReceivedEmails(
         // Format activity text with full email content as markdown
         const text = `## 📧 Email from ${sender}
 
+<<<<<<< HEAD
 **From:** ${fromEmail}
+=======
+**From:** ${from}
+>>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
 **Subject:** ${subject}
 **Date:** ${date}
 **Thread ID:** ${threadId}
@@ -195,7 +203,11 @@ async function processSentEmails(
           lastEmailTime = internalDate;
         }
 
+<<<<<<< HEAD
         const threadId = fullMessage.data.threadId || message.id;
+=======
+        const threadId = fullMessage.data.threadId || '';
+>>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
