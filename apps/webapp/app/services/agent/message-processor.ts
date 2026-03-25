@@ -16,6 +16,7 @@ import {
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
 import { type InboundAttachment } from "~/services/channels/types";
+import { formatDailyWhatsAppTitle } from "~/services/channels/whatsapp/utils";
 import { ModelMessage } from "ai";
 
 interface ProcessInboundMessageParams {
@@ -105,10 +106,14 @@ export async function getOrCreateChannelConversation(
 
   if (existing) return existing.id;
 
+  const title =
+    channel === "whatsapp" ? formatDailyWhatsAppTitle(new Date()) : undefined;
+
   const conversation = await createConversation(workspaceId, userId, {
     message,
     parts: [{ text: message, type: "text" }],
     source: channel,
+    ...(title ? { title } : {}),
   });
 
   return conversation.conversationId;

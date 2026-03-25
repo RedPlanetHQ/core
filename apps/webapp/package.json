@@ -10,6 +10,7 @@
     "lint:fix": "eslint 'app/**/*.{ts,tsx,js,jsx}' --rule 'turbo/no-undeclared-env-vars:error' -f table",
     "start": "node server.js",
     "typecheck": "tsc",
+    "test": "vitest run",
     "trigger:dev": "pnpm dlx trigger.dev@4.3.0 dev",
     "trigger:deploy": "pnpm dlx trigger.dev@4.3.0 deploy"
   },
@@ -211,7 +212,8 @@
     "tsx": "4.20.6",
     "typescript": "5.8.3",
     "vite": "^6.0.0",
-    "vite-tsconfig-paths": "^4.2.1"
+    "vite-tsconfig-paths": "^4.2.1",
+    "vitest": "^4.1.1"
   },
   "engines": {
     "node": ">=20.0.0"
