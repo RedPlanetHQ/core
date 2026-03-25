@@ -54,6 +54,41 @@ const getNestedPartsFromOutput = (output: any): any[] => {
   if (output.content && Array.isArray(output.content)) {
     return output.content;
   }
+  // Mastra subagent streaming format (from merged data-tool-agent chunks):
+  // { toolCalls, toolResults, text, steps }
+  // Convert to parts format for rendering
+  if (output.toolCalls || output.toolResults || output.steps) {
+    const parts: any[] = [];
+    // Use latest step's data if available, otherwise top-level
+    const source = output.steps?.length > 0
+      ? output.steps[output.steps.length - 1]
+      : output;
+    // Deduplicate toolCalls by toolCallId (streaming may send duplicates)
+    const seenCallIds = new Set<string>();
+    for (const tc of source.toolCalls ?? []) {
+      const call = tc.payload ?? tc;
+      if (seenCallIds.has(call.toolCallId)) continue;
+      seenCallIds.add(call.toolCallId);
+      const allResults = source.toolResults ?? output.toolResults ?? [];
+      const tr = allResults.find((r: any) => {
+        const result = r.payload ?? r;
+        return result.toolCallId === call.toolCallId;
+      });
+      const result = tr?.payload ?? tr;
+      parts.push({
+        type: `tool-${call.toolName}`,
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        state: result?.result !== undefined ? "output-available" : "in-progress",
+        input: call.args,
+        ...(result?.result !== undefined && { output: result.result }),
+      });
+    }
+    if (source.text || output.text) {
+      parts.push({ type: "text", text: source.text || output.text });
+    }
+    return parts;
+  }
   return [];
 };
 
@@ -139,7 +174,7 @@ const Tool = ({
   }
 
   // take_action → render nested tools flat, no collapsible wrapper
-  if (toolName === "take_action") {
+  if (toolName === "take_action" || toolName === "agent-take_action") {
     if (!hasNestedTools && part.state !== "output-available") {
       return (
         <div className="text-muted-foreground flex items-center gap-2 py-1">
@@ -183,11 +218,11 @@ const Tool = ({
       return <TriangleAlert size={16} className="rounded-sm" />;
     }
 
-    if (part.state === "in-progress") {
+    if (part.state === "in-progress" && !hasNestedTools) {
       return <LoaderCircle className="h-4 w-4 animate-spin" />;
     }
 
-    if (toolName === "gather_context") {
+    if (toolName === "gather_context" || toolName === "agent-gather_context") {
       return <Search size={16} />;
     }
 
@@ -248,7 +283,7 @@ const Tool = ({
     if (toolName === "get_integration_actions" && (part as any).input?.query) {
       return `Get tool · ${(part as any).input.query as string}`;
     }
-    if (toolName === "gather_context" && (part as any).input?.query) {
+    if ((toolName === "gather_context" || toolName === "agent-gather_context") && (part as any).input?.query) {
       const q = (part as any).input.query as string;
       const truncated = q.length > 30 ? q.slice(0, 30) + "..." : q;
       return `Gather context · ${truncated}`;
@@ -256,8 +291,9 @@ const Tool = ({
     return getToolDisplayName(part.type);
   })();
 
+  const isGatherContext = toolName === "gather_context" || toolName === "agent-gather_context";
   const gatherContextQuery =
-    toolName === "gather_context" ? (part as any).input?.query : null;
+    isGatherContext ? (part as any).input?.query : null;
 
   // Render leaf tool (no nested tools) - compact output
   const renderLeafContent = () => {
@@ -409,12 +445,70 @@ const ConversationItemComponent = ({
     return null;
   }
 
+  // Merge data-tool-agent parts into their parent agent tool parts.
+  // Mastra streams subagent activity as separate "data-tool-agent" sibling parts
+  // instead of nesting them inside the parent tool's output during streaming.
+  const mergedParts = (() => {
+    const result: any[] = [];
+    let lastAgentTool: any = null;
+
+    for (const part of message.parts) {
+      // data-tool-agent parts contain subagent's toolCalls/toolResults/text/steps
+      if ((part as any).type === "data-tool-agent" || (part as any).type === "tool-agent") {
+        // Merge into the preceding agent tool part's output
+        if (lastAgentTool) {
+          const agentData = (part as any).data ?? part;
+          if (!lastAgentTool.output || typeof lastAgentTool.output !== "object") {
+            lastAgentTool.output = {};
+          }
+          // Accumulate toolCalls and toolResults from streaming chunks
+          if (agentData.toolCalls) {
+            lastAgentTool.output.toolCalls = [
+              ...(lastAgentTool.output.toolCalls ?? []),
+              ...agentData.toolCalls,
+            ];
+          }
+          if (agentData.toolResults) {
+            lastAgentTool.output.toolResults = [
+              ...(lastAgentTool.output.toolResults ?? []),
+              ...agentData.toolResults,
+            ];
+          }
+          if (agentData.steps) {
+            lastAgentTool.output.steps = agentData.steps;
+          }
+          if (agentData.text) {
+            lastAgentTool.output.text = agentData.text;
+          }
+        }
+        // Don't add data-tool-agent to result — it's merged into parent
+        continue;
+      }
+
+      // Track the last agent tool part (agent-gather_context, agent-take_action, etc.)
+      const toolName = (part as any).type?.replace?.("tool-", "") ?? "";
+      if (toolName.startsWith("agent-")) {
+        // Clone to avoid mutating the original message part
+        const cloned = { ...(part as any) };
+        lastAgentTool = cloned;
+        result.push(cloned);
+      } else {
+        result.push(part);
+        // Reset tracker for non-agent tools
+        if ((part as any).type?.includes?.("tool-")) {
+          lastAgentTool = null;
+        }
+      }
+    }
+    return result;
+  })();
+
   // Group consecutive tools together
   const groupedParts: Array<{ type: "tool-group" | "single"; parts: any[] }> =
     [];
   let currentToolGroup: any[] = [];
 
-  message.parts.forEach((part) => {
+  mergedParts.forEach((part) => {
     if (part.type?.includes("tool-")) {
       currentToolGroup.push(part);
     } else {

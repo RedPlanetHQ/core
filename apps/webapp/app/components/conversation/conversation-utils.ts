@@ -16,6 +16,11 @@ export const getToolDisplayName = (toolType: string): string => {
     get_integration_actions: "Get integration actions",
     decision: "Decision",
     silent_action: "Silent action",
+
+    // Mastra subagent tools (auto-generated from agents: {} config)
+    "agent-gather_context": "Gather Context",
+    "agent-take_action": "Take Action",
+    "agent-think": "Think",
   };
 
   // Check for exact match
@@ -30,7 +35,13 @@ export const getToolDisplayName = (toolType: string): string => {
       .join(" ");
   }
 
-  // Check for gateway_ prefix
+  // Check for agent-gateway_* prefix (Mastra subagent tools for gateways)
+  if (name.startsWith("agent-gateway_")) {
+    const gatewayName = name.replace("agent-gateway_", "").replace(/_/g, " ");
+    return `Gateway: ${gatewayName.charAt(0).toUpperCase() + gatewayName.slice(1)}`;
+  }
+
+  // Check for gateway_ prefix (legacy)
   if (name.startsWith("gateway_")) {
     const gatewayName = name.replace("gateway_", "").replace(/_/g, " ");
     return `Gateway: ${gatewayName.charAt(0).toUpperCase() + gatewayName.slice(1)}`;
@@ -44,7 +55,7 @@ export const getToolDisplayName = (toolType: string): string => {
 };
 
 /**
- * Helper to get nested parts from output (checks both .content and .parts)
+ * Helper to get nested parts from output (checks .parts, .content, and Mastra streaming format)
  */
 const getNestedParts = (output: any): any[] => {
   if (!output) return [];
@@ -55,6 +66,36 @@ const getNestedParts = (output: any): any[] => {
   // Fallback to output.content
   if (output.content && Array.isArray(output.content)) {
     return output.content;
+  }
+  // Mastra subagent streaming format (merged from data-tool-agent chunks)
+  if (output.toolCalls || output.toolResults || output.steps) {
+    const parts: any[] = [];
+    const source =
+      output.steps?.length > 0
+        ? output.steps[output.steps.length - 1]
+        : output;
+    const seenCallIds = new Set<string>();
+    for (const tc of source.toolCalls ?? []) {
+      const call = tc.payload ?? tc;
+      if (seenCallIds.has(call.toolCallId)) continue;
+      seenCallIds.add(call.toolCallId);
+      const allResults = source.toolResults ?? output.toolResults ?? [];
+      const tr = allResults.find((r: any) => {
+        const result = r.payload ?? r;
+        return result.toolCallId === call.toolCallId;
+      });
+      const result = tr?.payload ?? tr;
+      parts.push({
+        type: `tool-${call.toolName}`,
+        toolCallId: call.toolCallId,
+        toolName: call.toolName,
+        state:
+          result?.result !== undefined ? "output-available" : "in-progress",
+        input: call.args,
+        ...(result?.result !== undefined && { output: result.result }),
+      });
+    }
+    return parts;
   }
   return [];
 };

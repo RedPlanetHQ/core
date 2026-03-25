@@ -5,15 +5,18 @@ import {
   upsertConversationHistory,
 } from "../conversation.server";
 import { EpisodeType, UserTypeEnum } from "@core/types";
-import { generateId, generateText, type LanguageModel, stepCountIs } from "ai";
-import { buildAgentContext } from "./agent-context";
-import { getModel } from "~/lib/model.server";
+import { generateId, stepCountIs } from "ai";
+import { Agent } from "@mastra/core/agent";
+import { buildAgentContext } from "./context";
+import { getMastra } from "./mastra";
+import { toRouterString } from "~/lib/model.server";
+import { env } from "~/env.server";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   type Trigger,
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
-import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
+import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { deductCredits } from "~/trigger/utils/utils";
 
 interface NoStreamProcessBody {
@@ -118,67 +121,82 @@ export async function noStreamProcess(
     finalMessages = body.messages as any;
   }
 
-  const { systemPrompt, tools, modelMessages } = await buildAgentContext({
-    userId,
-    workspaceId,
-    source: body.source as any,
-    finalMessages,
-    triggerContext: body.triggerContext,
-    onMessage: body.onMessage,
-    channelMetadata: body.channelMetadata,
-    conversationId: body.id,
-    executorTools: body.executorTools,
+  const { systemPrompt, tools, modelMessages, gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents } =
+    await buildAgentContext({
+      userId,
+      workspaceId,
+      source: body.source as any,
+      finalMessages,
+      triggerContext: body.triggerContext,
+      onMessage: body.onMessage,
+      channelMetadata: body.channelMetadata,
+      conversationId: body.id,
+      executorTools: body.executorTools,
+    });
+
+  // Create core agent with subagents — think only present for triggered flows
+  const subagents: Record<string, Agent> = {
+    gather_context: gatherContextAgent,
+    take_action: takeActionAgent,
+  };
+  if (thinkAgent) subagents.think = thinkAgent;
+
+  const agent = new Agent({
+    id: "core-agent",
+    name: "Core Agent",
+    model: toRouterString(env.MODEL) as any,
+    instructions: systemPrompt,
+    agents: subagents,
   });
 
-  // Generate response using generateText (non-streaming)
-  let result: Awaited<ReturnType<typeof generateText>>;
+  // Wire Mastra for storage on all agent levels
+  const mastra = getMastra();
+  (agent as any).__registerMastra(mastra);
+  (gatherContextAgent as any).__registerMastra(mastra);
+  (takeActionAgent as any).__registerMastra(mastra);
+  if (thinkAgent) (thinkAgent as any).__registerMastra(mastra);
+  for (const gw of gatewayAgents) {
+    (gw as any).__registerMastra(mastra);
+  }
+
+  let result: any;
   try {
-    result = await generateText({
-      model: getModel() as LanguageModel,
-      messages: [
-        {
-          role: "system",
-          content: systemPrompt,
-        },
-        ...modelMessages,
-      ],
-      tools,
+    result = await agent.generate(modelMessages, {
+      toolsets: { core: tools },
       stopWhen: [stepCountIs(10)],
-      temperature: 0.5,
+      modelSettings: { temperature: 0.5 },
     });
   } catch (error) {
     await updateConversationStatus(body.id, "failed");
     throw error;
   }
 
-  // Create assistant message with UI-compatible parts
-  // (must match the format expected by convertToModelMessages on reload)
-  // Build parts from result.steps so tool calls are preserved (not just result.text)
+  // Build assistant parts from result.steps (handle Mastra payload wrapper)
   const assistantMessageId = crypto.randomUUID();
   const assistantParts: any[] = [];
 
   for (const step of result.steps) {
-    // Add step-start marker for multi-step flows (matches streaming format)
     if (result.steps.length > 1 && step !== result.steps[0]) {
       assistantParts.push({ type: "step-start" });
     }
 
-    // Add tool invocation parts (matching the UIMessage format from streamText)
-    for (const toolCall of step.toolCalls) {
-      const toolResult = step.toolResults.find(
-        (r: any) => r.toolCallId === toolCall.toolCallId,
-      );
+    for (const toolCall of step.toolCalls ?? []) {
+      const tc = toolCall.payload ?? toolCall;
+      const toolResult = (step.toolResults ?? []).find((r: any) => {
+        const tr = r.payload ?? r;
+        return tr.toolCallId === tc.toolCallId;
+      });
+      const tr = toolResult?.payload ?? toolResult;
       assistantParts.push({
-        type: `tool-${toolCall.toolName}`,
-        toolCallId: toolCall.toolCallId,
-        toolName: toolCall.toolName,
+        type: `tool-${tc.toolName}`,
+        toolCallId: tc.toolCallId,
+        toolName: tc.toolName,
         state: "output-available",
-        input: toolCall.input,
-        output: toolResult?.output,
+        input: tc.args,
+        output: tr?.result,
       });
     }
 
-    // Add text part if this step produced text
     if (step.text) {
       assistantParts.push({ type: "text", text: step.text });
     }
@@ -190,7 +208,6 @@ export async function noStreamProcess(
     parts: assistantParts,
   };
 
-  // Save assistant message to history (use assistantParts — UI-compatible format)
   await upsertConversationHistory(
     assistantMessageId,
     assistantParts,
@@ -199,7 +216,6 @@ export async function noStreamProcess(
     false,
   );
 
-  // Add to ingestion queue
   if (result.text) {
     await addToQueue(
       {

@@ -1,23 +1,21 @@
 /**
- * Re-export from new location.
- * @deprecated Import from ~/services/agent/agents/gateway instead.
+ * Gateway Agent Factory
  *
- * Provides backward-compatible exports for callers that haven't been updated.
+ * Creates Mastra Agent instances for connected gateways.
+ * Each gateway becomes a sub-subagent under the orchestrator,
+ * with direct tools (browser, coding, exec) that can be called by the agent.
  */
 
-import { type Agent } from "@mastra/core/agent";
-import { type GatewayAgentInfo } from "./executors/base";
-import { getConnectedGateways } from "~/services/gateway.server";
-import { getGateway } from "~/services/gateway.server";
-import { streamText, type LanguageModel, stepCountIs, tool } from "ai";
+import { Agent } from "@mastra/core/agent";
+import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
-import { getModel, getModelForTask } from "~/lib/model.server";
-import { logger } from "~/services/logger.service";
-import { callGatewayTool } from "../../../websocket";
-import { type OrchestratorTools } from "./executors/base";
 
-// Re-export types
-export type { GatewayAgentInfo } from "./executors/base";
+import { logger } from "~/services/logger.service";
+import { getGateway } from "~/services/gateway.server";
+import { toRouterString } from "~/lib/model.server";
+import { env } from "~/env.server";
+import { type OrchestratorTools, type GatewayAgentInfo } from "../executors/base";
+import { callGatewayTool } from "../../../../websocket";
 
 // Types for gateway tools (matches schema in database)
 interface GatewayTool {
@@ -37,6 +35,9 @@ interface JsonSchemaProperty {
   default?: unknown;
 }
 
+/**
+ * Convert a JSON Schema property to a Zod schema
+ */
 function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
   switch (prop.type) {
     case "string":
@@ -57,6 +58,9 @@ function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
   }
 }
 
+/**
+ * Convert a gateway tool's JSON Schema to a Zod object schema
+ */
 function gatewayToolToZodSchema(
   gatewayTool: GatewayTool,
 ): z.ZodObject<Record<string, any>> {
@@ -79,7 +83,11 @@ function gatewayToolToZodSchema(
   return z.object(shape);
 }
 
-function createDirectGatewayTools(
+/**
+ * Create Mastra tools from a gateway's tool definitions.
+ * Each gateway tool becomes a Mastra createTool() with proper Zod schema.
+ */
+function createGatewayTools(
   gatewayId: string,
   gatewayTools: GatewayTool[],
   executorTools?: OrchestratorTools,
@@ -89,11 +97,16 @@ function createDirectGatewayTools(
   for (const gatewayTool of gatewayTools) {
     const zodSchema = gatewayToolToZodSchema(gatewayTool);
 
-    tools[gatewayTool.name] = tool({
+    tools[gatewayTool.name] = createTool({
+      id: gatewayTool.name,
       description: gatewayTool.description,
       inputSchema: zodSchema,
       execute: async (params) => {
         try {
+          logger.info(
+            `GatewayAgent: Executing ${gatewayId}/${gatewayTool.name} with params: ${JSON.stringify(params)}`,
+          );
+
           const result = executorTools
             ? await executorTools.executeGatewayTool(
                 gatewayId,
@@ -122,6 +135,9 @@ function createDirectGatewayTools(
         } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
+          logger.warn(`Gateway tool failed: ${gatewayId}/${gatewayTool.name}`, {
+            error,
+          });
           return `ERROR: ${errorMessage}`;
         }
       },
@@ -131,7 +147,9 @@ function createDirectGatewayTools(
   return tools;
 }
 
-const getGatewayExplorerPrompt = (
+// === Gateway Agent Prompt ===
+
+const getGatewayAgentPrompt = (
   gatewayName: string,
   gatewayDescription: string | null,
   tools: GatewayTool[],
@@ -151,6 +169,11 @@ EXECUTION:
 3. Execute with correct parameters
 4. Chain tools if needed for multi-step tasks
 
+TOOL CATEGORIES:
+- **Browser tools** (browser_*): Web automation - open pages, click, fill forms, take screenshots
+- **Coding tools** (coding_*): Spawn coding agents for development tasks
+- **Shell tools** (exec_*): Run commands and scripts
+
 RESPONSE:
 After execution, provide a clear summary of:
 - What was done
@@ -158,81 +181,76 @@ After execution, provide a clear summary of:
 - Any errors encountered`;
 };
 
-export interface GatewayExplorerResult {
-  stream?: ReturnType<typeof streamText>;
-  startTime: number;
-  gatewayConnected: boolean;
-}
+// === Factory ===
 
 /**
- * @deprecated Use createGatewayAgent from ~/services/agent/agents/gateway instead.
- * Kept for backward compatibility with gateway API routes.
+ * Create a Mastra Agent for a specific gateway.
+ * The agent has direct access to the gateway's tools.
  */
-export async function runGatewayExplorer(
+export async function createGatewayAgent(
   gatewayId: string,
-  intent: string,
-  abortSignal?: AbortSignal,
   executorTools?: OrchestratorTools,
-): Promise<GatewayExplorerResult> {
-  const startTime = Date.now();
-
+): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
 
   if (!gateway) {
+    // Return a disconnected placeholder
     return {
-      startTime,
-      gatewayConnected: false,
+      agent: new Agent({
+        id: `gateway_disconnected`,
+        name: "Disconnected Gateway",
+        model: toRouterString(env.MODEL) as any,
+        instructions: "This gateway is not connected.",
+      }),
+      connected: false,
     };
   }
 
   const gatewayTools = (gateway.tools || []) as unknown as GatewayTool[];
-  const tools = createDirectGatewayTools(
-    gatewayId,
-    gatewayTools,
-    executorTools,
+  const tools = createGatewayTools(gatewayId, gatewayTools, executorTools);
+
+  const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+
+  logger.info(
+    `GatewayAgent: Creating agent "${agentId}" with ${gatewayTools.length} tools`,
   );
 
-  const model = getModelForTask("high");
-  const modelInstance = getModel(model);
-
-  const stream = streamText({
-    model: modelInstance as LanguageModel,
-    system: getGatewayExplorerPrompt(
+  const agent = new Agent({
+    id: agentId,
+    name: gateway.name,
+    model: toRouterString(env.MODEL) as any,
+    instructions: getGatewayAgentPrompt(
       gateway.name,
       gateway.description,
       gatewayTools,
     ),
-    messages: [{ role: "user", content: intent }],
     tools,
-    stopWhen: stepCountIs(100),
-    abortSignal,
   });
 
-  return {
-    stream: stream as any,
-    startTime,
-    gatewayConnected: true,
-  };
+  return { agent, connected: true };
 }
 
 /**
- * @deprecated Use createGatewayAgents from ~/services/agent/agents/gateway instead.
+ * Create gateway agents for all connected gateways in a workspace.
+ * Returns a map of agent ID → Agent, plus the flat list.
  */
-export async function getGatewayAgents(
-  workspaceId: string,
-): Promise<GatewayAgentInfo[]> {
-  const gateways = await getConnectedGateways(workspaceId);
+export async function createGatewayAgents(
+  gateways: GatewayAgentInfo[],
+  executorTools?: OrchestratorTools,
+): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
+  const agents: Record<string, Agent> = {};
+  const agentList: Agent[] = [];
 
-  return gateways.map((gateway: GatewayAgentInfo) => {
-    const tools = (gateway.tools || []) as any as GatewayTool[];
-    return {
-      id: gateway.id,
-      name: gateway.name,
-      description: gateway.description || `Gateway: ${gateway.name}`,
-      tools: tools.map((t) => t.name),
-      platform: gateway.platform,
-      hostname: gateway.hostname,
-      status: gateway.status as "CONNECTED" | "DISCONNECTED",
-    };
-  });
+  for (const gw of gateways) {
+    if (gw.status !== "CONNECTED") continue;
+
+    const { agent, connected } = await createGatewayAgent(gw.id, executorTools);
+    if (connected) {
+      const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
+      agents[agentId] = agent;
+      agentList.push(agent);
+    }
+  }
+
+  return { agents, agentList };
 }
