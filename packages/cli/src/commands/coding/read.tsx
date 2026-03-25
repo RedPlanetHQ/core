@@ -7,7 +7,6 @@ import {executeCodingTool} from '@/server/tools/coding-tools';
 
 export const options = zod.object({
 	sessionId: zod.string().optional().describe('Session ID to read'),
-	dir: zod.string().optional().describe('Working directory of the session'),
 	lines: zod.number().optional().describe('Number of lines to return'),
 	offset: zod.number().optional().describe('Line offset to start from'),
 	tail: zod.boolean().optional().describe('Return last N lines'),
@@ -48,7 +47,6 @@ interface SessionReadResult {
 
 async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 	let sessionId = opts.sessionId;
-	let dir = opts.dir;
 
 	if (!sessionId) {
 		const listResult = await executeCodingTool('coding_list_sessions', {limit: 20});
@@ -80,16 +78,6 @@ async function runReadSession(opts: zod.infer<typeof options>): Promise<void> {
 		}
 
 		sessionId = selected as string;
-		dir = sessions.find((s) => s.sessionId === sessionId)?.dir;
-	}
-
-	if (!dir) {
-		const input = await p.text({message: 'Working directory', initialValue: process.cwd()});
-		if (p.isCancel(input)) {
-			p.cancel('Cancelled');
-			return;
-		}
-		dir = input;
 	}
 
 	const readOnce = async (): Promise<SessionReadResult | null> => {
