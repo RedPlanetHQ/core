@@ -57,7 +57,6 @@ const ReadSessionSchema = zod.object({
 const ListSessionsSchema = zod.object({
 	agent: zod.string().optional(), // e.g. "claude-code" or "codex-cli"
 	since: zod.string().optional(), // ISO date string e.g. "2024-01-01"
-	dir: zod.string().optional(),
 	limit: zod.number().optional(),
 	offset: zod.number().optional(),
 });
@@ -160,10 +159,6 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				type: 'string',
 				description:
 					'ISO date string to filter sessions updated after this date (e.g. "2024-03-01")',
-			},
-			dir: {
-				type: 'string',
-				description: 'Filter to a specific working directory (optional)',
 			},
 			limit: {
 				type: 'number',
@@ -677,7 +672,6 @@ async function handleListSessions(
 	const since = params.since ? new Date(params.since).getTime() : undefined;
 	const {sessions, total, hasMore} = await scanAllSessions({
 		agent: params.agent,
-		dir: params.dir,
 		since,
 		limit: params.limit ?? 20,
 		offset: params.offset ?? 0,
