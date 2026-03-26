@@ -1,21 +1,56 @@
 ---
 title: "CORE Agent"
-description: "The orchestrator that ties memory and actions together across all your tools"
+description: "The brain behind your named butler — memory, actions, and intent tied together"
 ---
 
 ## What is the CORE Agent?
 
-The CORE Agent is the engine behind your personal butler. It sits between you and everything CORE knows and can do - memory, toolkit, connected apps. When you send a message, the agent figures out what you need, pulls the right context, takes the right actions, and responds. Every conversation it has gets ingested back into memory, so your butler gets sharper over time.
+Every butler needs a brain. The CORE Agent is that brain — it's what makes your butler *yours*. It sits between you and everything CORE knows and can do: memory, toolkit, connected apps. When you send a message, it figures out what you need, pulls the right context, takes the right actions, and responds. Every conversation gets ingested back into memory, so your butler gets sharper the more you use it.
 
 You can talk to it from WhatsApp, the web dashboard, email, or through any MCP-compatible agent like Claude Code or Cursor. Same brain, same memory, regardless of where you start.
-
-<Frame>
-  <img src="/images/meta-agent-overview.png" alt="CORE Agent Architecture" />
-</Frame>
 
 ---
 
 ## How It Works
+
+Two paths into CORE — messages from you, and triggers that fire automatically. Both converge on the same intelligence.
+
+```mermaid
+flowchart TD
+    MSG["💬 Your message\nWhatsApp · Slack · Email · Web · API"]
+    TRG["⏰ Automated trigger\nReminder · Webhook · Scheduled job"]
+
+    CASE["① CASE — Decision Agent\nAnalyses trigger · builds ActionPlan\nwhat to do · tone · whether to message"]
+
+    AGENT["② CORE Agent\nReads ActionPlan · loads Persona\ndecides which tools to call"]
+
+    subgraph orch["Orchestrator — routes & coordinates all tool calls"]
+        MEMR["③ memory_explorer\nSearch knowledge graph for\nrelevant context · past decisions · relationships"]
+        TOOLS["④ Toolkit\nExecute the specific actions\nsearch_emails · get_calendar · create_issue · …"]
+        GW["④ Gateways  (if needed)\nClaude Code · Browser · Custom agents"]
+    end
+
+    MEM[("🧠 Memory\nKnowledge Graph")]
+
+    SYNTH["⑤ CORE Agent synthesizes\nCombines memory context + tool results"]
+    RESP["Response delivered\nvia your preferred channel"]
+
+    INGEST["⑥ memory_ingest\nSummarised conversation stored\nback to knowledge graph"]
+
+    MSG --> AGENT
+    TRG --> CASE
+    CASE -->|"ActionPlan"| AGENT
+
+    AGENT --> orch
+    MEMR <-->|"read"| MEM
+
+    orch --> SYNTH
+    SYNTH --> RESP
+    SYNTH --> INGEST
+    INGEST -->|"write"| MEM
+```
+
+### Step by step
 
 When you send a message, here's what happens:
 

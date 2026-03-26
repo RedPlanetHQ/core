@@ -20,11 +20,7 @@
           {
             "group": "Getting Started",
             "pages": [
-              "getting-started",
-              "quickstart/chief-of-staff",
-              "quickstart/supercharge-ai-agents",
-              "quickstart/capture-conversations",
-              "quickstart/remote-coding-sessions"
+              "getting-started"
             ]
           }
         ]
@@ -80,7 +76,7 @@
             ]
           },
           {
-            "group": "AI Providers",
+            "group": "Dev Tools",
             "pages": [
               "providers/memory-rules",
               {
@@ -325,22 +321,29 @@
           {
             "group": "Get Started",
             "pages": [
-              "self-hosting/overview",
-              "self-hosting/docker",
+              "self-hosting/setup"
+            ]
+          },
+          {
+            "group": "Configuration",
+            "pages": [
               "self-hosting/environment-variables",
               "self-hosting/embeddings",
-              "self-hosting/gateway",
               "self-hosting/ai-providers"
             ]
           },
           {
-            "group": "Channel",
-            "pages": ["channels/email-resend"]
+            "group": "Channels",
+            "pages": ["channels/email-resend", "channels/slack", "channels/telegram"]
           },
           {
-            "group": "Integrations",
+            "group": "Remote Sessions",
+            "pages": ["quickstart/remote-coding-sessions"]
+          },
+          {
+            "group": "Build Integrations",
             "pages": [
-              "integrations/building-integrations",
+              "opensource/building-integrations",
               "integrations/schedule-based-guide",
               "integrations/webhook-based-guide",
               "integrations/mcp-hub-guide",
@@ -348,12 +351,12 @@
             ]
           },
           {
-            "group": "Local setup",
-            "pages": ["guides/local-setup", "migrating-from-v1"]
+            "group": "Migration",
+            "pages": ["migrating-from-v1"]
           },
           {
-            "group": "Contributing",
-            "pages": ["opensource/contributing", "opensource/building-integrations"]
+            "group": "Local Development",
+            "pages": ["guides/local-setup"]
           }
         ]
       },

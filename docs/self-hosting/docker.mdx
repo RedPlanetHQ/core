@@ -80,8 +80,8 @@ APP_ORIGIN=https://your-domain.com
 LOGIN_ORIGIN=https://your-domain.com
 ```
 
-- **`APP_ORIGIN`** — The public URL of your CORE instance. Used by the Gateway and channel integrations to construct callback and webhook URLs.
-- **`LOGIN_ORIGIN`** — The URL used for authentication flows (magic links, OAuth redirects). Usually the same as `APP_ORIGIN`.
+- **`APP_ORIGIN`**: The public URL of your CORE instance. Used by the Gateway and channel integrations to construct callback and webhook URLs.
+- **`LOGIN_ORIGIN`**: The URL used for authentication flows (magic links, OAuth redirects). Usually the same as `APP_ORIGIN`.
 
 > If these are not set correctly, Gateway connections and channel webhooks (e.g. Slack events, WhatsApp callbacks) will fail to reach your instance.
 

@@ -3,7 +3,7 @@ title: "Embedding Models"
 description: "Configure embedding models for semantic search and memory retrieval"
 ---
 
-CORE uses embedding models to convert text into vector representations for semantic search, memory retrieval, and knowledge graph operations. Vectors are stored in pgvector with a fixed dimension — all embeddings must match the configured `EMBEDDING_MODEL_SIZE`.
+CORE uses embedding models to convert text into vector representations for semantic search, memory retrieval, and knowledge graph operations. Vectors are stored in pgvector with a fixed dimension: all embeddings must match the configured `EMBEDDING_MODEL_SIZE`.
 
 ## Configuration
 
@@ -53,7 +53,7 @@ GOOGLE_GENERATIVE_AI_API_KEY=AIza...
 
 ### Ollama (Self-Hosted)
 
-Requires a running Ollama instance. No API key needed — fully local and private.
+Requires a running Ollama instance. No API key needed: fully local and private.
 
 | Model | Dimensions | Notes |
 |-------|-----------|-------|
@@ -90,8 +90,8 @@ OLLAMA_URL=http://ollama:11434
 
 pgvector columns are created with a fixed dimension. If the embedding model returns vectors that don't match `EMBEDDING_MODEL_SIZE`:
 
-- **Too short** — padded with zeros. Works but degrades retrieval quality. A warning is logged.
-- **Too long** — fails with an error. Update `EMBEDDING_MODEL_SIZE` and re-embed.
+- **Too short**: padded with zeros. Works but degrades retrieval quality. A warning is logged.
+- **Too long**: fails with an error. Update `EMBEDDING_MODEL_SIZE` and re-embed.
 
 ## Switching Embedding Models
 

@@ -1,28 +1,28 @@
 ---
-title: "Run Remote Claude Code Sessions from WhatsApp/Slack"
-description: "Start and manage Claude Code sessions on your machine from WhatsApp or Slack using CORE Agent"
+title: "Remote Claude Code Sessions"
+description: "Trigger Claude Code sessions on your machine from WhatsApp or Slack: no laptop needed."
 ---
 
-If you have the WhatsApp (or Slack) agent connected to CORE, you can kick off a Claude Code session on your machine from your phone — no laptop needed.
+Once the Gateway is running on your machine, you can kick off a Claude Code session from your phone via WhatsApp or Slack. CORE routes the message through the Gateway, spawns the session, and reports back when it's done.
+
+## Connect the Gateway to your instance
+
+The CORE CLI connects to CORE Cloud by default. For a self-hosted instance, point it at your own deployment when logging in:
+
+```bash
+npm install -g @redplanethq/corebrain
+corebrain login
+# When prompted for instance URL, enter your APP_ORIGIN (e.g. https://your-domain.com)
+# Leave blank for localhost
+```
+
+Make sure `APP_ORIGIN` and `LOGIN_ORIGIN` are set correctly in your `.env`: see [Docker setup](/self-hosting/setup#connect-a-channel).
 
 ## Setup
 
 <Steps>
-  <Step title="Install the CLI">
-    ```bash
-    npm install -g @redplanethq/corebrain
-    ```
-  </Step>
-
-  <Step title="Login">
-    Authenticate with your CORE account:
-    ```bash
-    corebrain login
-    ```
-  </Step>
-
   <Step title="Install the Claude Code Plugin (Optional but Recommended)">
-    The CORE Brain plugin gives Claude Code persistent memory across sessions — your preferences, past decisions, and project context load automatically every time.
+    The CORE Brain plugin gives Claude Code persistent memory across sessions: your preferences, past decisions, and project context load automatically every time.
 
     Open Claude Code and run:
     ```bash
@@ -68,9 +68,9 @@ CORE will create the branch, launch Claude Code, and keep you updated as it work
 
 ### Tips for remote sessions
 
-- **Always include the repo path** — e.g., `~/Github/core` or `/Users/you/projects/myapp`
-- **Always include the branch** — CORE will create and checkout the branch from `main`
-- **Be specific with the task** — the more precise, the better the output
+- **Always include the repo path**: e.g., `~/Github/core` or `/Users/you/projects/myapp`
+- **Always include the branch**: CORE will create and checkout the branch from `main`
+- **Be specific with the task**: the more precise, the better the output
 
 ---
 
@@ -81,7 +81,7 @@ Not sure what to start with? Try asking CORE to summarize the codebase:
 > start a claude code session
 > repo: ~/Github/core
 > branch: explore/codebase-overview
-> task: explain this codebase to me in a brief summary — what it does, key directories, and main entry points
+> task: explain this codebase to me in a brief summary: what it does, key directories, and main entry points
 
 CORE will start the session and send you a summary when it's done.
 
@@ -91,9 +91,9 @@ CORE will start the session and send you a summary when it's done.
 
 CORE reports progress in milestones:
 
-- **started** — session created and agent launched
-- **checkpoint(s)** — e.g., "tests passing", "fix landed", "PR ready"
-- **complete** — summary of changes, files modified, and next action for you
+- **started**: session created and agent launched
+- **checkpoint(s)**: e.g., "tests passing", "fix landed", "PR ready"
+- **complete**: summary of changes, files modified, and next action for you
 
 You can also check in anytime:
 
