@@ -53,11 +53,13 @@ const ChatRequestSchema = z.object({
  */
 function detectApprovalFromMessages(messages: any[]): boolean {
   if (!messages?.length) return false;
-  const last = messages[messages.length - 1];
-  if (!last?.parts) return false;
-  for (const part of last.parts) {
-    if (part.state === "approval-responded" && part.approval) {
-      return part.approval.approved === true;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (!msg?.parts) continue;
+    for (const part of msg.parts) {
+      if (part.state === "approval-responded" && part.approval) {
+        return part.approval.approved === true;
+      }
     }
   }
   return false;
@@ -91,7 +93,6 @@ const { loader, action } = createHybridActionApiRoute(
       !isAssistantApproval &&
       incomingUserText
     ) {
-      // Trigger conversation title task
       await enqueueCreateConversationTitle({
         conversationId: body.id,
         message: incomingUserText,
@@ -129,7 +130,6 @@ const { loader, action } = createHybridActionApiRoute(
     const messages = conversationHistory.map((history: any) => {
       const role =
         history.role ?? (history.userType === "Agent" ? "assistant" : "user");
-      // For assistant messages, only inject text parts — tool call internals bloat context
       const normalizedParts = normalizeParts(history.parts);
       const parts =
         role === "assistant"
@@ -173,8 +173,6 @@ const { loader, action } = createHybridActionApiRoute(
         .filter((m: any) => hasNonEmptyParts(m.parts));
     }
 
-    // If onboarding and no messages yet, use empty messages for agent greeting
-    // But not for task conversations — those always have the user's first message
     const isTaskConversation = !!conversation?.asyncJobId;
     const useEmptyMessages =
       conversationHistory.length === 0 && !isTaskConversation;
@@ -207,44 +205,40 @@ const { loader, action } = createHybridActionApiRoute(
     }
 
     // -----------------------------------------------------------------------
-    // Approval resume path
+    // Resume path — user approved/declined a suspended tool
     // -----------------------------------------------------------------------
     if (isAssistantApproval) {
-      // conversationId IS the runId — we pass body.id as runId on initial stream
       const approved = detectApprovalFromMessages(body.messages ?? []);
-      logger.info(`[conversation] resuming approval: approved=${approved}, runId=${body.id}`);
+      logger.info(`[conversation] resuming: approved=${approved}, runId=${body.id}`);
 
-      const resumeResult = approved
-        ? await (agent as any).approveToolCall({ runId: body.id, maxSteps: 10 })
-        : await (agent as any).declineToolCall({ runId: body.id, maxSteps: 10 });
+      let resumeResult: any;
+      try {
+        resumeResult = approved
+          ? await (agent as any).approveToolCall({ runId: body.id, maxSteps: 10 })
+          : await (agent as any).declineToolCall({ runId: body.id, maxSteps: 10 });
+        logger.info(`[conversation] approveToolCall obtained, runId=${resumeResult.runId}`);
+      } catch (err) {
+        logger.error(`[conversation] approveToolCall failed`, { error: String(err), stack: (err as any)?.stack });
+        await updateConversationStatus(body.id, "failed");
+        const errorStream = createUIMessageStream({
+          execute: async ({ writer }) => {
+            const id = generateId();
+            writer.write({ type: "text-start", id });
+            writer.write({ type: "text-delta", id, delta: "Sorry, I couldn't resume the action. Please try again." });
+            writer.write({ type: "text-end", id });
+          },
+        });
+        return createUIMessageStreamResponse({ stream: errorStream });
+      }
 
-      // Manual UIMessageStream (workaround: toAISdkStream crashes on resumed streams)
-      const textPartId = generateId();
-      const uiStream = createUIMessageStream({
-        execute: async ({ writer }) => {
-          writer.write({ type: "text-start", id: textPartId });
-          const reader = resumeResult.textStream.getReader();
-          try {
-            while (true) {
-              const { done, value } = await reader.read();
-              if (done) break;
-              if (value) {
-                writer.write({ type: "text-delta", id: textPartId, delta: value });
-              }
-            }
-          } finally {
-            reader.releaseLock();
-          }
-          writer.write({ type: "text-end", id: textPartId });
-
-          // Save assistant message
-          const finalText = await resumeResult.text;
+      // Save after resume completes
+      resumeResult.text
+        .then(async (finalText: string) => {
+          logger.info(`[conversation] resume text length: ${finalText?.length ?? 0}`);
           if (finalText) {
-            const assistantMessageId = crypto.randomUUID();
-            const assistantParts = [{ type: "text", text: finalText }];
             await upsertConversationHistory(
-              assistantMessageId,
-              assistantParts,
+              crypto.randomUUID(),
+              [{ type: "text", text: finalText }],
               body.id,
               UserTypeEnum.Agent,
             );
@@ -263,7 +257,6 @@ const { loader, action } = createHybridActionApiRoute(
               );
             }
           }
-
           await deductCredits(
             authentication.workspaceId || "",
             authentication.userId,
@@ -271,9 +264,26 @@ const { loader, action } = createHybridActionApiRoute(
             1,
           );
           await updateConversationStatus(body.id, "completed");
+        })
+        .catch((err: any) => {
+          logger.error(`[conversation] resume save error`, { error: String(err) });
+          updateConversationStatus(body.id, "failed");
+        });
+
+      // toAISdkStream crashes on resumed streams (transformAgent missing init state).
+      // Pipe textStream manually — matches the Mastra docs pattern.
+      const textPartId = generateId();
+      const uiStream = createUIMessageStream({
+        execute: async ({ writer }) => {
+          writer.write({ type: "text-start", id: textPartId });
+          for await (const chunk of resumeResult.textStream) {
+            if (chunk) {
+              writer.write({ type: "text-delta", id: textPartId, delta: chunk });
+            }
+          }
+          writer.write({ type: "text-end", id: textPartId });
         },
       });
-
       return createUIMessageStreamResponse({ stream: uiStream });
     }
 
@@ -282,7 +292,6 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     await updateConversationStatus(body.id, "running");
 
-    // Collect steps for building assistant parts after stream completes
     const collectedSteps: any[] = [];
 
     const stream = await agent.stream(modelMessages, {
@@ -328,7 +337,6 @@ const { loader, action } = createHybridActionApiRoute(
           }
         }
 
-        // Fallback: if no steps collected, save final text
         if (assistantParts.length === 0 && finalText) {
           assistantParts.push({ type: "text", text: finalText });
         }
@@ -341,7 +349,6 @@ const { loader, action } = createHybridActionApiRoute(
             UserTypeEnum.Agent,
           );
 
-          // Extract text parts for ingestion
           const textParts = assistantParts
             .filter((p: any) => p.type === "text" && p.text)
             .map((p: any) => p.text);
@@ -379,12 +386,16 @@ const { loader, action } = createHybridActionApiRoute(
         updateConversationStatus(body.id, "failed");
       });
 
-    // Transform stream: convert data-tool-call-approval → tool-approval-request
+    // Stream to frontend — transform approval chunks to UI approval requests
     const mastraStream = toAISdkStream(stream, { from: "agent", version: "v6" });
     const transformed = mastraStream.pipeThrough(
       new TransformStream({
         transform(chunk, controller) {
           if (chunk?.type === "data-tool-call-approval" && chunk?.data?.toolCallId) {
+            logger.info(`[conversation] tool-call-approval:`, {
+              toolCallId: chunk.data.toolCallId,
+              toolName: chunk.data.toolName,
+            });
             const approvalId = generateId();
             controller.enqueue({
               type: "tool-approval-request",
