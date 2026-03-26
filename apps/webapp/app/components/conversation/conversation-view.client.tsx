@@ -57,12 +57,7 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
-    onFinish: () => {
-      readFetcher.submit(null, {
-        method: "GET",
-        action: `/api/v1/conversation/${conversationId}/read`,
-      });
-    },
+    onFinish: () => {},
     messages: history.map(
       (h) =>
         ({
@@ -90,6 +85,8 @@ export function ConversationView({
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
+
+  console.log(messages);
 
   useEffect(() => {
     if (autoRegenerate && history.length === 1) {

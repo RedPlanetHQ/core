@@ -60,9 +60,8 @@ const getNestedPartsFromOutput = (output: any): any[] => {
   if (output.toolCalls || output.toolResults || output.steps) {
     const parts: any[] = [];
     // Use latest step's data if available, otherwise top-level
-    const source = output.steps?.length > 0
-      ? output.steps[output.steps.length - 1]
-      : output;
+    const source =
+      output.steps?.length > 0 ? output.steps[output.steps.length - 1] : output;
     // Deduplicate toolCalls by toolCallId (streaming may send duplicates)
     const seenCallIds = new Set<string>();
     for (const tc of source.toolCalls ?? []) {
@@ -79,7 +78,8 @@ const getNestedPartsFromOutput = (output: any): any[] => {
         type: `tool-${call.toolName}`,
         toolCallId: call.toolCallId,
         toolName: call.toolName,
-        state: result?.result !== undefined ? "output-available" : "in-progress",
+        state:
+          result?.result !== undefined ? "output-available" : "in-progress",
         input: call.args,
         ...(result?.result !== undefined && { output: result.result }),
       });
@@ -283,7 +283,10 @@ const Tool = ({
     if (toolName === "get_integration_actions" && (part as any).input?.query) {
       return `Get tool · ${(part as any).input.query as string}`;
     }
-    if ((toolName === "gather_context" || toolName === "agent-gather_context") && (part as any).input?.query) {
+    if (
+      (toolName === "gather_context" || toolName === "agent-gather_context") &&
+      (part as any).input?.query
+    ) {
       const q = (part as any).input.query as string;
       const truncated = q.length > 30 ? q.slice(0, 30) + "..." : q;
       return `Gather context · ${truncated}`;
@@ -291,9 +294,11 @@ const Tool = ({
     return getToolDisplayName(part.type);
   })();
 
-  const isGatherContext = toolName === "gather_context" || toolName === "agent-gather_context";
-  const gatherContextQuery =
-    isGatherContext ? (part as any).input?.query : null;
+  const isGatherContext =
+    toolName === "gather_context" || toolName === "agent-gather_context";
+  const gatherContextQuery = isGatherContext
+    ? (part as any).input?.query
+    : null;
 
   // Render leaf tool (no nested tools) - compact output
   const renderLeafContent = () => {
@@ -305,8 +310,22 @@ const Tool = ({
           </div>
         );
       }
+      const args = (part as any).input;
+      const hasArgs = args && Object.keys(args).length > 0;
       return (
-        <ApprovalComponent onApprove={handleApprove} onReject={handleReject} />
+        <div>
+          {hasArgs && (
+            <div className="bg-grayAlpha-100 my-2 rounded p-2">
+              <pre className="text-muted-foreground max-h-[150px] overflow-auto font-mono text-xs">
+                {JSON.stringify(args, null, 2)}
+              </pre>
+            </div>
+          )}
+          <ApprovalComponent
+            onApprove={handleApprove}
+            onReject={handleReject}
+          />
+        </div>
       );
     }
 
@@ -346,6 +365,10 @@ const Tool = ({
 
   // Render nested tools (parent node)
   const renderNestedContent = () => {
+    // When parent has approval-requested, inject the approval into the last
+    // in-progress nested tool so it shows at the correct level (e.g. Memory explorer)
+    const parentApproval = needsApproval ? (part as any).approval : null;
+
     return (
       <div className="mt-1">
         {gatherContextQuery && (
@@ -354,6 +377,19 @@ const Tool = ({
           </p>
         )}
         {nestedToolParts.map((nestedPart: any, idx: number) => {
+          const isLastInProgress =
+            parentApproval &&
+            idx === nestedToolParts.length - 1 &&
+            nestedPart.state === "in-progress";
+
+          const effectivePart = isLastInProgress
+            ? {
+                ...nestedPart,
+                state: "approval-requested",
+                approval: parentApproval,
+              }
+            : nestedPart;
+
           const nestedDisabled = isToolDisabled(
             nestedPart,
             allToolsFlat,
@@ -363,7 +399,7 @@ const Tool = ({
             <div key={`nested-${idx}`}>
               {idx > 0 && <div className="ml-3" />}
               <Tool
-                part={nestedPart}
+                part={effectivePart}
                 addToolApprovalResponse={addToolApprovalResponse}
                 isDisabled={nestedDisabled}
                 allToolsFlat={allToolsFlat}
@@ -454,11 +490,17 @@ const ConversationItemComponent = ({
 
     for (const part of message.parts) {
       // data-tool-agent parts contain subagent's toolCalls/toolResults/text/steps
-      if ((part as any).type === "data-tool-agent" || (part as any).type === "tool-agent") {
+      if (
+        (part as any).type === "data-tool-agent" ||
+        (part as any).type === "tool-agent"
+      ) {
         // Merge into the preceding agent tool part's output
         if (lastAgentTool) {
           const agentData = (part as any).data ?? part;
-          if (!lastAgentTool.output || typeof lastAgentTool.output !== "object") {
+          if (
+            !lastAgentTool.output ||
+            typeof lastAgentTool.output !== "object"
+          ) {
             lastAgentTool.output = {};
           }
           // Accumulate toolCalls and toolResults from streaming chunks

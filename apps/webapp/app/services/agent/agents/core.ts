@@ -14,10 +14,7 @@ import { Agent } from "@mastra/core/agent";
 
 import { type SkillRef } from "../types";
 import { type OrchestratorTools } from "../executors/base";
-import {
-  type Trigger,
-  type DecisionContext,
-} from "../types/decision-agent";
+import { type Trigger, type DecisionContext } from "../types/decision-agent";
 import { createThinkAgent } from "./decision";
 import { logger } from "../../logger.service";
 import { prisma } from "~/db.server";
@@ -139,7 +136,9 @@ export async function createCoreTools(
   );
 
   // Task tools (only in write mode)
-  const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId, isBackgroundExecution);
+  const taskTools = readOnly
+    ? {}
+    : getTaskTools(workspaceId, userId, isBackgroundExecution);
 
   // Skill tools
   tools["get_skill"] = getSkillTool(workspaceId);
@@ -157,7 +156,12 @@ export async function createCoreTools(
 
 export async function createCoreAgents(
   params: CreateCoreAgentsParams,
-): Promise<{ gatherContextAgent: Agent; takeActionAgent: Agent; thinkAgent?: Agent; gatewayAgents: Agent[] }> {
+): Promise<{
+  gatherContextAgent: Agent;
+  takeActionAgent: Agent;
+  thinkAgent?: Agent;
+  gatewayAgents: Agent[];
+}> {
   const {
     userId,
     workspaceId,
@@ -173,8 +177,26 @@ export async function createCoreAgents(
   } = params;
 
   const [reader, writer] = await Promise.all([
-    createOrchestratorAgent(userId, workspaceId, "read", timezone, source, persona, skills, executorTools),
-    createOrchestratorAgent(userId, workspaceId, "write", timezone, source, persona, skills, executorTools),
+    createOrchestratorAgent(
+      userId,
+      workspaceId,
+      "read",
+      timezone,
+      source,
+      persona,
+      skills,
+      executorTools,
+    ),
+    createOrchestratorAgent(
+      userId,
+      workspaceId,
+      "write",
+      timezone,
+      source,
+      persona,
+      skills,
+      executorTools,
+    ),
   ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)

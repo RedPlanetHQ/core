@@ -17,10 +17,7 @@ import { logger } from "~/services/logger.service";
 import { toRouterString } from "~/lib/model.server";
 import { env } from "~/env.server";
 import { type SkillRef } from "../types";
-import {
-  type OrchestratorTools,
-  DirectOrchestratorTools,
-} from "../executors";
+import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 import { createGatewayAgents } from "./gateway";
 
 export type OrchestratorMode = "read" | "write";
@@ -330,9 +327,16 @@ export async function createOrchestratorAgent(
           "What to search for - include preferences, directives, and prior context related to the request",
         ),
     }),
+    requireApproval: true,
+
     execute: async (inputData) => {
       logger.info(`Orchestrator: memory search - ${inputData.query}`);
-      return executor.searchMemory(inputData.query, userId, workspaceId, source);
+      return executor.searchMemory(
+        inputData.query,
+        userId,
+        workspaceId,
+        source,
+      );
     },
   });
 
@@ -369,6 +373,7 @@ export async function createOrchestratorAgent(
           "What you want to do (e.g., 'search emails', 'create issue', 'list events')",
         ),
     }),
+    requireApproval: true,
     execute: async (inputData) => {
       try {
         logger.info(
@@ -380,7 +385,11 @@ export async function createOrchestratorAgent(
           userId,
         );
         // Unwrap MCP response format { content: [{ text }], isError }
-        if (result && typeof result === "object" && "content" in (result as any)) {
+        if (
+          result &&
+          typeof result === "object" &&
+          "content" in (result as any)
+        ) {
           const content = (result as any).content;
           if (Array.isArray(content) && content.length > 0 && content[0].text) {
             return content[0].text;
@@ -388,7 +397,9 @@ export async function createOrchestratorAgent(
         }
         return JSON.stringify(result, null, 2);
       } catch (error) {
-        logger.warn(`Failed to get actions for ${inputData.accountId}: ${error}`);
+        logger.warn(
+          `Failed to get actions for ${inputData.accountId}: ${error}`,
+        );
         return "[]";
       }
     },
@@ -427,7 +438,10 @@ export async function createOrchestratorAgent(
       } catch (error: any) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
-        logger.warn(`Integration action failed: ${inputData.accountId}/${inputData.action}`, error);
+        logger.warn(
+          `Integration action failed: ${inputData.accountId}/${inputData.action}`,
+          error,
+        );
         return `ERROR: ${errorMessage}. Check the inputSchema and retry with corrected parameters.`;
       }
     },
@@ -490,7 +504,8 @@ export async function createOrchestratorAgent(
       skills,
     ),
     tools,
-    agents: Object.keys(gatewayAgentMap).length > 0 ? gatewayAgentMap : undefined,
+    agents:
+      Object.keys(gatewayAgentMap).length > 0 ? gatewayAgentMap : undefined,
   });
 
   logger.info(
