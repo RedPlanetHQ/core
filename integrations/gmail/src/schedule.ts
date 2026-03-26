@@ -106,17 +106,19 @@ async function processReceivedEmails(
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
         const internalDate = parseInt(fullMessage.data.internalDate || '0');
+
+        // Skip emails that are at or before lastSyncTime (Gmail after: is not precise at second level)
+        const lastSyncMs = new Date(lastSyncTime).getTime();
+        if (internalDate <= lastSyncMs) {
+          continue;
+        }
+
         if (internalDate > lastEmailTime) {
           lastEmailTime = internalDate;
         }
 
         const sender = formatEmailSender(from);
-<<<<<<< HEAD
-        const fromEmail = from.match(/^.+?\s*<(.+?)>$/)?.[1]?.trim() ?? from.trim();
-        const threadId = fullMessage.data.threadId || message.id;
-=======
         const threadId = fullMessage.data.threadId || '';
->>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
@@ -133,11 +135,7 @@ async function processReceivedEmails(
         // Format activity text with full email content as markdown
         const text = `## 📧 Email from ${sender}
 
-<<<<<<< HEAD
-**From:** ${fromEmail}
-=======
 **From:** ${from}
->>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
 **Subject:** ${subject}
 **Date:** ${date}
 **Thread ID:** ${threadId}
@@ -199,15 +197,18 @@ async function processSentEmails(
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
         const internalDate = parseInt(fullMessage.data.internalDate || '0');
+
+        // Skip emails that are at or before lastSyncTime
+        const lastSyncMs = new Date(lastSyncTime).getTime();
+        if (internalDate <= lastSyncMs) {
+          continue;
+        }
+
         if (internalDate > lastEmailTime) {
           lastEmailTime = internalDate;
         }
 
-<<<<<<< HEAD
         const threadId = fullMessage.data.threadId || message.id;
-=======
-        const threadId = fullMessage.data.threadId || '';
->>>>>>> 9f94ac1f (fix: gmail add more metadata 740)
         const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
 
         // Clean and convert email content to markdown
