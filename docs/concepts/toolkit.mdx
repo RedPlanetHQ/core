@@ -9,6 +9,8 @@ The Toolkit is CORE's hands. While the Agent thinks and Memory remembers, the To
 
 You connect each app once. After that, every interface to CORE (WhatsApp, web dashboard, Claude Code, Cursor) can use those integrations. One connection, available everywhere.
 
+**What a multi-step action looks like:** A user emails reporting a bug → your butler creates a Todoist task, spins up a Claude Code session with context from memory, writes a fix, and opens a PR. You come back to a summary and a link. One message, multiple tools, coordinated automatically.
+
 ---
 
 ## How It Works
@@ -17,14 +19,14 @@ You connect each app once. After that, every interface to CORE (WhatsApp, web da
 
 From the [CORE Dashboard](https://app.getcore.me), connect the apps you use daily. Each integration authenticates via OAuth — no API keys to manage.
 
-### 2. Meta Agent Decides What to Use
+### 2. Your Butler Decides What to Use
 
-When you ask CORE to do something, the Meta Agent figures out which integration(s) to use:
+When you ask CORE to do something, the CORE Agent figures out which integration(s) to use:
 
 ```
 You: "Create a GitHub issue for the auth bug and tell Sarah on Slack"
 
-Meta Agent:
+CORE Agent:
 → Uses GitHub integration to create issue with context from memory
 → Uses Slack integration to DM Sarah with a link to the issue
 ```
@@ -98,7 +100,7 @@ See the [Toolkit Overview](/toolkit/overview) for details on how on-demand tool 
     Configure which integrations to expose via MCP
   </Card>
 
-  <Card title="Meta Agent" icon="brain" href="/concepts/meta-agent">
-    How the Meta Agent decides which tools to use
+  <Card title="CORE Agent" icon="brain" href="/concepts/meta-agent">
+    How the CORE Agent decides which tools to use
   </Card>
 </CardGroup>

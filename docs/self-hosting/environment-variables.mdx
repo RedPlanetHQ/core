@@ -3,8 +3,6 @@ title: "Environment Variables"
 description: "Environment variables for CORE self-hosting"
 ---
 
-# Environment Variables
-
 Environment variables for the CORE webapp container.
 
 | Name                                    | Required | Default                                        | Description                                                                                     |
@@ -12,9 +10,9 @@ Environment variables for the CORE webapp container.
 | **Version**                             |          |                                                |                                                                                                 |
 | `VERSION`                               | No       | 0.1.12                                         | CORE version identifier                                                                          |
 | **Secrets**                             |          |                                                |                                                                                                 |
-| `SESSION_SECRET`                        | Yes      | —                                              | Session encryption secret. Run: `openssl rand -hex 16`                                          |
-| `MAGIC_LINK_SECRET`                     | Yes      | —                                              | Magic link encryption secret. Run: `openssl rand -hex 16`                                       |
-| `ENCRYPTION_KEY`                        | Yes      | —                                              | Data encryption key. Run: `openssl rand -hex 16`                                                |
+| `SESSION_SECRET`                        | Yes      | none                                              | Session encryption secret. Run: `openssl rand -hex 16`                                          |
+| `MAGIC_LINK_SECRET`                     | Yes      | none                                              | Magic link encryption secret. Run: `openssl rand -hex 16`                                       |
+| `ENCRYPTION_KEY`                        | Yes      | none                                              | Data encryption key. Run: `openssl rand -hex 16`                                                |
 | **Application & Domains**               |          |                                                |                                                                                                 |
 | `REMIX_APP_PORT`                        | No       | 3033                                           | Application port number                                                                          |
 | `APP_ENV`                               | No       | production                                     | Application environment (development, production)                                                |
@@ -33,7 +31,7 @@ Environment variables for the CORE webapp container.
 | **Database - Neo4j (Memory Graph)**     |          |                                                |                                                                                                 |
 | `NEO4J_URI`                             | Yes      | bolt://neo4j:7687                              | Neo4j connection URI                                                                             |
 | `NEO4J_USERNAME`                        | Yes      | neo4j                                          | Neo4j username                                                                                   |
-| `NEO4J_PASSWORD`                        | Yes      | —                                              | Neo4j password. Run: `openssl rand -hex 16`                                                     |
+| `NEO4J_PASSWORD`                        | Yes      | none                                              | Neo4j password. Run: `openssl rand -hex 16`                                                     |
 | `NEO4J_AUTH`                            | Yes      | neo4j/password                                 | Neo4j authentication (username/password format)                                                 |
 | **Redis**                               |          |                                                |                                                                                                 |
 | `REDIS_HOST`                            | Yes      | redis                                          | Redis host (use container name for Docker)                                                      |
@@ -41,14 +39,14 @@ Environment variables for the CORE webapp container.
 | `REDIS_TLS_DISABLED`                    | No       | true                                           | Disable Redis TLS for local development                                                         |
 | **Authentication**                      |          |                                                |                                                                                                 |
 | `ENABLE_EMAIL_LOGIN`                    | No       | true                                           | Enable email-based authentication                                                               |
-| `AUTH_GOOGLE_CLIENT_ID`                 | No       | —                                              | Google OAuth client ID                                                                           |
-| `AUTH_GOOGLE_CLIENT_SECRET`             | No       | —                                              | Google OAuth client secret                                                                       |
+| `AUTH_GOOGLE_CLIENT_ID`                 | No       | none                                              | Google OAuth client ID                                                                           |
+| `AUTH_GOOGLE_CLIENT_SECRET`             | No       | none                                              | Google OAuth client secret                                                                       |
 | **AI Providers**                        |          |                                                |                                                                                                 |
-| `OPENAI_API_KEY`                        | No       | —                                              | OpenAI API key. Required for OpenAI; for many OpenAI-compatible proxies any non-empty value works |
-| `OPENAI_BASE_URL`                       | No       | —                                              | OpenAI-compatible API base URL (e.g. proxy endpoint)                                             |
+| `OPENAI_API_KEY`                        | No       | none                                              | OpenAI API key. Required for OpenAI; for many OpenAI-compatible proxies any non-empty value works |
+| `OPENAI_BASE_URL`                       | No       | none                                              | OpenAI-compatible API base URL (e.g. proxy endpoint)                                             |
 | `OPENAI_API_MODE`                       | No       | responses                                     | OpenAI API mode: `responses` (default) or `chat_completions` (common for proxies)               |
-| `GOOGLE_GENERATIVE_AI_API_KEY`          | No       | —                                              | Google AI API key (required when CHAT_PROVIDER=google or EMBEDDINGS_PROVIDER=google)             |
-| `ANTHROPIC_API_KEY`                     | No       | —                                              | Anthropic API key (required when CHAT_PROVIDER=anthropic)                                        |
+| `GOOGLE_GENERATIVE_AI_API_KEY`          | No       | none                                              | Google AI API key (required when CHAT_PROVIDER=google or EMBEDDINGS_PROVIDER=google)             |
+| `ANTHROPIC_API_KEY`                     | No       | none                                              | Anthropic API key (required when CHAT_PROVIDER=anthropic)                                        |
 | `MODEL`                                 | No       | gpt-4-turbo-2024-04-09                         | Default chat model                                                                               |
 | `CHAT_PROVIDER`                         | No       | openai                                        | Chat provider: `openai` (default), `anthropic`, `google`, or `ollama`                            |
 | `EMBEDDINGS_PROVIDER`                   | No       | openai                                        | Embeddings provider: `openai` (default), `google`, or `ollama`. See [Embedding Models](/self-hosting/embeddings) |
@@ -57,8 +55,8 @@ Environment variables for the CORE webapp container.
 | `OLLAMA_URL`                            | No       | http://ollama:11434                            | Ollama server URL for local models                                                               |
 | **Background Jobs**                     |          |                                                |                                                                                                 |
 | `QUEUE_PROVIDER`                        | No       | trigger                                        | Queue provider: "trigger" for Trigger.dev or "bullmq" for BullMQ (Redis-based)                  |
-| `TRIGGER_PROJECT_ID`                    | Conditional | —                                           | Trigger.dev project identifier (required only when QUEUE_PROVIDER=trigger)                       |
-| `TRIGGER_SECRET_KEY`                    | Conditional | —                                           | Trigger.dev authentication secret (required only when QUEUE_PROVIDER=trigger)                    |
+| `TRIGGER_PROJECT_ID`                    | Conditional | none                                           | Trigger.dev project identifier (required only when QUEUE_PROVIDER=trigger)                       |
+| `TRIGGER_SECRET_KEY`                    | Conditional | none                                           | Trigger.dev authentication secret (required only when QUEUE_PROVIDER=trigger)                    |
 | `TRIGGER_API_URL`                       | Conditional | http://host.docker.internal:8030            | Trigger.dev API endpoint (required only when QUEUE_PROVIDER=trigger)                             |
 | `TRIGGER_DB`                            | No       | trigger                                        | Database name for Trigger.dev                                                                    |
 | **Telemetry**                           |          |                                                |                                                                                                 |
@@ -71,29 +69,29 @@ Environment variables for the CORE webapp container.
 | `MODEL_PROVIDER`                        | No       | vercel-ai                                      | Model provider abstraction layer                                                                 |
 | **Reranking**                           |          |                                                |                                                                                                 |
 | `RERANK_PROVIDER`                       | No       | none                                           | Reranking provider: "cohere", "ollama", or "none"                                               |
-| `COHERE_API_KEY`                        | No       | —                                              | Cohere API key (required when RERANK_PROVIDER=cohere)                                           |
+| `COHERE_API_KEY`                        | No       | none                                              | Cohere API key (required when RERANK_PROVIDER=cohere)                                           |
 | `COHERE_RERANK_MODEL`                   | No       | rerank-english-v3.0                            | Cohere reranking model                                                                           |
 | `COHERE_SCORE_THRESHOLD`                | No       | 0.3                                            | Minimum score threshold for Cohere reranking                                                    |
 | `OLLAMA_RERANK_MODEL`                   | No       | dengcao/Qwen3-Reranker-8B:Q4_K_M              | Ollama reranking model                                                                           |
 | `OLLAMA_SCORE_THRESHOLD`                | No       | 0.3                                            | Minimum score threshold for Ollama reranking                                                    |
 | **Email / SMTP**                        |          |                                                |                                                                                                 |
-| `EMAIL_TRANSPORT`                       | No       | —                                              | Email transport: "smtp" or "resend"                                                             |
-| `FROM_EMAIL`                            | No       | —                                              | Sender email address                                                                             |
-| `REPLY_TO_EMAIL`                        | No       | —                                              | Reply-to email address                                                                           |
-| `RESEND_API_KEY`                        | No       | —                                              | Resend API key (required when EMAIL_TRANSPORT=resend)                                           |
-| `RESEND_WEBHOOK_SECRET`                 | No       | —                                              | Resend webhook signing secret                                                                   |
-| `SMTP_HOST`                             | No       | —                                              | SMTP server hostname                                                                             |
-| `SMTP_PORT`                             | No       | —                                              | SMTP server port                                                                                 |
-| `SMTP_SECURE`                           | No       | —                                              | Use TLS for SMTP (true/false)                                                                   |
-| `SMTP_USER`                             | No       | —                                              | SMTP authentication username                                                                    |
-| `SMTP_PASSWORD`                         | No       | —                                              | SMTP authentication password                                                                    |
+| `EMAIL_TRANSPORT`                       | No       | none                                              | Email transport: "smtp" or "resend"                                                             |
+| `FROM_EMAIL`                            | No       | none                                              | Sender email address                                                                             |
+| `REPLY_TO_EMAIL`                        | No       | none                                              | Reply-to email address                                                                           |
+| `RESEND_API_KEY`                        | No       | none                                              | Resend API key (required when EMAIL_TRANSPORT=resend)                                           |
+| `RESEND_WEBHOOK_SECRET`                 | No       | none                                              | Resend webhook signing secret                                                                   |
+| `SMTP_HOST`                             | No       | none                                              | SMTP server hostname                                                                             |
+| `SMTP_PORT`                             | No       | none                                              | SMTP server port                                                                                 |
+| `SMTP_SECURE`                           | No       | none                                              | Use TLS for SMTP (true/false)                                                                   |
+| `SMTP_USER`                             | No       | none                                              | SMTP authentication username                                                                    |
+| `SMTP_PASSWORD`                         | No       | none                                              | SMTP authentication password                                                                    |
 | **Channels**                            |          |                                                |                                                                                                 |
-| `SLACK_SIGNING_SECRET`                  | No       | —                                              | Slack app signing secret for webhook verification                                               |
-| `TWILIO_ACCOUNT_SID`                    | No       | —                                              | Twilio account SID (required for WhatsApp channel)                                              |
-| `TWILIO_AUTH_TOKEN`                     | No       | —                                              | Twilio auth token (required for WhatsApp channel)                                               |
-| `TWILIO_WHATSAPP_NUMBER`                | No       | —                                              | Twilio WhatsApp number (e.g. whatsapp:+14155238886)                                             |
+| `SLACK_SIGNING_SECRET`                  | No       | none                                              | Slack app signing secret for webhook verification                                               |
+| `TWILIO_ACCOUNT_SID`                    | No       | none                                              | Twilio account SID (required for WhatsApp channel)                                              |
+| `TWILIO_AUTH_TOKEN`                     | No       | none                                              | Twilio auth token (required for WhatsApp channel)                                               |
+| `TWILIO_WHATSAPP_NUMBER`                | No       | none                                              | Twilio WhatsApp number (e.g. whatsapp:+14155238886)                                             |
 | **Other**                               |          |                                                |                                                                                                 |
-| `EXA_API_KEY`                           | No       | —                                              | Exa API key for web search capabilities                                                         |
+| `EXA_API_KEY`                           | No       | none                                              | Exa API key for web search capabilities                                                         |
 
 
 ## Security Considerations

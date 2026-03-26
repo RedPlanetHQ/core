@@ -1,0 +1,103 @@
+---
+title: "Slack"
+description: "Message your butler directly in Slack: DMs or @mentions."
+---
+
+Once set up, you can DM your butler in Slack or @mention it in any channel. It reads your message, runs through its memory and toolkit, and replies in the thread.
+
+**What you need:** A Slack workspace where you can create and install apps.
+
+---
+
+## Step 1: Create a Slack App
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) → **Create New App** → **From scratch**
+2. Name it (e.g. "CORE Butler") and pick your workspace → **Create App**
+
+---
+
+## Step 2: Configure OAuth scopes
+
+Go to **OAuth & Permissions** in the sidebar.
+
+**Bot Token Scopes**: add all of these:
+
+| Scope | Why |
+|-------|-----|
+| `app_mentions:read` | Receive @mention events |
+| `chat:write` | Send messages and replies |
+| `im:history` | Read DM history |
+| `im:read` | Access DM channels |
+| `im:write` | Open DM conversations |
+| `users:read` | Look up user info |
+| `channels:read` | Access channel metadata |
+
+**User Token Scopes**: add these for full activity sync:
+
+`channels:history`, `channels:read`, `channels:write`, `chat:write`, `groups:history`, `groups:read`, `groups:write`, `im:history`, `im:read`, `im:write`, `mpim:history`, `mpim:read`, `mpim:write`, `reactions:read`, `reactions:write`, `search:read`, `stars:read`, `team:read`, `users:read`
+
+**Redirect URL**: under **Redirect URLs**, add:
+```
+https://your-domain.com/api/v1/integrations/slack/callback
+```
+
+---
+
+## Step 3: Enable Event Subscriptions
+
+Go to **Event Subscriptions** → toggle **Enable Events** on.
+
+**Request URL:**
+```
+https://your-domain.com/api/v1/channels/slack
+```
+
+Slack will send a challenge request: your CORE instance must be running and reachable for it to verify.
+
+**Subscribe to bot events**: add both:
+- `app_mention`: fires when someone @mentions your bot in a channel
+- `message.im`: fires when someone DMs your bot
+
+Save changes.
+
+---
+
+## Step 4: Set the signing secret
+
+Go to **Basic Information** → **App Credentials** → copy the **Signing Secret**.
+
+Add to your `.env`:
+
+```env
+SLACK_SIGNING_SECRET=your-signing-secret-here
+```
+
+Restart CORE:
+```bash
+docker compose restart webapp
+```
+
+---
+
+## Step 5: Connect in CORE dashboard
+
+1. Open your CORE dashboard → **Integrations** → find **Slack** → click **Connect**
+2. You'll be redirected to Slack's OAuth page: authorise the app
+3. The app is now installed in your workspace with both a bot token and your user token
+
+---
+
+## Step 6: Talk to your butler
+
+**Via DM:**
+Open Slack → find your app under **Apps** in the sidebar → send a message directly.
+
+**Via @mention:**
+Go to any channel → type `/invite @YourAppName` to add the bot → then use `@YourAppName your message` in any message.
+
+**Verify it's working:**
+```
+@YourAppName what are my open GitHub issues?
+```
+
+Your butler should reply in the thread within a few seconds.

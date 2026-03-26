@@ -2,21 +2,22 @@
 title: Building Integrations
 ---
 
-# Building Integrations
-
 CORE is open-source and welcomes community contributions. You can build integrations for any service to extend CORE's capabilities.
 
 ## What You Can Build
 
 **Project Management:**
+
 - Jira, ClickUp, Trello, Asana (similar to our Linear integration)
 - Task tools: create/update/search issues, manage projects
 
 **Analytics & Insights:**
+
 - GitLab Analytics, Bitbucket Analytics (similar to our GitHub Analytics)
 - Metric tools: get stats, generate reports, track KPIs
 
 **Communication:**
+
 - Microsoft Teams, Discord DMs (similar to our Slack integration)
 - Messaging tools: send messages, manage channels
 
@@ -27,6 +28,7 @@ CORE is open-source and welcomes community contributions. You can build integrat
 Every CORE integration provides **two essential capabilities:**
 
 1. **Activity Sync** - Capture relevant events → knowledge graph
+
    - Schedule-based: Poll API every 5-15 mins (GitHub, Linear)
    - Webhook-based: Real-time events (Slack, Discord)
 
@@ -39,6 +41,7 @@ Every CORE integration provides **two essential capabilities:**
 ### Step 1: Choose Integration Type
 
 **Schedule-Based** (for APIs without webhooks):
+
 ```
 Use when: Service has REST API, no webhooks
 Examples: GitHub, Linear, Todoist
@@ -46,6 +49,7 @@ Structure: index.ts, account-create.ts, schedule.ts, mcp/
 ```
 
 **Webhook-Based** (for real-time events):
+
 ```
 Use when: Service provides webhook events
 Examples: Slack, Discord, Linear webhooks
@@ -82,26 +86,29 @@ export async function integrationCreate(data: any) {
   // Get user info from service API
   const user = await getUser(oauthResponse.access_token);
 
-  return [{
-    type: 'account',
-    data: {
-      accountId: user.id,
-      config: {
-        access_token: oauthResponse.access_token,
-        refresh_token: oauthResponse.refresh_token,
+  return [
+    {
+      type: "account",
+      data: {
+        accountId: user.id,
+        config: {
+          access_token: oauthResponse.access_token,
+          refresh_token: oauthResponse.refresh_token,
+        },
+        settings: {
+          username: user.username,
+          // Add service-specific settings
+        },
       },
-      settings: {
-        username: user.username,
-        // Add service-specific settings
-      }
-    }
-  }];
+    },
+  ];
 }
 ```
 
 ### Step 4: Implement Activity Sync
 
 **For Schedule-Based (schedule.ts):**
+
 ```typescript
 export async function handleSchedule(config: any, state: any) {
   const lastSync = state?.lastSyncTime || getDefault24HoursAgo();
@@ -113,18 +120,18 @@ export async function handleSchedule(config: any, state: any) {
   // Create activity messages
   for (const item of items) {
     activities.push({
-      type: 'activity',
+      type: "activity",
       data: {
         text: `${item.user} created issue #${item.number}: ${item.title}`,
-        sourceURL: item.url
-      }
+        sourceURL: item.url,
+      },
     });
   }
 
   // Save state for next sync
   activities.push({
-    type: 'state',
-    data: { lastSyncTime: new Date().toISOString() }
+    type: "state",
+    data: { lastSyncTime: new Date().toISOString() },
   });
 
   return activities;
@@ -132,13 +139,16 @@ export async function handleSchedule(config: any, state: any) {
 ```
 
 **For Webhook-Based (create-activity.ts + identify.ts):**
+
 ```typescript
 // identify.ts - Extract user ID for routing
 export async function identify(integration: any, eventBody: any) {
-  return [{
-    type: 'identifier',
-    data: eventBody.event.user
-  }];
+  return [
+    {
+      type: "identifier",
+      data: eventBody.event.user,
+    },
+  ];
 }
 
 // create-activity.ts - Process webhook event
@@ -148,10 +158,12 @@ export async function createActivityEvent(eventData: any, config: any) {
   const text = `${event.user} mentioned you: ${event.message}`;
   const url = await getPermalink(config.access_token, event.id);
 
-  return [{
-    type: 'activity',
-    data: { text, sourceURL: url }
-  }];
+  return [
+    {
+      type: "activity",
+      data: { text, sourceURL: url },
+    },
+  ];
 }
 ```
 
@@ -159,32 +171,32 @@ export async function createActivityEvent(eventData: any, config: any) {
 
 ```typescript
 // src/mcp/index.ts
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
+import { z } from "zod";
+import { zodToJsonSchema } from "zod-to-json-schema";
 
 // Define tool schemas
 const CreateIssueSchema = z.object({
-  title: z.string().describe('Issue title'),
-  description: z.string().optional().describe('Issue description'),
-  assignee: z.string().optional().describe('User to assign'),
+  title: z.string().describe("Issue title"),
+  description: z.string().optional().describe("Issue description"),
+  assignee: z.string().optional().describe("User to assign"),
 });
 
 const SearchIssuesSchema = z.object({
-  query: z.string().describe('Search query'),
-  status: z.string().optional().describe('Filter by status'),
+  query: z.string().describe("Search query"),
+  status: z.string().optional().describe("Filter by status"),
 });
 
 // Export tools list
 export async function getTools() {
   return [
     {
-      name: 'create_issue',
-      description: 'Create a new issue in the project',
+      name: "create_issue",
+      description: "Create a new issue in the project",
       inputSchema: zodToJsonSchema(CreateIssueSchema),
     },
     {
-      name: 'search_issues',
-      description: 'Search for issues',
+      name: "search_issues",
+      description: "Search for issues",
       inputSchema: zodToJsonSchema(SearchIssuesSchema),
     },
   ];
@@ -193,13 +205,13 @@ export async function getTools() {
 // Implement tool execution
 export async function callTool(name: string, args: any, apiKey: string) {
   switch (name) {
-    case 'create_issue':
+    case "create_issue":
       const issue = await createIssue(apiKey, args);
-      return { content: [{ type: 'text', text: `Created issue #${issue.id}` }] };
+      return { content: [{ type: "text", text: `Created issue #${issue.id}` }] };
 
-    case 'search_issues':
+    case "search_issues":
       const results = await searchIssues(apiKey, args);
-      return { content: [{ type: 'text', text: JSON.stringify(results) }] };
+      return { content: [{ type: "text", text: JSON.stringify(results) }] };
 
     default:
       throw new Error(`Unknown tool: ${name}`);
@@ -211,10 +223,15 @@ export async function callTool(name: string, args: any, apiKey: string) {
 
 ```typescript
 // src/index.ts
-import { IntegrationCLI, IntegrationEventPayload, IntegrationEventType, Spec } from '@redplanethq/sdk';
-import { integrationCreate } from './account-create';
-import { handleSchedule } from './schedule'; // or createActivityEvent + identify
-import { getTools, callTool } from './mcp';
+import {
+  IntegrationCLI,
+  IntegrationEventPayload,
+  IntegrationEventType,
+  Spec,
+} from "@redplanethq/sdk";
+import { integrationCreate } from "./account-create";
+import { handleSchedule } from "./schedule"; // or createActivityEvent + identify
+import { getTools, callTool } from "./mcp";
 
 export async function run(eventPayload: IntegrationEventPayload) {
   switch (eventPayload.event) {
@@ -238,7 +255,7 @@ export async function run(eventPayload: IntegrationEventPayload) {
 
 class YourServiceCLI extends IntegrationCLI {
   constructor() {
-    super('your-service', '1.0.0');
+    super("your-service", "1.0.0");
   }
 
   protected async handleEvent(eventPayload: IntegrationEventPayload) {
@@ -247,20 +264,20 @@ class YourServiceCLI extends IntegrationCLI {
 
   protected async getSpec(): Promise<Spec> {
     return {
-      name: 'Your Service',
-      key: 'your-service',
-      description: 'Integration description',
-      icon: 'your-service',
-      schedule: { frequency: '*/5 * * * *' }, // For schedule-based
+      name: "Your Service",
+      key: "your-service",
+      description: "Integration description",
+      icon: "your-service",
+      schedule: { frequency: "*/5 * * * *" }, // For schedule-based
       auth: {
         OAuth2: {
-          token_url: 'https://api.service.com/oauth/token',
-          authorization_url: 'https://api.service.com/oauth/authorize',
-          scopes: ['read', 'write'],
-          scope_separator: ',',
+          token_url: "https://api.service.com/oauth/token",
+          authorization_url: "https://api.service.com/oauth/authorize",
+          scopes: ["read", "write"],
+          scope_separator: ",",
         },
       },
-      mcp: { type: 'cli' },
+      mcp: { type: "cli" },
     };
   }
 }
@@ -291,6 +308,7 @@ git push origin add-your-service-integration
 ```
 
 Open a PR with:
+
 - Description of what the integration does
 - List of MCP tools provided
 - Screenshots of it working
@@ -301,4 +319,15 @@ Open a PR with:
 - **Webhook-based**: [Slack](/integrations/slack), [Discord](/integrations/discord)
 - **Analytics**: [GitHub Analytics](/integrations/github-analytics)
 
-For detailed API reference, see [Integration Reference](/integrations/building-integrations).
+---
+
+## Contributing
+
+Other ways to contribute beyond integrations:
+
+- **Report bugs**: [GitHub Issues](https://github.com/RedPlanetHQ/core/issues) with steps to reproduce
+- **Improve docs**: fix anything unclear, add examples, correct errors
+- **Code review**: comment on open PRs
+- **Share CORE**: write about your setup, share in communities
+
+Open a PR against [RedPlanetHQ/core](https://github.com/RedPlanetHQ/core). Join [Discord](https://discord.gg/dVTC3BmgEq) for questions.

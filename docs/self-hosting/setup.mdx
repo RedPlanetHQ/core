@@ -1,0 +1,121 @@
+---
+title: "Self-Host CORE"
+description: "Run your butler on your own infrastructure. Docker-based, fully open source."
+---
+
+CORE runs as a set of Docker containers: the web app, PostgreSQL, Neo4j (memory graph), and Redis. You manage the infrastructure; your data never leaves your machine.
+
+**Requirements:** Docker 20.10+, Docker Compose 2.20+, 4 vCPU / 8 GB RAM / 20 GB storage
+
+---
+
+## Option A: One-click on Railway
+
+[![Deploy on Railway](https://railway.com/button.svg)](https://railway.com/deploy/core?referralCode=LHvbIb&utm_medium=integration&utm_source=template&utm_campaign=generic)
+
+Railway sets up all services automatically. Skip to [Connect a channel](#connect-a-channel) once deployed.
+
+---
+
+## Option B: Docker (manual)
+
+<Steps>
+
+<Step title="Clone and configure">
+
+```bash
+git clone https://github.com/RedPlanetHQ/core.git
+cd core/hosting/docker
+cp .env.example .env
+```
+
+Open `.env` and fill in the required values:
+
+```env
+# Generate all four secrets with: openssl rand -hex 16
+SESSION_SECRET=
+MAGIC_LINK_SECRET=
+ENCRYPTION_KEY=
+NEO4J_PASSWORD=                        # also update NEO4J_AUTH below
+NEO4J_AUTH=neo4j/<your-neo4j-password>
+
+# Pick one AI provider
+ANTHROPIC_API_KEY=sk-ant-...
+# OPENAI_API_KEY=sk-...
+# GOOGLE_GENERATIVE_AI_API_KEY=...
+
+# Set CHAT_PROVIDER to match (default is openai)
+CHAT_PROVIDER=anthropic
+MODEL=claude-sonnet-4-5
+
+# Only needed if deploying publicly (not localhost)
+# APP_ORIGIN=https://your-domain.com
+# LOGIN_ORIGIN=https://your-domain.com
+```
+
+Everything else in `.env` has working defaults for a local Docker deployment.
+
+</Step>
+
+<Step title="Start CORE">
+
+```bash
+docker compose up -d
+```
+
+Wait ~30 seconds for all services to initialise.
+
+**Verify:** Open [http://localhost:3033](http://localhost:3033): you should see the CORE login screen. If it doesn't load, check logs with `docker compose logs -f webapp`.
+
+</Step>
+
+<Step title="Create your account">
+
+Sign in with your email. CORE sends a magic link: check your terminal logs if you haven't configured an email provider yet:
+
+```bash
+docker compose logs webapp | grep "magic link"
+```
+
+Copy the link from the logs and open it in your browser.
+
+</Step>
+
+<Step title="Connect a channel">
+
+A channel is how you message your butler. **Email is the easiest to start with**: it requires a [Resend](https://resend.com) account and a verified domain.
+
+→ [Set up Email with Resend](/channels/email-resend)
+
+| Channel        | Effort    | Guide |
+| -------------- | --------- | ----- |
+| Email (Resend) | Low       | [Setup guide](/channels/email-resend) |
+| Slack          | Medium    | [Setup guide](/channels/slack) |
+| WhatsApp       | Medium    | Requires Twilio: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_WHATSAPP_NUMBER` |
+| Telegram       | Community | [Setup guide](/channels/telegram) |
+
+Once a channel is connected, send your first message: your butler will respond.
+
+</Step>
+
+</Steps>
+
+---
+
+## Next steps
+
+<CardGroup cols={3}>
+  <Card title="Environment Variables" icon="gear" href="/self-hosting/environment-variables">
+    Full reference for all configuration options.
+  </Card>
+  <Card title="Embedding Models" icon="database" href="/self-hosting/embeddings">
+    Configure OpenAI, Google, or local Ollama embeddings.
+  </Card>
+  <Card title="Remote Sessions" icon="terminal" href="/quickstart/remote-coding-sessions">
+    Trigger Claude Code sessions from WhatsApp or Slack.
+  </Card>
+</CardGroup>
+
+---
+
+> Need help? Join [#self-hosting on Discord](https://discord.gg/dVTC3BmgEq).

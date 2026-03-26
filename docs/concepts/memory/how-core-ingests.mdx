@@ -11,6 +11,27 @@ Ingestion is how raw information becomes structured knowledge in your graph. Eve
 
 ## The Ingestion Pipeline
 
+Every conversation is processed into structured facts — not saved as raw text.
+
+```mermaid
+flowchart LR
+    CONV["Conversation or event completes\nchat · reminder execution · email processed"]
+
+    EXTRACT["① Extract entities & relationships\nPeople · projects · companies · concepts\nand how they connect to each other"]
+
+    CLASSIFY["② Classify each fact by type\npreference · decision · goal\ndirective · rule · observation"]
+
+    EPISODE["③ Create an episode\nGroup related facts under a\ntimestamped conversation record"]
+
+    GRAPH["④ Write to Knowledge Graph\nEpisodes · entities · statements\nlinked with timestamps"]
+
+    MEM[("🧠 Memory\nKnowledge Graph")]
+
+    CONV --> EXTRACT --> CLASSIFY --> EPISODE --> GRAPH --> MEM
+```
+
+**What gets stored:** preferences, decisions, goals, directives, relationships, people and topics — not just facts but the *when* and *why* behind them.
+
 <Steps>
   <Step title="Raw Input Capture">
     Information arrives from conversations with the CORE Agent, integration activity (GitHub commits, Slack messages, Linear issues), manual document uploads, or scheduled syncs from connected apps.

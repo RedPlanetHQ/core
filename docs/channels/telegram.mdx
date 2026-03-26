@@ -1,0 +1,89 @@
+---
+title: "Telegram"
+description: "Message your butler directly on Telegram via a dedicated bot."
+---
+
+Once set up, you can message your butler through any Telegram bot you create. CORE registers the webhook automatically: no manual Telegram configuration needed beyond creating the bot.
+
+<Note>
+  This channel is available in [PR #739](https://github.com/RedPlanetHQ/core/pull/739). Make sure your instance is running that version or later.
+</Note>
+
+**What you need:** A publicly reachable CORE instance (`APP_ORIGIN` must be set in your `.env`).
+
+---
+
+## Step 1: Create a Telegram bot
+
+1. Open Telegram → search for **@BotFather** → `/start`
+2. Send `/newbot` → follow the prompts (pick a display name and a username ending in `bot`)
+3. BotFather replies with your **bot token**: copy it, you'll need it in Step 3
+
+---
+
+## Step 2: Ensure your instance is publicly reachable
+
+Telegram needs to send webhook events to your CORE instance. Confirm `APP_ORIGIN` is set to your public URL in `.env`:
+
+```env
+APP_ORIGIN=https://your-domain.com
+```
+
+CORE uses this to construct the webhook URL it registers with Telegram:
+```
+https://your-domain.com/webhooks/telegram?channelId=<channel-id>
+```
+
+> For local development, use a tunnel like [ngrok](https://ngrok.com): `ngrok http 3033` and set `APP_ORIGIN` to the tunnel URL.
+
+---
+
+## Step 3: Create the channel via the CORE API
+
+CORE stores the bot token in the channel record and **automatically registers the webhook** with Telegram when you create the channel.
+
+Get your API token from the CORE dashboard → **Settings** → **API**, then run:
+
+```bash
+curl -X POST https://your-domain.com/api/v1/channels \
+  -H "Authorization: Bearer <your-api-token>" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "My Telegram",
+    "type": "telegram",
+    "config": { "bot_token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11" },
+    "isDefault": true
+  }'
+```
+
+A successful response returns `{ "success": true, "channelId": "..." }`.
+
+At this point, CORE has called Telegram's `/setWebhook` with your channel ID: no further Telegram configuration is needed.
+
+---
+
+## Step 4: Talk to your butler
+
+Open Telegram → search for your bot by username → send a message:
+
+```
+What are my open GitHub issues?
+```
+
+Your butler replies directly in the chat.
+
+---
+
+## Managing the channel
+
+**List channels:**
+```bash
+curl https://your-domain.com/api/v1/channels \
+  -H "Authorization: Bearer <your-api-token>"
+```
+
+**Delete a channel** (also deregisters the Telegram webhook automatically):
+```bash
+curl -X DELETE https://your-domain.com/api/v1/channels/<channel-id> \
+  -H "Authorization: Bearer <your-api-token>"
+```
