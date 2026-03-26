@@ -16,7 +16,9 @@ import {
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { createConversation } from "../conversation.server";
 import { type InboundAttachment } from "~/services/channels/types";
+import { formatDailyWhatsAppTitle } from "~/services/channels/whatsapp/utils";
 import { ModelMessage } from "ai";
+import { getUserTimezone } from "~/models/user.server";
 
 interface ProcessInboundMessageParams {
   userId: string;
@@ -105,10 +107,17 @@ export async function getOrCreateChannelConversation(
 
   if (existing) return existing.id;
 
+  const userTimezone = await getUserTimezone(userId);
+  const title =
+    channel === "whatsapp"
+      ? formatDailyWhatsAppTitle(new Date(), userTimezone)
+      : undefined;
+
   const conversation = await createConversation(workspaceId, userId, {
     message,
     parts: [{ text: message, type: "text" }],
     source: channel,
+    ...(title ? { title } : {}),
   });
 
   return conversation.conversationId;

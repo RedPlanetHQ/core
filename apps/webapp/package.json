@@ -10,6 +10,7 @@
     "lint:fix": "eslint 'app/**/*.{ts,tsx,js,jsx}' --rule 'turbo/no-undeclared-env-vars:error' -f table",
     "start": "node server.js",
     "typecheck": "tsc",
+    "test": "vitest run",
     "trigger:dev": "pnpm dlx trigger.dev@4.3.0 dev",
     "trigger:deploy": "pnpm dlx trigger.dev@4.3.0 deploy"
   },
