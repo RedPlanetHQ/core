@@ -212,8 +212,7 @@
     "tsx": "4.20.6",
     "typescript": "5.8.3",
     "vite": "^6.0.0",
-    "vite-tsconfig-paths": "^4.2.1",
-    "vitest": "^4.1.1"
+    "vite-tsconfig-paths": "^4.2.1"
   },
   "engines": {
     "node": ">=20.0.0"

@@ -7,7 +7,7 @@
  *   - apostrophe + 2-digit year
  *   - literal suffix " whatsapp" (lowercase)
  *
- * Dates are evaluated in the Asia/Kolkata timezone so the boundary matches
+ * Dates are evaluated in the user's timezone so the boundary matches
  * what the user sees on their device.
  */
 
@@ -25,8 +25,6 @@ const MONTHS = [
   "nov",
   "dec",
 ] as const;
-
-const IST_TZ = "Asia/Kolkata";
 
 /** Returns the ordinal suffix for a calendar day (1-31). */
 export function ordinalSuffix(day: number): string {
@@ -48,11 +46,15 @@ export function ordinalSuffix(day: number): string {
  * Formats a Date into the canonical daily WhatsApp conversation title.
  *
  * @param date - The point in time to format (defaults to now).
+ * @param timeZone - The IANA timezone identifier (defaults to system timezone).
  * @returns e.g. "21st mar'26 whatsapp"
  */
-export function formatDailyWhatsAppTitle(date: Date = new Date()): string {
+export function formatDailyWhatsAppTitle(
+  date: Date = new Date(),
+  timeZone?: string
+): string {
   const fmt = new Intl.DateTimeFormat("en-US", {
-    timeZone: IST_TZ,
+    timeZone,
     day: "numeric",
     month: "numeric",
     year: "numeric",
