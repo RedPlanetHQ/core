@@ -12,7 +12,7 @@ import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
-import { runWebExplorer } from "../explorers";
+import { runWebExplorer, searchCoreDocs } from "../explorers";
 import { logger } from "~/services/logger.service";
 import { toRouterString } from "~/lib/model.server";
 import {
@@ -144,6 +144,7 @@ ${integrations}
 ${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above
+- search_docs: Search CORE's own documentation — use when the user asks about CORE features, setup, integrations, or troubleshooting
 - get_integration_actions: Discover available actions for an integration
 - execute_integration_action: Execute an action on a connected service (create, update, delete)
 - get_skill: Load a user-defined skill's full instructions by ID
@@ -205,6 +206,7 @@ ${integrations}
 ${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above
+- search_docs: Search CORE's own documentation — use when the user asks about CORE features, setup, integrations, or troubleshooting. Prefer this over web_search for CORE-related questions.
 - get_integration_actions: Discover available actions for an integration
 - execute_integration_action: Query data from a connected service (read operations)
 - web_search: Real-time information from the web (news, docs, prices, weather). Also reads URLs.
@@ -240,7 +242,14 @@ Intent: "What's the weather in SF"
 Intent: "summarize this: https://example.com/article"
 → web_search (reads the URL content)
 
+Intent: "how do I connect GitHub" / "what integrations do you support" / "what is the gateway"
+→ search_docs (CORE's own features and setup)
+
+Intent: "what toolkits do you have" / "how to set up WhatsApp" / "how does memory work"
+→ search_docs (CORE's own documentation)
+
 RULES:
+- For questions about CORE itself (features, setup, integrations, channels, gateway, toolkit, skills, memory), ALWAYS use search_docs FIRST. This is your own system — use your own documentation, not web_search.
 - Check user persona FIRST — use identity and directives; ignore style/preference sections.
 - Call memory_search for anything not in persona (prior conversations, specific history).
 - NEVER ask the user for info that's already in persona or memory.
@@ -488,6 +497,28 @@ export async function createOrchestratorAgent(
     });
   }
 
+  // search_docs — CORE documentation search, available in both modes
+  tools.search_docs = createTool({
+    id: "search_docs",
+    description:
+      "Search CORE's own documentation for product features, setup guides, integrations, how-tos, and troubleshooting. Use this when the user asks about CORE itself — how to connect integrations, set up channels, configure gateway, use skills, etc. Returns official documentation with links.",
+    inputSchema: z.object({
+      query: z
+        .string()
+        .describe(
+          "What to search for in CORE docs - e.g. 'how to connect WhatsApp', 'gateway setup', 'memory concepts'",
+        ),
+    }),
+    execute: async (inputData) => {
+      logger.info(`Orchestrator: docs search - ${inputData.query}`);
+      const result = await searchCoreDocs(inputData.query);
+      return result.success
+        ? result.data
+        : "CORE documentation search unavailable";
+    },
+  });
+
+  // Build orchestrator agent with gateway agents as subagents
   const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
   const agent = new Agent({
     id: `orchestrator-${mode}`,
