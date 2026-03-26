@@ -54,6 +54,9 @@
 
 > **Today you use tools. Soon, you'll describe outcomes and your butler uses the tools.**
 
+
+https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
+
 ## Why we're building this
 
 Every AI agent you use today is smart. And every single one forgets you the moment the conversation ends.
