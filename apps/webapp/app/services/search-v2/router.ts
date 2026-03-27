@@ -249,7 +249,7 @@ async function extractAspects(
         { role: "system", content: systemPrompt },
         { role: "user", content: `Query: "${intent}"` },
       ],
-      "high", // Use low-complexity model for cost efficiency
+      "medium",
       cacheKey,
     );
 

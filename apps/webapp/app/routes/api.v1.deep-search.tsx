@@ -3,9 +3,9 @@ import { json } from "@remix-run/node";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 
-import { type LanguageModel, streamText } from "ai";
 import { logger } from "~/services/logger.service";
-import { createAgent, getModel, getModelForTask } from "~/lib/model.server";
+import { createAgent, getModelForTask } from "~/lib/model.server";
+import { streamToUIResponse } from "~/services/agent/mastra-stream.server";
 import { searchMemoryWithAgent } from "~/services/agent/memory";
 
 const DeepSearchBodySchema = z.object({
@@ -75,23 +75,11 @@ ${invalidatedFacts.length > 0 ? `INVALIDATED FACTS (outdated information):\n${in
 Provide a clear, helpful summary based ONLY on the memory above. Do not add any information not present in the memory.`;
 
       if (body.stream) {
-        const result = streamText({
-          model: getModel() as LanguageModel,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-        });
-
-        return result.toUIMessageStreamResponse({});
+        const agent = createAgent(getModelForTask("medium"), systemPrompt);
+        const result = await agent.stream([{ role: "user", content: userPrompt }]);
+        return streamToUIResponse(result);
       } else {
-        const agent = createAgent(getModelForTask("high"), systemPrompt);
+        const agent = createAgent(getModelForTask("medium"), systemPrompt);
         const { text } = await agent.generate(userPrompt);
 
 

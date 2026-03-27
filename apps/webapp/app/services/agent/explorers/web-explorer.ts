@@ -7,7 +7,7 @@ import { env } from "~/env.server";
 import { createAgent, getModelForTask } from "~/lib/model.server";
 import { ExplorerResult } from "../types";
 
-const WEB_COMPLEXITY = "high";
+const WEB_COMPLEXITY = "medium";
 
 const getWebExplorerPrompt = (timezone: string = "UTC") => {
   const today = new Date().toLocaleDateString("en-CA", { timeZone: timezone });

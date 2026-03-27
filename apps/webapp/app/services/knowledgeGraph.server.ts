@@ -427,7 +427,7 @@ export class KnowledgeGraphService {
           await makeStructuredModelCall(
             ExtractWorldSchema,
             worldMessages as ModelMessage[],
-            "high",
+            "medium",
             "extract-world",
           );
         if (worldUsage) {
@@ -447,7 +447,7 @@ export class KnowledgeGraphService {
           await makeStructuredModelCall(
             ExtractVoiceSchema,
             voiceMessages as ModelMessage[],
-            "high",
+            "medium",
             "extract-voice",
           );
         if (voiceUsage) {
@@ -551,7 +551,7 @@ export class KnowledgeGraphService {
               await makeStructuredModelCall(
                 ClassifyVoiceSchema,
                 voiceMessages as ModelMessage[],
-                "high",
+                "medium",
                 "classify-voice",
               );
             if (voiceUsage) {
@@ -576,7 +576,7 @@ export class KnowledgeGraphService {
               await makeStructuredModelCall(
                 ClassifyWorldSchema,
                 worldMessages as ModelMessage[],
-                "high",
+                "medium",
                 "classify-world",
               );
             if (worldUsage) {
@@ -769,7 +769,7 @@ export class KnowledgeGraphService {
         }
       },
       undefined,
-      "high",
+      "medium",
       "normalization",
     );
     let normalizedEpisodeBody = "";

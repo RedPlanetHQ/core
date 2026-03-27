@@ -6,15 +6,13 @@ import {
 } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { useFetcher } from "@remix-run/react";
-import { generateObject } from "ai";
 import { z } from "zod";
-import { type LanguageModel } from "ai";
 import { requireUser } from "~/services/session.server";
 import { updateUser } from "~/models/user.server";
 import { getLibrarySkills } from "~/lib/skills-library";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
 import { getIntegrationAccounts, getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
-import { getModel } from "~/lib/model.server";
+import { makeStructuredModelCall } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { documentsPath } from "~/utils/pathBuilder";
 import { OnboardingSuggestions } from "~/components/onboarding/onboarding-suggestions";
@@ -65,15 +63,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   }
 
   try {
-    const { object } = await generateObject({
-      model: getModel() as LanguageModel,
-      schema: z.object({
+    const { object } = await makeStructuredModelCall(
+      z.object({
         skills: z.array(z.string()).describe("slugs of relevant skills, max 4"),
         integrations: z
           .array(z.string())
           .describe("slugs of relevant integrations, max 4"),
       }),
-      prompt: `Based on this user profile, pick the most relevant skills and integrations to suggest.
+      [{ role: "user", content: `Based on this user profile, pick the most relevant skills and integrations to suggest.
 
 User profile:
 ${summary}
@@ -96,9 +93,11 @@ ${JSON.stringify(
   2,
 )}
 
-Pick up to 4 skills and up to 4 integrations that are clearly relevant for this user. Return only slugs.`,
-      temperature: 0.3,
-    });
+Pick up to 4 skills and up to 4 integrations that are clearly relevant for this user. Return only slugs.` }],
+      "medium",
+      undefined,
+      0.3,
+    );
 
     const suggestedIntegrations = integrationDefs.filter((i) =>
       object.integrations.includes(i.slug),

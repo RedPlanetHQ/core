@@ -13,7 +13,7 @@ import { z } from "zod";
 import { logger } from "~/services/logger.service";
 import { getGateway } from "~/services/gateway.server";
 import { toRouterString } from "~/lib/model.server";
-import { env } from "~/env.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { type OrchestratorTools, type GatewayAgentInfo } from "../executors/base";
 import { callGatewayTool } from "../../../../websocket";
 
@@ -199,7 +199,7 @@ export async function createGatewayAgent(
       agent: new Agent({
         id: `gateway_disconnected`,
         name: "Disconnected Gateway",
-        model: toRouterString(env.MODEL) as any,
+        model: toRouterString(getDefaultChatModelId()) as any,
         instructions: "This gateway is not connected.",
       }),
       connected: false,
@@ -218,7 +218,7 @@ export async function createGatewayAgent(
   const agent = new Agent({
     id: agentId,
     name: gateway.name,
-    model: toRouterString(env.MODEL) as any,
+    model: toRouterString(getDefaultChatModelId()) as any,
     instructions: getGatewayAgentPrompt(
       gateway.name,
       gateway.description,

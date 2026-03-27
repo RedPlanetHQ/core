@@ -8,6 +8,7 @@ import {
   type BatchStatus,
 } from "../types";
 import { logger } from "~/services/logger.service";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
 
 export class AnthropicBatchProvider extends BaseBatchProvider {
   providerName = "anthropic";
@@ -38,7 +39,7 @@ export class AnthropicBatchProvider extends BaseBatchProvider {
       const batchRequests = params.requests.map((request) => ({
         custom_id: request.customId,
         params: {
-          model: process.env.MODEL as string,
+          model: getDefaultChatModelId(),
           max_tokens: 4096,
           messages: request.systemPrompt
             ? [

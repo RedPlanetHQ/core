@@ -10,7 +10,7 @@ import { Agent } from "@mastra/core/agent";
 import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
 import { toRouterString } from "~/lib/model.server";
-import { env } from "~/env.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   type Trigger,
@@ -144,7 +144,7 @@ export async function noStreamProcess(
   const agent = new Agent({
     id: "core-agent",
     name: "Core Agent",
-    model: toRouterString(env.MODEL) as any,
+    model: toRouterString(getDefaultChatModelId()) as any,
     instructions: systemPrompt,
     agents: subagents,
   });

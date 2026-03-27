@@ -1,5 +1,5 @@
 import { EditorRoot, EditorContent, Placeholder } from "novel";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 import { EyeOff } from "lucide-react";
@@ -17,6 +17,14 @@ import { RiGithubFill } from "@remixicon/react";
 import { Gmail } from "../icons/gmail";
 import { LinearIcon } from "../icons/linear-icon";
 import { GoogleCalendar } from "../icons/google-calendar";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+import type { LLMModel } from "./conversation-textarea.client";
 
 const SUGGESTED = [
   {
@@ -53,8 +61,21 @@ export const ConversationNew = ({
   const [incognito, setIncognito] = useState(false);
   const editorRef = useRef<any>(null);
   const [editor, setEditor] = useState<Editor>();
+  const [models, setModels] = useState<LLMModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>();
 
   const submit = useSubmit();
+
+  useEffect(() => {
+    fetch("/api/v1/llm-models")
+      .then((r) => r.json())
+      .then((data: LLMModel[]) => {
+        setModels(data);
+        const defaultModel = data.find((m) => m.isDefault);
+        setSelectedModelId(defaultModel?.id ?? data[0]?.id);
+      })
+      .catch(() => {});
+  }, []);
 
   const handleSelectPrompt = useCallback(
     (prompt: string) => {
@@ -66,29 +87,33 @@ export const ConversationNew = ({
     [editor],
   );
 
-  const submitForm = useCallback(
-    async (e: React.FormEvent<HTMLFormElement>) => {
-      if (!content.trim()) return;
+  const doSubmit = useCallback(
+    (messageContent: string) => {
       submit(
-        { message: content, title, incognito },
+        { message: messageContent, title: messageContent, incognito, modelId: selectedModelId ?? "" },
         { action: "/home/conversation", method: "post" },
       );
-      e.preventDefault();
       setContent("");
       setTitle("");
     },
-    [content, incognito],
+    [incognito, selectedModelId],
+  );
+
+  const submitForm = useCallback(
+    async (e: React.FormEvent<HTMLFormElement>) => {
+      if (!content.trim()) return;
+      e.preventDefault();
+      doSubmit(content);
+    },
+    [content, doSubmit],
   );
 
   const handleSubmitClick = useCallback(() => {
     if (!content.trim()) return;
-    submit(
-      { message: content, title: content, incognito },
-      { action: "/home/conversation", method: "post" },
-    );
-    setContent("");
-    setTitle("");
-  }, [content, incognito]);
+    doSubmit(content);
+  }, [content, doSubmit]);
+
+  const showModelSelector = models.length > 1;
 
   return (
     <Form
@@ -159,12 +184,7 @@ export const ConversationNew = ({
                     if (event.key === "Enter" && !event.shiftKey) {
                       event.preventDefault();
                       if (content) {
-                        submit(
-                          { message: content, title: content, incognito },
-                          { action: "/home/conversation", method: "post" },
-                        );
-                        setContent("");
-                        setTitle("");
+                        doSubmit(content);
                       }
                       return true;
                     }
@@ -180,21 +200,40 @@ export const ConversationNew = ({
               />
             </EditorRoot>
             <div className="flex items-center justify-between px-3 pb-3 pt-1">
-              <Button
-                type="button"
-                variant={incognito ? "secondary" : "ghost"}
-                size="sm"
-                onClick={() => setIncognito((v) => !v)}
-                title={
-                  incognito
-                    ? "Incognito on — not saved to memory"
-                    : "Incognito off"
-                }
-                className="gap-1.5"
-              >
-                <EyeOff size={13} />
-                {incognito && <span>Incognito</span>}
-              </Button>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant={incognito ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setIncognito((v) => !v)}
+                  title={
+                    incognito
+                      ? "Incognito on — not saved to memory"
+                      : "Incognito off"
+                  }
+                  className="gap-1.5"
+                >
+                  <EyeOff size={13} />
+                  {incognito && <span>Incognito</span>}
+                </Button>
+                {showModelSelector && (
+                  <Select value={selectedModelId} onValueChange={setSelectedModelId}>
+                    <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((model) => (
+                        <SelectItem key={model.id} value={model.id} className="text-xs">
+                          <span className="font-medium">{model.label}</span>
+                          <span className="text-muted-foreground ml-1 capitalize">
+                            · {model.provider}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
               <Button
                 type="button"
                 variant="secondary"

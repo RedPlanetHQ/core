@@ -412,7 +412,7 @@ async function generateCompaction(
         responseText = text;
       },
       undefined,
-      "high",
+      "medium",
       "session-compaction",
     );
 

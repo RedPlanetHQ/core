@@ -192,7 +192,7 @@ export async function runGatewayExplorer(
     executorTools,
   );
 
-  const model = getModelForTask("high");
+  const model = getModelForTask("medium");
   const modelInstance = getModel(model);
 
   const stream = streamText({

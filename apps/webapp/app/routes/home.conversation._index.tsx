@@ -63,7 +63,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const conversationId = conversation?.conversationId;
 
   if (conversationId) {
-    return redirect(`/home/conversation/${conversationId}`);
+    const modelId = submission.value.modelId;
+    const url = modelId
+      ? `/home/conversation/${conversationId}?modelId=${encodeURIComponent(modelId)}`
+      : `/home/conversation/${conversationId}`;
+    return redirect(url);
   }
 
   // fallback: just return the conversation object

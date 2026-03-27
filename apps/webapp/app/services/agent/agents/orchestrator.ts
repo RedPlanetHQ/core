@@ -15,7 +15,7 @@ import { z } from "zod";
 import { runWebExplorer } from "../explorers";
 import { logger } from "~/services/logger.service";
 import { toRouterString } from "~/lib/model.server";
-import { env } from "~/env.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 import { createGatewayAgents } from "./gateway";
@@ -493,7 +493,7 @@ export async function createOrchestratorAgent(
   const agent = new Agent({
     id: `orchestrator-${mode}`,
     name: mode === "read" ? "Gather Context" : "Take Action",
-    model: toRouterString(env.MODEL) as any,
+    model: toRouterString(getDefaultChatModelId()) as any,
     instructions: getOrchestratorPrompt(
       integrationsList,
       mode,

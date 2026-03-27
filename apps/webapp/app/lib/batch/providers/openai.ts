@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+import OpenAI, { toFile } from "openai";
 import fs from "fs";
 import path from "path";
 import os from "os";
@@ -90,9 +90,9 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
         await fs.promises.writeFile(tempFilePath, jsonlContent, "utf-8");
 
         // console.log("JSONL content:", jsonlContent);
-        // Upload file to OpenAI
+        // Upload file to OpenAI (must use toFile so the SDK sends the .jsonl filename)
         file = await this.openaiClient.files.create({
-          file: fs.createReadStream(tempFilePath),
+          file: await toFile(fs.createReadStream(tempFilePath), `batch-${Date.now()}.jsonl`, { type: "application/jsonl" }),
           purpose: "batch",
         });
 

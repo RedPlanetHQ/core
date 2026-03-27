@@ -1,0 +1,93 @@
+{
+  "openai": {
+    "name": "OpenAI",
+    "envKey": "OPENAI_API_KEY",
+    "models": [
+      {
+        "modelId": "gpt-5.2-2025-12-11",
+        "label": "GPT-5.2",
+        "complexity": "medium",
+        "supportsBatch": false,
+        "capabilities": ["chat", "structured", "reasoning"]
+      },
+      {
+        "modelId": "gpt-5-2025-08-07",
+        "label": "GPT-5",
+        "complexity": "medium",
+        "capabilities": ["chat", "structured", "reasoning"]
+      },
+      {
+        "modelId": "gpt-5-mini-2025-08-07",
+        "label": "GPT-5 Mini",
+        "complexity": "low",
+        "capabilities": ["chat", "structured", "reasoning"]
+      },
+      {
+        "modelId": "text-embedding-3-small",
+        "label": "Text Embedding 3 Small",
+        "complexity": "low",
+        "supportsBatch": false,
+        "capabilities": ["embedding"],
+        "dimensions": 1536
+      },
+      {
+        "modelId": "text-embedding-3-large",
+        "label": "Text Embedding 3 Large",
+        "complexity": "medium",
+        "supportsBatch": false,
+        "capabilities": ["embedding"],
+        "dimensions": 3072
+      }
+    ]
+  },
+  "anthropic": {
+    "name": "Anthropic",
+    "envKey": "ANTHROPIC_API_KEY",
+    "models": [
+      {
+        "modelId": "claude-sonnet-4-6",
+        "label": "Claude Sonnet 4.6",
+        "complexity": "medium",
+        "supportsBatch": false,
+        "capabilities": ["chat", "structured"]
+      },
+      {
+        "modelId": "claude-haiku-4-5",
+        "label": "Claude Haiku 4.5",
+        "complexity": "low",
+        "capabilities": ["chat", "structured"]
+      }
+    ]
+  },
+  "google": {
+    "name": "Google",
+    "envKey": "GOOGLE_GENERATIVE_AI_API_KEY",
+    "models": [
+      {
+        "modelId": "gemini-2.5-pro-preview-03-25",
+        "label": "Gemini 2.5 Pro",
+        "complexity": "medium",
+        "capabilities": ["chat", "structured"]
+      },
+      {
+        "modelId": "gemini-2.5-flash-preview-04-17",
+        "label": "Gemini 2.5 Flash",
+        "complexity": "low",
+        "capabilities": ["chat", "structured"]
+      },
+      {
+        "modelId": "text-embedding-004",
+        "label": "Text Embedding 004",
+        "complexity": "medium",
+        "supportsBatch": false,
+        "capabilities": ["embedding"],
+        "dimensions": 768
+      }
+    ]
+  },
+  "ollama": {
+    "name": "Ollama",
+    "envKey": "OLLAMA_URL",
+    "models": []
+  }
+}

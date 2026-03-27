@@ -1,8 +1,7 @@
 import { z } from "zod";
-import { streamText, type LanguageModel } from "ai";
-
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { getModel, getModelForTask } from "~/lib/model.server";
+import { createAgent, getModelForTask } from "~/lib/model.server";
+import { streamToUIResponse } from "~/services/agent/mastra-stream.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 
@@ -47,24 +46,9 @@ const { action } = createHybridActionApiRoute(
 
     const userMessage = `User intent: ${validatedData.prompt}${toolsContext}${existingContext}`;
 
-    const model = getModelForTask("low");
-    const modelInstance = getModel(model);
-
-    if (!modelInstance) {
-      throw new Response("No model available", { status: 503 });
-    }
-
-    const result = streamText({
-      model: modelInstance as LanguageModel,
-      messages: [
-        { role: "system", content: SKILL_GENERATOR_SYSTEM_PROMPT },
-        { role: "user", content: userMessage },
-      ],
-    });
-
-    result.consumeStream(); // no await
-
-    return result.toUIMessageStreamResponse();
+    const agent = createAgent(getModelForTask("low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+    const result = await agent.stream([{ role: "user", content: userMessage }]);
+    return streamToUIResponse(result);
   },
 );
 

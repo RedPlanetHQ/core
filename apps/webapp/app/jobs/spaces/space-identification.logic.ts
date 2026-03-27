@@ -87,7 +87,7 @@ export async function identifySpacesForTopics(
     {
       temperature: 0.7,
     },
-    "high",
+    "medium",
     "space-identification",
   );
 

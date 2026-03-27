@@ -10,7 +10,7 @@ import {
 import { Agent } from "@mastra/core/agent";
 
 import { toRouterString } from "~/lib/model.server";
-import { env } from "~/env.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
@@ -44,6 +44,7 @@ const ChatRequestSchema = z.object({
   approved: z.boolean().optional(),
   toolCallId: z.string().optional(),
   source: z.string().default("core"),
+  modelId: z.string().optional(),
 });
 
 function detectApprovalFromMessages(messages: any[]): boolean {
@@ -173,10 +174,12 @@ const { loader, action } = createHybridActionApiRoute(
       conversationId: body.id,
     });
 
+    const modelString = body.modelId ?? getDefaultChatModelId();
+    console.log("modelString", modelString);
     const agent = new Agent({
       id: "core-agent",
       name: "Core Agent",
-      model: toRouterString(env.MODEL),
+      model: toRouterString(modelString),
       instructions: systemPrompt,
       agents: {
         gather_context: gatherContextAgent,

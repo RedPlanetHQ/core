@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "@remix-run/react";
 import { useFetcher } from "@remix-run/react";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
@@ -7,7 +8,7 @@ import {
 } from "ai";
 import { UserTypeEnum } from "@core/types";
 import { ConversationItem } from "./conversation-item.client";
-import { ConversationTextarea } from "./conversation-textarea.client";
+import { ConversationTextarea, type LLMModel } from "./conversation-textarea.client";
 import { ThinkingIndicator } from "./thinking-indicator.client";
 import { hasNeedsApprovalDeep } from "./conversation-utils";
 import { cn } from "~/lib/utils";
@@ -39,6 +40,7 @@ export function ConversationView({
   conversationStatus,
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
+  const [searchParams] = useSearchParams();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
@@ -47,6 +49,34 @@ export function ConversationView({
   const [spacerHeight, setSpacerHeight] = useState(0);
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
+
+  const [models, setModels] = useState<LLMModel[]>([]);
+  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
+    searchParams.get("modelId") ?? undefined,
+  );
+  // Ref so prepareSendMessagesRequest always reads the latest selection
+  const selectedModelRef = useRef<string | undefined>(selectedModelId);
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModelId(modelId);
+    selectedModelRef.current = modelId;
+  };
+
+  useEffect(() => {
+    fetch("/api/v1/llm-models")
+      .then((r) => r.json())
+      .then((data: LLMModel[]) => {
+        setModels(data);
+        // Only set default if no model was passed via URL
+        if (!searchParams.get("modelId")) {
+          const defaultModel = data.find((m) => m.isDefault);
+          const id = defaultModel?.id ?? data[0]?.id;
+          setSelectedModelId(id);
+          selectedModelRef.current = id;
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   const {
     sendMessage,
@@ -78,15 +108,13 @@ export function ConversationView({
         );
 
         if (needsApproval) {
-          return { body: { messages, needsApproval: true, id } };
+          return { body: { messages, needsApproval: true, id, modelId: selectedModelRef.current } };
         }
-        return { body: { message: messages[messages.length - 1], id } };
+        return { body: { message: messages[messages.length - 1], id, modelId: selectedModelRef.current } };
       },
     }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
-
-  console.log(messages);
 
   useEffect(() => {
     if (autoRegenerate && history.length === 1) {
@@ -203,6 +231,9 @@ export function ConversationView({
               if (message) sendMessage({ text: message });
             }}
             stop={() => stop()}
+            models={models}
+            selectedModelId={selectedModelId}
+            onModelChange={handleModelChange}
           />
         </div>
       </div>
