@@ -45,9 +45,16 @@ export interface AgentOutput {
 // ── Tool part / state ─────────────────────────────────────────────────────────
 
 export type ToolPartState =
+  // AI SDK v6 states
+  | "input-streaming"
+  | "input-available"
   | "output-available"
-  | "in-progress"
+  | "output-error"
+  // approval middleware states
   | "approval-requested"
+  | "approval-responded"
+  // synthetic states used in our nested parts (built by getNestedPartsFromOutput)
+  | "in-progress"
   | "output-denied";
 
 export interface ConversationToolPart {

@@ -50,6 +50,15 @@ export const Tool = ({
   const toolName = part.type.replace("tool-", "");
   const needsApproval = part.state === "approval-requested";
 
+  // AI SDK v6 uses 'input-streaming' / 'input-available' while a tool is running.
+  // Our synthetic nested parts still use 'in-progress'. Treat anything that isn't
+  // a completed or denied state as "running".
+  const isRunning =
+    part.state !== "output-available" &&
+    part.state !== "output-error" &&
+    part.state !== "output-denied" &&
+    part.state !== "approval-responded";
+
   // AI SDK top-level tool parts use `args`; our synthetic nested parts use `input`.
   // Normalize once so all downstream code just reads `input`.
   const input: Record<string, unknown> =
@@ -121,7 +130,14 @@ export const Tool = ({
   const getActiveNestedInfo = (
     parts: ConversationToolPart[],
   ): NestedInfo | null => {
-    const last = [...parts].reverse().find((p) => p.state === "in-progress");
+    // Synthetic nested parts use "in-progress"; real parts may use "input-available" etc.
+    const last = [...parts].reverse().find(
+      (p) =>
+        p.state !== "output-available" &&
+        p.state !== "output-error" &&
+        p.state !== "output-denied" &&
+        p.state !== "approval-responded",
+    );
     if (!last) return null;
     const deeper = getNestedPartsFromOutput(last.output).filter(
       (p): p is ConversationToolPart => p.type.includes("tool-"),
@@ -148,7 +164,7 @@ export const Tool = ({
     | { kind: "own"; hint: string };
 
   const triggerHint = ((): TriggerHint | null => {
-    if (!isOpen && part.state === "in-progress" && hasNestedTools) {
+    if (!isOpen && isRunning && hasNestedTools) {
       const info = getActiveNestedInfo(nestedToolParts);
       if (info) return { kind: "nested", info };
     }
@@ -211,7 +227,7 @@ export const Tool = ({
       return <TriangleAlert size={16} className="rounded-sm" />;
     }
 
-    if (part.state === "in-progress" && !hasNestedTools) {
+    if (isRunning && !hasNestedTools) {
       return <LoaderCircle className="h-4 w-4 animate-spin" />;
     }
 
@@ -363,7 +379,9 @@ export const Tool = ({
           const isLastInProgress =
             parentApproval &&
             idx === nestedToolParts.length - 1 &&
-            nestedPart.state === "in-progress";
+            nestedPart.state !== "output-available" &&
+            nestedPart.state !== "output-error" &&
+            nestedPart.state !== "output-denied";
 
           const effectivePart: ConversationToolPart = isLastInProgress
             ? {
