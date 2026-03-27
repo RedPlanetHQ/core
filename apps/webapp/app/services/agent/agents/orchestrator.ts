@@ -327,7 +327,6 @@ export async function createOrchestratorAgent(
           "What to search for - include preferences, directives, and prior context related to the request",
         ),
     }),
-    requireApproval: true,
 
     execute: async (inputData) => {
       logger.info(`Orchestrator: memory search - ${inputData.query}`);
@@ -373,7 +372,7 @@ export async function createOrchestratorAgent(
           "What you want to do (e.g., 'search emails', 'create issue', 'list events')",
         ),
     }),
-    requireApproval: true,
+
     execute: async (inputData) => {
       try {
         logger.info(

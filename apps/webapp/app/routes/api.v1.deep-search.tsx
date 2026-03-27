@@ -3,13 +3,9 @@ import { json } from "@remix-run/node";
 import { createActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 
-import {
-  generateText,
-  type LanguageModel,
-  streamText,
-} from "ai";
+import { type LanguageModel, streamText } from "ai";
 import { logger } from "~/services/logger.service";
-import { getModel } from "~/lib/model.server";
+import { createAgent, getModel, getModelForTask } from "~/lib/model.server";
 import { searchMemoryWithAgent } from "~/services/agent/memory";
 
 const DeepSearchBodySchema = z.object({
@@ -95,19 +91,8 @@ Provide a clear, helpful summary based ONLY on the memory above. Do not add any 
 
         return result.toUIMessageStreamResponse({});
       } else {
-        const { text } = await generateText({
-          model: getModel() as LanguageModel,
-          messages: [
-            {
-              role: "system",
-              content: systemPrompt,
-            },
-            {
-              role: "user",
-              content: userPrompt,
-            },
-          ],
-        });
+        const agent = createAgent(getModelForTask("high"), systemPrompt);
+        const { text } = await agent.generate(userPrompt);
 
 
         return json({ text });

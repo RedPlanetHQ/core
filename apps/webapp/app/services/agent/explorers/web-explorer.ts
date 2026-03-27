@@ -1,10 +1,10 @@
-import { type LanguageModel, stepCountIs, tool, generateText } from "ai";
 import { z } from "zod";
+import { createTool } from "@mastra/core/tools";
 
 import Exa from "exa-js";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
-import { getModel, getModelForTask } from "~/lib/model.server";
+import { createAgent, getModelForTask } from "~/lib/model.server";
 import { ExplorerResult } from "../types";
 
 const WEB_COMPLEXITY = "high";
@@ -65,7 +65,8 @@ export async function runWebExplorer(
   const exa = new Exa(exaApiKey);
 
   const tools = {
-    web_search: tool({
+    web_search: createTool({
+      id: "web_search",
       description:
         "Search the web for information. Returns titles, URLs, and text snippets.",
       inputSchema: z.object({
@@ -81,7 +82,8 @@ export async function runWebExplorer(
           .default(true)
           .describe("Let Exa enhance the query for better results"),
       }),
-      execute: async ({ query, numResults, useAutoprompt }) => {
+      execute: async (inputData) => {
+        const { query, numResults, useAutoprompt } = inputData;
         toolCalls++;
         logger.info(`WebExplorer: searching - ${query}`);
         try {
@@ -112,7 +114,8 @@ ${highlights || text}`;
       },
     }),
 
-    get_page_contents: tool({
+    get_page_contents: createTool({
+      id: "get_page_contents",
       description:
         "Get full content from specific URLs. Use when search snippets aren't enough.",
       inputSchema: z.object({
@@ -122,7 +125,8 @@ ${highlights || text}`;
           .max(3)
           .describe("URLs to fetch content from (max 3)"),
       }),
-      execute: async ({ urls }) => {
+      execute: async (inputData) => {
+        const { urls } = inputData;
         toolCalls++;
         logger.info(`WebExplorer: fetching contents - ${urls.join(", ")}`);
         try {
@@ -151,18 +155,12 @@ ${r.text || "No content available"}`;
   };
 
   try {
-    let model = getModelForTask(WEB_COMPLEXITY);
+    const model = getModelForTask(WEB_COMPLEXITY);
     logger.info(`complexity: ${WEB_COMPLEXITY}, model: ${model}`);
 
-    const modelInstance = getModel(model);
-
-    const { text } = await generateText({
-      model: modelInstance as LanguageModel,
-      system: getWebExplorerPrompt(timezone),
-      messages: [{ role: "user", content: query }],
-      tools,
-      stopWhen: stepCountIs(6),
-    });
+    const agent = createAgent(model, getWebExplorerPrompt(timezone), tools);
+    const result = await agent.generate(query, { maxSteps: 6 });
+    const { text } = result;
 
     logger.info("WebExplorer completed", {
       executionTimeMs: Date.now() - startTime,

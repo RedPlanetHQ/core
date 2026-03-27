@@ -4,7 +4,7 @@ import {
   createOpenAI,
   type OpenAIResponsesProviderOptions,
 } from "@ai-sdk/openai";
-import { Agent } from "@mastra/core/agent";
+import { Agent, type ToolsInput } from "@mastra/core/agent";
 import {
   ModelRouterLanguageModel,
   ModelRouterEmbeddingModel,
@@ -231,7 +231,7 @@ function logTokenUsage(prefix: string, model: string, tokenUsage: TokenUsage | u
 // Mastra Agent factory
 // ---------------------------------------------------------------------------
 
-function createAgent(modelString: string, instructions?: string): Agent {
+export function createAgent(modelString: string, instructions?: string, tools?: ToolsInput): Agent {
   const provider = getProvider(modelString);
 
   // Ollama/proxy: use direct AI SDK model instance
@@ -241,6 +241,7 @@ function createAgent(modelString: string, instructions?: string): Agent {
       name: `Model Call (${modelString})`,
       model: getModel(modelString) as any,
       instructions: instructions || "",
+      ...(tools && { tools }),
     });
   }
 
@@ -250,6 +251,7 @@ function createAgent(modelString: string, instructions?: string): Agent {
     name: `Model Call (${modelString})`,
     model: toRouterString(modelString) as any,
     instructions: instructions || "",
+    ...(tools && { tools }),
   });
 }
 

@@ -26,28 +26,34 @@ import {
 } from "@core/types";
 import { ProviderFactory } from "@core/providers";
 import { getActiveVoiceAspects } from "~/services/aspectStore.server";
-import { type ModelMessage, generateText, type LanguageModel } from "ai";
-import { getModel, getModelForBatch } from "~/lib/model.server";
+
+import { createAgent, getModelForBatch } from "~/lib/model.server";
+import { type ModelMessage } from "ai";
+import { type MessageListInput } from "@mastra/core/agent/message-list";
+import { Message } from "@anthropic-ai/sdk/resources";
 
 /**
  * Direct LLM call helper — replaces batch for single/few requests.
  * Returns the text content from a single prompt.
  */
-async function directLLMCall(prompt: ModelMessage, label?: string): Promise<string | null> {
+async function directLLMCall(
+  prompt: MessageListInput,
+  label?: string,
+): Promise<string | null> {
   try {
     const modelId = getModelForBatch();
-    const model = getModel(modelId) as LanguageModel;
-    const { text } = await generateText({
-      model,
-      messages: [prompt],
-    });
+    const agent = createAgent(modelId);
+    const result = await agent.generate(prompt);
+    const text = result.text;
     logger.info(`Direct LLM call completed${label ? ` [${label}]` : ""}`, {
       responseLength: text.length,
       preview: text.slice(0, 100),
     });
     return text;
   } catch (error) {
-    logger.error(`Direct LLM call failed${label ? ` [${label}]` : ""}`, { error });
+    logger.error(`Direct LLM call failed${label ? ` [${label}]` : ""}`, {
+      error,
+    });
     return null;
   }
 }
@@ -124,11 +130,14 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
     // Search for ## TITLE pattern (handles both \n## and start-of-string)
     const firstTitle = ASPECT_SECTION_MAP[markers[0].aspect].title;
     const firstHeaderIdx = doc.indexOf(`## ${firstTitle}`);
-    result.header = doc.slice(0, firstHeaderIdx > 0 ? firstHeaderIdx : 0).trim();
+    result.header = doc
+      .slice(0, firstHeaderIdx > 0 ? firstHeaderIdx : 0)
+      .trim();
 
     for (let i = 0; i < markers.length; i++) {
       const marker = markers[i];
-      const markerEnd = marker.index + `<!-- section:${marker.aspect.toLowerCase()} -->`.length;
+      const markerEnd =
+        marker.index + `<!-- section:${marker.aspect.toLowerCase()} -->`.length;
 
       // Section starts right after the previous marker ends, or at the header start for first section
       let sectionStart: number;
@@ -136,7 +145,9 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
         sectionStart = firstHeaderIdx > 0 ? firstHeaderIdx : 0;
       } else {
         const prevMarker = markers[i - 1];
-        const prevMarkerEnd = prevMarker.index + `<!-- section:${prevMarker.aspect.toLowerCase()} -->`.length;
+        const prevMarkerEnd =
+          prevMarker.index +
+          `<!-- section:${prevMarker.aspect.toLowerCase()} -->`.length;
         sectionStart = prevMarkerEnd;
       }
 
@@ -155,7 +166,10 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
   let hMatch: RegExpExecArray | null;
 
   while ((hMatch = headerRegex.exec(doc)) !== null) {
-    headerPositions.push({ title: hMatch[1].toUpperCase(), index: hMatch.index });
+    headerPositions.push({
+      title: hMatch[1].toUpperCase(),
+      index: hMatch.index,
+    });
   }
 
   if (headerPositions.length === 0) {
@@ -170,7 +184,10 @@ export function parsePersonaDocument(doc: string): ParsedPersonaSections {
   // Each section runs from its ## header to the next ## header (or end of doc)
   for (let i = 0; i < headerPositions.length; i++) {
     const start = headerPositions[i].index;
-    const end = i + 1 < headerPositions.length ? headerPositions[i + 1].index : doc.length;
+    const end =
+      i + 1 < headerPositions.length
+        ? headerPositions[i + 1].index
+        : doc.length;
     const sectionContent = doc.slice(start, end).trim();
     const title = headerPositions[i].title;
 
@@ -221,8 +238,7 @@ export const ASPECT_SECTION_MAP: Record<
   },
   Preference: {
     title: "PREFERENCES",
-    description:
-      "How they want things done - style, format, approach, tools",
+    description: "How they want things done - style, format, approach, tools",
     agentQuestion: "How do they want things done?",
     filterGuidance:
       "Include: communication style, formatting preferences, tool choices, workflow preferences, tone preferences. These are 'I prefer X' statements. Exclude: hard rules (those are Directives), one-time requests, and project-specific preferences.",
@@ -280,8 +296,7 @@ export const ASPECT_SECTION_MAP: Record<
   },
   Task: {
     title: "TASKS",
-    description:
-      "One-time commitments, follow-ups, promises, action items",
+    description: "One-time commitments, follow-ups, promises, action items",
     agentQuestion: "What do they need to do?",
     filterGuidance:
       "SKIP - Transient data. Agents should query the graph directly for tasks and action items.",
@@ -419,9 +434,7 @@ export async function getStatementsByAspectWithEpisodes(
       const existing = aspectDataMap.get(aspect);
       if (existing) {
         // Avoid duplicates — only add if fact doesn't already exist
-        const factExists = existing.statements.some(
-          (s) => s.fact === va.fact,
-        );
+        const factExists = existing.statements.some((s) => s.fact === va.fact);
         if (!factExists) {
           existing.statements.push(syntheticStatement);
         }
@@ -434,7 +447,9 @@ export async function getStatementsByAspectWithEpisodes(
       }
     }
 
-    logger.info(`Merged ${voiceAspectNodes.length} voice aspects into aspect data`);
+    logger.info(
+      `Merged ${voiceAspectNodes.length} voice aspects into aspect data`,
+    );
   }
 
   return aspectDataMap;
@@ -729,7 +744,9 @@ async function generateSectionWithChunking(
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
 
   if (!sectionInfo) {
-    logger.warn(`No section mapping for aspect "${aspect}" — skipping chunking`);
+    logger.warn(
+      `No section mapping for aspect "${aspect}" — skipping chunking`,
+    );
     return null;
   }
 
@@ -1244,7 +1261,7 @@ function buildSectionUpdatePrompt(
   existingSectionContent: string,
   newStatements: StatementNode[],
   userContext: UserContext,
-): ModelMessage {
+): MessageListInput {
   const sectionInfo = ASPECT_SECTION_MAP[aspect];
   const isPreferencesSection = aspect === "Preference";
 
@@ -1304,10 +1321,12 @@ Do NOT include the section marker comment — it will be added automatically.
  * Reassemble a persona document from parsed sections.
  * Updates the metadata date and preserves section order.
  */
-function reassemblePersonaDocument(
-  parsed: ParsedPersonaSections,
-): string {
-  const sectionOrder: StatementAspect[] = ["Identity", "Preference", "Directive"];
+function reassemblePersonaDocument(parsed: ParsedPersonaSections): string {
+  const sectionOrder: StatementAspect[] = [
+    "Identity",
+    "Preference",
+    "Directive",
+  ];
 
   let document = parsed.header ? parsed.header + "\n\n" : "# PERSONA\n\n";
 
@@ -1317,7 +1336,9 @@ function reassemblePersonaDocument(
 
     // Strip any existing markers and re-add cleanly
     const marker = sectionMarker(aspect);
-    const cleanContent = sectionContent.replace(/<!-- section:\w+ -->/g, "").trim();
+    const cleanContent = sectionContent
+      .replace(/<!-- section:\w+ -->/g, "")
+      .trim();
     document += cleanContent + "\n\n" + marker + "\n\n";
   }
 
@@ -1335,19 +1356,28 @@ export async function generateIncrementalPersona(
   episodeUuid: string,
   existingPersonaContent: string,
 ): Promise<string> {
-  logger.info("Starting incremental persona generation", { userId, episodeUuid });
+  logger.info("Starting incremental persona generation", {
+    userId,
+    episodeUuid,
+  });
 
   // Step 1: Get user context
   const userContext = await getUserContext(userId);
 
   // Step 2: Get this episode's persona-relevant statements
-  const episodeStatements = await getStatementsForEpisodeByAspect(userId, episodeUuid);
+  const episodeStatements = await getStatementsForEpisodeByAspect(
+    userId,
+    episodeUuid,
+  );
 
   if (episodeStatements.size === 0) {
-    logger.info("No persona-relevant statements in episode, returning existing persona", {
-      userId,
-      episodeUuid,
-    });
+    logger.info(
+      "No persona-relevant statements in episode, returning existing persona",
+      {
+        userId,
+        episodeUuid,
+      },
+    );
     return existingPersonaContent;
   }
 
@@ -1381,7 +1411,10 @@ export async function generateIncrementalPersona(
   });
 
   // Step 4: Build section update prompts for affected sections
-  const sectionUpdates: { aspect: StatementAspect; prompt: ModelMessage }[] = [];
+  const sectionUpdates: {
+    aspect: StatementAspect;
+    prompt: MessageListInput;
+  }[] = [];
 
   for (const [aspect, data] of episodeStatements) {
     const existingSection = parsed.sections.get(aspect);
@@ -1394,7 +1427,8 @@ export async function generateIncrementalPersona(
 
     const prompt = buildSectionUpdatePrompt(
       aspect,
-      cleanSection || `## ${ASPECT_SECTION_MAP[aspect].title}\n\n(No existing content)`,
+      cleanSection ||
+        `## ${ASPECT_SECTION_MAP[aspect].title}\n\n(No existing content)`,
       data.statements,
       userContext,
     );
@@ -1467,19 +1501,24 @@ export async function generateAspectBasedPersona(
 
   // Step 2b: Inject user table fields as synthetic Identity statements (full mode only)
   const syntheticIdentityFacts: string[] = [];
-  if (userContext.name) syntheticIdentityFacts.push(`Name: ${userContext.name}`);
-  if (userContext.email) syntheticIdentityFacts.push(`Email: ${userContext.email}`);
-  if (userContext.phoneNumber) syntheticIdentityFacts.push(`Phone: ${userContext.phoneNumber}`);
-  if (userContext.timezone) syntheticIdentityFacts.push(`Timezone: ${userContext.timezone}`);
-  if (userContext.role) syntheticIdentityFacts.push(`Role: ${userContext.role}`);
+  if (userContext.name)
+    syntheticIdentityFacts.push(`Name: ${userContext.name}`);
+  if (userContext.email)
+    syntheticIdentityFacts.push(`Email: ${userContext.email}`);
+  if (userContext.phoneNumber)
+    syntheticIdentityFacts.push(`Phone: ${userContext.phoneNumber}`);
+  if (userContext.timezone)
+    syntheticIdentityFacts.push(`Timezone: ${userContext.timezone}`);
+  if (userContext.role)
+    syntheticIdentityFacts.push(`Role: ${userContext.role}`);
 
   if (syntheticIdentityFacts.length > 0) {
     const existingIdentity = aspectDataMap.get("Identity");
     const now = new Date();
 
     const newStatements: StatementNode[] = syntheticIdentityFacts
-      .filter((fact) =>
-        !existingIdentity?.statements.some((s) => s.fact === fact),
+      .filter(
+        (fact) => !existingIdentity?.statements.some((s) => s.fact === fact),
       )
       .map((fact) => ({
         uuid: `user-ctx-${fact.split(":")[0].toLowerCase()}`,
@@ -1503,7 +1542,9 @@ export async function generateAspectBasedPersona(
           episodes: [],
         });
       }
-      logger.info(`Injected ${newStatements.length} user context facts into Identity`);
+      logger.info(
+        `Injected ${newStatements.length} user context facts into Identity`,
+      );
     }
   }
 

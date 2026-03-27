@@ -1,8 +1,7 @@
 import { conversationTitlePrompt } from "~/trigger/conversation/prompt";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
-import { generateText, type LanguageModel } from "ai";
-import { getModel } from "~/lib/model.server";
+import { createAgent, getModelForTask } from "~/lib/model.server";
 import { env } from "~/env.server";
 
 export interface CreateConversationTitlePayload {
@@ -41,18 +40,11 @@ export async function processConversationTitleCreation(
         : ((env.OPENAI_API_MODE === "chat_completions" || env.OPENAI_API_MODE === "chat") &&
             !!env.OPENAI_BASE_URL) ||
           env.CHAT_PROVIDER === "ollama";
-    const { text } = await generateText({
-      model: getModel() as LanguageModel,
-      messages: [
-        {
-          role: "user",
-          content: conversationTitlePrompt.replace(
-            "{{message}}",
-            payload.message,
-          ),
-        },
-      ],
-    });
+    const agent = createAgent(getModelForTask("high"));
+    const result = await agent.generate(
+      conversationTitlePrompt.replace("{{message}}", payload.message),
+    );
+    const text = result.text;
 
     const extractTitle = (raw: string): string | undefined => {
       const stripHtml = (value: string) =>

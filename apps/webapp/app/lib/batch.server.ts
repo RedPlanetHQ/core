@@ -6,8 +6,9 @@ import {
 import { OpenAIBatchProvider } from "./batch/providers/openai";
 import { AnthropicBatchProvider } from "./batch/providers/anthropic";
 import { logger } from "~/services/logger.service";
-import { generateObject, generateText, type LanguageModel } from "ai";
+import { generateObject, type LanguageModel } from "ai";
 import {
+  createAgent,
   getModel,
   getModelForBatch,
   makeStructuredModelCall,
@@ -159,14 +160,11 @@ async function runInlineBatch<T = any>(
               // For simple `{ content: string }` payloads (persona/aspect sections),
               // degrade to plain text and wrap it so callers can continue.
               if (isContentOnlySchema(params.outputSchema)) {
-                const { text } = await generateText({
-                  model,
-                  messages,
-                  ...(request.options || {}),
-                });
+                const batchAgent = createAgent(modelId);
+                const batchResult = await batchAgent.generate(messages, request.options || {});
                 return {
                   customId: request.customId,
-                  response: { content: text } as any,
+                  response: { content: batchResult.text } as any,
                 };
               }
               throw error;
@@ -183,13 +181,10 @@ async function runInlineBatch<T = any>(
           return { customId: request.customId, response: object as any };
         }
 
-        const { text } = await generateText({
-          model,
-          messages,
-          ...(request.options || {}),
-        });
+        const batchAgent = createAgent(modelId);
+        const batchResult = await batchAgent.generate(messages, request.options || {});
 
-        return { customId: request.customId, response: text as any };
+        return { customId: request.customId, response: batchResult.text as any };
       } catch (error) {
         return {
           customId: request.customId,

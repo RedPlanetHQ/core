@@ -33,6 +33,7 @@
     "@core/providers": "workspace:*",
     "@core/types": "workspace:*",
     "@mastra/ai-sdk": "^1.2.1",
+    "@redplanethq/ai": "1.2.1",
     "@mastra/core": "^1.15.0",
     "@mastra/pg": "^1.8.3",
     "@mjackson/headers": "0.11.1",
