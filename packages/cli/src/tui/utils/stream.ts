@@ -24,7 +24,7 @@ export interface IntegrationAccount {
 	integrationDefinition: {
 		name: string;
 		slug: string;
-		widgetUrl?: string | null;
+		frontendUrl?: string | null;
 		spec?: Record<string, unknown> | null;
 	};
 	isActive: boolean;
@@ -108,6 +108,7 @@ export type StreamEvent =
 			output: {parts?: OutputPart[]};
 			preliminary?: boolean;
 	  }
+	| {type: 'tool-approval-request'; approvalId: string; toolCallId: string}
 	| {type: 'finish-step'}
 	| {type: 'finish-message'}
 	| {type: 'finish'; finishReason?: string}
@@ -122,6 +123,35 @@ function parseSSELine(line: string): string | null {
 	}
 
 	return null;
+}
+
+// ── Shared SSE body reader ────────────────────────────────────────────────────
+
+async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const {done, value} = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, {stream: true});
+		const lines = buffer.split('\n');
+		buffer = lines.pop() ?? '';
+
+		for (const line of lines) {
+			const data = parseSSELine(line);
+			if (!data || data === '[DONE]') continue;
+
+			try {
+				const event = JSON.parse(data) as StreamEvent;
+				yield event;
+			} catch {
+				// ignore malformed lines
+			}
+		}
+	}
 }
 
 // ── Fetch workspace info ──────────────────────────────────────────────────────
@@ -172,30 +202,38 @@ export async function* streamConversation(
 		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
 
-	const reader = response.body.getReader();
-	const decoder = new TextDecoder();
-	let buffer = '';
+	yield* readSSEBody(response.body);
+}
 
-	while (true) {
-		const {done, value} = await reader.read();
-		if (done) break;
+// ── Stream approval response ──────────────────────────────────────────────────
 
-		buffer += decoder.decode(value, {stream: true});
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
+export async function* streamConversationApproval(
+	baseUrl: string,
+	apiKey: string,
+	conversationId: string,
+	approved: boolean,
+	signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
+	const response = await fetch(`${baseUrl}/api/v1/conversation`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify({
+			id: conversationId,
+			needsApproval: true,
+			approved,
+			source: 'cli',
+		}),
+		signal,
+	});
 
-		for (const line of lines) {
-			const data = parseSSELine(line);
-			if (!data || data === '[DONE]') continue;
-
-			try {
-				const event = JSON.parse(data) as StreamEvent;
-				yield event;
-			} catch {
-				// ignore malformed lines
-			}
-		}
+	if (!response.ok || !response.body) {
+		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
+
+	yield* readSSEBody(response.body);
 }
 
 // ── Fetch conversations list ──────────────────────────────────────────────────

@@ -25,6 +25,7 @@ import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
 import {fetchConversationHistory, fetchWorkspace, openBrowser} from './utils/stream.js';
+import {ApprovalBar} from './components/approval-bar.js';
 
 export function startTuiApp(
 	baseUrl: string,
@@ -101,7 +102,7 @@ export function startTuiApp(
 		}
 
 		try {
-			const mod = await loadWidgetBundle(cfg.widgetUrl);
+			const mod = await loadWidgetBundle(cfg.frontendUrl);
 			const bundleWidgets = (mod.widgets ?? []) as Array<{
 				slug: string;
 				render: (ctx: unknown) => Promise<unknown>;
@@ -135,6 +136,8 @@ export function startTuiApp(
 	let conversationComponents: Component[] = [];
 	let requestId = 0;
 	let butlerName = 'CORE'; // replaced once workspace loads
+	let pendingApprovalBar: ApprovalBar | null = null;
+	let autoApproveAll = false;
 
 	const conversation = createConversation(baseUrl, apiKey);
 
@@ -212,6 +215,9 @@ export function startTuiApp(
 
 		conversationComponents = [];
 		allToolItems = [];
+		pendingApprovalBar = null;
+		autoApproveAll = false;
+		statusLine.setAcceptAll(false);
 		conversation.clear();
 		isProcessing = false;
 		editor.disableSubmit = false;
@@ -427,6 +433,23 @@ export function startTuiApp(
 		};
 	}
 
+	function removeLoader(): void {
+		const idx = conversationComponents.lastIndexOf(loader);
+		if (idx !== -1) conversationComponents.splice(idx, 1);
+		try {
+			messagesContainer.removeChild(loader);
+		} catch {
+			// ignore
+		}
+		loader.stop();
+	}
+
+	function showLoader(): void {
+		conversationComponents.push(loader);
+		messagesContainer.addChild(loader);
+		loader.start();
+	}
+
 	function runMessage(message: string): void {
 		isProcessing = true;
 		editor.disableSubmit = true;
@@ -442,122 +465,141 @@ export function startTuiApp(
 		);
 		addToMessages(new Spacer(1));
 
-		// Loader
-		conversationComponents.push(loader);
-		messagesContainer.addChild(loader);
-		loader.start();
+		showLoader();
 
 		const responseMd = new Markdown('', 1, 0, markdownTheme);
 		let accumulated = '';
 		let markdownInserted = false;
 		let hadOutput = false;
 
+		const callbacks = {
+			onTextDelta(delta: string) {
+				if (requestId !== myRequestId) return;
+				accumulated += delta;
+				hadOutput = true;
+
+				if (!markdownInserted) {
+					insertBeforeLoader(responseMd);
+					markdownInserted = true;
+				}
+
+				responseMd.setText(accumulated);
+				tui.requestRender();
+			},
+
+			onToolStart(_id: string, _name: string, item: ToolCallItem) {
+				if (requestId !== myRequestId) return;
+				hadOutput = true;
+				allToolItems.push(item);
+				insertBeforeLoader(item);
+				tui.requestRender();
+			},
+
+			onRerender() {
+				if (requestId !== myRequestId) return;
+				tui.requestRender();
+			},
+
+			onStepFinish() {
+				if (requestId !== myRequestId) return;
+				tui.requestRender();
+			},
+
+			onFinish() {
+				if (requestId !== myRequestId) return;
+				removeLoader();
+
+				if (!hadOutput) {
+					addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
+				}
+
+				addToMessages(new Spacer(1));
+				isProcessing = false;
+				editor.disableSubmit = false;
+				tui.requestRender();
+			},
+
+			onAbort() {
+				if (requestId !== myRequestId) return;
+				removeLoader();
+				// Remove pending approval bar if present
+				if (pendingApprovalBar) {
+					try { messagesContainer.removeChild(pendingApprovalBar); } catch { /* ignore */ }
+					const barIdx = conversationComponents.lastIndexOf(pendingApprovalBar);
+					if (barIdx !== -1) conversationComponents.splice(barIdx, 1);
+					pendingApprovalBar = null;
+				}
+				addToMessages(
+					new Text(
+						chalk.dim('Interrupted · What should ') +
+							chalk.white(butlerName) +
+							chalk.dim(' do instead?'),
+						1,
+						0,
+					),
+				);
+				addToMessages(new Spacer(1));
+				isProcessing = false;
+				editor.disableSubmit = false;
+				tui.requestRender();
+			},
+
+			onError(err: Error) {
+				if (requestId !== myRequestId) return;
+				removeLoader();
+				addToMessages(
+					new Text(chalk.red('Error: ') + chalk.gray(err.message), 1, 0),
+				);
+				addToMessages(new Spacer(1));
+				isProcessing = false;
+				editor.disableSubmit = false;
+				tui.requestRender();
+			},
+
+			onApprovalRequested(_approvalId: string, _toolCallId: string, toolName: string) {
+				if (requestId !== myRequestId) return;
+				hadOutput = true;
+
+				// If accept-all is active, silently approve without showing the bar
+				if (autoApproveAll) {
+					showLoader();
+					conversation.approve(true, callbacks).catch(() => {});
+					return;
+				}
+
+				// Hide loader while waiting for approval
+				removeLoader();
+
+				const bar = new ApprovalBar(toolName);
+				pendingApprovalBar = bar;
+				addToMessages(bar);
+				tui.requestRender();
+
+				bar.onSelect = (approved: boolean, acceptAll: boolean) => {
+					// Remove the approval bar
+					try { messagesContainer.removeChild(bar); } catch { /* ignore */ }
+					const barIdx = conversationComponents.lastIndexOf(bar);
+					if (barIdx !== -1) conversationComponents.splice(barIdx, 1);
+					pendingApprovalBar = null;
+
+					if (acceptAll) {
+						autoApproveAll = true;
+						statusLine.setAcceptAll(true);
+					}
+
+					// Show loader again and send approval
+					showLoader();
+					tui.requestRender();
+
+					conversation.approve(approved, callbacks).catch(() => {
+						// errors handled via onError
+					});
+				};
+			},
+		};
+
 		conversation
-			.send(message, {
-				onTextDelta(delta) {
-					if (requestId !== myRequestId) return;
-					accumulated += delta;
-					hadOutput = true;
-
-					if (!markdownInserted) {
-						insertBeforeLoader(responseMd);
-						markdownInserted = true;
-					}
-
-					responseMd.setText(accumulated);
-					tui.requestRender();
-				},
-
-				onToolStart(_id, _name, item) {
-					if (requestId !== myRequestId) return;
-					hadOutput = true;
-					allToolItems.push(item);
-					insertBeforeLoader(item);
-					tui.requestRender();
-				},
-
-				onRerender() {
-					if (requestId !== myRequestId) return;
-					tui.requestRender();
-				},
-
-				onStepFinish() {
-					if (requestId !== myRequestId) return;
-					tui.requestRender();
-				},
-
-				onFinish() {
-					if (requestId !== myRequestId) return;
-					// Remove loader from tracked list
-					const idx = conversationComponents.lastIndexOf(loader);
-					if (idx !== -1) conversationComponents.splice(idx, 1);
-
-					try {
-						messagesContainer.removeChild(loader);
-					} catch {
-						// ignore
-					}
-
-					loader.stop();
-
-					if (!hadOutput) {
-						addToMessages(new Text(chalk.gray('(no response)'), 1, 0));
-					}
-
-					addToMessages(new Spacer(1));
-					isProcessing = false;
-					editor.disableSubmit = false;
-					tui.requestRender();
-				},
-
-				onAbort() {
-					if (requestId !== myRequestId) return;
-					const idx = conversationComponents.lastIndexOf(loader);
-					if (idx !== -1) conversationComponents.splice(idx, 1);
-
-					try {
-						messagesContainer.removeChild(loader);
-					} catch {
-						// ignore
-					}
-
-					loader.stop();
-					addToMessages(
-						new Text(
-							chalk.dim('Interrupted · What should ') +
-								chalk.white(butlerName) +
-								chalk.dim(' do instead?'),
-							1,
-							0,
-						),
-					);
-					addToMessages(new Spacer(1));
-					isProcessing = false;
-					editor.disableSubmit = false;
-					tui.requestRender();
-				},
-
-				onError(err) {
-					if (requestId !== myRequestId) return;
-					const idx = conversationComponents.lastIndexOf(loader);
-					if (idx !== -1) conversationComponents.splice(idx, 1);
-
-					try {
-						messagesContainer.removeChild(loader);
-					} catch {
-						// ignore
-					}
-
-					loader.stop();
-					addToMessages(
-						new Text(chalk.red('Error: ') + chalk.gray(err.message), 1, 0),
-					);
-					addToMessages(new Spacer(1));
-					isProcessing = false;
-					editor.disableSubmit = false;
-					tui.requestRender();
-				},
-			})
+			.send(message, callbacks)
 			.catch(() => {
 				// errors are handled via onError callback
 			});
@@ -572,9 +614,26 @@ export function startTuiApp(
 			process.exit(0);
 		}
 
-		// Esc during processing — abort the stream
+		// Esc during processing — abort the stream (also clears any pending approval)
 		if (isProcessing && matchesKey(data, Key.escape)) {
 			conversation.abort();
+			return;
+		}
+
+		// ── Approval mode input ───────────────────────────────────────────────
+		if (pendingApprovalBar) {
+			// Shift+Tab toggles between approve and accept-all
+			if (data === '\x1b[Z') {
+				pendingApprovalBar.toggle();
+				tui.requestRender();
+				return;
+			}
+			// Enter / Space confirms the selection
+			if (data === '\r' || data === '\n' || data === ' ') {
+				pendingApprovalBar.confirm();
+				return;
+			}
+			// Block all other input while approval is pending
 			return;
 		}
 

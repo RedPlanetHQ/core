@@ -35,10 +35,10 @@ const KNOWN_DEPS: Array<[string, string]> = [
 ];
 
 export async function loadWidgetBundle(
-	widgetUrl: string,
+	frontendUrl: string,
 ): Promise<{widgets: unknown[]}> {
-	let src = await fetch(widgetUrl).then(r => {
-		if (!r.ok) throw new Error(`Failed to fetch widget bundle: ${r.status}`);
+	let src = await fetch(frontendUrl).then(r => {
+		if (!r.ok) throw new Error(`Failed to fetch frontend bundle: ${r.status}`);
 		return r.text();
 	});
 

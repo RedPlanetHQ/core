@@ -117,7 +117,7 @@ export class DashboardView implements Component {
 		this.onRender();
 
 		try {
-			const mod = await loadWidgetBundle(config.widgetUrl);
+			const mod = await loadWidgetBundle(config.frontendUrl);
 			const bundleWidgets = mod.widgets as WidgetBundleSpec[];
 			const widget = bundleWidgets.find(w => w.slug === config.widgetSlug);
 

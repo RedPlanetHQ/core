@@ -1,6 +1,6 @@
 {
   "name": "@redplanethq/ui",
-  "version": "2.1.3",
+  "version": "2.1.4",
   "description": "Shared widget UI components for CORE — web (React) and TUI (pi-tui)",
   "publishConfig": {
     "access": "public"
