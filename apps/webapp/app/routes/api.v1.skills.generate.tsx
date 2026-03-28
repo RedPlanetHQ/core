@@ -46,7 +46,10 @@ const { action } = createHybridActionApiRoute(
 
     const userMessage = `User intent: ${validatedData.prompt}${toolsContext}${existingContext}`;
 
-    const agent = createAgent(getModelForTask("low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+    const agent = createAgent(
+      getModelForTask("low"),
+      SKILL_GENERATOR_SYSTEM_PROMPT,
+    );
     const result = await agent.stream([{ role: "user", content: userMessage }]);
     return streamToUIResponse(result);
   },

@@ -106,10 +106,21 @@ export type StreamEvent =
 	| {
 			type: 'tool-output-available';
 			toolCallId: string;
-			output: {parts?: OutputPart[]};
+			// output can be {parts} or Mastra format {toolCalls, toolResults, steps}
+			output: Record<string, unknown>;
 			preliminary?: boolean;
 	  }
 	| {type: 'tool-approval-request'; approvalId: string; toolCallId: string}
+	| {
+			// Sub-agent activity chunks — carry nested tool calls/results for agent-take_action
+			type: 'data-tool-agent';
+			data?: {
+				toolCalls?: Array<{toolCallId: string; toolName: string; args: Record<string, unknown>; payload?: {toolCallId: string; toolName: string; args: Record<string, unknown>}}>;
+				toolResults?: Array<{toolCallId: string; result?: unknown; payload?: {toolCallId: string; result?: unknown}}>;
+				steps?: unknown[];
+				text?: string;
+			};
+	  }
 	| {type: 'finish-step'}
 	| {type: 'finish-message'}
 	| {type: 'finish'; finishReason?: string}
@@ -212,6 +223,7 @@ export async function* streamConversationApproval(
 	baseUrl: string,
 	apiKey: string,
 	conversationId: string,
+	toolCallId: string,
 	approved: boolean,
 	signal?: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
@@ -224,7 +236,7 @@ export async function* streamConversationApproval(
 		body: JSON.stringify({
 			id: conversationId,
 			needsApproval: true,
-			approved,
+			toolArgOverrides: {[toolCallId]: {approved}},
 			source: 'cli',
 		}),
 		signal,

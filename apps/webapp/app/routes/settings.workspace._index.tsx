@@ -59,6 +59,31 @@ export async function action({ request }: ActionFunctionArgs) {
     throw json({ error: "Workspace not found" }, { status: 404 });
   }
 
+  if (intent === "update") {
+    const name = (formData.get("name") as string)?.trim();
+    const slug = (formData.get("slug") as string)?.trim();
+
+    if (!name || !slug) {
+      return json({ error: "Name and slug are required" }, { status: 400 });
+    }
+
+    // Check slug uniqueness (exclude current workspace)
+    const conflict = await prisma.workspace.findFirst({
+      where: { slug, id: { not: workspaceId } },
+    });
+
+    if (conflict) {
+      return json({ error: "Slug is already taken" }, { status: 400 });
+    }
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { name, slug },
+    });
+
+    return json({ success: true });
+  }
+
   if (intent === "delete") {
     const confirmName = formData.get("confirmName") as string;
     const workspace = await getWorkspaceById(workspaceId);
@@ -125,12 +150,17 @@ export async function action({ request }: ActionFunctionArgs) {
 
 export default function WorkspaceSettings() {
   const { workspace, memberCount } = useLoaderData<typeof loader>();
-  const fetcher = useFetcher();
+  const fetcher = useFetcher<{ error?: string; success?: boolean }>();
+  const updateFetcher = useFetcher<{ error?: string; success?: boolean }>();
   const [confirmName, setConfirmName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [name, setName] = useState(workspace.name);
+  const [slug, setSlug] = useState(workspace.slug);
 
   const isDeleting = fetcher.state === "submitting";
   const canDelete = confirmName === workspace.name;
+  const isSaving = updateFetcher.state === "submitting";
+  const hasChanges = name !== workspace.name || slug !== workspace.slug;
 
   const handleDelete = () => {
     fetcher.submit({ intent: "delete", confirmName }, { method: "POST" });
@@ -144,20 +174,50 @@ export default function WorkspaceSettings() {
       >
         <div className="flex flex-col gap-6">
           <div>
-            <h2 className="text-md mb-4">Workspace details</h2>
+            <h2 className="text-md mb-4">Butler settings</h2>
             <Card>
-              <CardContent className="p-3">
-                <div className="flex items-center gap-4">
-                  <AvatarText
-                    text={workspace.name}
-                    className="h-12 w-12 rounded text-lg"
+              <CardContent className="flex flex-col gap-4 p-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Name</label>
+                  <Input
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Butler name"
                   />
-                  <div>
-                    <h3 className="text-lg font-medium">{workspace.name}</h3>
-                    <p className="text-muted-foreground text-sm">
-                      {memberCount} {memberCount === 1 ? "member" : "members"}
-                    </p>
-                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-sm font-medium">Slug</label>
+                  <Input
+                    value={slug}
+                    onChange={(e) => setSlug(e.target.value)}
+                    placeholder="workspace-slug"
+                  />
+                  <p className="text-muted-foreground text-xs">
+                    Used as the butler's email prefix. Must be unique.
+                  </p>
+                </div>
+                {updateFetcher.data?.error && (
+                  <p className="text-destructive text-sm">
+                    {updateFetcher.data.error}
+                  </p>
+                )}
+                {updateFetcher.data?.success && (
+                  <p className="text-sm text-green-600">Saved successfully.</p>
+                )}
+                <div className="flex justify-end">
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    onClick={() =>
+                      updateFetcher.submit(
+                        { intent: "update", name, slug },
+                        { method: "POST" },
+                      )
+                    }
+                    disabled={!hasChanges || isSaving}
+                  >
+                    {isSaving ? "Saving..." : "Save"}
+                  </Button>
                 </div>
               </CardContent>
             </Card>

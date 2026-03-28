@@ -140,6 +140,7 @@ export function startTuiApp(
 	let requestId = 0;
 	let butlerName = 'CORE'; // replaced once workspace loads
 	let pendingApprovalPanel: ApprovalPanel | null = null;
+	let pendingApprovalToolCallId: string | null = null;
 	let autoApproveAll = false;
 
 	const conversation = createConversation(baseUrl, apiKey);
@@ -575,12 +576,13 @@ export function startTuiApp(
 				// If accept-all is active, silently approve without showing the panel
 				if (autoApproveAll) {
 					showLoader();
-					conversation.approve(true, callbacks).catch(() => {});
+					conversation.approve(true, toolCallId, callbacks).catch(() => {});
 					return;
 				}
 
 				if (!pendingApprovalPanel) {
 					// First approval — create the panel and hide the loader
+					pendingApprovalToolCallId = toolCallId;
 					removeLoader();
 					const panel = new ApprovalPanel(accountFrontendMap, () => tui.requestRender());
 					pendingApprovalPanel = panel;

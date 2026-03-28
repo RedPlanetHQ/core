@@ -14,7 +14,10 @@ import { logger } from "~/services/logger.service";
 import { getGateway } from "~/services/gateway.server";
 import { toRouterString } from "~/lib/model.server";
 import { getDefaultChatModelId } from "~/services/llm-provider.server";
-import { type OrchestratorTools, type GatewayAgentInfo } from "../executors/base";
+import {
+  type OrchestratorTools,
+  type GatewayAgentInfo,
+} from "../executors/base";
 import { callGatewayTool } from "../../../../websocket";
 
 // Types for gateway tools (matches schema in database)
@@ -216,7 +219,12 @@ export async function createGatewayAgent(
   }
 
   const gatewayTools = (gateway.tools || []) as unknown as GatewayTool[];
-  const tools = createGatewayTools(gatewayId, gatewayTools, executorTools, interactive);
+  const tools = createGatewayTools(
+    gatewayId,
+    gatewayTools,
+    executorTools,
+    interactive,
+  );
 
   const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
 
@@ -254,7 +262,11 @@ export async function createGatewayAgents(
   for (const gw of gateways) {
     if (gw.status !== "CONNECTED") continue;
 
-    const { agent, connected } = await createGatewayAgent(gw.id, executorTools, interactive);
+    const { agent, connected } = await createGatewayAgent(
+      gw.id,
+      executorTools,
+      interactive,
+    );
     if (connected) {
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
       agents[agentId] = agent;
