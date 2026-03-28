@@ -84,11 +84,12 @@ export const createTools = async (
     gather_context: tool({
       description: `Search memory, connected integrations, the web, AND connected gateways (user's devices like Claude Code, browser, etc.). This is how you access information.
 
-      FOUR DATA SOURCES:
+      FIVE DATA SOURCES:
       1. Memory: past conversations, decisions, user preferences
       2. Integrations: user's emails, calendar, issues, messages (their personal data)
       3. Web: news, current events, documentation, prices, weather, general knowledge, AND reading URLs
       4. Gateways: user's connected devices/agents (e.g., Claude Code on their laptop, browser agent) - use for tasks on their machine
+      5. CORE Docs: your own documentation — how things work in your system, setup steps, integrations, troubleshooting. Use this when they ask about YOU.
 
       IMPORTANT: Each call handles ONE data source effectively. If you need data from multiple integrations (e.g., Gmail AND Calendar), make SEPARATE gather_context calls — one per integration. You can call them in parallel.
 
@@ -99,6 +100,7 @@ export const createTools = async (
       - When user asks about news, current events, how-tos, or general questions
       - When user shares a URL and wants you to read/summarize it
       - When user asks to do something on their device/machine (coding tasks, file operations, browser actions)
+      - When user asks about YOUR features, integrations, setup, channels, gateway, toolkit — anything about CORE itself
 
       HOW TO FORM YOUR QUERY:
       Describe your INTENT clearly. One integration/source per query.
@@ -111,6 +113,8 @@ export const createTools = async (
       - "Summarize this article: https://example.com/post" → web (fetches URL)
       - "User's unread emails from GitHub" → integrations (gmail)
       - "Check the status of user's local dev server" → gateway (connected device)
+      - "How do I connect WhatsApp to CORE" → CORE docs
+      - "What is the gateway" → CORE docs
 
       For URLs: include the full URL in your query.
       For GENERAL NEWS/INFO: the orchestrator will use web search.
