@@ -24,11 +24,8 @@ import {
   type OutputProcessor,
   type Processor,
 } from "@mastra/core/processors";
-import {
-  ToolArgsPatchProcessor,
-  patchArgsDeep,
-} from "~/services/agent/tool-args-patch-processor";
-import { appendFile } from "fs/promises";
+import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
+
 import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
   message: z

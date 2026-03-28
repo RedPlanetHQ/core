@@ -122,6 +122,29 @@ export class ToolCallItem implements Component {
 		}
 	}
 
+	/**
+	 * Returns not-done children — these are nested tools still waiting
+	 * (in-progress or approval-requested) at the time of an approval event.
+	 * Mirrors webapp's findPendingApprovals expansion of agent-take_action.
+	 */
+	getPendingChildren(): Array<{toolName: string; displayName: string; input: Record<string, unknown>}> {
+		return this.children
+			.filter(c => !c.isDone)
+			.map(c => ({
+				toolName: c.toolName,
+				displayName: c.displayName,
+				input: c.parsedArgs(),
+			}));
+	}
+
+	parsedArgs(): Record<string, unknown> {
+		try {
+			return JSON.parse(this.args) as Record<string, unknown>;
+		} catch {
+			return {};
+		}
+	}
+
 	addChild(child: ToolCallItem): void {
 		this.children.push(child);
 	}

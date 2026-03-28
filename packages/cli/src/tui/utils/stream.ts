@@ -76,10 +76,11 @@ export async function connectApiKeyIntegration(
 export type OutputPart = {
 	type: string; // e.g. "tool-get_integration_actions", "text", "step-start"
 	toolCallId?: string;
-	state?: 'input-streaming' | 'output-available';
+	state?: 'input-streaming' | 'output-available' | 'approval-requested' | 'in-progress';
 	input?: Record<string, unknown>;
 	output?: unknown;
 	text?: string;
+	approval?: {id: string};
 };
 
 export type StreamEvent =

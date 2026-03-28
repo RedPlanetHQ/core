@@ -33,12 +33,7 @@ export function WidgetCell({
 
     (async () => {
       try {
-        const mod = await loadWidgetBundle(frontendUrl);
-        const widgets = mod.widgets as Array<{
-          slug: string;
-          render: (ctx: unknown) => Promise<WidgetComponent> | WidgetComponent;
-        }>;
-
+        const { widgets } = await loadWidgetBundle(frontendUrl);
         const widget = widgets.find((w) => w.slug === widgetSlug);
         if (!widget) {
           setError(`Widget "${widgetSlug}" not found in bundle`);

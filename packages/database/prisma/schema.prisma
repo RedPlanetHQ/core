@@ -1139,8 +1139,8 @@ model LLMProvider {
   id          String     @id @default(uuid())
   workspaceId String?
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  name        String     // "OpenAI", "Anthropic", "Google", "Ollama"
-  type        String     // "openai", "anthropic", "google", "ollama"
+  name        String // "OpenAI", "Anthropic", "Google", "Ollama"
+  type        String // "openai", "anthropic", "google", "ollama"
   config      Json       @default("{}")
   isActive    Boolean    @default(true)
   createdAt   DateTime   @default(now())
@@ -1155,15 +1155,15 @@ model LLMModel {
   id            String      @id @default(uuid())
   providerId    String
   provider      LLMProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
-  modelId       String      // "gpt-5-2025-08-07"
-  label         String      // "GPT-5"
-  complexity    String      // "high", "medium", "low"
+  modelId       String // "gpt-5-2025-08-07"
+  label         String // "GPT-5"
+  complexity    String // "high", "medium", "low"
   supportsBatch Boolean     @default(true)
   isDefault     Boolean     @default(false)
   isEnabled     Boolean     @default(true)
   isDeprecated  Boolean     @default(false)
-  capabilities  String[]    // ["chat", "structured", "reasoning"] or ["embedding"]
-  dimensions    Int?        // For embedding models (e.g., 1024, 1536, 3072)
+  capabilities  String[] // ["chat", "structured", "reasoning"] or ["embedding"]
+  dimensions    Int? // For embedding models (e.g., 1024, 1536, 3072)
   createdAt     DateTime    @default(now())
   updatedAt     DateTime    @updatedAt
 

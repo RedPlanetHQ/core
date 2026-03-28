@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { type ChatAddToolApproveResponseFunction } from "ai";
-import { loadWidgetBundle } from "~/utils/widget-loader.client";
+import { loadIntegrationBundle, type ToolUIComponent } from "~/utils/integration-loader.client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -142,7 +142,6 @@ export const Tool = ({
     typeof input.accountId === "string" ? input.accountId : undefined;
   const frontendUrl = accountId ? integrationFrontendMap[accountId] : undefined;
 
-  type ToolUIComponent = React.ComponentType<Record<string, never>>;
   const [ToolUIComp, setToolUIComp] = useState<ToolUIComponent | null>(null);
   // Track which state we last loaded toolUI for to avoid redundant loads
   // but allow re-loading when transitioning between phases.
@@ -162,21 +161,7 @@ export const Tool = ({
 
     (async () => {
       try {
-        const mod = await loadWidgetBundle(frontendUrl);
-        const toolUI = mod.toolUI as
-          | {
-              supported_tools: string[];
-              render: (
-                toolName: string,
-                input: Record<string, any>,
-                result: unknown,
-                context: Record<string, unknown>,
-                submitInput: (i: Record<string, unknown>) => void,
-                onDecline: () => void,
-              ) => Promise<ToolUIComponent>;
-            }
-          | undefined;
-
+        const { toolUI } = await loadIntegrationBundle(frontendUrl);
         if (!toolUI?.supported_tools.includes(effectiveAction)) return;
 
         const rawOutput = part.output;

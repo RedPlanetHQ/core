@@ -13,6 +13,7 @@ import {
   deleteConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { getAvailableModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
 import { PageHeader } from "~/components/common/page-header";
@@ -39,13 +40,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const [conversation, integrationAccounts] = await Promise.all([
+  const [conversation, integrationAccounts, allModels] = await Promise.all([
     getConversationAndHistory(params.conversationId as string, user.id),
     getIntegrationAccounts(user.id, workspaceId),
+    getAvailableModels(),
   ]);
 
+  const models = allModels
+    .filter(
+      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
+    )
+    .map((m) => ({
+      id: `${m.provider.type}/${m.modelId}`,
+      modelId: m.modelId,
+      label: m.label,
+      provider: m.provider.type,
+      isDefault: m.isDefault,
+    }));
+
   if (!conversation) {
-    return { conversation: null, integrationAccountMap: {} };
+    return { conversation: null, integrationAccountMap: {}, models };
   }
 
   if (conversation.unread) {
@@ -61,7 +75,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }
   }
 
-  return { conversation, integrationAccountMap, integrationFrontendMap };
+  return { conversation, integrationAccountMap, integrationFrontendMap, models };
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
@@ -71,7 +85,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap, integrationFrontendMap } =
+  const { conversation, integrationAccountMap, integrationFrontendMap, models } =
     useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { conversationId } = useParams();
@@ -154,6 +168,7 @@ export default function SingleConversation() {
           integrationAccountMap={integrationAccountMap}
           integrationFrontendMap={integrationFrontendMap}
           conversationStatus={conversation.status}
+          models={models}
           autoRegenerate
         />
       </div>

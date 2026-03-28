@@ -16,14 +16,27 @@ import {
   createConversation,
   CreateConversationSchema,
 } from "~/services/conversation.server";
+import { getAvailableModels } from "~/services/llm-provider.server";
 
 import { PageHeader } from "~/components/common/page-header";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   // Only return userId, not the heavy nodeLinks
   const user = await requireUser(request);
+  const allModels = await getAvailableModels();
+  const models = allModels
+    .filter(
+      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
+    )
+    .map((m) => ({
+      id: `${m.provider.type}/${m.modelId}`,
+      modelId: m.modelId,
+      label: m.label,
+      provider: m.provider.type,
+      isDefault: m.isDefault,
+    }));
 
-  return { user };
+  return { user, models };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -75,12 +88,12 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Chat() {
-  const { user } = useTypedLoaderData<typeof loader>();
+  const { user, models } = useTypedLoaderData<typeof loader>();
 
   return (
     <>
       <PageHeader title="Conversation" />
-      {typeof window !== "undefined" && <ConversationNew user={user} />}
+      {typeof window !== "undefined" && <ConversationNew user={user} models={models} />}
     </>
   );
 }

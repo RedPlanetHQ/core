@@ -2,7 +2,7 @@ import {truncateToWidth} from '@mariozechner/pi-tui';
 import type {Component} from '@mariozechner/pi-tui';
 import chalk from 'chalk';
 import {getToolDisplayName} from '../utils/tool-names.js';
-import {loadWidgetBundle} from '../utils/widget-loader.js';
+import {loadIntegrationBundle} from '../utils/integration-loader.js';
 
 export interface PendingApproval {
 	approvalId: string;
@@ -24,14 +24,21 @@ function resolveDisplayName(toolName: string, input?: Record<string, unknown>): 
 	return getToolDisplayName(toolName);
 }
 
+// 0 = Yes, 1 = Yes allow all, 2 = No
+const OPTIONS = [
+	{label: 'Yes'},
+	{label: 'Yes, allow all during this session', hint: '(shift+tab)'},
+	{label: 'No'},
+] as const;
+
 export class ApprovalPanel implements Component {
 	private pendingApprovals: PendingApproval[] = [];
-	private acceptAll = false;
+	private selectedOption = 0; // 0=Yes, 1=Yes allow all, 2=No
 	private accountFrontendMap: Map<string, string>;
 	private requestRender: () => void;
 	private toolUIComp: Component | null = null;
 
-	/** Called with (approved, acceptAll) when the user confirms */
+	/** Called with (approved, acceptAll) when user confirms */
 	onSelect?: (approved: boolean, acceptAll: boolean) => void;
 
 	constructor(
@@ -44,7 +51,6 @@ export class ApprovalPanel implements Component {
 
 	addApproval(approval: PendingApproval): void {
 		this.pendingApprovals.push(approval);
-		// Try loading toolUI only for the first (active) approval
 		if (this.pendingApprovals.length === 1) {
 			void this.tryLoadToolUI(approval);
 		}
@@ -63,19 +69,7 @@ export class ApprovalPanel implements Component {
 		if (!frontendUrl) return;
 
 		try {
-			const mod = await loadWidgetBundle(frontendUrl);
-			const toolUI = (mod as unknown as {toolUI?: {
-				supported_tools: string[];
-				render: (
-					toolName: string,
-					input: Record<string, unknown>,
-					result: unknown,
-					context: Record<string, unknown>,
-					submitInput: (i: Record<string, unknown>) => void,
-					onDecline: () => void,
-				) => Promise<unknown>;
-			}}).toolUI;
-
+			const {toolUI} = await loadIntegrationBundle(frontendUrl);
 			const effectiveAction =
 				typeof approval.input?.action === 'string' ? approval.input.action : null;
 			if (!toolUI || !effectiveAction || !toolUI.supported_tools.includes(effectiveAction))
@@ -93,16 +87,12 @@ export class ApprovalPanel implements Component {
 				inputParameters,
 				null,
 				{placement: 'tui'},
-				() => {
-					this.onSelect?.(true, this.acceptAll);
-				},
-				() => {
-					this.onSelect?.(false, false);
-				},
+				() => this.confirm(),
+				() => this.confirm(2),
 			);
 
-			if (comp && typeof (comp as Component).render === 'function') {
-				this.toolUIComp = comp as Component;
+			if (comp && typeof comp.render === 'function') {
+				this.toolUIComp = comp;
 				this.requestRender();
 			}
 		} catch {
@@ -110,73 +100,95 @@ export class ApprovalPanel implements Component {
 		}
 	}
 
-	/** Shift+Tab toggles accept-all */
-	toggle(): void {
-		this.acceptAll = !this.acceptAll;
+	/** Move selection up */
+	moveUp(): void {
+		this.selectedOption = (this.selectedOption + OPTIONS.length - 1) % OPTIONS.length;
 	}
 
-	confirm(approved: boolean): void {
-		this.onSelect?.(approved, this.acceptAll);
+	/** Move selection down */
+	moveDown(): void {
+		this.selectedOption = (this.selectedOption + 1) % OPTIONS.length;
+	}
+
+	/** Shift+Tab → jump straight to "Yes, allow all" */
+	selectAllowAll(): void {
+		this.selectedOption = 1;
+	}
+
+	/** Confirm current selection, or pass explicit index */
+	confirm(optionIndex?: number): void {
+		const idx = optionIndex ?? this.selectedOption;
+		if (idx === 0) {
+			this.onSelect?.(true, false);
+		} else if (idx === 1) {
+			this.onSelect?.(true, true);
+		} else {
+			this.onSelect?.(false, false);
+		}
 	}
 
 	render(width: number): string[] {
 		const lines: string[] = [];
+		const active = this.pendingApprovals[0];
 		const n = this.pendingApprovals.length;
 
-		// Header
-		const zap = chalk.yellow('⚡');
-		lines.push(
-			truncateToWidth(
-				`${zap} ${chalk.bold.white(`${n} action${n !== 1 ? 's' : ''} require${n === 1 ? 's' : ''} approval`)}`,
-				width,
-			),
-		);
-		lines.push(truncateToWidth(chalk.dim('─'.repeat(width)), width));
+		if (!active) return lines;
 
-		// Tool list
-		for (let i = 0; i < this.pendingApprovals.length; i++) {
-			const a = this.pendingApprovals[i];
-			const displayName = resolveDisplayName(a.toolName, a.input);
-			if (i === 0) {
-				lines.push(truncateToWidth(chalk.bold.white(`  ● ${displayName}`), width));
-			} else {
-				lines.push(truncateToWidth(chalk.dim(`  ○ ${displayName}`) + chalk.dim('  (Queued)'), width));
-			}
-		}
+		const displayName = resolveDisplayName(active.toolName, active.input);
 
-		// ToolUI or inline args for the first (active) tool
-		const active = this.pendingApprovals[0];
-		if (active) {
-			if (this.toolUIComp) {
-				lines.push('');
-				for (const line of this.toolUIComp.render(width)) {
-					lines.push(line);
-				}
-			} else if (active.input && Object.keys(active.input).length > 0) {
-				lines.push('');
-				try {
-					const argLines = JSON.stringify(active.input, null, 2).split('\n');
-					for (const line of argLines.slice(0, 8)) {
-						lines.push(truncateToWidth(chalk.dim('    ' + line), width));
-					}
-					if (argLines.length > 8) {
-						lines.push(truncateToWidth(chalk.dim(`    … +${argLines.length - 8} more lines`), width));
-					}
-				} catch {
-					// skip
-				}
-			}
+		// ── Title (bold tool name) ────────────────────────────────────────────
+		lines.push(truncateToWidth(chalk.bold.white(displayName), width));
+
+		// Sub-title: queued count if >1
+		if (n > 1) {
+			const queued = this.pendingApprovals
+				.slice(1)
+				.map(a => resolveDisplayName(a.toolName, a.input))
+				.join(', ');
+			lines.push(
+				truncateToWidth(chalk.dim(`+${n - 1} queued: ${queued}`), width),
+			);
 		}
 
 		lines.push('');
 
-		// Action bar
-		const yKey = chalk.bold.green('y') + chalk.white(' approve all');
-		const nKey = chalk.bold.red('n') + chalk.white(' decline all');
-		const tabHint = this.acceptAll
-			? chalk.bold.yellow('[shift+tab]') + chalk.white(' accept-all: ') + chalk.green('ON')
-			: chalk.dim('[shift+tab] accept-all');
-		lines.push(truncateToWidth(`  ${yKey}   ${nKey}   ${tabHint}`, width));
+		// ── Content: toolUI or args preview ──────────────────────────────────
+		if (this.toolUIComp) {
+			for (const line of this.toolUIComp.render(width)) {
+				lines.push(line);
+			}
+		} else {
+			const argsToShow = buildArgsPreview(active.toolName, active.input);
+			if (argsToShow) {
+				const argLines = argsToShow.split('\n');
+				for (const line of argLines) {
+					lines.push(truncateToWidth(chalk.dim(line), width));
+				}
+				lines.push('');
+			}
+		}
+
+		// ── Question ─────────────────────────────────────────────────────────
+		lines.push(
+			truncateToWidth(
+				`Do you want to run ${chalk.bold(displayName)}?`,
+				width,
+			),
+		);
+
+		// ── Options ──────────────────────────────────────────────────────────
+		for (let i = 0; i < OPTIONS.length; i++) {
+			const opt = OPTIONS[i];
+			const isSelected = i === this.selectedOption;
+			const arrow = isSelected ? chalk.green('\u203a') : ' ';
+			const num = chalk.dim(`${i + 1}.`);
+			const label = isSelected ? chalk.green(opt.label) : opt.label;
+			const hint = 'hint' in opt ? chalk.dim(` ${opt.hint}`) : '';
+			lines.push(truncateToWidth(`${arrow} ${num} ${label}${hint}`, width));
+		}
+
+		lines.push('');
+		lines.push(truncateToWidth(chalk.dim('Esc to cancel \xb7 \u2191\u2193 to navigate \xb7 enter to confirm'), width));
 
 		return lines;
 	}
@@ -184,4 +196,34 @@ export class ApprovalPanel implements Component {
 	invalidate(): void {
 		this.toolUIComp?.invalidate?.();
 	}
+}
+
+// Build a concise args preview string for the active tool
+function buildArgsPreview(toolName: string, input?: Record<string, unknown>): string | null {
+	if (!input) return null;
+
+	// For integration actions, show the parsed parameters
+	if (toolName === 'execute_integration_action') {
+		const params: Record<string, unknown> = {};
+		if (typeof input.action === 'string') params.action = input.action;
+		if (typeof input.parameters === 'string') {
+			try {
+				const parsed = JSON.parse(input.parameters) as Record<string, unknown>;
+				Object.assign(params, parsed);
+			} catch {
+				// keep raw
+			}
+		}
+		if (Object.keys(params).length === 0) return null;
+		return JSON.stringify(params, null, 2);
+	}
+
+	// Generic: show full input, max 10 lines
+	const keys = Object.keys(input);
+	if (keys.length === 0) return null;
+	const lines = JSON.stringify(input, null, 2).split('\n');
+	if (lines.length > 10) {
+		return lines.slice(0, 10).join('\n') + `\n… +${lines.length - 10} more lines`;
+	}
+	return lines.join('\n');
 }

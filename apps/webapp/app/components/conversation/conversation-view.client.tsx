@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useSearchParams } from "@remix-run/react";
-
 import { useFetcher } from "@remix-run/react";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -38,6 +37,7 @@ interface ConversationViewProps {
   autoRegenerate?: boolean;
   /** DB conversation status — input is disabled when "running" */
   conversationStatus?: string;
+  models?: LLMModel[];
 }
 
 export function ConversationView({
@@ -48,9 +48,9 @@ export function ConversationView({
   integrationFrontendMap = {},
   autoRegenerate = false,
   conversationStatus,
+  models: modelsProp = [],
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
-  const [searchParams] = useSearchParams();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
@@ -60,33 +60,18 @@ export function ConversationView({
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
 
-  const [models, setModels] = useState<LLMModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>(
-    searchParams.get("modelId") ?? undefined,
+  const defaultModelId = modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
+    "selectedModelId",
+    defaultModelId,
   );
   // Ref so prepareSendMessagesRequest always reads the latest selection
   const selectedModelRef = useRef<string | undefined>(selectedModelId);
+  selectedModelRef.current = selectedModelId;
 
   const handleModelChange = (modelId: string) => {
     setSelectedModelId(modelId);
-    selectedModelRef.current = modelId;
   };
-
-  useEffect(() => {
-    fetch("/api/v1/llm-models")
-      .then((r) => r.json())
-      .then((data: LLMModel[]) => {
-        setModels(data);
-        // Only set default if no model was passed via URL
-        if (!searchParams.get("modelId")) {
-          const defaultModel = data.find((m) => m.isDefault);
-          const id = defaultModel?.id ?? data[0]?.id;
-          setSelectedModelId(id);
-          selectedModelRef.current = id;
-        }
-      })
-      .catch(() => {});
-  }, []);
   // toolCallId → { approved, ...argOverrides }
   // Single ref for both approval decisions and arg overrides
   const toolArgOverridesRef = useRef<Record<string, Record<string, unknown>>>(
@@ -156,6 +141,7 @@ export function ConversationView({
             message: messages[messages.length - 1],
             id,
             toolArgOverrides,
+            modelId: selectedModelRef.current,
           },
         };
       },
@@ -305,7 +291,7 @@ export function ConversationView({
               if (message) sendMessage({ text: message });
             }}
             stop={() => stop()}
-            models={models}
+            models={modelsProp}
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
           />

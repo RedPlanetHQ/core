@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { type ChatAddToolApproveResponseFunction } from "ai";
 import { LayoutGrid, Zap } from "lucide-react";
-import { loadWidgetBundle } from "~/utils/widget-loader.client";
+import { loadIntegrationBundle, type ToolUIComponent } from "~/utils/integration-loader.client";
 import { ApprovalComponent } from "./approval-component";
 import {
   type ConversationToolPart,
@@ -54,7 +54,6 @@ function ToolApprovalCard({
     typeof input.accountId === "string" ? input.accountId : undefined;
   const frontendUrl = accountId ? integrationFrontendMap[accountId] : undefined;
 
-  type ToolUIComponent = React.ComponentType<Record<string, never>>;
   const [ToolUIComp, setToolUIComp] = useState<ToolUIComponent | null>(null);
   const loadedRef = useRef(false);
 
@@ -65,21 +64,7 @@ function ToolApprovalCard({
 
     (async () => {
       try {
-        const mod = await loadWidgetBundle(frontendUrl);
-        const toolUI = mod.toolUI as
-          | {
-              supported_tools: string[];
-              render: (
-                toolName: string,
-                input: Record<string, any>,
-                result: unknown,
-                context: Record<string, unknown>,
-                submitInput: (i: Record<string, unknown>) => void,
-                onDecline: () => void,
-              ) => Promise<ToolUIComponent>;
-            }
-          | undefined;
-
+        const { toolUI } = await loadIntegrationBundle(frontendUrl);
         if (!toolUI?.supported_tools.includes(effectiveAction)) return;
 
         let inputParameters = {};

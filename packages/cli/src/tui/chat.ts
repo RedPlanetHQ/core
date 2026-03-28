@@ -144,10 +144,19 @@ export function startTuiApp(
 
 	const conversation = createConversation(baseUrl, apiKey);
 
-	// Fetch workspace name async — used in interrupted prompt
+	// Fetch workspace name + integration accounts async
 	fetchWorkspace(baseUrl, apiKey)
 		.then(ws => {
 			if (ws?.name) butlerName = ws.name;
+		})
+		.catch(() => {});
+
+	fetchIntegrationAccounts(baseUrl, apiKey)
+		.then(accounts => {
+			for (const acc of accounts) {
+				const url = acc.integrationDefinition.frontendUrl;
+				if (url) accountFrontendMap.set(acc.id, url);
+			}
 		})
 		.catch(() => {});
 
@@ -218,7 +227,7 @@ export function startTuiApp(
 
 		conversationComponents = [];
 		allToolItems = [];
-		pendingApprovalBar = null;
+		pendingApprovalPanel = null;
 		autoApproveAll = false;
 		statusLine.setAcceptAll(false);
 		conversation.clear();
@@ -525,12 +534,12 @@ export function startTuiApp(
 			onAbort() {
 				if (requestId !== myRequestId) return;
 				removeLoader();
-				// Remove pending approval bar if present
-				if (pendingApprovalBar) {
-					try { messagesContainer.removeChild(pendingApprovalBar); } catch { /* ignore */ }
-					const barIdx = conversationComponents.lastIndexOf(pendingApprovalBar);
-					if (barIdx !== -1) conversationComponents.splice(barIdx, 1);
-					pendingApprovalBar = null;
+				// Remove pending approval panel if present
+				if (pendingApprovalPanel) {
+					try { messagesContainer.removeChild(pendingApprovalPanel); } catch { /* ignore */ }
+					const idx = conversationComponents.lastIndexOf(pendingApprovalPanel);
+					if (idx !== -1) conversationComponents.splice(idx, 1);
+					pendingApprovalPanel = null;
 				}
 				addToMessages(
 					new Text(
@@ -559,45 +568,48 @@ export function startTuiApp(
 				tui.requestRender();
 			},
 
-			onApprovalRequested(_approvalId: string, _toolCallId: string, toolName: string) {
+			onApprovalRequested(approvalId: string, toolCallId: string, toolName: string, input?: Record<string, unknown>) {
 				if (requestId !== myRequestId) return;
 				hadOutput = true;
 
-				// If accept-all is active, silently approve without showing the bar
+				// If accept-all is active, silently approve without showing the panel
 				if (autoApproveAll) {
 					showLoader();
 					conversation.approve(true, callbacks).catch(() => {});
 					return;
 				}
 
-				// Hide loader while waiting for approval
-				removeLoader();
+				if (!pendingApprovalPanel) {
+					// First approval — create the panel and hide the loader
+					removeLoader();
+					const panel = new ApprovalPanel(accountFrontendMap, () => tui.requestRender());
+					pendingApprovalPanel = panel;
+					addToMessages(panel);
 
-				const bar = new ApprovalBar(toolName);
-				pendingApprovalBar = bar;
-				addToMessages(bar);
+					panel.onSelect = (approved: boolean, acceptAll: boolean) => {
+						// Remove the approval panel
+						try { messagesContainer.removeChild(panel); } catch { /* ignore */ }
+						const pidx = conversationComponents.lastIndexOf(panel);
+						if (pidx !== -1) conversationComponents.splice(pidx, 1);
+						pendingApprovalPanel = null;
+
+						if (acceptAll) {
+							autoApproveAll = true;
+							statusLine.setAcceptAll(true);
+						}
+
+						showLoader();
+						tui.requestRender();
+
+						conversation.approve(approved, callbacks).catch(() => {
+							// errors handled via onError
+						});
+					};
+				}
+
+				// Add this tool to the panel (may be first or additional)
+				pendingApprovalPanel.addApproval({approvalId, toolCallId, toolName, input});
 				tui.requestRender();
-
-				bar.onSelect = (approved: boolean, acceptAll: boolean) => {
-					// Remove the approval bar
-					try { messagesContainer.removeChild(bar); } catch { /* ignore */ }
-					const barIdx = conversationComponents.lastIndexOf(bar);
-					if (barIdx !== -1) conversationComponents.splice(barIdx, 1);
-					pendingApprovalBar = null;
-
-					if (acceptAll) {
-						autoApproveAll = true;
-						statusLine.setAcceptAll(true);
-					}
-
-					// Show loader again and send approval
-					showLoader();
-					tui.requestRender();
-
-					conversation.approve(approved, callbacks).catch(() => {
-						// errors handled via onError
-					});
-				};
 			},
 		};
 
@@ -624,18 +636,34 @@ export function startTuiApp(
 		}
 
 		// ── Approval mode input ───────────────────────────────────────────────
-		if (pendingApprovalBar) {
-			// Shift+Tab toggles between approve and accept-all
-			if (data === '\x1b[Z') {
-				pendingApprovalBar.toggle();
+		if (pendingApprovalPanel) {
+			// Up arrow
+			if (data === '\x1b[A') {
+				pendingApprovalPanel.moveUp();
 				tui.requestRender();
 				return;
 			}
-			// Enter / Space confirms the selection
-			if (data === '\r' || data === '\n' || data === ' ') {
-				pendingApprovalBar.confirm();
+			// Down arrow
+			if (data === '\x1b[B') {
+				pendingApprovalPanel.moveDown();
+				tui.requestRender();
 				return;
 			}
+			// Shift+Tab → jump to "Yes, allow all"
+			if (data === '\x1b[Z') {
+				pendingApprovalPanel.selectAllowAll();
+				tui.requestRender();
+				return;
+			}
+			// Enter / Space → confirm selected option
+			if (data === '\r' || data === '\n' || data === ' ') {
+				pendingApprovalPanel.confirm();
+				return;
+			}
+			// Direct number keys 1 / 2 / 3
+			if (data === '1') { pendingApprovalPanel.confirm(0); return; }
+			if (data === '2') { pendingApprovalPanel.confirm(1); return; }
+			if (data === '3') { pendingApprovalPanel.confirm(2); return; }
 			// Block all other input while approval is pending
 			return;
 		}

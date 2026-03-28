@@ -1,5 +1,6 @@
 import { EditorRoot, EditorContent, Placeholder } from "novel";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback } from "react";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 import { EyeOff } from "lucide-react";
@@ -52,30 +53,24 @@ const SUGGESTED = [
 export const ConversationNew = ({
   user,
   defaultMessage,
+  models = [],
 }: {
   user: { name: string | null };
   defaultMessage?: string;
+  models?: LLMModel[];
 }) => {
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
   const [incognito, setIncognito] = useState(false);
   const editorRef = useRef<any>(null);
   const [editor, setEditor] = useState<Editor>();
-  const [models, setModels] = useState<LLMModel[]>([]);
-  const [selectedModelId, setSelectedModelId] = useState<string | undefined>();
+  const defaultModelId = models.find((m) => m.isDefault)?.id ?? models[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
+    "selectedModelId",
+    defaultModelId,
+  );
 
   const submit = useSubmit();
-
-  useEffect(() => {
-    fetch("/api/v1/llm-models")
-      .then((r) => r.json())
-      .then((data: LLMModel[]) => {
-        setModels(data);
-        const defaultModel = data.find((m) => m.isDefault);
-        setSelectedModelId(defaultModel?.id ?? data[0]?.id);
-      })
-      .catch(() => {});
-  }, []);
 
   const handleSelectPrompt = useCallback(
     (prompt: string) => {
