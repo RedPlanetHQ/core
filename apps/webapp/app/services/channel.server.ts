@@ -128,7 +128,7 @@ export async function createChannel(
 ): Promise<{ id: string }> {
   if (data.isDefault) {
     await prisma.channel.updateMany({
-      where: { workspaceId, type: data.type, isDefault: true },
+      where: { workspaceId, isDefault: true },
       data: { isDefault: false },
     });
   }

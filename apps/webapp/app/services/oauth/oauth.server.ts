@@ -195,36 +195,36 @@ export async function callbackHandler(params: CallbackParams) {
       const botToken = config?.bot_token;
 
       if (botToken) {
-        const exists = teamId
-          ? await prisma.channel
-              .findFirst({
-                where: {
-                  workspaceId: sessionRecord.workspaceId,
-                  type: "slack",
-                },
-              })
-              .then((ch) => {
-                if (!ch) return false;
-                const cfg = ch.config as Record<string, string>;
-                return cfg?.team_id === teamId;
-              })
-          : false;
+        const slackConfig = {
+          bot_token: botToken,
+          ...(config?.user_token ? { user_token: config.user_token } : {}),
+          ...(teamId ? { team_id: teamId } : {}),
+          ...(teamName ? { team_name: teamName } : {}),
+          ...(config?.bot_user_id ? { bot_user_id: config.bot_user_id } : {}),
+          // account.accountId is the Slack user ID of the person who connected — used for inbound DM routing
+          ...(account.accountId ? { user_id: account.accountId } : {}),
+        };
 
-        if (!exists) {
+        const existing = teamId
+          ? await prisma.channel.findFirst({
+              where: { workspaceId: sessionRecord.workspaceId, type: "slack" },
+            }).then((ch) => {
+              if (!ch) return null;
+              const cfg = ch.config as Record<string, string>;
+              return cfg?.team_id === teamId ? ch : null;
+            })
+          : null;
+
+        if (existing) {
+          await prisma.channel.update({
+            where: { id: existing.id },
+            data: { config: slackConfig, isActive: true },
+          });
+        } else {
           await createChannel(sessionRecord.workspaceId, {
             name: `${teamName} (Slack)`,
             type: "slack",
-            config: {
-              bot_token: botToken,
-              ...(config?.user_token ? { user_token: config.user_token } : {}),
-              ...(teamId ? { team_id: teamId } : {}),
-              ...(teamName ? { team_name: teamName } : {}),
-              ...(config?.bot_user_id
-                ? { bot_user_id: config.bot_user_id }
-                : {}),
-              // account.accountId is the Slack user ID of the person who connected — used for inbound DM routing
-              ...(account.accountId ? { user_id: account.accountId } : {}),
-            },
+            config: slackConfig,
             isDefault: false,
           }).catch((err) => {
             logger.warn("Failed to auto-create Slack channel", {
