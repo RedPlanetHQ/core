@@ -175,7 +175,6 @@ export async function updateChannel(
     await prisma.channel.updateMany({
       where: {
         workspaceId,
-        type: existing.type,
         isDefault: true,
         id: { not: channelId },
       },

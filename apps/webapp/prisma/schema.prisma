@@ -337,6 +337,8 @@ model IntegrationDefinitionV2 {
   version     String?
   url         String?
 
+  widgetUrl   String?
+
   workspace   Workspace? @relation(references: [id], fields: [workspaceId], onDelete: Cascade)
   workspaceId String?
 
@@ -694,6 +696,23 @@ model RecallLog {
   metadata Json? @default("{}")
 }
 
+model Channel {
+  id          String    @id @default(uuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  type        String // "slack" | "telegram" | "whatsapp" | "email"
+  config      Json // type-specific: Slack: { bot_token, user_token?, channel_id?, team_id?, team_name? } Telegram: { bot_token, chat_id, username? }
+  isDefault   Boolean   @default(false)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  reminders   Reminder[]
+
+  @@index([workspaceId])
+  @@index([workspaceId, type])
+}
+
 model Reminder {
   id               String    @id @default(uuid())
   workspaceId      String
@@ -705,7 +724,9 @@ model Reminder {
   maxOccurrences   Int? // null = unlimited, 1 = one-time, N = limited
   occurrenceCount  Int       @default(0) // Auto-deactivate when >= maxOccurrences
   endDate          DateTime? // Optional: auto-deactivate after this date
-  channel          String    @default("whatsapp") // "whatsapp" or "email"
+  channel          String    @default("whatsapp") // "whatsapp" or "email" — kept for backward compat
+  channelId        String? // FK to Channel table (optional, new explicit routing)
+  channelRef       Channel?  @relation(fields: [channelId], references: [id], onDelete: SetNull)
   isActive         Boolean   @default(true)
   confirmedActive  Boolean   @default(false) // User said "yes" to keep - never ask again
   unrespondedCount Int       @default(0)
@@ -984,6 +1005,10 @@ model Workspace {
   version  WorkspaceVersion @default(V3)
   metadata Json             @default("{}")
 
+  // Plain-text PAT used exclusively by remotely loaded widgets.
+  // Never returned to the UI. Created once and reused.
+  widgetPat String?
+
   // deprecated but keep until we move them
   userId String? @unique
 
@@ -1013,6 +1038,7 @@ model Workspace {
   entityEmbeddings        EntityEmbedding[]
   gateways                Gateway[]
   reminders               Reminder[]
+  channels                Channel[]
   tasks                   Task[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
