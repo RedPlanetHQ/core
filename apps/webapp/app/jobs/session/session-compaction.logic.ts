@@ -326,7 +326,7 @@ async function createCompaction(
   });
 
   // Generate compaction using LLM
-  const compactionData = await generateCompaction(episodes, null);
+  const compactionData = await generateCompaction(episodes, null, workspaceId);
 
   // Save to graph, vector DB, and Document table in parallel
   const document = await upsertDocumentFromCompaction(
@@ -364,6 +364,7 @@ async function updateCompaction(
   const compactionData = await generateCompaction(
     newEpisodes,
     existingCompact.content,
+    workspaceId,
   );
 
   // Update graph, vector DB, and Document table in parallel
@@ -389,6 +390,7 @@ async function updateCompaction(
 async function generateCompaction(
   episodes: EpisodicNode[],
   existingSummary: string | null,
+  workspaceId?: string,
 ): Promise<z.infer<typeof CompactionResultSchema>> {
   const systemPrompt = createCompactionSystemPrompt();
   const userPrompt = createCompactionUserPrompt(episodes, existingSummary);
@@ -414,6 +416,8 @@ async function generateCompaction(
       undefined,
       "medium",
       "session-compaction",
+      undefined,
+      workspaceId,
     );
 
     return parseCompactionResponse(responseText);

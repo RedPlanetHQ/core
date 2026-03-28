@@ -28,6 +28,7 @@ import {
 import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { prisma } from "~/db.server";
 import { MessageListInput } from "@mastra/core/agent/message-list";
+import { type ModelConfig } from "~/services/llm-provider.server";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -51,6 +52,8 @@ interface BuildAgentContextParams {
   executorTools?: OrchestratorTools;
   /** When false, tools run without requireApproval (non-interactive / automated contexts) */
   interactive?: boolean;
+  /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
+  modelConfig?: ModelConfig;
 }
 
 interface AgentContext {
@@ -77,6 +80,7 @@ export async function buildAgentContext({
   conversationId,
   executorTools,
   interactive = true,
+  modelConfig,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
@@ -182,6 +186,7 @@ export async function buildAgentContext({
       defaultChannel,
       availableChannels,
       interactive,
+      modelConfig,
     }),
   ]);
 

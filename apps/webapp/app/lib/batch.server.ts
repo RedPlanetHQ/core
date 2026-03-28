@@ -9,6 +9,7 @@ import { logger } from "~/services/logger.service";
 import {
   createAgent,
   getModelForBatch,
+  getProvider,
   makeStructuredModelCall,
 } from "~/lib/model.server";
 import { env } from "~/env.server";
@@ -16,7 +17,7 @@ import {
   getDefaultChatProviderType,
   getDefaultChatModelId,
   getProviderConfig,
-  resolveApiKey,
+  resolveApiKeyForWorkspace,
 } from "~/services/llm-provider.server";
 
 // Global provider instances (singleton pattern)
@@ -120,6 +121,13 @@ async function runInlineBatch<T = any>(
   const batchId = createInlineBatchId();
   const startedAt = new Date();
 
+  // Resolve BYOK key for bare createAgent calls
+  let byokApiKey: string | undefined;
+  if (params.workspaceId) {
+    const resolved = await resolveApiKeyForWorkspace(params.workspaceId, getProvider(modelId));
+    if (resolved.isBYOK) byokApiKey = resolved.apiKey;
+  }
+
   const concurrency = env.INLINE_BATCH_CONCURRENCY;
   const openaiConfig = getProviderConfig("openai");
   const isProxyChatMode =
@@ -149,6 +157,7 @@ async function runInlineBatch<T = any>(
                 "medium",
                 undefined,
                 temperature,
+                params.workspaceId,
               );
 
               return { customId: request.customId, response: object as any };
@@ -156,7 +165,7 @@ async function runInlineBatch<T = any>(
               // For simple `{ content: string }` payloads (persona/aspect sections),
               // degrade to plain text and wrap it so callers can continue.
               if (isContentOnlySchema(params.outputSchema)) {
-                const batchAgent = createAgent(modelId);
+                const batchAgent = createAgent(modelId, undefined, undefined, byokApiKey ? { apiKey: byokApiKey } : undefined);
                 const batchResult = await batchAgent.generate(messages, request.options || {});
                 return {
                   customId: request.customId,
@@ -177,12 +186,13 @@ async function runInlineBatch<T = any>(
             "high",
             undefined,
             temperature,
+            params.workspaceId,
           );
 
           return { customId: request.customId, response: object as any };
         }
 
-        const batchAgent = createAgent(modelId);
+        const batchAgent = createAgent(modelId, undefined, undefined, byokApiKey ? { apiKey: byokApiKey } : undefined);
         const batchResult = await batchAgent.generate(messages, request.options || {});
 
         return { customId: request.customId, response: batchResult.text as any };

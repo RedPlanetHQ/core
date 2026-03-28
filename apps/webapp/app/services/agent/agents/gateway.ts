@@ -202,8 +202,11 @@ export async function createGatewayAgent(
   gatewayId: string,
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
+  modelConfig?: ModelConfig,
 ): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
+
+  const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
 
   if (!gateway) {
     // Return a disconnected placeholder
@@ -211,7 +214,7 @@ export async function createGatewayAgent(
       agent: new Agent({
         id: `gateway_disconnected`,
         name: "Disconnected Gateway",
-        model: toRouterString(getDefaultChatModelId()) as any,
+        model: resolvedModel as any,
         instructions: "This gateway is not connected.",
       }),
       connected: false,
@@ -235,7 +238,7 @@ export async function createGatewayAgent(
   const agent = new Agent({
     id: agentId,
     name: gateway.name,
-    model: toRouterString(getDefaultChatModelId()) as any,
+    model: resolvedModel as any,
     instructions: getGatewayAgentPrompt(
       gateway.name,
       gateway.description,
@@ -255,6 +258,7 @@ export async function createGatewayAgents(
   gateways: GatewayAgentInfo[],
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
+  modelConfig?: ModelConfig,
 ): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];

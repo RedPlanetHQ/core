@@ -41,6 +41,7 @@ export interface CreateBatchParams<T = any> {
   maxRetries?: number;
   timeoutMs?: number;
   modelComplexity?: ModelComplexity;
+  workspaceId?: string;
 }
 
 export interface GetBatchParams {

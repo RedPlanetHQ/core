@@ -4,6 +4,7 @@ import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { makeStructuredModelCall } from "~/lib/model.server";
 
+
 export interface CreateConversationTitlePayload {
   conversationId: string;
   message: string;
@@ -27,6 +28,12 @@ export async function processConversationTitleCreation(
   payload: CreateConversationTitlePayload,
 ): Promise<CreateConversationTitleResult> {
   try {
+    // Look up workspaceId from conversation for BYOK key resolution
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: payload.conversationId },
+      select: { workspaceId: true },
+    });
+
     const { object } = await makeStructuredModelCall(
       TitleSchema,
       [
@@ -36,6 +43,9 @@ export async function processConversationTitleCreation(
         },
       ],
       "medium",
+      "conversationTitle",
+      undefined,
+      conversation?.workspaceId ?? undefined,
     );
 
     const title = object.title?.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "";

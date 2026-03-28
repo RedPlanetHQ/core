@@ -28,7 +28,7 @@ import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { upsertConversationHistory } from "~/services/conversation.server";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { deductCredits } from "~/trigger/utils/utils";
-import { getWorkspaceChannelContext } from "~/services/channel.server";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 // ============================================================================
 // Types
@@ -108,7 +108,8 @@ export async function runCASEPipeline(
     // =========================================================================
     const channelCtx = await getWorkspaceChannelContext(userData.workspaceId);
     const resolved = channelCtx.resolveChannel(trigger.channel);
-    const channelType: ChannelType = (resolved?.channelType ?? channelCtx.defaultChannelType) as ChannelType;
+    const channelType: ChannelType = (resolved?.channelType ??
+      channelCtx.defaultChannelType) as ChannelType;
 
     // =========================================================================
     // Run butler with think tool enabled
@@ -135,9 +136,7 @@ export async function runCASEPipeline(
     // =========================================================================
     // Extract shouldMessage from think tool output
     // =========================================================================
-    const thinkPart = parts.find(
-      (p: any) => p.toolName === "think",
-    );
+    const thinkPart = parts.find((p: any) => p.toolName === "think");
     const actionPlan = thinkPart?.output;
     const shouldMessage = actionPlan?.shouldMessage ?? true;
     const reasoning = actionPlan?.reasoning ?? "No think output found";
@@ -153,10 +152,13 @@ export async function runCASEPipeline(
     // =========================================================================
     if (shouldMessage) {
       if (!responseText || responseText === "I processed your request.") {
-        logger.warn(`[pipeline] Butler produced empty/generic response for ${reminderId}`, {
-          channel: trigger.channel,
-          responseText,
-        });
+        logger.warn(
+          `[pipeline] Butler produced empty/generic response for ${reminderId}`,
+          {
+            channel: trigger.channel,
+            responseText,
+          },
+        );
       }
 
       await deliverToChannel(
@@ -205,18 +207,21 @@ export async function runCASEPipeline(
     }
 
     // Deduct credits (1 for think-only, 2 if butler also ran full execution)
-    try {
-      await deductCredits(
-        userData.workspaceId,
-        userData.userId,
-        "chatMessage",
-        1, // noStreamProcess already deducts 1, so just 1 more for the pipeline
-      );
-    } catch (error) {
-      logger.warn(
-        `[pipeline] Failed to deduct credits for ${reminderId}`,
-        { error },
-      );
+    // Skip credit deduction if workspace is using their own API key (BYOK)
+    const isBYOK = await isWorkspaceBYOK(userData.workspaceId);
+    if (!isBYOK) {
+      try {
+        await deductCredits(
+          userData.workspaceId,
+          userData.userId,
+          "chatMessage",
+          1, // noStreamProcess already deducts 1, so just 1 more for the pipeline
+        );
+      } catch (error) {
+        logger.warn(`[pipeline] Failed to deduct credits for ${reminderId}`, {
+          error,
+        });
+      }
     }
 
     logger.info(`[pipeline] Successfully processed ${reminderId}`);
@@ -268,7 +273,11 @@ async function deliverToChannel(
   // Resolve channel record: by channelId first, then by name, then by type
   const channelRecord = channelId
     ? await prisma.channel.findFirst({
-        where: { id: channelId, workspaceId: userData.workspaceId, isActive: true },
+        where: {
+          id: channelId,
+          workspaceId: userData.workspaceId,
+          isActive: true,
+        },
       })
     : await prisma.channel.findFirst({
         where: {
@@ -319,7 +328,9 @@ async function deliverToChannel(
   });
 
   await handler.sendReply(replyTo, responseText, metadata);
-  logger.info(`[pipeline] Sent ${channelType} message for ${reminder.id} to ${userData.userId}`);
+  logger.info(
+    `[pipeline] Sent ${channelType} message for ${reminder.id} to ${userData.userId}`,
+  );
 
   // Mirror to channel conversation so user replies have context
   try {

@@ -37,6 +37,7 @@ export interface SaveConversationResultParams {
   incognito: boolean | undefined;
   userId: string;
   workspaceId: string;
+  isBYOK?: boolean;
 }
 
 export async function saveConversationResult({
@@ -46,6 +47,7 @@ export async function saveConversationResult({
   incognito,
   userId,
   workspaceId,
+  isBYOK,
 }: SaveConversationResultParams): Promise<void> {
   if (parts.length === 0) {
     const fallbackText = parts
@@ -82,7 +84,9 @@ export async function saveConversationResult({
     }
   }
 
-  await deductCredits(workspaceId, userId, "chatMessage", 1);
+  if (!isBYOK) {
+    await deductCredits(workspaceId, userId, "chatMessage", 1);
+  }
   await updateConversationStatus(conversationId, "completed");
 }
 

@@ -97,6 +97,7 @@ Pick up to 4 skills and up to 4 integrations that are clearly relevant for this 
       "medium",
       undefined,
       0.3,
+      user.workspaceId as string | undefined,
     );
 
     const suggestedIntegrations = integrationDefs.filter((i) =>

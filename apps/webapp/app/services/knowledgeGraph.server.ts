@@ -429,6 +429,8 @@ export class KnowledgeGraphService {
             worldMessages as ModelMessage[],
             "medium",
             "extract-world",
+            undefined,
+            episode.workspaceId,
           );
         if (worldUsage) {
           tokenMetrics.high.input += worldUsage.promptTokens as number;
@@ -449,6 +451,8 @@ export class KnowledgeGraphService {
             voiceMessages as ModelMessage[],
             "medium",
             "extract-voice",
+            undefined,
+            episode.workspaceId,
           );
         if (voiceUsage) {
           tokenMetrics.high.input += voiceUsage.promptTokens as number;
@@ -481,6 +485,8 @@ export class KnowledgeGraphService {
                   reflectMessages as ModelMessage[],
                   "low",
                   "reflect-world",
+                  undefined,
+                  episode.workspaceId,
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -514,6 +520,8 @@ export class KnowledgeGraphService {
                   reflectMessages as ModelMessage[],
                   "low",
                   "reflect-voice",
+                  undefined,
+                  episode.workspaceId,
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -553,6 +561,8 @@ export class KnowledgeGraphService {
                 voiceMessages as ModelMessage[],
                 "medium",
                 "classify-voice",
+                undefined,
+                episode.workspaceId,
               );
             if (voiceUsage) {
               tokenMetrics.low.input += voiceUsage.promptTokens as number;
@@ -578,6 +588,8 @@ export class KnowledgeGraphService {
                 worldMessages as ModelMessage[],
                 "medium",
                 "classify-world",
+                undefined,
+                episode.workspaceId,
               );
             if (worldUsage) {
               tokenMetrics.low.input += worldUsage.promptTokens as number;
@@ -771,6 +783,8 @@ export class KnowledgeGraphService {
       undefined,
       "medium",
       "normalization",
+      undefined,
+      workspaceId,
     );
     let normalizedEpisodeBody = "";
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);

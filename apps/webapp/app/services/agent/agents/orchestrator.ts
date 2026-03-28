@@ -15,7 +15,7 @@ import { z } from "zod";
 import { runWebExplorer } from "../explorers";
 import { logger } from "~/services/logger.service";
 import { toRouterString } from "~/lib/model.server";
-import { getDefaultChatModelId } from "~/services/llm-provider.server";
+import { getDefaultChatModelId, type ModelConfig } from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
 import { createGatewayAgents } from "./gateway";
@@ -286,6 +286,7 @@ export async function createOrchestratorAgent(
   skills?: SkillRef[],
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
+  modelConfig?: ModelConfig,
 ): Promise<CreateOrchestratorAgentResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
@@ -511,13 +512,14 @@ export async function createOrchestratorAgent(
 
   // Create gateway sub-subagents
   const { agents: gatewayAgentMap, agentList: gatewayAgentList } =
-    await createGatewayAgents(gatewayInfos, executorTools, interactive);
+    await createGatewayAgents(gatewayInfos, executorTools, interactive, modelConfig);
 
   // Build orchestrator agent with gateway agents as subagents
+  const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
   const agent = new Agent({
     id: `orchestrator-${mode}`,
     name: mode === "read" ? "Gather Context" : "Take Action",
-    model: toRouterString(getDefaultChatModelId()) as any,
+    model: resolvedModel as any,
     instructions: getOrchestratorPrompt(
       integrationsList,
       mode,

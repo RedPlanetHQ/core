@@ -15,6 +15,7 @@
 import { stepCountIs } from "ai";
 import { Agent } from "@mastra/core/agent";
 import { toRouterString, getModelForTask } from "~/lib/model.server";
+import { type ModelConfig } from "~/services/llm-provider.server";
 import { getMastra } from "../mastra";
 
 import {
@@ -147,6 +148,7 @@ export function createThinkAgent(
   timezone: string,
   availableChannels: Array<"whatsapp" | "slack" | "email">,
   minRecurrenceMinutes: number,
+  modelConfig?: ModelConfig,
 ): Agent {
   const tools: Record<string, any> = {};
   tools["get_skill"] = getSkillTool(workspaceId);
@@ -162,7 +164,7 @@ export function createThinkAgent(
   const thinkAgent = new Agent({
     id: "thinking-agent",
     name: "Think",
-    model: toRouterString(getModelForTask("low")) as any,
+    model: (modelConfig ?? toRouterString(getModelForTask("low"))) as any,
     instructions: "Analyze triggers and produce structured JSON action plans.",
     agents: { gather_context: gatherContextAgent },
     tools: { ...tools, ...reminderTools },

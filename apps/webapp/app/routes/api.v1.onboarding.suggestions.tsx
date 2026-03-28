@@ -51,6 +51,7 @@ Pick up to 4 skills and up to 4 integrations that would be most useful for this 
       "medium",
       undefined,
       0.3,
+      authentication.workspaceId as string,
     );
 
     const suggestedSkills = librarySkills.filter((s) =>

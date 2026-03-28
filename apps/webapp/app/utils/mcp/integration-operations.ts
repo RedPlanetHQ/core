@@ -155,6 +155,7 @@ export async function getIntegrationActions(
   accountId: string,
   query?: string,
   userId?: string,
+  workspaceId?: string,
 ): Promise<any[]> {
   // Queue the get-tools call to limit concurrent child processes
   return integrationQueue.add(async () => {
@@ -243,6 +244,9 @@ export async function getIntegrationActions(
         maxTokens: 500,
       },
       "low",
+      undefined,
+      undefined,
+      workspaceId,
     );
 
     if (selectedActionNames.length > 0) {
@@ -379,7 +383,7 @@ export async function handleGetIntegrationActions(args: any) {
       throw new Error("query is required");
     }
 
-    const actions = await getIntegrationActions(accountId, query, userId);
+    const actions = await getIntegrationActions(accountId, query, userId, args.workspaceId);
 
     if (actions.length > 0) {
       return {

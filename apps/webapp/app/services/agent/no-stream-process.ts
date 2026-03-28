@@ -10,7 +10,7 @@ import { Agent } from "@mastra/core/agent";
 import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
 import { toRouterString } from "~/lib/model.server";
-import { getDefaultChatModelId } from "~/services/llm-provider.server";
+import { getDefaultChatModelId, resolveModelConfig } from "~/services/llm-provider.server";
 import { addToQueue } from "~/lib/ingest.server";
 import {
   type Trigger,
@@ -121,6 +121,9 @@ export async function noStreamProcess(
     finalMessages = body.messages as any;
   }
 
+  const modelString = getDefaultChatModelId();
+  const { modelConfig, isBYOK } = await resolveModelConfig(modelString, workspaceId);
+
   const { systemPrompt, tools, modelMessages, gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents } =
     await buildAgentContext({
       userId,
@@ -132,6 +135,7 @@ export async function noStreamProcess(
       channelMetadata: body.channelMetadata,
       conversationId: body.id,
       executorTools: body.executorTools,
+      modelConfig,
     });
 
   // Create core agent with subagents — think only present for triggered flows
@@ -144,7 +148,7 @@ export async function noStreamProcess(
   const agent = new Agent({
     id: "core-agent",
     name: "Core Agent",
-    model: toRouterString(getDefaultChatModelId()) as any,
+    model: modelConfig as any,
     instructions: systemPrompt,
     agents: subagents,
   });
@@ -230,7 +234,9 @@ export async function noStreamProcess(
     );
   }
 
-  await deductCredits(workspaceId, userId, "chatMessage", 1);
+  if (!isBYOK) {
+    await deductCredits(workspaceId, userId, "chatMessage", 1);
+  }
   await updateConversationStatus(body.id, "completed");
 
   return { ...assistantMessage, text: result.text };

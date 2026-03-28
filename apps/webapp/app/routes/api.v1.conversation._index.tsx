@@ -8,7 +8,7 @@ import {
   upsertConversationHistory,
 } from "~/services/conversation.server";
 import { toRouterString } from "~/lib/model.server";
-import { getDefaultChatModelId } from "~/services/llm-provider.server";
+import { getDefaultChatModelId, resolveModelConfig } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
@@ -149,6 +149,11 @@ const { loader, action } = createHybridActionApiRoute(
     const useEmptyMessages =
       conversationHistory.length === 0 && !isTaskConversation;
 
+    const workspaceId = authentication.workspaceId as string;
+    const modelString = body.modelId ?? getDefaultChatModelId();
+
+    const { modelConfig, isBYOK } = await resolveModelConfig(modelString, workspaceId);
+
     const {
       systemPrompt,
       tools,
@@ -158,11 +163,12 @@ const { loader, action } = createHybridActionApiRoute(
       gatewayAgents,
     } = await buildAgentContext({
       userId: authentication.userId,
-      workspaceId: authentication.workspaceId as string,
+      workspaceId,
       source: body.source as any,
       finalMessages: useEmptyMessages ? [] : finalMessages,
       conversationId: body.id,
       interactive: body.interactive,
+      modelConfig,
     });
 
     const modelString = body.modelId ?? getDefaultChatModelId();
@@ -170,7 +176,7 @@ const { loader, action } = createHybridActionApiRoute(
     const agent = new Agent({
       id: "core-agent",
       name: "Core Agent",
-      model: toRouterString(modelString),
+      model: modelConfig as any,
       instructions: systemPrompt,
       agents: {
         gather_context: gatherContextAgent,
@@ -189,7 +195,8 @@ const { loader, action } = createHybridActionApiRoute(
       incomingUserText,
       incognito: conversation?.incognito,
       userId: authentication.userId,
-      workspaceId: authentication.workspaceId || "",
+      workspaceId: workspaceId || "",
+      isBYOK,
     };
 
     const messageHistoryProcessor: Processor<"message-history"> = {

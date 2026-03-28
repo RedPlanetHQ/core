@@ -8,8 +8,8 @@ const loader = createHybridLoaderApiRoute(
     findResource: async () => 1,
     corsStrategy: "all",
   },
-  async () => {
-    const models = await getAvailableModels();
+  async ({ authentication }) => {
+    const models = await getAvailableModels(authentication.workspaceId as string | undefined);
 
     // Exclude embedding-only models (not useful for chat selection)
     const chatModels = models.filter(

@@ -145,6 +145,9 @@ export async function memoryAgent({
 Generate 1-5 optimized search queries to retrieve relevant context from memory.` },
       ],
       "low",
+      undefined,
+      undefined,
+      workspaceId,
     );
 
     const queries = queryObject.queries;

@@ -13,6 +13,7 @@ import { z } from "zod";
 import { Agent } from "@mastra/core/agent";
 
 import { type SkillRef } from "../types";
+import { type ModelConfig } from "~/services/llm-provider.server";
 import { type OrchestratorTools } from "../executors/base";
 import { type Trigger, type DecisionContext } from "../types/decision-agent";
 import { createThinkAgent } from "./decision";
@@ -64,6 +65,8 @@ interface CreateCoreAgentsParams {
   minRecurrenceMinutes?: number;
   /** When false, tools run without requireApproval */
   interactive?: boolean;
+  /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
+  modelConfig?: ModelConfig;
 }
 
 // ---------------------------------------------------------------------------
@@ -177,6 +180,7 @@ export async function createCoreAgents(
     availableChannels,
     minRecurrenceMinutes,
     interactive = true,
+    modelConfig,
   } = params;
 
   const [reader, writer] = await Promise.all([
@@ -190,6 +194,7 @@ export async function createCoreAgents(
       skills,
       executorTools,
       interactive,
+      modelConfig,
     ),
     createOrchestratorAgent(
       userId,
@@ -201,6 +206,7 @@ export async function createCoreAgents(
       skills,
       executorTools,
       interactive,
+      modelConfig,
     ),
   ]);
 
@@ -220,6 +226,7 @@ export async function createCoreAgents(
         timezone,
         availableChannels || ["email"],
         minRecurrenceMinutes ?? 60,
+        modelConfig,
       )
     : undefined;
 

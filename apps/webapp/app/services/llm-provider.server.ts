@@ -431,23 +431,83 @@ const ENV_KEY_MAP: Record<string, string | undefined> = {
 };
 
 /**
- * List active global providers (that have env keys configured).
+ * List active providers available to a workspace.
+ * Includes global providers with env keys AND any workspace BYOK providers.
  */
-export async function getProviders() {
-  const providers = await prisma.lLMProvider.findMany({
+export async function getProviders(workspaceId?: string) {
+  const globalProviders = await prisma.lLMProvider.findMany({
     where: { workspaceId: null, isActive: true },
     include: { models: true },
   });
 
-  return providers.filter((p) => !!ENV_KEY_MAP[p.type]);
+  // Global providers available via platform env keys
+  const available = globalProviders.filter((p) => !!ENV_KEY_MAP[p.type]);
+
+  if (workspaceId) {
+    // Check for workspace BYOK providers
+    const workspaceProviders = await prisma.lLMProvider.findMany({
+      where: { workspaceId, isActive: true },
+      include: { models: true },
+    });
+
+    // For each workspace BYOK provider, include the global provider for that type
+    // (so the workspace gets access to those models)
+    for (const wp of workspaceProviders) {
+      const alreadyIncluded = available.some((p) => p.type === wp.type);
+      if (!alreadyIncluded) {
+        const globalForType = globalProviders.find((p) => p.type === wp.type);
+        if (globalForType) {
+          available.push(globalForType);
+        }
+      }
+    }
+  }
+
+  return available;
 }
 
 /**
  * Returns enabled, non-deprecated models from active providers.
+ * For BYOK workspaces: if the workspace provider has its own models, only those
+ * are returned for that provider type. Otherwise, uses global provider models.
  */
-export async function getAvailableModels() {
-  const providers = await getProviders();
+export async function getAvailableModels(workspaceId?: string) {
+  const providers = await getProviders(workspaceId);
   const providerIds = providers.map((p) => p.id);
+
+  // Check if workspace has BYOK providers with custom models
+  if (workspaceId) {
+    const workspaceProviders = await prisma.lLMProvider.findMany({
+      where: { workspaceId, isActive: true },
+      include: { models: { where: { isEnabled: true, isDeprecated: false } } },
+    });
+
+    // Build a set of provider types that have workspace-specific models
+    const typesWithCustomModels = new Set<string>();
+    const customModels: any[] = [];
+    for (const wp of workspaceProviders) {
+      if (wp.models.length > 0) {
+        typesWithCustomModels.add(wp.type);
+        customModels.push(...wp.models.map((m) => ({ ...m, provider: wp })));
+      }
+    }
+
+    // For provider types with custom models, exclude global models
+    const filteredProviderIds = providers
+      .filter((p) => !typesWithCustomModels.has(p.type))
+      .map((p) => p.id);
+
+    const globalModels = await prisma.lLMModel.findMany({
+      where: {
+        providerId: { in: filteredProviderIds },
+        isEnabled: true,
+        isDeprecated: false,
+      },
+      include: { provider: true },
+    });
+
+    return [...globalModels, ...customModels];
+  }
 
   return prisma.lLMModel.findMany({
     where: {
@@ -520,4 +580,165 @@ export async function getModelForBatch(): Promise<string> {
  */
 export function resolveApiKey(providerType: string): string | undefined {
   return ENV_KEY_MAP[providerType];
+}
+
+// ---------------------------------------------------------------------------
+// Workspace-aware key resolution (BYOK)
+// ---------------------------------------------------------------------------
+
+import { resolveWorkspaceApiKey } from "~/services/byok.server";
+
+export interface ResolvedKey {
+  apiKey: string | undefined;
+  isBYOK: boolean;
+}
+
+/**
+ * Resolve API key for a provider, checking workspace BYOK first, then env vars.
+ */
+export async function resolveApiKeyForWorkspace(
+  workspaceId: string | null | undefined,
+  providerType: string,
+): Promise<ResolvedKey> {
+  if (workspaceId) {
+    const byokKey = await resolveWorkspaceApiKey(workspaceId, providerType);
+    if (byokKey) {
+      return { apiKey: byokKey, isBYOK: true };
+    }
+  }
+
+  return { apiKey: ENV_KEY_MAP[providerType], isBYOK: false };
+}
+
+/**
+ * Resolve the best model + API key for a workspace and complexity level.
+ * If the workspace has a BYOK provider, picks a model from that provider.
+ * Otherwise, uses the global model for the given complexity.
+ */
+export async function resolveModelForWorkspace(
+  workspaceId: string | null | undefined,
+  complexity: "high" | "medium" | "low" = "medium",
+): Promise<{ modelId: string; apiKey: string | undefined; isBYOK: boolean }> {
+  const globalModel = getModelForTaskSync(complexity);
+
+  if (!workspaceId) {
+    return { modelId: globalModel, apiKey: undefined, isBYOK: false };
+  }
+
+  // Check if workspace has any BYOK providers
+  const workspaceProviders = await prisma.lLMProvider.findMany({
+    where: { workspaceId, isActive: true },
+  });
+
+  if (workspaceProviders.length === 0) {
+    return { modelId: globalModel, apiKey: undefined, isBYOK: false };
+  }
+
+  // Check if the global model's provider matches a workspace BYOK provider
+  const globalProvider = getDefaultChatProviderType();
+  const matchingWsProvider = workspaceProviders.find(
+    (p) => p.type === globalProvider,
+  );
+
+  if (matchingWsProvider) {
+    // Same provider — use the global model with BYOK key
+    const { apiKey } = await resolveApiKeyForWorkspace(workspaceId, globalProvider);
+    return { modelId: globalModel, apiKey, isBYOK: true };
+  }
+
+  // Different provider — find a model at the right complexity from the BYOK provider
+  const byokProvider = workspaceProviders[0]; // Use the first BYOK provider
+
+  // Look up models from the global catalog for this provider type
+  const globalProviderRow = await prisma.lLMProvider.findFirst({
+    where: { type: byokProvider.type, workspaceId: null },
+  });
+
+  if (globalProviderRow) {
+    // Map complexity: "medium" and "high" both look for "medium" first (most providers use "medium" for their best model)
+    const complexityOrder =
+      complexity === "low" ? ["low", "medium"] : ["medium", "high", "low"];
+
+    for (const c of complexityOrder) {
+      const matchedModel = await prisma.lLMModel.findFirst({
+        where: {
+          providerId: globalProviderRow.id,
+          complexity: c,
+          capabilities: { has: "chat" },
+          isEnabled: true,
+          isDeprecated: false,
+        },
+      });
+
+      if (matchedModel) {
+        const { apiKey } = await resolveApiKeyForWorkspace(workspaceId, byokProvider.type);
+        return { modelId: matchedModel.modelId, apiKey, isBYOK: true };
+      }
+    }
+
+    // Last resort: any enabled chat model from this provider
+    const anyModel = await prisma.lLMModel.findFirst({
+      where: {
+        providerId: globalProviderRow.id,
+        capabilities: { has: "chat" },
+        isEnabled: true,
+        isDeprecated: false,
+      },
+    });
+
+    if (anyModel) {
+      const { apiKey } = await resolveApiKeyForWorkspace(workspaceId, byokProvider.type);
+      return { modelId: anyModel.modelId, apiKey, isBYOK: true };
+    }
+  }
+
+  // No matching model found — fall back to global model with no BYOK
+  logger.warn(
+    `[BYOK] No model found for workspace=${workspaceId} provider=${byokProvider.type} complexity=${complexity}, falling back to global model`,
+  );
+  return { modelId: globalModel, apiKey: undefined, isBYOK: false };
+}
+
+export type OpenAICompatibleConfig = {
+  id: `${string}/${string}`;
+  apiKey?: string;
+  url?: string;
+  headers?: Record<string, string>;
+};
+
+export type ModelConfig = string | OpenAICompatibleConfig;
+
+export interface ResolvedModelConfig {
+  modelConfig: ModelConfig;
+  isBYOK: boolean;
+}
+
+/**
+ * Resolve a model string to a Mastra-compatible model config.
+ * - BYOK workspace → OpenAICompatibleConfig { id, apiKey }
+ * - Platform key   → router string "provider/model"
+ */
+export async function resolveModelConfig(
+  modelString: string,
+  workspaceId: string | null | undefined,
+): Promise<ResolvedModelConfig> {
+  // Import inline to avoid circular deps at module load time
+  const { toRouterString, getProvider } = await import("~/lib/model.server");
+
+  const providerType = getProvider(modelString);
+  const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
+    workspaceId,
+    providerType,
+  );
+
+  const routerString = toRouterString(modelString) as `${string}/${string}`;
+
+  if (isBYOK && apiKey) {
+    return {
+      modelConfig: { id: routerString, apiKey },
+      isBYOK: true,
+    };
+  }
+
+  return { modelConfig: routerString, isBYOK: false };
 }

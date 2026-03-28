@@ -21,6 +21,8 @@ import {
   getProviderConfig,
   getEmbeddingDimensions,
   resolveApiKey,
+  resolveApiKeyForWorkspace,
+  resolveModelForWorkspace,
 } from "~/services/llm-provider.server";
 
 // ---------------------------------------------------------------------------
@@ -217,9 +219,26 @@ function logTokenUsage(prefix: string, model: string, tokenUsage: TokenUsage | u
 // Mastra Agent factory
 // ---------------------------------------------------------------------------
 
-export function createAgent(modelString: string, instructions?: string, tools?: ToolsInput): Agent {
+export function createAgent(
+  modelString: string,
+  instructions?: string,
+  tools?: ToolsInput,
+  options?: { apiKey?: string },
+): Agent {
   const provider = getProvider(modelString);
   const openaiConfig = getProviderConfig("openai");
+
+  // BYOK: use OpenAICompatibleConfig with explicit apiKey
+  if (options?.apiKey) {
+    const routerString = toRouterString(modelString) as `${string}/${string}`;
+    return new Agent({
+      id: `model-call-${modelString}`,
+      name: `Model Call (${modelString})`,
+      model: { id: routerString, apiKey: options.apiKey } as any,
+      instructions: instructions || "",
+      ...(tools && { tools }),
+    });
+  }
 
   // Ollama/proxy: use direct AI SDK model instance
   if (provider === "ollama" || (provider === "openai" && openaiConfig.baseUrl)) {
@@ -254,9 +273,11 @@ export async function makeModelCall(
   complexity: ModelComplexity = "medium",
   cacheKey?: string,
   reasoningEffort?: "low" | "medium" | "high",
+  workspaceId?: string,
 ) {
-  const model = getModelForTask(complexity);
-  logger.info(`complexity: ${complexity}, model: ${model}`);
+  // Resolve model + BYOK key for the workspace (picks provider-appropriate model)
+  const { modelId: model, apiKey, isBYOK } = await resolveModelForWorkspace(workspaceId, complexity);
+  logger.info(`complexity: ${complexity}, model: ${model}${isBYOK ? " (BYOK)" : ""}`);
 
   const providerOptions = buildOpenAIProviderOptions(
     model,
@@ -264,7 +285,7 @@ export async function makeModelCall(
     reasoningEffort,
   );
 
-  const agent = createAgent(model);
+  const agent = createAgent(model, undefined, undefined, apiKey ? { apiKey } : undefined);
 
   if (stream) {
     const result = await agent.stream(messages as any, {
@@ -328,8 +349,10 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   complexity: ModelComplexity = "medium",
   cacheKey?: string,
   temperature?: number,
+  workspaceId?: string,
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
-  const model = getModelForTask(complexity);
+  // Resolve model + BYOK key for the workspace (picks provider-appropriate model)
+  const { modelId: model, apiKey } = await resolveModelForWorkspace(workspaceId, complexity);
   logger.info(`[Structured] complexity: ${complexity}, model: ${model}`);
 
   const providerOptions = buildOpenAIProviderOptions(
@@ -344,6 +367,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
       messages,
       model,
       temperature,
+      apiKey,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -351,7 +375,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   }
 
   // Standard path: Mastra Agent with structuredOutput
-  const agent = createAgent(model);
+  const agent = createAgent(model, undefined, undefined, apiKey ? { apiKey } : undefined);
 
   try {
     const result = await agent.generate(messages as any, {
@@ -390,13 +414,15 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   messages: ModelMessage[],
   modelString: string,
   temperature?: number,
+  apiKey?: string,
 ): Promise<{ object: z.infer<T>; usage: any }> {
   const jsonPreamble =
     "Return ONLY a single valid JSON object that matches the requested schema. " +
     "Do not wrap it in Markdown fences. Do not include extra text. " +
     "Include every required key; use null for nullable fields; use [] for empty arrays.";
 
-  const agent = createAgent(modelString, jsonPreamble);
+  const agentOpts = apiKey ? { apiKey } : undefined;
+  const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
 
   const textResult = await agent.generate(messages as any, {
     ...(temperature !== undefined && { temperature }),
@@ -413,6 +439,8 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
     modelString,
     "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
     "Return ONLY the JSON object, with no Markdown fences and no extra text.",
+    undefined,
+    agentOpts,
   );
 
   const repairResult = await repairAgent.generate(

@@ -315,6 +315,7 @@ export async function extractLabelsFromEpisode(
     "medium",
     "label-extraction",
     0.3, // Low temperature for consistent label extraction
+    workspaceId,
   );
 
   // Create lookup map for existing labels (case-insensitive) for exact matching

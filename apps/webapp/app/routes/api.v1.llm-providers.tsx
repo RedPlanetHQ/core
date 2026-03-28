@@ -8,8 +8,8 @@ const loader = createHybridLoaderApiRoute(
     findResource: async () => 1,
     corsStrategy: "all",
   },
-  async () => {
-    const providers = await getProviders();
+  async ({ authentication }) => {
+    const providers = await getProviders(authentication.workspaceId as string | undefined);
     return json(providers);
   },
 );

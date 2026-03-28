@@ -9,6 +9,7 @@ import { type IngestBodyRequest } from "~/trigger/ingest/ingest";
 import { enqueuePreprocessEpisode } from "~/lib/queue-adapter.server";
 import { trackFeatureUsage } from "~/services/telemetry.server";
 import { estimateCreditsFromTokens, reserveCredits } from "~/jobs/credit_utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 // Used in the server
 export const addToQueue = async (
@@ -92,29 +93,33 @@ export const addToQueue = async (
     },
   });
 
-  // Attempt to reserve credits
-  const reserved = await reserveCredits(workspaceId, userId, estimatedCredits);
+  // Attempt to reserve credits (skip for BYOK workspaces)
+  const byok = await isWorkspaceBYOK(workspaceId);
 
-  if (reserved === 0) {
-    // Mark as NO_CREDITS so it can be retried after purchase
+  if (!byok) {
+    const reserved = await reserveCredits(workspaceId, userId, estimatedCredits);
+
+    if (reserved === 0) {
+      // Mark as NO_CREDITS so it can be retried after purchase
+      await prisma.ingestionQueue.update({
+        where: { id: queuePersist.id },
+        data: {
+          status: IngestionStatus.NO_CREDITS,
+          error:
+            "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
+        },
+      });
+      throw new Error("no credits");
+    }
+
+    // Store reserved amount for reconciliation later
     await prisma.ingestionQueue.update({
       where: { id: queuePersist.id },
       data: {
-        status: IngestionStatus.NO_CREDITS,
-        error:
-          "Insufficient credits. Please upgrade your plan or wait for your credits to reset.",
+        output: { reservedCredits: reserved },
       },
     });
-    throw new Error("no credits");
   }
-
-  // Store reserved amount for reconciliation later
-  await prisma.ingestionQueue.update({
-    where: { id: queuePersist.id },
-    data: {
-      output: { reservedCredits: reserved },
-    },
-  });
 
   // Use preprocessing flow for all types (preprocessing handles chunking, versioning, then enqueues ingestion)
   const handler = await enqueuePreprocessEpisode(
