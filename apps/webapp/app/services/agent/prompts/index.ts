@@ -17,8 +17,9 @@ export interface UserInfo {
   email: string;
   timezone: string;
   phoneNumber?: string;
-  personality?: PersonalityType;
+  personality?: string;
   pronoun?: PronounType;
+  customPersonality?: { text: string; useHonorifics: boolean };
 }
 
 /**
@@ -62,8 +63,8 @@ ${userPersona}
 </user-persona>`;
   }
 
-  const personalityType = userInfo?.personality || "tars";
-  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
+  const personalityType = (userInfo?.personality as PersonalityType) || "tars";
+  return `${PERSONALITY(userInfo?.name ?? "User", personalityType, userInfo?.pronoun, butlerName, userInfo?.customPersonality)}\n\n${CAPABILITIES}\n\n${channelFormat}\n\n${currentTime}${userContext}${personaSection}`;
 }
 
 // Re-export for convenience

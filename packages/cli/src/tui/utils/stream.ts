@@ -1,5 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import {exec} from 'node:child_process';
+import {appendFileSync} from 'node:fs';
+
+const LOG_FILE = '/tmp/core-stream.log';
+function streamLog(data: unknown): void {
+	try {
+		appendFileSync(LOG_FILE, JSON.stringify(data) + '\n');
+	} catch { /* ignore */ }
+}
 
 // ── Open URL in browser ───────────────────────────────────────────────────────
 
@@ -158,6 +166,7 @@ async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<St
 
 			try {
 				const event = JSON.parse(data) as StreamEvent;
+				streamLog(event);
 				yield event;
 			} catch {
 				// ignore malformed lines

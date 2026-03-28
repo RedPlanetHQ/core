@@ -19,7 +19,8 @@ import {
 } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
-import { type PersonalityType, type PronounType } from "~/services/agent/prompts/personality";
+import { type PronounType } from "~/services/agent/prompts/personality";
+import { getCustomPersonalities } from "~/models/personality.server";
 import { createCoreTools, createCoreAgents } from "~/services/agent/agents/core";
 import {
   type Trigger,
@@ -83,7 +84,7 @@ export async function buildAgentContext({
   modelConfig,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
+  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace, customPersonalities] =
     await Promise.all([
       getUserById(userId),
       getPersonaDocumentForUser(workspaceId),
@@ -101,6 +102,7 @@ export async function buildAgentContext({
         where: { id: workspaceId },
         select: { name: true },
       }),
+      getCustomPersonalities(workspaceId),
     ]);
 
   // Look up linked task context
@@ -113,7 +115,7 @@ export async function buildAgentContext({
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
-  const personality = (metadata?.personality as PersonalityType) ?? "tars";
+  const personality = (metadata?.personality as string) ?? "tars";
   const pronoun = (metadata?.pronoun as PronounType) ?? undefined;
   const defaultChannel =
     (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
@@ -190,6 +192,8 @@ export async function buildAgentContext({
     }),
   ]);
 
+  const customPersonality = customPersonalities.find((p) => p.id === personality);
+
   // Build system prompt
   let systemPrompt = getCorePrompt(
     source,
@@ -200,6 +204,9 @@ export async function buildAgentContext({
       phoneNumber: user?.phoneNumber ?? undefined,
       personality,
       pronoun,
+      customPersonality: customPersonality
+        ? { text: customPersonality.text, useHonorifics: customPersonality.useHonorifics }
+        : undefined,
     },
     persona ?? "",
     workspace?.name ?? undefined,

@@ -137,6 +137,17 @@ export class ToolCallItem implements Component {
 			}));
 	}
 
+	/**
+	 * TUI equivalent of webapp's cachedNestedPartsRef lookup.
+	 * Resumed streams send only toolResults, so this resolves a Mastra call ID
+	 * (e.g. "call k23...") to the child that was cached from the first stream.
+	 */
+	getChildInfo(callId: string): {toolName: string; input: Record<string, unknown>} | undefined {
+		const child = this.childrenByCallId.get(callId);
+		if (!child) return undefined;
+		return {toolName: child.toolName, input: child.parsedArgs()};
+	}
+
 	parsedArgs(): Record<string, unknown> {
 		try {
 			return JSON.parse(this.args) as Record<string, unknown>;

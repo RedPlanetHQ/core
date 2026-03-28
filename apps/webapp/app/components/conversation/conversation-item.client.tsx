@@ -20,7 +20,10 @@ import { ToolApprovalPanel } from "./tool-approval-panel.client";
 interface AIConversationItemProps {
   message: UIMessage;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
-  setToolArgOverride: (toolCallId: string, args: Record<string, unknown>) => void;
+  setToolArgOverride: (
+    toolCallId: string,
+    args: Record<string, unknown>,
+  ) => void;
   isChatBusy?: boolean;
   integrationAccountMap?: Record<string, string>;
   integrationFrontendMap?: Record<string, string>;

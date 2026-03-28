@@ -229,6 +229,7 @@ export function startTuiApp(
 		conversationComponents = [];
 		allToolItems = [];
 		pendingApprovalPanel = null;
+		pendingApprovalToolCallId = null;
 		autoApproveAll = false;
 		statusLine.setAcceptAll(false);
 		conversation.clear();
@@ -541,6 +542,7 @@ export function startTuiApp(
 					const idx = conversationComponents.lastIndexOf(pendingApprovalPanel);
 					if (idx !== -1) conversationComponents.splice(idx, 1);
 					pendingApprovalPanel = null;
+					pendingApprovalToolCallId = null;
 				}
 				addToMessages(
 					new Text(
@@ -594,6 +596,8 @@ export function startTuiApp(
 						const pidx = conversationComponents.lastIndexOf(panel);
 						if (pidx !== -1) conversationComponents.splice(pidx, 1);
 						pendingApprovalPanel = null;
+						const resolvedToolCallId = pendingApprovalToolCallId ?? '';
+						pendingApprovalToolCallId = null;
 
 						if (acceptAll) {
 							autoApproveAll = true;
@@ -603,7 +607,7 @@ export function startTuiApp(
 						showLoader();
 						tui.requestRender();
 
-						conversation.approve(approved, callbacks).catch(() => {
+						conversation.approve(approved, resolvedToolCallId, callbacks).catch(() => {
 							// errors handled via onError
 						});
 					};

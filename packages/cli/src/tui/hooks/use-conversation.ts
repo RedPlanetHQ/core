@@ -107,6 +107,8 @@ export function createConversation(
 	let conversationId: string | null = null;
 	let incognito = false;
 	let activeAbortController: AbortController | null = null;
+	// Equivalent of webapp's cachedNestedPartsRef — persists agent item across streams
+	let savedAgentItem: ToolCallItem | null = null;
 
 	// ── Shared stream event processor ─────────────────────────────────────────
 	async function processStream(
@@ -118,7 +120,7 @@ export function createConversation(
 		const toolNameMap = new Map<string, string>(); // toolCallId → toolName
 		const toolInputMap = new Map<string, Record<string, unknown>>(); // toolCallId → input
 		let activeParent: {id: string; item: ToolCallItem} | null = null;
-		let lastAgentItem: ToolCallItem | null = null; // last agent-* tool for data-tool-agent merging
+		let lastAgentItem: ToolCallItem | null = savedAgentItem; // restored from prior stream (like cachedNestedPartsRef)
 		let hadApprovalRequest = false;
 
 		try {
@@ -243,15 +245,42 @@ export function createConversation(
 							}
 						}
 
-						// Fall back to the container itself
-						const toolInput = toolInputMap.get(event.toolCallId);
-						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, toolName, toolInput);
+						// Save agent item so the next processStream (approval resume) can use it
+						if (lastAgentItem) savedAgentItem = lastAgentItem;
+
+						// Fall back: if toolName wasn't resolved, check children cached from first stream
+						let resolvedName = toolName;
+						let toolInput = toolInputMap.get(event.toolCallId);
+						if (resolvedName === event.toolCallId && lastAgentItem) {
+							const childInfo = lastAgentItem.getChildInfo(event.toolCallId);
+							if (childInfo) { resolvedName = childInfo.toolName; toolInput = childInfo.input; }
+						}
+						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, resolvedName, toolInput);
 						break;
 					}
 
 					case 'data-tool-agent': {
-						if (lastAgentItem && event.data) {
-							const parts = mastraDataToOutputParts(event.data);
+						// Mirror webapp's mergeAgentParts: agentData = raw.data ?? raw
+						const agentData = (event as any).data ?? event;
+						if (agentData.toolCalls || agentData.toolResults || agentData.steps) {
+							// Orphan in resumed approval stream — create synthetic item like webapp
+							if (!lastAgentItem) {
+								lastAgentItem = new ToolCallItem('agent-take_action');
+							}
+							const allAgentCalls = [
+								...(agentData.toolCalls ?? []),
+								...(Array.isArray(agentData.steps)
+									? agentData.steps.flatMap((s: any) => s.toolCalls ?? [])
+									: []),
+							];
+							for (const tc of allAgentCalls) {
+								const call = (tc as any).payload ?? tc;
+								if (call.toolCallId && call.toolName) {
+									toolNameMap.set(call.toolCallId as string, call.toolName as string);
+									if (call.args) toolInputMap.set(call.toolCallId as string, call.args as Record<string, unknown>);
+								}
+							}
+							const parts = mastraDataToOutputParts(agentData);
 							if (parts.length > 0) {
 								lastAgentItem.updateFromOutputParts(parts);
 								callbacks.onRerender?.();
@@ -323,6 +352,7 @@ export function createConversation(
 
 		clear() {
 			conversationId = null;
+			savedAgentItem = null;
 		},
 
 		resume(id: string) {
