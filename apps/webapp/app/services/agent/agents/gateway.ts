@@ -83,6 +83,12 @@ function gatewayToolToZodSchema(
   return z.object(shape);
 }
 
+const APPROVAL_REQUIRED_PATTERNS = [/^coding_ask$/i, /^exec_/i];
+
+function requiresApproval(toolName: string): boolean {
+  return APPROVAL_REQUIRED_PATTERNS.some((p) => p.test(toolName));
+}
+
 /**
  * Create Mastra tools from a gateway's tool definitions.
  * Each gateway tool becomes a Mastra createTool() with proper Zod schema.
@@ -91,6 +97,7 @@ function createGatewayTools(
   gatewayId: string,
   gatewayTools: GatewayTool[],
   executorTools?: OrchestratorTools,
+  interactive: boolean = true,
 ) {
   const tools: Record<string, any> = {};
 
@@ -101,6 +108,7 @@ function createGatewayTools(
       id: gatewayTool.name,
       description: gatewayTool.description,
       inputSchema: zodSchema,
+      requireApproval: interactive && requiresApproval(gatewayTool.name),
       execute: async (params) => {
         try {
           logger.info(
@@ -190,6 +198,7 @@ After execution, provide a clear summary of:
 export async function createGatewayAgent(
   gatewayId: string,
   executorTools?: OrchestratorTools,
+  interactive: boolean = true,
 ): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
 
@@ -207,7 +216,7 @@ export async function createGatewayAgent(
   }
 
   const gatewayTools = (gateway.tools || []) as unknown as GatewayTool[];
-  const tools = createGatewayTools(gatewayId, gatewayTools, executorTools);
+  const tools = createGatewayTools(gatewayId, gatewayTools, executorTools, interactive);
 
   const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
 
@@ -237,6 +246,7 @@ export async function createGatewayAgent(
 export async function createGatewayAgents(
   gateways: GatewayAgentInfo[],
   executorTools?: OrchestratorTools,
+  interactive: boolean = true,
 ): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];
@@ -244,7 +254,7 @@ export async function createGatewayAgents(
   for (const gw of gateways) {
     if (gw.status !== "CONNECTED") continue;
 
-    const { agent, connected } = await createGatewayAgent(gw.id, executorTools);
+    const { agent, connected } = await createGatewayAgent(gw.id, executorTools, interactive);
     if (connected) {
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
       agents[agentId] = agent;

@@ -24,8 +24,8 @@ import {WidgetsView} from './components/widgets-view.js';
 import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
-import {fetchConversationHistory, fetchWorkspace, openBrowser} from './utils/stream.js';
-import {ApprovalBar} from './components/approval-bar.js';
+import {fetchConversationHistory, fetchWorkspace, fetchIntegrationAccounts, openBrowser} from './utils/stream.js';
+import {ApprovalPanel} from './components/approval-panel.js';
 
 export function startTuiApp(
 	baseUrl: string,
@@ -130,13 +130,16 @@ export function startTuiApp(
 	tui.setFocus(editor);
 
 	// ── State ─────────────────────────────────────────────────────────────────
+	// accountId → frontendUrl map for toolUI loading
+	const accountFrontendMap = new Map<string, string>();
+
 	let overlayActive = false;
 	let isProcessing = false;
 	let allToolItems: ToolCallItem[] = [];
 	let conversationComponents: Component[] = [];
 	let requestId = 0;
 	let butlerName = 'CORE'; // replaced once workspace loads
-	let pendingApprovalBar: ApprovalBar | null = null;
+	let pendingApprovalPanel: ApprovalPanel | null = null;
 	let autoApproveAll = false;
 
 	const conversation = createConversation(baseUrl, apiKey);

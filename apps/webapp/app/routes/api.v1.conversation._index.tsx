@@ -7,21 +7,29 @@ import {
   updateConversationStatus,
   upsertConversationHistory,
 } from "~/services/conversation.server";
-import { Agent } from "@mastra/core/agent";
-
 import { toRouterString } from "~/lib/model.server";
 import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
-import { getMastra } from "~/services/agent/mastra";
+import { mastra } from "~/services/agent/mastra";
 import { logger } from "~/services/logger.service";
 import {
   saveConversationResult,
   streamToUIResponse,
+  drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
-import { type OutputProcessor, type Processor } from "@mastra/core/processors";
-
+import {
+  InputProcessor,
+  type OutputProcessor,
+  type Processor,
+} from "@mastra/core/processors";
+import {
+  ToolArgsPatchProcessor,
+  patchArgsDeep,
+} from "~/services/agent/tool-args-patch-processor";
+import { appendFile } from "fs/promises";
+import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
   message: z
     .object({
@@ -41,28 +49,13 @@ const ChatRequestSchema = z.object({
     .optional(),
   id: z.string(),
   needsApproval: z.boolean().optional(),
-  approved: z.boolean().optional(),
-  toolCallId: z.string().optional(),
+  interactive: z.boolean().optional().default(true),
+  toolArgOverrides: z
+    .record(z.string(), z.record(z.string(), z.unknown()))
+    .optional(),
   source: z.string().default("core"),
   modelId: z.string().optional(),
 });
-
-function detectApprovalFromMessages(messages: any[]): boolean {
-  if (!messages?.length) return false;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (!msg?.parts) continue;
-    for (const part of msg.parts) {
-      if (
-        part.state === "approval-responded" &&
-        part.approval?.approved === true
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
 
 const normalizeParts = (parts: any[] | undefined) =>
   (Array.isArray(parts) ? parts : []).filter(Boolean);
@@ -77,7 +70,7 @@ const { loader, action } = createHybridActionApiRoute(
     authorization: { action: "conversation" },
     corsStrategy: "all",
   },
-  async ({ body, authentication, request }) => {
+  async ({ body, authentication }) => {
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -172,10 +165,11 @@ const { loader, action } = createHybridActionApiRoute(
       source: body.source as any,
       finalMessages: useEmptyMessages ? [] : finalMessages,
       conversationId: body.id,
+      interactive: body.interactive,
     });
 
     const modelString = body.modelId ?? getDefaultChatModelId();
-    console.log("modelString", modelString);
+
     const agent = new Agent({
       id: "core-agent",
       name: "Core Agent",
@@ -186,8 +180,6 @@ const { loader, action } = createHybridActionApiRoute(
         take_action: takeActionAgent,
       },
     });
-
-    const mastra = getMastra();
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
     takeActionAgent.__registerMastra(mastra);
@@ -222,25 +214,79 @@ const { loader, action } = createHybridActionApiRoute(
     // Resume path — user approved/declined a suspended tool
     // -----------------------------------------------------------------------
     if (isAssistantApproval) {
-      const approved =
-        body.approved !== undefined
-          ? body.approved
-          : detectApprovalFromMessages(body.messages ?? []);
+      const rawOverrides = body.toolArgOverrides ?? {};
+
+      // Extract approval decisions from toolArgOverrides entries (approved key)
+      const toolDecisions = Object.entries(rawOverrides).filter(
+        ([, entry]) => "approved" in entry,
+      ) as [string, { approved: boolean } & Record<string, unknown>][];
 
       logger.info(
-        `[conversation] resuming: approved=${approved}, runId=${body.id}`,
+        `[conversation] resuming: ${toolDecisions.length} approval(s), runId=${body.id}`,
       );
 
-      let resumeResult;
+      let resumeResult: any;
+
+      // Build nested arg overrides: strip 'approved' from each entry so only
+      // the real tool args remain (accountId, action, parameters, etc.).
+      // Entries that have nothing left after stripping are excluded.
+      const nestedArgOverrides = Object.fromEntries(
+        Object.entries(rawOverrides)
+          .map(([id, { approved: _approved, ...rest }]) => [id, rest])
+          .filter(([, rest]) => Object.keys(rest as object).length > 0),
+      ) as Record<string, Record<string, unknown>>;
+
+      const requestContext = new RequestContext<any>();
+      requestContext.set(
+        "toolArgsOverride",
+        JSON.stringify(nestedArgOverrides),
+      );
       try {
-        resumeResult = approved
-          ? await agent.approveToolCall({
+        for (let i = 0; i < toolDecisions.length; i++) {
+          const [toolCallId, entry] = toolDecisions[i];
+          const isLast = i === toolDecisions.length - 1;
+          const { approved, ...args } = entry;
+
+          if (approved) {
+            resumeResult = await agent.approveToolCall({
               runId: body.id,
+              toolCallId,
+              toolCallConcurrency: 1,
+              requestContext,
+              prepareStep: (stepArgs) => {
+                if (Object.keys(nestedArgOverrides).length === 0) return;
+                // Deep-walk messages and patch args for any matching toolCallId,
+                // regardless of how deeply nested the tool call is.
+                //
+
+                const patchedMessages = patchArgsDeep(
+                  stepArgs.messages,
+                  nestedArgOverrides,
+                );
+
+                return {
+                  messages: patchedMessages as typeof stepArgs.messages,
+                };
+              },
               outputProcessors: [messageHistoryProcessor as OutputProcessor],
-            })
-          : await agent.declineToolCall({ runId: body.id });
+            });
+          } else {
+            resumeResult = await agent.declineToolCall({
+              runId: body.id,
+              toolCallId,
+              outputProcessors: [messageHistoryProcessor as OutputProcessor],
+            });
+          }
+
+          // Drain intermediate streams so each Mastra run finishes (and its
+          // outputProcessors fire) before the next tool decision is processed.
+          if (!isLast) {
+            await drainAgentResult(resumeResult);
+            resumeResult = undefined;
+          }
+        }
         logger.info(
-          `[conversation] approveToolCall obtained, runId=${resumeResult.runId}`,
+          `[conversation] resume complete, runId=${resumeResult?.runId ?? body.id}`,
         );
       } catch (err) {
         logger.error(`[conversation] approveToolCall failed`, {
@@ -263,6 +309,7 @@ const { loader, action } = createHybridActionApiRoute(
       toolsets: { core: tools },
       runId: body.id,
       stopWhen: [stepCountIs(10)],
+      toolCallConcurrency: 1,
       outputProcessors: [messageHistoryProcessor as OutputProcessor],
       modelSettings: { temperature: 0.5 },
     });

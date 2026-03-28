@@ -125,3 +125,23 @@ export function streamToUIResponse(agentResult: any): Response {
     stream: createUIStreamWithApprovals(agentResult),
   });
 }
+
+/**
+ * Fully consumes a Mastra agent result stream without sending it to the client.
+ * Used to drain intermediate results in a multi-decision approval loop so that
+ * each run's outputProcessors (history save) complete before the next starts.
+ */
+export async function drainAgentResult(agentResult: any): Promise<void> {
+  if (!agentResult) return;
+  try {
+    const stream = toAISdkStream(agentResult, { from: "agent", version: "v6" });
+    const reader = (stream as ReadableStream).getReader();
+    while (true) {
+      const { done } = await reader.read();
+      if (done) break;
+    }
+    reader.releaseLock();
+  } catch {
+    // ignore drain errors — the important side-effects (outputProcessors) already ran
+  }
+}

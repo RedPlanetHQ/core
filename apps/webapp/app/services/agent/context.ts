@@ -49,6 +49,8 @@ interface BuildAgentContextParams {
   conversationId: string;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
+  /** When false, tools run without requireApproval (non-interactive / automated contexts) */
+  interactive?: boolean;
 }
 
 interface AgentContext {
@@ -74,6 +76,7 @@ export async function buildAgentContext({
   channelMetadata,
   conversationId,
   executorTools,
+  interactive = true,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
@@ -178,6 +181,7 @@ export async function buildAgentContext({
         : undefined,
       defaultChannel,
       availableChannels,
+      interactive,
     }),
   ]);
 

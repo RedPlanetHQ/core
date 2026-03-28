@@ -5,8 +5,9 @@ import { extensionsForConversation } from "./editor-extensions";
 import { type ChatAddToolApproveResponseFunction, type UIMessage } from "ai";
 import { Button } from "../ui";
 import {
-  findAllToolsDeep,
   findFirstPendingApprovalIndex,
+  findAllToolsDeep,
+  findPendingApprovals,
   isToolDisabled,
   mergeAgentParts,
   groupToolParts,
@@ -14,17 +15,24 @@ import {
   type ExtendedPart,
 } from "./conversation-utils";
 import { Tool } from "./tool-item";
+import { ToolApprovalPanel } from "./tool-approval-panel.client";
 
 interface AIConversationItemProps {
   message: UIMessage;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
+  setToolArgOverride: (toolCallId: string, args: Record<string, unknown>) => void;
+  isChatBusy?: boolean;
   integrationAccountMap?: Record<string, string>;
+  integrationFrontendMap?: Record<string, string>;
 }
 
 const ConversationItemComponent = ({
   message,
   addToolApprovalResponse,
+  setToolArgOverride,
+  isChatBusy = false,
   integrationAccountMap = {},
+  integrationFrontendMap = {},
 }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
@@ -48,36 +56,19 @@ const ConversationItemComponent = ({
   }
 
   const mergedParts = mergeAgentParts(message.parts);
+
   const groupedParts = groupToolParts(mergedParts);
 
-  // Find the first pending approval tool globally (including nested sub-agents)
-  const allToolsFlat = findAllToolsDeep(message.parts);
-  const firstPendingApprovalIdx = findFirstPendingApprovalIndex(message.parts);
+  // Pending approvals from merged parts (so nested tools inside take_action are visible)
+  const pendingApprovals = isUser ? [] : findPendingApprovals(mergedParts);
 
-  // Enhanced addToolApprovalResponse that auto-rejects subsequent tools (including nested)
+  // Use mergedParts so data-tool-agent nested tools are included in the flat list
+  const allToolsFlat = findAllToolsDeep(mergedParts);
+  const firstPendingApprovalIdx = findFirstPendingApprovalIndex(mergedParts);
+
+  // Pass approval responses straight through — cascade-reject is handled inside ToolApprovalPanel.
   const handleToolApproval = (params: { id: string; approved: boolean }) => {
     addToolApprovalResponse(params);
-
-    if (!params.approved) {
-      const allTools = findAllToolsDeep(message.parts);
-      const currentToolIndex = allTools.findIndex(
-        (part) => part.approval?.id === params.id,
-      );
-
-      if (currentToolIndex !== -1) {
-        allTools.slice(currentToolIndex + 1).forEach((part) => {
-          if (part.state === "approval-requested" && part.approval?.id) {
-            setTimeout(() => {
-              addToolApprovalResponse({
-                id: (part as ConversationToolPart).approval!.id,
-                approved: false,
-                reason: "don't call this",
-              });
-            }, 100);
-          }
-        });
-      }
-    }
   };
 
   const getComponent = (part: ExtendedPart, isDisabled = false) => {
@@ -89,9 +80,10 @@ const ConversationItemComponent = ({
           part={part as unknown as ConversationToolPart}
           addToolApprovalResponse={handleToolApproval}
           isDisabled={isDisabled}
-          allToolsFlat={allToolsFlat}
           firstPendingApprovalIdx={firstPendingApprovalIdx}
           integrationAccountMap={integrationAccountMap}
+          integrationFrontendMap={integrationFrontendMap}
+          setToolArgOverride={setToolArgOverride}
         />
       );
     }
@@ -186,6 +178,17 @@ const ConversationItemComponent = ({
             </div>
           );
         })}
+
+        {pendingApprovals.length > 0 && (
+          <ToolApprovalPanel
+            pendingApprovals={pendingApprovals}
+            addToolApprovalResponse={handleToolApproval}
+            isChatBusy={isChatBusy}
+            integrationAccountMap={integrationAccountMap}
+            integrationFrontendMap={integrationFrontendMap}
+            setToolArgOverride={setToolArgOverride}
+          />
+        )}
       </div>
     </div>
   );

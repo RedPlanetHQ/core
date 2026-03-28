@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { cn } from "~/lib/utils";
 import { type ChatAddToolApproveResponseFunction } from "ai";
+import { loadWidgetBundle } from "~/utils/widget-loader.client";
 import {
   Collapsible,
   CollapsibleContent,
@@ -17,7 +18,6 @@ import {
   Search,
   TriangleAlert,
 } from "lucide-react";
-import { ApprovalComponent } from "./approval-component";
 import {
   type ConversationToolPart,
   type ToolPartState,
@@ -38,6 +38,8 @@ export const Tool = ({
   firstPendingApprovalIdx = -1,
   isNested = false,
   integrationAccountMap = {},
+  integrationFrontendMap = {},
+  setToolArgOverride,
 }: {
   part: ConversationToolPart;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
@@ -46,6 +48,11 @@ export const Tool = ({
   firstPendingApprovalIdx?: number;
   isNested?: boolean;
   integrationAccountMap?: Record<string, string>;
+  integrationFrontendMap?: Record<string, string>;
+  setToolArgOverride?: (
+    toolCallId: string,
+    args: Record<string, unknown>,
+  ) => void;
 }) => {
   const toolName = part.type.replace("tool-", "");
   const needsApproval = part.state === "approval-requested";
@@ -61,7 +68,7 @@ export const Tool = ({
 
   // AI SDK top-level tool parts use `args`; our synthetic nested parts use `input`.
   // Normalize once so all downstream code just reads `input`.
-  const input: Record<string, unknown> =
+  const input: Record<string, any> =
     part.input ??
     (part as unknown as { args?: Record<string, unknown> }).args ??
     {};
@@ -70,9 +77,51 @@ export const Tool = ({
   const allNestedParts = getNestedPartsFromOutput(part.output);
 
   // Filter to get only tool parts
-  const nestedToolParts = allNestedParts.filter(
+  const liveNestedToolParts = allNestedParts.filter(
     (item): item is ConversationToolPart => item.type.includes("tool-"),
   );
+
+  // Cache toolCalls seen in nested parts. The resumed stream (after approval)
+  // sends only toolResults — no toolCalls — so liveNestedToolParts becomes
+  // empty. The ref preserves the last known tool calls so we can still render
+  // them and update their state when the matching results arrive.
+  const cachedNestedPartsRef = useRef<ConversationToolPart[]>([]);
+  if (liveNestedToolParts.length > 0) {
+    cachedNestedPartsRef.current = liveNestedToolParts;
+  }
+
+  const nestedToolParts: ConversationToolPart[] = (() => {
+    if (liveNestedToolParts.length > 0) return liveNestedToolParts;
+    const cached = cachedNestedPartsRef.current;
+    if (cached.length === 0) return [];
+
+    // Extract toolResults from output to update cached parts' state
+    const rawOut = part.output as Record<string, unknown> | null | undefined;
+    if (!rawOut || typeof rawOut !== "object") return cached;
+    const steps = Array.isArray(rawOut.steps) ? rawOut.steps : [];
+    const lastStep = steps[steps.length - 1] as
+      | Record<string, unknown>
+      | undefined;
+    const allResults: Array<{ toolCallId: string; result: unknown }> = [
+      ...((rawOut.toolResults as any[]) ?? []).map((r: any) => r.payload ?? r),
+      ...((lastStep?.toolResults as any[]) ?? []).map(
+        (r: any) => r.payload ?? r,
+      ),
+    ];
+
+    return cached.map((cachedPart) => {
+      const match = allResults.find(
+        (r) => r.toolCallId === cachedPart.toolCallId,
+      );
+      if (!match) return cachedPart;
+      return {
+        ...cachedPart,
+        state: "output-available" as ToolPartState,
+        output: match.result,
+      };
+    });
+  })();
+
   const hasNestedTools = nestedToolParts.length > 0;
 
   // Check if any nested tool (at any depth) needs approval (to auto-open)
@@ -81,26 +130,121 @@ export const Tool = ({
 
   const [isOpen, setIsOpen] = useState(needsApproval || hasNestedApproval);
 
+  // ── ToolUI ──────────────────────────────────────────────────────────────────
+  // For execute_integration_action tools, the effective action is input.action.
+  const effectiveAction =
+    toolName === "execute_integration_action" &&
+    typeof input.action === "string"
+      ? input.action
+      : null;
+
+  const accountId =
+    typeof input.accountId === "string" ? input.accountId : undefined;
+  const frontendUrl = accountId ? integrationFrontendMap[accountId] : undefined;
+
+  type ToolUIComponent = React.ComponentType<Record<string, never>>;
+  const [ToolUIComp, setToolUIComp] = useState<ToolUIComponent | null>(null);
+  // Track which state we last loaded toolUI for to avoid redundant loads
+  // but allow re-loading when transitioning between phases.
+  const toolUILoadedForState = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!effectiveAction || !frontendUrl) return;
+
+    // Only render ToolUI when output is available (phase 2)
+    // Phase 1 ToolUI is handled by ToolApprovalPanel
+    const isPhase2 = part.state === "output-available";
+    if (!isPhase2) return;
+
+    // Already loaded for this exact state — skip
+    if (toolUILoadedForState.current === part.state) return;
+    toolUILoadedForState.current = part.state;
+
+    (async () => {
+      try {
+        const mod = await loadWidgetBundle(frontendUrl);
+        const toolUI = mod.toolUI as
+          | {
+              supported_tools: string[];
+              render: (
+                toolName: string,
+                input: Record<string, any>,
+                result: unknown,
+                context: Record<string, unknown>,
+                submitInput: (i: Record<string, unknown>) => void,
+                onDecline: () => void,
+              ) => Promise<ToolUIComponent>;
+            }
+          | undefined;
+
+        if (!toolUI?.supported_tools.includes(effectiveAction)) return;
+
+        const rawOutput = part.output;
+        const parsedOutput = (() => {
+          if (typeof rawOutput === "string") {
+            try {
+              return JSON.parse(rawOutput);
+            } catch {
+              return rawOutput;
+            }
+          }
+          return rawOutput;
+        })();
+        const result =
+          parsedOutput !== null &&
+          typeof parsedOutput === "object" &&
+          "content" in parsedOutput
+            ? (parsedOutput as Record<string, unknown>)
+            : parsedOutput;
+
+        let inputParameters = {};
+
+        try {
+          inputParameters = JSON.parse(input["parameters"]);
+        } catch {}
+
+        const Comp = await toolUI.render(
+          effectiveAction,
+          inputParameters,
+          result,
+          { placement: "webapp" },
+          (newInput) => {
+            if (setToolArgOverride && part.toolCallId) {
+              setToolArgOverride(part.toolCallId, {
+                ...input,
+                parameters: JSON.stringify(newInput),
+              });
+            }
+            if (part.approval?.id) {
+              addToolApprovalResponse({ id: part.approval.id, approved: true });
+            }
+            // keep collapsible open so user can see the submitted state
+          },
+          () => {
+            if (part.approval?.id) {
+              addToolApprovalResponse({
+                id: part.approval.id,
+                approved: false,
+              });
+            }
+            setIsOpen(false);
+          },
+        );
+
+        setToolUIComp(() => Comp as ToolUIComponent);
+      } catch {
+        // fall through to default rendering
+      }
+    })();
+  }, [effectiveAction, frontendUrl, part.state]);
+  // ────────────────────────────────────────────────────────────────────────────
+
   // Extract text parts from output (non-tool content)
   const textPart = allNestedParts
     .filter((item) => !item.type.includes("tool-") && "text" in item)
     .map((t) => ("text" in t ? t.text : ""))
     .filter(Boolean)
     .join("\n");
-
-  const handleApprove = () => {
-    if (addToolApprovalResponse && part.approval?.id && !isDisabled) {
-      addToolApprovalResponse({ id: part.approval.id, approved: true });
-      setIsOpen(false);
-    }
-  };
-
-  const handleReject = () => {
-    if (addToolApprovalResponse && part.approval?.id && !isDisabled) {
-      addToolApprovalResponse({ id: part.approval.id, approved: false });
-      setIsOpen(false);
-    }
-  };
 
   useEffect(() => {
     if (needsApproval || hasNestedApproval) {
@@ -131,13 +275,15 @@ export const Tool = ({
     parts: ConversationToolPart[],
   ): NestedInfo | null => {
     // Synthetic nested parts use "in-progress"; real parts may use "input-available" etc.
-    const last = [...parts].reverse().find(
-      (p) =>
-        p.state !== "output-available" &&
-        p.state !== "output-error" &&
-        p.state !== "output-denied" &&
-        p.state !== "approval-responded",
-    );
+    const last = [...parts]
+      .reverse()
+      .find(
+        (p) =>
+          p.state !== "output-available" &&
+          p.state !== "output-error" &&
+          p.state !== "output-denied" &&
+          p.state !== "approval-responded",
+      );
     if (!last) return null;
     const deeper = getNestedPartsFromOutput(last.output).filter(
       (p): p is ConversationToolPart => p.type.includes("tool-"),
@@ -188,10 +334,13 @@ export const Tool = ({
       return (
         <div className="text-muted-foreground flex items-center gap-2 py-1">
           <LoaderCircle className="h-4 w-4 animate-spin" />
-          <span className="text-sm">Working...</span>
+          <span className="text-sm">
+            {needsApproval ? "Awaiting approval..." : "Working..."}
+          </span>
         </div>
       );
     }
+
     return (
       <div
         className={cn(
@@ -200,22 +349,23 @@ export const Tool = ({
         )}
       >
         {nestedToolParts.map((nestedPart, idx) => {
-          const nestedDisabled = isToolDisabled(
-            nestedPart,
-            allToolsFlat,
-            firstPendingApprovalIdx,
-          );
+          const nestedDisabled =
+            needsApproval ||
+            isToolDisabled(nestedPart, allToolsFlat, firstPendingApprovalIdx);
           return (
-            <Tool
-              key={`flat-${idx}`}
-              part={nestedPart}
-              addToolApprovalResponse={addToolApprovalResponse}
-              isDisabled={nestedDisabled}
-              allToolsFlat={allToolsFlat}
-              firstPendingApprovalIdx={firstPendingApprovalIdx}
-              isNested={false}
-              integrationAccountMap={integrationAccountMap}
-            />
+            <div key={`flat-${idx}`}>
+              <Tool
+                part={nestedPart}
+                addToolApprovalResponse={addToolApprovalResponse}
+                isDisabled={nestedDisabled}
+                allToolsFlat={allToolsFlat}
+                firstPendingApprovalIdx={firstPendingApprovalIdx}
+                isNested={false}
+                integrationAccountMap={integrationAccountMap}
+                integrationFrontendMap={integrationFrontendMap}
+                setToolArgOverride={setToolArgOverride}
+              />
+            </div>
           );
         })}
       </div>
@@ -292,36 +442,35 @@ export const Tool = ({
   // Full (untruncated) primary input string shown at the top of the expanded view
   const ownFullInput = (() => {
     const str =
-      typeof input.query === "string" ? input.query :
-      typeof input.action === "string" ? input.action :
-      (Object.values(input).find((v) => typeof v === "string") as string | undefined);
+      typeof input.query === "string"
+        ? input.query
+        : typeof input.action === "string"
+          ? input.action
+          : (Object.values(input).find((v) => typeof v === "string") as
+              | string
+              | undefined);
     return str ?? null;
   })();
 
   // Render leaf tool (no nested tools) — compact output
   const renderLeafContent = () => {
-    if (needsApproval) {
-      if (isDisabled) {
-        return (
-          <div className="text-muted-foreground py-1 text-sm">
-            Waiting for previous tool approval...
-          </div>
-        );
-      }
-      const hasArgs = Object.keys(input).length > 0;
+    // If a ToolUI component is loaded, render it instead of raw JSON
+    if (ToolUIComp) {
       return (
-        <div>
-          {hasArgs && (
-            <div className="bg-grayAlpha-100 my-2 rounded p-2">
-              <pre className="text-muted-foreground max-h-[150px] overflow-auto font-mono text-sm">
-                {JSON.stringify(input, null, 2)}
-              </pre>
-            </div>
-          )}
-          <ApprovalComponent
-            onApprove={handleApprove}
-            onReject={handleReject}
-          />
+        <div className="py-1">
+          <ToolUIComp />
+        </div>
+      );
+    }
+
+    if (needsApproval) {
+      const hasArgs = Object.keys(input).length > 0;
+      if (!hasArgs) return null;
+      return (
+        <div className="bg-grayAlpha-100 my-2 rounded p-2">
+          <pre className="text-muted-foreground max-h-[150px] overflow-auto font-mono text-sm">
+            {JSON.stringify(input, null, 2)}
+          </pre>
         </div>
       );
     }
@@ -364,10 +513,6 @@ export const Tool = ({
 
   // Render nested tools (parent node)
   const renderNestedContent = () => {
-    // When parent has approval-requested, inject the approval into the last
-    // in-progress nested tool so it shows at the correct level
-    const parentApproval = needsApproval ? part.approval : null;
-
     return (
       <div className="mt-1">
         {ownFullInput && (
@@ -376,21 +521,6 @@ export const Tool = ({
           </p>
         )}
         {nestedToolParts.map((nestedPart, idx) => {
-          const isLastInProgress =
-            parentApproval &&
-            idx === nestedToolParts.length - 1 &&
-            nestedPart.state !== "output-available" &&
-            nestedPart.state !== "output-error" &&
-            nestedPart.state !== "output-denied";
-
-          const effectivePart: ConversationToolPart = isLastInProgress
-            ? {
-                ...nestedPart,
-                state: "approval-requested" as ToolPartState,
-                approval: parentApproval ?? undefined,
-              }
-            : nestedPart;
-
           const nestedDisabled = isToolDisabled(
             nestedPart,
             allToolsFlat,
@@ -400,13 +530,15 @@ export const Tool = ({
             <div key={`nested-${idx}`}>
               {idx > 0 && <div className="ml-3" />}
               <Tool
-                part={effectivePart}
+                part={nestedPart}
                 addToolApprovalResponse={addToolApprovalResponse}
                 isDisabled={nestedDisabled}
                 allToolsFlat={allToolsFlat}
                 firstPendingApprovalIdx={firstPendingApprovalIdx}
                 isNested={true}
                 integrationAccountMap={integrationAccountMap}
+                integrationFrontendMap={integrationFrontendMap}
+                setToolArgOverride={setToolArgOverride}
               />
             </div>
           );

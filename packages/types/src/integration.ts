@@ -92,6 +92,7 @@ export interface ToolUI {
     result: ToolResult | null,
     context: ToolUIRenderContext,
     submitInput: (input: ToolInput) => void,
+    onDecline: () => void,
   ): Promise<ToolUIComponent>;
 }
 

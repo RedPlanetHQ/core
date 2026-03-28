@@ -2,6 +2,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
+import { Memory } from "@mastra/memory";
 
 import { useParams, useNavigate, useFetcher } from "@remix-run/react";
 
@@ -28,6 +29,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import React from "react";
 
+import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 // Example loader accessing params
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -51,11 +53,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   const integrationAccountMap: Record<string, string> = {};
+  const integrationFrontendMap: Record<string, string> = {};
   for (const acc of integrationAccounts) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
+    if (acc.integrationDefinition.frontendUrl) {
+      integrationFrontendMap[acc.id] = acc.integrationDefinition.frontendUrl;
+    }
   }
 
-  return { conversation, integrationAccountMap };
+  return { conversation, integrationAccountMap, integrationFrontendMap };
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
@@ -65,7 +71,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap } =
+  const { conversation, integrationAccountMap, integrationFrontendMap } =
     useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { conversationId } = useParams();
@@ -146,6 +152,7 @@ export default function SingleConversation() {
           conversationId={conversationId as string}
           history={conversation.ConversationHistory}
           integrationAccountMap={integrationAccountMap}
+          integrationFrontendMap={integrationFrontendMap}
           conversationStatus={conversation.status}
           autoRegenerate
         />

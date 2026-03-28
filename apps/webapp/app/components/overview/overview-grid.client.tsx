@@ -181,7 +181,7 @@ export const OverviewGrid = forwardRef<OverviewGridHandle, Props>(function Overv
                     {option && widgetPat ? (
                       <WidgetCell
                         widgetSlug={option.widgetSlug}
-                        widgetUrl={option.widgetUrl}
+                        frontendUrl={option.frontendUrl}
                         integrationAccountId={option.integrationAccountId}
                         integrationSlug={option.integrationSlug}
                         integrationName={option.integrationName}

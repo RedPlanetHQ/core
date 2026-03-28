@@ -23,10 +23,12 @@ function EmailComposeForm({
   toolName,
   initialInput,
   submitInput,
+  onDecline,
 }: {
   toolName: string;
   initialInput: EmailInput;
   submitInput: (input: ToolInput) => void;
+  onDecline: () => void;
 }) {
   const [to, setTo] = useState(initialInput.to.join(', '));
   const [subject, setSubject] = useState(initialInput.subject);
@@ -103,7 +105,10 @@ function EmailComposeForm({
           placeholder="Email body..."
         />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+        <button onClick={onDecline} style={rejectButtonStyle}>
+          Reject
+        </button>
         <button onClick={handleSubmit} style={buttonStyle}>
           {label}
         </button>
@@ -142,6 +147,17 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
+const rejectButtonStyle: React.CSSProperties = {
+  padding: '6px 16px',
+  fontSize: 13,
+  fontWeight: 500,
+  borderRadius: 4,
+  border: '1px solid var(--border)',
+  background: 'transparent',
+  color: 'var(--muted-foreground)',
+  cursor: 'pointer',
+};
+
 const buttonStyle: React.CSSProperties = {
   padding: '6px 16px',
   fontSize: 13,
@@ -163,7 +179,8 @@ export const emailToolUI: ToolUI = {
     input: ToolInput,
     result: ToolResult | null,
     _context: ToolUIRenderContext,
-    submitInput: (input: ToolInput) => void
+    submitInput: (input: ToolInput) => void,
+    onDecline: () => void,
   ): Promise<ToolUIComponent> {
     const emailInput = input as unknown as EmailInput;
 
@@ -175,6 +192,7 @@ export const emailToolUI: ToolUI = {
             toolName={toolName}
             initialInput={emailInput}
             submitInput={submitInput}
+            onDecline={onDecline}
           />
         );
       };

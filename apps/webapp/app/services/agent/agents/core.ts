@@ -62,6 +62,8 @@ interface CreateCoreAgentsParams {
   defaultChannel?: "whatsapp" | "slack" | "email";
   availableChannels?: Array<"whatsapp" | "slack" | "email">;
   minRecurrenceMinutes?: number;
+  /** When false, tools run without requireApproval */
+  interactive?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -174,6 +176,7 @@ export async function createCoreAgents(
     defaultChannel,
     availableChannels,
     minRecurrenceMinutes,
+    interactive = true,
   } = params;
 
   const [reader, writer] = await Promise.all([
@@ -186,6 +189,7 @@ export async function createCoreAgents(
       persona,
       skills,
       executorTools,
+      interactive,
     ),
     createOrchestratorAgent(
       userId,
@@ -196,6 +200,7 @@ export async function createCoreAgents(
       persona,
       skills,
       executorTools,
+      interactive,
     ),
   ]);
 

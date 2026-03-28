@@ -38,6 +38,7 @@ interface ConversationTextareaProps {
   models?: LLMModel[];
   selectedModelId?: string;
   onModelChange?: (modelId: string) => void;
+  needsApproval?: boolean;
 }
 
 export function ConversationTextarea({
@@ -47,6 +48,7 @@ export function ConversationTextarea({
   onChange,
   onConversationCreated,
   stop,
+  needsApproval,
   disabled = false,
   models,
   selectedModelId,
@@ -100,7 +102,7 @@ export function ConversationTextarea({
 
             Placeholder.configure({
               placeholder: () =>
-                disabled
+                needsApproval
                   ? "Waiting for approval..."
                   : (placeholder ?? "ask corebrain..."),
               includeChildren: true,
@@ -166,7 +168,11 @@ export function ConversationTextarea({
               </SelectTrigger>
               <SelectContent>
                 {models.map((model) => (
-                  <SelectItem key={model.id} value={model.id} className="text-xs">
+                  <SelectItem
+                    key={model.id}
+                    value={model.id}
+                    className="text-xs"
+                  >
                     <span className="font-medium">{model.label}</span>
                     <span className="text-muted-foreground ml-1 capitalize">
                       · {model.provider}

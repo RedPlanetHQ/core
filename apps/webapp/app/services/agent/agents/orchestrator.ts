@@ -285,6 +285,7 @@ export async function createOrchestratorAgent(
   userPersona?: string,
   skills?: SkillRef[],
   executorTools?: OrchestratorTools,
+  interactive: boolean = true,
 ): Promise<CreateOrchestratorAgentResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
@@ -418,11 +419,34 @@ export async function createOrchestratorAgent(
           "Action parameters as JSON string, matching the inputSchema exactly",
         ),
     }),
-    // Only require approval for risky write actions
-    requireApproval: mode === "write",
-    execute: async (inputData) => {
+    // Only require approval for risky write actions in interactive mode
+    requireApproval: mode === "write" && interactive,
+    execute: async (inputData, args: any) => {
+      // Apply toolArgsOverride if the user modified args during approval
+      const callId = args?.agent?.toolCallId;
+      const overrideRaw = args?.requestContext?.get("toolArgsOverride");
+
+      if (callId && overrideRaw) {
+        try {
+          const overrideMap =
+            typeof overrideRaw === "string"
+              ? JSON.parse(overrideRaw)
+              : overrideRaw;
+          if (overrideMap[callId]?.parameters !== undefined) {
+            inputData = {
+              ...inputData,
+              parameters: overrideMap[callId].parameters,
+            };
+          }
+        } catch {
+          // ignore parse errors, fall through to original inputData
+        }
+      }
       try {
-        const parsedParams = JSON.parse(inputData.parameters);
+        const parsedParams =
+          typeof inputData.parameters === "string"
+            ? JSON.parse(inputData.parameters)
+            : inputData.parameters;
         logger.info(
           `Orchestrator: execute_integration_action - ${inputData.accountId}/${inputData.action} with params: ${JSON.stringify(parsedParams)}`,
         );
@@ -487,7 +511,7 @@ export async function createOrchestratorAgent(
 
   // Create gateway sub-subagents
   const { agents: gatewayAgentMap, agentList: gatewayAgentList } =
-    await createGatewayAgents(gatewayInfos, executorTools);
+    await createGatewayAgents(gatewayInfos, executorTools, interactive);
 
   // Build orchestrator agent with gateway agents as subagents
   const agent = new Agent({

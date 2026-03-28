@@ -11,7 +11,7 @@ export interface ConversationCallbacks {
 	onFinish?: () => void;
 	onAbort?: () => void;
 	onError?: (err: Error) => void;
-	onApprovalRequested?: (approvalId: string, toolCallId: string, toolName: string) => void;
+	onApprovalRequested?: (approvalId: string, toolCallId: string, toolName: string, input?: Record<string, unknown>) => void;
 }
 
 export interface Conversation {
@@ -46,6 +46,7 @@ export function createConversation(
 	): Promise<void> {
 		const activeTools = new Map<string, ToolCallItem>();
 		const toolNameMap = new Map<string, string>(); // toolCallId → toolName
+		const toolInputMap = new Map<string, Record<string, unknown>>(); // toolCallId → input
 		let activeParent: {id: string; item: ToolCallItem} | null = null;
 		let hadApprovalRequest = false;
 
@@ -83,8 +84,14 @@ export function createConversation(
 						break;
 					}
 
+					case 'tool-input-available': {
+						toolInputMap.set(event.toolCallId, event.input);
+						break;
+					}
+
 					case 'tool-call': {
 						toolNameMap.set(event.toolCallId, event.toolName);
+						toolInputMap.set(event.toolCallId, event.args);
 						const item = new ToolCallItem(event.toolName);
 						item.setArgs(event.args);
 						activeTools.set(event.toolCallId, item);
@@ -134,7 +141,8 @@ export function createConversation(
 					case 'tool-approval-request': {
 						hadApprovalRequest = true;
 						const toolName = toolNameMap.get(event.toolCallId) ?? event.toolCallId;
-						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, toolName);
+						const toolInput = toolInputMap.get(event.toolCallId);
+						callbacks.onApprovalRequested?.(event.approvalId, event.toolCallId, toolName, toolInput);
 						break;
 					}
 
