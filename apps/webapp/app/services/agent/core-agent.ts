@@ -19,6 +19,7 @@ import { getModel, getModelForTask } from "~/lib/model.server";
 import { logger } from "../logger.service";
 import { prisma } from "~/db.server";
 import { getReminderTools } from "./tools/reminder-tools";
+import { type WorkspaceChannelContext } from "~/services/channel.server";
 
 import {
   getSkillTool,
@@ -62,10 +63,8 @@ export const createTools = async (
   skills?: SkillRef[],
   /** Optional callback for channels to send intermediate messages (acks) */
   onMessage?: (message: string) => Promise<void>,
-  /** Default channel for reminders when source is not whatsapp/slack */
-  defaultChannel?: "whatsapp" | "slack" | "email",
-  /** Available channels for reminders */
-  availableChannels?: Array<"whatsapp" | "slack" | "email">,
+  /** Channel context from getWorkspaceChannelContext() */
+  channelCtx?: WorkspaceChannelContext,
   /** Conversation ID for web channel callbacks */
   conversationId?: string,
   /** Additional channel metadata for callbacks */
@@ -246,13 +245,14 @@ export const createTools = async (
   }
 
   // Add reminder management tools
-  // WhatsApp/Slack source → same channel, everything else → use defaultChannel or email
+  // WhatsApp/Slack source → same channel type, everything else → workspace default
+  const defaultChannelType = channelCtx?.defaultChannelType ?? "email";
   const channel =
     source === "whatsapp"
       ? "whatsapp"
       : source === "slack"
         ? "slack"
-        : defaultChannel || "email";
+        : defaultChannelType;
   // Look up plan type to enforce minimum recurrence interval
   const subscription = await prisma.subscription.findFirst({
     where: {
@@ -268,8 +268,9 @@ export const createTools = async (
     workspaceId,
     channel,
     timezone,
-    availableChannels || ["email"],
+    channelCtx?.availableTypes || ["email"],
     minRecurrenceMinutes,
+    channelCtx?.channels,
   );
 
   const taskTools = readOnly ? {} : getTaskTools(workspaceId, userId, isBackgroundExecution);

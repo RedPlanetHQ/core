@@ -226,39 +226,130 @@ export async function deleteChannel(
 }
 
 // ---------------------------------------------------------------------------
-// Available channels for reminders
+// Channel context — single source of truth for agent / reminder code
 // ---------------------------------------------------------------------------
 
+export interface ChannelRecord {
+  id: string;
+  name: string;
+  type: string;
+  isDefault: boolean;
+}
+
+export interface WorkspaceChannelContext {
+  /** Raw channel records (active, ordered default-first) */
+  channels: ChannelRecord[];
+  /** Unique channel types present (e.g. ["email", "slack"]) */
+  availableTypes: MessageChannel[];
+  /** Channel names for LLM-facing enum (e.g. ["Email", "Work Slack"]) */
+  channelNames: string[];
+  /** Default channel type (from first default channel, or "email") */
+  defaultChannelType: MessageChannel;
+  /** Default channel name */
+  defaultChannelName: string;
+  /**
+   * Resolve a channel name or type → { channelId, channelType }.
+   * Tries name match first, then type match. Returns null if not found.
+   */
+  resolveChannel: (nameOrType: string) => {
+    channelId: string;
+    channelType: MessageChannel;
+  } | null;
+}
+
 /**
- * Returns the list of available channel slugs for a workspace.
- * Always includes email. Also includes any active Channel records.
- * Used to validate reminder creation.
+ * Load all active channels for a workspace and return a reusable context object.
+ * This is the single query — call once and thread the result through.
+ */
+export async function getWorkspaceChannelContext(
+  workspaceId: string,
+): Promise<WorkspaceChannelContext> {
+  const records = await prisma.channel.findMany({
+    where: { workspaceId, isActive: true },
+    select: { id: true, name: true, type: true, isDefault: true },
+    orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
+  });
+
+  const byName = new Map<string, ChannelRecord>();
+  const byType = new Map<string, ChannelRecord>(); // first record per type
+  const types = new Set<MessageChannel>();
+
+  for (const ch of records) {
+    byName.set(ch.name, ch);
+    if (!byType.has(ch.type)) byType.set(ch.type, ch);
+    types.add(ch.type as MessageChannel);
+  }
+
+  const defaultRecord = records.find((ch) => ch.isDefault) ?? records[0];
+
+  return {
+    channels: records,
+    availableTypes: Array.from(types),
+    channelNames: records.map((ch) => ch.name),
+    defaultChannelType: (defaultRecord?.type as MessageChannel) ?? "email",
+    defaultChannelName: defaultRecord?.name ?? "Email",
+    resolveChannel(nameOrType: string) {
+      // Try exact name match first
+      const byNameMatch = byName.get(nameOrType);
+      if (byNameMatch) {
+        return {
+          channelId: byNameMatch.id,
+          channelType: byNameMatch.type as MessageChannel,
+        };
+      }
+      // Fall back to type match (backward compat: LLM passes "slack" instead of "Work Slack")
+      const byTypeMatch = byType.get(nameOrType);
+      if (byTypeMatch) {
+        return {
+          channelId: byTypeMatch.id,
+          channelType: byTypeMatch.type as MessageChannel,
+        };
+      }
+      return null;
+    },
+  };
+}
+
+/**
+ * Resolve a channel name or type to its MessageChannel type.
+ * Looks up by channelId first, then by name/type from the workspace context.
+ * Falls back to "email" if nothing matches.
+ */
+export async function resolveChannelType(
+  workspaceId: string,
+  channelNameOrType: string,
+  channelId?: string | null,
+): Promise<MessageChannel> {
+  if (channelId) {
+    const record = await prisma.channel.findFirst({
+      where: { id: channelId, isActive: true },
+      select: { type: true },
+    });
+    if (record) return record.type as MessageChannel;
+  }
+
+  // Try as a type directly
+  const validTypes: MessageChannel[] = ["email", "slack", "whatsapp", "telegram"];
+  if (validTypes.includes(channelNameOrType as MessageChannel)) {
+    return channelNameOrType as MessageChannel;
+  }
+
+  // Try as a name from the Channel table
+  const record = await prisma.channel.findFirst({
+    where: { workspaceId, name: channelNameOrType, isActive: true },
+    select: { type: true },
+  });
+  if (record) return record.type as MessageChannel;
+
+  return "email";
+}
+
+/**
+ * @deprecated Use getWorkspaceChannelContext instead.
  */
 export async function getAvailableChannels(
   workspaceId: string,
 ): Promise<MessageChannel[]> {
-  const [workspace, channels] = await Promise.all([
-    prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: { UserWorkspace: { include: { user: true }, take: 1 } },
-    }),
-    prisma.channel.findMany({
-      where: { workspaceId, isActive: true },
-      select: { type: true },
-    }),
-  ]);
-
-  const user = workspace?.UserWorkspace[0]?.user;
-  const available = new Set<MessageChannel>(["email"]);
-
-  if (user?.phoneNumber) available.add("whatsapp");
-
-  for (const ch of channels) {
-    const type = ch.type as MessageChannel;
-    if (type === "slack" || type === "telegram" || type === "whatsapp") {
-      available.add(type);
-    }
-  }
-
-  return Array.from(available);
+  const ctx = await getWorkspaceChannelContext(workspaceId);
+  return ctx.availableTypes;
 }

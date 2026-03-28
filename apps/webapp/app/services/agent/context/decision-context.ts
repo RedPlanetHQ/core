@@ -16,6 +16,7 @@ import {
 } from "../types/decision-agent";
 import type { MessageChannel } from "~/services/agent/types";
 import { logger } from "~/services/logger.service";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { UserTypeEnum } from "@core/types";
 import {
   createConversation,
@@ -63,12 +64,7 @@ async function getUserState(
   timezone: string,
 ): Promise<UserState> {
   try {
-    // Get user, last activity, and slack integration in parallel
-    const [user, lastUserMessage, slackAccount] = await Promise.all([
-      prisma.user.findUnique({
-        where: { id: userId },
-        select: { metadata: true, phoneNumber: true },
-      }),
+    const [lastUserMessage, channelCtx] = await Promise.all([
       prisma.conversationHistory.findFirst({
         where: {
           conversation: { userId },
@@ -77,32 +73,8 @@ async function getUserState(
         orderBy: { createdAt: "desc" },
         select: { createdAt: true },
       }),
-      prisma.integrationAccount.findFirst({
-        where: {
-          workspaceId,
-          integrationDefinition: { slug: "slack" },
-        },
-      }),
+      getWorkspaceChannelContext(workspaceId),
     ]);
-
-    const metadata = user?.metadata as Record<string, unknown> | null;
-    const defaultChannel =
-      (metadata?.defaultChannel as
-        | "whatsapp"
-        | "slack"
-        | "email"
-        | undefined) ?? "email";
-
-    // Determine available channels
-    const availableChannels: Array<"whatsapp" | "slack" | "email"> = ["email"];
-    if (user?.phoneNumber) availableChannels.push("whatsapp");
-    if (slackAccount) availableChannels.push("slack");
-
-    // Simple busy check based on time of day
-    // In future, this could check calendar integration
-    const now = new Date();
-    const hourInTimezone = getHourInTimezone(now, timezone);
-    const isNightTime = hourInTimezone < 7 || hourInTimezone >= 23;
 
     return {
       userId,
@@ -110,9 +82,8 @@ async function getUserState(
       timezone,
       lastActiveAt: lastUserMessage?.createdAt,
       currentlyBusy: false,
-      defaultChannel,
-      availableChannels,
-      // currentlyBusy: isNightTime, // Simple heuristic for now
+      defaultChannel: channelCtx.defaultChannelType,
+      availableChannels: channelCtx.availableTypes,
     };
   } catch (error) {
     logger.error("Failed to get user state", { userId, error });
@@ -201,6 +172,7 @@ export function createReminderTriggerFromDb(reminder: {
   workspaceId: string;
   text: string;
   channel: string;
+  channelId?: string | null;
   unrespondedCount: number;
   confirmedActive: boolean;
   occurrenceCount: number;
@@ -228,6 +200,7 @@ export function createReminderTriggerFromDb(reminder: {
     workspaceId: reminder.workspaceId,
     userId: reminder.userId,
     channel: reminder.channel as MessageChannel,
+    channelId: reminder.channelId,
     data,
   };
 }

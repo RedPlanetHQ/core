@@ -27,6 +27,8 @@ export interface BaseTrigger {
   userId: string;
   workspaceId: string;
   channel: MessageChannel;
+  /** FK to Channel table — when set, delivery uses this specific channel record */
+  channelId?: string | null;
 }
 
 export interface ReminderTriggerData {
@@ -163,8 +165,8 @@ export interface UserState {
   workspaceId?: string;
   lastActiveAt?: Date;
   currentlyBusy: boolean;
-  defaultChannel?: "whatsapp" | "slack" | "email";
-  availableChannels?: Array<"whatsapp" | "slack" | "email">;
+  defaultChannel?: MessageChannel;
+  availableChannels?: MessageChannel[];
 }
 
 export interface ReminderSummary {

@@ -20,6 +20,7 @@ import {
   computeNextRun,
 } from "~/services/reminder.server";
 import type { MessageChannel } from "~/services/agent/types";
+import type { ChannelRecord } from "~/services/channel.server";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 
@@ -137,11 +138,34 @@ export function getReminderTools(
   timezone: string = "UTC",
   availableChannels: MessageChannel[] = ["email"],
   minRecurrenceMinutes: number = 60,
+  channelRecords?: ChannelRecord[],
 ): Record<string, Tool> {
   const minRecurrenceLabel =
     minRecurrenceMinutes >= 60
       ? `${minRecurrenceMinutes / 60} hour${minRecurrenceMinutes > 60 ? "s" : ""}`
       : `${minRecurrenceMinutes} minutes`;
+
+  // Build name → channel record lookup for resolving at creation time
+  const channelByName = new Map<string, ChannelRecord>();
+  if (channelRecords?.length) {
+    for (const ch of channelRecords) {
+      channelByName.set(ch.name, ch);
+    }
+  }
+
+  // Build the channel enum: use channel names when records exist, fall back to types
+  const channelNames = channelRecords?.length
+    ? channelRecords.map((ch) => ch.name)
+    : null;
+
+  // Build channel schema — dynamic enum from Channel table names, or static type enum as fallback
+  const channelSchema = channelNames && channelNames.length > 0
+    ? z.string().optional().describe(
+        `Channel to send the reminder on. Available: ${channelNames.join(", ")}. Defaults to user's default channel if not specified.`,
+      )
+    : z.enum(["whatsapp", "slack", "email", "telegram"]).optional().describe(
+        "Channel to send the reminder on. Defaults to user's default channel if not specified.",
+      );
 
   return {
     add_reminder: tool({
@@ -200,12 +224,7 @@ FOLLOW-UP REMINDERS:
           .describe(
             "RRule schedule string (e.g., 'FREQ=DAILY;BYHOUR=9' for 9am daily)",
           ),
-        channel: z
-          .enum(["whatsapp", "slack", "email", "telegram"])
-          .optional()
-          .describe(
-            "Channel to send the reminder on. Defaults to user's default channel if not specified.",
-          ),
+        channel: channelSchema,
         startDate: z
           .string()
           .optional()
@@ -298,16 +317,33 @@ FOLLOW-UP REMINDERS:
           const maxOcc =
             maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null;
 
-          // Use specified channel or fall back to default
-          const targetChannel = reminderChannel || channel;
+          // Resolve channel: LLM passes a channel name (e.g. "Work Slack") or type fallback ("slack")
+          // We store the channel *name* so list_reminders shows it, and channelId for precise delivery.
+          let targetChannelName: string = channel; // default: current source channel type
+          let targetChannelId: string | null = null;
 
-          // Validate channel is available
-          if (!availableChannels.includes(targetChannel)) {
-            return `Channel "${targetChannel}" is not available. Available channels: ${availableChannels.join(", ")}`;
+          if (reminderChannel) {
+            // First try matching by name from channel records
+            const matchedByName = channelByName.get(reminderChannel);
+            if (matchedByName) {
+              targetChannelName = matchedByName.name;
+              targetChannelId = matchedByName.id;
+            } else {
+              // Fall back to treating it as a type (backward compat)
+              const asType = reminderChannel as MessageChannel;
+              if (availableChannels.includes(asType)) {
+                targetChannelName = reminderChannel;
+              } else {
+                const names = channelRecords?.length
+                  ? channelRecords.map((ch) => ch.name).join(", ")
+                  : availableChannels.join(", ");
+                return `Channel "${reminderChannel}" is not available. Available channels: ${names}`;
+              }
+            }
           }
 
           logger.info(
-            `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${targetChannel}`,
+            `Creating reminder for workspace ${workspaceId}: ${text} (${schedule}, start: ${startDate}, max: ${maxOcc}, end: ${endDate}, followUp: ${isFollowUp}) on ${targetChannelName}${targetChannelId ? ` [channelId: ${targetChannelId}]` : ""}`,
           );
 
           // Build metadata for follow-ups and skill attachments
@@ -326,7 +362,8 @@ FOLLOW-UP REMINDERS:
           const reminder = await addReminder(workspaceId, {
             text,
             schedule,
-            channel: targetChannel,
+            channel: targetChannelName,
+            channelId: targetChannelId,
             maxOccurrences: maxOcc,
             endDate: endDate ? new Date(endDate) : null,
             startDate: startDate ? new Date(startDate) : null,

@@ -25,6 +25,7 @@ import {
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { prisma } from "~/db.server";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -68,7 +69,7 @@ export async function buildAgentContext({
   executorTools,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace] =
+  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace, channelCtx] =
     await Promise.all([
       getUserById(userId),
       getPersonaDocumentForUser(workspaceId),
@@ -86,6 +87,7 @@ export async function buildAgentContext({
         where: { id: workspaceId },
         select: { name: true },
       }),
+      getWorkspaceChannelContext(workspaceId),
     ]);
 
   // Look up linked task context
@@ -100,40 +102,6 @@ export async function buildAgentContext({
   const timezone = (metadata?.timezone as string) ?? "UTC";
   const personality = (metadata?.personality as PersonalityType) ?? "tars";
   const pronoun = (metadata?.pronoun as PronounType) ?? undefined;
-  const defaultChannel =
-    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
-    "email";
-
-  // Determine available messaging channels
-  const hasWhatsapp = !!user?.phoneNumber;
-  const hasSlack = connectedIntegrations.some(
-    (int: IntegrationAccountWithDefinition) =>
-      int.integrationDefinition.slug === "slack",
-  );
-  const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
-    "email", // always available
-    ...(hasWhatsapp ? (["whatsapp"] as const) : []),
-    ...(hasSlack ? (["slack"] as const) : []),
-  ];
-
-  // Resolve replyTo for background task callbacks (so tasks are self-contained)
-  let replyTo: string | undefined;
-  if (source === "slack") {
-    const slackAccount = connectedIntegrations.find(
-      (int: IntegrationAccountWithDefinition) =>
-        int.integrationDefinition.slug === "slack",
-    );
-    replyTo = slackAccount?.accountId ?? undefined;
-  } else if (source === "whatsapp") {
-    replyTo = user?.phoneNumber ?? undefined;
-  } else if (source === "email") {
-    replyTo = user?.email ?? undefined;
-  }
-
-  const resolvedChannelMetadata = {
-    ...(channelMetadata ?? {}),
-    ...(replyTo ? { replyTo } : {}),
-  };
 
   const isBackgroundExecution = !!linkedTask;
 
@@ -146,10 +114,9 @@ export async function buildAgentContext({
     persona ?? undefined,
     skills,
     onMessage,
-    defaultChannel,
-    availableChannels,
+    channelCtx,
     conversationId,
-    resolvedChannelMetadata,
+    channelMetadata,
     executorTools,
     triggerContext
       ? {
@@ -198,10 +165,10 @@ export async function buildAgentContext({
   // Messaging channels context
   systemPrompt += `
     <messaging_channels>
-    Channels you can reach them on: ${availableChannels.join(", ")}
-    Default: ${defaultChannel}
+    Channels you can reach them on: ${channelCtx.channelNames.join(", ")}
+    Default: ${channelCtx.defaultChannelName}
 
-    Reminders go via ${defaultChannel} unless they say otherwise.
+    Reminders go via ${channelCtx.defaultChannelName} unless they say otherwise.
     </messaging_channels>`;
 
   // Skills context

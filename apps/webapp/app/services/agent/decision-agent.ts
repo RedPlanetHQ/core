@@ -148,6 +148,7 @@ export async function runDecisionAgent(
   context: DecisionContext,
   userPersona?: string,
   executorTools?: import("./orchestrator-tools").OrchestratorTools,
+  channelCtx?: import("~/services/channel.server").WorkspaceChannelContext,
 ): Promise<DecisionAgentResult> {
   const startTime = Date.now();
 
@@ -213,8 +214,7 @@ export async function runDecisionAgent(
       userPersona,
       skills,
       undefined, // onMessage
-      context.user.defaultChannel,
-      context.user.availableChannels,
+      channelCtx,
       undefined, // conversationId
       undefined, // channelMetadata
       executorTools,
