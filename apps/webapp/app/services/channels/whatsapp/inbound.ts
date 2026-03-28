@@ -1,4 +1,7 @@
-import { getUserByPhone } from "~/models/user.server";
+import {
+  getUserByPhone,
+  getUserWorkspaceByWorkspace,
+} from "~/models/user.server";
 import { prisma } from "~/db.server";
 import { verifyTwilioSignature, type TwilioCredentials } from "./client";
 import { logger } from "~/services/logger.service";
@@ -17,29 +20,34 @@ async function resolveChannel(
     where: {
       type: "whatsapp",
       isActive: true,
+      config: {
+        path: ["phone_number"],
+        equals: fromPhone,
+      },
     },
     orderBy: { isDefault: "desc" },
   });
 
-  // Match by phone_number stored in config
   if (channel) {
     const config = channel.config as Record<string, string>;
-    if (config.phone_number === fromPhone || config.phone_number === `+${fromPhone}`) {
-      const accountSid = config.account_sid ?? env.TWILIO_ACCOUNT_SID;
-      const authToken = config.auth_token ?? env.TWILIO_AUTH_TOKEN;
-      const whatsappNumber = config.whatsapp_number ?? env.TWILIO_WHATSAPP_NUMBER;
+    const accountSid = config.account_sid ?? env.TWILIO_ACCOUNT_SID;
+    const authToken = config.auth_token ?? env.TWILIO_AUTH_TOKEN;
+    const whatsappNumber = config.whatsapp_number ?? env.TWILIO_WHATSAPP_NUMBER;
 
-      if (accountSid && authToken && whatsappNumber) {
-        return {
-          creds: { accountSid, authToken, whatsappNumber },
-          workspaceId: channel.workspaceId,
-        };
-      }
+    if (accountSid && authToken && whatsappNumber) {
+      return {
+        creds: { accountSid, authToken, whatsappNumber },
+        workspaceId: channel.workspaceId,
+      };
     }
   }
 
   // Fallback: env-var credentials only (no DB channel match)
-  if (env.TWILIO_ACCOUNT_SID && env.TWILIO_AUTH_TOKEN && env.TWILIO_WHATSAPP_NUMBER) {
+  if (
+    env.TWILIO_ACCOUNT_SID &&
+    env.TWILIO_AUTH_TOKEN &&
+    env.TWILIO_WHATSAPP_NUMBER
+  ) {
     // Try to find workspaceId from any active whatsapp channel
     const fallbackChannel = await prisma.channel.findFirst({
       where: { type: "whatsapp", isActive: true },
@@ -83,7 +91,10 @@ export async function parseInbound(
   // Resolve channel and credentials by caller's phone number
   const resolved = await resolveChannel(from);
   if (!resolved) {
-    logger.warn("No WhatsApp channel or Twilio credentials for incoming message", { from });
+    logger.warn(
+      "No WhatsApp channel or Twilio credentials for incoming message",
+      { from },
+    );
     return {};
   }
 
@@ -92,28 +103,17 @@ export async function parseInbound(
   const url = new URL(request.url);
   const fullUrl = url.origin + url.pathname;
 
-  if (!verifyTwilioSignature(fullUrl, params, signature, resolved.creds.authToken)) {
+  if (
+    !verifyTwilioSignature(fullUrl, params, signature, resolved.creds.authToken)
+  ) {
     logger.warn("Invalid Twilio signature", { from });
     return {};
   }
 
-  // Look up user by phone
-  const user = await getUserByPhone(from);
-  if (!user) {
-    logger.warn("WhatsApp message from unknown phone", { from });
-    return { unknownContact: { identifier: from, channel: "whatsapp" } };
-  }
+  const userWorkspace = await getUserWorkspaceByWorkspace(resolved.workspaceId);
 
-  // Get user's workspace (prefer the one from channel record)
-  const userWorkspace = await prisma.userWorkspace.findFirst({
-    where: {
-      userId: user.id,
-      workspaceId: resolved.workspaceId,
-    },
-  });
-
-  if (!userWorkspace) {
-    logger.warn("User has no workspace", { userId: user.id });
+  if (!resolved.workspaceId) {
+    logger.warn("User has no workspace");
     return {};
   }
 
@@ -152,8 +152,8 @@ export async function parseInbound(
 
   return {
     message: {
-      userId: user.id,
-      workspaceId: userWorkspace.workspaceId,
+      userId: userWorkspace?.userId as string,
+      workspaceId: resolved.workspaceId,
       userMessage: body,
       replyTo: from,
       metadata: {

@@ -328,7 +328,12 @@ export async function resolveChannelType(
   }
 
   // Try as a type directly
-  const validTypes: MessageChannel[] = ["email", "slack", "whatsapp", "telegram"];
+  const validTypes: MessageChannel[] = [
+    "email",
+    "slack",
+    "whatsapp",
+    "telegram",
+  ];
   if (validTypes.includes(channelNameOrType as MessageChannel)) {
     return channelNameOrType as MessageChannel;
   }

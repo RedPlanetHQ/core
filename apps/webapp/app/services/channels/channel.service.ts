@@ -103,7 +103,6 @@ export async function handleChannelMessage(
   return channel.emptyResponse();
 }
 
-
 /**
  * Send a signup/verification invite to an unknown user via their channel.
  */

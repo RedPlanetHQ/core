@@ -35,7 +35,10 @@ export function splitMessage(
   limit: number = MESSAGE_CHAR_LIMIT,
 ): string[] {
   // Split by explicit separator first
-  const sections = text.split(MESSAGE_SEPARATOR).map((s) => s.trim()).filter(Boolean);
+  const sections = text
+    .split(MESSAGE_SEPARATOR)
+    .map((s) => s.trim())
+    .filter(Boolean);
 
   const chunks: string[] = [];
   for (const section of sections) {
@@ -114,9 +117,9 @@ export async function sendWhatsAppTypingIndicator(
     const creds = credentials ?? getEnvCredentials();
     if (!creds) return;
 
-    const auth = Buffer.from(
-      `${creds.accountSid}:${creds.authToken}`,
-    ).toString("base64");
+    const auth = Buffer.from(`${creds.accountSid}:${creds.authToken}`).toString(
+      "base64",
+    );
 
     await fetch("https://messaging.twilio.com/v2/Indicators/Typing.json", {
       method: "POST",
@@ -149,8 +152,11 @@ export function verifyTwilioSignature(
 ): boolean {
   const token = authToken ?? env.TWILIO_AUTH_TOKEN;
   if (!token) {
-    logger.warn("Twilio auth token not configured, skipping signature verification");
+    logger.warn(
+      "Twilio auth token not configured, skipping signature verification",
+    );
     return false;
   }
+
   return Twilio.validateRequest(token, signature, url, params);
 }

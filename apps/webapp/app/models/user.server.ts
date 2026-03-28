@@ -181,7 +181,10 @@ export async function findOrCreateGoogleUser({
 }
 
 export async function storeOnboardingSummary(id: User["id"], summary: string) {
-  const user = await prisma.user.findUnique({ where: { id }, select: { metadata: true } });
+  const user = await prisma.user.findUnique({
+    where: { id },
+    select: { metadata: true },
+  });
   const existing = (user?.metadata ?? {}) as Record<string, unknown>;
   return prisma.user.update({
     where: { id },
@@ -189,7 +192,9 @@ export async function storeOnboardingSummary(id: User["id"], summary: string) {
   });
 }
 
-export async function isUserOnboardingComplete(id: User["id"]): Promise<boolean> {
+export async function isUserOnboardingComplete(
+  id: User["id"],
+): Promise<boolean> {
   const user = await prisma.user.findUnique({
     where: { id },
     select: { onboardingComplete: true },
@@ -289,6 +294,14 @@ export async function deleteUser(id: User["id"]) {
 
 export async function getUserByPhone(phoneNumber: string) {
   return prisma.user.findUnique({ where: { phoneNumber } });
+}
+
+export async function getUserWorkspaceByWorkspace(workspaceId: string) {
+  return prisma.userWorkspace.findFirst({
+    where: {
+      workspaceId,
+    },
+  });
 }
 
 export const setPhoneNumber = async (phoneNumber: string, userId: string) => {
