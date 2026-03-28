@@ -28,6 +28,7 @@ import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { upsertConversationHistory } from "~/services/conversation.server";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { deductCredits } from "~/trigger/utils/utils";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
 
 // ============================================================================
 // Types
@@ -103,6 +104,13 @@ export async function runCASEPipeline(
     );
 
     // =========================================================================
+    // Resolve channel type from Channel table (trigger.channel is a name now)
+    // =========================================================================
+    const channelCtx = await getWorkspaceChannelContext(userData.workspaceId);
+    const resolved = channelCtx.resolveChannel(trigger.channel);
+    const channelType: ChannelType = (resolved?.channelType ?? channelCtx.defaultChannelType) as ChannelType;
+
+    // =========================================================================
     // Run butler with think tool enabled
     // =========================================================================
     logger.info(`[pipeline] Running butler with think for ${reminderId}`);
@@ -110,7 +118,7 @@ export async function runCASEPipeline(
     const { responseText, parts } = await processInboundMessage({
       userId: userData.userId,
       workspaceId: userData.workspaceId,
-      channel: trigger.channel as ChannelType,
+      channel: channelType,
       userMessage: `[Trigger fired] ${reminderText}`,
       conversationId,
       skipUserMessage: true,
@@ -157,6 +165,7 @@ export async function runCASEPipeline(
         userData,
         { id: reminderId, text: reminderText },
         conversationId,
+        trigger.channelId,
       );
     } else {
       logger.info(`[pipeline] Butler executed silently for ${reminderId}`, {
@@ -233,7 +242,8 @@ export async function runCASEPipeline(
 // ============================================================================
 
 /**
- * Deliver the butler's response to the user's channel (WhatsApp, Slack, email)
+ * Deliver the butler's response to the user's channel.
+ * Resolves the target from the Channel table — by channelId (precise) or by name fallback.
  */
 async function deliverToChannel(
   responseText: string,
@@ -246,51 +256,52 @@ async function deliverToChannel(
   },
   reminder: { id: string; text: string },
   conversationId: string,
+  channelId?: string | null,
 ) {
-  const handler = getChannel(channel);
   let replyTo: string | undefined;
-
-  if (channel === "whatsapp") {
-    replyTo = userData.phoneNumber;
-  } else if (channel === "slack") {
-    const slackAccount = await prisma.integrationAccount.findFirst({
-      where: {
-        integratedById: userData.userId,
-        integrationDefinition: { slug: "slack" },
-        isActive: true,
-        deleted: null,
-      },
-      select: { accountId: true },
-    });
-    replyTo = slackAccount?.accountId ?? undefined;
-  } else if (channel === "telegram") {
-    const telegramChannel = await prisma.channel.findFirst({
-      where: { workspaceId: userData.workspaceId, type: "telegram", isActive: true },
-      orderBy: { isDefault: "desc" },
-    });
-    const config = telegramChannel?.config as Record<string, string> | undefined;
-    replyTo = config?.chat_id;
-    if (telegramChannel) {
-      (metadata as Record<string, string>).channelId = telegramChannel.id;
-    }
-  } else {
-    replyTo = userData.email;
-  }
-
-  if (!replyTo) {
-    logger.error(`[pipeline] No delivery target for channel=${channel}, userId=${userData.userId}`, {
-      reminderId: reminder.id,
-      channel,
-      hasPhone: !!userData.phoneNumber,
-      hasEmail: !!userData.email,
-    });
-    return;
-  }
+  let channelType: string | undefined;
 
   const metadata: Record<string, string> = {
     workspaceId: userData.workspaceId,
   };
-  if (channel === "email") {
+
+  // Resolve channel record: by channelId first, then by name, then by type
+  const channelRecord = channelId
+    ? await prisma.channel.findFirst({
+        where: { id: channelId, workspaceId: userData.workspaceId, isActive: true },
+      })
+    : await prisma.channel.findFirst({
+        where: {
+          workspaceId: userData.workspaceId,
+          isActive: true,
+          OR: [{ name: channel }, { type: channel }],
+        },
+        orderBy: { isDefault: "desc" },
+      });
+
+  if (channelRecord) {
+    const config = channelRecord.config as Record<string, string>;
+    channelType = channelRecord.type;
+    metadata.channelId = channelRecord.id;
+
+    if (channelType === "slack") {
+      replyTo = config.user_id;
+    } else if (channelType === "whatsapp") {
+      replyTo = config.phone_number ?? userData.phoneNumber;
+    } else if (channelType === "telegram") {
+      replyTo = config.chat_id;
+    } else {
+      replyTo = userData.email;
+    }
+  }
+
+  // Last resort: no channel record found
+  if (!channelType) channelType = "email";
+  if (!replyTo) replyTo = userData.email;
+
+  const handler = getChannel(channelType);
+
+  if (channelType === "email") {
     const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
     const subject = subjectMatch
       ? subjectMatch[1].trim()
@@ -298,15 +309,17 @@ async function deliverToChannel(
     metadata.subject = subject.slice(0, 120);
   }
 
-  logger.info(`[pipeline] Sending ${channel} message`, {
+  logger.info(`[pipeline] Sending ${channelType} message`, {
     reminderId: reminder.id,
     replyTo,
+    channel,
+    channelId: metadata.channelId,
     responseLength: responseText.length,
     responsePreview: responseText.slice(0, 150),
   });
 
   await handler.sendReply(replyTo, responseText, metadata);
-  logger.info(`[pipeline] Sent ${channel} message for ${reminder.id} to ${userData.userId}`);
+  logger.info(`[pipeline] Sent ${channelType} message for ${reminder.id} to ${userData.userId}`);
 
   // Mirror to channel conversation so user replies have context
   try {
@@ -314,7 +327,7 @@ async function deliverToChannel(
       userData.userId,
       userData.workspaceId,
       reminder.text,
-      channel,
+      channelType,
     );
     await upsertConversationHistory(
       crypto.randomUUID(),

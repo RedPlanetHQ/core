@@ -38,13 +38,13 @@ import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http"
 export interface ReminderJobData {
   reminderId: string;
   workspaceId: string;
-  channel: MessageChannel;
+  channel: string; // Channel name or type — actual routing uses channelId from DB
 }
 
 export interface FollowUpJobData {
   parentReminderId: string;
   workspaceId: string;
-  channel: MessageChannel;
+  channel: string;
   action: string;
   originalSentAt: string; // ISO timestamp
 }
@@ -124,6 +124,7 @@ export async function processReminderJob(
       workspaceId,
       text: reminder.text,
       channel: reminder.channel,
+      channelId: reminder.channelId,
       unrespondedCount: reminder.unrespondedCount,
       confirmedActive: reminder.confirmedActive,
       occurrenceCount: reminder.occurrenceCount,

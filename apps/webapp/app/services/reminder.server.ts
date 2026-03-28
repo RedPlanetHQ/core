@@ -6,15 +6,14 @@ import {
   removeScheduledReminder,
 } from "~/lib/queue-adapter.server";
 import { logger } from "./logger.service";
-import type { MessageChannel } from "~/services/agent/types";
 import { prisma } from "~/db.server";
 import { type Prisma } from "@prisma/client";
 
 export interface ReminderData {
   text: string;
   schedule: string; // RRule string (in user's local timezone)
-  channel: MessageChannel;
-  channelId?: string | null; // Optional FK to Channel table for explicit routing
+  channel: string; // Channel name (e.g. "Email", "Work Slack") or type (e.g. "email", "slack") for backward compat
+  channelId?: string | null; // FK to Channel table for explicit routing
   isActive?: boolean;
   maxOccurrences?: number | null;
   endDate?: Date | null;
@@ -25,7 +24,7 @@ export interface ReminderData {
 export interface ReminderUpdateData {
   text?: string;
   schedule?: string;
-  channel?: MessageChannel;
+  channel?: string;
   isActive?: boolean;
   maxOccurrences?: number | null;
   endDate?: Date | null;
@@ -207,6 +206,7 @@ export async function addReminder(
         startDate: data.startDate ?? null,
         nextRunAt,
         channel: data.channel,
+        channelId: data.channelId ?? null,
         isActive: data.isActive ?? true,
         unrespondedCount: 0,
         maxOccurrences: data.maxOccurrences ?? null,
@@ -222,7 +222,7 @@ export async function addReminder(
         {
           reminderId: reminder.id,
           workspaceId,
-          channel: reminder.channel as MessageChannel,
+          channel: reminder.channel,
         },
         nextRunAt,
       );
@@ -303,7 +303,7 @@ export async function updateReminder(
         {
           reminderId: reminder.id,
           workspaceId,
-          channel: reminder.channel as MessageChannel,
+          channel: reminder.channel,
         },
         reminder.nextRunAt,
       );
@@ -448,7 +448,7 @@ export async function scheduleNextOccurrence(
       {
         reminderId,
         workspaceId: reminder.workspaceId,
-        channel: reminder.channel as MessageChannel,
+        channel: reminder.channel,
       },
       nextRunAt,
     );
@@ -755,7 +755,7 @@ export async function rescheduleReminderAt(
     {
       reminderId,
       workspaceId,
-      channel: existing.channel as MessageChannel,
+      channel: existing.channel,
     },
     nextRunAt,
   );
@@ -861,7 +861,7 @@ export async function recalculateRemindersForTimezone(
             {
               reminderId: reminder.id,
               workspaceId,
-              channel: reminder.channel as MessageChannel,
+              channel: reminder.channel,
             },
             nextRunAt,
           );

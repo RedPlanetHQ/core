@@ -69,6 +69,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     const accountSid = formData.get("account_sid") as string;
     const authToken = formData.get("auth_token") as string;
     const whatsappNumber = formData.get("whatsapp_number") as string;
+    const phoneNumber = formData.get("phone_number") as string;
     const isDefault = formData.get("isDefault") === "true";
 
     if (!name || !type) {
@@ -98,16 +99,17 @@ export const action = async ({ request }: ActionFunctionArgs) => {
         ...(userId ? { user_id: userId } : {}),
       };
     } else if (type === "whatsapp") {
-      if (!accountSid || !authToken || !whatsappNumber) {
+      if (!phoneNumber) {
         return json(
-          { error: "Account SID, Auth Token, and WhatsApp Number are required" },
+          { error: "Your Phone Number is required for WhatsApp" },
           { status: 400 },
         );
       }
       config = {
-        account_sid: accountSid,
-        auth_token: authToken,
-        whatsapp_number: whatsappNumber,
+        phone_number: phoneNumber,
+        ...(accountSid ? { account_sid: accountSid } : {}),
+        ...(authToken ? { auth_token: authToken } : {}),
+        ...(whatsappNumber ? { whatsapp_number: whatsappNumber } : {}),
       };
     }
 
@@ -231,7 +233,7 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
               <Label>Bot User ID</Label>
               <Input
                 name="bot_user_id"
-                placeholder="e.g. U0123456789"
+                placeholder="e.g. UXXXXXXXXX"
                 required
               />
               <p className="text-muted-foreground text-xs">
@@ -241,7 +243,7 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
             </div>
             <div className="space-y-1.5">
               <Label>User ID (optional)</Label>
-              <Input name="user_id" placeholder="e.g. U0987654321" />
+              <Input name="user_id" placeholder="e.g. UXXXXXXXXX" />
               <p className="text-muted-foreground text-xs">
                 Your personal Slack user ID. Required for inbound DM routing.
               </p>
@@ -252,31 +254,39 @@ function AddChannelModal({ onClose }: { onClose: () => void }) {
         {type === "whatsapp" && (
           <>
             <div className="space-y-1.5">
-              <Label>Account SID</Label>
+              <Label>Your Phone Number</Label>
+              <Input
+                name="phone_number"
+                placeholder="+1XXXXXXXXXX"
+                required
+              />
+              <p className="text-muted-foreground text-xs">
+                Your personal WhatsApp number where messages will be delivered.
+              </p>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Account SID (optional)</Label>
               <Input
                 name="account_sid"
                 placeholder="ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-                required
               />
             </div>
             <div className="space-y-1.5">
-              <Label>Auth Token</Label>
+              <Label>Auth Token (optional)</Label>
               <Input
                 name="auth_token"
                 type="password"
                 placeholder="Your Twilio Auth Token"
-                required
               />
             </div>
             <div className="space-y-1.5">
-              <Label>WhatsApp Number</Label>
+              <Label>WhatsApp Number (optional)</Label>
               <Input
                 name="whatsapp_number"
-                placeholder="+14155238886"
-                required
+                placeholder="+1XXXXXXXXXX"
               />
               <p className="text-muted-foreground text-xs">
-                Your Twilio WhatsApp-enabled number (from the Twilio console).
+                Twilio WhatsApp-enabled number. Falls back to default if not provided.
               </p>
             </div>
           </>
