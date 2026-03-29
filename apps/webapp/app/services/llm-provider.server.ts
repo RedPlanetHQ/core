@@ -246,9 +246,9 @@ export async function getModelForUseCase(
   workspaceId: string | null | undefined,
   complexity: ModelComplexity = "medium",
 ): Promise<string> {
-  // 1. Workspace override — applied for medium and high complexity.
-  // Low complexity bypasses this so DB routing can pick the cheaper model.
-  if (workspaceId && complexity !== "low") {
+  // 1. Workspace override — always check when workspace has explicit model config.
+  // This ensures BYOK workspaces use their chosen model at every complexity tier.
+  if (workspaceId) {
     const workspace = await prisma.workspace.findUnique({
       where: { id: workspaceId },
       select: { metadata: true },

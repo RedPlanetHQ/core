@@ -135,6 +135,7 @@ export async function noStreamProcess(
       channelMetadata: body.channelMetadata,
       conversationId: body.id,
       executorTools: body.executorTools,
+      interactive: false,
       modelConfig,
     });
 
