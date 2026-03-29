@@ -37,7 +37,8 @@ const USE_CASES = [
   {
     key: "memory",
     label: "Memory Ingestion",
-    description: "Model used for extracting and structuring knowledge from episodes",
+    description:
+      "Model used for extracting and structuring knowledge from episodes",
   },
   {
     key: "search",
@@ -48,7 +49,13 @@ const USE_CASES = [
 
 type UseCase = (typeof USE_CASES)[number]["key"];
 
-const BYOK_PROVIDERS: { type: SupportedProvider; label: string; placeholder: string; hint?: string }[] = [
+const BYOK_PROVIDERS: {
+  type: SupportedProvider;
+  label: string;
+  placeholder: string;
+  hint?: string;
+  isUrl?: boolean;
+}[] = [
   { type: "openai", label: "OpenAI", placeholder: "sk-..." },
   { type: "anthropic", label: "Anthropic", placeholder: "sk-ant-..." },
   { type: "google", label: "Google", placeholder: "AIza..." },
@@ -57,6 +64,33 @@ const BYOK_PROVIDERS: { type: SupportedProvider; label: string; placeholder: str
     label: "OpenRouter",
     placeholder: "sk-or-...",
     hint: "Use model IDs like openrouter/anthropic/claude-3.5-haiku",
+  },
+  { type: "deepseek", label: "DeepSeek", placeholder: "sk-..." },
+  {
+    type: "vercel",
+    label: "Vercel AI Gateway",
+    placeholder: "aig-...",
+    hint: "Use model IDs like vercel/anthropic/claude-sonnet-4-5",
+  },
+  {
+    type: "groq",
+    label: "Groq",
+    placeholder: "gsk_...",
+    hint: "Use model IDs like groq/llama-3.3-70b-versatile",
+  },
+  { type: "mistral", label: "Mistral", placeholder: "..." },
+  {
+    type: "xai",
+    label: "xAI (Grok)",
+    placeholder: "xai-...",
+    hint: "Use model IDs like grok-3-mini",
+  },
+  {
+    type: "ollama",
+    label: "Ollama",
+    placeholder: "http://localhost:11434",
+    hint: "Enter your Ollama server URL. Use model IDs like ollama/llama3.2",
+    isUrl: true,
   },
 ];
 
@@ -72,10 +106,8 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     select: { metadata: true },
   });
 
-  const modelConfig = ((workspace?.metadata as any)?.modelConfig ?? {}) as Record<
-    UseCase,
-    { modelId: string } | undefined
-  >;
+  const modelConfig = ((workspace?.metadata as any)?.modelConfig ??
+    {}) as Record<UseCase, { modelId: string } | undefined>;
 
   const [models, keyStatus] = await Promise.all([
     getChatModels(user.workspaceId),
@@ -112,7 +144,8 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     });
 
     const metadata = (workspace?.metadata as Record<string, unknown>) ?? {};
-    const currentConfig = (metadata.modelConfig as Record<string, unknown>) ?? {};
+    const currentConfig =
+      (metadata.modelConfig as Record<string, unknown>) ?? {};
 
     await prisma.workspace.update({
       where: { id: user.workspaceId },
@@ -196,12 +229,18 @@ function BYOKRow({
   return (
     <div className="bg-background-3 flex flex-col gap-2 rounded-lg p-3 px-4">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="text-sm font-medium">{provider.label}</span>
-          {activeHasKey ? (
-            <Badge variant="secondary" className="text-xs">Key set</Badge>
-          ) : (
-            <Badge variant="outline" className="text-muted-foreground text-xs">Not set</Badge>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{provider.label}</span>
+            {activeHasKey && (
+              <Badge variant="secondary" className="text-xs">
+                {provider.isUrl ? "URL set" : "Key set"}
+              </Badge>
+            )}
+          </div>
+
+          {provider.hint && (
+            <p className="text-muted-foreground text-xs">{provider.hint}</p>
           )}
         </div>
 
@@ -234,7 +273,7 @@ function BYOKRow({
                 value={inputValue}
                 onChange={(e) => setInputValue(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSave()}
-                type="password"
+                type={provider.isUrl ? "text" : "password"}
               />
               <Button
                 variant="secondary"
@@ -250,7 +289,10 @@ function BYOKRow({
                   variant="ghost"
                   size="sm"
                   className="h-7 text-xs"
-                  onClick={() => { setEditing(false); setInputValue(""); }}
+                  onClick={() => {
+                    setEditing(false);
+                    setInputValue("");
+                  }}
                 >
                   Cancel
                 </Button>
@@ -259,10 +301,6 @@ function BYOKRow({
           )}
         </div>
       </div>
-
-      {provider.hint && (
-        <p className="text-muted-foreground text-xs">{provider.hint}</p>
-      )}
     </div>
   );
 }
@@ -282,14 +320,21 @@ function ModelSelector({
   label: string;
   description: string;
   currentModelId: string;
-  modelsByProvider: Record<string, { id: string; modelId: string; label: string | null }[]>;
+  modelsByProvider: Record<
+    string,
+    { id: string; modelId: string; label: string | null }[]
+  >;
   hasBYOK: boolean;
   onSelect: (useCase: UseCase, modelId: string) => void;
 }) {
-  const isCustom = currentModelId !== "" && !Object.values(modelsByProvider)
-    .flat()
-    .some((m) => m.modelId === currentModelId);
-  const [customValue, setCustomValue] = useState(isCustom ? currentModelId : "");
+  const isCustom =
+    currentModelId !== "" &&
+    !Object.values(modelsByProvider)
+      .flat()
+      .some((m) => m.modelId === currentModelId);
+  const [customValue, setCustomValue] = useState(
+    isCustom ? currentModelId : "",
+  );
   const [showCustom, setShowCustom] = useState(isCustom);
 
   const handleSelect = (value: string) => {
@@ -314,18 +359,20 @@ function ModelSelector({
             <SelectValue placeholder="Use server default" />
           </SelectTrigger>
           <SelectContent>
-            {Object.entries(modelsByProvider).map(([provider, providerModels]) => (
-              <div key={provider}>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold uppercase">
-                  {provider}
+            {Object.entries(modelsByProvider).map(
+              ([provider, providerModels]) => (
+                <div key={provider}>
+                  <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold uppercase">
+                    {provider}
+                  </div>
+                  {providerModels.map((model) => (
+                    <SelectItem key={model.id} value={model.modelId}>
+                      {model.label ?? model.modelId}
+                    </SelectItem>
+                  ))}
                 </div>
-                {providerModels.map((model) => (
-                  <SelectItem key={model.id} value={model.modelId}>
-                    {model.label ?? model.modelId}
-                  </SelectItem>
-                ))}
-              </div>
-            ))}
+              ),
+            )}
             {hasBYOK && (
               <>
                 <div className="text-muted-foreground px-2 py-1.5 text-xs font-semibold uppercase">
@@ -376,12 +423,13 @@ export default function ModelsSettings() {
   const { modelConfig, models, keyStatus } = useLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
-  const pendingConfig = fetcher.formData?.get("intent") === "updateModel"
-    ? {
-        useCase: fetcher.formData.get("useCase") as UseCase,
-        modelId: fetcher.formData.get("modelId") as string,
-      }
-    : null;
+  const pendingConfig =
+    fetcher.formData?.get("intent") === "updateModel"
+      ? {
+          useCase: fetcher.formData.get("useCase") as UseCase,
+          modelId: fetcher.formData.get("modelId") as string,
+        }
+      : null;
 
   const getCurrentModelId = (useCase: UseCase) => {
     if (pendingConfig?.useCase === useCase) return pendingConfig.modelId;
@@ -389,20 +437,32 @@ export default function ModelsSettings() {
   };
 
   const handleModelChange = (useCase: UseCase, modelId: string) => {
-    fetcher.submit({ intent: "updateModel", useCase, modelId }, { method: "POST" });
+    fetcher.submit(
+      { intent: "updateModel", useCase, modelId },
+      { method: "POST" },
+    );
   };
 
   const modelsByProvider = models.reduce(
     (acc, model) => {
       const providerLabel = model.provider.label ?? model.provider.type;
       if (!acc[providerLabel]) acc[providerLabel] = [];
-      acc[providerLabel].push({ id: model.id, modelId: model.modelId, label: model.label });
+      acc[providerLabel].push({
+        id: model.id,
+        modelId: model.modelId,
+        label: model.label,
+      });
       return acc;
     },
-    {} as Record<string, { id: string; modelId: string; label: string | null }[]>,
+    {} as Record<
+      string,
+      { id: string; modelId: string; label: string | null }[]
+    >,
   );
 
-  const keyStatusMap = Object.fromEntries(keyStatus.map((k) => [k.providerType, true]));
+  const keyStatusMap = Object.fromEntries(
+    keyStatus.map((k) => [k.providerType, true]),
+  );
   const hasBYOK = keyStatus.length > 0;
 
   return (

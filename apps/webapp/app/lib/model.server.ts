@@ -60,6 +60,12 @@ function inferProvider(modelId: string): string {
   if (modelId.startsWith("us.amazon") || modelId.startsWith("us.meta"))
     return "bedrock";
   if (modelId.startsWith("openrouter/")) return "openrouter";
+  if (modelId.startsWith("deepseek-")) return "deepseek";
+  if (modelId.startsWith("mistral-") || modelId.startsWith("open-mistral-") || modelId.startsWith("open-mixtral-"))
+    return "mistral";
+  if (modelId.startsWith("grok-")) return "xai";
+  if (modelId.startsWith("groq/")) return "groq";
+  if (modelId.startsWith("vercel/")) return "vercel";
   return getDefaultChatProviderType();
 }
 
@@ -217,8 +223,20 @@ export function createAgent(
   const provider = getProvider(modelString);
   const openaiConfig = getProviderConfig("openai");
 
+  // BYOK Ollama: apiKey field carries the base URL (Ollama has no API key).
+  if (options?.apiKey && provider === "ollama") {
+    const modelId = getModelId(modelString);
+    const ollama = createOllama({ baseURL: options.apiKey });
+    return new Agent({
+      id: `model-call-${modelString}`,
+      name: `Model Call (${modelString})`,
+      model: ollama(modelId) as any,
+      instructions: instructions || "",
+      ...(tools && { tools }),
+    });
+  }
+
   // BYOK: pass { id: "provider/model", apiKey } — Mastra's router handles the rest.
-  // OpenRouter uses "openrouter/provider/model" natively (no custom base URL needed).
   if (options?.apiKey) {
     const routerString = toRouterString(modelString) as `${string}/${string}`;
     return new Agent({
@@ -230,7 +248,7 @@ export function createAgent(
     });
   }
 
-  // Ollama/proxy: use direct AI SDK model instance
+  // Server-level Ollama/proxy: use direct AI SDK model instance
   if (provider === "ollama" || (provider === "openai" && openaiConfig.baseUrl)) {
     return new Agent({
       id: `model-call-${modelString}`,

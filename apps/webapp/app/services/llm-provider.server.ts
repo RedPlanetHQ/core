@@ -291,6 +291,11 @@ const ENV_KEY_MAP: Record<string, string | undefined> = {
   anthropic: env.ANTHROPIC_API_KEY,
   google: env.GOOGLE_GENERATIVE_AI_API_KEY,
   openrouter: env.OPENROUTER_API_KEY,
+  deepseek: env.DEEPSEEK_API_KEY,
+  vercel: env.AI_GATEWAY_API_KEY,
+  groq: env.GROQ_API_KEY,
+  mistral: env.MISTRAL_API_KEY,
+  xai: env.XAI_API_KEY,
   ollama: env.OLLAMA_URL,
 };
 
@@ -411,6 +416,12 @@ function inferProviderFromModelId(modelId: string): string {
   if (modelId.startsWith("us.amazon") || modelId.startsWith("us.meta"))
     return "bedrock";
   if (modelId.startsWith("openrouter/")) return "openrouter";
+  if (modelId.startsWith("deepseek-")) return "deepseek";
+  if (modelId.startsWith("mistral-") || modelId.startsWith("open-mistral-") || modelId.startsWith("open-mixtral-"))
+    return "mistral";
+  if (modelId.startsWith("grok-")) return "xai";
+  if (modelId.startsWith("groq/")) return "groq";
+  if (modelId.startsWith("vercel/")) return "vercel";
   return env.CHAT_PROVIDER;
 }
 
