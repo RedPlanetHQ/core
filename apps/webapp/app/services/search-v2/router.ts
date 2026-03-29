@@ -254,6 +254,7 @@ async function extractAspects(
       cacheKey,
       undefined,
       workspaceId,
+      "search",
     );
 
     logger.info(

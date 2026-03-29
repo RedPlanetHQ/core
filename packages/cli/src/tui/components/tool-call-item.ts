@@ -83,6 +83,21 @@ export class ToolCallItem implements Component {
 		this.displayName = resolveDisplayName(this.toolName, args);
 	}
 
+	/**
+	 * Mark known children done by their call IDs.
+	 * Used when data-tool-agent events have toolCalls:[] but toolResults with results
+	 * for children that were registered in an earlier snapshot (post-approval pattern).
+	 */
+	markChildrenDoneByIds(resultMap: Map<string, unknown>): void {
+		for (const [callId, result] of resultMap) {
+			const child = this.childrenByCallId.get(callId);
+			if (child && !child.isDone) {
+				child.isDone = true;
+				child.result = toResultString(result);
+			}
+		}
+	}
+
 	/** Called on each tool-output-available — updates nested children in real-time */
 	updateFromOutputParts(parts: OutputPart[]): void {
 		for (const part of parts) {

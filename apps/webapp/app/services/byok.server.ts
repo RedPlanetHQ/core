@@ -48,7 +48,7 @@ function invalidateCache(workspaceId: string, providerType: string) {
 // BYOK key management
 // ---------------------------------------------------------------------------
 
-const SUPPORTED_PROVIDERS = ["openai", "anthropic", "google"] as const;
+const SUPPORTED_PROVIDERS = ["openai", "anthropic", "google", "openrouter"] as const;
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
 
 export function isSupportedProvider(type: string): type is SupportedProvider {

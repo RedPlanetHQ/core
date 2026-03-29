@@ -17,6 +17,8 @@ import {
   getPlaceholder,
 } from "~/components/conversation/editor-extensions";
 import { type CustomPersonality } from "~/models/personality.server";
+import { Checkbox } from "../ui/checkbox";
+import { AI } from "../icons/ai";
 
 interface Props {
   open: boolean;
@@ -24,7 +26,11 @@ interface Props {
   existing: CustomPersonality | null;
 }
 
-export function CustomPersonalityDialog({ open, onOpenChange, existing }: Props) {
+export function CustomPersonalityDialog({
+  open,
+  onOpenChange,
+  existing,
+}: Props) {
   const fetcher = useFetcher<{
     success?: boolean;
     improved?: { text: string };
@@ -113,12 +119,12 @@ export function CustomPersonalityDialog({ open, onOpenChange, existing }: Props)
               <Label className="text-sm">Personality</Label>
               <Button
                 size="sm"
-                variant="outline"
+                variant="ghost"
                 onClick={handleImprove}
-                disabled={!name || isImproving}
+                disabled={isImproving}
                 className="gap-1.5 text-xs"
               >
-                <Sparkles className="h-3 w-3" />
+                <AI className="h-3 w-3" />
                 {isImproving ? "Improving..." : "Improve with AI"}
               </Button>
             </div>
@@ -128,10 +134,12 @@ export function CustomPersonalityDialog({ open, onOpenChange, existing }: Props)
           </div>
 
           <div className="flex items-center gap-2">
-            <Switch
+            <Checkbox
               id="honorifics"
               checked={useHonorifics}
-              onCheckedChange={setUseHonorifics}
+              onCheckedChange={(checked) =>
+                setUseHonorifics(checked as boolean)
+              }
             />
             <Label htmlFor="honorifics" className="text-sm">
               Use honorifics (sir / ma'am)
@@ -139,10 +147,14 @@ export function CustomPersonalityDialog({ open, onOpenChange, existing }: Props)
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
+            <Button variant="ghost" onClick={() => onOpenChange(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSave} disabled={!name || isSaving}>
+            <Button
+              variant="secondary"
+              onClick={handleSave}
+              disabled={!name || isSaving}
+            >
               {isSaving ? "Saving..." : "Save personality"}
             </Button>
           </div>

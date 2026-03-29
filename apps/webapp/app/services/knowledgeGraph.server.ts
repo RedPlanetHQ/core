@@ -431,6 +431,7 @@ export class KnowledgeGraphService {
             "extract-world",
             undefined,
             episode.workspaceId,
+            "memory",
           );
         if (worldUsage) {
           tokenMetrics.high.input += worldUsage.promptTokens as number;
@@ -453,6 +454,7 @@ export class KnowledgeGraphService {
             "extract-voice",
             undefined,
             episode.workspaceId,
+            "memory",
           );
         if (voiceUsage) {
           tokenMetrics.high.input += voiceUsage.promptTokens as number;
@@ -487,6 +489,7 @@ export class KnowledgeGraphService {
                   "reflect-world",
                   undefined,
                   episode.workspaceId,
+                  "memory",
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -522,6 +525,7 @@ export class KnowledgeGraphService {
                   "reflect-voice",
                   undefined,
                   episode.workspaceId,
+                  "memory",
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -563,6 +567,7 @@ export class KnowledgeGraphService {
                 "classify-voice",
                 undefined,
                 episode.workspaceId,
+                "memory",
               );
             if (voiceUsage) {
               tokenMetrics.low.input += voiceUsage.promptTokens as number;
@@ -590,6 +595,7 @@ export class KnowledgeGraphService {
                 "classify-world",
                 undefined,
                 episode.workspaceId,
+                "memory",
               );
             if (worldUsage) {
               tokenMetrics.low.input += worldUsage.promptTokens as number;

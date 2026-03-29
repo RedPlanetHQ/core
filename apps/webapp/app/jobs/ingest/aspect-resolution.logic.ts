@@ -141,6 +141,7 @@ export async function processAspectResolution(
         "aspect-resolution",
         undefined,
         payload.workspaceId,
+        "memory",
       );
 
       // Apply decisions

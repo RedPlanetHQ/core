@@ -14,7 +14,7 @@
 
 import { stepCountIs } from "ai";
 import { Agent } from "@mastra/core/agent";
-import { toRouterString, getModelForTask } from "~/lib/model.server";
+import { toRouterString, resolveModelString } from "~/lib/model.server";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getMastra } from "../mastra";
 
@@ -141,7 +141,7 @@ export interface DecisionAgentOptions {
  * Create a thinking agent with gather_context as subagent.
  * Used as a subagent on the core agent when triggerContext is present.
  */
-export function createThinkAgent(
+export async function createThinkAgent(
   gatherContextAgent: Agent,
   workspaceId: string,
   channel: string,
@@ -149,7 +149,7 @@ export function createThinkAgent(
   availableChannels: Array<"whatsapp" | "slack" | "email">,
   minRecurrenceMinutes: number,
   modelConfig?: ModelConfig,
-): Agent {
+): Promise<Agent> {
   const tools: Record<string, any> = {};
   tools["get_skill"] = getSkillTool(workspaceId);
 
@@ -161,10 +161,11 @@ export function createThinkAgent(
     minRecurrenceMinutes,
   );
 
+  const model = await resolveModelString("chat", "low");
   const thinkAgent = new Agent({
     id: "thinking-agent",
     name: "Think",
-    model: (modelConfig ?? toRouterString(getModelForTask("low"))) as any,
+    model: modelConfig ?? toRouterString(model),
     instructions: "Analyze triggers and produce structured JSON action plans.",
     agents: { gather_context: gatherContextAgent },
     tools: { ...tools, ...reminderTools },

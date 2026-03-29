@@ -13,8 +13,6 @@ import { logger } from "~/services/logger.service";
 
 import { createOllama } from "ollama-ai-provider-v2";
 import {
-  getModelForTaskSync,
-  getModelForBatchSync,
   getDefaultChatProviderType,
   getDefaultChatModelId,
   getDefaultEmbeddingInfo,
@@ -23,13 +21,15 @@ import {
   resolveApiKey,
   resolveApiKeyForWorkspace,
   resolveModelForWorkspace,
+  type UseCase,
+  type ModelComplexity,
 } from "~/services/llm-provider.server";
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-export type ModelComplexity = "high" | "medium" | "low";
+export type { UseCase, ModelComplexity };
 
 export interface TokenUsage {
   promptTokens?: number;
@@ -59,6 +59,7 @@ function inferProvider(modelId: string): string {
   if (modelId.startsWith("gemini-")) return "google";
   if (modelId.startsWith("us.amazon") || modelId.startsWith("us.meta"))
     return "bedrock";
+  if (modelId.startsWith("openrouter/")) return "openrouter";
   return getDefaultChatProviderType();
 }
 
@@ -85,18 +86,6 @@ export function getProvider(modelString: string): string {
 function getModelId(modelString: string): string {
   if (modelString.includes("/")) return modelString.split("/").slice(1).join("/");
   return modelString;
-}
-
-// ---------------------------------------------------------------------------
-// Model complexity routing (DB-backed sync cache)
-// ---------------------------------------------------------------------------
-
-export function getModelForTask(complexity: ModelComplexity = "medium"): string {
-  return getModelForTaskSync(complexity);
-}
-
-export function getModelForBatch(): string {
-  return getModelForBatchSync();
 }
 
 // ---------------------------------------------------------------------------
@@ -228,13 +217,14 @@ export function createAgent(
   const provider = getProvider(modelString);
   const openaiConfig = getProviderConfig("openai");
 
-  // BYOK: use OpenAICompatibleConfig with explicit apiKey
+  // BYOK: pass { id: "provider/model", apiKey } — Mastra's router handles the rest.
+  // OpenRouter uses "openrouter/provider/model" natively (no custom base URL needed).
   if (options?.apiKey) {
     const routerString = toRouterString(modelString) as `${string}/${string}`;
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
-      model: { id: routerString, apiKey: options.apiKey } as any,
+      model: { id: routerString, apiKey: options.apiKey },
       instructions: instructions || "",
       ...(tools && { tools }),
     });
@@ -274,14 +264,14 @@ export async function makeModelCall(
   cacheKey?: string,
   reasoningEffort?: "low" | "medium" | "high",
   workspaceId?: string,
+  useCase: UseCase = "chat",
 ) {
-  // Resolve model + BYOK key for the workspace (picks provider-appropriate model)
-  const { modelId: model, apiKey, isBYOK } = await resolveModelForWorkspace(workspaceId, complexity);
-  logger.info(`complexity: ${complexity}, model: ${model}${isBYOK ? " (BYOK)" : ""}`);
+  const { modelId: model, apiKey, isBYOK } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
 
   const providerOptions = buildOpenAIProviderOptions(
     model,
-    cacheKey || `ingestion-${complexity}`,
+    cacheKey || `${useCase}-${complexity}`,
     reasoningEffort,
   );
 
@@ -350,10 +340,10 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   cacheKey?: string,
   temperature?: number,
   workspaceId?: string,
+  useCase: UseCase = "chat",
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
-  // Resolve model + BYOK key for the workspace (picks provider-appropriate model)
-  const { modelId: model, apiKey } = await resolveModelForWorkspace(workspaceId, complexity);
-  logger.info(`[Structured] complexity: ${complexity}, model: ${model}`);
+  const { modelId: model, apiKey } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
 
   const providerOptions = buildOpenAIProviderOptions(
     model,
@@ -489,12 +479,25 @@ export function getDefaultModelString(): string {
   return toRouterString(getDefaultChatModelId());
 }
 
+/**
+ * Async helper: resolve a model string for a given use case + complexity.
+ * Use this wherever createAgent needs a model string.
+ */
+export async function resolveModelString(
+  useCase: UseCase = "chat",
+  complexity: ModelComplexity = "medium",
+  workspaceId?: string,
+): Promise<string> {
+  const { modelId } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  return modelId;
+}
+
 // ---------------------------------------------------------------------------
 // Embeddings — Mastra ModelRouterEmbeddingModel
 // ---------------------------------------------------------------------------
 
-function getEmbeddingModel() {
-  const embeddingInfo = getDefaultEmbeddingInfo();
+async function getEmbeddingModel() {
+  const embeddingInfo = await getDefaultEmbeddingInfo();
 
   if (!embeddingInfo) {
     // Fallback: use OpenAI text-embedding-3-small via router
@@ -541,8 +544,8 @@ function getEmbeddingModel() {
 }
 
 export async function getEmbedding(text: string) {
-  const targetDim = getEmbeddingDimensions();
-  const embeddingInfo = getDefaultEmbeddingInfo();
+  const targetDim = await getEmbeddingDimensions();
+  const embeddingInfo = await getDefaultEmbeddingInfo();
   const embeddingProviderType = embeddingInfo?.providerType ?? "openai";
   const embeddingModelId = embeddingInfo?.modelId ?? "text-embedding-3-small";
 
@@ -550,7 +553,7 @@ export async function getEmbedding(text: string) {
   let lastEmbedding: number[] = [];
   let textForEmbedding = (text ?? "").toString();
 
-  const embeddingModel = getEmbeddingModel();
+  const embeddingModel = await getEmbeddingModel();
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {

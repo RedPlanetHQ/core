@@ -219,7 +219,7 @@ export async function createCoreAgents(
         : defaultChannel || "email";
 
   const thinkAgent = triggerContext
-    ? createThinkAgent(
+    ? await createThinkAgent(
         reader.agent,
         workspaceId,
         channel,

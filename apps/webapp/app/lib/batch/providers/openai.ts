@@ -11,7 +11,7 @@ import {
   type BatchResponse,
 } from "../types";
 import { logger } from "~/services/logger.service";
-import { getModelForBatch } from "~/lib/model.server";
+import { resolveModelString } from "~/lib/model.server";
 
 export class OpenAIBatchProvider extends BaseBatchProvider {
   providerName = "openai";
@@ -43,7 +43,7 @@ export class OpenAIBatchProvider extends BaseBatchProvider {
     try {
       this.validateRequests(params.requests);
 
-      const model = getModelForBatch();
+      const model = await resolveModelString("chat", "medium");
       // Convert requests to OpenAI batch format
       const batchRequests = params.requests.map((request, index) => ({
         custom_id: request.customId,

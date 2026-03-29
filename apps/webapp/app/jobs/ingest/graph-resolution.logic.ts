@@ -530,6 +530,7 @@ async function resolveExtractedNodesWithMerges(
       "entity-deduplication",
       undefined,
       workspaceId,
+      "memory",
     );
 
     // Step 5: Process LLM response
@@ -867,6 +868,7 @@ async function resolveStatementsWithDuplicates(
       "statement-resolution",
       undefined,
       workspaceId,
+      "memory",
     );
 
     try {

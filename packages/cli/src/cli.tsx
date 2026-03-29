@@ -28,11 +28,7 @@ if (args[0] === 'tui') {
 
 	// startTuiApp is synchronous — pi-tui manages the process lifecycle
 	// via its stdin listener. tui.addInputListener handles Ctrl+C → process.exit(0)
-	startTuiApp(
-		'http://localhost:3033',
-		'rc_pat_fpnm3fkvtnk9njbjyhsa82yfgthjziejvco5a2mo',
-		pkg.version,
-	);
+	startTuiApp(baseUrl, apiKey, pkg.version);
 } else {
 	const app = new Pastel({
 		importMeta: import.meta,

@@ -4,7 +4,7 @@ import { createTool } from "@mastra/core/tools";
 import Exa from "exa-js";
 import { logger } from "~/services/logger.service";
 import { env } from "~/env.server";
-import { createAgent, getModelForTask } from "~/lib/model.server";
+import { createAgent, resolveModelString } from "~/lib/model.server";
 import { ExplorerResult } from "../types";
 
 const WEB_COMPLEXITY = "medium";
@@ -155,7 +155,7 @@ ${r.text || "No content available"}`;
   };
 
   try {
-    const model = getModelForTask(WEB_COMPLEXITY);
+    const model = await resolveModelString("chat", WEB_COMPLEXITY);
     logger.info(`complexity: ${WEB_COMPLEXITY}, model: ${model}`);
 
     const agent = createAgent(model, getWebExplorerPrompt(timezone), tools);

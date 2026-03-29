@@ -8,9 +8,9 @@ import { AnthropicBatchProvider } from "./batch/providers/anthropic";
 import { logger } from "~/services/logger.service";
 import {
   createAgent,
-  getModelForBatch,
   getProvider,
   makeStructuredModelCall,
+  resolveModelString,
 } from "~/lib/model.server";
 import { env } from "~/env.server";
 import {
@@ -117,7 +117,7 @@ async function mapWithConcurrency<TInput, TOutput>(
 async function runInlineBatch<T = any>(
   params: CreateBatchParams<T>,
 ): Promise<{ batchId: string }> {
-  const modelId = getModelForBatch();
+  const modelId = await resolveModelString("chat", "medium");
   const batchId = createInlineBatchId();
   const startedAt = new Date();
 

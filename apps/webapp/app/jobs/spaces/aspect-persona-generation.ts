@@ -27,7 +27,7 @@ import {
 import { ProviderFactory } from "@core/providers";
 import { getActiveVoiceAspects } from "~/services/aspectStore.server";
 
-import { createAgent, getModelForBatch } from "~/lib/model.server";
+import { createAgent, resolveModelString } from "~/lib/model.server";
 import { type ModelMessage } from "ai";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { Message } from "@anthropic-ai/sdk/resources";
@@ -41,7 +41,7 @@ async function directLLMCall(
   label?: string,
 ): Promise<string | null> {
   try {
-    const modelId = getModelForBatch();
+    const modelId = await resolveModelString("chat", "medium");
     const agent = createAgent(modelId);
     const result = await agent.generate(prompt);
     const text = result.text;

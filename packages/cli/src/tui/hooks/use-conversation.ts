@@ -122,6 +122,7 @@ export function createConversation(
 		let activeParent: {id: string; item: ToolCallItem} | null = null;
 		let lastAgentItem: ToolCallItem | null = savedAgentItem; // restored from prior stream (like cachedNestedPartsRef)
 		let hadApprovalRequest = false;
+		const approvedContainerIds = new Set<string>(); // prevent duplicate approval expansion
 
 		try {
 			for await (const event of gen) {
@@ -231,6 +232,11 @@ export function createConversation(
 							toolName === 'agent-take_action' || toolName === 'take_action';
 
 						if (isContainerTool && containerItem) {
+							// Deduplicate: parallel tool calls fire multiple approval events for
+							// the same container. Only expand once — one approval covers all children.
+							if (approvedContainerIds.has(event.toolCallId)) break;
+							approvedContainerIds.add(event.toolCallId);
+
 							const pendingChildren = containerItem.getPendingChildren();
 							if (pendingChildren.length > 0) {
 								for (const child of pendingChildren) {
@@ -284,6 +290,24 @@ export function createConversation(
 							if (parts.length > 0) {
 								lastAgentItem.updateFromOutputParts(parts);
 								callbacks.onRerender?.();
+							} else {
+								// Post-approval pattern: toolCalls is [] but toolResults has results
+								// for children registered in an earlier snapshot — mark them done.
+								const allResults = [
+									...(agentData.toolResults ?? []),
+									...(Array.isArray(agentData.steps)
+										? agentData.steps.flatMap((s: any) => s.toolResults ?? [])
+										: []),
+								];
+								if (allResults.length > 0) {
+									const resultMap = new Map<string, unknown>();
+									for (const r of allResults) {
+										const res = (r as any).payload ?? r;
+										if (res.toolCallId) resultMap.set(res.toolCallId as string, res.result);
+									}
+									lastAgentItem.markChildrenDoneByIds(resultMap);
+									callbacks.onRerender?.();
+								}
 							}
 						}
 						break;

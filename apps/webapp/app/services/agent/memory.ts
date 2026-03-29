@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { makeStructuredModelCall, getModelForTask } from "~/lib/model.server";
+import { makeStructuredModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "../search.server";
 import { searchV2 } from "../search-v2";
@@ -148,6 +148,7 @@ Generate 1-5 optimized search queries to retrieve relevant context from memory.`
       undefined,
       undefined,
       workspaceId,
+      "search",
     );
 
     const queries = queryObject.queries;

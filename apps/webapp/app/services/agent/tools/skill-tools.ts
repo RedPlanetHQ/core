@@ -9,7 +9,7 @@ import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { createSkill, updateSkill } from "~/services/skills.server";
-import { createAgent, getModelForTask } from "~/lib/model.server";
+import { createAgent, resolveModelString } from "~/lib/model.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 
@@ -78,7 +78,7 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
         const userMessage = `User intent: ${intent}${toolsContext}`;
 
         // Generate structured workflow via the skill generator
-        const agent = createAgent(getModelForTask("low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+        const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
         const { text: generatedContent } = await agent.generate(userMessage);
 
         if (!generatedContent) {

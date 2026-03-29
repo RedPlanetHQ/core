@@ -8,7 +8,10 @@ import {
   upsertConversationHistory,
 } from "~/services/conversation.server";
 import { toRouterString } from "~/lib/model.server";
-import { getDefaultChatModelId, resolveModelConfig } from "~/services/llm-provider.server";
+import {
+  getDefaultChatModelId,
+  resolveModelConfig,
+} from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
@@ -152,7 +155,10 @@ const { loader, action } = createHybridActionApiRoute(
     const workspaceId = authentication.workspaceId as string;
     const modelString = body.modelId ?? getDefaultChatModelId();
 
-    const { modelConfig, isBYOK } = await resolveModelConfig(modelString, workspaceId);
+    const { modelConfig, isBYOK } = await resolveModelConfig(
+      modelString,
+      workspaceId,
+    );
 
     const {
       systemPrompt,
@@ -170,8 +176,6 @@ const { loader, action } = createHybridActionApiRoute(
       interactive: body.interactive,
       modelConfig,
     });
-
-    const modelString = body.modelId ?? getDefaultChatModelId();
 
     const agent = new Agent({
       id: "core-agent",
@@ -207,7 +211,7 @@ const { loader, action } = createHybridActionApiRoute(
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV5.UI");
         await saveConversationResult({
-          parts: convertedMessages[convertMessages.length - 1].parts,
+          parts: convertedMessages[convertedMessages.length - 1].parts,
           ...saveParams,
         });
         return messages;
