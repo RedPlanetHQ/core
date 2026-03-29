@@ -40,6 +40,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { prisma } from "~/db.server";
 import { IngestionStatus } from "@core/database";
 import { deductCredits } from "~/trigger/utils/utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 import {
   batchGetEntityEmbeddings,
@@ -343,32 +344,37 @@ export async function processGraphResolution(
       }
 
       // Credit reconciliation: only reconcile when all chunks are done
-      const reservedCredits = finalOutput?.reservedCredits || currentOutput?.reservedCredits || 0;
-      const totalChunks = payload.episodeDetails?.totalChunks || 1;
-      const completedChunks = finalOutput?.episodes?.length || 1;
-      const allChunksDone = completedChunks >= totalChunks;
+      // Skip for BYOK workspaces (no credits were reserved or need deducting)
+      const byok = await isWorkspaceBYOK(payload.workspaceId);
 
-      if (reservedCredits > 0) {
-        if (allChunksDone) {
-          // All chunks done: reconcile reserved vs total statements across all chunks
-          const totalStatementsUsed = finalOutput?.statementsCreated || statementsCount;
-          await reconcileCredits(
+      if (!byok) {
+        const reservedCredits = finalOutput?.reservedCredits || currentOutput?.reservedCredits || 0;
+        const totalChunks = payload.episodeDetails?.totalChunks || 1;
+        const completedChunks = finalOutput?.episodes?.length || 1;
+        const allChunksDone = completedChunks >= totalChunks;
+
+        if (reservedCredits > 0) {
+          if (allChunksDone) {
+            // All chunks done: reconcile reserved vs total statements across all chunks
+            const totalStatementsUsed = finalOutput?.statementsCreated || statementsCount;
+            await reconcileCredits(
+              payload.workspaceId,
+              payload.userId,
+              "addEpisode",
+              reservedCredits,
+              totalStatementsUsed,
+            );
+          }
+          // Non-last chunks: credits already reserved, no action needed
+        } else {
+          // Fallback: no reservation found (legacy path), deduct full amount
+          await deductCredits(
             payload.workspaceId,
             payload.userId,
             "addEpisode",
-            reservedCredits,
-            totalStatementsUsed,
+            statementsCount,
           );
         }
-        // Non-last chunks: credits already reserved, no action needed
-      } else {
-        // Fallback: no reservation found (legacy path), deduct full amount
-        await deductCredits(
-          payload.workspaceId,
-          payload.userId,
-          "addEpisode",
-          statementsCount,
-        );
       }
     } catch (error) {
       logger.warn(`Failed to update ingestion queue with resolution metrics:`, {
@@ -522,6 +528,9 @@ async function resolveExtractedNodesWithMerges(
       undefined,
       "low",
       "entity-deduplication",
+      undefined,
+      workspaceId,
+      "memory",
     );
 
     // Step 5: Process LLM response
@@ -857,6 +866,9 @@ async function resolveStatementsWithDuplicates(
       undefined,
       "low",
       "statement-resolution",
+      undefined,
+      workspaceId,
+      "memory",
     );
 
     try {

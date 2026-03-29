@@ -1,11 +1,9 @@
 import { json } from "@remix-run/node";
-import { generateObject } from "ai";
 import { z } from "zod";
-import { type LanguageModel } from "ai";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
 import { getLibrarySkills } from "~/lib/skills-library";
 import { getIntegrationDefinitions } from "~/services/integrationDefinition.server";
-import { getModel } from "~/lib/model.server";
+import { makeStructuredModelCall } from "~/lib/model.server";
 
 const { action } = createHybridActionApiRoute(
   { allowJWT: false, corsStrategy: "none" },
@@ -29,19 +27,16 @@ const { action } = createHybridActionApiRoute(
       name: i.name,
     }));
 
-    const { object } = await generateObject({
-      model: getModel() as LanguageModel,
-      schema: z.object({
+    const { object } = await makeStructuredModelCall(
+      z.object({
         skills: z
           .array(z.string())
           .describe("slugs of skills relevant to this user, max 4"),
         integrations: z
           .array(z.string())
-          .describe(
-            "slugs of integrations relevant to this user, max 4",
-          ),
+          .describe("slugs of integrations relevant to this user, max 4"),
       }),
-      prompt: `You are helping onboard a new user. Based on their profile summary, pick the most relevant skills and integrations to suggest.
+      [{ role: "user", content: `You are helping onboard a new user. Based on their profile summary, pick the most relevant skills and integrations to suggest.
 
 User profile:
 ${summary}
@@ -52,9 +47,12 @@ ${JSON.stringify(skillsList, null, 2)}
 Available integrations:
 ${JSON.stringify(integrationsList, null, 2)}
 
-Pick up to 4 skills and up to 4 integrations that would be most useful for this specific user based on their work, tools, and patterns. Only suggest things that are clearly relevant. Return only the slugs.`,
-      temperature: 0.3,
-    });
+Pick up to 4 skills and up to 4 integrations that would be most useful for this specific user based on their work, tools, and patterns. Only suggest things that are clearly relevant. Return only the slugs.` }],
+      "medium",
+      undefined,
+      0.3,
+      authentication.workspaceId as string,
+    );
 
     const suggestedSkills = librarySkills.filter((s) =>
       object.skills.includes(s.slug),

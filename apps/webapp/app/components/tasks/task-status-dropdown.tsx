@@ -94,7 +94,6 @@ export const TaskStatusDropdown = ({
   return (
     <div
       onClick={(e) => {
-        console.log(e);
         e.stopPropagation();
         e.preventDefault();
       }}

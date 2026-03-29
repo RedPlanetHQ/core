@@ -10,10 +10,15 @@ import chalk from 'chalk';
  */
 export class StatusLine implements Component {
 	private _incognito = false;
+	private _acceptAll = false;
 	private _widget: Component | null = null;
 
 	setIncognito(val: boolean): void {
 		this._incognito = val;
+	}
+
+	setAcceptAll(val: boolean): void {
+		this._acceptAll = val;
 	}
 
 	setWidget(widget: Component | null): void {
@@ -21,9 +26,14 @@ export class StatusLine implements Component {
 	}
 
 	render(width: number): string[] {
-		const left = this._incognito
-			? chalk.bgHex('#3a2a00').hex('#ffcc44')(' ⊘ incognito ')
-			: '';
+		const parts: string[] = [];
+		if (this._incognito) {
+			parts.push(chalk.bgHex('#3a2a00').hex('#ffcc44')(' ⊘ incognito '));
+		}
+		if (this._acceptAll) {
+			parts.push(chalk.bgHex('#1a3a1a').hex('#44cc44')(' ✓ accept all '));
+		}
+		const left = parts.join(' ');
 
 		let right = '';
 		if (this._widget) {

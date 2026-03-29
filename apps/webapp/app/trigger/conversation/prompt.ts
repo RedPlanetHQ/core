@@ -12,17 +12,10 @@ Please follow these steps:
    - Avoid unnecessary words
    - Maximum length: 60 characters
 
-Before providing output, analyze in <title_analysis> tags:
-- Key elements from message
-- Main topic/action
-- Relevant actors/context
-- Your title formation process
-
-Provide final output in this format:
-<output>
+Return a JSON object with a single field:
 {
   "title": "Your generated title"
 }
-</output>
 
 If message is empty or contains no meaningful content, return {"title": "New Conversation"}`;
+

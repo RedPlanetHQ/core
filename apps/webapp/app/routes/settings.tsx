@@ -10,6 +10,7 @@ import {
   Bot,
   Server,
   MessageSquare,
+  Cpu,
 } from "lucide-react";
 
 import {
@@ -68,8 +69,13 @@ export default function Settings() {
       { name: "Labels", icon: Tag, path: "/settings/labels" },
       { name: "Activity", icon: Activity, path: "/settings/activity" },
       { name: "Agent", icon: Bot, path: "/settings/workspace/agent" },
+      { name: "Models", icon: Cpu, path: "/settings/workspace/models" },
       { name: "Gateway", icon: Server, path: "/settings/workspace/gateway" },
-      { name: "Channels", icon: MessageSquare, path: "/settings/workspace/channels" },
+      {
+        name: "Channels",
+        icon: MessageSquare,
+        path: "/settings/workspace/channels",
+      },
     ],
   };
   const navigate = useNavigate();
@@ -125,7 +131,7 @@ export default function Settings() {
                         isActive={isActive(item)}
                         onClick={() => navigate(`/settings/${item.path}`)}
                         className={cn(
-                          "!text-foreground flex w-fit min-w-0 justify-start gap-1",
+                          "text-foreground flex w-fit min-w-0 justify-start gap-1",
                         )}
                       >
                         <item.icon size={18} />

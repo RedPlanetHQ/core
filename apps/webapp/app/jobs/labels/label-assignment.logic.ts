@@ -312,9 +312,11 @@ export async function extractLabelsFromEpisode(
   const { object: response } = await makeStructuredModelCall(
     LabelExtractionSchema,
     messages,
-    "high",
+    "medium",
     "label-extraction",
     0.3, // Low temperature for consistent label extraction
+    workspaceId,
+    "memory",
   );
 
   // Create lookup map for existing labels (case-insensitive) for exact matching

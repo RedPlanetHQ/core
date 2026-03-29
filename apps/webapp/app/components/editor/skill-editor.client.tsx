@@ -8,11 +8,12 @@ import { Textarea } from "../ui/textarea";
 import { DeleteSkillAlert } from "../skills/delete-skill-alert";
 import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import { useToast } from "~/hooks/use-toast";
 import { LoaderCircle, Sparkles } from "lucide-react";
-import { useCompletion } from "@ai-sdk/react";
+import { useChat } from "@ai-sdk/react";
+import { DefaultChatTransport } from "ai";
 import { AI } from "../icons/ai";
 
 interface Skill {
@@ -40,12 +41,23 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
-  const {
-    complete,
-    completion,
-    isLoading: isGeneratingDesc,
-  } = useCompletion({
-    api: "/api/v1/skills/generate",
+  const existingDescRef = useRef("");
+
+  const { messages, status, sendMessage } = useChat({
+    transport: new DefaultChatTransport({
+      api: "/api/v1/skills/generate",
+      prepareSendMessagesRequest({ messages: msgs }) {
+        const lastUser = msgs.findLast((m: any) => m.role === "user");
+        const prompt =
+          lastUser?.parts?.[0]?.text ?? lastUser?.content ?? "";
+        return {
+          body: {
+            prompt,
+            existingDescription: existingDescRef.current || undefined,
+          },
+        };
+      },
+    }),
     onError: (err) => {
       toast({
         title: err.message || "Failed to generate",
@@ -53,6 +65,12 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
       });
     },
   });
+
+  const isGeneratingDesc = status === "streaming" || status === "submitted";
+  const completion =
+    messages
+      .findLast((m) => m.role === "assistant")
+      ?.parts?.find((p: any) => p.type === "text")?.text ?? "";
 
   const editor = useEditor({
     extensions: [
@@ -68,9 +86,16 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
     },
   });
 
+  // Live-update editor content as tokens stream in
+  useEffect(() => {
+    if (completion) {
+      editor?.commands.setContent(completion);
+    }
+  }, [completion, editor]);
+
+  // Close popover only when generation finishes
   useEffect(() => {
     if (!isGeneratingDesc && completion) {
-      editor?.commands.setContent(completion);
       setDescOpen(false);
       setDescIntent("");
     }
@@ -78,10 +103,9 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
 
   const handleGenerateDesc = () => {
     if (!descIntent.trim()) return;
-    const existingDesc = editor?.storage.markdown.getMarkdown() ?? "";
-    complete(descIntent.trim(), {
-      body: { existingDescription: existingDesc.trim() || undefined },
-    });
+    existingDescRef.current =
+      (editor?.storage.markdown.getMarkdown() ?? "").trim();
+    sendMessage({ text: descIntent.trim() });
   };
 
   const handleSubmit = async () => {

@@ -6,13 +6,19 @@ import {
 import { OpenAIBatchProvider } from "./batch/providers/openai";
 import { AnthropicBatchProvider } from "./batch/providers/anthropic";
 import { logger } from "~/services/logger.service";
-import { generateObject, generateText, type LanguageModel } from "ai";
 import {
-  getModel,
-  getModelForBatch,
+  createAgent,
+  getProvider,
   makeStructuredModelCall,
+  resolveModelString,
 } from "~/lib/model.server";
 import { env } from "~/env.server";
+import {
+  getDefaultChatProviderType,
+  getDefaultChatModelId,
+  getProviderConfig,
+  resolveApiKeyForWorkspace,
+} from "~/services/llm-provider.server";
 
 // Global provider instances (singleton pattern)
 let openaiProvider: OpenAIBatchProvider | null = null;
@@ -48,8 +54,8 @@ function pruneInlineBatches(now = Date.now()) {
   }
 }
 
-function getProvider() {
-  const chatProvider = env.CHAT_PROVIDER;
+function getBatchProvider() {
+  const chatProvider = getDefaultChatProviderType();
 
   // Anthropic provider
   if (chatProvider === "anthropic") {
@@ -59,7 +65,7 @@ function getProvider() {
     return anthropicProvider;
   }
 
-  // OpenAI provider (also handles proxies via OPENAI_BASE_URL)
+  // OpenAI provider (also handles proxies)
   if (chatProvider === "openai" || chatProvider === "google") {
     if (!openaiProvider) {
       openaiProvider = new OpenAIBatchProvider();
@@ -111,22 +117,21 @@ async function mapWithConcurrency<TInput, TOutput>(
 async function runInlineBatch<T = any>(
   params: CreateBatchParams<T>,
 ): Promise<{ batchId: string }> {
-  const modelId = getModelForBatch();
-  const model = getModel(modelId) as LanguageModel;
-  if (!model) {
-    throw new Error(`Failed to initialize model for inline batch: ${modelId}`);
-  }
-
+  const modelId = await resolveModelString("chat", "medium");
   const batchId = createInlineBatchId();
   const startedAt = new Date();
 
+  // Resolve BYOK key for bare createAgent calls
+  let byokApiKey: string | undefined;
+  if (params.workspaceId) {
+    const resolved = await resolveApiKeyForWorkspace(params.workspaceId, getProvider(modelId));
+    if (resolved.isBYOK) byokApiKey = resolved.apiKey;
+  }
+
   const concurrency = env.INLINE_BATCH_CONCURRENCY;
-  const openaiApiMode = env.OPENAI_API_MODE;
-  const hasOpenAIBaseUrl =
-    typeof env.OPENAI_BASE_URL === "string" &&
-    env.OPENAI_BASE_URL.trim().length > 0;
+  const openaiConfig = getProviderConfig("openai");
   const isProxyChatMode =
-    hasOpenAIBaseUrl && openaiApiMode === "chat_completions";
+    !!openaiConfig.baseUrl && openaiConfig.apiMode === "chat_completions";
 
   // Execute requests with bounded concurrency (avoids overloading local resources and upstream providers).
   const results = await mapWithConcurrency(
@@ -149,9 +154,10 @@ async function runInlineBatch<T = any>(
               const { object } = await makeStructuredModelCall(
                 params.outputSchema as any,
                 messages as any,
-                "high",
+                "medium",
                 undefined,
                 temperature,
+                params.workspaceId,
               );
 
               return { customId: request.customId, response: object as any };
@@ -159,37 +165,37 @@ async function runInlineBatch<T = any>(
               // For simple `{ content: string }` payloads (persona/aspect sections),
               // degrade to plain text and wrap it so callers can continue.
               if (isContentOnlySchema(params.outputSchema)) {
-                const { text } = await generateText({
-                  model,
-                  messages,
-                  ...(request.options || {}),
-                });
+                const batchAgent = createAgent(modelId, undefined, undefined, byokApiKey ? { apiKey: byokApiKey } : undefined);
+                const batchResult = await batchAgent.generate(messages, request.options || {});
                 return {
                   customId: request.customId,
-                  response: { content: text } as any,
+                  response: { content: batchResult.text } as any,
                 };
               }
               throw error;
             }
           }
 
-          const { object } = await generateObject({
-            model,
-            schema: params.outputSchema as any,
-            messages,
-            ...(request.options || {}),
-          });
+          const temperature =
+            typeof request.options?.temperature === "number"
+              ? request.options.temperature
+              : undefined;
+          const { object } = await makeStructuredModelCall(
+            params.outputSchema as any,
+            messages as any,
+            "high",
+            undefined,
+            temperature,
+            params.workspaceId,
+          );
 
           return { customId: request.customId, response: object as any };
         }
 
-        const { text } = await generateText({
-          model,
-          messages,
-          ...(request.options || {}),
-        });
+        const batchAgent = createAgent(modelId, undefined, undefined, byokApiKey ? { apiKey: byokApiKey } : undefined);
+        const batchResult = await batchAgent.generate(messages, request.options || {});
 
-        return { customId: request.customId, response: text as any };
+        return { customId: request.customId, response: batchResult.text as any };
       } catch (error) {
         return {
           customId: request.customId,
@@ -234,23 +240,20 @@ async function runInlineBatch<T = any>(
  */
 export async function createBatch<T = any>(params: CreateBatchParams<T>) {
   try {
-    const chatProvider = env.CHAT_PROVIDER;
-    const modelId = env.MODEL;
+    const chatProvider = getDefaultChatProviderType();
+    const modelId = getDefaultChatModelId();
 
     // Ollama doesn't support batch API — always use inline
     if (chatProvider === "ollama") {
       return await runInlineBatch(params);
     }
 
-    const provider = getProvider();
-    const openaiApiMode = env.OPENAI_API_MODE;
-    const hasOpenAIBaseUrl =
-      typeof env.OPENAI_BASE_URL === "string" &&
-      env.OPENAI_BASE_URL.trim().length > 0;
+    const provider = getBatchProvider();
+    const openaiConfig = getProviderConfig("openai");
     const forceInlineForProxy =
       chatProvider === "openai" &&
-      hasOpenAIBaseUrl &&
-      openaiApiMode === "chat_completions";
+      !!openaiConfig.baseUrl &&
+      openaiConfig.apiMode === "chat_completions";
 
     logger.info(
       `Creating batch with ${provider.providerName} provider for model ${modelId}`,
@@ -285,7 +288,7 @@ export async function getBatch<T = any>(
       );
     }
 
-    const provider = getProvider();
+    const provider = getBatchProvider();
     return await provider.getBatch<T>(params);
   } catch (error) {
     logger.error("Failed to get batch:", { error });
@@ -306,7 +309,7 @@ export async function cancelBatch(
       return { success: false };
     }
 
-    const provider = getProvider();
+    const provider = getBatchProvider();
     if (provider.cancelBatch) {
       return await provider.cancelBatch(params);
     }

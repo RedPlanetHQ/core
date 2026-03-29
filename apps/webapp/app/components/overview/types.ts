@@ -17,6 +17,6 @@ export interface WidgetOption {
   integrationSlug: string;
   integrationName: string;
   integrationIcon: string | null;
-  widgetUrl: string;
+  frontendUrl: string;
   integrationAccountId: string;
 }

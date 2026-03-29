@@ -1,5 +1,13 @@
 import {randomUUID} from 'node:crypto';
 import {exec} from 'node:child_process';
+import {appendFileSync} from 'node:fs';
+
+const LOG_FILE = '/tmp/core-stream.log';
+function streamLog(data: unknown): void {
+	try {
+		appendFileSync(LOG_FILE, JSON.stringify(data) + '\n');
+	} catch { /* ignore */ }
+}
 
 // ── Open URL in browser ───────────────────────────────────────────────────────
 
@@ -24,7 +32,7 @@ export interface IntegrationAccount {
 	integrationDefinition: {
 		name: string;
 		slug: string;
-		widgetUrl?: string | null;
+		frontendUrl?: string | null;
 		spec?: Record<string, unknown> | null;
 	};
 	isActive: boolean;
@@ -76,10 +84,11 @@ export async function connectApiKeyIntegration(
 export type OutputPart = {
 	type: string; // e.g. "tool-get_integration_actions", "text", "step-start"
 	toolCallId?: string;
-	state?: 'input-streaming' | 'output-available';
+	state?: 'input-streaming' | 'output-available' | 'approval-requested' | 'in-progress';
 	input?: Record<string, unknown>;
 	output?: unknown;
 	text?: string;
+	approval?: {id: string};
 };
 
 export type StreamEvent =
@@ -105,8 +114,20 @@ export type StreamEvent =
 	| {
 			type: 'tool-output-available';
 			toolCallId: string;
-			output: {parts?: OutputPart[]};
+			// output can be {parts} or Mastra format {toolCalls, toolResults, steps}
+			output: Record<string, unknown>;
 			preliminary?: boolean;
+	  }
+	| {type: 'tool-approval-request'; approvalId: string; toolCallId: string}
+	| {
+			// Sub-agent activity chunks — carry nested tool calls/results for agent-take_action
+			type: 'data-tool-agent';
+			data?: {
+				toolCalls?: Array<{toolCallId: string; toolName: string; args: Record<string, unknown>; payload?: {toolCallId: string; toolName: string; args: Record<string, unknown>}}>;
+				toolResults?: Array<{toolCallId: string; result?: unknown; payload?: {toolCallId: string; result?: unknown}}>;
+				steps?: unknown[];
+				text?: string;
+			};
 	  }
 	| {type: 'finish-step'}
 	| {type: 'finish-message'}
@@ -122,6 +143,36 @@ function parseSSELine(line: string): string | null {
 	}
 
 	return null;
+}
+
+// ── Shared SSE body reader ────────────────────────────────────────────────────
+
+async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+	const reader = body.getReader();
+	const decoder = new TextDecoder();
+	let buffer = '';
+
+	while (true) {
+		const {done, value} = await reader.read();
+		if (done) break;
+
+		buffer += decoder.decode(value, {stream: true});
+		const lines = buffer.split('\n');
+		buffer = lines.pop() ?? '';
+
+		for (const line of lines) {
+			const data = parseSSELine(line);
+			if (!data || data === '[DONE]') continue;
+
+			try {
+				const event = JSON.parse(data) as StreamEvent;
+				streamLog(event);
+				yield event;
+			} catch {
+				// ignore malformed lines
+			}
+		}
+	}
 }
 
 // ── Fetch workspace info ──────────────────────────────────────────────────────
@@ -172,30 +223,39 @@ export async function* streamConversation(
 		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
 
-	const reader = response.body.getReader();
-	const decoder = new TextDecoder();
-	let buffer = '';
+	yield* readSSEBody(response.body);
+}
 
-	while (true) {
-		const {done, value} = await reader.read();
-		if (done) break;
+// ── Stream approval response ──────────────────────────────────────────────────
 
-		buffer += decoder.decode(value, {stream: true});
-		const lines = buffer.split('\n');
-		buffer = lines.pop() ?? '';
+export async function* streamConversationApproval(
+	baseUrl: string,
+	apiKey: string,
+	conversationId: string,
+	toolCallId: string,
+	approved: boolean,
+	signal?: AbortSignal,
+): AsyncGenerator<StreamEvent> {
+	const response = await fetch(`${baseUrl}/api/v1/conversation`, {
+		method: 'POST',
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
+		body: JSON.stringify({
+			id: conversationId,
+			needsApproval: true,
+			toolArgOverrides: {[toolCallId]: {approved}},
+			source: 'cli',
+		}),
+		signal,
+	});
 
-		for (const line of lines) {
-			const data = parseSSELine(line);
-			if (!data || data === '[DONE]') continue;
-
-			try {
-				const event = JSON.parse(data) as StreamEvent;
-				yield event;
-			} catch {
-				// ignore malformed lines
-			}
-		}
+	if (!response.ok || !response.body) {
+		throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 	}
+
+	yield* readSSEBody(response.body);
 }
 
 // ── Fetch conversations list ──────────────────────────────────────────────────

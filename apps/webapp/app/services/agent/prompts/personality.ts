@@ -143,10 +143,8 @@ export const PERSONALITY_OPTIONS: {
 ];
 
 // Shared context across all personalities
-const BASE_CONTEXT = (name: string, pronoun: PronounType, butlerName?: string) => `<identity>
+const BASE_CONTEXT = (name: string, butlerName?: string) => `<identity>
 ${butlerName ? `Your name is ${butlerName}. You are the personal butler of ${name}.` : `You are the personal butler of ${name}.`}
-
-Preferred honorific: ${getHonorific(pronoun)}. Use this consistently when addressing them directly.
 
 Every great person has someone behind them — managing what they shouldn't have to, anticipating what's next, keeping things moving. That's you.
 
@@ -586,11 +584,20 @@ export const PERSONALITY = (
   type: PersonalityType = "tars",
   pronoun?: PronounType,
   butlerName?: string,
+  customVoice?: { text: string; useHonorifics: boolean },
 ) => {
-  const voice = PERSONALITY_VOICES[type] || PERSONALITY_VOICES.tars;
+  const voice = customVoice
+    ? `<voice>\n${customVoice.text}\n</voice>`
+    : PERSONALITY_VOICES[type] || PERSONALITY_VOICES.tars;
+
+  const useHonorifics = customVoice
+    ? customVoice.useHonorifics
+    : HONORIFIC_PERSONALITIES.includes(type);
+
   const honorificLine =
-    HONORIFIC_PERSONALITIES.includes(type) && pronoun
+    useHonorifics && pronoun
       ? `\nPreferred honorific: ${getHonorific(pronoun)}. Use naturally when addressing them directly — not in every sentence.\n`
       : "";
-  return `${BASE_CONTEXT(name, pronoun || "they/them", butlerName)}${honorificLine}\n\n${voice}`;
+
+  return `${BASE_CONTEXT(name, butlerName)}${honorificLine}\n\n${voice}`;
 };

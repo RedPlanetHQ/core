@@ -38,6 +38,73 @@ export interface WidgetSpec extends WidgetMeta {
   render(context: WidgetRenderContext): Promise<WidgetComponent>;
 }
 
+// ─── Tool UI ──────────────────────────────────────────────────────────────────
+
+/** Recursive JSON value type — covers all valid tool input shapes */
+export type ToolInputPrimitive = string | number | boolean | null;
+export type ToolInputValue =
+  | ToolInputPrimitive
+  | ToolInputValue[]
+  | { [key: string]: ToolInputValue };
+export type ToolInput = Record<string, ToolInputValue>;
+
+/** A single content block in a tool result */
+export interface ToolContent {
+  type: string;
+  text: string;
+}
+
+/** The result returned by a tool call */
+export interface ToolResult {
+  content: ToolContent[];
+  isError?: boolean;
+}
+
+/** A pi-tui component rendering a tool result (tui placement) */
+export interface TuiToolUIComponent {
+  render: (width: number) => string[];
+}
+
+/** A React component rendering a tool result (webapp placement) */
+export type WebToolUIComponent = () => object;
+
+export type ToolUIComponent = WebToolUIComponent | TuiToolUIComponent;
+
+/** Context passed to a ToolUI renderer */
+export interface ToolUIRenderContext {
+  placement: 'tui' | 'webapp';
+  pat: string;
+  accounts: Array<{ id: string; slug: string; name?: string }>;
+  baseUrl: string;
+}
+
+/**
+ * Integration-defined UI for tool calls.
+ * render() is called in two phases:
+ *   Phase 1 — result is null: tool input is known, user can modify and call submitInput()
+ *   Phase 2 — result is present: tool has run, show rich result UI
+ */
+export interface ToolUI {
+  supported_tools: string[];
+  render(
+    toolName: string,
+    input: ToolInput,
+    result: ToolResult | null,
+    context: ToolUIRenderContext,
+    submitInput: (input: ToolInput) => void,
+    onDecline: () => void,
+  ): Promise<ToolUIComponent>;
+}
+
+/**
+ * Shape exported by an integration's frontend.js bundle.
+ * Combines widgets (standalone) and toolUI (per-tool result renderer).
+ */
+export interface FrontendExport {
+  widgets?: WidgetSpec[];
+  toolUI?: ToolUI;
+}
+
 export enum IntegrationEventType {
   /**
    * Processes authentication data and returns tokens/credentials to be saved
@@ -114,6 +181,8 @@ export class Spec {
     mcp?: McpAuthParams;
   };
   widgets?: WidgetMeta[];
+  /** Set to true when the integration's frontend bundle exports a ToolUI */
+  toolUISupported?: boolean;
 }
 
 export interface Config {

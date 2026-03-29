@@ -16,6 +16,7 @@ export const CreateConversationSchema = z.object({
     .optional(),
   userType: z.nativeEnum(UserTypeEnum).optional(),
   asyncJobId: z.string().optional(),
+  modelId: z.string().optional(),
   parts: z
     .array(
       z.object({

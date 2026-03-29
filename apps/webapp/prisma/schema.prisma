@@ -337,7 +337,7 @@ model IntegrationDefinitionV2 {
   version     String?
   url         String?
 
-  widgetUrl   String?
+  frontendUrl String?
 
   workspace   Workspace? @relation(references: [id], fields: [workspaceId], onDelete: Cascade)
   workspaceId String?
@@ -697,16 +697,16 @@ model RecallLog {
 }
 
 model Channel {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   type        String // "slack" | "telegram" | "whatsapp" | "email"
   config      Json // type-specific: Slack: { bot_token, user_token?, channel_id?, team_id?, team_name? } Telegram: { bot_token, chat_id, username? }
-  isDefault   Boolean   @default(false)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isDefault   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   reminders   Reminder[]
 
   @@index([workspaceId])
@@ -1042,6 +1042,7 @@ model Workspace {
   tasks                   Task[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
+  llmProviders            LLMProvider[]
 }
 
 enum TaskStatus {
@@ -1128,4 +1129,44 @@ enum WorkspaceRole {
   ADMIN // Can manage users, settings, integrations
   MEMBER // Can access and use workspace features
   GUEST // Limited read-only access
+}
+
+// ---------------------------------------------------------------------------
+// LLM Providers & Models
+// ---------------------------------------------------------------------------
+
+model LLMProvider {
+  id          String     @id @default(uuid())
+  workspaceId String?
+  workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String // "OpenAI", "Anthropic", "Google", "Ollama"
+  type        String // "openai", "anthropic", "google", "ollama"
+  config      Json       @default("{}")
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  models      LLMModel[]
+
+  @@index([workspaceId])
+  @@index([type])
+}
+
+model LLMModel {
+  id            String      @id @default(uuid())
+  providerId    String
+  provider      LLMProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  modelId       String // "gpt-5-2025-08-07"
+  label         String // "GPT-5"
+  complexity    String // "high", "medium", "low"
+  supportsBatch Boolean     @default(true)
+  isDefault     Boolean     @default(false)
+  isEnabled     Boolean     @default(true)
+  isDeprecated  Boolean     @default(false)
+  capabilities  String[] // ["chat", "structured", "reasoning"] or ["embedding"]
+  dimensions    Int? // For embedding models (e.g., 1024, 1536, 3072)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([providerId])
+  @@index([complexity])
 }

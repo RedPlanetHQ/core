@@ -43,32 +43,28 @@ export function OnboardingAgentLoader({
 
   // Extract latest update and summary from messages
   useEffect(() => {
-    if (messages.length > 0) {
-      const lastMessage = messages[messages.length - 1] as UIMessage;
+    if (messages.length === 0) return;
+    const lastMessage = messages[messages.length - 1] as UIMessage;
+    if (lastMessage.role !== "assistant") return;
 
-      // Check for tool calls with progress_update
-      if (lastMessage.role === "assistant") {
-        lastMessage.parts?.forEach((part: any) => {
-          if (
-            part.type.includes("progress_update") &&
-            part.state === "output-available"
-          ) {
-            const message = part.input.message;
-            if (message && typeof message === "string") {
-              // Replace with latest update
-              setLatestUpdate(message);
-            }
-          } else if (
-            part.type === "text" &&
-            part.text &&
-            part.state === "done"
-          ) {
-            // Accumulate text content as summary
-            setSummary((prev) => prev + part.text);
-          }
-        });
+    lastMessage.parts?.forEach((part: any) => {
+      // Tool part: type is "tool-invocation" (AI SDK) or "tool-progress_update" (Mastra)
+      const isProgressUpdate =
+        part.toolName === "progress_update" ||
+        part.type === "tool-progress_update";
+
+      if (isProgressUpdate) {
+        const msg = part.args?.message ?? part.input?.message;
+        if (msg && typeof msg === "string") {
+          setLatestUpdate(msg);
+        }
       }
-    }
+
+      // Text part: no state field needed — just check type and text presence
+      if (part.type === "text" && part.text) {
+        setSummary(part.text);
+      }
+    });
   }, [messages]);
 
   // When streaming is done, call onComplete with the summary

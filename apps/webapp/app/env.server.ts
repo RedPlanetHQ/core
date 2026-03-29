@@ -95,6 +95,12 @@ const EnvironmentSchema = z
       .default("responses"),
     ANTHROPIC_API_KEY: z.string().optional(),
     GOOGLE_GENERATIVE_AI_API_KEY: z.string().optional(),
+    OPENROUTER_API_KEY: z.string().optional(),
+    DEEPSEEK_API_KEY: z.string().optional(),
+    AI_GATEWAY_API_KEY: z.string().optional(),
+    GROQ_API_KEY: z.string().optional(),
+    MISTRAL_API_KEY: z.string().optional(),
+    XAI_API_KEY: z.string().optional(),
 
     EMAIL_TRANSPORT: z.string().optional(),
     FROM_EMAIL: z.string().optional(),

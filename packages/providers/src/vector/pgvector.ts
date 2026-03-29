@@ -15,6 +15,7 @@ import type { IVectorProvider } from "./interface";
 
 interface PgVectorConfig {
   prisma: PrismaClient;
+  dimensions?: number;
 }
 
 /**
@@ -105,10 +106,10 @@ export class PgVectorProvider implements IVectorProvider {
 
   constructor(config: PgVectorConfig) {
     this.prisma = config.prisma;
-    // Get dimension from environment variable (same as vector-indexes.server.ts)
-    this.dimensions = process.env.EMBEDDING_MODEL_SIZE
-      ? parseInt(process.env.EMBEDDING_MODEL_SIZE, 10)
-      : 1024;
+    this.dimensions = config.dimensions
+      ?? (process.env.EMBEDDING_MODEL_SIZE
+        ? parseInt(process.env.EMBEDDING_MODEL_SIZE, 10)
+        : 1024);
   }
 
   /**

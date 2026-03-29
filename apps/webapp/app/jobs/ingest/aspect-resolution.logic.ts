@@ -139,6 +139,9 @@ export async function processAspectResolution(
         messages as ModelMessage[],
         "low",
         "aspect-resolution",
+        undefined,
+        payload.workspaceId,
+        "memory",
       );
 
       // Apply decisions

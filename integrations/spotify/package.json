@@ -22,10 +22,10 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "build": "pnpm run build:cli && pnpm run build:widgets",
+    "build": "pnpm run build:cli && pnpm run build:frontend",
     "build:cli": "rimraf bin && bun build src/index.ts --outfile bin/index.js --target node --minify",
-    "build:widgets": "tsup",
-    "dev:widgets": "tsup --watch",
+    "build:frontend": "tsup",
+    "dev:frontend": "tsup --watch",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },

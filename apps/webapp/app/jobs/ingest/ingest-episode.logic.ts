@@ -5,6 +5,7 @@ import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { type AddEpisodeResult, EpisodeType } from "@core/types";
 import { refundCredits } from "../credit_utils";
+import { isWorkspaceBYOK } from "~/services/byok.server";
 
 export const IngestBodyRequest = z.object({
   episodeBody: z.string().min(20),
@@ -77,10 +78,11 @@ export async function processEpisodeIngestion(
     queueId?: string;
   }) => Promise<any>,
 ): Promise<IngestEpisodeResult> {
+  // Credits are reserved upfront in addToQueue — no check needed here
+  // BYOK workspaces skip all credit operations
+  const byok = await isWorkspaceBYOK(payload.workspaceId);
   try {
     logger.log(`Processing job for user ${payload.userId}`);
-
-    // Credits are reserved upfront in addToQueue — no check needed here
 
     try {
       await prisma.ingestionQueue.update({
@@ -163,8 +165,9 @@ export async function processEpisodeIngestion(
 
     // Refund reserved credits if nothing was processed (nothing to remember)
     // Only refund for single-chunk episodes; multi-chunk reconciliation happens in graph-resolution
+    // Skip for BYOK workspaces (no credits were reserved)
     const totalChunks = payload.body.totalChunks || 1;
-    if (isNothingToRemember && totalChunks <= 1) {
+    if (!byok && isNothingToRemember && totalChunks <= 1) {
       try {
         const queue = await prisma.ingestionQueue.findUnique({
           where: { id: payload.queueId },
@@ -291,8 +294,9 @@ export async function processEpisodeIngestion(
   } catch (err: any) {
     // Refund reserved credits on failure
     // Only refund for single-chunk episodes; multi-chunk reconciliation happens in graph-resolution
+    // Skip for BYOK workspaces (no credits were reserved)
     const errorTotalChunks = payload.body.totalChunks || 1;
-    if (errorTotalChunks <= 1) {
+    if (!byok && errorTotalChunks <= 1) {
       try {
         const queue = await prisma.ingestionQueue.findUnique({
           where: { id: payload.queueId },

@@ -3,6 +3,11 @@ import { customAlphabet, nanoid } from "nanoid";
 import nodeCrypto from "node:crypto";
 import { z } from "zod";
 import { prisma } from "~/db.server";
+import {
+  encryptSecret,
+  decryptSecret,
+  EncryptedSecretSchema,
+} from "~/lib/encryption.server";
 import { env } from "~/env.server";
 import { logger } from "./logger.service";
 
@@ -123,11 +128,7 @@ export type PersonalAccessTokenAuthenticationResult = {
   workspaceId?: string;
 };
 
-const EncryptedSecretValueSchema = z.object({
-  nonce: z.string(),
-  ciphertext: z.string(),
-  tag: z.string(),
-});
+const EncryptedSecretValueSchema = EncryptedSecretSchema;
 
 const AuthorizationHeaderSchema = z.string().regex(/^Bearer .+$/);
 
@@ -452,23 +453,7 @@ function obfuscateToken(token: string) {
 }
 
 function encryptToken(value: string) {
-  const nonce = nodeCrypto.randomBytes(12);
-  const cipher = nodeCrypto.createCipheriv(
-    "aes-256-gcm",
-    env.ENCRYPTION_KEY,
-    nonce,
-  );
-
-  let encrypted = cipher.update(value, "utf8", "hex");
-  encrypted += cipher.final("hex");
-
-  const tag = cipher.getAuthTag().toString("hex");
-
-  return {
-    nonce: nonce.toString("hex"),
-    ciphertext: encrypted,
-    tag,
-  };
+  return encryptSecret(value);
 }
 
 function decryptPersonalAccessToken(personalAccessToken: PersonalAccessToken) {
@@ -481,27 +466,7 @@ function decryptPersonalAccessToken(personalAccessToken: PersonalAccessToken) {
     );
   }
 
-  const decryptedToken = decryptToken(
-    encryptedData.data.nonce,
-    encryptedData.data.ciphertext,
-    encryptedData.data.tag,
-  );
-  return decryptedToken;
-}
-
-function decryptToken(nonce: string, ciphertext: string, tag: string): string {
-  const decipher = nodeCrypto.createDecipheriv(
-    "aes-256-gcm",
-    env.ENCRYPTION_KEY,
-    Buffer.from(nonce, "hex"),
-  );
-
-  decipher.setAuthTag(Buffer.from(tag, "hex"));
-
-  let decrypted = decipher.update(ciphertext, "hex", "utf8");
-  decrypted += decipher.final("utf8");
-
-  return decrypted;
+  return decryptSecret(encryptedData.data);
 }
 
 function hashToken(token: string): string {

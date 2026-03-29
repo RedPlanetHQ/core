@@ -10,6 +10,21 @@ import { cn } from "~/lib/utils";
 import { Button } from "../ui";
 import { LoaderCircle } from "lucide-react";
 import { useSubmit } from "@remix-run/react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
+
+export interface LLMModel {
+  id: string;
+  modelId: string;
+  label: string;
+  provider: string;
+  isDefault: boolean;
+}
 
 interface ConversationTextareaProps {
   defaultValue?: string;
@@ -20,6 +35,10 @@ interface ConversationTextareaProps {
   disabled?: boolean;
   onConversationCreated?: (message: string) => void;
   stop?: () => void;
+  models?: LLMModel[];
+  selectedModelId?: string;
+  onModelChange?: (modelId: string) => void;
+  needsApproval?: boolean;
 }
 
 export function ConversationTextarea({
@@ -29,7 +48,11 @@ export function ConversationTextarea({
   onChange,
   onConversationCreated,
   stop,
+  needsApproval,
   disabled = false,
+  models,
+  selectedModelId,
+  onModelChange,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const [editor, setEditor] = useState<Editor>();
@@ -61,6 +84,8 @@ export function ConversationTextarea({
     }
   }, [disabled]);
 
+  const showModelSelector = models && models.length > 1 && onModelChange;
+
   return (
     <div className="bg-background-3 rounded-xl">
       <EditorRoot>
@@ -77,7 +102,7 @@ export function ConversationTextarea({
 
             Placeholder.configure({
               placeholder: () =>
-                disabled
+                needsApproval
                   ? "Waiting for approval..."
                   : (placeholder ?? "ask corebrain..."),
               includeChildren: true,
@@ -134,7 +159,30 @@ export function ConversationTextarea({
           className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
         />
       </EditorRoot>
-      <div className="flex justify-end px-3 pb-3 pt-1">
+      <div className="flex items-center justify-between px-3 pb-3 pt-1">
+        <div>
+          {showModelSelector && (
+            <Select value={selectedModelId} onValueChange={onModelChange}>
+              <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                {models.map((model) => (
+                  <SelectItem
+                    key={model.id}
+                    value={model.id}
+                    className="text-xs"
+                  >
+                    <span className="font-medium">{model.label}</span>
+                    <span className="text-muted-foreground ml-1 capitalize">
+                      · {model.provider}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
         <Button
           variant="secondary"
           className="gap-1 shadow-none transition-all duration-500 ease-in-out"

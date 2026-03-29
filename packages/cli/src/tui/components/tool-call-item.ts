@@ -83,6 +83,21 @@ export class ToolCallItem implements Component {
 		this.displayName = resolveDisplayName(this.toolName, args);
 	}
 
+	/**
+	 * Mark known children done by their call IDs.
+	 * Used when data-tool-agent events have toolCalls:[] but toolResults with results
+	 * for children that were registered in an earlier snapshot (post-approval pattern).
+	 */
+	markChildrenDoneByIds(resultMap: Map<string, unknown>): void {
+		for (const [callId, result] of resultMap) {
+			const child = this.childrenByCallId.get(callId);
+			if (child && !child.isDone) {
+				child.isDone = true;
+				child.result = toResultString(result);
+			}
+		}
+	}
+
 	/** Called on each tool-output-available — updates nested children in real-time */
 	updateFromOutputParts(parts: OutputPart[]): void {
 		for (const part of parts) {
@@ -119,6 +134,40 @@ export class ToolCallItem implements Component {
 				child.isDone = true;
 				child.result = toResultString(part.output);
 			}
+		}
+	}
+
+	/**
+	 * Returns not-done children — these are nested tools still waiting
+	 * (in-progress or approval-requested) at the time of an approval event.
+	 * Mirrors webapp's findPendingApprovals expansion of agent-take_action.
+	 */
+	getPendingChildren(): Array<{toolName: string; displayName: string; input: Record<string, unknown>}> {
+		return this.children
+			.filter(c => !c.isDone)
+			.map(c => ({
+				toolName: c.toolName,
+				displayName: c.displayName,
+				input: c.parsedArgs(),
+			}));
+	}
+
+	/**
+	 * TUI equivalent of webapp's cachedNestedPartsRef lookup.
+	 * Resumed streams send only toolResults, so this resolves a Mastra call ID
+	 * (e.g. "call k23...") to the child that was cached from the first stream.
+	 */
+	getChildInfo(callId: string): {toolName: string; input: Record<string, unknown>} | undefined {
+		const child = this.childrenByCallId.get(callId);
+		if (!child) return undefined;
+		return {toolName: child.toolName, input: child.parsedArgs()};
+	}
+
+	parsedArgs(): Record<string, unknown> {
+		try {
+			return JSON.parse(this.args) as Record<string, unknown>;
+		} catch {
+			return {};
 		}
 	}
 
