@@ -78,7 +78,7 @@ export async function processTitleGeneration(
     // Handle different types
     if (episodeType === EpisodeType.DOCUMENT) {
       // For documents, just pass the document content to get title
-      title = await generateTitleFromContent(episodeBody, "document");
+      title = await generateTitleFromContent(episodeBody, "document", payload.workspaceId);
     } else if (episodeType === EpisodeType.CONVERSATION) {
       if (sessionId) {
         // For conversations with sessionId, fetch other episodes in the same session
@@ -90,7 +90,7 @@ export async function processTitleGeneration(
         );
       } else {
         // For conversations without sessionId, just use the episode body
-        title = await generateTitleFromContent(episodeBody, "conversation");
+        title = await generateTitleFromContent(episodeBody, "conversation", payload.workspaceId);
       }
     }
 
@@ -154,6 +154,7 @@ export async function processTitleGeneration(
 async function generateTitleFromContent(
   content: string,
   type: "document" | "conversation",
+  workspaceId?: string,
 ): Promise<string> {
   const prompt = buildSimpleTitlePrompt(content, type);
 
@@ -169,6 +170,8 @@ async function generateTitleFromContent(
     },
     "low",
     "title-generation",
+    undefined,
+    workspaceId,
   );
 
   // Clean up the response
@@ -231,6 +234,8 @@ async function generateTitleForConversationWithSession(
     },
     "low",
     "title-generation-session",
+    undefined,
+    workspaceId,
   );
 
   return responseText.trim().replace(/^["']|["']$/g, "");

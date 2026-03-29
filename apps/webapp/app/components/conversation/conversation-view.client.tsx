@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useFetcher } from "@remix-run/react";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 import { useChat, type UIMessage } from "@ai-sdk/react";
 import {
   DefaultChatTransport,
@@ -7,9 +8,16 @@ import {
 } from "ai";
 import { UserTypeEnum } from "@core/types";
 import { ConversationItem } from "./conversation-item.client";
-import { ConversationTextarea } from "./conversation-textarea.client";
+import {
+  ConversationTextarea,
+  type LLMModel,
+} from "./conversation-textarea.client";
 import { ThinkingIndicator } from "./thinking-indicator.client";
-import { hasNeedsApprovalDeep } from "./conversation-utils";
+import {
+  collectApprovalRequests,
+  hasNeedsApprovalDeep,
+  mergeAgentParts,
+} from "./conversation-utils";
 import { cn } from "~/lib/utils";
 
 interface ConversationHistory {
@@ -24,10 +32,12 @@ interface ConversationViewProps {
   history: ConversationHistory[];
   className?: string;
   integrationAccountMap?: Record<string, string>;
+  integrationFrontendMap?: Record<string, string>;
   /** When true, auto-triggers regenerate if history has only 1 message */
   autoRegenerate?: boolean;
   /** DB conversation status — input is disabled when "running" */
   conversationStatus?: string;
+  models?: LLMModel[];
 }
 
 export function ConversationView({
@@ -35,8 +45,10 @@ export function ConversationView({
   history,
   className,
   integrationAccountMap = {},
+  integrationFrontendMap = {},
   autoRegenerate = false,
   conversationStatus,
+  models: modelsProp = [],
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
@@ -48,6 +60,43 @@ export function ConversationView({
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
 
+  const defaultModelId = modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
+    "selectedModelId",
+    defaultModelId,
+  );
+  // Ref so prepareSendMessagesRequest always reads the latest selection
+  const selectedModelRef = useRef<string | undefined>(selectedModelId);
+  selectedModelRef.current = selectedModelId;
+
+  const handleModelChange = (modelId: string) => {
+    setSelectedModelId(modelId);
+  };
+  // toolCallId → { approved, ...argOverrides }
+  // Single ref for both approval decisions and arg overrides
+  const toolArgOverridesRef = useRef<Record<string, Record<string, unknown>>>(
+    {},
+  );
+
+  // {approvalId, toolCallId}[] — one entry per suspended agent/tool call.
+  // Populated by deep-scanning the last assistant message; reset on chat finish.
+  const pendingApprovalRequestsRef = useRef<
+    Array<{ approvalId: string; toolCallId: string }>
+  >([]);
+
+  const setToolArgOverride = useCallback(
+    (toolCallId: string, args: Record<string, unknown>) => {
+      toolArgOverridesRef.current = {
+        ...toolArgOverridesRef.current,
+        [toolCallId]: {
+          ...(toolArgOverridesRef.current[toolCallId] ?? {}),
+          ...args,
+        },
+      };
+    },
+    [],
+  );
+
   const {
     sendMessage,
     messages,
@@ -58,6 +107,8 @@ export function ConversationView({
   } = useChat({
     id: conversationId,
     onFinish: () => {
+      toolArgOverridesRef.current = {};
+      pendingApprovalRequestsRef.current = [];
       readFetcher.submit(null, {
         method: "GET",
         action: `/api/v1/conversation/${conversationId}/read`,
@@ -74,20 +125,29 @@ export function ConversationView({
     transport: new DefaultChatTransport({
       api: "/api/v1/conversation",
       prepareSendMessagesRequest({ messages, id }) {
-        const lastAssistant = [...messages]
-          .reverse()
-          .find((m) => m.role === "assistant") as UIMessage | undefined;
-
-        const needsApproval = !!lastAssistant?.parts.find(
-          (p: any) => p.state === "approval-responded",
+        const toolArgOverrides = toolArgOverridesRef.current;
+        const hasApprovals = Object.values(toolArgOverrides).some(
+          (e) => "approved" in e,
         );
 
-        if (needsApproval) {
-          return { body: { messages, needsApproval: true, id } };
+        if (hasApprovals) {
+          return {
+            body: { messages, needsApproval: true, id, toolArgOverrides },
+          };
         }
-        return { body: { message: messages[messages.length - 1], id } };
+
+        return {
+          body: {
+            message: messages[messages.length - 1],
+            id,
+            toolArgOverrides,
+            modelId: selectedModelRef.current,
+          },
+        };
       },
     }),
+    // Fire when every suspended tool (across the full agent hierarchy) has a
+    // recorded approve/decline decision in toolArgOverridesRef.
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
@@ -160,6 +220,28 @@ export function ConversationView({
     ? hasNeedsApprovalDeep(lastAssistant.parts)
     : false;
 
+  // Deep-scan the last assistant message for all suspended tool calls.
+  // Keep the ref at the max seen set (stable during approval processing);
+  // reset on chat finish (onFinish above).
+  const currentApprovalRequests = lastAssistant
+    ? collectApprovalRequests(mergeAgentParts(lastAssistant.parts))
+    : [];
+  if (
+    currentApprovalRequests.length > pendingApprovalRequestsRef.current.length
+  ) {
+    pendingApprovalRequestsRef.current = currentApprovalRequests;
+  }
+
+  // Real decisions are recorded directly into toolArgOverridesRef via setToolArgOverride,
+  // called from ToolApprovalPanel per card. This wrapper only updates AI SDK state
+  // (approval-requested → approval-responded) — always approved:true.
+  const handleToolApprovalResponse = useCallback(
+    (params: { id: string; approved: boolean }) => {
+      addToolApprovalResponse({ id: params.id, approved: true });
+    },
+    [addToolApprovalResponse],
+  );
+
   return (
     <div
       className={cn(
@@ -181,8 +263,11 @@ export function ConversationView({
             >
               <ConversationItem
                 message={message}
-                addToolApprovalResponse={addToolApprovalResponse}
+                addToolApprovalResponse={handleToolApprovalResponse}
+                setToolArgOverride={setToolArgOverride}
+                isChatBusy={status === "streaming" || status === "submitted"}
                 integrationAccountMap={integrationAccountMap}
+                integrationFrontendMap={integrationFrontendMap}
               />
             </div>
           ))}
@@ -206,6 +291,9 @@ export function ConversationView({
               if (message) sendMessage({ text: message });
             }}
             stop={() => stop()}
+            models={modelsProp}
+            selectedModelId={selectedModelId}
+            onModelChange={handleModelChange}
           />
         </div>
       </div>

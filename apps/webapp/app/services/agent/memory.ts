@@ -1,6 +1,5 @@
-import { generateObject } from "ai";
 import { z } from "zod";
-import { getModel, getModelForTask } from "~/lib/model.server";
+import { makeStructuredModelCall } from "~/lib/model.server";
 import { logger } from "~/services/logger.service";
 import { SearchService } from "../search.server";
 import { searchV2 } from "../search-v2";
@@ -130,33 +129,27 @@ export async function memoryAgent({
     logger.info(`[MemoryAgent] Processing intent: "${intent}"`);
 
     // Use low complexity model for query generation to save costs
-    const modelName = getModelForTask("low");
-    const model = getModel(modelName);
-
-    if (!model) {
-      throw new Error(`Failed to initialize model: ${modelName}`);
-    }
-
     // Step 1: Generate queries using LLM
-    const { object: queryObject } = await generateObject({
-      model,
-      system: MEMORY_AGENT_SYSTEM_PROMPT,
-      prompt: `User Intent: ${intent}
-
-Generate 1-5 optimized search queries to retrieve relevant context from memory.`,
-      schema: z.object({
+    const { object: queryObject } = await makeStructuredModelCall(
+      z.object({
         queries: z
           .array(z.string())
           .min(1)
           .max(5)
           .describe("Array of search queries to execute"),
       }),
-      providerOptions: {
-        openai: {
-          strictJsonSchema: false,
-        },
-      },
-    });
+      [
+        { role: "system", content: MEMORY_AGENT_SYSTEM_PROMPT },
+        { role: "user", content: `User Intent: ${intent}
+
+Generate 1-5 optimized search queries to retrieve relevant context from memory.` },
+      ],
+      "low",
+      undefined,
+      undefined,
+      workspaceId,
+      "search",
+    );
 
     const queries = queryObject.queries;
     logger.info(

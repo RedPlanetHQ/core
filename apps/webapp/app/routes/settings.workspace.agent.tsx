@@ -4,11 +4,12 @@ import {
   type ActionFunctionArgs,
 } from "@remix-run/node";
 import { useLoaderData, useFetcher } from "@remix-run/react";
+import { useState } from "react";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
 import { SettingSection } from "~/components/setting-section";
 import { Card } from "~/components/ui/card";
-import { Check } from "lucide-react";
+import { Check, Plus, Trash2, Pencil } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -16,11 +17,20 @@ import {
   SelectTrigger,
   SelectValue,
 } from "~/components/ui/select";
+import { CustomPersonalityDialog } from "~/components/personality/custom-personality-dialog.client";
+import { ClientOnly } from "remix-utils/client-only";
 import {
   PERSONALITY_OPTIONS,
-  type PersonalityType,
   type PronounType,
 } from "~/services/agent/prompts/personality";
+import {
+  getCustomPersonalities,
+  saveCustomPersonality,
+  deleteCustomPersonality,
+  improvePersonality,
+  type CustomPersonality,
+} from "~/models/personality.server";
+import { cn } from "~/lib/utils";
 
 const PRONOUN_OPTIONS: { id: PronounType; label: string; honorific: string }[] =
   [
@@ -28,7 +38,6 @@ const PRONOUN_OPTIONS: { id: PronounType; label: string; honorific: string }[] =
     { id: "she/her", label: "She / Her", honorific: "ma'am" },
     { id: "they/them", label: "They / Them", honorific: "name only" },
   ];
-import { cn } from "~/lib/utils";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
@@ -38,13 +47,15 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   }
 
   const userMetadata = user.metadata as Record<string, unknown> | null;
-  const personality = (userMetadata?.personality as PersonalityType) || "tars";
+  const personality = (userMetadata?.personality as string) || "tars";
   const pronoun = (userMetadata?.pronoun as PronounType) || "he/him";
+  const customPersonalities = await getCustomPersonalities(user.workspaceId);
 
   return json({
     personality,
     pronoun,
     personalityOptions: PERSONALITY_OPTIONS,
+    customPersonality: customPersonalities[0] ?? null,
   });
 };
 
@@ -76,12 +87,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   if (intent === "updatePersonality") {
     const personality = formData.get("personality") as string;
-    const validPersonalities = PERSONALITY_OPTIONS.map((p) => p.id);
-
-    if (
-      !personality ||
-      !validPersonalities.includes(personality as PersonalityType)
-    ) {
+    if (!personality) {
       return json({ error: "Invalid personality" }, { status: 400 });
     }
 
@@ -94,20 +100,77 @@ export const action = async ({ request }: ActionFunctionArgs) => {
     return json({ success: true });
   }
 
+  if (intent === "createPersonality") {
+    const raw = formData.get("personality") as string;
+    if (!raw) {
+      return json({ error: "Missing personality data" }, { status: 400 });
+    }
+
+    const personality: CustomPersonality = JSON.parse(raw);
+    await saveCustomPersonality(user.workspaceId, personality);
+    return json({ success: true });
+  }
+
+  if (intent === "deletePersonality") {
+    const personalityId = formData.get("personalityId") as string;
+    if (!personalityId) {
+      return json({ error: "Missing personalityId" }, { status: 400 });
+    }
+
+    await deleteCustomPersonality(user.workspaceId, personalityId);
+    return json({ success: true });
+  }
+
+  if (intent === "improvePersonality") {
+    const name = formData.get("name") as string;
+    const text = formData.get("text") as string;
+    if (!name || !text) {
+      return json({ error: "Missing name or text" }, { status: 400 });
+    }
+
+    const improved = await improvePersonality(name, text);
+    return json({ success: true, improved });
+  }
+
   return json({ error: "Invalid intent" }, { status: 400 });
 };
 
 export default function AgentSettings() {
-  const { personality, pronoun, personalityOptions } =
+  const { personality, pronoun, personalityOptions, customPersonality } =
     useLoaderData<typeof loader>();
   const personalityFetcher = useFetcher();
   const pronounFetcher = useFetcher();
+  const deleteFetcher = useFetcher();
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingCustom, setEditingCustom] = useState(false);
 
   const currentPersonality =
     personalityFetcher.formData?.get("personality")?.toString() || personality;
   const currentPronoun =
     (pronounFetcher.formData?.get("pronoun")?.toString() as PronounType) ||
     pronoun;
+
+  const handleSelect = (id: string) => {
+    personalityFetcher.submit(
+      { intent: "updatePersonality", personality: id },
+      { method: "POST" },
+    );
+  };
+
+  const handleDeleteCustom = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    deleteFetcher.submit(
+      { intent: "deletePersonality", personalityId: id },
+      { method: "POST" },
+    );
+    if (currentPersonality === id) {
+      personalityFetcher.submit(
+        { intent: "updatePersonality", personality: "tars" },
+        { method: "POST" },
+      );
+    }
+  };
 
   return (
     <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
@@ -159,12 +222,7 @@ export default function AgentSettings() {
                   currentPersonality === option.id &&
                     "border-primary/50 border-1",
                 )}
-                onClick={() => {
-                  personalityFetcher.submit(
-                    { intent: "updatePersonality", personality: option.id },
-                    { method: "POST" },
-                  );
-                }}
+                onClick={() => handleSelect(option.id)}
               >
                 {currentPersonality === option.id && (
                   <div className="absolute right-3 top-3">
@@ -190,9 +248,73 @@ export default function AgentSettings() {
                 </div>
               </Card>
             ))}
+
+            {/* Custom personality card */}
+            {customPersonality ? (
+              <Card
+                className={cn(
+                  "hover:border-primary/50 group relative cursor-pointer p-4 transition-all",
+                  currentPersonality === customPersonality.id &&
+                    "border-primary/50 border-1",
+                )}
+                onClick={() => handleSelect(customPersonality.id)}
+              >
+                {currentPersonality === customPersonality.id && (
+                  <div className="absolute right-3 top-3">
+                    <Check className="text-primary h-4 w-4" />
+                  </div>
+                )}
+                <div className="absolute right-3 top-3 hidden gap-1 group-hover:flex">
+                  <button
+                    className="text-muted-foreground hover:text-foreground rounded p-0.5"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingCustom(true);
+                      setDialogOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    className="text-muted-foreground hover:text-destructive rounded p-0.5"
+                    onClick={(e) => handleDeleteCustom(e, customPersonality.id)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                <h3 className="mb-1 font-medium">{customPersonality.name}</h3>
+                <p className="text-muted-foreground line-clamp-4 text-sm">
+                  {customPersonality.text}
+                </p>
+              </Card>
+            ) : (
+              <Card
+                className="hover:border-primary/50 flex cursor-pointer flex-col items-center justify-center gap-2 border-dashed p-4 transition-all"
+                onClick={() => {
+                  setEditingCustom(false);
+                  setDialogOpen(true);
+                }}
+              >
+                <Plus className="text-muted-foreground h-5 w-5" />
+                <p className="text-muted-foreground text-sm">
+                  Create your own
+                </p>
+              </Card>
+            )}
           </div>
         </div>
       </SettingSection>
+
+      <ClientOnly>
+        {() => (
+          <CustomPersonalityDialog
+            key={editingCustom ? "edit" : "create"}
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            existing={editingCustom ? customPersonality : null}
+          />
+        )}
+      </ClientOnly>
     </div>
   );
 }

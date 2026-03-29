@@ -12,12 +12,24 @@
   "bin": {
     "gmail": "./bin/index.js"
   },
+  "exports": {
+    "./frontend": {
+      "import": "./dist/frontend.js"
+    },
+    "./package.json": "./package.json"
+  },
   "scripts": {
-    "build": "rimraf dist && bun build src/index.ts --outfile dist/index.js --target node --minify",
+    "build": "pnpm run build:cli && pnpm run build:frontend",
+    "build:cli": "rimraf bin && bun build src/index.ts --outfile bin/index.js --target node --minify",
+    "build:frontend": "tsup",
+    "dev:frontend": "tsup --watch",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
     "prettier": "prettier --config .prettierrc --write ."
   },
   "devDependencies": {
+    "@types/react": "^19.2.13",
+    "react": "^19.2.4",
+    "tsup": "^8.0.1",
     "@types/nodemailer": "^6.4.17",
     "@types/turndown": "^5.0.5",
     "@babel/preset-typescript": "^7.26.0",
@@ -68,7 +80,8 @@
     "commander": "^12.0.0",
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
-    "@redplanethq/sdk": "0.1.14",
-    "turndown": "^7.2.0"
+    "@redplanethq/sdk": "0.1.18",
+    "turndown": "^7.2.0",
+    "@redplanethq/ui": "2.1.4"
   }
 }

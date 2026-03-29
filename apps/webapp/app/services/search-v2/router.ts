@@ -231,6 +231,7 @@ async function searchLabels(
 async function extractAspects(
   intent: string,
   matchedLabels: LabelMatch[] = [],
+  workspaceId?: string,
 ): Promise<AspectExtraction> {
   const startTime = Date.now();
 
@@ -249,8 +250,11 @@ async function extractAspects(
         { role: "system", content: systemPrompt },
         { role: "user", content: `Query: "${intent}"` },
       ],
-      "high", // Use low-complexity model for cost efficiency
+      "medium",
       cacheKey,
+      undefined,
+      workspaceId,
+      "search",
     );
 
     logger.info(
@@ -299,7 +303,7 @@ export async function routeIntent(
   const labelMatches = await searchLabels(intent, workspaceId);
 
   // Step 2: Run aspect extraction with label context
-  const aspectExtraction = await extractAspects(intent, labelMatches);
+  const aspectExtraction = await extractAspects(intent, labelMatches, workspaceId);
 
   const routingTimeMs = Date.now() - startTime;
 

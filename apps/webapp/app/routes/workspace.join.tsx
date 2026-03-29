@@ -21,6 +21,7 @@ import { requireUserId } from "~/services/session.server";
 import { typedjson } from "remix-typedjson";
 import { prisma } from "~/db.server";
 import { ensureBillingInitialized } from "~/services/billing.server";
+import { ensureDefaultProviders } from "~/services/llm-provider.server";
 import { LabelService } from "~/services/label.server";
 import { logger } from "~/services/logger.service";
 import { saveSession } from "~/services/sessionStorage.server";
@@ -73,6 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
     });
 
     await ensureBillingInitialized(workspace.id, userId);
+    await ensureDefaultProviders();
 
     // Create persona document and label
     try {

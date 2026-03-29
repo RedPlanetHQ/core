@@ -1,6 +1,7 @@
 import { type Workspace } from "@core/database";
 import { prisma } from "~/db.server";
 import { ensureBillingInitialized } from "~/services/billing.server";
+import { ensureDefaultProviders } from "~/services/llm-provider.server";
 import { sendEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.service";
 import { LabelService } from "~/services/label.server";
@@ -47,6 +48,7 @@ export async function createWorkspace(
   });
 
   await ensureBillingInitialized(workspace.id, input.userId);
+  await ensureDefaultProviders();
 
   // Create persona document and label
   try {

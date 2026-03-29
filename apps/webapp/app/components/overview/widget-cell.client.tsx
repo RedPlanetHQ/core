@@ -4,7 +4,7 @@ import { loadWidgetBundle } from "~/utils/widget-loader.client";
 
 interface WidgetCellProps {
   widgetSlug: string;
-  widgetUrl: string;
+  frontendUrl: string;
   integrationAccountId: string;
   integrationSlug: string;
   integrationName: string;
@@ -16,7 +16,7 @@ type WidgetComponent = React.ComponentType<Record<string, unknown>>;
 
 export function WidgetCell({
   widgetSlug,
-  widgetUrl,
+  frontendUrl,
   integrationAccountId,
   integrationSlug,
   integrationName,
@@ -33,12 +33,7 @@ export function WidgetCell({
 
     (async () => {
       try {
-        const mod = await loadWidgetBundle(widgetUrl);
-        const widgets = mod.widgets as Array<{
-          slug: string;
-          render: (ctx: unknown) => Promise<WidgetComponent> | WidgetComponent;
-        }>;
-
+        const { widgets } = await loadWidgetBundle(frontendUrl);
         const widget = widgets.find((w) => w.slug === widgetSlug);
         if (!widget) {
           setError(`Widget "${widgetSlug}" not found in bundle`);
@@ -58,7 +53,7 @@ export function WidgetCell({
         setError(err instanceof Error ? err.message : String(err));
       }
     })();
-  }, [widgetUrl, widgetSlug, pat, baseUrl, integrationAccountId, integrationSlug, integrationName]);
+  }, [frontendUrl, widgetSlug, pat, baseUrl, integrationAccountId, integrationSlug, integrationName]);
 
   if (error) {
     return (

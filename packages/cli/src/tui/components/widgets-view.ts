@@ -17,7 +17,7 @@ interface WidgetMeta {
 interface WidgetOption {
 	meta: WidgetMeta;
 	account: IntegrationAccount;
-	widgetUrl: string;
+	frontendUrl: string;
 }
 
 type Tab = 'overview' | 'below-input';
@@ -197,7 +197,7 @@ export class WidgetsView implements Component {
 		const toConfig = (opt: WidgetOption): WidgetConfig => ({
 			widgetSlug: opt.meta.slug,
 			widgetName: opt.meta.name,
-			widgetUrl: opt.widgetUrl,
+			frontendUrl: opt.frontendUrl,
 			accountId: opt.account.id,
 			accountSlug: opt.account.integrationDefinition.slug,
 			accountName: opt.account.integrationDefinition.name,
@@ -251,7 +251,7 @@ export class WidgetsView implements Component {
 
 			for (const account of accounts) {
 				const def = account.integrationDefinition;
-				if (!def.widgetUrl) continue;
+				if (!def.frontendUrl) continue;
 
 				const spec = def.spec as {widgets?: WidgetMeta[]} | null;
 				const widgets = spec?.widgets ?? [];
@@ -261,7 +261,7 @@ export class WidgetsView implements Component {
 					const option: WidgetOption = {
 						meta: w,
 						account,
-						widgetUrl: def.widgetUrl,
+						frontendUrl: def.frontendUrl,
 					};
 					if (w.tuiPlacement === 'below-input') {
 						this.belowInputOptions.push(option);

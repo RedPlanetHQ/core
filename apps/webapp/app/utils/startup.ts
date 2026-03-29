@@ -6,6 +6,7 @@ import { initWorkers, shutdownWorkers } from "~/bullmq/start-workers";
 import { trackConfig } from "~/services/telemetry.server";
 import { prisma } from "~/db.server";
 import { migration } from "~/migration";
+import { ensureDefaultProviders } from "~/services/llm-provider.server";
 
 // Global flag to ensure startup only runs once per server process
 let startupInitialized = false;
@@ -129,6 +130,10 @@ export async function initializeStartupServices() {
     // // Run database migrations
     await migration();
     logger.info("Database migration completed");
+
+    // Seed LLM providers/models and populate in-memory cache
+    await ensureDefaultProviders();
+    logger.info("LLM providers and models seeded");
 
     startupInitialized = true;
     logger.info("Application initialization completed successfully");

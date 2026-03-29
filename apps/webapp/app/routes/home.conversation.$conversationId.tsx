@@ -2,6 +2,7 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/server-runtime";
+import { Memory } from "@mastra/memory";
 
 import { useParams, useNavigate, useFetcher } from "@remix-run/react";
 
@@ -12,6 +13,7 @@ import {
   deleteConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { getAvailableModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
 import { PageHeader } from "~/components/common/page-header";
@@ -28,6 +30,7 @@ import {
 } from "~/components/ui/alert-dialog";
 import React from "react";
 
+import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
 // Example loader accessing params
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -37,13 +40,26 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const [conversation, integrationAccounts] = await Promise.all([
+  const [conversation, integrationAccounts, allModels] = await Promise.all([
     getConversationAndHistory(params.conversationId as string, user.id),
     getIntegrationAccounts(user.id, workspaceId),
+    getAvailableModels(),
   ]);
 
+  const models = allModels
+    .filter(
+      (m) => m.capabilities.length === 0 || m.capabilities.includes("chat"),
+    )
+    .map((m) => ({
+      id: `${m.provider.type}/${m.modelId}`,
+      modelId: m.modelId,
+      label: m.label,
+      provider: m.provider.type,
+      isDefault: m.isDefault,
+    }));
+
   if (!conversation) {
-    return { conversation: null, integrationAccountMap: {} };
+    return { conversation: null, integrationAccountMap: {}, models };
   }
 
   if (conversation.unread) {
@@ -51,11 +67,15 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
   }
 
   const integrationAccountMap: Record<string, string> = {};
+  const integrationFrontendMap: Record<string, string> = {};
   for (const acc of integrationAccounts) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
+    if (acc.integrationDefinition.frontendUrl) {
+      integrationFrontendMap[acc.id] = acc.integrationDefinition.frontendUrl;
+    }
   }
 
-  return { conversation, integrationAccountMap };
+  return { conversation, integrationAccountMap, integrationFrontendMap, models };
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
@@ -65,7 +85,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap } =
+  const { conversation, integrationAccountMap, integrationFrontendMap, models } =
     useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const { conversationId } = useParams();
@@ -146,7 +166,9 @@ export default function SingleConversation() {
           conversationId={conversationId as string}
           history={conversation.ConversationHistory}
           integrationAccountMap={integrationAccountMap}
+          integrationFrontendMap={integrationFrontendMap}
           conversationStatus={conversation.status}
+          models={models}
           autoRegenerate
         />
       </div>

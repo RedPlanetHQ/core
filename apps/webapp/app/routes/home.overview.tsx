@@ -39,13 +39,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
   const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
   if (!meta.widgetsEnabled) throw redirect("/home/conversation");
 
-  // All connected accounts that belong to an integration with a widgetUrl.
+  // All connected accounts that belong to an integration with a frontendUrl.
   const accounts = await prisma.integrationAccount.findMany({
     where: {
       integratedById: user.id,
       workspaceId: workspace.id,
       isActive: true,
-      integrationDefinition: { widgetUrl: { not: null } },
+      integrationDefinition: { frontendUrl: { not: null } },
     },
     select: {
       id: true,
@@ -54,7 +54,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
           name: true,
           slug: true,
           icon: true,
-          widgetUrl: true,
+          frontendUrl: true,
           spec: true,
         },
       },
@@ -76,7 +76,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
         integrationSlug: def.slug,
         integrationName: def.name,
         integrationIcon: def.icon ?? null,
-        widgetUrl: def.widgetUrl!,
+        frontendUrl: def.frontendUrl!,
         integrationAccountId: account.id,
       });
     }

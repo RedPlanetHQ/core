@@ -427,8 +427,11 @@ export class KnowledgeGraphService {
           await makeStructuredModelCall(
             ExtractWorldSchema,
             worldMessages as ModelMessage[],
-            "high",
+            "medium",
             "extract-world",
+            undefined,
+            episode.workspaceId,
+            "memory",
           );
         if (worldUsage) {
           tokenMetrics.high.input += worldUsage.promptTokens as number;
@@ -447,8 +450,11 @@ export class KnowledgeGraphService {
           await makeStructuredModelCall(
             ExtractVoiceSchema,
             voiceMessages as ModelMessage[],
-            "high",
+            "medium",
             "extract-voice",
+            undefined,
+            episode.workspaceId,
+            "memory",
           );
         if (voiceUsage) {
           tokenMetrics.high.input += voiceUsage.promptTokens as number;
@@ -481,6 +487,9 @@ export class KnowledgeGraphService {
                   reflectMessages as ModelMessage[],
                   "low",
                   "reflect-world",
+                  undefined,
+                  episode.workspaceId,
+                  "memory",
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -514,6 +523,9 @@ export class KnowledgeGraphService {
                   reflectMessages as ModelMessage[],
                   "low",
                   "reflect-voice",
+                  undefined,
+                  episode.workspaceId,
+                  "memory",
                 );
               if (reflectUsage) {
                 tokenMetrics.low.input += reflectUsage.promptTokens as number;
@@ -551,8 +563,11 @@ export class KnowledgeGraphService {
               await makeStructuredModelCall(
                 ClassifyVoiceSchema,
                 voiceMessages as ModelMessage[],
-                "high",
+                "medium",
                 "classify-voice",
+                undefined,
+                episode.workspaceId,
+                "memory",
               );
             if (voiceUsage) {
               tokenMetrics.low.input += voiceUsage.promptTokens as number;
@@ -576,8 +591,11 @@ export class KnowledgeGraphService {
               await makeStructuredModelCall(
                 ClassifyWorldSchema,
                 worldMessages as ModelMessage[],
-                "high",
+                "medium",
                 "classify-world",
+                undefined,
+                episode.workspaceId,
+                "memory",
               );
             if (worldUsage) {
               tokenMetrics.low.input += worldUsage.promptTokens as number;
@@ -769,8 +787,10 @@ export class KnowledgeGraphService {
         }
       },
       undefined,
-      "high",
+      "medium",
       "normalization",
+      undefined,
+      workspaceId,
     );
     let normalizedEpisodeBody = "";
     const outputMatch = responseText.match(/<output>([\s\S]*?)<\/output>/);

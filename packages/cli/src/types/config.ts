@@ -145,7 +145,7 @@ export interface ExecConfig {
 export interface WidgetConfig {
 	widgetSlug: string;
 	widgetName: string;
-	widgetUrl: string;
+	frontendUrl: string;
 	accountId: string;
 	accountSlug: string;
 	accountName: string;

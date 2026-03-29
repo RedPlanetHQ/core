@@ -1,7 +1,12 @@
-import { streamText, tool, type LanguageModel, stepCountIs } from "ai";
+import { stepCountIs } from "ai";
+import { tool } from "ai";
 import { z } from "zod";
+import { Agent } from "@mastra/core/agent";
 import { createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { getModel } from "~/lib/model.server";
+import { toRouterString } from "~/lib/model.server";
+import { getDefaultChatModelId } from "~/services/llm-provider.server";
+import { mastra } from "~/services/agent/mastra";
+import { streamToUIResponse } from "~/services/agent/mastra-stream.server";
 
 import { callMemoryTool } from "~/utils/mcp/memory";
 import { getIntegrationAccountBySlugAndUser } from "~/services/integrationAccount.server";
@@ -325,28 +330,24 @@ const { loader, action } = createHybridActionApiRoute(
       progress_update: progressUpdateTool,
     };
 
-    const result = streamText({
-      model: getModel() as LanguageModel,
-      messages: [
-        {
-          role: "system",
-          content: ONBOARDING_AGENT_PROMPT,
-        },
-        {
-          role: "user",
-          content: "analyze my emails from the past 6 months. start fetching.",
-        },
-      ],
-      tools,
-      stopWhen: stepCountIs(50), // Allow enough steps for iterations and updates
-      temperature: 0.7,
+    const agent = new Agent({
+      id: "onboarding-agent",
+      name: "Onboarding Agent",
+      model: toRouterString(getDefaultChatModelId()),
+      instructions: ONBOARDING_AGENT_PROMPT,
     });
+    agent.__registerMastra(mastra);
 
-    result.consumeStream(); // no await
+    const result = await agent.stream(
+      [{ role: "user", content: "analyze my emails from the past 6 months. start fetching." }],
+      {
+        toolsets: { onboarding: tools },
+        stopWhen: [stepCountIs(50)],
+        modelSettings: { temperature: 0.7 },
+      },
+    );
 
-    return result.toUIMessageStreamResponse({
-      generateMessageId: () => crypto.randomUUID(),
-    });
+    return streamToUIResponse(result);
   },
 );
 

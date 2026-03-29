@@ -4,13 +4,12 @@
  * Provides skill management tools: get_skill, create_skill, update_skill.
  */
 
-import { generateText, type LanguageModel } from "ai";
 import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { createSkill, updateSkill } from "~/services/skills.server";
-import { getModel, getModelForTask } from "~/lib/model.server";
+import { createAgent, resolveModelString } from "~/lib/model.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
 
@@ -79,16 +78,8 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
         const userMessage = `User intent: ${intent}${toolsContext}`;
 
         // Generate structured workflow via the skill generator
-        const model = getModelForTask("low");
-        const modelInstance = getModel(model);
-
-        const { text: generatedContent } = await generateText({
-          model: modelInstance as LanguageModel,
-          messages: [
-            { role: "system", content: SKILL_GENERATOR_SYSTEM_PROMPT },
-            { role: "user", content: userMessage },
-          ],
-        });
+        const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+        const { text: generatedContent } = await agent.generate(userMessage);
 
         if (!generatedContent) {
           return "Failed to generate skill workflow — generator produced no output.";

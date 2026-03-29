@@ -103,6 +103,7 @@ class GmailCLI extends IntegrationCLI {
           },
         },
       },
+      toolUISupported: true,
     };
   }
 }

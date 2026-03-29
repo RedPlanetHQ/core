@@ -503,6 +503,9 @@ If NO episodes are relevant to the query, return:
       { temperature: 0.2, maxTokens: 500 },
       "low",
       "search-rerank",
+      undefined,
+      undefined,
+      "search",
     );
 
     // Parse LLM response
