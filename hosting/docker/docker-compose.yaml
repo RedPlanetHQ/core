@@ -11,6 +11,7 @@ services:
   core:
     container_name: core-app
     image: redplanethq/core:${VERSION}
+    restart: ${RESTART_POLICY:-unless-stopped}
     environment:
       - NODE_ENV=${NODE_ENV}
       - DATABASE_URL=${DATABASE_URL}
@@ -30,6 +31,9 @@ services:
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - OPENAI_BASE_URL=${OPENAI_BASE_URL}
       - OPENAI_API_MODE=${OPENAI_API_MODE}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - GOOGLE_GENERATIVE_AI_API_KEY=${GOOGLE_GENERATIVE_AI_API_KEY}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
       - CHAT_PROVIDER=${CHAT_PROVIDER}
       - LLM_TOLERANT_OUTPUT=${LLM_TOLERANT_OUTPUT:-}
       - EMBEDDINGS_PROVIDER=${EMBEDDINGS_PROVIDER}
@@ -91,6 +95,7 @@ services:
   redis:
     container_name: core-redis
     image: redis:7
+    restart: ${RESTART_POLICY:-unless-stopped}
     ports:
       - "6379:6379"
     networks:
@@ -99,6 +104,7 @@ services:
   neo4j:
     container_name: core-neo4j
     image: redplanethq/neo4j:0.1.0
+    restart: ${RESTART_POLICY:-unless-stopped}
     environment:
       - NEO4J_AUTH=${NEO4J_AUTH}
       - NEO4J_dbms_security_procedures_unrestricted=gds.*,apoc.*

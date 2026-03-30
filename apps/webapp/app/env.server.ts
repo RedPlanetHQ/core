@@ -247,6 +247,12 @@ let env: z.infer<typeof EnvironmentSchema>;
 try {
   env = EnvironmentSchema.parse(process.env);
 } catch (e) {
+  if (e instanceof z.ZodError) {
+    console.error("Environment validation failed:");
+    for (const issue of e.issues) {
+      console.error(`  ${issue.path.join(".")}: ${issue.message}`);
+    }
+  }
   env = process.env as unknown as z.infer<typeof EnvironmentSchema>;
 }
 
