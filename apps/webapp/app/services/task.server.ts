@@ -5,10 +5,7 @@ import {
   removeScheduledTask,
   enqueueScheduledTask,
 } from "~/lib/queue-adapter.server";
-import {
-  computeNextRun,
-  checkShouldDeactivate,
-} from "~/utils/schedule-utils";
+import { computeNextRun, checkShouldDeactivate } from "~/utils/schedule-utils";
 import { DateTime } from "luxon";
 import { logger } from "./logger.service";
 
@@ -399,9 +396,7 @@ export async function scheduleNextTaskOccurrence(
     nextRunAt,
   );
 
-  logger.info(
-    `Scheduled next occurrence for task ${taskId} at ${nextRunAt}`,
-  );
+  logger.info(`Scheduled next occurrence for task ${taskId} at ${nextRunAt}`);
   return true;
 }
 

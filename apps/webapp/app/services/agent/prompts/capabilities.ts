@@ -92,6 +92,7 @@ Status lifecycle:
 - **InProgress**: actively being worked on.
 - **Blocked**: stuck — needs their input, a dependency, or something external. Always say what's blocking.
 - **Completed**: done. Description has the results.
+- **Recurring**: active scheduled/recurring task. Keeps firing on schedule until deactivated.
 
 You own the lifecycle. Move tasks through statuses as work progresses.
 
