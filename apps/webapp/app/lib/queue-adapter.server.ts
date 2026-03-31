@@ -452,6 +452,85 @@ export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
 
+// ============================================================================
+// Scheduled Task Queue (unified — replaces reminder queue for new tasks)
+// ============================================================================
+
+export interface ScheduledTaskPayload {
+  taskId: string;
+  workspaceId: string;
+  userId: string;
+  channel: string;
+}
+
+/**
+ * Enqueue a scheduled task job (with delay support for scheduling)
+ */
+export async function enqueueScheduledTask(
+  payload: ScheduledTaskPayload,
+  nextRunAt: Date,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const delay = Math.max(nextRunAt.getTime() - Date.now(), 0);
+  const jobId = `scheduled-task-${payload.taskId}-${nextRunAt.getTime()}`;
+
+  if (provider === "trigger") {
+    const { scheduledTaskRunner } = await import("~/trigger/task/task");
+    const handler = await scheduledTaskRunner.trigger(payload, {
+      queue: "scheduled-task-queue",
+      delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
+      concurrencyKey: payload.workspaceId,
+      idempotencyKey: jobId,
+      tags: [`scheduledTask:${payload.taskId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    const { scheduledTaskQueue } = await import("~/bullmq/queues");
+    const job = await scheduledTaskQueue.add(
+      `scheduled-task-${payload.taskId}`,
+      payload,
+      {
+        delay,
+        jobId,
+      },
+    );
+    return { id: job.id };
+  }
+}
+
+/**
+ * Remove a scheduled task job from the queue
+ */
+export async function removeScheduledTask(taskId: string): Promise<void> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`scheduledTask:${taskId}`],
+        status: ["QUEUED", "DELAYED"],
+      });
+
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+      }
+    } catch {
+      // Silently fail - job may not exist
+    }
+  } else {
+    const { scheduledTaskQueue } = await import("~/bullmq/queues");
+    const delayed = await scheduledTaskQueue.getDelayed();
+    const waiting = await scheduledTaskQueue.getWaiting();
+    const jobs = [...delayed, ...waiting];
+
+    for (const job of jobs) {
+      if (job.data.taskId === taskId) {
+        await job.remove();
+      }
+    }
+  }
+}
+
 /**
  * Enqueue activity CASE job
  */

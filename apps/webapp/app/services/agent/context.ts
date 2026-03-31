@@ -14,21 +14,24 @@ import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 import { writeFile } from "fs/promises";
 import {
-  type IntegrationAccountWithDefinition,
   IntegrationLoader,
 } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PronounType } from "~/services/agent/prompts/personality";
 import { getCustomPersonalities } from "~/models/personality.server";
-import { createCoreTools, createCoreAgents } from "~/services/agent/agents/core";
+import {
+  createCoreTools,
+  createCoreAgents,
+} from "~/services/agent/agents/core";
 import {
   type Trigger,
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { prisma } from "~/db.server";
-import { MessageListInput } from "@mastra/core/agent/message-list";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
+import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 
 interface BuildAgentContextParams {
@@ -84,26 +87,35 @@ export async function buildAgentContext({
   modelConfig,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace, customPersonalities] =
-    await Promise.all([
-      getUserById(userId),
-      getPersonaDocumentForUser(workspaceId),
-      IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
-      prisma.document.findMany({
-        where: { workspaceId, type: "skill", deleted: null },
-        select: { id: true, title: true, metadata: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { asyncJobId: true },
-      }),
-      prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { name: true },
-      }),
-      getCustomPersonalities(workspaceId),
-    ]);
+  const [
+    user,
+    persona,
+    connectedIntegrations,
+    skills,
+    conversationRecord,
+    workspace,
+    customPersonalities,
+    channelCtx,
+  ] = await Promise.all([
+    getUserById(userId),
+    getPersonaDocumentForUser(workspaceId),
+    IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
+    prisma.document.findMany({
+      where: { workspaceId, type: "skill", deleted: null },
+      select: { id: true, title: true, metadata: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { asyncJobId: true },
+    }),
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true },
+    }),
+    getCustomPersonalities(workspaceId),
+    getWorkspaceChannelContext(workspaceId),
+  ]);
 
   // Look up linked task context
   const linkedTask = conversationRecord?.asyncJobId
@@ -117,47 +129,16 @@ export async function buildAgentContext({
   const timezone = (metadata?.timezone as string) ?? "UTC";
   const personality = (metadata?.personality as string) ?? "tars";
   const pronoun = (metadata?.pronoun as PronounType) ?? undefined;
-  const defaultChannel =
-    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
-    "email";
-
-  // Determine available messaging channels
-  const hasWhatsapp = !!user?.phoneNumber;
-  const hasSlack = connectedIntegrations.some(
-    (int) =>
-      "integrationDefinition" in int &&
-      int.integrationDefinition.slug === "slack",
-  );
-  const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
-    "email", // always available
-    ...(hasWhatsapp ? (["whatsapp"] as const) : []),
-    ...(hasSlack ? (["slack"] as const) : []),
-  ];
-
-  // Resolve replyTo for background task callbacks (so tasks are self-contained)
-  let replyTo: string | undefined;
-  if (source === "slack") {
-    const slackAccount = connectedIntegrations.find(
-      (int) =>
-        "integrationDefinition" in int &&
-        int.integrationDefinition.slug === "slack",
-    );
-    replyTo = slackAccount?.accountId ?? undefined;
-  } else if (source === "whatsapp") {
-    replyTo = user?.phoneNumber ?? undefined;
-  } else if (source === "email") {
-    replyTo = user?.email ?? undefined;
-  }
-
-  const resolvedChannelMetadata = {
-    ...(channelMetadata ?? {}),
-    ...(replyTo ? { replyTo } : {}),
-  };
+  const defaultChannel = channelCtx.defaultChannelType;
+  const availableChannels = channelCtx.availableTypes;
 
   const isBackgroundExecution = !!linkedTask;
 
   // Build tools and agents in parallel (no dependency between them)
-  const [tools, { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents }] = await Promise.all([
+  const [
+    tools,
+    { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents },
+  ] = await Promise.all([
     createCoreTools({
       userId,
       workspaceId,
@@ -169,6 +150,10 @@ export async function buildAgentContext({
       defaultChannel,
       availableChannels,
       isBackgroundExecution,
+      triggerChannel: triggerContext?.trigger.channel,
+      triggerChannelId: triggerContext?.trigger.channelId,
+      userEmail: user?.email ?? undefined,
+      userPhoneNumber: user?.phoneNumber ?? undefined,
     }),
     createCoreAgents({
       userId,
@@ -192,7 +177,9 @@ export async function buildAgentContext({
     }),
   ]);
 
-  const customPersonality = customPersonalities.find((p) => p.id === personality);
+  const customPersonality = customPersonalities.find(
+    (p) => p.id === personality,
+  );
 
   // Build system prompt
   let systemPrompt = getCorePrompt(
@@ -205,7 +192,10 @@ export async function buildAgentContext({
       personality,
       pronoun,
       customPersonality: customPersonality
-        ? { text: customPersonality.text, useHonorifics: customPersonality.useHonorifics }
+        ? {
+            text: customPersonality.text,
+            useHonorifics: customPersonality.useHonorifics,
+          }
         : undefined,
     },
     persona ?? "",
@@ -214,11 +204,10 @@ export async function buildAgentContext({
 
   // Integrations context
   const integrationsList = connectedIntegrations
-    .map(
-      (int, index) =>
-        "integrationDefinition" in int
-          ? `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`
-          : "",
+    .map((int, index) =>
+      "integrationDefinition" in int
+        ? `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`
+        : "",
     )
     .join("\n");
 
@@ -239,10 +228,10 @@ export async function buildAgentContext({
   // Messaging channels context
   systemPrompt += `
     <messaging_channels>
-    Channels you can reach them on: ${availableChannels.join(", ")}
-    Default: ${defaultChannel}
+    Channels you can reach them on: ${channelCtx.channelNames.join(", ")}
+    Default: ${channelCtx.defaultChannelName}
 
-    Reminders go via ${defaultChannel} unless they say otherwise.
+    Scheduled tasks and notifications go via ${channelCtx.defaultChannelName} unless they say otherwise.
     </messaging_channels>`;
 
   // Skills context
@@ -313,15 +302,23 @@ Task ID: ${linkedTask.id}
 
 LONG-RUNNING SESSIONS (coding, browser):
 If you start a coding session or browser session via the orchestrator, the response will include a sessionId.
-After getting the sessionId, immediately call add_reminder with this exact format:
-  text: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
+After getting the sessionId, immediately call create_task with scheduling to check on it:
+  title: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
   schedule: "FREQ=MINUTELY;INTERVAL=10"
   maxOccurrences: 1
 
 For browser tasks, use sessionName (not sessionId) and include the intent:
-  text: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
+  title: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
+  schedule: "FREQ=MINUTELY;INTERVAL=10"
+  maxOccurrences: 1
 
-Do NOT create a reminder if the task completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
+Do NOT create a scheduled task if the work completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
+
+NOTIFYING THE USER:
+When you complete the task (or it fails/blocks), use the \`send_message\` tool to notify the user.
+- For completion: send a concise summary of what was accomplished
+- For failure/blocked: send what happened and what's needed
+- Do NOT skip notification — the user is waiting to hear back
 </task_execution>`;
     } else {
       systemPrompt += `\n\n<task_context>
@@ -342,12 +339,13 @@ A trigger has fired: "${triggerContext.reminderText}"
 
 1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
 2. Follow the ActionPlan it returns:
-   - Execute any required work (skills, integrations, tasks)
+   - Execute any required work (skills, integrations, gather_context, take_action)
    - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
    - Always craft a response summarizing what happened. Match the tone specified. Be concise.
-   - The pipeline handles whether to deliver your message to the owner or not — just always write one.
-3. Don't create new reminders unless the ActionPlan's intent specifically calls for it (think handles scheduling)
-4. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
+   - Use the \`send_message\` tool to deliver your response to the user. If the think tool says shouldMessage=false, do NOT call send_message.
+3. Do NOT create new tasks unless the ActionPlan explicitly says to create a follow-up or new scheduled task. The trigger IS already a task — don't duplicate it.
+4. Do NOT use create_task as a way to "deliver" or "send" a message. Use send_message for that.
+5. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
 </trigger_context>`;
   }
 
@@ -356,5 +354,15 @@ A trigger has fired: "${triggerContext.reminderText}"
     finalMessages as MessageListInput,
   ).to("AIV5.Model");
 
-  return { systemPrompt, tools, modelMessages, user, timezone, gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents };
+  return {
+    systemPrompt,
+    tools,
+    modelMessages,
+    user,
+    timezone,
+    gatherContextAgent,
+    takeActionAgent,
+    thinkAgent,
+    gatewayAgents,
+  };
 }

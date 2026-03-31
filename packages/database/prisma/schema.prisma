@@ -697,17 +697,18 @@ model RecallLog {
 }
 
 model Channel {
-  id          String    @id @default(uuid())
+  id          String     @id @default(uuid())
   workspaceId String
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   name        String
   type        String // "slack" | "telegram" | "whatsapp" | "email"
   config      Json // type-specific: Slack: { bot_token, user_token?, channel_id?, team_id?, team_name? } Telegram: { bot_token, chat_id, username? }
-  isDefault   Boolean   @default(false)
-  isActive    Boolean   @default(true)
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
+  isDefault   Boolean    @default(false)
+  isActive    Boolean    @default(true)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
   reminders   Reminder[]
+  tasks       Task[]
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -1052,6 +1053,7 @@ enum TaskStatus {
   InProgress
   Blocked
   Completed
+  Recurring
 }
 
 model Task {
@@ -1078,9 +1080,33 @@ model Task {
   pageId String?
   source String  @default("manual")
 
+  // Scheduling fields (unified with reminders)
+  schedule         String? // RRule string for recurring (null = one-time or immediate)
+  nextRunAt        DateTime? // When to fire next (one-time scheduled or recurring)
+  lastRunAt        DateTime?
+  occurrenceCount  Int       @default(0)
+  maxOccurrences   Int? // null = unlimited, 1 = one-shot
+  isActive         Boolean   @default(true)
+  startDate        DateTime? // Don't fire before this date
+  endDate          DateTime? // Auto-deactivate after this date
+  confirmedActive  Boolean   @default(false)
+  unrespondedCount Int       @default(0)
+
+  channel    String? // Delivery channel name/type
+  channelId  String? // FK to Channel table
+  channelRef Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  parentTaskId String? // FK to self (subtasks/follow-ups)
+  parentTask   Task?   @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks     Task[]  @relation("TaskSubtasks")
+
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([userId, status])
+  @@index([nextRunAt])
+  @@index([isActive])
+  @@index([parentTaskId])
+  @@index([workspaceId, isActive, nextRunAt])
 }
 
 model Page {
@@ -1089,8 +1115,8 @@ model Page {
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  date             DateTime
-  description      String?
+  date              DateTime
+  description       String?
   descriptionBinary Bytes?
 
   workspaceId String

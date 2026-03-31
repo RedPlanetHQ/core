@@ -67,11 +67,20 @@ import {
   scheduleNextOccurrence,
   deactivateReminder,
 } from "~/services/reminder.server";
-import { reminderQueue, followUpQueue, taskQueue } from "~/bullmq/queues";
+import {
+  reminderQueue,
+  followUpQueue,
+  taskQueue,
+  scheduledTaskQueue,
+} from "~/bullmq/queues";
 import {
   type TaskPayload,
   processTask,
 } from "~/jobs/task/task.logic";
+import {
+  type ScheduledTaskPayload,
+  processScheduledTask,
+} from "~/jobs/task/scheduled-task.logic";
 import {
   type ActivityCasePayload,
   processActivityCase,
@@ -311,6 +320,22 @@ export const activityCaseWorker = new Worker(
 );
 
 /**
+ * Scheduled task worker
+ * Processes scheduled/recurring tasks (unified with reminders)
+ */
+export const scheduledTaskWorker = new Worker(
+  "scheduled-task-queue",
+  async (job) => {
+    const payload = job.data as ScheduledTaskPayload;
+    return await processScheduledTask(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 10,
+  },
+);
+
+/**
  * Task worker
  * Processes long-running tasks
  */
@@ -343,9 +368,11 @@ export async function closeAllWorkers(): Promise<void> {
     reminderWorker.close(),
     followUpWorker.close(),
     activityCaseWorker.close(),
+    scheduledTaskWorker.close(),
     taskWorker.close(),
     reminderQueue.close(),
     followUpQueue.close(),
+    scheduledTaskQueue.close(),
     taskQueue.close(),
   ]);
   logger.log("All BullMQ workers closed");
