@@ -1,23 +1,29 @@
 import { cx } from "class-variance-authority";
-import { StarterKit, TiptapLink, HorizontalRule, Placeholder } from "novel";
+import StarterKit from "@tiptap/starter-kit";
+import Link from "@tiptap/extension-link";
+import HorizontalRule from "@tiptap/extension-horizontal-rule";
+import Placeholder from "@tiptap/extension-placeholder";
 
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Heading from "@tiptap/extension-heading";
-import Table from "@tiptap/extension-table";
+import { Table } from "@tiptap/extension-table";
 import TableCell from "@tiptap/extension-table-cell";
 import TableHeader from "@tiptap/extension-table-header";
 import TableRow from "@tiptap/extension-table-row";
 import { all, createLowlight } from "lowlight";
-import { mergeAttributes, type Extension } from "@tiptap/react";
+import { mergeAttributes } from "@tiptap/core";
+import { type Extension } from "@tiptap/react";
 import { Markdown } from "tiptap-markdown";
 
 // create a lowlight instance with all languages loaded
 export const lowlight = createLowlight(all);
 
-const tiptapLink = TiptapLink.configure({
+const tiptapLink = Link.configure({
   HTMLAttributes: {
     class: cx("text-primary cursor-pointer"),
   },
+  openOnClick: false,
+  autolink: true,
 });
 
 const horizontalRule = HorizontalRule.configure({

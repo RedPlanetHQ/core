@@ -1,7 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useFetcher } from "@remix-run/react";
-import { type Editor } from "@tiptap/react";
-import { EditorContent, EditorRoot } from "novel";
+import { useEditor, EditorContent } from "@tiptap/react";
 import { type DocumentItem } from "~/hooks/use-documents";
 import { useDebounce } from "~/hooks/use-debounce";
 
@@ -19,7 +18,6 @@ interface DocumentEditorViewProps {
 const DEBOUNCE_MS = 500;
 
 export function DocumentEditorView({ document, editable: defaultEditable }: DocumentEditorViewProps) {
-  const [editor, setEditor] = useState<Editor>();
   const [content, setContent] = useState<string | null>(null);
   const fetcher = useFetcher<{ success?: boolean; error?: boolean }>();
   const isInitialMount = useRef(true);
@@ -27,6 +25,33 @@ export function DocumentEditorView({ document, editable: defaultEditable }: Docu
   const debouncedContent = useDebounce(content, DEBOUNCE_MS);
   const isLoading = fetcher.state === "submitting";
   const hasChanges = content !== null && content !== debouncedContent;
+
+  const editable = defaultEditable && document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
+
+  const editor = useEditor({
+    extensions: [
+      ...extensionsForConversation,
+      getPlaceholder("Start writing here..."),
+    ],
+    content: document?.content as any,
+    editable,
+    immediatelyRender: false,
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm max-w-none focus:outline-none",
+      },
+    },
+    onUpdate({ editor: updatedEditor }) {
+      setContent(updatedEditor.storage.markdown.getMarkdown());
+    },
+  });
+
+  // Sync editable prop to editor
+  useEffect(() => {
+    if (editor && editor.isEditable !== editable) {
+      editor.setEditable(editable);
+    }
+  }, [editor, editable]);
 
   // Save when debounced content changes
   useEffect(() => {
@@ -47,14 +72,6 @@ export function DocumentEditorView({ document, editable: defaultEditable }: Docu
     );
   }, [debouncedContent, document.id]);
 
-  const handleUpdate = useCallback(() => {
-    if (!editor) return;
-    const newContent = editor.storage.markdown.getMarkdown();
-    setContent(newContent);
-  }, [editor]);
-
-  const editable = defaultEditable && document.latestIngestionLog && document.latestIngestionLog?.status ? document.latestIngestionLog?.status != "PROCESSING" : true;
-
   return (
     <div className="flex w-full flex-col gap-4 p-4 pt-0">
       {/* Editor Section */}
@@ -65,26 +82,7 @@ export function DocumentEditorView({ document, editable: defaultEditable }: Docu
             hasChanges && "border-blue-500",
           )}
         >
-          <EditorRoot>
-            <EditorContent
-              editorProps={{
-                attributes: {
-                  class: "prose prose-sm max-w-none focus:outline-none",
-                },
-              }}
-              initialContent={document?.content as any}
-              editable={editable}
-              onCreate={({ editor }) => {
-                setEditor(editor);
-              }}
-              onUpdate={handleUpdate}
-              extensions={[
-                ...extensionsForConversation,
-                getPlaceholder("Start writing here..."),
-              ]}
-              immediatelyRender={false}
-            />
-          </EditorRoot>
+          <EditorContent editor={editor} />
         </div>
       </div>
     </div>

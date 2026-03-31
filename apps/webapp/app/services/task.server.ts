@@ -7,14 +7,17 @@ export async function createTask(
   userId: string,
   title: string,
   description?: string,
+  options?: { pageId?: string; source?: string; status?: TaskStatus },
 ): Promise<Task> {
   return prisma.task.create({
     data: {
       title,
       description,
-      status: "Backlog",
+      status: options?.status ?? "Backlog",
       workspaceId,
       userId,
+      ...(options?.pageId && { pageId: options.pageId }),
+      ...(options?.source && { source: options.source }),
     },
   });
 }

@@ -10,7 +10,7 @@ import { Button } from "~/components/ui";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { Markdown } from "tiptap-markdown";
-import { Placeholder } from "novel";
+import Placeholder from "@tiptap/extension-placeholder";
 import { extensionsForConversation } from "../conversation/editor-extensions";
 
 interface NewTaskDialogProps {

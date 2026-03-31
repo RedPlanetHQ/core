@@ -11,8 +11,6 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  MessageSquare,
-  Plus,
   MessageCircle,
   BookOpen,
   Mail,
@@ -21,6 +19,7 @@ import {
   Brain,
   Library,
   Plug,
+  CalendarDays,
   LayoutDashboard,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
@@ -42,21 +41,16 @@ import { Task } from "../icons/task";
 const data = {
   navMain: [
     {
-      title: "New chat",
-      url: "/home/conversation",
-      icon: MessageSquare,
-      strict: true,
+      title: "Daily",
+      url: "/home/daily",
+      icon: CalendarDays,
     },
     {
       title: "Overview",
       url: "/home/overview",
       icon: LayoutDashboard,
+      strict: true,
     },
-    // {
-    //   title: "Integrations",
-    //   url: "/home/integrations",
-    //   icon: LayoutGrid,
-    // },
     {
       title: "Memory",
       url: "/home/memory",
@@ -116,15 +110,13 @@ export function AppSidebar({
         e.preventDefault();
         setCommandBar(true);
       },
+      "g d": whenNotEditing(() => navigate("/home/daily")),
+      "g t": whenNotEditing(() => navigate("/home/tasks")),
+      "g m": whenNotEditing(() => navigate("/home/memory")),
+      "g s": whenNotEditing(() => navigate("/home/agent/skills")),
       ...(widgetsEnabled
         ? { "g o": whenNotEditing(() => navigate("/home/overview")) }
         : {}),
-      "g t": whenNotEditing(() => navigate("/home/tasks")),
-      "g m": whenNotEditing(() => navigate("/home/memory")),
-      "g d": whenNotEditing(() => navigate("/home/memory/documents")),
-      "g s": whenNotEditing(() => navigate("/home/agent/skills")),
-      "g a": whenNotEditing(() => navigate("/home/agent/automations")),
-      "g c": whenNotEditing(() => navigate("/home/conversation")),
     });
     return unsub;
   }, [navigate]);
@@ -151,14 +143,6 @@ export function AppSidebar({
                   onClick={() => setCommandBar(true)}
                 >
                   <Search size={16} />
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="rounded"
-                  onClick={() => navigate(`/home/conversation`)}
-                >
-                  <Plus size={16} />
                 </Button>
               </div>
             </SidebarMenuItem>

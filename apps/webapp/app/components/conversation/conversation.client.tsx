@@ -1,5 +1,4 @@
-import { EditorRoot, EditorContent, Placeholder } from "novel";
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
@@ -9,9 +8,10 @@ import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
 import { Paragraph } from "@tiptap/extension-paragraph";
 import { Text } from "@tiptap/extension-text";
+import Placeholder from "@tiptap/extension-placeholder";
+import { useEditor, EditorContent } from "@tiptap/react";
 import { Button } from "../ui";
 import { ExampleUseCases } from "./example-usecases";
-import { type Editor } from "@tiptap/react";
 import { ArrowUp } from "lucide-react";
 import { RiGithubFill } from "@remixicon/react";
 import { Gmail } from "../icons/gmail";
@@ -66,8 +66,6 @@ export const ConversationNew = ({
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
   const [incognito, setIncognito] = useState(false);
-  const editorRef = useRef<any>(null);
-  const [editor, setEditor] = useState<Editor>();
   const defaultModelId = models.find((m) => m.isDefault)?.id ?? models[0]?.id;
   const [selectedModelId, setSelectedModelId] = useLocalCommonState<
     string | undefined
@@ -75,15 +73,9 @@ export const ConversationNew = ({
 
   const submit = useSubmit();
 
-  const handleSelectPrompt = useCallback(
-    (prompt: string) => {
-      const htmlContent = `<p>${prompt}</p>`;
-      editor?.commands.setContent(htmlContent);
-      setContent(htmlContent);
-      setTitle(prompt);
-    },
-    [editor],
-  );
+  // Refs so handleKeyDown always sees the latest values without stale closures
+  const doSubmitRef = useRef<(messageContent: string) => void>(() => {});
+  const contentRef = useRef(defaultMessage ?? "");
 
   const doSubmit = useCallback(
     (messageContent: string) => {
@@ -100,6 +92,67 @@ export const ConversationNew = ({
       setTitle("");
     },
     [incognito, selectedModelId],
+  );
+
+  useEffect(() => {
+    doSubmitRef.current = doSubmit;
+  }, [doSubmit]);
+
+  const editor = useEditor({
+    extensions: [
+      Placeholder.configure({
+        placeholder: () => "ask corebrain...",
+        includeChildren: true,
+      }),
+      Document,
+      Paragraph,
+      Text,
+      HardBreak.configure({ keepMarks: true }),
+      History,
+    ],
+    immediatelyRender: false,
+    autofocus: true,
+    editorProps: {
+      attributes: {
+        class: `prose prose-base dark:prose-invert focus:outline-none max-w-full`,
+      },
+      handleKeyDown: (_view, event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          if (contentRef.current.trim()) {
+            doSubmitRef.current(contentRef.current);
+          }
+          return true;
+        }
+        return false;
+      },
+    },
+    onUpdate({ editor: updatedEditor }) {
+      const html = updatedEditor.getHTML();
+      setContent(html);
+      contentRef.current = html;
+      setTitle(updatedEditor.getText());
+    },
+  });
+
+  // Focus on mount
+  useEffect(() => {
+    if (editor) {
+      const timer = setTimeout(() => {
+        editor.commands.focus("end");
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [editor]);
+
+  const handleSelectPrompt = useCallback(
+    (prompt: string) => {
+      const htmlContent = `<p>${prompt}</p>`;
+      editor?.commands.setContent(htmlContent);
+      setContent(htmlContent);
+      setTitle(prompt);
+    },
+    [editor],
   );
 
   const submitForm = useCallback(
@@ -164,49 +217,10 @@ export const ConversationNew = ({
 
           {/* Input */}
           <div className="bg-background-3 rounded-xl">
-            <EditorRoot>
-              <EditorContent
-                ref={editorRef}
-                autofocus
-                extensions={[
-                  Placeholder.configure({
-                    placeholder: () => "ask corebrain...",
-                    includeChildren: true,
-                  }),
-                  Document,
-                  Paragraph,
-                  Text,
-                  HardBreak.configure({ keepMarks: true }),
-                  History,
-                ]}
-                onCreate={async ({ editor }) => {
-                  setEditor(editor);
-                  await new Promise((resolve) => setTimeout(resolve, 100));
-                  editor.commands.focus("end");
-                }}
-                editorProps={{
-                  attributes: {
-                    class: `prose prose-base dark:prose-invert focus:outline-none max-w-full`,
-                  },
-                  handleKeyDown: (_view: any, event: KeyboardEvent) => {
-                    if (event.key === "Enter" && !event.shiftKey) {
-                      event.preventDefault();
-                      if (content) {
-                        doSubmit(content);
-                      }
-                      return true;
-                    }
-                    return false;
-                  },
-                }}
-                immediatelyRender={false}
-                className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
-                onUpdate={({ editor }: { editor: any }) => {
-                  setContent(editor.getHTML());
-                  setTitle(editor.getText());
-                }}
-              />
-            </EditorRoot>
+            <EditorContent
+              editor={editor}
+              className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
+            />
             <div className="flex items-center justify-between px-3 pb-3 pt-1">
               <div className="flex items-center gap-1">
                 <Button
