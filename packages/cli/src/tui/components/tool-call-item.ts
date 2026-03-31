@@ -16,6 +16,10 @@ function toResultString(value: unknown): string {
 	}
 }
 
+function toSingleLine(str: string): string {
+	return str.replace(/[\r\n\t]+/g, ' ').trim();
+}
+
 function argSummaryFromInput(
 	input: Record<string, unknown> | undefined,
 	raw: string,
@@ -23,8 +27,9 @@ function argSummaryFromInput(
 	if (input) {
 		try {
 			const firstVal = Object.values(input)[0];
-			const str =
-				typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? '');
+			const str = toSingleLine(
+				typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? ''),
+			);
 			return str.length > 60 ? str.slice(0, 60) + '\u2026' : str;
 		} catch {}
 	}
@@ -32,11 +37,12 @@ function argSummaryFromInput(
 	try {
 		const parsed = JSON.parse(raw) as Record<string, unknown>;
 		const firstVal = Object.values(parsed)[0];
-		const str =
-			typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? '');
+		const str = toSingleLine(
+			typeof firstVal === 'string' ? firstVal : JSON.stringify(firstVal ?? ''),
+		);
 		return str.length > 60 ? str.slice(0, 60) + '\u2026' : str;
 	} catch {
-		return raw.slice(0, 60);
+		return toSingleLine(raw).slice(0, 60);
 	}
 }
 

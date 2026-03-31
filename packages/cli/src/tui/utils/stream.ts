@@ -1,18 +1,15 @@
 import {randomUUID} from 'node:crypto';
 import {exec} from 'node:child_process';
-import {appendFileSync} from 'node:fs';
-
-const LOG_FILE = '/tmp/core-stream.log';
-function streamLog(data: unknown): void {
-	try {
-		appendFileSync(LOG_FILE, JSON.stringify(data) + '\n');
-	} catch { /* ignore */ }
-}
 
 // ── Open URL in browser ───────────────────────────────────────────────────────
 
 export function openBrowser(url: string): void {
-	const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+	const cmd =
+		process.platform === 'darwin'
+			? 'open'
+			: process.platform === 'win32'
+			? 'start'
+			: 'xdg-open';
 	exec(`${cmd} "${url}"`);
 }
 
@@ -45,7 +42,8 @@ export async function fetchIntegrationDefinitions(
 	const res = await fetch(`${baseUrl}/api/v1/integration_definitions`, {
 		headers: {Authorization: `Bearer ${apiKey}`},
 	});
-	if (!res.ok) throw new Error(`Failed to fetch definitions: ${res.statusText}`);
+	if (!res.ok)
+		throw new Error(`Failed to fetch definitions: ${res.statusText}`);
 	const data = (await res.json()) as {definitions: IntegrationDefinition[]};
 	return data.definitions ?? [];
 }
@@ -70,7 +68,10 @@ export async function connectApiKeyIntegration(
 ): Promise<void> {
 	const res = await fetch(`${baseUrl}/api/v1/integration_account`, {
 		method: 'POST',
-		headers: {'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}`},
+		headers: {
+			'Content-Type': 'application/json',
+			Authorization: `Bearer ${apiKey}`,
+		},
 		body: JSON.stringify({integrationDefinitionId, apiKey: key}),
 	});
 	if (!res.ok) {
@@ -84,7 +85,11 @@ export async function connectApiKeyIntegration(
 export type OutputPart = {
 	type: string; // e.g. "tool-get_integration_actions", "text", "step-start"
 	toolCallId?: string;
-	state?: 'input-streaming' | 'output-available' | 'approval-requested' | 'in-progress';
+	state?:
+		| 'input-streaming'
+		| 'output-available'
+		| 'approval-requested'
+		| 'in-progress';
 	input?: Record<string, unknown>;
 	output?: unknown;
 	text?: string;
@@ -123,8 +128,21 @@ export type StreamEvent =
 			// Sub-agent activity chunks — carry nested tool calls/results for agent-take_action
 			type: 'data-tool-agent';
 			data?: {
-				toolCalls?: Array<{toolCallId: string; toolName: string; args: Record<string, unknown>; payload?: {toolCallId: string; toolName: string; args: Record<string, unknown>}}>;
-				toolResults?: Array<{toolCallId: string; result?: unknown; payload?: {toolCallId: string; result?: unknown}}>;
+				toolCalls?: Array<{
+					toolCallId: string;
+					toolName: string;
+					args: Record<string, unknown>;
+					payload?: {
+						toolCallId: string;
+						toolName: string;
+						args: Record<string, unknown>;
+					};
+				}>;
+				toolResults?: Array<{
+					toolCallId: string;
+					result?: unknown;
+					payload?: {toolCallId: string; result?: unknown};
+				}>;
 				steps?: unknown[];
 				text?: string;
 			};
@@ -147,7 +165,9 @@ function parseSSELine(line: string): string | null {
 
 // ── Shared SSE body reader ────────────────────────────────────────────────────
 
-async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<StreamEvent> {
+async function* readSSEBody(
+	body: ReadableStream<Uint8Array>,
+): AsyncGenerator<StreamEvent> {
 	const reader = body.getReader();
 	const decoder = new TextDecoder();
 	let buffer = '';
@@ -166,7 +186,6 @@ async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<St
 
 			try {
 				const event = JSON.parse(data) as StreamEvent;
-				streamLog(event);
 				yield event;
 			} catch {
 				// ignore malformed lines
@@ -180,13 +199,33 @@ async function* readSSEBody(body: ReadableStream<Uint8Array>): AsyncGenerator<St
 export async function fetchWorkspace(
 	baseUrl: string,
 	apiKey: string,
-): Promise<{id: string; name: string} | null> {
+): Promise<{id: string; name: string; accentColor: string} | null> {
 	try {
 		const res = await fetch(`${baseUrl}/api/v1/workspace`, {
 			headers: {Authorization: `Bearer ${apiKey}`},
 		});
 		if (!res.ok) return null;
-		return (await res.json()) as {id: string; name: string};
+		return (await res.json()) as {
+			id: string;
+			name: string;
+			accentColor: string;
+		};
+	} catch {
+		return null;
+	}
+}
+
+export async function fetchWorkspaceAvatar(
+	baseUrl: string,
+	apiKey: string,
+): Promise<string | null> {
+	try {
+		const res = await fetch(`${baseUrl}/api/v1/workspace/avatar`, {
+			headers: {Authorization: `Bearer ${apiKey}`},
+		});
+		if (!res.ok) return null;
+		const buf = await res.arrayBuffer();
+		return Buffer.from(buf).toString('base64');
 	} catch {
 		return null;
 	}

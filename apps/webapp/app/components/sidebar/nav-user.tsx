@@ -23,8 +23,17 @@ import { SidebarMenu, SidebarMenuItem, useSidebar } from "../ui/sidebar";
 import { Button } from "../ui";
 import { useNavigate, useFetcher } from "@remix-run/react";
 import { type ExtendedUser } from "~/hooks/useUser";
+import Avatar from "boring-avatars";
 
-export function NavUser({ user }: { user: ExtendedUser }) {
+export function NavUser({
+  user,
+  agentName,
+  accentColor = "#c87844",
+}: {
+  user: ExtendedUser;
+  agentName: string;
+  accentColor?: string;
+}) {
   const { isMobile } = useSidebar();
   const navigate = useNavigate();
   const fetcher = useFetcher();
@@ -41,10 +50,12 @@ export function NavUser({ user }: { user: ExtendedUser }) {
       <SidebarMenuItem className="flex justify-between">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="link" className="mb-2 ml-2 gap-2 px-0">
-              <AvatarText
-                text={user.name ?? "User"}
-                className="h-6 w-6 rounded"
+            <Button variant="link" className="mb-2 gap-2 px-0">
+              <Avatar
+                name={agentName}
+                variant="pixel"
+                colors={["var(--background-3)", accentColor]}
+                size={24}
               />
             </Button>
           </DropdownMenuTrigger>
@@ -133,15 +144,6 @@ export function NavUser({ user }: { user: ExtendedUser }) {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-
-        <Button
-          variant="ghost"
-          onClick={() => {
-            navigate("/settings/billing");
-          }}
-        >
-          <div>{user.availableCredits} credits</div>
-        </Button>
       </SidebarMenuItem>
     </SidebarMenu>
   );

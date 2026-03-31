@@ -23,6 +23,7 @@ import { PageHeader } from "~/components/common/page-header";
 export async function loader({ request }: LoaderFunctionArgs) {
   // Only return userId, not the heavy nodeLinks
   const user = await requireUser(request);
+  const workspace = await requireWorkpace(request);
   const allModels = await getAvailableModels();
   const models = allModels
     .filter(
@@ -36,7 +37,9 @@ export async function loader({ request }: LoaderFunctionArgs) {
       isDefault: m.isDefault,
     }));
 
-  return { user, models };
+  const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
+  const accentColor = (meta.accentColor as string) || "#c87844";
+  return { user, models, workspace, accentColor };
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -88,12 +91,20 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function Chat() {
-  const { user, models } = useTypedLoaderData<typeof loader>();
+  const { user, models, workspace, accentColor } =
+    useTypedLoaderData<typeof loader>();
 
   return (
     <>
       <PageHeader title="Conversation" />
-      {typeof window !== "undefined" && <ConversationNew user={user} models={models} />}
+      {typeof window !== "undefined" && (
+        <ConversationNew
+          user={user}
+          models={models}
+          name={workspace?.name ?? "core"}
+          accentColor={accentColor}
+        />
+      )}
     </>
   );
 }

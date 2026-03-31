@@ -19,7 +19,6 @@ import {
   Phone,
   Search,
   Brain,
-  Clock,
   Library,
   Plug,
   LayoutDashboard,
@@ -27,11 +26,8 @@ import {
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
 import { NavUser } from "./nav-user";
-import Logo from "../logo/logo";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
-import { ConversationList } from "../conversation/conversation-list";
-import { UnreadConversations } from "../conversation/unread-conversations";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -67,14 +63,6 @@ const data = {
       icon: Brain,
     },
     {
-      title: "Automations",
-      url: "/home/agent/automations",
-      icon: Clock,
-      params: {
-        filter: "active",
-      },
-    },
-    {
       title: "Tasks",
       url: "/home/tasks",
       icon: Task,
@@ -90,13 +78,18 @@ const data = {
 export function AppSidebar({
   conversationSources,
   widgetsEnabled = false,
+  agentName = "butler",
+  accentColor = "#c87844",
 }: {
   conversationSources: { source: string; count: number }[];
   widgetsEnabled?: boolean;
+  agentName?: string;
+  accentColor?: string;
 }) {
   const user = useUser();
   const navigate = useNavigate();
   const params = useParams();
+
   const [commandBar, setCommandBar] = React.useState(false);
 
   // Open command bar with Meta+K (Cmd+K on Mac, Ctrl+K on Windows/Linux)
@@ -107,17 +100,16 @@ export function AppSidebar({
 
   // Linear-style go-to sequences via tinykeys
   React.useEffect(() => {
-    const whenNotEditing =
-      (fn: () => void) => (e: KeyboardEvent) => {
-        const t = e.target as HTMLElement;
-        if (
-          t.tagName === "INPUT" ||
-          t.tagName === "TEXTAREA" ||
-          t.isContentEditable
-        )
-          return;
-        fn();
-      };
+    const whenNotEditing = (fn: () => void) => (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      if (
+        t.tagName === "INPUT" ||
+        t.tagName === "TEXTAREA" ||
+        t.isContentEditable
+      )
+        return;
+      fn();
+    };
 
     const unsub = tinykeys(window, {
       "$mod+k": (e) => {
@@ -140,12 +132,15 @@ export function AppSidebar({
   return (
     <>
       <Sidebar variant="inset" className="bg-background py-2">
-        <SidebarHeader>
+        <SidebarHeader className="pb-0">
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">
-              <div className="ml-1 mt-1 flex w-full items-center justify-start gap-2">
-                <Logo size={20} />
-                C.O.R.E.
+              <div className="ml-1 flex w-full items-center justify-start gap-2">
+                <NavUser
+                  user={user}
+                  agentName={agentName}
+                  accentColor={accentColor}
+                />
               </div>
 
               <div className="flex gap-1">
@@ -171,27 +166,26 @@ export function AppSidebar({
         </SidebarHeader>
         <SidebarContent>
           <NavMain
-          items={data.navMain.filter(
-            (item) => item.url !== "/home/overview" || widgetsEnabled,
-          )}
-        />
-          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-            <UnreadConversations
-              currentConversationId={params.conversationId}
-            />
-            <ConversationList
-              currentConversationId={params.conversationId}
-              conversationSources={conversationSources}
-            />
-          </div>
+            items={data.navMain.filter(
+              (item) => item.url !== "/home/overview" || widgetsEnabled,
+            )}
+          />
         </SidebarContent>
 
         <SidebarFooter className="flex flex-col gap-1 px-2">
           <IngestionStatus />
           <Button
+            variant="ghost"
+            className="justify-end"
+            onClick={() => {
+              navigate("/settings/billing");
+            }}
+          >
+            <div>{user.availableCredits} credits</div>
+          </Button>
+          <Button
             variant="secondary"
             className="w-full justify-start gap-2 rounded"
-            size="lg"
             onClick={() => {
               navigate("/home/agent/connect");
             }}
@@ -204,7 +198,6 @@ export function AppSidebar({
               <Button
                 variant="secondary"
                 className="w-full justify-start gap-2 rounded"
-                size="lg"
               >
                 <MessageCircle size={16} />
                 Help
@@ -238,8 +231,6 @@ export function AppSidebar({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-
-          <NavUser user={user} />
         </SidebarFooter>
       </Sidebar>
 

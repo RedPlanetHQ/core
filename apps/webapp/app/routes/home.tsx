@@ -87,12 +87,13 @@ export default function Home() {
   >() as any;
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
   const needsButlerName = !meta.onboardingV2Complete;
+  const accentColor = (meta.accentColor as string) || "#c87844";
 
   return (
     <SidebarProvider
       style={
         {
-          "--sidebar-width": "calc(var(--spacing) * 56)",
+          "--sidebar-width": "calc(var(--spacing) * 52)",
           "--header-height": "calc(var(--spacing) * 12)",
           background: "var(--background)",
         } as React.CSSProperties
@@ -108,6 +109,8 @@ export default function Home() {
       <AppSidebar
         conversationSources={conversationSources}
         widgetsEnabled={!!meta.widgetsEnabled}
+        agentName={workspace?.name ?? "butler"}
+        accentColor={accentColor}
       />
       <SidebarInset className="bg-background-2 h-full rounded pr-0">
         <div className="flex h-full flex-col rounded">

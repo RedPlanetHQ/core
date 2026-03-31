@@ -15,14 +15,19 @@ const loader = createHybridLoaderApiRoute(
 
     const workspace = await prisma.workspace.findFirst({
       where: { id: authentication.workspaceId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, metadata: true },
     });
 
     if (!workspace) {
       return json({ error: "Workspace not found" }, { status: 404 });
     }
 
-    return json({ id: workspace.id, name: workspace.name });
+    const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
+    return json({
+      id: workspace.id,
+      name: workspace.name,
+      accentColor: (meta.accentColor as string) || "#c87844",
+    });
   },
 );
 

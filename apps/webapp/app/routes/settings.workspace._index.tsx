@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import {
   json,
   redirect,
@@ -24,7 +24,13 @@ import {
 } from "~/components/ui/alert-dialog";
 import { Card, CardContent } from "~/components/ui/card";
 import { AvatarText } from "~/components/ui/avatar";
-import { Trash2 } from "lucide-react";
+import { Trash2, RefreshCw } from "lucide-react";
+import Avatar from "boring-avatars";
+import { generateOklchColor } from "~/components/ui/color-utils";
+import { toHex } from "~/lib/color-utils";
+import { cn } from "~/lib/utils";
+
+const DEFAULT_ACCENT = "#c87844";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const { workspaceId } = await requireUser(request);
@@ -47,7 +53,10 @@ export async function loader({ request }: LoaderFunctionArgs) {
     },
   });
 
-  return json({ workspace, memberCount });
+  const meta = (workspace.metadata ?? {}) as Record<string, unknown>;
+  const accentColor = (meta.accentColor as string) || DEFAULT_ACCENT;
+
+  return json({ workspace, memberCount, accentColor });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
@@ -81,6 +90,23 @@ export async function action({ request }: ActionFunctionArgs) {
       data: { name, slug },
     });
 
+    return json({ success: true });
+  }
+
+  if (intent === "updateAccentColor") {
+    const accentColor = (formData.get("accentColor") as string)?.trim();
+    if (!accentColor) {
+      return json({ error: "Missing color" }, { status: 400 });
+    }
+    const existing = await prisma.workspace.findFirst({
+      where: { id: workspaceId },
+      select: { metadata: true },
+    });
+    const existingMeta = (existing?.metadata ?? {}) as Record<string, unknown>;
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: { metadata: { ...existingMeta, accentColor } },
+    });
     return json({ success: true });
   }
 
@@ -149,18 +175,32 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function WorkspaceSettings() {
-  const { workspace, memberCount } = useLoaderData<typeof loader>();
+  const {
+    workspace,
+    memberCount,
+    accentColor: savedAccentColor,
+  } = useLoaderData<typeof loader>();
   const fetcher = useFetcher<{ error?: string; success?: boolean }>();
   const updateFetcher = useFetcher<{ error?: string; success?: boolean }>();
+  const colorFetcher = useFetcher<{ error?: string; success?: boolean }>();
   const [confirmName, setConfirmName] = useState("");
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [name, setName] = useState(workspace.name);
   const [slug, setSlug] = useState(workspace.slug);
+  const [accentColor, setAccentColor] = useState(savedAccentColor);
 
   const isDeleting = fetcher.state === "submitting";
   const canDelete = confirmName === workspace.name;
   const isSaving = updateFetcher.state === "submitting";
   const hasChanges = name !== workspace.name || slug !== workspace.slug;
+  const isSavingColor = colorFetcher.state === "submitting";
+  const colorChanged = accentColor !== savedAccentColor;
+
+  const generateSwatches = useCallback(() => {
+    return Array.from({ length: 10 }, () => toHex(generateOklchColor()));
+  }, []);
+
+  const [swatches, setSwatches] = useState<string[]>(() => generateSwatches());
 
   const handleDelete = () => {
     fetcher.submit({ intent: "delete", confirmName }, { method: "POST" });
@@ -217,6 +257,66 @@ export default function WorkspaceSettings() {
                     disabled={!hasChanges || isSaving}
                   >
                     {isSaving ? "Saving..." : "Save"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div>
+            <h2 className="text-md mb-4">Butler color</h2>
+            <Card>
+              <CardContent className="flex flex-col gap-4 p-4">
+                <div className="flex items-center gap-4">
+                  <Avatar
+                    name={name || "butler"}
+                    variant="pixel"
+                    colors={["var(--background-3)", accentColor]}
+                    size={56}
+                  />
+                  <div className="flex flex-1 flex-col gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      {swatches.map((color) => (
+                        <button
+                          key={color}
+                          type="button"
+                          onClick={() => setAccentColor(color)}
+                          className={cn(
+                            "h-7 w-7 rounded-full border-2 transition-transform hover:scale-110 focus:outline-none",
+                            accentColor === color
+                              ? "border-border"
+                              : "border-transparent",
+                          )}
+                          style={{
+                            backgroundColor: color,
+                          }}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button
+                    variant="ghost"
+                    size="lg"
+                    onClick={() => setSwatches(generateSwatches())}
+                    type="button"
+                  >
+                    <RefreshCw size={13} className="mr-1.5" />
+                    Regenerate
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="lg"
+                    disabled={!colorChanged || isSavingColor}
+                    onClick={() =>
+                      colorFetcher.submit(
+                        { intent: "updateAccentColor", accentColor },
+                        { method: "POST" },
+                      )
+                    }
+                  >
+                    {isSavingColor ? "Saving..." : "Save color"}
                   </Button>
                 </div>
               </CardContent>

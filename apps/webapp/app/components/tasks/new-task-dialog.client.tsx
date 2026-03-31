@@ -96,7 +96,7 @@ export function NewTaskDialog({
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="gap-0 sm:max-w-md">
         <DialogHeader>
-          <DialogTitle className="text-sm font-normal">
+          <DialogTitle className="text-xs font-normal">
             {mode === "edit" ? "Edit task" : "New task"}
           </DialogTitle>
         </DialogHeader>

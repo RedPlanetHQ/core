@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Loader2, Check, X } from "lucide-react";
 import { Button } from "~/components/ui";
 import { Input } from "~/components/ui/input";
+import Avatar from "boring-avatars";
 
 interface OnboardingAgentNameProps {
   defaultName: string;
@@ -83,6 +84,14 @@ export function OnboardingAgentName({
 
   return (
     <div className="flex w-full max-w-lg flex-col gap-4 p-3">
+      <div className="flex justify-center">
+        <Avatar
+          name={name || "butler"}
+          variant="pixel"
+          colors={["var(--background-3)", "#c87844"]}
+          size={72}
+        />
+      </div>
       <div className="space-y-1">
         <h2 className="text-xl font-semibold">name your butler</h2>
         <p className="text-muted-foreground text-base">

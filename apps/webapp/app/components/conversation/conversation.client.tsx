@@ -12,7 +12,6 @@ import { Text } from "@tiptap/extension-text";
 import { Button } from "../ui";
 import { ExampleUseCases } from "./example-usecases";
 import { type Editor } from "@tiptap/react";
-import Logo from "../logo/logo";
 import { ArrowUp } from "lucide-react";
 import { RiGithubFill } from "@remixicon/react";
 import { Gmail } from "../icons/gmail";
@@ -26,6 +25,7 @@ import {
   SelectValue,
 } from "../ui/select";
 import type { LLMModel } from "./conversation-textarea.client";
+import Avatar from "boring-avatars";
 
 const SUGGESTED = [
   {
@@ -53,11 +53,15 @@ const SUGGESTED = [
 export const ConversationNew = ({
   user,
   defaultMessage,
+  name,
   models = [],
+  accentColor = "#c87844",
 }: {
   user: { name: string | null };
   defaultMessage?: string;
   models?: LLMModel[];
+  name: string;
+  accentColor?: string;
 }) => {
   const [content, setContent] = useState(defaultMessage ?? "");
   const [title, setTitle] = useState(defaultMessage ?? "");
@@ -65,10 +69,9 @@ export const ConversationNew = ({
   const editorRef = useRef<any>(null);
   const [editor, setEditor] = useState<Editor>();
   const defaultModelId = models.find((m) => m.isDefault)?.id ?? models[0]?.id;
-  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
-    "selectedModelId",
-    defaultModelId,
-  );
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<
+    string | undefined
+  >("selectedModelId", defaultModelId);
 
   const submit = useSubmit();
 
@@ -85,7 +88,12 @@ export const ConversationNew = ({
   const doSubmit = useCallback(
     (messageContent: string) => {
       submit(
-        { message: messageContent, title: messageContent, incognito, modelId: selectedModelId ?? "" },
+        {
+          message: messageContent,
+          title: messageContent,
+          incognito,
+          modelId: selectedModelId ?? "",
+        },
         { action: "/home/conversation", method: "post" },
       );
       setContent("");
@@ -119,7 +127,12 @@ export const ConversationNew = ({
     >
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">
-        <Logo size={40} />
+        <Avatar
+          name={name || "butler"}
+          variant="pixel"
+          colors={["var(--background-3)", accentColor]}
+          size={64}
+        />
         <h1 className="text-3xl font-medium tracking-tight">
           What can I help with?
         </h1>
@@ -212,13 +225,20 @@ export const ConversationNew = ({
                   {incognito && <span>Incognito</span>}
                 </Button>
                 {showModelSelector && (
-                  <Select value={selectedModelId} onValueChange={setSelectedModelId}>
+                  <Select
+                    value={selectedModelId}
+                    onValueChange={setSelectedModelId}
+                  >
                     <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
                       {models.map((model) => (
-                        <SelectItem key={model.id} value={model.id} className="text-xs">
+                        <SelectItem
+                          key={model.id}
+                          value={model.id}
+                          className="text-xs"
+                        >
                           <span className="font-medium">{model.label}</span>
                           <span className="text-muted-foreground ml-1 capitalize">
                             · {model.provider}

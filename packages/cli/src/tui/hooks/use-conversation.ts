@@ -1,3 +1,4 @@
+import {appendFileSync} from 'node:fs';
 import {createConversationApi, streamConversation, streamConversationApproval} from '../utils/stream.js';
 import type {OutputPart} from '../utils/stream.js';
 import {ToolCallItem} from '../components/tool-call-item.js';
@@ -100,6 +101,8 @@ function mastraDataToOutputParts(data: {
 
 // ── Factory (hook-like, no React required) ────────────────────────────────────
 
+let streamCounter = 0;
+
 export function createConversation(
 	baseUrl: string,
 	apiKey: string,
@@ -116,6 +119,8 @@ export function createConversation(
 		callbacks: ConversationCallbacks,
 		controller: AbortController,
 	): Promise<void> {
+		const streamNum = ++streamCounter;
+		const logFile = `/tmp/core-stream-${streamNum}.log`;
 		const activeTools = new Map<string, ToolCallItem>();
 		const toolNameMap = new Map<string, string>(); // toolCallId → toolName
 		const toolInputMap = new Map<string, Record<string, unknown>>(); // toolCallId → input
@@ -124,8 +129,9 @@ export function createConversation(
 		let hadApprovalRequest = false;
 		const approvedContainerIds = new Set<string>(); // prevent duplicate approval expansion
 
-		try {
+			try {
 			for await (const event of gen) {
+				try { appendFileSync(logFile, JSON.stringify(event) + '\n'); } catch { /* ignore */ }
 				switch (event.type) {
 					case 'text-delta': {
 						callbacks.onTextDelta(event.delta);
@@ -225,6 +231,10 @@ export function createConversation(
 						hadApprovalRequest = true;
 						const toolName = toolNameMap.get(event.toolCallId) ?? event.toolCallId;
 
+						// Save agent item unconditionally — must happen before any early break
+						// so the next processStream (approval resume stream) can look up children.
+						if (lastAgentItem) savedAgentItem = lastAgentItem;
+
 						// Mirror webapp's findPendingApprovals: expand container tools into
 						// their pending children so the user sees the actual leaf tools.
 						const containerItem = activeTools.get(event.toolCallId);
@@ -250,9 +260,6 @@ export function createConversation(
 								break;
 							}
 						}
-
-						// Save agent item so the next processStream (approval resume) can use it
-						if (lastAgentItem) savedAgentItem = lastAgentItem;
 
 						// Fall back: if toolName wasn't resolved, check children cached from first stream
 						let resolvedName = toolName;

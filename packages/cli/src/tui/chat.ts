@@ -12,6 +12,7 @@ import {
 	Key,
 } from '@mariozechner/pi-tui';
 import type {Component} from '@mariozechner/pi-tui';
+import {buildAvatar} from './utils/avatar.js';
 import chalk from 'chalk';
 import {StatusLine} from './components/status-line.js';
 import {editorTheme, markdownTheme} from './themes.js';
@@ -24,7 +25,7 @@ import {WidgetsView} from './components/widgets-view.js';
 import {DashboardView} from './components/dashboard-view.js';
 import {loadWidgetBundle} from './utils/widget-loader.js';
 import {getPreferences} from '../config/preferences.js';
-import {fetchConversationHistory, fetchWorkspace, fetchIntegrationAccounts, openBrowser} from './utils/stream.js';
+import {fetchConversationHistory, fetchWorkspace, fetchWorkspaceAvatar, fetchIntegrationAccounts, openBrowser} from './utils/stream.js';
 import {ApprovalPanel} from './components/approval-panel.js';
 
 export function startTuiApp(
@@ -36,29 +37,16 @@ export function startTuiApp(
 	const tui = new TUI(terminal);
 
 	// ── Header ───────────────────────────────────────────────────────────────
-	const c = (s: string) => chalk.hex('#c15e50')(s);
-	const logoRows = [
-		c(' ▄███▄  '),
-		c(' ▐◉███◉▌ '),
-		c(' ▐█████▌'),
-		c('  ◉   ◉  '),
-	];
-	const infoRows: string[] = [
-		'',
-		chalk.bold.white('CORE') + '  ' + chalk.dim('v' + version),
-		chalk.gray('ctrl+c to exit'),
-		'',
-		'',
-	];
-	for (let i = 0; i < logoRows.length; i++) {
-		tui.addChild(
-			new Text(
-				logoRows[i] + (infoRows[i] ? '  ' + infoRows[i] : ''),
-				i === 0 ? 1 : 0,
-				0,
-			),
-		);
-	}
+	// Avatar placeholder (replaced with real image once fetched)
+	const avatarContainer = new Container();
+	tui.addChild(avatarContainer);
+
+	const infoText = new Text(
+		chalk.bold.white('CORE') + '  ' + chalk.dim('v' + version) + '\n' + chalk.gray('ctrl+c to exit'),
+		1,
+		0,
+	);
+	tui.addChild(infoText);
 	tui.addChild(new Spacer(1));
 
 	// ── Messages area ─────────────────────────────────────────────────────────
@@ -139,16 +127,30 @@ export function startTuiApp(
 	let conversationComponents: Component[] = [];
 	let requestId = 0;
 	let butlerName = 'CORE'; // replaced once workspace loads
+	let workspaceAccent = '#c15e50';
 	let pendingApprovalPanel: ApprovalPanel | null = null;
 	let pendingApprovalToolCallId: string | null = null;
 	let autoApproveAll = false;
 
 	const conversation = createConversation(baseUrl, apiKey);
 
-	// Fetch workspace name + integration accounts async
+	// Fetch workspace name + avatar async
 	fetchWorkspace(baseUrl, apiKey)
 		.then(ws => {
-			if (ws?.name) butlerName = ws.name;
+			if (ws?.name) {
+				butlerName = ws.name;
+				infoText.setText(
+					chalk.bold.white(ws.name) + '  ' + chalk.dim('v' + version) + '\n' + chalk.gray('ctrl+c to exit'),
+				);
+				tui.requestRender();
+			}
+		})
+		.catch(() => {});
+
+	fetchWorkspaceAvatar(baseUrl, apiKey)
+		.then(base64Png => {
+			avatarContainer.addChild(buildAvatar(butlerName, workspaceAccent, base64Png));
+			tui.requestRender();
 		})
 		.catch(() => {});
 
@@ -461,6 +463,7 @@ export function startTuiApp(
 	function showLoader(): void {
 		conversationComponents.push(loader);
 		messagesContainer.addChild(loader);
+		loader.stop();   // clear any existing interval before restarting
 		loader.start();
 	}
 
