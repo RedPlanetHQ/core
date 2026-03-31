@@ -1053,7 +1053,6 @@ enum TaskStatus {
   InProgress
   Blocked
   Completed
-  Recurring
 }
 
 model Task {

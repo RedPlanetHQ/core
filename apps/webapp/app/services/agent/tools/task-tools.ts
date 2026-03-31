@@ -320,7 +320,7 @@ When the user asks to work on something, search existing tasks first (search_tas
         "List tasks with their current status. Use type filter to see scheduled/recurring tasks separately.",
       inputSchema: z.object({
         status: z
-          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed", "Recurring"])
+          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
           .optional()
           .describe("Filter by status. Omit to list all."),
         type: z
@@ -398,7 +398,7 @@ When the user asks to work on something, search existing tasks first (search_tas
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed", "Recurring"])
+          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
           .optional()
           .describe("New status"),
         title: z.string().optional().describe("Updated title"),

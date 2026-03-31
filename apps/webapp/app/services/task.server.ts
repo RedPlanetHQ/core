@@ -237,10 +237,7 @@ export async function createScheduledTask(
     nextRunAt = computeNextRun(data.schedule, timezone, afterTime);
   }
 
-  // Determine status: Recurring if it has a schedule and is not one-shot
-  const isRecurring =
-    data.schedule && (!data.maxOccurrences || data.maxOccurrences > 1);
-  const status: TaskStatus = isRecurring ? "Recurring" : "Backlog";
+  const status: TaskStatus = "Backlog";
 
   const task = await prisma.task.create({
     data: {

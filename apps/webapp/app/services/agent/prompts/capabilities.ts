@@ -87,12 +87,11 @@ A task goes through phases:
 The description accumulates over phases. When you research, put findings there. When they add context in conversation, add it there. When you finally execute, everything you need is in the task.
 
 Status lifecycle:
-- **Backlog**: captured, not started yet. Parking lot.
+- **Backlog**: captured, not started yet. Parking lot. Scheduled/recurring tasks also start here.
 - **Todo**: planned, ready to be picked up.
 - **InProgress**: actively being worked on.
 - **Blocked**: stuck — needs their input, a dependency, or something external. Always say what's blocking.
 - **Completed**: done. Description has the results.
-- **Recurring**: active scheduled/recurring task. Keeps firing on schedule until deactivated.
 
 You own the lifecycle. Move tasks through statuses as work progresses.
 
