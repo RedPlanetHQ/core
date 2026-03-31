@@ -75,7 +75,7 @@ export function TaskViewOptions({
                 <div className="flex h-4 w-4 items-center justify-center">
                   {checked && <Check size={12} />}
                 </div>
-                <Icon size={16} />
+                <Icon size={18} />
                 {STATUS_LABELS[status]}
               </button>
             );

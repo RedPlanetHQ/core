@@ -66,14 +66,23 @@ export async function getTaskById(id: string): Promise<Task | null> {
   return prisma.task.findUnique({ where: { id } });
 }
 
+export type TaskWithRelations = Task & {
+  subtasks: Pick<Task, "id" | "status">[];
+  parentTask: Pick<Task, "id" | "title"> | null;
+};
+
 export async function getTasks(
   workspaceId: string,
   status?: TaskStatus,
-): Promise<Task[]> {
+): Promise<TaskWithRelations[]> {
   return prisma.task.findMany({
     where: { workspaceId, ...(status && { status }) },
     orderBy: { createdAt: "desc" },
-  });
+    include: {
+      subtasks: { select: { id: true, status: true } },
+      parentTask: { select: { id: true, title: true } },
+    },
+  }) as Promise<TaskWithRelations[]>;
 }
 
 export async function searchTasks(
