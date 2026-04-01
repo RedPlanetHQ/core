@@ -71,6 +71,24 @@ export type TaskWithRelations = Task & {
   parentTask: Pick<Task, "id" | "title"> | null;
 };
 
+export type TaskFull = Task & {
+  subtasks: Task[];
+  parentTask: Pick<Task, "id" | "title"> | null;
+};
+
+export async function getTaskFull(
+  id: string,
+  workspaceId: string,
+): Promise<TaskFull | null> {
+  return prisma.task.findFirst({
+    where: { id, workspaceId },
+    include: {
+      subtasks: { orderBy: { createdAt: "asc" } },
+      parentTask: { select: { id: true, title: true } },
+    },
+  }) as Promise<TaskFull | null>;
+}
+
 export async function getTasks(
   workspaceId: string,
   status?: TaskStatus,

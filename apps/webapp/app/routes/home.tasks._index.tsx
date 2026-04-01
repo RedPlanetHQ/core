@@ -3,14 +3,8 @@ import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
 } from "@remix-run/node";
-import {
-  useFetcher,
-  useNavigate,
-  useRevalidator,
-  useSearchParams,
-} from "@remix-run/react";
-import React, { useEffect, useRef } from "react";
-import { ResizablePanelGroup, ResizablePanel } from "~/components/ui/resizable";
+import { useFetcher, useNavigate } from "@remix-run/react";
+import React from "react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getTasks,
@@ -18,22 +12,15 @@ import {
   changeTaskStatus,
   deleteTask,
 } from "~/services/task.server";
-import { getButlerName } from "~/models/workspace.server";
-import {
-  getConversationAndHistory,
-  readConversation,
-} from "~/services/conversation.server";
-import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
-import { TaskDetail } from "~/components/tasks/task-detail.client";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
   TaskViewOptions,
   DEFAULT_VISIBLE,
 } from "~/components/tasks/task-view-options";
-import { LoaderCircle, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
@@ -51,53 +38,13 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const url = new URL(request.url);
-  const selectedTaskId = url.searchParams.get("taskId");
-
-  const [tasks, integrationAccounts, butlerName] = await Promise.all([
-    getTasks(workspaceId),
-    getIntegrationAccounts(user.id, workspaceId),
-    getButlerName(workspaceId),
-  ]);
-
-  let selectedTask: (typeof tasks)[number] | null = null;
-  let taskConversations: Awaited<ReturnType<typeof getConversationAndHistory>>[] = [];
-
-  if (selectedTaskId) {
-    selectedTask = tasks.find((t) => t.id === selectedTaskId) ?? null;
-    if (selectedTask?.conversationIds?.length) {
-      const results = await Promise.all(
-        selectedTask.conversationIds.map((id) =>
-          getConversationAndHistory(id, user.id),
-        ),
-      );
-      taskConversations = results.filter(Boolean) as typeof taskConversations;
-      // Mark all unread as read
-      await Promise.all(
-        taskConversations
-          .filter((c) => c?.unread)
-          .map((c) => readConversation(c!.id)),
-      );
-    }
-  }
-
-  const integrationAccountMap: Record<string, string> = {};
-  for (const acc of integrationAccounts) {
-    integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
-  }
-
-  return { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName };
+  const tasks = await getTasks(workspaceId);
+  return json({ tasks });
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("create"),
-    title: z.string().min(1),
-    description: z.string().optional(),
-  }),
-  z.object({
-    intent: z.literal("update"),
-    taskId: z.string(),
     title: z.string().min(1),
     description: z.string().optional(),
   }),
@@ -141,17 +88,6 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ task });
   }
 
-  if (parsed.data.intent === "update") {
-    const task = await prisma.task.update({
-      where: { id: parsed.data.taskId },
-      data: {
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-      },
-    });
-    return json({ task });
-  }
-
   if (parsed.data.intent === "update-status") {
     const task = await changeTaskStatus(
       parsed.data.taskId,
@@ -173,11 +109,9 @@ export async function action({ request }: ActionFunctionArgs) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TasksIndex() {
-  const { tasks, selectedTask, taskConversations, integrationAccountMap, butlerName } =
-    useTypedLoaderData<typeof loader>();
+  const { tasks } = useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
   const [dialogOpen, setDialogOpen] = React.useState(false);
   const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<
     TaskStatus[]
@@ -187,26 +121,12 @@ export default function TasksIndex() {
     visibleStatuses.includes(t.status as TaskStatus),
   );
 
-  const selectedTaskId = searchParams.get("taskId");
-
-  // Poll loader every 3s while selected task is InProgress
-  const { revalidate } = useRevalidator();
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  useEffect(() => {
-    if (selectedTask?.status === "InProgress") {
-      pollRef.current = setInterval(() => revalidate(), 3000);
-    }
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [selectedTask?.id, selectedTask?.status]);
-
   const isCreating =
     fetcher.state !== "idle" &&
     (fetcher.formData?.get("intent") as string) === "create";
 
   const handleSelect = (id: string) => {
-    navigate(`?taskId=${id}`, { replace: true });
+    navigate(`/home/tasks/${id}`);
   };
 
   const handleCreate = (title: string, description: string) => {
@@ -217,19 +137,6 @@ export default function TasksIndex() {
     setDialogOpen(false);
   };
 
-  const handleSave = (title: string, description: string) => {
-    if (!selectedTask) return;
-    fetcher.submit(
-      { intent: "update", taskId: selectedTask.id, title, description },
-      { method: "POST" },
-    );
-  };
-
-  const handleDelete = (taskId: string) => {
-    fetcher.submit({ intent: "delete", taskId }, { method: "POST" });
-    navigate("?", { replace: true });
-  };
-
   const handleStatusChange = (taskId: string, status: string) => {
     fetcher.submit(
       { intent: "update-status", taskId, status },
@@ -238,11 +145,11 @@ export default function TasksIndex() {
   };
 
   // Navigate to newly created task
-  useEffect(() => {
+  React.useEffect(() => {
     if (fetcher.state === "idle" && fetcher.data) {
       const data = fetcher.data as any;
       if (data.task?.id) {
-        navigate(`?taskId=${data.task.id}`, { replace: true });
+        navigate(`/home/tasks/${data.task.id}`);
       }
     }
   }, [fetcher.state, fetcher.data]);
@@ -270,71 +177,28 @@ export default function TasksIndex() {
         }
       />
 
-      <NewTaskDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onSubmit={handleCreate}
-        isSubmitting={isCreating}
-      />
+      <ClientOnly fallback={null}>
+        {() => (
+          <NewTaskDialog
+            open={dialogOpen}
+            onOpenChange={setDialogOpen}
+            onSubmit={handleCreate}
+            isSubmitting={isCreating}
+          />
+        )}
+      </ClientOnly>
 
-      {selectedTask ? (
-        <ResizablePanelGroup
-          orientation="horizontal"
-          className="w-full flex-1 overflow-hidden"
-        >
-          <ResizablePanel defaultSize={50} minSize={50} maxSize={50}>
-            <div className="h-full overflow-hidden">
-              <TaskListPanel
-                tasks={filteredTasks}
-                selectedTaskId={selectedTaskId}
-                onSelect={handleSelect}
-                onNew={() => setDialogOpen(true)}
-                onStatusChange={handleStatusChange}
-              />
-            </div>
-          </ResizablePanel>
-
-          <ResizablePanel
-            defaultSize={50}
-            minSize={30}
-            maxSize={50}
-            className="border-l border-gray-300"
-          >
-            <ClientOnly
-              fallback={
-                <div className="flex w-full justify-center">
-                  <LoaderCircle className="mr-2 h-4 w-4 animate-spin" />
-                </div>
-              }
-            >
-              {() => (
-                <TaskDetail
-                  task={selectedTask}
-                  conversations={taskConversations}
-                  integrationAccountMap={integrationAccountMap}
-                  onSave={handleSave}
-                  onDelete={() => handleDelete(selectedTask.id)}
-                  onClose={() => navigate("?", { replace: true })}
-                  isSubmitting={fetcher.state !== "idle"}
-                  butlerName={butlerName}
-                />
-              )}
-            </ClientOnly>
-          </ResizablePanel>
-        </ResizablePanelGroup>
-      ) : (
-        <div className="flex flex-1 overflow-hidden">
-          <div className="w-full shrink-0 overflow-hidden border-r">
-            <TaskListPanel
-              tasks={filteredTasks}
-              selectedTaskId={null}
-              onSelect={handleSelect}
-              onNew={() => setDialogOpen(true)}
-              onStatusChange={handleStatusChange}
-            />
-          </div>
+      <div className="flex flex-1 overflow-hidden">
+        <div className="w-full overflow-hidden">
+          <TaskListPanel
+            tasks={filteredTasks}
+            selectedTaskId={null}
+            onSelect={handleSelect}
+            onNew={() => setDialogOpen(true)}
+            onStatusChange={handleStatusChange}
+          />
         </div>
-      )}
+      </div>
     </div>
   );
 }

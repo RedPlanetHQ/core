@@ -1,5 +1,4 @@
 import {
-  InputRule,
   Node,
   mergeAttributes,
   type KeyboardShortcutCommand,
@@ -101,18 +100,10 @@ const AgentTaskComponent = ({
 
   return (
     <NodeViewWrapper className="task-item-component" as="div">
-      <div
-        className={cn(
-          "hover:bg-grayAlpha-100 group -ml-2 mb-1 inline-flex w-fit items-start gap-2 rounded px-2 pb-0.5",
-          selected && "bg-grayAlpha-300",
-        )}
-      >
-        <label
-          className={cn("flex shrink-0 items-start gap-2 py-1")}
-          contentEditable={false}
-        >
+      <div className="group flex items-center gap-2 py-0.5">
+        <label className="shrink-0" contentEditable={false}>
           <Checkbox
-            className="group-hover:border-foreground/40 relative top-[1px] h-[18px] w-[18px] shrink-0"
+            className="h-4 w-4 shrink-0 rounded"
             checked={isDone}
             onCheckedChange={handleToggle}
           />
@@ -121,19 +112,19 @@ const AgentTaskComponent = ({
         <NodeViewContent
           as="p"
           className={cn(
-            "relative top-[2px] min-w-[3px]",
+            "min-w-[3px] flex-1 leading-6",
             isDone &&
-              "decoration-muted-foreground line-through decoration-[1px] opacity-60",
+              "text-muted-foreground line-through decoration-[1px] opacity-60",
           )}
         />
 
         <div
-          className={cn("flex shrink-0 items-start gap-2 pt-1 !text-sm")}
+          className="flex shrink-0 items-center gap-2"
           contentEditable={false}
         >
           {id && (
             <span
-              className="text-muted-foreground relative top-[1px] cursor-pointer font-mono text-sm"
+              className="text-muted-foreground hover:text-foreground cursor-pointer font-mono text-xs"
               onClick={() => {
                 window.location.href = "/home/tasks";
               }}
@@ -322,24 +313,7 @@ export const AgentTaskExtension = ({
     },
 
     addInputRules() {
-      return [
-        new InputRule({
-          find: /^\[\] $/,
-          handler: ({ state, range, chain }: any) => {
-            const $start = state.doc.resolve(range.from);
-            const blockRange = $start.blockRange();
-            if (!blockRange) return null;
-
-            chain()
-              .deleteRange({ from: blockRange.start, to: blockRange.end })
-              .insertContentAt(blockRange.start, {
-                type: NODE_NAME,
-                attrs: { id: null, status: "Backlog", conversationId: null },
-                content: [{ type: "paragraph" }],
-              })
-              .run();
-          },
-        }),
-      ];
+      // [] now creates a native taskList item — no agentTask trigger
+      return [];
     },
   });

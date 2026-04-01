@@ -1099,6 +1099,7 @@ model Task {
   parentTaskId String? // FK to self (subtasks/follow-ups)
   parentTask   Task?   @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
   subtasks     Task[]  @relation("TaskSubtasks")
+  pages        Page[]
 
   @@index([workspaceId])
   @@index([workspaceId, status])
@@ -1109,19 +1110,29 @@ model Task {
   @@index([workspaceId, isActive, nextRunAt])
 }
 
+enum PageType {
+  Daily
+  Task
+}
+
 model Page {
   id        String    @id @default(uuid())
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   deleted   DateTime?
 
-  date              DateTime
+  type              PageType  @default(Daily)
+  date              DateTime?
   description       String?
   descriptionBinary Bytes?
+  outlinks          Json?     @default("[]")
 
   workspaceId String
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
+
+  task   Task?   @relation("TaskPage", fields: [taskId], references: [id])
+  taskId String?
 
   @@unique([workspaceId, userId, date])
   @@index([workspaceId, userId])

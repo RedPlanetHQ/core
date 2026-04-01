@@ -75,9 +75,14 @@ export async function action({ request }: ActionFunctionArgs) {
     return json({ conversation });
   }
 
-  // For new conversations (no conversationId), redirect to the conversation page
   const conversationId = conversation?.conversationId;
 
+  // panelMode: return JSON so the panel can embed ConversationView inline
+  if (submission.value.panelMode) {
+    return json({ conversation, conversationId });
+  }
+
+  // For new conversations (no conversationId), redirect to the conversation page
   if (conversationId) {
     const modelId = submission.value.modelId;
     const url = modelId

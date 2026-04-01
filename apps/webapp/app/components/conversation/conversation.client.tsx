@@ -27,7 +27,7 @@ import {
 import type { LLMModel } from "./conversation-textarea.client";
 import Avatar from "boring-avatars";
 
-const SUGGESTED = [
+export const SUGGESTED = [
   {
     icon: RiGithubFill,
     prompt:

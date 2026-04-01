@@ -6,23 +6,30 @@ import { ClientOnly } from "remix-utils/client-only";
 import { DailyPage } from "~/components/daily/daily-page.client";
 import { PageHeader } from "~/components/common/page-header";
 import { generateCollabToken } from "~/services/collab-token.server";
+import { findOrCreateDailyPage } from "~/services/page.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   const workspace = await requireWorkpace(request);
+
+  const todayPage = await findOrCreateDailyPage(
+    workspace?.id ?? "",
+    user.id,
+    new Date(),
+  );
 
   return typedjson({
     butlerName: workspace?.name ?? "butler",
     workspaceId: workspace?.id ?? "",
     userId: user.id,
     collabToken: generateCollabToken(workspace?.id ?? "", user.id),
+    todayPage: { id: todayPage.id, date: todayPage.date?.toISOString() ?? "" },
   });
 };
 
 export default function DailyRoute() {
-  const { butlerName, workspaceId, userId, collabToken } = useLoaderData<
-    typeof loader
-  >() as any;
+  const { butlerName, workspaceId, userId, collabToken, todayPage } =
+    useLoaderData<typeof loader>() as any;
 
   return (
     <div className="flex h-full flex-col overflow-hidden">

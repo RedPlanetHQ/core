@@ -1,11 +1,12 @@
 import React, { useEffect, useRef, useCallback, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
-import Link from "@tiptap/extension-link";
 import Heading from "@tiptap/extension-heading";
 import Placeholder from "@tiptap/extension-placeholder";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Collaboration from "@tiptap/extension-collaboration";
+import TaskList from "@tiptap/extension-task-list";
+import { CustomTaskItem } from "~/components/editor/extensions/custom-task-item";
 import { HocuspocusProvider } from "@hocuspocus/provider";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
@@ -14,10 +15,13 @@ import { Markdown } from "tiptap-markdown";
 import { mergeAttributes } from "@tiptap/core";
 import { cx } from "class-variance-authority";
 
-import { AgentTaskExtension } from "~/components/editor/extensions/agent-task-extension";
 import { ButlerExtension } from "~/components/editor/extensions/butler-extension";
 import { buildMentionExtension } from "~/components/editor/extensions/mention-extension";
 import { SlashCommand } from "~/components/editor/extensions/slash-command";
+import { ButlerTaskExtension } from "~/components/editor/extensions/butler-task-extension";
+import { TaskPickerExtension } from "~/components/editor/extensions/task-picker-extension";
+import { ChecklistInputRule } from "~/components/editor/extensions/checklist-input-rule";
+import { SelectionBubble } from "~/components/editor/selection-bubble";
 
 const lowlight = createLowlight(all);
 
@@ -35,11 +39,7 @@ function buildExtensions(
   const heading = Heading.extend({
     renderHTML({ node, HTMLAttributes }) {
       const level: 1 | 2 | 3 = node.attrs.level;
-      const levelMap: Record<number, string> = {
-        1: "text-2xl",
-        2: "text-xl",
-        3: "text-lg",
-      };
+      const levelMap: Record<number, string> = { 1: "text-2xl", 2: "text-xl", 3: "text-lg" };
       return [
         `h${level}`,
         mergeAttributes(HTMLAttributes, {
@@ -53,14 +53,9 @@ function buildExtensions(
   return [
     StarterKit.configure({
       heading: false,
-      // Collaboration replaces history
       history: false,
-      bulletList: {
-        HTMLAttributes: { class: cx("list-disc list-outside pl-4 leading-1 my-1") },
-      },
-      orderedList: {
-        HTMLAttributes: { class: cx("list-decimal list-outside pl-4 leading-1 my-1") },
-      },
+      bulletList: { HTMLAttributes: { class: cx("list-disc list-outside pl-4 leading-1 my-1") } },
+      orderedList: { HTMLAttributes: { class: cx("list-decimal list-outside pl-4 leading-1 my-1") } },
       listItem: { HTMLAttributes: { class: cx("mt-1.5") } },
       blockquote: { HTMLAttributes: { class: cx("border-l-4 border-border pl-2") } },
       paragraph: { HTMLAttributes: { class: cx("leading-[24px] mt-4 paragraph-node") } },
@@ -74,9 +69,11 @@ function buildExtensions(
       horizontalRule: false,
       dropcursor: { color: "#DBEAFE", width: 4 },
       gapcursor: false,
+      link: { HTMLAttributes: { class: "text-primary cursor-pointer" }, openOnClick: false },
     }),
-    Link.configure({ HTMLAttributes: { class: "text-primary cursor-pointer" }, openOnClick: false }),
     heading,
+    TaskList.configure({ HTMLAttributes: { class: cx("list-none pl-0 my-1") } }),
+    CustomTaskItem,
     CodeBlockLowlight.configure({ lowlight }),
     Markdown,
     Placeholder.configure({
@@ -86,18 +83,22 @@ function buildExtensions(
       },
       includeChildren: true,
     }),
-    AgentTaskExtension({ pageId, isToday }),
+    // [] → taskList input rule (standalone so chain() has full editor context)
+    ChecklistInputRule,
+    // Inline task chip created via selection or [[ picker
+    ButlerTaskExtension({ pageId, isToday }),
     ButlerExtension,
     buildMentionExtension(butlerName),
     SlashCommand,
-    // Collaboration must come last — it replaces the doc content with Yjs
+    // [[ → task search picker
+    TaskPickerExtension,
+    // Collaboration must come last
     Collaboration.configure({ document: ydoc }),
   ];
 }
 
 const IDLE_THRESHOLD_MS = 60_000;
 
-// Inner component — only mounts once ydoc is ready, so useEditor always has a valid schema
 function EditorWithDoc({
   pageId,
   isToday,
@@ -183,10 +184,14 @@ function EditorWithDoc({
     };
   }, []);
 
-  return <EditorContent editor={editor} className="w-full" />;
+  return (
+    <>
+      <SelectionBubble editor={editor} />
+      <EditorContent editor={editor} className="w-full" />
+    </>
+  );
 }
 
-// Outer component — sets up Yjs doc + IndexedDB + Hocuspocus, then renders EditorWithDoc
 export function DayEditor({
   pageId,
   isToday,
@@ -203,19 +208,13 @@ export function DayEditor({
 
   useEffect(() => {
     const doc = new Y.Doc();
-
-    // Persist locally via IndexedDB (survives page reloads, offline)
     new IndexeddbPersistence(pageId, doc);
-
-    // Sync with server via Hocuspocus WebSocket
     providerRef.current = new HocuspocusProvider({
       url: getCollabURL(),
       name: pageId,
       document: doc,
       token: collabToken,
     });
-
-    // Small delay like Sol does — ensures IndexedDB has loaded before editor mounts
     const t = setTimeout(() => setYdoc(doc), 50);
 
     return () => {
@@ -226,7 +225,7 @@ export function DayEditor({
     };
   }, [pageId]);
 
-  if (!ydoc) return null;
+  if (!ydoc) return <div className="min-h-[60px]" />;
 
   return (
     <EditorWithDoc
