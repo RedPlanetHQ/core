@@ -101,6 +101,8 @@ const EnvironmentSchema = z
     GROQ_API_KEY: z.string().optional(),
     MISTRAL_API_KEY: z.string().optional(),
     XAI_API_KEY: z.string().optional(),
+    AZURE_API_KEY: z.string().optional(),
+    AZURE_BASE_URL: z.string().optional(),
 
     EMAIL_TRANSPORT: z.string().optional(),
     FROM_EMAIL: z.string().optional(),
@@ -128,8 +130,8 @@ const EnvironmentSchema = z
     MODEL_TEMPERATURE: z.coerce.number().default(1),
     LLM_TOLERANT_OUTPUT: z.string().optional(),
     OLLAMA_URL: z.string().optional(),
-    CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama"]).default("openai"),
-    EMBEDDINGS_PROVIDER: z.enum(["openai", "google", "ollama"]).optional(),
+    CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama", "azure"]).default("openai"),
+    EMBEDDINGS_PROVIDER: z.enum(["openai", "google", "ollama", "azure"]).optional(),
 
     // Inline batch fallback (when Batch API is unavailable)
     INLINE_BATCH_TTL_MS: z.coerce.number().int().positive().default(3600000),

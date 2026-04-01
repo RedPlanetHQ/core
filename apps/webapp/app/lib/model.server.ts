@@ -12,6 +12,7 @@ import {
 import { logger } from "~/services/logger.service";
 
 import { createOllama } from "ollama-ai-provider-v2";
+import { createAzure } from "@ai-sdk/azure";
 import {
   getDefaultChatProviderType,
   getDefaultChatModelId,
@@ -66,6 +67,7 @@ function inferProvider(modelId: string): string {
   if (modelId.startsWith("grok-")) return "xai";
   if (modelId.startsWith("groq/")) return "groq";
   if (modelId.startsWith("vercel/")) return "vercel";
+  if (modelId.startsWith("azure/")) return "azure";
   return getDefaultChatProviderType();
 }
 
@@ -126,6 +128,21 @@ export const getModel = (takeModel?: string) => {
     }
     const ollama = createOllama({ baseURL: ollamaUrl });
     return ollama(modelId);
+  }
+
+  // Azure: use direct AI SDK provider (needs base URL + API key)
+  if (provider === "azure" || getDefaultChatProviderType() === "azure") {
+    const azureConfig = getProviderConfig("azure");
+    const baseURL = azureConfig.baseUrl;
+    if (!baseURL) {
+      throw new Error("Azure provider selected but AZURE_BASE_URL is not configured.");
+    }
+    const apiKey = resolveApiKey("azure");
+    if (!apiKey) {
+      throw new Error("Azure provider selected but AZURE_API_KEY is not configured.");
+    }
+    const azureClient = createAzure({ baseURL, apiKey });
+    return azureClient(modelId);
   }
 
   // OpenAI proxy: use direct AI SDK provider (needs custom base URL)
@@ -218,10 +235,27 @@ export function createAgent(
   modelString: string,
   instructions?: string,
   tools?: ToolsInput,
-  options?: { apiKey?: string },
+  options?: { apiKey?: string; baseUrl?: string },
 ): Agent {
   const provider = getProvider(modelString);
   const openaiConfig = getProviderConfig("openai");
+
+  // BYOK Azure: apiKey carries the API key, options.baseUrl carries the endpoint URL
+  if (provider === "azure" && options?.apiKey) {
+    const modelId = getModelId(modelString);
+    const baseURL = options.baseUrl ?? getProviderConfig("azure").baseUrl;
+    if (!baseURL) {
+      throw new Error("Azure BYOK requires a base URL (e.g. https://<resource>.openai.azure.com/openai/v1).");
+    }
+    const azureClient = createAzure({ baseURL, apiKey: options.apiKey });
+    return new Agent({
+      id: `model-call-${modelString}`,
+      name: `Model Call (${modelString})`,
+      model: azureClient(modelId) as any,
+      instructions: instructions || "",
+      ...(tools && { tools }),
+    });
+  }
 
   // BYOK Ollama: apiKey field carries the base URL (Ollama has no API key).
   if (options?.apiKey && provider === "ollama") {
@@ -248,8 +282,8 @@ export function createAgent(
     });
   }
 
-  // Server-level Ollama/proxy: use direct AI SDK model instance
-  if (provider === "ollama" || (provider === "openai" && openaiConfig.baseUrl)) {
+  // Server-level Ollama/Azure/proxy: use direct AI SDK model instance
+  if (provider === "ollama" || provider === "azure" || (provider === "openai" && openaiConfig.baseUrl)) {
     return new Agent({
       id: `model-call-${modelString}`,
       name: `Model Call (${modelString})`,
@@ -284,7 +318,7 @@ export async function makeModelCall(
   workspaceId?: string,
   useCase: UseCase = "chat",
 ) {
-  const { modelId: model, apiKey, isBYOK } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  const { modelId: model, apiKey, isBYOK, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[${useCase}/${complexity}] model: ${model}${isBYOK ? " (BYOK)" : ""}`);
 
   const providerOptions = buildOpenAIProviderOptions(
@@ -293,7 +327,8 @@ export async function makeModelCall(
     reasoningEffort,
   );
 
-  const agent = createAgent(model, undefined, undefined, apiKey ? { apiKey } : undefined);
+  const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
+  const agent = createAgent(model, undefined, undefined, agentOptions);
 
   if (stream) {
     const result = await agent.stream(messages as any, {
@@ -360,13 +395,15 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   workspaceId?: string,
   useCase: UseCase = "chat",
 ): Promise<{ object: z.infer<T>; usage: TokenUsage | undefined }> {
-  const { modelId: model, apiKey } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
+  const { modelId: model, apiKey, baseUrl } = await resolveModelForWorkspace(workspaceId, useCase, complexity);
   logger.info(`[Structured/${useCase}/${complexity}] model: ${model}`);
 
   const providerOptions = buildOpenAIProviderOptions(
     model,
     cacheKey || `structured-${complexity}`,
   );
+
+  const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
 
   // Proxy/Ollama: manual JSON extraction (no structured output support)
   if (needsTolerantParsing()) {
@@ -383,7 +420,7 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   }
 
   // Standard path: Mastra Agent with structuredOutput
-  const agent = createAgent(model, undefined, undefined, apiKey ? { apiKey } : undefined);
+  const agent = createAgent(model, undefined, undefined, agentApiOptions);
 
   try {
     const result = await agent.generate(messages as any, {

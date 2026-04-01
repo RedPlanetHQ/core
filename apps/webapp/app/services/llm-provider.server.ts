@@ -58,6 +58,10 @@ function buildProviderConfig(providerType: string): Record<string, unknown> {
       return {
         ...(env.OLLAMA_URL && { baseUrl: env.OLLAMA_URL }),
       };
+    case "azure":
+      return {
+        ...(env.AZURE_BASE_URL && { baseUrl: env.AZURE_BASE_URL }),
+      };
     default:
       return {};
   }
@@ -206,6 +210,9 @@ export function getProviderConfig(providerType: string): ProviderConfig {
   if (providerType === "ollama") {
     return { baseUrl: env.OLLAMA_URL };
   }
+  if (providerType === "azure") {
+    return { baseUrl: env.AZURE_BASE_URL };
+  }
   return {};
 }
 
@@ -297,6 +304,7 @@ const ENV_KEY_MAP: Record<string, string | undefined> = {
   mistral: env.MISTRAL_API_KEY,
   xai: env.XAI_API_KEY,
   ollama: env.OLLAMA_URL,
+  azure: env.AZURE_API_KEY,
 };
 
 export async function getProviders(workspaceId?: string) {
@@ -386,7 +394,7 @@ export function resolveApiKey(providerType: string): string | undefined {
   return ENV_KEY_MAP[providerType];
 }
 
-import { resolveWorkspaceApiKey } from "~/services/byok.server";
+import { resolveWorkspaceApiKey, resolveWorkspaceProviderBaseUrl } from "~/services/byok.server";
 
 export interface ResolvedKey {
   apiKey: string | undefined;
@@ -422,6 +430,7 @@ function inferProviderFromModelId(modelId: string): string {
   if (modelId.startsWith("grok-")) return "xai";
   if (modelId.startsWith("groq/")) return "groq";
   if (modelId.startsWith("vercel/")) return "vercel";
+  if (modelId.startsWith("azure/")) return "azure";
   return env.CHAT_PROVIDER;
 }
 
@@ -434,10 +443,20 @@ export async function resolveModelForWorkspace(
   workspaceId: string | null | undefined,
   useCase: UseCase = "chat",
   complexity: ModelComplexity = "medium",
-): Promise<{ modelId: string; apiKey: string | undefined; isBYOK: boolean }> {
+): Promise<{ modelId: string; apiKey: string | undefined; isBYOK: boolean; baseUrl?: string }> {
   const modelId = await getModelForUseCase(useCase, workspaceId, complexity);
   const providerType = inferProviderFromModelId(modelId);
   const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(workspaceId, providerType);
+
+  // For Azure, also resolve the base URL (BYOK stores it in baseUrl; env fallback)
+  if (providerType === "azure") {
+    const byokBaseUrl = workspaceId
+      ? await resolveWorkspaceProviderBaseUrl(workspaceId, "azure")
+      : null;
+    const baseUrl = byokBaseUrl ?? env.AZURE_BASE_URL;
+    return { modelId, apiKey, isBYOK, baseUrl };
+  }
+
   return { modelId, apiKey, isBYOK };
 }
 

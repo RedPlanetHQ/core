@@ -89,5 +89,32 @@
     "name": "Ollama",
     "envKey": "OLLAMA_URL",
     "models": []
+  },
+  "azure": {
+    "name": "Azure OpenAI",
+    "envKey": "AZURE_API_KEY",
+    "models": [
+      {
+        "modelId": "azure/gpt-4o",
+        "label": "GPT-4o (Azure)",
+        "complexity": "medium",
+        "supportsBatch": false,
+        "capabilities": ["chat", "structured"]
+      },
+      {
+        "modelId": "azure/gpt-4o-mini",
+        "label": "GPT-4o Mini (Azure)",
+        "complexity": "low",
+        "supportsBatch": false,
+        "capabilities": ["chat", "structured"]
+      },
+      {
+        "modelId": "azure/gpt-4.1",
+        "label": "GPT-4.1 (Azure)",
+        "complexity": "high",
+        "supportsBatch": false,
+        "capabilities": ["chat", "structured"]
+      }
+    ]
   }
 }

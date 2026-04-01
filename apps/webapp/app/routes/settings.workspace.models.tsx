@@ -55,6 +55,7 @@ const BYOK_PROVIDERS: {
   placeholder: string;
   hint?: string;
   isUrl?: boolean;
+  isAzure?: boolean;
 }[] = [
   { type: "openai", label: "OpenAI", placeholder: "sk-..." },
   { type: "anthropic", label: "Anthropic", placeholder: "sk-ant-..." },
@@ -91,6 +92,13 @@ const BYOK_PROVIDERS: {
     placeholder: "http://localhost:11434",
     hint: "Enter your Ollama server URL. Use model IDs like ollama/llama3.2",
     isUrl: true,
+  },
+  {
+    type: "azure",
+    label: "Azure OpenAI",
+    placeholder: "sk-...",
+    hint: "Use model IDs like azure/gpt-4o (deployment name after azure/)",
+    isAzure: true,
   },
 ];
 
@@ -163,6 +171,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
   if (intent === "setKey") {
     const providerType = formData.get("providerType") as string;
     const apiKey = (formData.get("apiKey") as string)?.trim();
+    const baseUrl = (formData.get("baseUrl") as string)?.trim() || undefined;
 
     if (!isSupportedProvider(providerType)) {
       return json({ error: "Unsupported provider" }, { status: 400 });
@@ -171,7 +180,7 @@ export const action = async ({ request }: ActionFunctionArgs) => {
       return json({ error: "API key is required" }, { status: 400 });
     }
 
-    await setWorkspaceApiKey(user.workspaceId, providerType, apiKey);
+    await setWorkspaceApiKey(user.workspaceId, providerType, apiKey, baseUrl);
     return json({ success: true });
   }
 
@@ -188,6 +197,133 @@ export const action = async ({ request }: ActionFunctionArgs) => {
 
   return json({ error: "Invalid intent" }, { status: 400 });
 };
+
+function AzureBYOKRow({
+  provider,
+  hasKey,
+}: {
+  provider: (typeof BYOK_PROVIDERS)[number];
+  hasKey: boolean;
+}) {
+  const fetcher = useFetcher();
+  const [apiKey, setApiKey] = useState("");
+  const [baseUrl, setBaseUrl] = useState("");
+  const [editing, setEditing] = useState(false);
+
+  const isSubmitting = fetcher.state !== "idle";
+
+  const handleSave = () => {
+    if (!apiKey.trim() || !baseUrl.trim()) return;
+    fetcher.submit(
+      { intent: "setKey", providerType: provider.type, apiKey, baseUrl },
+      { method: "POST" },
+    );
+    setApiKey("");
+    setBaseUrl("");
+    setEditing(false);
+  };
+
+  const handleDelete = () => {
+    fetcher.submit(
+      { intent: "deleteKey", providerType: provider.type },
+      { method: "POST" },
+    );
+  };
+
+  const activeHasKey =
+    fetcher.formData?.get("intent") === "deleteKey"
+      ? false
+      : fetcher.formData?.get("intent") === "setKey"
+        ? true
+        : hasKey;
+
+  return (
+    <div className="bg-background-3 flex flex-col gap-2 rounded-lg p-3 px-4">
+      <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{provider.label}</span>
+            {activeHasKey && (
+              <Badge variant="secondary" className="text-xs">
+                Key set
+              </Badge>
+            )}
+          </div>
+          {provider.hint && (
+            <p className="text-muted-foreground text-xs">{provider.hint}</p>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {activeHasKey && !editing ? (
+            <>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-7 text-xs"
+                onClick={() => setEditing(true)}
+              >
+                Replace
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="text-destructive h-7"
+                onClick={handleDelete}
+                disabled={isSubmitting}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </>
+          ) : (
+            <div className="flex flex-col items-end gap-1.5">
+              <Input
+                className="h-7 w-72 font-mono text-xs"
+                placeholder="https://<resource>.openai.azure.com/openai/v1"
+                value={baseUrl}
+                onChange={(e) => setBaseUrl(e.target.value)}
+                type="text"
+              />
+              <Input
+                className="h-7 w-72 font-mono text-xs"
+                placeholder="API key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSave()}
+                type="password"
+              />
+              <div className="flex gap-2">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={handleSave}
+                  disabled={!apiKey.trim() || !baseUrl.trim() || isSubmitting}
+                >
+                  Save
+                </Button>
+                {editing && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs"
+                    onClick={() => {
+                      setEditing(false);
+                      setApiKey("");
+                      setBaseUrl("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function BYOKRow({
   provider,
@@ -412,7 +548,7 @@ function ModelSelector({
       </div>
       {showCustom && (
         <p className="text-muted-foreground mt-1 text-xs">
-          Use <code>openrouter/provider/model</code> for OpenRouter models
+          Use <code>openrouter/provider/model</code> for OpenRouter, <code>azure/&lt;deployment-name&gt;</code> for Azure
         </p>
       )}
     </div>
@@ -492,13 +628,21 @@ export default function ModelsSettings() {
         description="Add your own provider API keys. These override server-level keys for your workspace."
       >
         <div className="flex flex-col gap-2">
-          {BYOK_PROVIDERS.map((provider) => (
-            <BYOKRow
-              key={provider.type}
-              provider={provider}
-              hasKey={!!keyStatusMap[provider.type]}
-            />
-          ))}
+          {BYOK_PROVIDERS.map((provider) =>
+            provider.isAzure ? (
+              <AzureBYOKRow
+                key={provider.type}
+                provider={provider}
+                hasKey={!!keyStatusMap[provider.type]}
+              />
+            ) : (
+              <BYOKRow
+                key={provider.type}
+                provider={provider}
+                hasKey={!!keyStatusMap[provider.type]}
+              />
+            ),
+          )}
         </div>
       </SettingSection>
     </div>

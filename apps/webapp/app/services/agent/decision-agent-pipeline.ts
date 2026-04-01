@@ -29,6 +29,7 @@ import { upsertConversationHistory } from "~/services/conversation.server";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { deductCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
+import { getWorkspaceChannelContext } from "../channel.server";
 
 // ============================================================================
 // Types

@@ -59,6 +59,7 @@ const SUPPORTED_PROVIDERS = [
   "mistral",
   "xai",
   "ollama",
+  "azure",
 ] as const;
 export type SupportedProvider = (typeof SUPPORTED_PROVIDERS)[number];
 
@@ -190,6 +191,23 @@ export async function resolveWorkspaceApiKey(
   const decrypted = decryptSecret(parsed.data);
   setCache(workspaceId, providerType, decrypted);
   return decrypted;
+}
+
+/**
+ * For providers that need extra config alongside the API key (e.g. Azure resource name),
+ * returns the stored `baseUrl` field from the provider config.
+ * Returns null if no BYOK config exists for the provider.
+ */
+export async function resolveWorkspaceProviderBaseUrl(
+  workspaceId: string,
+  providerType: string,
+): Promise<string | null> {
+  const provider = await prisma.lLMProvider.findFirst({
+    where: { workspaceId, type: providerType, isActive: true },
+  });
+  if (!provider) return null;
+  const config = provider.config as Record<string, unknown> | null;
+  return (config?.baseUrl as string | undefined) ?? null;
 }
 
 /**
