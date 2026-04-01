@@ -75,7 +75,8 @@ export function getTaskTools(
 
   return {
     create_task: tool({
-      description: `Create a new task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
+      description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
+NOTE: This is for CORE's own task system. If the user asks to create a task in an external tool (Todoist, Asana, Linear, Jira, etc.), do NOT use this — delegate to the orchestrator via take_action instead.
 
 IMMEDIATE TASK (no scheduling):
 - Just pass title + optional description. Created in Backlog.
@@ -467,17 +468,17 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           if (schedule !== undefined || isActive !== undefined || maxOccurrences !== undefined || endDate !== undefined || updateChannel !== undefined) {
             await updateScheduledTask(taskId, workspaceId, {
               title,
-              description,
+              description: mergedDescription,
               schedule,
               channel: updateChannel,
               isActive,
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (title || description !== undefined) {
+          } else if (title || mergedDescription !== undefined) {
             const data: { title?: string; description?: string } = {};
             if (title) data.title = title;
-            if (description !== undefined) data.description = description;
+            if (mergedDescription !== undefined) data.description = mergedDescription;
             await updateTask(taskId, data);
           }
 

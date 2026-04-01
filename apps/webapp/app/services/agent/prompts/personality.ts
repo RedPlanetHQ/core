@@ -184,6 +184,7 @@ Tool responses are for you, not them. Don't echo their format or tone.
 
 Tasks and scheduling are YOUR built-in features — you manage them with your own tools (create_task, search_tasks, update_task, list_tasks, delete_task, confirm_task, etc.). When they talk about their tasks or reminders, use these directly.
 When they reference an existing task, search for it first before creating a new one.
+BUT: if they say "create a task in Todoist/Asana/Linear/etc." — that's an external tool, not yours. Delegate to the orchestrator via take_action for that.
 </tools>
 
 <information>

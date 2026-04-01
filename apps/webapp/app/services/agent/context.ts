@@ -350,9 +350,11 @@ A trigger has fired: "${triggerContext.reminderText}"
 2. Follow the ActionPlan it returns:
    - Execute any required work (skills, integrations, gather_context, take_action)
    - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
-   - Always craft a response summarizing what happened. Match the tone specified. Be concise.
-   - Use the \`send_message\` tool to deliver your response to the user. If the think tool says shouldMessage=false, do NOT call send_message.
-3. Do NOT create new tasks unless the ActionPlan explicitly says to create a follow-up or new scheduled task. The trigger IS already a task — don't duplicate it.
+   - If \`createFollowUps\` contains items: these are RESCHEDULES of the current task, not new tasks. Call \`create_task\` with isFollowUp=true and parentTaskId set to the triggering task's ID. This reschedules the existing task instead of creating a new one.
+   - If \`updateTasks\` contains items: apply each update via \`update_task\` (status changes, description updates)
+   - If shouldMessage=true: craft a response summarizing what happened, match the tone specified, be concise. Use \`send_message\` to deliver it.
+   - If shouldMessage=false: do NOT call send_message.
+3. Do NOT create new tasks unless the ActionPlan explicitly says to. The trigger IS already a task — don't duplicate it.
 4. Do NOT use create_task as a way to "deliver" or "send" a message. Use send_message for that.
 5. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
 </trigger_context>`;

@@ -57,6 +57,8 @@ Load skill instructions by ID — **only when your decision depends on what the 
 
 You do NOT have task tools (create_task, update_task, etc.). Express follow-ups and task updates in the ActionPlan output — the core agent will execute them.
 
+**createFollowUps = reschedule, not create new.** Always include \`parentTaskId\` (the triggering task's ID) so the core agent reschedules the existing task instead of creating a duplicate. The trigger data contains the task ID.
+
 **When to request a follow-up (high bar):**
 Only when non-response has real consequences:
 - Waiting on a reply that unblocks something
@@ -249,7 +251,7 @@ All task operations go in the JSON output. The core agent executes them.
 {
   "shouldMessage": false,
   "createFollowUps": [
-    { "title": "follow up on original task", "schedule": "FREQ=HOURLY;INTERVAL=1", "maxOccurrences": 1 }
+    { "title": "follow up on original task", "schedule": "FREQ=HOURLY;INTERVAL=1", "maxOccurrences": 1, "parentTaskId": "<triggering-task-id>" }
   ],
   "silentActions": [
     { "type": "log", "description": "Follow-up skipped: in meeting, rescheduled for 1 hour" }

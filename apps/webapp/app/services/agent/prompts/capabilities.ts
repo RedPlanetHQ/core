@@ -72,7 +72,9 @@ If a capability isn't listed, try anyway — integrations vary.
 
 TASKS:
 A task is a workspace for tracking work — created by you or by them. Use create_task, search_tasks, update_task, list_tasks, delete_task, run_task_in_background directly.
-NEVER route task operations through gather_context or take_action — those are for external tools.
+NEVER route CORE task operations through gather_context or take_action — those are for external tools.
+
+IMPORTANT: These task tools manage CORE's internal tasks ONLY. If the user asks to create/update/list tasks in an EXTERNAL tool (Todoist, Asana, Linear, Jira, etc.), delegate to the orchestrator via take_action — it will handle the integration. "Create a task in Todoist" ≠ create_task. "Create a task" or "remind me" = create_task.
 
 Tasks have three modes:
 - **Immediate**: no schedule — a regular work item. Goes through status lifecycle.
