@@ -1,6 +1,9 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
-import { createHybridLoaderApiRoute, createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
+import {
+  createHybridLoaderApiRoute,
+  createHybridActionApiRoute,
+} from "~/services/routeBuilders/apiBuilder.server";
 import { searchTasks, getTasks, createTask } from "~/services/task.server";
 
 const loader = createHybridLoaderApiRoute(
@@ -25,9 +28,11 @@ const loader = createHybridLoaderApiRoute(
 
 const CreateTaskSchema = z.object({
   title: z.string().min(1),
-  pageId: z.string().optional(),
+
   source: z.string().default("manual"),
-  status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]).default("Backlog"),
+  status: z
+    .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
+    .default("Backlog"),
   parentTaskId: z.string().optional(),
 });
 
@@ -45,7 +50,6 @@ const { action } = createHybridActionApiRoute(
       body.title,
       undefined,
       {
-        pageId: body.pageId,
         source: body.source,
         status: body.status,
         parentTaskId: body.parentTaskId,

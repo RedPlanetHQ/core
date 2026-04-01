@@ -5,6 +5,7 @@ import { SquareCheck } from "lucide-react";
 
 interface SelectionBubbleProps {
   editor: Editor | null;
+  isToday: boolean;
 }
 
 interface Position {
@@ -12,11 +13,7 @@ interface Position {
   left: number;
 }
 
-/**
- * Floating toolbar that appears above a text selection.
- * Positioned via ProseMirror coordsAtPos — no extra packages needed.
- */
-export function SelectionBubble({ editor }: SelectionBubbleProps) {
+export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
   const [pos, setPos] = useState<Position | null>(null);
 
   useEffect(() => {
@@ -49,28 +46,59 @@ export function SelectionBubble({ editor }: SelectionBubbleProps) {
 
   if (!pos || !editor || typeof document === "undefined") return null;
 
-  function handleCreateTasks() {
+  async function handleCreateTasks() {
     if (!editor) return;
     const { from, to, empty } = editor.state.selection;
     if (empty) return;
 
-    // Collect text from each selected block separately
     const blocks: string[] = [];
     editor.state.doc.nodesBetween(from, to, (node) => {
-      if (node.isBlock && node.textContent.trim()) {
+      if (node.isTextblock && node.textContent.trim()) {
         blocks.push(node.textContent.trim());
       }
     });
 
     if (blocks.length === 0) return;
-
     setPos(null);
 
-    // Build inline content: one butlerTask chip per block
-    const content = blocks.flatMap((text) => [
-      { type: "butlerTask", attrs: { id: null, status: "Backlog", title: text } },
-      { type: "text", text: " " },
-    ]);
+    const taskStatus = isToday ? "Todo" : "Backlog";
+
+    const tasks = await Promise.all(
+      blocks.map((title) =>
+        fetch("/api/v1/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, source: "daily", status: taskStatus }),
+        })
+          .then((r) => {
+            if (!r.ok) throw new Error(`Task creation failed: ${r.status}`);
+            return r.json();
+          })
+          .catch((err) => {
+            console.error("[selectionBubble] create failed:", err);
+            return { id: null, status: taskStatus, title };
+          }),
+      ),
+    );
+
+    const content = {
+      type: "taskList",
+      content: tasks.map((task) => ({
+        type: "taskItem",
+        attrs: { checked: false },
+        content: [
+          {
+            type: "paragraph",
+            content: [
+              {
+                type: "butlerTask",
+                attrs: { id: task.id, status: task.status, title: task.title },
+              },
+            ],
+          },
+        ],
+      })),
+    };
 
     editor.chain().focus().deleteSelection().insertContent(content).run();
   }

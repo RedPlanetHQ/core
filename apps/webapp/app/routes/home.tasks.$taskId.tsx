@@ -21,6 +21,8 @@ import {
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getButlerName } from "~/models/workspace.server";
+import { findOrCreateTaskPage } from "~/services/page.server";
+import { generateCollabToken } from "~/services/collab-token.server";
 import { TaskDetailFull } from "~/components/tasks/task-detail-full.client";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
@@ -44,6 +46,8 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   if (!task) return redirect("/home/tasks");
 
+  const taskPage = await findOrCreateTaskPage(workspaceId, user.id, taskId);
+
   let taskConversations: Awaited<ReturnType<typeof getConversationAndHistory>>[] =
     [];
   if (task.conversationIds?.length) {
@@ -65,7 +69,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
   }
 
-  return json({ task, taskConversations, integrationAccountMap, butlerName });
+  return json({
+    task,
+    taskConversations,
+    integrationAccountMap,
+    butlerName,
+    taskPageId: taskPage.id,
+    collabToken: generateCollabToken(workspaceId, user.id),
+  });
 }
 
 // ─── Action ───────────────────────────────────────────────────────────────────
@@ -178,14 +189,14 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function TaskDetailPage() {
-  const { task, taskConversations, integrationAccountMap, butlerName } =
+  const { task, taskConversations, integrationAccountMap, butlerName, taskPageId, collabToken } =
     useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const fetcher = useFetcher<typeof action>();
 
-  const handleSave = (title: string, description: string) => {
+  const handleSave = (title: string) => {
     fetcher.submit(
-      { intent: "update", title, description },
+      { intent: "update", title },
       { method: "POST" },
     );
   };
@@ -238,6 +249,8 @@ export default function TaskDetailPage() {
           conversations={taskConversations}
           integrationAccountMap={integrationAccountMap}
           butlerName={butlerName}
+          taskPageId={taskPageId}
+          collabToken={collabToken}
           isSubmitting={fetcher.state !== "idle"}
           onSave={handleSave}
           onDelete={handleDelete}

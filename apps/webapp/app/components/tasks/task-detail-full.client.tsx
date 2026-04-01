@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
-import { useEditor, EditorContent } from "@tiptap/react";
 import { Trash2, Plus, GitFork, ExternalLink, X } from "lucide-react";
+import { TaskPageEditor } from "~/components/tasks/task-page-editor.client";
 import { Tabs, TabsContent } from "~/components/ui/tabs";
 import { Button } from "~/components/ui/button";
 import {
@@ -22,7 +22,6 @@ import {
 import { PageHeader } from "~/components/common/page-header";
 import type { getConversationAndHistory } from "~/services/conversation.server";
 import type { TaskFull } from "~/services/task.server";
-import { extensionsForConversation } from "~/components/conversation/editor-extensions";
 import { cn } from "~/lib/utils";
 import type { TaskStatus } from "@core/database";
 
@@ -35,8 +34,10 @@ interface TaskDetailFullProps {
   conversations: ConversationItem[];
   integrationAccountMap?: Record<string, string>;
   butlerName?: string;
+  taskPageId: string;
+  collabToken: string;
   isSubmitting: boolean;
-  onSave: (title: string, description: string) => void;
+  onSave: (title: string) => void;
   onDelete: () => void;
   onStatusChange: (status: string) => void;
   onCreateSubtask: (title: string) => void;
@@ -45,30 +46,6 @@ interface TaskDetailFullProps {
   onSubtaskClick: (id: string) => void;
 }
 
-function DescriptionEditor({
-  initialContent,
-  onChange,
-}: {
-  initialContent: string;
-  onChange: (markdown: string) => void;
-}) {
-  const editor = useEditor({
-    extensions: [...extensionsForConversation],
-    content: initialContent,
-    immediatelyRender: false,
-    editorProps: {
-      attributes: {
-        class:
-          "min-h-[120px] focus:outline-none prose prose-sm max-w-none dark:prose-invert",
-      },
-    },
-    onUpdate({ editor }) {
-      onChange(editor.storage.markdown.getMarkdown());
-    },
-  });
-
-  return <EditorContent editor={editor} />;
-}
 
 function SubtaskRow({
   subtask,
@@ -175,6 +152,8 @@ export function TaskDetailFull({
   conversations,
   integrationAccountMap = {},
   butlerName = "Core",
+  taskPageId,
+  collabToken,
   isSubmitting,
   onSave,
   onDelete,
@@ -185,52 +164,32 @@ export function TaskDetailFull({
   onSubtaskClick,
 }: TaskDetailFullProps) {
   const [title, setTitle] = React.useState(task.title);
-  const [description, setDescription] = React.useState(task.description ?? "");
   const [activeTab, setActiveTab] = React.useState("info");
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const [selectedConversationId, setSelectedConversationId] = React.useState(
     () => conversations[conversations.length - 1]?.id ?? "",
   );
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastSavedRef = useRef({
-    title: task.title,
-    description: task.description ?? "",
-  });
+  const lastSavedTitleRef = useRef(task.title);
 
   useEffect(() => {
     setTitle(task.title);
-    setDescription(task.description ?? "");
-    lastSavedRef.current = {
-      title: task.title,
-      description: task.description ?? "",
-    };
+    lastSavedTitleRef.current = task.title;
     setSelectedConversationId(
       conversations[conversations.length - 1]?.id ?? "",
     );
   }, [task.id]);
 
-  const triggerSave = (nextTitle: string, nextDesc: string) => {
+  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const next = e.target.value;
+    setTitle(next);
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      const saved = lastSavedRef.current;
-      if (
-        nextTitle.trim() &&
-        (nextTitle !== saved.title || nextDesc !== saved.description)
-      ) {
-        lastSavedRef.current = { title: nextTitle, description: nextDesc };
-        onSave(nextTitle, nextDesc);
+      if (next.trim() && next !== lastSavedTitleRef.current) {
+        lastSavedTitleRef.current = next;
+        onSave(next);
       }
     }, 800);
-  };
-
-  const handleTitleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setTitle(e.target.value);
-    triggerSave(e.target.value, description);
-  };
-
-  const handleDescriptionChange = (markdown: string) => {
-    setDescription(markdown);
-    triggerSave(title, markdown);
   };
 
   const doneSubtasks = task.subtasks.filter(
@@ -337,9 +296,11 @@ export function TaskDetailFull({
             <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
               Description
             </p>
-            <DescriptionEditor
-              initialContent={task.description ?? ""}
-              onChange={handleDescriptionChange}
+            <TaskPageEditor
+              pageId={taskPageId}
+              collabToken={collabToken}
+              butlerName={butlerName}
+              taskId={task.id}
             />
           </div>
 

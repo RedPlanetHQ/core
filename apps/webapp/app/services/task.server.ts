@@ -1,5 +1,6 @@
 import { prisma } from "~/db.server";
 import type { Task, TaskStatus } from "@prisma/client";
+import { findOrCreateTaskPage } from "~/services/page.server";
 import {
   cancelTaskJob,
   removeScheduledTask,
@@ -47,20 +48,23 @@ export async function createTask(
   userId: string,
   title: string,
   description?: string,
-  options?: { pageId?: string; source?: string; status?: TaskStatus; parentTaskId?: string },
+  options?: { source?: string; status?: TaskStatus; parentTaskId?: string },
 ): Promise<Task> {
-  return prisma.task.create({
+  const task = await prisma.task.create({
     data: {
       title,
       description,
       status: options?.status ?? "Backlog",
       workspaceId,
       userId,
-      ...(options?.pageId && { pageId: options.pageId }),
       ...(options?.source && { source: options.source }),
       ...(options?.parentTaskId && { parentTaskId: options.parentTaskId }),
     },
   });
+
+  await findOrCreateTaskPage(workspaceId, userId, task.id);
+
+  return prisma.task.findUniqueOrThrow({ where: { id: task.id } });
 }
 
 export async function getTaskById(id: string): Promise<Task | null> {

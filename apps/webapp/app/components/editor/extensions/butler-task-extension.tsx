@@ -31,7 +31,6 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: taskTitle,
-        pageId,
         source: "daily",
         status: taskStatus,
         ...(parentTaskId && { parentTaskId }),
