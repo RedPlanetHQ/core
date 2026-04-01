@@ -30,6 +30,29 @@ export async function findOrCreateDailyPage(
   });
 }
 
+export async function findOrCreateTaskPage(
+  workspaceId: string,
+  userId: string,
+  taskId: string,
+): Promise<Page> {
+  const task = await prisma.task.findUnique({
+    where: { id: taskId },
+    select: { pageId: true },
+  });
+
+  if (task?.pageId) {
+    const existing = await prisma.page.findUnique({ where: { id: task.pageId } });
+    if (existing) return existing;
+  }
+
+  const page = await prisma.page.create({
+    data: { workspaceId, userId, type: "Task" },
+  });
+
+  await prisma.task.update({ where: { id: taskId }, data: { pageId: page.id } });
+  return page;
+}
+
 export async function getPageById(id: string): Promise<Page | null> {
   return prisma.page.findUnique({ where: { id } });
 }

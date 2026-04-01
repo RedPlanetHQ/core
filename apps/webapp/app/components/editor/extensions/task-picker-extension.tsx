@@ -112,11 +112,11 @@ export const TaskPickerExtension = Extension.create({
             .run();
         },
         items: async ({ query }: { query: string }) => {
-          if (!query || query.length < 1) return [];
           try {
-            const res = await fetch(
-              `/api/v1/tasks?search=${encodeURIComponent(query)}`,
-            );
+            const url = query
+              ? `/api/v1/tasks?search=${encodeURIComponent(query)}`
+              : `/api/v1/tasks`;
+            const res = await fetch(url);
             return (await res.json()) as TaskItem[];
           } catch {
             return [];

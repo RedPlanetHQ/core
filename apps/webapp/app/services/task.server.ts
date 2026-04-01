@@ -47,7 +47,7 @@ export async function createTask(
   userId: string,
   title: string,
   description?: string,
-  options?: { pageId?: string; source?: string; status?: TaskStatus },
+  options?: { pageId?: string; source?: string; status?: TaskStatus; parentTaskId?: string },
 ): Promise<Task> {
   return prisma.task.create({
     data: {
@@ -58,6 +58,7 @@ export async function createTask(
       userId,
       ...(options?.pageId && { pageId: options.pageId }),
       ...(options?.source && { source: options.source }),
+      ...(options?.parentTaskId && { parentTaskId: options.parentTaskId }),
     },
   });
 }

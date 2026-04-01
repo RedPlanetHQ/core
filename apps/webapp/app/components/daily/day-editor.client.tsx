@@ -35,6 +35,7 @@ function buildExtensions(
   isToday: boolean,
   butlerName: string,
   ydoc: Y.Doc,
+  parentTaskId?: string,
 ) {
   const heading = Heading.extend({
     renderHTML({ node, HTMLAttributes }) {

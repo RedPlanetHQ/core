@@ -1,7 +1,7 @@
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import { createHybridLoaderApiRoute, createHybridActionApiRoute } from "~/services/routeBuilders/apiBuilder.server";
-import { searchTasks, createTask } from "~/services/task.server";
+import { searchTasks, getTasks, createTask } from "~/services/task.server";
 
 const loader = createHybridLoaderApiRoute(
   {
@@ -11,13 +11,14 @@ const loader = createHybridLoaderApiRoute(
     searchParams: z.object({ search: z.string().optional() }),
   },
   async ({ authentication, searchParams }) => {
-    if (!searchParams?.search) return json([]);
+    const workspaceId = authentication.workspaceId as string;
 
-    const tasks = await searchTasks(
-      authentication.workspaceId as string,
-      searchParams.search,
-    );
+    if (!searchParams?.search) {
+      const tasks = await getTasks(workspaceId);
+      return json(tasks);
+    }
 
+    const tasks = await searchTasks(workspaceId, searchParams.search);
     return json(tasks);
   },
 );
@@ -27,6 +28,7 @@ const CreateTaskSchema = z.object({
   pageId: z.string().optional(),
   source: z.string().default("manual"),
   status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]).default("Backlog"),
+  parentTaskId: z.string().optional(),
 });
 
 const { action } = createHybridActionApiRoute(
@@ -42,7 +44,12 @@ const { action } = createHybridActionApiRoute(
       authentication.userId,
       body.title,
       undefined,
-      { pageId: body.pageId, source: body.source, status: body.status },
+      {
+        pageId: body.pageId,
+        source: body.source,
+        status: body.status,
+        parentTaskId: body.parentTaskId,
+      },
     );
 
     return json(task);

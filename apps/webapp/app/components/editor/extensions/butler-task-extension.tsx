@@ -13,7 +13,7 @@ const TERMINAL = new Set(["Completed", "Blocked"]);
 
 const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
   const { id, status, title } = node.attrs;
-  const { pageId, isToday } = extension.options;
+  const { pageId, isToday, parentTaskId } = extension.options;
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const creatingRef = useRef(false);
@@ -34,6 +34,7 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
         pageId,
         source: "daily",
         status: taskStatus,
+        ...(parentTaskId && { parentTaskId }),
       }),
     })
       .then((r) => {
@@ -126,9 +127,11 @@ const NODE_NAME = "butlerTask";
 export const ButlerTaskExtension = ({
   pageId,
   isToday,
+  parentTaskId,
 }: {
   pageId: string;
   isToday: boolean;
+  parentTaskId?: string;
 }) =>
   Node.create({
     name: NODE_NAME,
@@ -138,7 +141,7 @@ export const ButlerTaskExtension = ({
     selectable: true,
 
     addOptions() {
-      return { pageId, isToday };
+      return { pageId, isToday, parentTaskId };
     },
 
     addAttributes() {
