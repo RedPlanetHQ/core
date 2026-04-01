@@ -82,11 +82,19 @@ export async function ensureDefaultProviders(): Promise<void> {
 
     if (!provider) {
       provider = await prisma.lLMProvider.create({
-        data: { name: providerData.name, type: providerType, isActive: true, config },
+        data: {
+          name: providerData.name,
+          type: providerType,
+          isActive: true,
+          config,
+        },
       });
       logger.info(`[LLM] Created provider: ${providerData.name}`);
     } else if (Object.keys(config).length > 0) {
-      await prisma.lLMProvider.update({ where: { id: provider.id }, data: { config } });
+      await prisma.lLMProvider.update({
+        where: { id: provider.id },
+        data: { config },
+      });
     }
 
     const existingModels = await prisma.lLMModel.findMany({
@@ -109,9 +117,13 @@ export async function ensureDefaultProviders(): Promise<void> {
             dimensions: seedModel.dimensions ?? null,
           },
         });
-        logger.info(`[LLM] Added model: ${seedModel.label} (${seedModel.modelId})`);
+        logger.info(
+          `[LLM] Added model: ${seedModel.label} (${seedModel.modelId})`,
+        );
       } else {
-        const existing = existingModels.find((m) => m.modelId === seedModel.modelId)!;
+        const existing = existingModels.find(
+          (m) => m.modelId === seedModel.modelId,
+        )!;
         await prisma.lLMModel.update({
           where: { id: existing.id },
           data: {
@@ -155,7 +167,9 @@ export async function ensureDefaultProviders(): Promise<void> {
             capabilities: ["chat"],
           },
         });
-        logger.info(`[LLM] Added custom chat model: ${env.MODEL} under ${env.CHAT_PROVIDER}`);
+        logger.info(
+          `[LLM] Added custom chat model: ${env.MODEL} under ${env.CHAT_PROVIDER}`,
+        );
       }
     }
   }
@@ -182,7 +196,9 @@ export async function ensureDefaultProviders(): Promise<void> {
           dimensions: dims,
         },
       });
-      logger.info(`[LLM] Added custom embedding model: ${embeddingModelId} under ${embeddingProvider}`);
+      logger.info(
+        `[LLM] Added custom embedding model: ${embeddingModelId} under ${embeddingProvider}`,
+      );
     }
   }
 }
@@ -204,7 +220,9 @@ export function getProviderConfig(providerType: string): ProviderConfig {
     return {
       baseUrl: env.OPENAI_BASE_URL,
       apiMode:
-        env.OPENAI_API_MODE === "chat" ? "chat_completions" : env.OPENAI_API_MODE,
+        env.OPENAI_API_MODE === "chat"
+          ? "chat_completions"
+          : env.OPENAI_API_MODE,
     };
   }
   if (providerType === "ollama") {
@@ -373,7 +391,11 @@ export async function getAvailableModels(workspaceId?: string) {
       .map((p) => p.id);
 
     const globalModels = await prisma.lLMModel.findMany({
-      where: { providerId: { in: filteredIds }, isEnabled: true, isDeprecated: false },
+      where: {
+        providerId: { in: filteredIds },
+        isEnabled: true,
+        isDeprecated: false,
+      },
       include: { provider: true },
     });
 
@@ -381,7 +403,11 @@ export async function getAvailableModels(workspaceId?: string) {
   }
 
   return prisma.lLMModel.findMany({
-    where: { providerId: { in: providerIds }, isEnabled: true, isDeprecated: false },
+    where: {
+      providerId: { in: providerIds },
+      isEnabled: true,
+      isDeprecated: false,
+    },
     include: { provider: true },
   });
 }
@@ -394,7 +420,10 @@ export function resolveApiKey(providerType: string): string | undefined {
   return ENV_KEY_MAP[providerType];
 }
 
-import { resolveWorkspaceApiKey, resolveWorkspaceProviderBaseUrl } from "~/services/byok.server";
+import {
+  resolveWorkspaceApiKey,
+  resolveWorkspaceProviderBaseUrl,
+} from "~/services/byok.server";
 
 export interface ResolvedKey {
   apiKey: string | undefined;
@@ -417,7 +446,11 @@ export async function resolveApiKeyForWorkspace(
  * Duplicated from model.server.ts to avoid circular imports.
  */
 function inferProviderFromModelId(modelId: string): string {
-  if (modelId.startsWith("gpt-") || modelId.startsWith("o3") || modelId.startsWith("o4"))
+  if (
+    modelId.startsWith("gpt-") ||
+    modelId.startsWith("o3") ||
+    modelId.startsWith("o4")
+  )
     return "openai";
   if (modelId.startsWith("claude-")) return "anthropic";
   if (modelId.startsWith("gemini-")) return "google";
@@ -425,7 +458,11 @@ function inferProviderFromModelId(modelId: string): string {
     return "bedrock";
   if (modelId.startsWith("openrouter/")) return "openrouter";
   if (modelId.startsWith("deepseek-")) return "deepseek";
-  if (modelId.startsWith("mistral-") || modelId.startsWith("open-mistral-") || modelId.startsWith("open-mixtral-"))
+  if (
+    modelId.startsWith("mistral-") ||
+    modelId.startsWith("open-mistral-") ||
+    modelId.startsWith("open-mixtral-")
+  )
     return "mistral";
   if (modelId.startsWith("grok-")) return "xai";
   if (modelId.startsWith("groq/")) return "groq";
@@ -443,10 +480,18 @@ export async function resolveModelForWorkspace(
   workspaceId: string | null | undefined,
   useCase: UseCase = "chat",
   complexity: ModelComplexity = "medium",
-): Promise<{ modelId: string; apiKey: string | undefined; isBYOK: boolean; baseUrl?: string }> {
+): Promise<{
+  modelId: string;
+  apiKey: string | undefined;
+  isBYOK: boolean;
+  baseUrl?: string;
+}> {
   const modelId = await getModelForUseCase(useCase, workspaceId, complexity);
   const providerType = inferProviderFromModelId(modelId);
-  const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(workspaceId, providerType);
+  const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
+    workspaceId,
+    providerType,
+  );
 
   // For Azure, also resolve the base URL (BYOK stores it in baseUrl; env fallback)
   if (providerType === "azure") {
@@ -481,7 +526,10 @@ export async function resolveModelConfig(
   const { toRouterString, getProvider } = await import("~/lib/model.server");
 
   const providerType = getProvider(modelString);
-  const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(workspaceId, providerType);
+  const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
+    workspaceId,
+    providerType,
+  );
   const routerString = toRouterString(modelString) as `${string}/${string}`;
 
   if (isBYOK && apiKey) {

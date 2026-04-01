@@ -1159,7 +1159,6 @@ model LLMModel {
   label         String // "GPT-5"
   complexity    String // "high", "medium", "low"
   supportsBatch Boolean     @default(true)
-  isDefault     Boolean     @default(false)
   isEnabled     Boolean     @default(true)
   isDeprecated  Boolean     @default(false)
   capabilities  String[] // ["chat", "structured", "reasoning"] or ["embedding"]
