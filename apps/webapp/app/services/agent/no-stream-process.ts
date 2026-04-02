@@ -50,6 +50,8 @@ interface NoStreamProcessBody {
   skipUserMessage?: boolean;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
+  /** When set, adds add_comment tool for daily scratchpad responses */
+  scratchpadPageId?: string;
 }
 
 export async function noStreamProcess(
@@ -137,6 +139,7 @@ export async function noStreamProcess(
       executorTools: body.executorTools,
       interactive: false,
       modelConfig,
+      scratchpadPageId: body.scratchpadPageId,
     });
 
   // Create core agent with subagents — think only present for triggered flows

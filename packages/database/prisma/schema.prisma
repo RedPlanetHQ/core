@@ -1042,6 +1042,7 @@ model Workspace {
   channels                Channel[]
   tasks                   Task[]
   pages                   Page[]
+  butlerComments          ButlerComment[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
   llmProviders            LLMProvider[]
@@ -1139,6 +1140,27 @@ model Page {
 
   @@unique([workspaceId, userId, date])
   @@index([workspaceId, userId])
+  butlerComments ButlerComment[]
+}
+
+model ButlerComment {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  resolved  Boolean   @default(false)
+  resolvedAt DateTime?
+
+  selectedText   String
+  content        String
+
+  pageId         String
+  conversationId String?
+  workspaceId    String
+
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, resolved])
 }
 
 enum PlanType {

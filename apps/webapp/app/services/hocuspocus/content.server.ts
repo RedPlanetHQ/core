@@ -13,6 +13,7 @@ import {
   ButlerTaskExtensionServer,
   CustomTaskItemServer,
 } from "~/services/hocuspocus/extensions.server";
+import { handleScratchpadChange, cleanupPage, setHocuspocusRef } from "~/services/collab-scanner.server";
 
 // Singleton pattern to avoid re-creating across HMR reloads
 const globalForHocuspocus = globalThis as unknown as {
@@ -28,6 +29,16 @@ export const hocuspocus: Hocuspocus =
       const auth = verifyCollabToken(token);
       if (!auth) throw new Error("Unauthorized");
       return auth;
+    },
+    async onChange({ documentName, document, context }) {
+      handleScratchpadChange(documentName, document, context).catch((err) =>
+        console.error("[collab-onChange]", err),
+      );
+    },
+    async onDisconnect({ documentName, document }) {
+      if (document.getConnectionsCount() === 0) {
+        cleanupPage(documentName);
+      }
     },
     extensions: [
       new Database({
@@ -50,6 +61,9 @@ export const hocuspocus: Hocuspocus =
       }),
     ],
   }));
+
+// Share the Hocuspocus instance so collab-scanner can access live Y.Docs
+setHocuspocusRef(hocuspocus);
 
 /**
  * Returns server-safe TipTap extensions (no React renderers).

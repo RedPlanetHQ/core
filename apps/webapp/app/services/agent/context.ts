@@ -86,6 +86,7 @@ export async function buildAgentContext({
   executorTools,
   interactive = true,
   modelConfig,
+  scratchpadPageId,
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [
@@ -358,6 +359,16 @@ A trigger has fired: "${triggerContext.reminderText}"
 4. Do NOT use create_task as a way to "deliver" or "send" a message. Use send_message for that.
 5. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
 </trigger_context>`;
+  }
+
+  // Scratchpad context — when user @mentioned butler in the daily scratchpad
+  if (scratchpadPageId) {
+    systemPrompt += `\n\n<scratchpad_context>
+This request comes from the user's daily scratchpad — an unstructured page where they jot down thoughts, tasks, and notes.
+The system detected something actionable in what they wrote and extracted an intent for you.
+Do the work (gather info, take actions, etc.) and respond concisely. Your text response will be shown directly on the paragraph they wrote.
+Keep it short — this is a scratchpad, not a conversation.
+</scratchpad_context>`;
   }
 
   // Convert UI messages to Mastra-compatible ModelMessage format

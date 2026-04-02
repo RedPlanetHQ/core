@@ -21,6 +21,8 @@ import { ButlerTaskExtension } from "~/components/editor/extensions/butler-task-
 import { TaskPickerExtension } from "~/components/editor/extensions/task-picker-extension";
 import { ChecklistInputRule } from "~/components/editor/extensions/checklist-input-rule";
 import { SelectionBubble } from "~/components/editor/selection-bubble";
+import { ConversationParagraph } from "~/components/editor/extensions/conversation-paragraph-extension";
+import { ConversationPopover } from "~/components/editor/conversation-popover";
 
 const lowlight = createLowlight(all);
 
@@ -72,11 +74,7 @@ function buildExtensions(
       blockquote: {
         HTMLAttributes: { class: cx("border-l-4 border-border pl-2") },
       },
-      paragraph: {
-        HTMLAttributes: {
-          class: cx("leading-[24px] mt-[0.25rem] paragraph-node"),
-        },
-      },
+      paragraph: false, // Replaced by ConversationParagraph extension
       codeBlock: false,
       code: {
         HTMLAttributes: {
@@ -108,6 +106,7 @@ function buildExtensions(
       },
       includeChildren: true,
     }),
+    ConversationParagraph,
     ChecklistInputRule,
     ButlerTaskExtension({ pageId, isToday, parentTaskId }),
     buildMentionExtension(butlerName),
@@ -133,6 +132,11 @@ function EditorInner({
   parentTaskId?: string;
   ydoc: Y.Doc;
 }) {
+  const [activeConversation, setActiveConversation] = useState<{
+    conversationId: string;
+    rect: DOMRect;
+  } | null>(null);
+
   const editor = useEditor({
     extensions: buildExtensions(
       pageId,
@@ -146,6 +150,25 @@ function EditorInner({
         class: "prose prose-sm focus:outline-none max-w-full py-1",
         style: `min-height: ${minHeight}`,
       },
+      handleClick(view, pos) {
+        // Check for conversation paragraph click
+        const $pos = view.state.doc.resolve(pos);
+        for (let depth = $pos.depth; depth > 0; depth--) {
+          const node = $pos.node(depth);
+          if (node.type.name === "paragraph" && node.attrs.conversationId) {
+            const startPos = $pos.start(depth);
+            const coords = view.coordsAtPos(startPos);
+            const rect = new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
+            setActiveConversation({
+              conversationId: node.attrs.conversationId,
+              rect,
+            });
+            return true;
+          }
+        }
+        setActiveConversation(null);
+        return false;
+      },
     },
   });
 
@@ -153,6 +176,13 @@ function EditorInner({
     <>
       <SelectionBubble editor={editor} isToday={isToday} />
       <EditorContent editor={editor} className="w-full" />
+      <ConversationPopover
+        conversationId={activeConversation?.conversationId ?? null}
+        anchorRect={activeConversation?.rect ?? null}
+        butlerName={butlerName}
+        pageId={pageId}
+        onClose={() => setActiveConversation(null)}
+      />
     </>
   );
 }
