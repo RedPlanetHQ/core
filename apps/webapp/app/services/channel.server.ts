@@ -5,8 +5,15 @@ import {
   setTelegramWebhook,
   deleteTelegramWebhook,
 } from "~/services/channels/telegram/client";
+import { env } from "~/env.server";
+import { deriveEmailDomain } from "~/utils/onboarding-email";
 
+/** @deprecated use getEmailDomain() for dynamic resolution from LOGIN_ORIGIN */
 export const DEFAULT_EMAIL_DOMAIN = "getcore.me";
+
+export function getEmailDomain(): string {
+  return deriveEmailDomain(env.LOGIN_ORIGIN);
+}
 
 export interface ChannelCreateData {
   name: string;
@@ -73,9 +80,10 @@ export async function ensureWhatsAppChannel(
 
 /**
  * Returns the canonical email address for a workspace's default email channel.
+ * Domain is derived from the LOGIN_ORIGIN environment variable.
  */
 export function workspaceEmailAddress(workspaceSlug: string): string {
-  return `${workspaceSlug}@${DEFAULT_EMAIL_DOMAIN}`;
+  return `${workspaceSlug}@${getEmailDomain()}`;
 }
 
 /**

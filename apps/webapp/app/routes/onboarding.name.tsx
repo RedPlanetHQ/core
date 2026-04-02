@@ -1,10 +1,21 @@
-import { json, redirect, type ActionFunctionArgs, type LoaderFunctionArgs } from "@remix-run/node";
+import {
+  json,
+  redirect,
+  type ActionFunctionArgs,
+  type LoaderFunctionArgs,
+} from "@remix-run/node";
 import { useFetcher } from "@remix-run/react";
 import { useTypedLoaderData } from "remix-typedjson";
 import { requireUser } from "~/services/session.server";
 import { prisma } from "~/db.server";
-import { OnboardingAgentName } from "~/components/onboarding/onboarding-agent-name";
+import {
+  OnboardingAgentName,
+  type CustomPersonalityData,
+} from "~/components/onboarding/onboarding-agent-name";
 import { ensureDefaultEmailChannel } from "~/services/channel.server";
+import { saveCustomPersonality } from "~/models/personality.server";
+import { env } from "~/env.server";
+import { deriveEmailDomain } from "~/utils/onboarding-email";
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -25,14 +36,22 @@ export async function loader({ request }: LoaderFunctionArgs) {
     workspaceId: workspace!.id,
     defaultName: workspace!.name,
     defaultSlug: workspace!.slug,
+    emailDomain: deriveEmailDomain(env.LOGIN_ORIGIN),
+    userName: user.displayName ?? user.name ?? user.email ?? "",
   });
 }
 
 export async function action({ request }: ActionFunctionArgs) {
-  const { workspaceId } = await requireUser(request);
+  const user = await requireUser(request);
+  const { workspaceId } = user;
   const formData = await request.formData();
+
   const agentName = formData.get("agentName") as string;
   const agentSlug = formData.get("agentSlug") as string;
+  const personalityId = formData.get("personalityId") as string;
+  const customPersonalityRaw = formData.get("customPersonality") as
+    | string
+    | null;
 
   if (workspaceId) {
     const existing = await prisma.workspace.findFirst({
@@ -50,6 +69,28 @@ export async function action({ request }: ActionFunctionArgs) {
       },
     });
 
+    // Save personality selection to user metadata
+    if (personalityId) {
+      const currentUserMeta = (user.metadata as Record<string, unknown>) ?? {};
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          metadata: { ...currentUserMeta, personality: personalityId },
+        },
+      });
+
+      // If custom personality data is provided, persist it to workspace
+      if (customPersonalityRaw) {
+        const customData: CustomPersonalityData = JSON.parse(customPersonalityRaw);
+        await saveCustomPersonality(workspaceId as string, {
+          id: personalityId,
+          name: customData.name,
+          text: customData.text,
+          useHonorifics: customData.useHonorifics,
+        });
+      }
+    }
+
     await ensureDefaultEmailChannel(workspaceId as string, agentSlug);
   }
 
@@ -57,11 +98,27 @@ export async function action({ request }: ActionFunctionArgs) {
 }
 
 export default function OnboardingName() {
-  const { workspaceId, defaultName, defaultSlug } = useTypedLoaderData<typeof loader>();
+  const { workspaceId, defaultName, defaultSlug, emailDomain, userName } =
+    useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher();
 
-  const handleComplete = (name: string, slug: string) => {
-    fetcher.submit({ agentName: name, agentSlug: slug }, { method: "POST" });
+  const handleComplete = (
+    name: string,
+    slug: string,
+    personalityId: string,
+    customPersonality?: CustomPersonalityData,
+  ) => {
+    fetcher.submit(
+      {
+        agentName: name,
+        agentSlug: slug,
+        personalityId,
+        ...(customPersonality
+          ? { customPersonality: JSON.stringify(customPersonality) }
+          : {}),
+      },
+      { method: "POST" },
+    );
   };
 
   return (
@@ -70,6 +127,8 @@ export default function OnboardingName() {
         defaultName={defaultName}
         defaultSlug={defaultSlug}
         workspaceId={workspaceId}
+        emailDomain={emailDomain}
+        userName={userName}
         onComplete={handleComplete}
         isSubmitting={fetcher.state !== "idle"}
       />
