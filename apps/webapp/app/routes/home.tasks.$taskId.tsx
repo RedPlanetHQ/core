@@ -97,6 +97,7 @@ const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("create-subtask"),
     title: z.string().min(1),
+    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]).optional(),
   }),
   z.object({
     intent: z.literal("update-subtask-status"),
@@ -159,11 +160,8 @@ export async function action({ request, params }: ActionFunctionArgs) {
 
   if (parsed.data.intent === "create-subtask") {
     const subtask = await createTask(workspaceId, user.id, parsed.data.title, undefined, {
-      status: "Todo",
-    });
-    await prisma.task.update({
-      where: { id: subtask.id },
-      data: { parentTaskId: taskId },
+      status: (parsed.data.status as TaskStatus) ?? "Todo",
+      parentTaskId: taskId,
     });
     return json({ subtask });
   }
@@ -212,9 +210,9 @@ export default function TaskDetailPage() {
     fetcher.submit({ intent: "delete" }, { method: "POST" });
   };
 
-  const handleCreateSubtask = (title: string) => {
+  const handleCreateSubtask = (title: string, status: string) => {
     fetcher.submit(
-      { intent: "create-subtask", title },
+      { intent: "create-subtask", title, status },
       { method: "POST" },
     );
   };

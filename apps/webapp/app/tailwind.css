@@ -6,8 +6,8 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: oklch(91.28% 0 0);
-  --background-2: oklch(95.21% 0 0);
+  --background: oklch(93.28% 0 282);
+  --background-2: oklch(96.21% 0 0);
   --background-3: oklch(100% 0 0);
   --foreground: oklch(0% 0 0);
   --popover: oklch(95.21% 0 0);

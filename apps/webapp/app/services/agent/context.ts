@@ -33,6 +33,7 @@ import { prisma } from "~/db.server";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -118,11 +119,19 @@ export async function buildAgentContext({
   ]);
 
   // Look up linked task context
-  const linkedTask = conversationRecord?.asyncJobId
+  const linkedTaskRecord = conversationRecord?.asyncJobId
     ? await prisma.task.findUnique({
         where: { id: conversationRecord.asyncJobId },
-        select: { id: true, title: true, description: true, status: true },
+        select: { id: true, title: true, pageId: true, status: true },
       })
+    : null;
+
+  const linkedTaskDescription = linkedTaskRecord?.pageId
+    ? await getPageContentAsHtml(linkedTaskRecord.pageId)
+    : null;
+
+  const linkedTask = linkedTaskRecord
+    ? { ...linkedTaskRecord, description: linkedTaskDescription }
     : null;
 
   const metadata = user?.metadata as Record<string, unknown> | null;

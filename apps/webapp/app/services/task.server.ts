@@ -11,6 +11,7 @@ import { DateTime } from "luxon";
 import { logger } from "./logger.service";
 import {
   setPageContentFromHtml,
+  getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
 
 // ============================================================================
@@ -80,7 +81,7 @@ export type TaskWithRelations = Task & {
 
 export type TaskFull = Task & {
   subtasks: Task[];
-  parentTask: Pick<Task, "id" | "title"> | null;
+  parentTask: Pick<Task, "id" | "title" | "displayId"> | null;
 };
 
 export async function getTaskFull(
@@ -91,7 +92,7 @@ export async function getTaskFull(
     where: { id, workspaceId },
     include: {
       subtasks: { orderBy: { createdAt: "asc" } },
-      parentTask: { select: { id: true, title: true } },
+      parentTask: { select: { id: true, title: true, displayId: true } },
     },
   }) as Promise<TaskFull | null>;
 }
@@ -118,10 +119,7 @@ export async function searchTasks(
   return prisma.task.findMany({
     where: {
       workspaceId,
-      OR: [
-        { title: { contains: search, mode: "insensitive" } },
-        { description: { contains: search, mode: "insensitive" } },
-      ],
+      title: { contains: search, mode: "insensitive" },
     },
     orderBy: { createdAt: "desc" },
     take: limit,
@@ -210,16 +208,91 @@ export async function markTaskCompleted(
 
 export async function markTaskFailed(id: string, error: string): Promise<Task> {
   const task = await prisma.task.findUnique({ where: { id } });
-  const existingDescription = task?.description ?? "";
-  const errorEntry = `\n\n[Error] ${new Date().toISOString()}: ${error}`;
+
+  if (task?.pageId) {
+    const existingHtml = (await getPageContentAsHtml(task.pageId)) ?? "";
+    const errorEntry = `<p>[Error] ${new Date().toISOString()}: ${error}</p>`;
+    await setPageContentFromHtml(task.pageId, existingHtml + errorEntry);
+  }
+
   return prisma.task.update({
     where: { id },
-    data: {
-      status: "Blocked",
-      error,
-      description: existingDescription + errorEntry,
-    },
+    data: { status: "Blocked", error },
   });
+}
+
+export type TaskAncestor = {
+  id: string;
+  displayId: string | null;
+  title: string;
+};
+
+/**
+ * Walk up the parent chain from a task to the root.
+ * Returns ancestors ordered root → ... → immediate parent → task itself.
+ */
+export async function getTaskTree(taskId: string): Promise<TaskAncestor[]> {
+  const ancestors: TaskAncestor[] = [];
+  let currentId: string | null = taskId;
+
+  while (currentId) {
+    const task = await prisma.task.findUnique({
+      where: { id: currentId },
+      select: { id: true, displayId: true, title: true, parentTaskId: true },
+    });
+    if (!task) break;
+    ancestors.unshift({
+      id: task.id,
+      displayId: (task as { displayId?: string | null }).displayId ?? null,
+      title: task.title,
+    });
+    currentId = task.parentTaskId ?? null;
+  }
+
+  return ancestors;
+}
+
+/**
+ * Reparent a task: delete it (cascades subtasks) and recreate under newParentId.
+ * Copies title, status, source, and description to the new task.
+ */
+export async function reparentTask(
+  taskId: string,
+  newParentId: string | null,
+  workspaceId: string,
+  userId: string,
+): Promise<Task> {
+  const original = await prisma.task.findFirst({
+    where: { id: taskId, workspaceId },
+  });
+  if (!original) throw new Error(`Task ${taskId} not found`);
+
+  // Capture page content before deletion
+  let pageContent: string | undefined;
+  if (original.pageId) {
+    const page = await prisma.page.findUnique({
+      where: { id: original.pageId },
+      select: { content: true },
+    });
+    pageContent = (page?.content as string) ?? undefined;
+  }
+
+  // Delete original — cascades to subtasks
+  await deleteTask(taskId, workspaceId);
+
+  // Recreate under new parent (trigger assigns fresh displayId)
+  const newTask = await createTask(workspaceId, userId, original.title, undefined, {
+    source: original.source,
+    status: original.status,
+    parentTaskId: newParentId ?? undefined,
+  });
+
+  // Restore description if any
+  if (pageContent && newTask.pageId) {
+    await setPageContentFromHtml(newTask.pageId, pageContent);
+  }
+
+  return newTask;
 }
 
 export async function deleteTask(
@@ -281,7 +354,6 @@ export async function createScheduledTask(
   const task = await prisma.task.create({
     data: {
       title: data.title,
-      description: data.description,
       status,
       workspaceId,
       userId,
@@ -298,6 +370,12 @@ export async function createScheduledTask(
       metadata: data.metadata ?? undefined,
     },
   });
+
+  // Create page and set description content if provided
+  const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
+  if (data.description) {
+    await setPageContentFromHtml(page.id, data.description);
+  }
 
   // Enqueue the scheduled job
   if (task.isActive && nextRunAt) {
@@ -355,7 +433,6 @@ export async function updateScheduledTask(
     where: { id: taskId },
     data: {
       ...(data.title !== undefined && { title: data.title }),
-      ...(data.description !== undefined && { description: data.description }),
       ...(data.schedule !== undefined && { schedule, nextRunAt }),
       ...(data.channel !== undefined && { channel: data.channel }),
       ...(data.channelId !== undefined && { channelId: data.channelId }),
@@ -366,6 +443,11 @@ export async function updateScheduledTask(
       ...(data.endDate !== undefined && { endDate: data.endDate }),
     },
   });
+
+  if (data.description !== undefined) {
+    const page = await findOrCreateTaskPage(existing.workspaceId, existing.userId, taskId);
+    await setPageContentFromHtml(page.id, data.description);
+  }
 
   // Reschedule job
   await removeScheduledTask(taskId);

@@ -7,7 +7,7 @@ import {
   type Index,
   type ListRowProps,
 } from "react-virtualized";
-import { Plus, GitFork, ArrowUpRight } from "lucide-react";
+import { Plus, ArrowUpRight } from "lucide-react";
 import type { TaskStatus } from "@core/database";
 import { Button } from "~/components/ui";
 import { Badge } from "~/components/ui/badge";
@@ -20,6 +20,7 @@ import {
 } from "~/components/tasks/task-status-dropdown";
 import { Task as TaskIcon } from "~/components/icons/task";
 import type { TaskWithRelations } from "~/services/task.server";
+import { SubTask } from "../icons/sub-task";
 
 const STATUS_ORDER: TaskStatus[] = [
   "InProgress",
@@ -88,7 +89,9 @@ function TaskRowItem({
   onClick: () => void;
   onStatusChange: (status: string) => void;
 }) {
-  const doneSubtasks = task.subtasks.filter((s) => s.status === "Completed").length;
+  const doneSubtasks = task.subtasks.filter(
+    (s) => s.status === "Completed",
+  ).length;
   const totalSubtasks = task.subtasks.length;
 
   return (
@@ -137,14 +140,17 @@ function TaskRowItem({
                     variant="secondary"
                     className="max-w-[140px] gap-1 text-xs"
                   >
-                    <ArrowUpRight size={10} className="shrink-0 text-muted-foreground" />
+                    <ArrowUpRight
+                      size={14}
+                      className="text-muted-foreground shrink-0"
+                    />
                     <span className="text-muted-foreground">Parent</span>
                     <span className="truncate">{task.parentTask.title}</span>
                   </Badge>
                 )}
                 {totalSubtasks > 0 && (
                   <Badge variant="secondary" className="gap-1 text-xs">
-                    <GitFork size={10} className="text-muted-foreground" />
+                    <SubTask size={14} className="shrink-0" />
                     <span className="text-muted-foreground">
                       {doneSubtasks}/{totalSubtasks}
                     </span>

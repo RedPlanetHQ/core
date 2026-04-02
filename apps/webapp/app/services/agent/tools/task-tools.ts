@@ -14,9 +14,11 @@ import {
   rescheduleTaskAt,
   getScheduledTasksForWorkspace,
   recalculateTasksForTimezone,
+  getTaskTree,
+  reparentTask,
 } from "~/services/task.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
-import { setPageContentFromHtml } from "~/services/hocuspocus/content.server";
+import { setPageContentFromHtml, getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
@@ -264,10 +266,17 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           const task = await getTaskById(taskId);
           if (!task) return `Task ${taskId} not found.`;
 
+          // Read description from linked page (HTML)
+          let description = "(empty)";
+          if (task.pageId) {
+            const pageHtml = await getPageContentAsHtml(task.pageId);
+            if (pageHtml) description = pageHtml;
+          }
+
           const parts = [
             `Title: ${task.title}`,
             `Status: ${task.status}`,
-            `Description: ${task.description || "(empty)"}`,
+            `Description: ${description}`,
             `ID: ${task.id}`,
             `Created: ${task.createdAt}`,
           ];
@@ -355,10 +364,13 @@ When the user asks to work on something, search existing tasks first (search_tas
 
           if (tasks.length === 0) return "No tasks found.";
 
-          return tasks
-            .map((t, i) => {
+          const lines = await Promise.all(
+            tasks.map(async (t, i) => {
               let info = `${i + 1}. [${t.status}] ${t.title}`;
-              if (t.description) info += ` — ${t.description.substring(0, 60)}`;
+              if (t.pageId) {
+                const html = await getPageContentAsHtml(t.pageId);
+                if (html) info += ` — ${html.substring(0, 100)}`;
+              }
               if (t.schedule) info += ` (${formatScheduleForUser(t.schedule, timezone)})`;
               if (t.maxOccurrences) {
                 const remaining = t.maxOccurrences - t.occurrenceCount;
@@ -366,8 +378,9 @@ When the user asks to work on something, search existing tasks first (search_tas
               }
               info += ` (ID: ${t.id})`;
               return info;
-            })
-            .join("\n");
+            }),
+          );
+          return lines.join("\n");
         } catch (error) {
           return "Failed to list tasks.";
         }
@@ -387,12 +400,18 @@ When the user asks to work on something, search existing tasks first (search_tas
         try {
           const tasks = await searchTasks(workspaceId, query);
           if (tasks.length === 0) return "No matching tasks found.";
-          return tasks
-            .map(
-              (t, i) =>
-                `${i + 1}. [${t.status}] ${t.title}${t.description ? ` — ${t.description.substring(0, 100)}` : ""} (ID: ${t.id})`,
-            )
-            .join("\n");
+          const lines = await Promise.all(
+            tasks.map(async (t, i) => {
+              let info = `${i + 1}. [${t.status}] ${t.title}`;
+              if (t.pageId) {
+                const html = await getPageContentAsHtml(t.pageId);
+                if (html) info += ` — ${html.substring(0, 100)}`;
+              }
+              info += ` (ID: ${t.id})`;
+              return info;
+            }),
+          );
+          return lines.join("\n");
         } catch (error) {
           return "Failed to search tasks.";
         }
@@ -400,7 +419,9 @@ When the user asks to work on something, search existing tasks first (search_tas
     }),
 
     update_task: tool({
-      description: `Update an existing task — change its status, title, description, or scheduling. When updating the description, ALWAYS call get_task first to read the current description, then write a merged version that includes both old and new context. Never blindly replace — accumulate.`,
+      description: `Update an existing task — change its status, title, description, scheduling, or parent. When updating the description, ALWAYS call get_task first to read the current description, then write a merged version that includes both old and new context. Never blindly replace — accumulate.
+
+REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
@@ -417,6 +438,11 @@ When the user asks to work on something, search existing tasks first (search_tas
         maxOccurrences: z.number().optional().describe("Update max occurrences limit"),
         endDate: z.string().optional().describe("Update end date (ISO 8601)"),
         channel: channelSchema,
+        newParentId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe("Move task under a new parent (UUID). Pass null to make it a root task. Deletes and recreates the task with a new displayId."),
       }),
       execute: async ({
         taskId,
@@ -428,8 +454,15 @@ When the user asks to work on something, search existing tasks first (search_tas
         maxOccurrences,
         endDate,
         channel: updateChannel,
+        newParentId,
       }) => {
         try {
+          // Reparent: delete + recreate under new parent
+          if (newParentId !== undefined) {
+            const newTask = await reparentTask(taskId, newParentId, workspaceId, userId);
+            return `Task reparented. New ID: ${newTask.id}, displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
+          }
+
           // Handle scheduling updates
           if (schedule !== undefined || isActive !== undefined || maxOccurrences !== undefined || endDate !== undefined || updateChannel !== undefined) {
             await updateScheduledTask(taskId, workspaceId, {
@@ -493,6 +526,28 @@ When the user asks to work on something, search existing tasks first (search_tas
           return "Task confirmed active.";
         } catch (error) {
           return "Failed to confirm task.";
+        }
+      },
+    }),
+
+    get_task_tree: tool({
+      description: `Get the full ancestor chain for a task, from root down to the task itself. Use this to understand the hierarchy context — e.g. which epic/parent a task belongs to. Returns each ancestor's displayId and title in order.`,
+      inputSchema: z.object({
+        taskId: z.string().describe("The task ID to get the tree for"),
+      }),
+      execute: async ({ taskId }) => {
+        try {
+          const tree = await getTaskTree(taskId);
+          if (tree.length === 0) return `Task ${taskId} not found.`;
+          return tree
+            .map((t, i) => {
+              const indent = "  ".repeat(i);
+              const label = i === tree.length - 1 ? "(current)" : i === 0 ? "(root)" : "(parent)";
+              return `${indent}${t.displayId ?? t.id} — ${t.title} ${label}`;
+            })
+            .join("\n");
+        } catch (error) {
+          return `Failed to get task tree: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),

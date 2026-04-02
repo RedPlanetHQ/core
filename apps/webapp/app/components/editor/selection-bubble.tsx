@@ -61,9 +61,7 @@ function BubbleButton({
       onMouseDown={onMouseDown}
       className={cn(
         "flex items-center gap-1 rounded px-1.5 py-1 transition-colors",
-        active
-          ? "bg-accent text-foreground"
-          : "text-muted-foreground hover:bg-accent hover:text-foreground",
+        active ? "bg-accent" : "hover:bg-accent",
       )}
     >
       {children}

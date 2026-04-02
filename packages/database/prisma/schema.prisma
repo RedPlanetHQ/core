@@ -1077,9 +1077,6 @@ model Task {
   jobId    String?
   metadata Json?   @default("{}")
 
-  pageId String?
-  source String  @default("manual")
-
   // Scheduling fields (unified with reminders)
   schedule         String? // RRule string for recurring (null = one-time or immediate)
   nextRunAt        DateTime? // When to fire next (one-time scheduled or recurring)
@@ -1099,8 +1096,14 @@ model Task {
   parentTaskId String? // FK to self (subtasks/follow-ups)
   parentTask   Task?   @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
   subtasks     Task[]  @relation("TaskSubtasks")
-  pages        Page[]
 
+  displayId String? // Hierarchical human-readable ID e.g. tk-abcde, tk-abcde.1.2
+
+  pageId String? @unique
+  page   Page?   @relation("TaskPage", fields: [pageId], references: [id], onDelete: SetNull)
+  source String  @default("manual")
+
+  @@unique([workspaceId, displayId])
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([userId, status])

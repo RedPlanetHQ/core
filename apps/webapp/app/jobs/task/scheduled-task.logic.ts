@@ -27,6 +27,7 @@ import {
 import { prisma } from "~/db.server";
 import { CoreClient } from "@redplanethq/sdk";
 import { HttpOrchestratorTools } from "~/services/agent/orchestrator-tools.http";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 
 // ============================================================================
 // Types
@@ -96,12 +97,14 @@ export async function processScheduledTask(
     // =========================================================================
     // Build trigger + context + persona (parallel)
     // =========================================================================
+    const taskText = (task.pageId ? await getPageContentAsHtml(task.pageId) : null) || task.title;
+
     const trigger = createTaskTriggerFromDb({
       id: task.id,
       userId: user?.id as string,
       workspaceId,
       title: task.title,
-      description: task.description,
+      description: taskText,
       channel: task.channel ?? "email",
       channelId: task.channelId,
       unrespondedCount: task.unrespondedCount,
@@ -127,8 +130,6 @@ export async function processScheduledTask(
 
     const client = new CoreClient({ baseUrl: env.APP_ORIGIN, token: token! });
     const executorTools = new HttpOrchestratorTools(client);
-
-    const taskText = task.description || task.title;
 
     const result: CASEPipelineResult = await runCASEPipeline({
       trigger,

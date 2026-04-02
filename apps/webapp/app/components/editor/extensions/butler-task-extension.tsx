@@ -108,7 +108,7 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
       <NodeViewWrapper as="span" className="butler-task-inline">
         <span
           contentEditable={false}
-          className="inline-flex items-center gap-1.5 rounded px-1.5 bg-grayAlpha-100 text-sm leading-tight text-muted-foreground"
+          className="bg-grayAlpha-100 text-muted-foreground inline-flex items-center gap-1.5 rounded px-1.5 text-sm leading-tight"
         >
           ...
         </span>
@@ -133,7 +133,7 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
         />
         <span
           className={cn(
-            "max-w-[240px] truncate cursor-pointer hover:underline",
+            "max-w-[240px] cursor-pointer truncate",
             task.status === "Completed" &&
               "text-muted-foreground line-through decoration-[1px]",
           )}
