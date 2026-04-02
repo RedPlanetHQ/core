@@ -3,7 +3,7 @@ import { syncEnvVars } from "@trigger.dev/build/extensions/core";
 import { prismaExtension } from "@trigger.dev/build/extensions/prisma";
 
 export default defineConfig({
-  project: process.env.TRIGGER_PROJECT_ID as string,
+  project: "proj_uziccliykvdenjtqvbyr",
   runtime: "node-22",
   logLevel: "log",
   // The max compute seconds a task is allowed to run. If the task run exceeds this duration, it will be stopped.

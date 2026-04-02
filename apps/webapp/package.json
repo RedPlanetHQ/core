@@ -17,11 +17,11 @@
   "dependencies": {
     "@ai-sdk/amazon-bedrock": "3.0.47",
     "@ai-sdk/anthropic": "^3.0.9",
-    "@ai-sdk/azure": "^3.0.50",
     "@ai-sdk/google": "^3.0.6",
     "@ai-sdk/openai": "^3.0.27",
     "@ai-sdk/openai-compatible": "2.0.29",
     "@ai-sdk/react": "3.0.83",
+    "@ai-sdk/azure": "3.0.50",
     "@anthropic-ai/sdk": "^0.74.0",
     "@aws-sdk/client-s3": "3.879.0",
     "@aws-sdk/credential-providers": "^3.894.0",
@@ -191,7 +191,7 @@
     "ws": "8.19.0",
     "y-indexeddb": "^9.0.12",
     "yjs": "^13.6.30",
-    "zod": "3.25.76",
+    "zod": "4.3.6",
     "zod-error": "2.0.0",
     "zod-validation-error": "^5.0.0"
   },

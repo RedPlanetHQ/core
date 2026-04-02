@@ -14,7 +14,7 @@ import {
 import { useFetcher } from "@remix-run/react";
 import { Input } from "~/components/ui/input";
 import { useState } from "react";
-import { parseWithZod } from "@conform-to/zod";
+import { parseWithZod } from "@conform-to/zod/v4";
 import { json } from "@remix-run/node";
 import { z } from "zod";
 import {
@@ -38,23 +38,19 @@ export const APIKeyDeleteBodyRequest = z.object({
 export async function action({ request }: ActionFunctionArgs) {
   const { id: userId, workspaceId } = await requireUser(request);
 
-
-
   if (request.method === "DELETE") {
     const formData = await request.formData();
     const submission = parseWithZod(formData, {
       schema: APIKeyDeleteBodyRequest,
     });
 
-
-    if (submission.status !== 'success') {
+    if (submission.status !== "success") {
       return json(submission.reply());
     }
 
     if (!workspaceId) {
       return json(submission.reply());
     }
-
 
     const results = await revokePersonalAccessToken(submission.value.id);
 
@@ -67,11 +63,9 @@ export async function action({ request }: ActionFunctionArgs) {
     schema: APIKeyBodyRequest,
   });
 
-
-  if (submission.status !== 'success') {
+  if (submission.status !== "success") {
     return json(submission.reply());
   }
-
 
   if (submission.value.name === "cli" || submission.value.name === "whatsapp") {
     return json(submission);
@@ -80,7 +74,7 @@ export async function action({ request }: ActionFunctionArgs) {
   const results = await createPersonalAccessToken({
     name: submission.value.name,
     userId,
-    workspaceId: workspaceId as string
+    workspaceId: workspaceId as string,
   });
   return json(results);
 }
@@ -112,7 +106,7 @@ export default function API() {
   };
 
   return (
-    <div className="mx-auto flex w-auto flex-col gap-4 px-4 py-6 md:w-3xl">
+    <div className="md:w-3xl mx-auto flex w-auto flex-col gap-4 px-4 py-6">
       <Dialog open={open} onOpenChange={setOpen}>
         <SettingSection
           title="API Keys"
@@ -179,7 +173,7 @@ export default function API() {
               again!
             </p>
             <div className="flex items-center gap-2 rounded-md border p-3">
-              <code className="flex-1 text-sm break-all">
+              <code className="flex-1 break-all text-sm">
                 {fetcher.data?.token}
               </code>
               <Button

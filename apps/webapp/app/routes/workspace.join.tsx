@@ -6,7 +6,7 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useForm } from "@conform-to/react";
-import { getZodConstraint, parseWithZod } from "@conform-to/zod";
+import { getZodConstraint, parseWithZod } from "@conform-to/zod/v4";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
 import {
   Card,
