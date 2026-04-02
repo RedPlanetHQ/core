@@ -481,6 +481,19 @@
   margin-top: 0 !important;
 }
 
+.paragraph-node {
+  text-wrap-mode: wrap;
+
+  unicode-bidi: isolate;
+  user-select: text;
+  vertical-align: baseline;
+  white-space-collapse: preserve;
+}
+
+.node-butlerTask {
+  display: inline;
+}
+
 .list-item--task {
   list-style-type: none;
 }

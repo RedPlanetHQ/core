@@ -1,29 +1,32 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { ReactNodeViewRenderer, NodeViewWrapper } from "@tiptap/react";
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   TaskStatusDropdown,
   TaskStatusDropdownVariant,
 } from "~/components/tasks/task-status-dropdown";
 import type { TaskStatus } from "@core/database";
-import { ExternalLink } from "lucide-react";
 import { cn } from "~/lib/utils";
-
-const TERMINAL = new Set(["Completed", "Blocked"]);
+import { useNavigate } from "@remix-run/react";
 
 const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
-  const { id, status, title } = node.attrs;
-  const { pageId, isToday, parentTaskId } = extension.options;
+  const { id } = node.attrs;
+  const { isToday, parentTaskId } = extension.options;
 
+  const [task, setTask] = useState<{
+    title: string;
+    status: string;
+  } | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const creatingRef = useRef(false);
+  const navigate = useNavigate();
 
   // On mount with no id → create task in DB
   useEffect(() => {
     if (id || creatingRef.current) return;
     creatingRef.current = true;
 
-    const taskTitle = title || "Untitled task";
+    const taskTitle = "Untitled task";
     const taskStatus = isToday ? "Todo" : "Backlog";
 
     fetch("/api/v1/tasks", {
@@ -40,18 +43,36 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
         if (!r.ok) throw new Error(`Task creation failed: ${r.status}`);
         return r.json();
       })
-      .then((task) => {
-        updateAttributes({ id: task.id, status: task.status });
+      .then((data) => {
+        updateAttributes({ id: data.id });
+        setTask({
+          title: data.title ?? taskTitle,
+          status: data.status ?? taskStatus,
+        });
       })
       .catch((err) => {
         console.error("[butlerTask] create failed:", err);
-        creatingRef.current = false; // allow retry on next mount
+        creatingRef.current = false;
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll status when non-terminal
+  // On mount with id → fetch to hydrate state
   useEffect(() => {
-    if (!id || TERMINAL.has(status)) {
+    if (!id) return;
+    fetch(`/api/v1/tasks/${id}`)
+      .then((r) => r.json())
+      .then((data) => {
+        setTask({
+          title: data.title ?? "Untitled task",
+          status: data.status ?? "Backlog",
+        });
+      })
+      .catch(console.error);
+  }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Poll only when status is "Todo"
+  useEffect(() => {
+    if (!id || task?.status !== "Todo") {
       if (pollRef.current) clearInterval(pollRef.current);
       return;
     }
@@ -59,9 +80,9 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
     pollRef.current = setInterval(() => {
       fetch(`/api/v1/tasks/${id}`)
         .then((r) => r.json())
-        .then((task) => {
-          if (task.status !== status) {
-            updateAttributes({ status: task.status });
+        .then((data) => {
+          if (data.status !== task?.status) {
+            setTask((prev) => (prev ? { ...prev, status: data.status } : null));
           }
         })
         .catch(console.error);
@@ -70,16 +91,29 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [id, status]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [id, task?.status]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleStatusChange(next: string) {
     if (!id) return;
-    updateAttributes({ status: next });
+    setTask((prev) => (prev ? { ...prev, status: next } : null));
     fetch(`/api/v1/tasks/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: next }),
     }).catch(console.error);
+  }
+
+  if (!task) {
+    return (
+      <NodeViewWrapper as="span" className="butler-task-inline">
+        <span
+          contentEditable={false}
+          className="inline-flex items-center gap-1.5 rounded px-1.5 bg-grayAlpha-100 text-sm leading-tight text-muted-foreground"
+        >
+          ...
+        </span>
+      </NodeViewWrapper>
+    );
   }
 
   return (
@@ -93,29 +127,24 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
         )}
       >
         <TaskStatusDropdown
-          value={(status || "Backlog") as TaskStatus}
+          value={(task.status || "Backlog") as TaskStatus}
           onChange={handleStatusChange}
           variant={TaskStatusDropdownVariant.NO_BACKGROUND}
         />
         <span
           className={cn(
-            "max-w-[240px] truncate",
-            status === "Completed" &&
+            "max-w-[240px] truncate cursor-pointer hover:underline",
+            task.status === "Completed" &&
               "text-muted-foreground line-through decoration-[1px]",
           )}
+          onMouseDown={(e) => {
+            if (!id) return;
+            e.preventDefault();
+            navigate(`/home/tasks/${id}`);
+          }}
         >
-          {title || "Untitled task"}
+          {task.title || "Untitled task"}
         </span>
-        {id && (
-          <a
-            href={`/home/tasks/${id}`}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-            title="Open task"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <ExternalLink size={11} />
-          </a>
-        )}
       </span>
     </NodeViewWrapper>
   );
@@ -146,8 +175,6 @@ export const ButlerTaskExtension = ({
     addAttributes() {
       return {
         id: { default: null },
-        status: { default: "Backlog" },
-        title: { default: null },
       };
     },
 

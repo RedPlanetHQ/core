@@ -9,6 +9,9 @@ import {
 import { computeNextRun, checkShouldDeactivate } from "~/utils/schedule-utils";
 import { DateTime } from "luxon";
 import { logger } from "./logger.service";
+import {
+  setPageContentFromHtml,
+} from "~/services/hocuspocus/content.server";
 
 // ============================================================================
 // Interfaces
@@ -47,13 +50,12 @@ export async function createTask(
   workspaceId: string,
   userId: string,
   title: string,
-  description?: string,
+  _description?: string,
   options?: { source?: string; status?: TaskStatus; parentTaskId?: string },
 ): Promise<Task> {
   const task = await prisma.task.create({
     data: {
       title,
-      description,
       status: options?.status ?? "Backlog",
       workspaceId,
       userId,
@@ -130,7 +132,15 @@ export async function updateTask(
   id: string,
   data: { status?: TaskStatus; title?: string; description?: string },
 ): Promise<Task> {
-  return prisma.task.update({ where: { id }, data });
+  const { description, ...prismaData } = data;
+
+  const task = await prisma.task.update({ where: { id }, data: prismaData });
+
+  if (description && task.pageId) {
+    await setPageContentFromHtml(task.pageId, description);
+  }
+
+  return task;
 }
 
 export async function updateTaskStatus(

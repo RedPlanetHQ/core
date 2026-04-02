@@ -15,6 +15,8 @@ import {
   getScheduledTasksForWorkspace,
   recalculateTasksForTimezone,
 } from "~/services/task.server";
+import { findOrCreateTaskPage } from "~/services/page.server";
+import { setPageContentFromHtml } from "~/services/hocuspocus/content.server";
 import { enqueueTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
@@ -107,7 +109,7 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
         description: z
           .string()
           .optional()
-          .describe("Detailed description of what to do"),
+          .describe("Task description as HTML"),
         // Scheduling params (optional — omit for immediate tasks)
         schedule: z
           .string()
@@ -238,7 +240,11 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           }
 
           // Immediate task (no scheduling)
-          const task = await createTask(workspaceId, userId, title, description);
+          const task = await createTask(workspaceId, userId, title);
+          if (description) {
+            const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
+            await setPageContentFromHtml(page.id, description);
+          }
           logger.info(`Task ${task.id} created in Backlog`);
           return `Task created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
         } catch (error) {
@@ -405,7 +411,7 @@ When the user asks to work on something, search existing tasks first (search_tas
         description: z
           .string()
           .optional()
-          .describe("Updated description — this becomes context when the agent executes the task"),
+          .describe("Task description as HTML — stored as page content"),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z.boolean().optional().describe("Set to false to pause, true to resume"),
         maxOccurrences: z.number().optional().describe("Update max occurrences limit"),

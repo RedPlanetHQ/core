@@ -15,7 +15,6 @@ import { mergeAttributes } from "@tiptap/core";
 import { cx } from "class-variance-authority";
 
 import { CustomTaskItem } from "~/components/editor/extensions/custom-task-item";
-import { ButlerExtension } from "~/components/editor/extensions/butler-extension";
 import { buildMentionExtension } from "~/components/editor/extensions/mention-extension";
 import { SlashCommand } from "~/components/editor/extensions/slash-command";
 import { ButlerTaskExtension } from "~/components/editor/extensions/butler-task-extension";
@@ -40,7 +39,11 @@ function buildExtensions(
   const heading = Heading.extend({
     renderHTML({ node, HTMLAttributes }) {
       const level: 1 | 2 | 3 = node.attrs.level;
-      const levelMap: Record<number, string> = { 1: "text-2xl", 2: "text-xl", 3: "text-lg" };
+      const levelMap: Record<number, string> = {
+        1: "text-2xl",
+        2: "text-xl",
+        3: "text-lg",
+      };
       return [
         `h${level}`,
         mergeAttributes(HTMLAttributes, {
@@ -55,25 +58,46 @@ function buildExtensions(
     StarterKit.configure({
       heading: false,
       history: false,
-      bulletList: { HTMLAttributes: { class: cx("list-disc list-outside pl-4 leading-1 my-1") } },
-      orderedList: { HTMLAttributes: { class: cx("list-decimal list-outside pl-4 leading-1 my-1") } },
+      bulletList: {
+        HTMLAttributes: {
+          class: cx("list-disc list-outside pl-4 leading-1 my-1"),
+        },
+      },
+      orderedList: {
+        HTMLAttributes: {
+          class: cx("list-decimal list-outside pl-4 leading-1 my-1"),
+        },
+      },
       listItem: { HTMLAttributes: { class: cx("mt-1.5") } },
-      blockquote: { HTMLAttributes: { class: cx("border-l-4 border-border pl-2") } },
-      paragraph: { HTMLAttributes: { class: cx("leading-[24px] mt-4 paragraph-node") } },
+      blockquote: {
+        HTMLAttributes: { class: cx("border-l-4 border-border pl-2") },
+      },
+      paragraph: {
+        HTMLAttributes: {
+          class: cx("leading-[24px] mt-[0.25rem] paragraph-node"),
+        },
+      },
       codeBlock: false,
       code: {
         HTMLAttributes: {
-          class: cx("rounded bg-muted text-[#BF4594] px-1.5 py-1 font-mono font-medium"),
+          class: cx(
+            "rounded bg-muted text-[#BF4594] px-1.5 py-1 font-mono font-medium",
+          ),
           spellcheck: "false",
         },
       },
       horizontalRule: false,
       dropcursor: { color: "#DBEAFE", width: 4 },
       gapcursor: false,
-      link: { HTMLAttributes: { class: "text-primary cursor-pointer" }, openOnClick: false },
+      link: {
+        HTMLAttributes: { class: "text-primary cursor-pointer" },
+        openOnClick: false,
+      },
     }),
     heading,
-    TaskList.configure({ HTMLAttributes: { class: cx("list-none pl-0 my-1") } }),
+    TaskList.configure({
+      HTMLAttributes: { class: cx("list-none pl-0 my-1") },
+    }),
     CustomTaskItem,
     CodeBlockLowlight.configure({ lowlight }),
     Markdown,
@@ -86,7 +110,6 @@ function buildExtensions(
     }),
     ChecklistInputRule,
     ButlerTaskExtension({ pageId, isToday, parentTaskId }),
-    ButlerExtension,
     buildMentionExtension(butlerName),
     SlashCommand,
     TaskPickerExtension,
@@ -111,7 +134,13 @@ function EditorInner({
   ydoc: Y.Doc;
 }) {
   const editor = useEditor({
-    extensions: buildExtensions(pageId, isToday, butlerName, ydoc, parentTaskId),
+    extensions: buildExtensions(
+      pageId,
+      isToday,
+      butlerName,
+      ydoc,
+      parentTaskId,
+    ),
     editorProps: {
       attributes: {
         class: "prose prose-sm focus:outline-none max-w-full py-1",

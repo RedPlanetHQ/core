@@ -5,6 +5,8 @@ import {
   createHybridActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { searchTasks, getTasks, createTask } from "~/services/task.server";
+import { findOrCreateTaskPage } from "~/services/page.server";
+import { setPageContentFromHtml } from "~/services/hocuspocus/content.server";
 
 const loader = createHybridLoaderApiRoute(
   {
@@ -28,7 +30,7 @@ const loader = createHybridLoaderApiRoute(
 
 const CreateTaskSchema = z.object({
   title: z.string().min(1),
-
+  description: z.string().optional(),
   source: z.string().default("manual"),
   status: z
     .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
@@ -44,9 +46,12 @@ const { action } = createHybridActionApiRoute(
     corsStrategy: "all",
   },
   async ({ body, authentication }) => {
+    const workspaceId = authentication.workspaceId as string;
+    const userId = authentication.userId;
+
     const task = await createTask(
-      authentication.workspaceId as string,
-      authentication.userId,
+      workspaceId,
+      userId,
       body.title,
       undefined,
       {
@@ -55,6 +60,11 @@ const { action } = createHybridActionApiRoute(
         parentTaskId: body.parentTaskId,
       },
     );
+
+    if (body.description) {
+      const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
+      await setPageContentFromHtml(page.id, body.description);
+    }
 
     return json(task);
   },

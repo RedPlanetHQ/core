@@ -1,10 +1,6 @@
 import { type Server } from "http";
 import { WebSocketServer, WebSocket } from "ws";
-import { Hocuspocus } from "@hocuspocus/server";
-import { Database } from "@hocuspocus/extension-database";
-import { TiptapTransformer } from "@hocuspocus/transformer";
-import { prisma } from "~/db.server";
-import { verifyCollabToken } from "~/services/collab-token.server";
+import { hocuspocus } from "~/services/hocuspocus/content.server";
 
 // Types for gateway protocol
 interface GatewayTool {
@@ -111,36 +107,6 @@ function removeGatewayFromWorkspace(
 let moduleRef: any = null;
 
 const collabWss = new WebSocketServer({ noServer: true });
-
-const hocuspocus = new Hocuspocus({
-  debounce: 3000,
-  maxDebounce: 10000,
-  async onAuthenticate({ token }) {
-    const auth = verifyCollabToken(token);
-    if (!auth) throw new Error("Unauthorized");
-    return auth;
-  },
-  extensions: [
-    new Database({
-      fetch: async ({ documentName }) => {
-        const page = await prisma.page.findUnique({
-          where: { id: documentName },
-        });
-        return page?.descriptionBinary ?? null;
-      },
-      store: async ({ documentName, document, state }) => {
-        const json = TiptapTransformer.fromYdoc(document, "default");
-        await prisma.page.update({
-          where: { id: documentName },
-          data: {
-            descriptionBinary: Buffer.from(state),
-            description: JSON.stringify(json),
-          },
-        });
-      },
-    }),
-  ],
-});
 
 export function setupWebSocket(server: Server, module: any) {
   moduleRef = module;

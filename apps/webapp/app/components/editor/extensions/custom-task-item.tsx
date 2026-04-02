@@ -18,7 +18,7 @@ const CustomTaskItemComponent = ({ node, updateAttributes }: any) => {
 
   return (
     <NodeViewWrapper as="div" className="group flex items-center gap-2 py-0.5">
-      <label className="h-[16px] shrink-0" contentEditable={false}>
+      <label className="mt-[3px] h-[16px] shrink-0" contentEditable={false}>
         <Checkbox
           className="h-4 w-4 shrink-0"
           checked={checked}
@@ -28,7 +28,7 @@ const CustomTaskItemComponent = ({ node, updateAttributes }: any) => {
       <NodeViewContent
         as="div"
         className={cn(
-          "h-[24px] min-w-[3px] flex-1 leading-4",
+          "flex min-w-[3px] flex-1 items-center leading-6",
           checked &&
             "text-muted-foreground line-through decoration-[1px] opacity-60",
         )}

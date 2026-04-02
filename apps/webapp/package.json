@@ -104,6 +104,7 @@
     "@tiptap/extension-text": "^3.21.0",
     "@tiptap/pm": "^3.21.0",
     "@tiptap/react": "^3.21.0",
+    "@tiptap/html": "^3.21.0",
     "@tiptap/starter-kit": "^3.21.0",
     "@tiptap/suggestion": "^3.21.0",
     "@trigger.dev/react-hooks": "4.3.0",
