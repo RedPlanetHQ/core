@@ -16,18 +16,14 @@ import { EntityTypes } from "@core/types";
  * A graph fact — user's world, stored as an atomic SPO triple
  */
 const GraphFactSchema = z.object({
-  source: z
-    .string()
-    .describe("Subject entity name"),
-  predicate: z
-    .string()
-    .describe("Relationship type"),
-  target: z
-    .string()
-    .describe("Object entity name or literal value"),
+  source: z.string().describe("Subject entity name"),
+  predicate: z.string().describe("Relationship type"),
+  target: z.string().describe("Object entity name or literal value"),
   fact: z
     .string()
-    .describe("Natural language sentence starting with the subject (source entity). Max 15 words."),
+    .describe(
+      "Natural language sentence starting with the subject (source entity). Max 15 words.",
+    ),
   event_date: z
     .string()
     .nullable()
@@ -45,15 +41,10 @@ const EntitySchema = z.object({
   name: z
     .string()
     .describe("Entity name — clean, without articles or qualifiers"),
-  type: z
-    .enum(EntityTypes)
-    .nullable()
-    .describe("Entity type classification"),
+  type: z.enum(EntityTypes).nullable().describe("Entity type classification"),
   attributes: z
-    .record(
-      z.string(),
-      z.union([z.string(), z.number(), z.boolean(), z.null()]),
-    )
+    .object({})
+    .catchall(z.union([z.string(), z.number(), z.boolean(), z.null()]))
     .nullable()
     .describe("Lookup data: email, phone, company, role, etc."),
 });
@@ -62,7 +53,9 @@ export const ExtractWorldSchema = z.object({
   entities: z.array(EntitySchema).describe("All extracted entities"),
   graph_facts: z
     .array(GraphFactSchema)
-    .describe("User's world — identity, events, relationships, decisions, knowledge"),
+    .describe(
+      "User's world — identity, events, relationships, decisions, knowledge",
+    ),
 });
 
 export type ExtractWorldResult = z.infer<typeof ExtractWorldSchema>;
