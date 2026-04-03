@@ -1,7 +1,6 @@
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { createButlerComment } from "~/services/butler-comment.server";
-import { getHocuspocusRef, applyCommentMarkToYdoc } from "~/services/collab-scanner.server";
 
 interface GetCommentToolsParams {
   workspaceId: string;
@@ -33,12 +32,6 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
           content,
           conversationId,
         );
-
-        // Apply mark directly into the live Yjs doc — syncs to all clients
-        const liveDoc = getHocuspocusRef()?.documents.get(pageId);
-        if (liveDoc) {
-          applyCommentMarkToYdoc(liveDoc, selectedText, comment.id);
-        }
 
         return `Comment added (id: ${comment.id}) on "${selectedText.slice(0, 50)}${selectedText.length > 50 ? "..." : ""}"`;
       },

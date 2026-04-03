@@ -14,10 +14,8 @@ import {
   CustomTaskItemServer,
 } from "~/services/hocuspocus/extensions.server";
 import {
-  handleScratchpadChange,
   handleScratchpadStore,
   cleanupPage,
-  setHocuspocusRef,
 } from "~/services/collab-scanner.server";
 
 // Singleton pattern to avoid re-creating across HMR reloads
@@ -36,14 +34,6 @@ export const hocuspocus: Hocuspocus =
       if (!auth) throw new Error("Unauthorized");
       return auth;
     },
-    async onChange({ documentName, document, context }) {
-      handleScratchpadChange(documentName, document, context);
-    },
-    async onStoreDocument({ documentName, document, context }) {
-      handleScratchpadStore(documentName, document, context).catch((err) =>
-        console.error("[collab-onStoreDocument]", err),
-      );
-    },
     async onDisconnect({ documentName, document }) {
       if (document.getConnectionsCount() === 0) {
         cleanupPage(documentName);
@@ -60,20 +50,25 @@ export const hocuspocus: Hocuspocus =
         store: async ({ documentName, document, state }) => {
           console.log(documentName, "store");
           const json = TiptapTransformer.fromYdoc(document, "default");
-          await prisma.page.update({
+          const page = await prisma.page.update({
             where: { id: documentName },
             data: {
               descriptionBinary: Buffer.from(state),
               description: JSON.stringify(json),
             },
           });
+
+          handleScratchpadStore(
+            documentName,
+            document,
+            { workspaceId: page.workspaceId, userId: page.userId },
+          ).catch((err) =>
+            console.error("[collab-store-scratchpad]", err),
+          );
         },
       }),
     ],
   }));
-
-// Share the Hocuspocus instance so collab-scanner can access live Y.Docs
-setHocuspocusRef(hocuspocus);
 
 /**
  * Returns server-safe TipTap extensions (no React renderers).

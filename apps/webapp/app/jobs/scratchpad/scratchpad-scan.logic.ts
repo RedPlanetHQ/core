@@ -1,55 +1,146 @@
 /**
  * Scratchpad Scan Job Logic
  *
- * Handles both mention and proactive scratchpad processing:
- * - mention: createConversation → tagParagraphsByIndex → noStreamProcess
- * - proactive: classifyScratchpadIntents → per-intent createConversation → tagParagraphsByIndex → noStreamProcess
+ * Runs in the BullMQ worker (separate process). All state comes from DB.
+ *
+ * - mention: read current doc from DB → find mention → createConversation → tag paragraph → noStreamProcess
+ * - proactive: read current doc + butlerLastSeen from DB → extract paragraphs → LLM decision → act → update butlerLastSeen
  */
 
 import * as Y from "yjs";
+import { prisma } from "~/db.server";
 import { createConversation } from "~/services/conversation.server";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { classifyScratchpadIntents } from "~/services/agent/prompts/scratchpad-decision";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { logger } from "~/services/logger.service";
-import {
-  getHocuspocusRef,
-  clearPendingProactive,
-} from "~/services/collab-scanner.server";
 
 // ── Payload types ─────────────────────────────────────────────────────────────
 
 export type ScratchpadScanPayload =
   | {
-    type: "mention";
-    pageId: string;
-    userId: string;
-    workspaceId: string;
-    instruction: string;
-    mentionFragmentIndex: number;
-  }
+      type: "mention";
+      pageId: string;
+      userId: string;
+      workspaceId: string;
+      instruction: string;
+    }
   | {
-    type: "proactive";
-    pageId: string;
-    userId: string;
-    workspaceId: string;
-    previousParagraphs: string[];
-    currentParagraphs: string[];
-    // Actual fragment indices for each currentParagraph entry
-    currentFragmentIndices: number[];
-  };
+      type: "proactive";
+      pageId: string;
+      userId: string;
+      workspaceId: string;
+    };
 
 // ── Yjs helpers ───────────────────────────────────────────────────────────────
 
-function tagParagraphsByIndex(
-  ydoc: Y.Doc,
+interface ScanResult {
+  paragraphs: { text: string; fragmentIndex: number }[];
+}
+
+/** Load a Y.Doc from binary state (as stored in descriptionBinary) */
+function loadYdocFromBinary(binary: Buffer | Uint8Array): Y.Doc {
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, new Uint8Array(binary));
+  return doc;
+}
+
+/** Recursively extract all text from a Yjs element */
+function extractTextFromElement(element: Y.XmlElement): { text: string; hasMention: boolean } {
+  let hasMention = false;
+  const textParts: string[] = [];
+
+  element.forEach((child) => {
+    if (child instanceof Y.XmlText) {
+      textParts.push(child.toString());
+    } else if (child instanceof Y.XmlElement) {
+      if (child.nodeName === "mention") {
+        hasMention = true;
+      } else {
+        const nested = extractTextFromElement(child);
+        if (nested.text) textParts.push(nested.text);
+        if (nested.hasMention) hasMention = true;
+      }
+    }
+  });
+
+  return { text: textParts.join("").trim(), hasMention };
+}
+
+/** Extract non-mention paragraph texts and their top-level fragment indices from a Yjs doc */
+function extractParagraphs(doc: Y.Doc): ScanResult {
+  const fragment = doc.getXmlFragment("default");
+  const paragraphs: ScanResult["paragraphs"] = [];
+  let idx = 0;
+
+  fragment.forEach((child) => {
+    if (!(child instanceof Y.XmlElement)) { idx++; return; }
+
+    const { text, hasMention } = extractTextFromElement(child);
+    if (text && !hasMention) {
+      paragraphs.push({ text, fragmentIndex: idx });
+    }
+
+    idx++;
+  });
+
+  return { paragraphs };
+}
+
+/** Find the fragment index of a mention paragraph matching the instruction text */
+function findMentionFragmentIndex(doc: Y.Doc, instruction: string): number | null {
+  const fragment = doc.getXmlFragment("default");
+  let idx = 0;
+
+  let found: number | null = null;
+  fragment.forEach((child) => {
+    if (found !== null) { idx++; return; }
+    if (!(child instanceof Y.XmlElement)) { idx++; return; }
+
+    let hasMention = false;
+    const textParts: string[] = [];
+
+    child.forEach((inline) => {
+      if (inline instanceof Y.XmlElement && inline.nodeName === "mention") {
+        hasMention = true;
+      } else if (inline instanceof Y.XmlText) {
+        textParts.push(inline.toString());
+      }
+    });
+
+    if (hasMention) {
+      const paraInstruction = textParts.join("").trim().replace(/@\S+/g, "").trim();
+      if (paraInstruction === instruction) {
+        found = idx;
+      }
+    }
+
+    idx++;
+  });
+
+  return found;
+}
+
+/**
+ * Tag a paragraph in the Yjs doc with a conversationId and save back to DB.
+ * This modifies descriptionBinary directly since the worker doesn't have Hocuspocus access.
+ */
+async function tagParagraphInDb(
+  pageId: string,
   fragmentIndices: number[],
   conversationId: string,
-): void {
-  const fragment = ydoc.getXmlFragment("default");
+): Promise<void> {
+  const page = await prisma.page.findUnique({
+    where: { id: pageId },
+    select: { descriptionBinary: true },
+  });
+  if (!page?.descriptionBinary) return;
+
+  const doc = loadYdocFromBinary(page.descriptionBinary);
+  const fragment = doc.getXmlFragment("default");
   let tagged = 0;
 
-  ydoc.transact(() => {
+  doc.transact(() => {
     for (const idx of fragmentIndices) {
       if (idx < 0 || idx >= fragment.length) continue;
       const child = fragment.get(idx);
@@ -60,16 +151,16 @@ function tagParagraphsByIndex(
     }
   }, "server-conversation-attach");
 
-  logger.info(
-    `[scratchpad] tagByIndex: tagged=${tagged}/${fragmentIndices.length} conversationId=${conversationId}`,
-  );
-}
+  // Save modified doc back to DB
+  const updatedBinary = Buffer.from(Y.encodeStateAsUpdate(doc));
+  await prisma.page.update({
+    where: { id: pageId },
+    data: { descriptionBinary: updatedBinary },
+  });
 
-function getYdoc(pageId: string): Y.Doc | null {
-  const hocuspocus = getHocuspocusRef();
-  if (!hocuspocus) return null;
-  const doc = hocuspocus.documents.get(pageId);
-  return doc ?? null;
+  logger.info(
+    `[scratchpad] tagInDb: tagged=${tagged}/${fragmentIndices.length} conversationId=${conversationId}`,
+  );
 }
 
 // ── Main processor ────────────────────────────────────────────────────────────
@@ -77,8 +168,6 @@ function getYdoc(pageId: string): Y.Doc | null {
 export async function processScratchpadScan(
   payload: ScratchpadScanPayload,
 ): Promise<void> {
-  const { pageId, userId, workspaceId } = payload;
-
   if (payload.type === "mention") {
     await processMention(payload);
   } else {
@@ -87,7 +176,7 @@ export async function processScratchpadScan(
 }
 
 async function processMention(payload: Extract<ScratchpadScanPayload, { type: "mention" }>) {
-  const { pageId, userId, workspaceId, instruction, mentionFragmentIndex } = payload;
+  const { pageId, userId, workspaceId, instruction } = payload;
 
   logger.info(
     `[scratchpad] Mention job page=${pageId} message="${instruction.slice(0, 100)}"`,
@@ -100,11 +189,20 @@ async function processMention(payload: Extract<ScratchpadScanPayload, { type: "m
       parts: [{ text: instruction, type: "text" }],
     });
 
-    const ydoc = getYdoc(pageId);
-    if (ydoc) {
-      tagParagraphsByIndex(ydoc, [mentionFragmentIndex], result.conversationId);
-    } else {
-      logger.warn(`[scratchpad] Mention: no ydoc for page=${pageId}`);
+    // Find the mention's current position in the doc and tag it
+    const page = await prisma.page.findUnique({
+      where: { id: pageId },
+      select: { descriptionBinary: true },
+    });
+
+    if (page?.descriptionBinary) {
+      const doc = loadYdocFromBinary(page.descriptionBinary);
+      const fragmentIndex = findMentionFragmentIndex(doc, instruction);
+      if (fragmentIndex !== null) {
+        await tagParagraphInDb(pageId, [fragmentIndex], result.conversationId);
+      } else {
+        logger.warn(`[scratchpad] Mention: couldn't find paragraph for instruction="${instruction.slice(0, 60)}"`);
+      }
     }
 
     await noStreamProcess(
@@ -125,13 +223,34 @@ async function processMention(payload: Extract<ScratchpadScanPayload, { type: "m
 }
 
 async function processProactive(payload: Extract<ScratchpadScanPayload, { type: "proactive" }>) {
-  const { pageId, userId, workspaceId, previousParagraphs, currentParagraphs, currentFragmentIndices } = payload;
+  const { pageId, userId, workspaceId } = payload;
 
-  // Clear pending flag so next burst gets a fresh baseline
-  clearPendingProactive(pageId);
+  // Read current state and baseline from DB
+  const page = await prisma.page.findUnique({
+    where: { id: pageId },
+    select: { descriptionBinary: true, butlerLastSeen: true },
+  });
 
-  logger.info(
-    `[scratchpad] Proactive job page=${pageId} prev=${previousParagraphs.length} curr=${currentParagraphs.length}`,
+  if (!page?.descriptionBinary) {
+    logger.warn(`[scratchpad] Proactive: no descriptionBinary for page=${pageId}`);
+    return;
+  }
+
+  const currentDoc = loadYdocFromBinary(page.descriptionBinary);
+  const { paragraphs: currentParagraphs } = extractParagraphs(currentDoc);
+  const currentTexts = currentParagraphs.map((p) => p.text);
+  const currentFragmentIndices = currentParagraphs.map((p) => p.fragmentIndex);
+
+  // Extract previous paragraphs from butlerLastSeen, or use empty array (first time)
+  let previousTexts: string[] = [];
+  if (page.butlerLastSeen) {
+    const prevDoc = loadYdocFromBinary(page.butlerLastSeen);
+    const { paragraphs: prevParagraphs } = extractParagraphs(prevDoc);
+    previousTexts = prevParagraphs.map((p) => p.text);
+  }
+
+  logger.debug(
+    `[scratchpad] Proactive job page=${pageId} prev=${previousTexts.length} curr=${currentTexts.length}`,
   );
 
   try {
@@ -142,20 +261,16 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
     );
 
     const { intents } = await classifyScratchpadIntents(
-      previousParagraphs,
-      currentParagraphs,
+      previousTexts,
+      currentTexts,
       connectedIntegrations,
       workspaceId,
     );
 
     const actionableIntents = intents.filter((i) => i.actionable);
-    logger.info(
+    logger.debug(
       `[scratchpad] Decision: ${intents.length} intents, ${actionableIntents.length} actionable`,
     );
-
-    if (actionableIntents.length === 0) return;
-
-    const ydoc = getYdoc(pageId);
 
     for (const intent of actionableIntents) {
       try {
@@ -165,16 +280,11 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
           parts: [{ text: intent.intent, type: "text" }],
         });
 
-        if (ydoc) {
-          // LLM returns 1-based indices into currentParagraphs array
-          // Map through currentFragmentIndices to get actual Yjs fragment indices
-          const fragmentIndices = intent.paragraphIndices
-            .map((i) => currentFragmentIndices[i - 1])
-            .filter((i) => i !== undefined);
-          tagParagraphsByIndex(ydoc, fragmentIndices, result.conversationId);
-        } else {
-          logger.warn(`[scratchpad] Proactive: no ydoc for page=${pageId}`);
-        }
+        // Map LLM 1-based indices → actual Yjs fragment indices
+        const fragmentIndices = intent.paragraphIndices
+          .map((i) => currentFragmentIndices[i - 1])
+          .filter((i) => i !== undefined);
+        await tagParagraphInDb(pageId, fragmentIndices, result.conversationId);
 
         await noStreamProcess(
           {
@@ -194,6 +304,13 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
         );
       }
     }
+
+    // Update butlerLastSeen to current state after processing
+    await prisma.page.update({
+      where: { id: pageId },
+      data: { butlerLastSeen: Buffer.from(page.descriptionBinary) },
+    });
+    logger.debug(`[scratchpad] butlerLastSeen updated page=${pageId}`);
   } catch (err) {
     logger.error("[scratchpad] Proactive job failed", { err });
     throw err;

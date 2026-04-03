@@ -1129,6 +1129,7 @@ model Page {
   date              DateTime?
   description       String?
   descriptionBinary Bytes?
+  butlerLastSeen    Bytes?
   outlinks          Json?     @default("[]")
 
   workspaceId String
