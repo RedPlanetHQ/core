@@ -59,6 +59,8 @@ interface BuildAgentContextParams {
   interactive?: boolean;
   /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
   modelConfig?: ModelConfig;
+  /** Optional scratchpad page ID for context retrieval */
+  scratchpadPageId?: string;
 }
 
 interface AgentContext {

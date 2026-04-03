@@ -15,6 +15,7 @@ import {
 } from "~/services/hocuspocus/extensions.server";
 import {
   handleScratchpadChange,
+  handleScratchpadStore,
   cleanupPage,
   setHocuspocusRef,
 } from "~/services/collab-scanner.server";
@@ -36,8 +37,11 @@ export const hocuspocus: Hocuspocus =
       return auth;
     },
     async onChange({ documentName, document, context }) {
-      handleScratchpadChange(documentName, document, context).catch((err) =>
-        console.error("[collab-onChange]", err),
+      handleScratchpadChange(documentName, document, context);
+    },
+    async onStoreDocument({ documentName, document, context }) {
+      handleScratchpadStore(documentName, document, context).catch((err) =>
+        console.error("[collab-onStoreDocument]", err),
       );
     },
     async onDisconnect({ documentName, document }) {

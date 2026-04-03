@@ -285,6 +285,22 @@ export const scheduledTaskQueue = new Queue("scheduled-task-queue", {
 });
 
 /**
+ * Scratchpad scan queue
+ * Handles mention and proactive scratchpad processing (LLM + agent execution)
+ */
+export const scratchpadScanQueue = new Queue("scratchpad-scan-queue", {
+  connection: getRedisConnection(),
+  defaultJobOptions: {
+    attempts: 1,
+    // Remove immediately on complete so the same jobId can be reused for debouncing
+    removeOnComplete: true,
+    removeOnFail: {
+      age: 86400,
+    },
+  },
+});
+
+/**
  * Task queue
  * Handles long-running tasks
  */

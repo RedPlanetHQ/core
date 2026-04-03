@@ -72,11 +72,16 @@ import {
   followUpQueue,
   taskQueue,
   scheduledTaskQueue,
+  scratchpadScanQueue,
 } from "~/bullmq/queues";
 import {
   type TaskPayload,
   processTask,
 } from "~/jobs/task/task.logic";
+import {
+  type ScratchpadScanPayload,
+  processScratchpadScan,
+} from "~/jobs/scratchpad/scratchpad-scan.logic";
 import {
   type ScheduledTaskPayload,
   processScheduledTask,
@@ -352,6 +357,22 @@ export const taskWorker = new Worker(
 );
 
 /**
+ * Scratchpad scan worker
+ * Processes mention and proactive scratchpad scan jobs
+ */
+export const scratchpadScanWorker = new Worker(
+  "scratchpad-scan-queue",
+  async (job) => {
+    const payload = job.data as ScratchpadScanPayload;
+    return await processScratchpadScan(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
  * Graceful shutdown handler
  */
 export async function closeAllWorkers(): Promise<void> {
@@ -374,6 +395,8 @@ export async function closeAllWorkers(): Promise<void> {
     followUpQueue.close(),
     scheduledTaskQueue.close(),
     taskQueue.close(),
+    scratchpadScanWorker.close(),
+    scratchpadScanQueue.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

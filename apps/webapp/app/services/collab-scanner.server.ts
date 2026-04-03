@@ -1,25 +1,27 @@
 /**
  * Server-side scratchpad scanner.
  *
- * Runs inside the Hocuspocus onChange hook to detect @mentions
- * and proactive text — replaces all client-side detection.
+ * Uses two Hocuspocus hooks:
+ * - onChange: captures baseline snapshot + tracks mentions (fires per keystroke, no I/O)
+ * - onStoreDocument: detects changes, enqueues jobs (fires once per debounce, 3s idle / 10s max)
  *
  * Two paths:
- * 1. Mentions (@butler) → direct conversation + agent with add_comment tool
- * 2. Proactive diff → decision prompt → classify intents → per-intent conversations
- *    → attach conversationId to paragraph XmlElement in Yjs
+ * 1. Mentions (@butler) → enqueue with 10s delay
+ * 2. Proactive → enqueue with 60s delay
+ *
+ * Heavy work (LLM, agent execution, Yjs tagging) runs in the queue job.
  */
 
 import * as Y from "yjs";
 import type { Hocuspocus } from "@hocuspocus/server";
-import { createConversation } from "~/services/conversation.server";
-import { noStreamProcess } from "~/services/agent/no-stream-process";
-import { classifyScratchpadIntents } from "~/services/agent/prompts/scratchpad-decision";
-import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { logger } from "~/services/logger.service";
 import { isButlerSnoozed } from "~/services/butler-activity.server";
+import {
+  enqueueScratchpadScan,
+  cancelScratchpadScan,
+} from "~/lib/queue-adapter.server";
 
-// ── Hocuspocus reference (set from websocket.ts) ───────────────────────
+// ── Hocuspocus reference ─────────────────────────────────────────────
 let hocuspocusRef: Hocuspocus | null = null;
 
 export function setHocuspocusRef(instance: Hocuspocus) {
@@ -30,53 +32,46 @@ export function getHocuspocusRef(): Hocuspocus | null {
   return hocuspocusRef;
 }
 
-// ── State ───────────────────────────────────────────────────────────────
-// Track processed mentions per document to avoid re-triggering
+// ── In-memory state ──────────────────────────────────────────────────
 const processedMentions = new Map<string, Set<string>>();
-
-// Debounce mention triggers — wait for user to stop typing before firing
-const mentionTimers = new Map<string, ReturnType<typeof setTimeout>>();
-const MENTION_IDLE_MS = 10_000; // 10s idle before processing mentions
-
-// Proactive scan: snapshot-based diff + debounce
-// Stores previous paragraph texts per page — used to compute what changed
 const docSnapshots = new Map<string, string[]>();
-const proactiveTimers = new Map<string, ReturnType<typeof setTimeout>>();
+// Tracks pages that have a pending proactive job in the queue
+const pendingProactive = new Set<string>();
+
+const MENTION_IDLE_MS = 10_000;
 const PROACTIVE_IDLE_MS = 60_000;
 
-/** Clean up in-memory state when a document is closed (no more connections) */
+/** Called by the job when it starts executing — clears the pending flag */
+export function clearPendingProactive(pageId: string) {
+  pendingProactive.delete(pageId);
+}
+
+/** Clean up in-memory state when a document is closed */
 export function cleanupPage(pageId: string) {
   processedMentions.delete(pageId);
-  const mt = mentionTimers.get(pageId);
-  if (mt) clearTimeout(mt);
-  mentionTimers.delete(pageId);
-  const pt = proactiveTimers.get(pageId);
-  if (pt) clearTimeout(pt);
-  proactiveTimers.delete(pageId);
   docSnapshots.delete(pageId);
+  pendingProactive.delete(pageId);
+  cancelScratchpadScan(pageId).catch(() => { });
 }
 
-// ── Yjs tree walker ─────────────────────────────────────────────────────
+// ── Yjs tree walker ──────────────────────────────────────────────────
 
 interface ScanResult {
-  mentions: { instruction: string; mentionKey: string }[];
-  paragraphs: string[];
+  mentions: { instruction: string; mentionKey: string; fragmentIndex: number }[];
+  paragraphs: { text: string; fragmentIndex: number }[];
 }
 
-/**
- * Walk a Yjs XmlFragment to find mention nodes and extract paragraph text.
- */
 function scanYjsFragment(fragment: Y.XmlFragment): ScanResult {
   const mentions: ScanResult["mentions"] = [];
-  const paragraphs: string[] = [];
+  const paragraphs: ScanResult["paragraphs"] = [];
+  let idx = 0;
 
   fragment.forEach((child) => {
-    if (!(child instanceof Y.XmlElement)) return;
+    if (!(child instanceof Y.XmlElement)) { idx++; return; }
 
     let hasMention = false;
     let mentionId = "";
     const textParts: string[] = [];
-    let hasCommentMark = false;
 
     child.forEach((inline) => {
       if (inline instanceof Y.XmlElement && inline.nodeName === "mention") {
@@ -84,172 +79,28 @@ function scanYjsFragment(fragment: Y.XmlFragment): ScanResult {
         mentionId = inline.getAttribute("id") ?? "";
       } else if (inline instanceof Y.XmlText) {
         textParts.push(inline.toString());
-        // Check if any text already has a butlerComment format
-        const delta = inline.toDelta();
-        for (const op of delta) {
-          if (op.attributes?.butlerComment) {
-            hasCommentMark = true;
-          }
-        }
       }
     });
 
     const paraText = textParts.join("").trim();
-    if (paraText) paragraphs.push(paraText);
+    if (paraText) paragraphs.push({ text: paraText, fragmentIndex: idx });
 
-    if (hasMention && !hasCommentMark) {
+    if (hasMention) {
       const instruction = paraText.replace(/@\S+/g, "").trim();
       if (instruction) {
-        const mentionKey = `${mentionId}-${instruction}`;
-        mentions.push({ instruction, mentionKey });
+        mentions.push({ instruction, mentionKey: `${mentionId}-${instruction}`, fragmentIndex: idx });
       }
     }
+
+    idx++;
   });
 
   return { mentions, paragraphs };
 }
 
-// ── Mention agent trigger (direct — no decision layer) ──────────────────
+// ── onChange handler (fires per keystroke — lightweight, no I/O) ──────
 
-async function triggerMentionAgent(
-  pageId: string,
-  message: string,
-  document: Y.Doc,
-  userId: string,
-  workspaceId: string,
-) {
-  logger.info(
-    `[scratchpad] Mention trigger page=${pageId} message="${message.slice(0, 100)}"`,
-  );
-
-  try {
-    const result = await createConversation(workspaceId, userId, {
-      message,
-      source: "daily",
-      parts: [{ text: message, type: "text" }],
-    });
-
-    // Attach conversationId to the mention paragraph in Yjs
-    attachConversationToYdoc(document, [message], result.conversationId);
-
-    noStreamProcess(
-      {
-        id: result.conversationId,
-        message: { parts: [{ text: message, type: "text" }], role: "user" },
-        source: "daily",
-        scratchpadPageId: pageId,
-      },
-      userId,
-      workspaceId,
-    ).catch((err) =>
-      logger.error("[scratchpad] Mention agent processing failed", err),
-    );
-  } catch (err) {
-    logger.error("[scratchpad] Failed to create mention conversation", err);
-  }
-}
-
-// ── Proactive decision trigger ──────────────────────────────────────────
-
-/**
- * Run the decision prompt on proactive diff, then create conversations
- * for each actionable intent and attach conversationId to paragraphs in Yjs.
- */
-async function triggerProactiveDecision(
-  pageId: string,
-  diffParagraphs: string[],
-  fullPageParagraphs: string[],
-  document: Y.Doc,
-  userId: string,
-  workspaceId: string,
-) {
-  logger.info(
-    `[scratchpad] Proactive decision page=${pageId} diff=${diffParagraphs.length} paragraphs`,
-  );
-
-  try {
-    // Load connected integrations for the decision prompt
-    const integrationAccounts =
-      await IntegrationLoader.getConnectedIntegrationAccounts(
-        userId,
-        workspaceId,
-      );
-    const connectedIntegrations = integrationAccounts.map((int) =>
-      "integrationDefinition" in int
-        ? int.integrationDefinition.name
-        : int.name,
-    );
-
-    // Step 1: Classify intents via lightweight LLM call
-    const { intents } = await classifyScratchpadIntents(
-      diffParagraphs,
-      fullPageParagraphs,
-      connectedIntegrations,
-      workspaceId,
-    );
-
-    const actionableIntents = intents.filter((i) => i.actionable);
-    logger.info(
-      `[scratchpad] Decision: ${intents.length} intents, ${actionableIntents.length} actionable`,
-    );
-
-    if (actionableIntents.length === 0) return;
-
-    // Step 2: For each actionable intent, create a conversation and run agent
-    for (const intent of actionableIntents) {
-      try {
-        const result = await createConversation(workspaceId, userId, {
-          message: intent.intent,
-          source: "daily",
-          parts: [{ text: intent.intent, type: "text" }],
-        });
-
-        // Map LLM's 1-based indices back to original diff paragraph text
-        const sourceParagraphs = intent.paragraphIndices
-          .map((i) => diffParagraphs[i - 1])
-          .filter(Boolean);
-
-        // Attach conversationId to matching paragraph(s) in Yjs using containment match
-        attachConversationToYdoc(
-          document,
-          sourceParagraphs,
-          result.conversationId,
-        );
-
-        // Fire agent processing with scratchpad context
-        noStreamProcess(
-          {
-            id: result.conversationId,
-            message: {
-              parts: [{ text: intent.intent, type: "text" }],
-              role: "user",
-            },
-            source: "daily",
-            scratchpadPageId: pageId,
-          },
-          userId,
-          workspaceId,
-        ).catch((err) =>
-          logger.error(
-            `[scratchpad] Proactive agent failed for intent="${intent.intent.slice(0, 60)}"`,
-            err,
-          ),
-        );
-      } catch (err) {
-        logger.error(
-          `[scratchpad] Failed to create conversation for intent="${intent.intent.slice(0, 60)}"`,
-          err,
-        );
-      }
-    }
-  } catch (err) {
-    logger.error("[scratchpad] Decision prompt failed", err);
-  }
-}
-
-// ── Main onChange handler ───────────────────────────────────────────────
-
-export async function handleScratchpadChange(
+export function handleScratchpadChange(
   pageId: string,
   document: Y.Doc,
   context: { workspaceId: string; userId: string } | null,
@@ -258,198 +109,123 @@ export async function handleScratchpadChange(
 
   const fragment = document.getXmlFragment("default");
   const { mentions, paragraphs } = scanYjsFragment(fragment);
-  const nonMentionParagraphs = paragraphs.filter((p) => !p.includes("@"));
+  const nonMentionTexts = paragraphs
+    .filter((p) => !p.text.includes("@"))
+    .map((p) => p.text);
 
-  // Ensure processedMentions exists for this page
   if (!processedMentions.has(pageId)) {
     processedMentions.set(pageId, new Set());
   }
   const processed = processedMentions.get(pageId)!;
 
-  // ── First onChange after start/restart: capture baseline, don't trigger ──
+  // Capture baseline on first call — don't update after that until job clears pendingProactive
   if (!docSnapshots.has(pageId)) {
-    docSnapshots.set(pageId, nonMentionParagraphs);
-    // Seed existing mentions as already processed so they don't re-trigger
+    docSnapshots.set(pageId, nonMentionTexts);
+    for (const { mentionKey } of mentions) {
+      processed.add(mentionKey);
+    }
+    logger.debug(`[scratchpad] baseline set page=${pageId} paragraphs=${nonMentionTexts.length}`);
+    return;
+  }
+
+}
+
+// ── onStoreDocument handler (fires once per debounce — does Redis I/O) ──
+
+export async function handleScratchpadStore(
+  pageId: string,
+  document: Y.Doc,
+  context: { workspaceId: string; userId: string } | null,
+) {
+  if (!context?.workspaceId || !context?.userId) return;
+
+  const { userId, workspaceId } = context;
+
+  const fragment = document.getXmlFragment("default");
+  const { mentions, paragraphs } = scanYjsFragment(fragment);
+  const nonMentionParagraphs = paragraphs.filter((p) => !p.text.includes("@"));
+
+  if (!processedMentions.has(pageId)) {
+    processedMentions.set(pageId, new Set());
+  }
+  const processed = processedMentions.get(pageId)!;
+
+  // If no baseline yet (page just opened), set it and return
+  if (!docSnapshots.has(pageId)) {
+    docSnapshots.set(pageId, nonMentionParagraphs.map((p) => p.text));
     for (const { mentionKey } of mentions) {
       processed.add(mentionKey);
     }
     return;
   }
 
-  // ── Mention detection (debounced) ──
-  const existingMentionTimer = mentionTimers.get(pageId);
-  if (existingMentionTimer) clearTimeout(existingMentionTimer);
-
+  // ── Mention detection ──
   const newMentions = mentions.filter((m) => !processed.has(m.mentionKey));
 
   if (newMentions.length > 0) {
-    // Schedule mention processing after user stops typing
-    mentionTimers.set(
-      pageId,
-      setTimeout(() => {
-        mentionTimers.delete(pageId);
+    for (const { instruction, mentionKey, fragmentIndex } of newMentions) {
+      processed.add(mentionKey);
 
-        // Re-scan to get final state of the doc (not stale closure)
-        const freshFragment = document.getXmlFragment("default");
-        const fresh = scanYjsFragment(freshFragment);
-        const freshNew = fresh.mentions.filter(
-          (m) => !processed.has(m.mentionKey),
-        );
-
-        for (const { instruction, mentionKey } of freshNew) {
-          processed.add(mentionKey);
-          triggerMentionAgent(
+      try {
+        await cancelScratchpadScan(pageId);
+        await enqueueScratchpadScan(
+          {
+            type: "mention",
             pageId,
+            userId,
+            workspaceId,
             instruction,
-            document,
-            context.userId,
-            context.workspaceId,
-          );
-        }
-      }, MENTION_IDLE_MS),
-    );
+            mentionFragmentIndex: fragmentIndex,
+          },
+          MENTION_IDLE_MS,
+        );
+        logger.debug(`[scratchpad] mention enqueued page=${pageId} instruction="${instruction.slice(0, 60)}"`);
+      } catch (err) {
+        logger.error("[scratchpad] Failed to enqueue mention scan", { err });
+      }
+    }
+    return;
+  }
 
-    // Don't start proactive scan while new mentions are pending
-    const existingTimer = proactiveTimers.get(pageId);
-    if (existingTimer) clearTimeout(existingTimer);
-    proactiveTimers.delete(pageId);
+  // ── Proactive detection ──
+  if (await isButlerSnoozed(workspaceId)) {
+    docSnapshots.set(pageId, nonMentionParagraphs.map((p) => p.text));
+    await cancelScratchpadScan(pageId).catch(() => { });
     return;
   }
 
   const previousSnapshot = docSnapshots.get(pageId)!;
   const previousSet = new Set(previousSnapshot);
+  const currentTexts = nonMentionParagraphs.map((p) => p.text);
+  const currentSet = new Set(currentTexts);
+  const hasChanges =
+    previousSnapshot.length !== currentTexts.length ||
+    currentTexts.some((t) => !previousSet.has(t)) ||
+    previousSnapshot.some((t) => !currentSet.has(t));
 
-  if (await isButlerSnoozed(context.workspaceId)) {
-    const existingTimer = proactiveTimers.get(pageId);
-    if (existingTimer) clearTimeout(existingTimer);
-    proactiveTimers.delete(pageId);
-    docSnapshots.set(pageId, nonMentionParagraphs);
-    return;
-  }
+  logger.info(`[scratchpad] proactive check page=${pageId} prev=${previousSnapshot.length} curr=${currentTexts.length} hasChanges=${hasChanges}`);
+  if (!hasChanges) return;
 
-  // Only update snapshot when no proactive timer is pending
-  if (!proactiveTimers.has(pageId)) {
-    docSnapshots.set(pageId, nonMentionParagraphs);
-  }
-
-  // Diff: paragraphs that are new or modified (not in previous snapshot)
-  const diffParagraphs = nonMentionParagraphs.filter(
-    (p) => !previousSet.has(p),
-  );
-
-  if (diffParagraphs.length === 0) return;
-
-  // Reset idle timer on every change
-  const existingTimer = proactiveTimers.get(pageId);
-  if (existingTimer) clearTimeout(existingTimer);
-
-  proactiveTimers.set(
-    pageId,
-    setTimeout(() => {
-      proactiveTimers.delete(pageId);
-
-      // Re-scan for final state
-      const freshFragment = document.getXmlFragment("default");
-      const fresh = scanYjsFragment(freshFragment);
-      const freshNonMention = fresh.paragraphs.filter((p) => !p.includes("@"));
-      const freshDiff = freshNonMention.filter((p) => !previousSet.has(p));
-
-      if (freshDiff.length === 0) return;
-
-      // Update snapshot to latest
-      docSnapshots.set(pageId, freshNonMention);
-
-      // Send through decision prompt instead of direct agent trigger
-      triggerProactiveDecision(
+  try {
+    await cancelScratchpadScan(pageId);
+    pendingProactive.add(pageId);
+    await enqueueScratchpadScan(
+      {
+        type: "proactive",
         pageId,
-        freshDiff,
-        freshNonMention,
-        document,
-        context.userId,
-        context.workspaceId,
-      );
-    }, PROACTIVE_IDLE_MS),
-  );
-}
-
-// ── Yjs attribute helpers ──────────────────────────────────────────────
-
-/**
- * Attach a conversationId attribute to paragraph XmlElements in the Yjs doc.
- * Matches paragraphs by their text content. Syncs to all clients via CRDT.
- */
-function attachConversationToYdoc(
-  ydoc: Y.Doc,
-  paragraphTexts: string[],
-  conversationId: string,
-): void {
-  const fragment = ydoc.getXmlFragment("default");
-  let matched = 0;
-
-  ydoc.transact(() => {
-    fragment.forEach((child) => {
-      if (!(child instanceof Y.XmlElement)) return;
-
-      const textParts: string[] = [];
-      child.forEach((inline) => {
-        if (inline instanceof Y.XmlText) {
-          textParts.push(inline.toString());
-        }
-      });
-      const paraText = textParts.join("").trim();
-      if (!paraText) return;
-
-      // Containment match — handles user editing paragraph during LLM call
-      const isMatch = paragraphTexts.some(
-        (target) => paraText.includes(target) || target.includes(paraText),
-      );
-
-      if (isMatch) {
-        child.setAttribute("conversationId", conversationId);
-        child.setAttribute("resolved", false);
-        matched++;
-      }
-    });
-  }, "server-conversation-attach");
-
-  logger.info(
-    `[scratchpad] attachConversation: matched=${matched}/${paragraphTexts.length} conversationId=${conversationId}`,
-  );
-}
-
-/**
- * Apply a butlerComment mark directly into the live Yjs document.
- * Called from add_comment tool after DB write — syncs to clients via CRDT.
- */
-export function applyCommentMarkToYdoc(
-  ydoc: Y.Doc,
-  selectedText: string,
-  commentId: string,
-): boolean {
-  const fragment = ydoc.getXmlFragment("default");
-  let found = false;
-
-  ydoc.transact(() => {
-    fragment.forEach((child) => {
-      if (found) return;
-      if (!(child instanceof Y.XmlElement)) return;
-
-      child.forEach((inline) => {
-        if (found) return;
-        if (!(inline instanceof Y.XmlText)) return;
-
-        const text = inline.toString();
-        const index = text.indexOf(selectedText);
-        if (index === -1) return;
-
-        // Apply the mark as Yjs text formatting
-        inline.format(index, selectedText.length, {
-          butlerComment: { commentId },
-        });
-        found = true;
-      });
-    });
-  }, "server-comment");
-
-  return found;
+        userId,
+        workspaceId,
+        previousParagraphs: previousSnapshot,
+        currentParagraphs: currentTexts,
+        currentFragmentIndices: nonMentionParagraphs.map((p) => p.fragmentIndex),
+      },
+      PROACTIVE_IDLE_MS,
+    );
+    // Update baseline so next burst compares against what was just enqueued
+    docSnapshots.set(pageId, currentTexts);
+    logger.debug(`[scratchpad] proactive enqueued page=${pageId}`);
+  } catch (err) {
+    pendingProactive.delete(pageId);
+    logger.error("[scratchpad] Failed to enqueue proactive scan", { err });
+  }
 }

@@ -24,6 +24,7 @@ import type {
 } from "~/jobs/reminder/reminder.logic";
 import type { TaskPayload } from "~/jobs/task/task.logic";
 import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
+import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -581,6 +582,67 @@ export async function enqueueTask(
       attempts: 1,
     });
     return { id: job.id };
+  }
+}
+
+/**
+ * Enqueue scratchpad scan job (with delay for debouncing)
+ */
+export async function enqueueScratchpadScan(
+  payload: ScratchpadScanPayload,
+  delayMs: number,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const jobId = `scratchpad-${payload.pageId}`;
+
+  if (provider === "trigger") {
+    const { scratchpadScanTask } = await import(
+      "~/trigger/scratchpad/scratchpad-scan"
+    );
+    const handler = await scratchpadScanTask.trigger(payload, {
+      queue: "scratchpad-scan-queue",
+      delay: delayMs > 0 ? `${Math.ceil(delayMs / 1000)}s` : undefined,
+      idempotencyKey: jobId,
+      tags: [`scratchpad:${payload.pageId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    const { scratchpadScanQueue } = await import("~/bullmq/queues");
+    const job = await scratchpadScanQueue.add("scratchpad-scan", payload, {
+      jobId,
+      delay: delayMs,
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Cancel a pending scratchpad scan job for a page (called before re-enqueuing)
+ */
+export async function cancelScratchpadScan(pageId: string): Promise<void> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`scratchpad:${pageId}`],
+        status: ["QUEUED", "DELAYED"],
+      });
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+      }
+    } catch {
+      // Silently fail — job may not exist
+    }
+  } else {
+    const { scratchpadScanQueue } = await import("~/bullmq/queues");
+    const job = await scratchpadScanQueue.getJob(`scratchpad-${pageId}`);
+    if (job) {
+      const state = await job.getState();
+      if (state === "delayed" || state === "waiting") {
+        await job.remove();
+      }
+    }
   }
 }
 

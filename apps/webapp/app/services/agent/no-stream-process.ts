@@ -52,6 +52,8 @@ interface NoStreamProcessBody {
   executorTools?: OrchestratorTools;
   /** When set, adds add_comment tool for daily scratchpad responses */
   scratchpadPageId?: string;
+  /** When true, write tools require user approval (default false) */
+  interactive?: boolean;
 }
 
 export async function noStreamProcess(
@@ -137,7 +139,7 @@ export async function noStreamProcess(
       channelMetadata: body.channelMetadata,
       conversationId: body.id,
       executorTools: body.executorTools,
-      interactive: false,
+      interactive: body.interactive ?? false,
       modelConfig,
       scratchpadPageId: body.scratchpadPageId,
     });
