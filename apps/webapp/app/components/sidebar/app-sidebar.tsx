@@ -11,14 +11,9 @@ import {
   SidebarMenuItem,
 } from "../ui/sidebar";
 import {
-  MessageCircle,
-  BookOpen,
-  Mail,
-  Phone,
   Search,
   Brain,
   Library,
-  Plug,
   CalendarDays,
   LayoutDashboard,
 } from "lucide-react";
@@ -27,17 +22,12 @@ import { useUser } from "~/hooks/useUser";
 import { NavUser } from "./nav-user";
 import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "../ui/dropdown-menu";
 
 import { useNavigate, useParams } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
-import { ButlerActivityIndicator } from "../common/butler-activity-indicator";
+import { TryIt } from "./try-it";
+import { ButlerStatusPill } from "../common/butler-status-pill";
 
 const data = {
   navMain: [
@@ -134,6 +124,7 @@ export function AppSidebar({
                   agentName={agentName}
                   accentColor={accentColor}
                 />
+                <ButlerStatusPill />
               </div>
 
               <div className="flex gap-1">
@@ -155,9 +146,10 @@ export function AppSidebar({
               (item) => item.url !== "/home/overview" || widgetsEnabled,
             )}
           />
+          <TryIt />
         </SidebarContent>
 
-        <SidebarFooter className="flex flex-col gap-1 px-2">
+        <SidebarFooter className="flex flex-col gap-1 px-2 pb-0">
           <IngestionStatus />
 
           <div className="flex justify-end">
@@ -171,57 +163,6 @@ export function AppSidebar({
               <div>{user.availableCredits} credits</div>
             </Button>
           </div>
-
-          <ButlerActivityIndicator workspaceName={agentName} />
-
-          <Button
-            variant="secondary"
-            className="w-full justify-start gap-2 rounded"
-            onClick={() => {
-              navigate("/home/agent/connect");
-            }}
-          >
-            <Plug size={18} />
-            Connect
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="secondary"
-                className="w-full justify-start gap-2 rounded"
-              >
-                <MessageCircle size={16} />
-                Help
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent side="top" align="start" className="w-[200px]">
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() => window.open("https://docs.getcore.me", "_blank")}
-              >
-                <BookOpen size={16} />
-                Documentation
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() =>
-                  (window.location.href = "mailto:harshith@poozle.dev")
-                }
-              >
-                <Mail size={16} />
-                Email Us
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className="flex gap-2 rounded"
-                onClick={() =>
-                  (window.location.href = "https://cal.com/core-memory/15min")
-                }
-              >
-                <Phone size={16} />
-                Book a call
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
         </SidebarFooter>
       </Sidebar>
 

@@ -125,7 +125,7 @@ function SubtaskRow({
   onClick: () => void;
 }) {
   return (
-    <div className="hover:bg-grayAlpha-100 group flex min-w-0 items-center gap-2 rounded px-3 py-2">
+    <div className="hover:bg-grayAlpha-100 group flex min-w-0 items-center gap-2 rounded px-2 py-1">
       <div className="shrink-0">
         <TaskStatusDropdown
           value={subtask.status as TaskStatus}
@@ -255,9 +255,13 @@ export function TaskDetailFull({
               )}
               <span>
                 {task.isActive && task.schedule
-                  ? ((task.metadata as Record<string, string> | null)?.scheduleText ?? "Recurring")
+                  ? ((task.metadata as Record<string, string> | null)
+                      ?.scheduleText ?? "Recurring")
                   : task.isActive && task.nextRunAt
-                    ? format(new Date(task.nextRunAt as unknown as string), "MMM d")
+                    ? format(
+                        new Date(task.nextRunAt as unknown as string),
+                        "MMM d",
+                      )
                     : "Schedule"}
               </span>
             </Button>

@@ -28,6 +28,7 @@ interface AIConversationItemProps {
   isChatBusy?: boolean;
   integrationAccountMap?: Record<string, string>;
   integrationFrontendMap?: Record<string, string>;
+  className?: string;
 }
 
 const ConversationItemComponent = ({
@@ -38,6 +39,7 @@ const ConversationItemComponent = ({
   isChatBusy = false,
   integrationAccountMap = {},
   integrationFrontendMap = {},
+  className,
 }: AIConversationItemProps) => {
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
@@ -136,14 +138,10 @@ const ConversationItemComponent = ({
       className={cn(
         "group/message flex w-full gap-2 px-5 pb-2",
         isUser && "my-4 justify-end",
+        className,
       )}
     >
-      <div
-        className={cn(
-          "flex w-full flex-col",
-          isUser && "w-fit items-end",
-        )}
-      >
+      <div className={cn("flex w-full flex-col", isUser && "w-fit items-end")}>
         <div
           className={cn(
             "flex w-full flex-col",

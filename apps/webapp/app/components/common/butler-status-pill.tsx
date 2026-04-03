@@ -1,79 +1,33 @@
 import React from "react";
-import {
-  BellOff,
-  LoaderCircle,
-  MoonStar,
-  Pause,
-  Play,
-  Radar,
-} from "lucide-react";
+import { BellOff, MoonStar, Play } from "lucide-react";
 import { useFetcher } from "@remix-run/react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "~/components/ui/dropdown-menu";
 import { cn } from "~/lib/utils";
 import type {
   ButlerActivityState,
   ButlerActivitySummary,
 } from "~/services/butler-activity.server";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from "~/components/ui/dropdown-menu";
+import { FlickeringGrid } from "~/components/ui/flickering-grid";
 
-const STATE_STYLES: Record<
-  ButlerActivityState,
-  { dot: string; ring: string; icon: React.ReactNode }
-> = {
-  idle: {
-    dot: "bg-muted-foreground/60",
-    ring: "bg-muted-foreground/15",
-    icon: <Radar className="h-3.5 w-3.5" />,
-  },
-  watching: {
-    dot: "bg-primary",
-    ring: "bg-primary/18",
-    icon: <Radar className="h-3.5 w-3.5" />,
-  },
-  thinking: {
-    dot: "bg-primary",
-    ring: "bg-primary/18",
-    icon: <LoaderCircle className="h-3.5 w-3.5 animate-spin" />,
-  },
-  acting: {
-    dot: "bg-primary",
-    ring: "bg-primary/18",
-    icon: <Play className="h-3.5 w-3.5" />,
-  },
-  paused: {
-    dot: "bg-muted-foreground/70",
-    ring: "bg-muted-foreground/15",
-    icon: <Pause className="h-3.5 w-3.5" />,
-  },
-};
+const ACTIVE_STATES: ButlerActivityState[] = ["watching", "thinking", "acting"];
 
 function formatPauseCopy(data: ButlerActivitySummary | undefined) {
-  if (!data) return "Automatic page watching is paused";
-  if (data.pausedIndefinitely) return "Automatic page watching is paused";
-  if (!data.snoozedUntil) return "Automatic page watching is paused";
-
+  if (!data || data.pausedIndefinitely || !data.snoozedUntil)
+    return "Automatic page watching is paused";
   const date = new Date(data.snoozedUntil);
   if (Number.isNaN(date.getTime())) return "Automatic page watching is paused";
-
-  return `Paused until ${date.toLocaleTimeString([], {
-    hour: "numeric",
-    minute: "2-digit",
-  })}`;
+  return `Paused until ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
 }
 
-export function ButlerActivityIndicator({
-  workspaceName,
-}: {
-  workspaceName: string;
-}) {
+export function ButlerStatusPill() {
   const fetcher = useFetcher<ButlerActivitySummary>();
   const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const [open, setOpen] = React.useState(false);
 
   React.useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
@@ -83,13 +37,11 @@ export function ButlerActivityIndicator({
 
   React.useEffect(() => {
     if (intervalRef.current) return;
-
     intervalRef.current = setInterval(() => {
       if (fetcher.state === "idle") {
         fetcher.load("/api/v1/butler-status");
       }
     }, 5000);
-
     return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
@@ -100,58 +52,58 @@ export function ButlerActivityIndicator({
 
   const data = fetcher.data;
   const state = data?.state ?? "idle";
-  const styles = STATE_STYLES[state];
+  const isActive = ACTIVE_STATES.includes(state);
+  const stateLabel = data?.stateLabel ?? "Idle";
   const sentence = data?.sentence ?? "Watching for page edits";
 
   const submitControl = (intent: "resume" | "snooze", duration?: string) => {
     const formData = new FormData();
     formData.set("intent", intent);
     if (duration) formData.set("duration", duration);
-
     fetcher.submit(formData, {
       action: "/api/v1/butler-status",
       method: "POST",
     });
+    setOpen(false);
   };
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <button
-          type="button"
-          className={cn(
-            "bg-background-3 hover:bg-accent/50 flex w-full items-start gap-3 rounded-xl px-3 py-2 text-left transition-colors",
-            "focus-visible:ring-ring focus-visible:outline-none focus-visible:ring-2",
-          )}
-          aria-live="polite"
-        >
-          <div className="bg-background relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full">
-            <span
-              className={cn(
-                "absolute h-6 w-6 rounded-full",
-                styles.ring,
-                state !== "paused" && state !== "idle" && "animate-pulse",
-              )}
-            />
-            <span className="text-muted-foreground">{styles.icon}</span>
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              <span className="truncate font-medium">
-                {data?.stateLabel ?? "Idle"}
-              </span>
-            </div>
-            <div className="truncate text-sm leading-5">{sentence}</div>
-          </div>
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-[260px]">
-        <DropdownMenuLabel>{workspaceName}</DropdownMenuLabel>
-        <div className="px-2 py-1.5">
-          <div className="text-xs font-medium">
-            {data?.stateLabel ?? "Idle"}
-          </div>
-          <div className="text-muted-foreground text-xs">{sentence}</div>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <button
+        type="button"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+        className={cn(
+          "flex h-6 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
+          isActive
+            ? "border-primary/30 bg-primary/10 text-primary"
+            : "border-border bg-background-3 text-muted-foreground",
+        )}
+      >
+        <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
+          <FlickeringGrid
+            width={20}
+            height={14}
+            squareSize={2}
+            gridGap={2}
+            flickerChance={isActive ? 0.4 : 0.05}
+            maxOpacity={isActive ? 0.7 : 0.25}
+            color={isActive ? "rgb(var(--primary))" : "currentColor"}
+          />
+        </div>
+        {stateLabel}
+      </button>
+      <DropdownMenuContent
+        side="bottom"
+        align="start"
+        sideOffset={6}
+        className="w-[260px] p-0"
+        onMouseEnter={() => setOpen(true)}
+        onMouseLeave={() => setOpen(false)}
+      >
+        <div className="p-3">
+          <div className="font-medium">{stateLabel}</div>
+          <div className="text-muted-foreground mt-0.5 text-sm">{sentence}</div>
         </div>
         <DropdownMenuSeparator />
         {data?.state === "paused" ? (

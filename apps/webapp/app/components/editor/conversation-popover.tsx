@@ -18,10 +18,7 @@ import {
 import { ArrowUpRight, Check, Loader2, RotateCcw } from "lucide-react";
 import { Button, buttonVariants } from "../ui";
 import { cn } from "~/lib/utils";
-import {
-  ConversationItem,
-  ConversationTextarea,
-} from "../conversation";
+import { ConversationItem, ConversationTextarea } from "../conversation";
 import { hasNeedsApprovalDeep } from "../conversation/conversation-utils";
 
 interface ConversationPart {
@@ -307,6 +304,7 @@ export function ConversationPopover({
                   addToolApprovalResponse={handleToolApprovalResponse}
                   setToolArgOverride={setToolArgOverride}
                   isChatBusy={sending}
+                  className="my-1 px-1"
                 />
               );
             })}
