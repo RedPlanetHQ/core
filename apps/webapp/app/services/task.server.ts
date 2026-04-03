@@ -99,10 +99,31 @@ export async function getTaskFull(
 
 export async function getTasks(
   workspaceId: string,
-  status?: TaskStatus,
+  options?: { status?: TaskStatus; isScheduled?: boolean },
 ): Promise<TaskWithRelations[]> {
+  const { status, isScheduled } = options ?? {};
+
+  const scheduledFilter =
+    isScheduled === true
+      ? {
+          isActive: true,
+          OR: [
+            { schedule: { not: null as null } },
+            { nextRunAt: { not: null as null } },
+          ],
+        }
+      : isScheduled === false
+        ? {
+            AND: [{ schedule: null as null }, { nextRunAt: null as null }],
+          }
+        : {};
+
   return prisma.task.findMany({
-    where: { workspaceId, ...(status && { status }) },
+    where: {
+      workspaceId,
+      ...(status && { status }),
+      ...scheduledFilter,
+    },
     orderBy: { createdAt: "desc" },
     include: {
       subtasks: { select: { id: true, status: true } },
@@ -281,11 +302,17 @@ export async function reparentTask(
   await deleteTask(taskId, workspaceId);
 
   // Recreate under new parent (trigger assigns fresh displayId)
-  const newTask = await createTask(workspaceId, userId, original.title, undefined, {
-    source: original.source,
-    status: original.status,
-    parentTaskId: newParentId ?? undefined,
-  });
+  const newTask = await createTask(
+    workspaceId,
+    userId,
+    original.title,
+    undefined,
+    {
+      source: original.source,
+      status: original.status,
+      parentTaskId: newParentId ?? undefined,
+    },
+  );
 
   // Restore description if any
   if (pageContent && newTask.pageId) {
@@ -445,7 +472,11 @@ export async function updateScheduledTask(
   });
 
   if (data.description !== undefined) {
-    const page = await findOrCreateTaskPage(existing.workspaceId, existing.userId, taskId);
+    const page = await findOrCreateTaskPage(
+      existing.workspaceId,
+      existing.userId,
+      taskId,
+    );
     await setPageContentFromHtml(page.id, data.description);
   }
 

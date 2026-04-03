@@ -17,7 +17,7 @@ export async function appendToPage(
     const newDoc = TiptapTransformer.toYdoc(contentJson as any, "default");
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
   });
-  await connection.destroy();
+  await connection.disconnect();
 }
 
 /**

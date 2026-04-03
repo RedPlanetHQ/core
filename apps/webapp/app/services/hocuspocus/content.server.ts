@@ -13,7 +13,11 @@ import {
   ButlerTaskExtensionServer,
   CustomTaskItemServer,
 } from "~/services/hocuspocus/extensions.server";
-import { handleScratchpadChange, cleanupPage, setHocuspocusRef } from "~/services/collab-scanner.server";
+import {
+  handleScratchpadChange,
+  cleanupPage,
+  setHocuspocusRef,
+} from "~/services/collab-scanner.server";
 
 // Singleton pattern to avoid re-creating across HMR reloads
 const globalForHocuspocus = globalThis as unknown as {
@@ -25,6 +29,7 @@ export const hocuspocus: Hocuspocus =
   (globalForHocuspocus.hocuspocusInstance = new Hocuspocus({
     debounce: 3000,
     maxDebounce: 10000,
+
     async onAuthenticate({ token }) {
       const auth = verifyCollabToken(token);
       if (!auth) throw new Error("Unauthorized");
@@ -49,6 +54,7 @@ export const hocuspocus: Hocuspocus =
           return page?.descriptionBinary ?? null;
         },
         store: async ({ documentName, document, state }) => {
+          console.log(documentName, "store");
           const json = TiptapTransformer.fromYdoc(document, "default");
           await prisma.page.update({
             where: { id: documentName },
@@ -79,7 +85,10 @@ export function getServerExtensions(): Extensions {
 }
 
 export function tiptapJsonToHtml(json: unknown): string {
-  return generateHTML(json as Parameters<typeof generateHTML>[0], getServerExtensions());
+  return generateHTML(
+    json as Parameters<typeof generateHTML>[0],
+    getServerExtensions(),
+  );
 }
 
 export function htmlToTiptapJson(html: string): unknown {
@@ -102,7 +111,7 @@ export async function updateContentForDocument(
     const newDoc = TiptapTransformer.toYdoc(json as any, "default");
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
   });
-  await connection.destroy();
+  await connection.disconnect();
 }
 
 /**
@@ -135,4 +144,3 @@ export async function getPageContentAsHtml(
     return null;
   }
 }
-

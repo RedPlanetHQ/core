@@ -143,7 +143,7 @@ export function PageHeader({
               {tabs.map((tab) => (
                 <Button
                   key={tab.value}
-                  variant="secondary"
+                  variant="ghost"
                   className="rounded"
                   isActive={tab.isActive}
                   onClick={tab.onClick}

@@ -19,6 +19,7 @@ import { ToolApprovalPanel } from "./tool-approval-panel.client";
 
 interface AIConversationItemProps {
   message: UIMessage;
+  createdAt?: string;
   addToolApprovalResponse: ChatAddToolApproveResponseFunction;
   setToolArgOverride: (
     toolCallId: string,
@@ -31,6 +32,7 @@ interface AIConversationItemProps {
 
 const ConversationItemComponent = ({
   message,
+  createdAt,
   addToolApprovalResponse,
   setToolArgOverride,
   isChatBusy = false,
@@ -40,6 +42,12 @@ const ConversationItemComponent = ({
   const isUser = message.role === "user" || false;
   const textPart = message.parts.find((part) => part.type === "text");
   const [showAllTools, setShowAllTools] = useState(false);
+  const formattedTime = createdAt
+    ? new Date(createdAt).toLocaleTimeString([], {
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
 
   const editor = useEditor({
     extensions: [...extensionsForConversation],
@@ -126,71 +134,91 @@ const ConversationItemComponent = ({
   return (
     <div
       className={cn(
-        "flex w-full gap-2 px-5 pb-2",
+        "group/message flex w-full gap-2 px-5 pb-2",
         isUser && "my-4 justify-end",
       )}
     >
       <div
         className={cn(
           "flex w-full flex-col",
-          isUser && "bg-grayAlpha-100 w-fit rounded-md p-2",
+          isUser && "w-fit items-end",
         )}
       >
-        {groupedParts.map((group, groupIndex) => {
-          if (group.type === "single") {
+        <div
+          className={cn(
+            "flex w-full flex-col",
+            isUser && "bg-grayAlpha-100 rounded-md p-2",
+          )}
+        >
+          {groupedParts.map((group, groupIndex) => {
+            if (group.type === "single") {
+              return (
+                <div key={`single-${groupIndex}`}>
+                  {getComponent(group.parts[0])}
+                </div>
+              );
+            }
+
+            const toolGroup = group.parts;
+            const shouldCollapse = toolGroup.length > 3;
+            const visibleTools =
+              shouldCollapse && !showAllTools
+                ? toolGroup.slice(0, 2)
+                : toolGroup;
+            const hiddenCount = shouldCollapse ? toolGroup.length - 2 : 0;
+
             return (
-              <div key={`single-${groupIndex}`}>
-                {getComponent(group.parts[0])}
+              <div key={`group-${groupIndex}`}>
+                {visibleTools.map((part, index) => {
+                  const disabled = isToolDisabled(
+                    part as unknown as ConversationToolPart,
+                    allToolsFlat,
+                    firstPendingApprovalIdx,
+                  );
+                  return (
+                    <div key={`tool-${groupIndex}-${index}`}>
+                      {getComponent(part, disabled)}
+                    </div>
+                  );
+                })}
+
+                {shouldCollapse && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setShowAllTools(!showAllTools)}
+                    className="text-muted-foreground hover:text-foreground self-start text-sm"
+                  >
+                    {showAllTools
+                      ? "Show less"
+                      : `Show ${hiddenCount} more tool${hiddenCount > 1 ? "s" : ""}...`}
+                  </Button>
+                )}
               </div>
             );
-          }
+          })}
 
-          const toolGroup = group.parts;
-          const shouldCollapse = toolGroup.length > 3;
-          const visibleTools =
-            shouldCollapse && !showAllTools ? toolGroup.slice(0, 2) : toolGroup;
-          const hiddenCount = shouldCollapse ? toolGroup.length - 2 : 0;
+          {pendingApprovals.length > 0 && (
+            <ToolApprovalPanel
+              pendingApprovals={pendingApprovals}
+              addToolApprovalResponse={handleToolApproval}
+              isChatBusy={isChatBusy}
+              integrationAccountMap={integrationAccountMap}
+              integrationFrontendMap={integrationFrontendMap}
+              setToolArgOverride={setToolArgOverride}
+            />
+          )}
+        </div>
 
-          return (
-            <div key={`group-${groupIndex}`}>
-              {visibleTools.map((part, index) => {
-                const disabled = isToolDisabled(
-                  part as unknown as ConversationToolPart,
-                  allToolsFlat,
-                  firstPendingApprovalIdx,
-                );
-                return (
-                  <div key={`tool-${groupIndex}-${index}`}>
-                    {getComponent(part, disabled)}
-                  </div>
-                );
-              })}
-
-              {shouldCollapse && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowAllTools(!showAllTools)}
-                  className="text-muted-foreground hover:text-foreground self-start text-sm"
-                >
-                  {showAllTools
-                    ? "Show less"
-                    : `Show ${hiddenCount} more tool${hiddenCount > 1 ? "s" : ""}...`}
-                </Button>
-              )}
-            </div>
-          );
-        })}
-
-        {pendingApprovals.length > 0 && (
-          <ToolApprovalPanel
-            pendingApprovals={pendingApprovals}
-            addToolApprovalResponse={handleToolApproval}
-            isChatBusy={isChatBusy}
-            integrationAccountMap={integrationAccountMap}
-            integrationFrontendMap={integrationFrontendMap}
-            setToolArgOverride={setToolArgOverride}
-          />
+        {formattedTime && (
+          <div
+            className={cn(
+              "text-muted-foreground/70 pt-1 text-[10px] opacity-0 transition-opacity group-hover/message:opacity-100",
+              isUser ? "self-end" : "self-start",
+            )}
+          >
+            {formattedTime}
+          </div>
         )}
       </div>
     </div>

@@ -40,38 +40,12 @@ export const TemporalTypeSchema = z.enum([
 export type TemporalType = z.infer<typeof TemporalTypeSchema>;
 
 // Using discriminated union for proper OpenAI structured output support
-export const TemporalFilterSchema = z.discriminatedUnion("type", [
-  z.object({
-    type: z.literal("recent"),
-    days: z.number(),
-    startDate: z.null(),
-    endDate: z.null(),
-  }),
-  z.object({
-    type: z.literal("range"),
-    days: z.null(),
-    startDate: z.string(),
-    endDate: z.string(),
-  }),
-  z.object({
-    type: z.literal("before"),
-    days: z.null(),
-    startDate: z.null(),
-    endDate: z.string(),
-  }),
-  z.object({
-    type: z.literal("after"),
-    days: z.null(),
-    startDate: z.string(),
-    endDate: z.null(),
-  }),
-  z.object({
-    type: z.literal("all"),
-    days: z.null(),
-    startDate: z.null(),
-    endDate: z.null(),
-  }),
-]);
+export const TemporalFilterSchema = z.object({
+  type: z.enum(["recent", "range", "before", "after", "all"]),
+  days: z.number().nullable(),
+  startDate: z.string().nullable(),
+  endDate: z.string().nullable(),
+});
 
 export type TemporalFilter = z.infer<typeof TemporalFilterSchema>;
 

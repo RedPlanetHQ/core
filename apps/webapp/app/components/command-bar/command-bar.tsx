@@ -173,12 +173,17 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
     setNewTaskOpen(true);
   };
 
-  const handleTaskCreate = async (title: string, description: string) => {
+  const handleTaskCreate = async (
+    title: string,
+    description: string,
+    status: string,
+  ) => {
     setIsCreatingTask(true);
     try {
       const formData = new FormData();
       formData.set("intent", "create");
       formData.set("title", title);
+      formData.set("status", status);
       if (description) formData.set("description", description);
 
       const res = await fetch("/home/tasks", {
@@ -244,9 +249,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
               {NAV_ITEMS.filter(
                 (item) =>
                   !searchQuery.trim() ||
-                  item.label
-                    .toLowerCase()
-                    .includes(searchQuery.toLowerCase()),
+                  item.label.toLowerCase().includes(searchQuery.toLowerCase()),
               ).map((item) => (
                 <CommandItem
                   key={item.url}
@@ -276,14 +279,24 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
 
             <CommandGroup heading="Actions" className="p-2">
               {[
-                { label: "New Chat", icon: MessageSquare, onSelect: handleNewChat },
+                {
+                  label: "New Chat",
+                  icon: MessageSquare,
+                  onSelect: handleNewChat,
+                },
                 { label: "Add Task", icon: Task, onSelect: handleAddTask },
-                { label: "Add Document", icon: Plus, onSelect: handleAddDocument },
+                {
+                  label: "Add Document",
+                  icon: Plus,
+                  onSelect: handleAddDocument,
+                },
               ]
                 .filter(
                   (action) =>
                     !searchQuery.trim() ||
-                    action.label.toLowerCase().includes(searchQuery.toLowerCase()),
+                    action.label
+                      .toLowerCase()
+                      .includes(searchQuery.toLowerCase()),
                 )
                 .map((action) => (
                   <CommandItem

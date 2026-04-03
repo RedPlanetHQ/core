@@ -7,6 +7,7 @@ import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Collaboration from "@tiptap/extension-collaboration";
 import TaskList from "@tiptap/extension-task-list";
 import { HocuspocusProvider } from "@hocuspocus/provider";
+import { useCollabSocket } from "~/components/editor/collab-socket-context";
 import { IndexeddbPersistence } from "y-indexeddb";
 import * as Y from "yjs";
 import { all, createLowlight } from "lowlight";
@@ -25,11 +26,6 @@ import { ConversationParagraph } from "~/components/editor/extensions/conversati
 import { ConversationPopover } from "~/components/editor/conversation-popover";
 
 const lowlight = createLowlight(all);
-
-function getCollabURL(): string {
-  const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
-  return `${proto}//${window.location.host}/collab`;
-}
 
 function buildExtensions(
   pageId: string,
@@ -59,7 +55,6 @@ function buildExtensions(
   return [
     StarterKit.configure({
       heading: false,
-      history: false,
       bulletList: {
         HTMLAttributes: {
           class: cx("list-disc list-outside pl-4 leading-1 my-1"),
@@ -135,7 +130,28 @@ function EditorInner({
   const [activeConversation, setActiveConversation] = useState<{
     conversationId: string;
     rect: DOMRect;
+    resolved: boolean;
   } | null>(null);
+
+  const updateConversationResolved = React.useCallback(
+    (conversationId: string, resolved: boolean) => {
+      const fragment = ydoc.getXmlFragment("default");
+
+      ydoc.transact(() => {
+        fragment.forEach((child) => {
+          if (!(child instanceof Y.XmlElement)) return;
+          if (child.getAttribute("conversationId") !== conversationId) return;
+
+          child.setAttribute("resolved", resolved);
+        });
+      }, "client-conversation-resolved");
+
+      setActiveConversation((current) =>
+        current?.conversationId === conversationId ? { ...current, resolved } : current,
+      );
+    },
+    [ydoc],
+  );
 
   const editor = useEditor({
     extensions: buildExtensions(
@@ -158,10 +174,16 @@ function EditorInner({
           if (node.type.name === "paragraph" && node.attrs.conversationId) {
             const startPos = $pos.start(depth);
             const coords = view.coordsAtPos(startPos);
-            const rect = new DOMRect(coords.left, coords.top, 0, coords.bottom - coords.top);
+            const rect = new DOMRect(
+              coords.left,
+              coords.top,
+              0,
+              coords.bottom - coords.top,
+            );
             setActiveConversation({
               conversationId: node.attrs.conversationId,
               rect,
+              resolved: Boolean(node.attrs.resolved),
             });
             return true;
           }
@@ -179,8 +201,9 @@ function EditorInner({
       <ConversationPopover
         conversationId={activeConversation?.conversationId ?? null}
         anchorRect={activeConversation?.rect ?? null}
+        resolved={activeConversation?.resolved ?? false}
         butlerName={butlerName}
-        pageId={pageId}
+        onResolvedChange={updateConversationResolved}
         onClose={() => setActiveConversation(null)}
       />
     </>
@@ -206,16 +229,35 @@ export function PageEditor({
 }: PageEditorProps) {
   const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
   const providerRef = useRef<HocuspocusProvider | null>(null);
+  const sharedSocket = useCollabSocket();
 
   useEffect(() => {
     const doc = new Y.Doc();
     new IndexeddbPersistence(pageId, doc);
-    providerRef.current = new HocuspocusProvider({
-      url: getCollabURL(),
-      name: pageId,
-      document: doc,
-      token: collabToken,
-    });
+    const providerOptions: ConstructorParameters<typeof HocuspocusProvider>[0] =
+      sharedSocket
+        ? {
+            websocketProvider: sharedSocket,
+            name: pageId,
+            document: doc,
+            token: collabToken,
+            onConnect: () => {
+              console.log("connected");
+            },
+          }
+        : {
+            url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collab`,
+            name: pageId,
+            document: doc,
+            token: collabToken,
+          };
+    providerRef.current = new HocuspocusProvider(providerOptions);
+    if (sharedSocket) {
+      // When websocketProvider is passed, HocuspocusProvider skips calling attach()
+      // internally (manageSocket stays false). We must call it manually so the
+      // provider registers in the socket's providerMap and receives onOpen.
+      providerRef.current.attach();
+    }
     const t = setTimeout(() => setYdoc(doc), 50);
 
     return () => {

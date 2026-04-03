@@ -434,3 +434,36 @@ export async function isWithinWhatsApp24hWindow(
     return false;
   }
 }
+
+export type TaskRun = {
+  id: string;
+  createdAt: Date;
+  status: string;
+  lastMessage: { text: string; userType: string } | null;
+};
+
+export async function getTaskRuns(taskId: string): Promise<TaskRun[]> {
+  const conversations = await prisma.conversation.findMany({
+    where: { asyncJobId: taskId, deleted: null },
+    orderBy: { createdAt: "desc" },
+    include: {
+      ConversationHistory: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { message: true, userType: true },
+      },
+    },
+  });
+
+  return conversations.map((c) => ({
+    id: c.id,
+    createdAt: c.createdAt,
+    status: c.status,
+    lastMessage: c.ConversationHistory[0]
+      ? {
+          text: c.ConversationHistory[0].message ?? "",
+          userType: c.ConversationHistory[0].userType,
+        }
+      : null,
+  }));
+}

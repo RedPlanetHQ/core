@@ -63,11 +63,11 @@ export const TaskStatusDropdown = ({
           variant="link"
           role="combobox"
           aria-expanded={open}
-          className="focus-visible:border-primary flex items-center justify-between px-0 shadow-none focus-visible:ring-1"
+          className="focus-visible:border-primary bg-grayAlpha-100 flex items-center justify-between px-2 shadow-none focus-visible:ring-1"
         >
           <CategoryIcon
             size={20}
-            className="text-muted-foreground mr-2"
+            className="text-muted-foreground mr-1"
             color={getTaskStatusColor(value as any).color}
           />
           {value}

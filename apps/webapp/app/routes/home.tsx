@@ -23,6 +23,7 @@ import { prisma } from "~/db.server";
 import { SetButlerNameModal } from "~/components/onboarding/set-butler-name-modal";
 import { ClientOnly } from "remix-utils/client-only";
 import { GlobalChatPanel } from "~/components/chat-panel/global-chat-panel.client";
+import { CollabSocketProvider } from "~/components/editor/collab-socket-context";
 import {
   ChatPanelProvider,
   useChatPanel,
@@ -220,17 +221,19 @@ export default function Home() {
   const agentName = (workspace?.name as string) ?? "butler";
 
   return (
-    <ChatPanelProvider>
-      <HomeInner
-        conversationSources={conversationSources}
-        workspace={workspace}
-        meta={meta}
-        agentName={agentName}
-        accentColor={accentColor}
-        needsButlerName={needsButlerName}
-        models={models}
-        integrationAccountMap={integrationAccountMap}
-      />
-    </ChatPanelProvider>
+    <CollabSocketProvider>
+      <ChatPanelProvider>
+        <HomeInner
+          conversationSources={conversationSources}
+          workspace={workspace}
+          meta={meta}
+          agentName={agentName}
+          accentColor={accentColor}
+          needsButlerName={needsButlerName}
+          models={models}
+          integrationAccountMap={integrationAccountMap}
+        />
+      </ChatPanelProvider>
+    </CollabSocketProvider>
   );
 }

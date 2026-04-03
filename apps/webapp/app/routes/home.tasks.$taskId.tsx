@@ -1,9 +1,9 @@
 import { json, redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
-import { useNavigate, useFetcher } from "@remix-run/react";
-import { useTypedLoaderData } from "remix-typedjson";
+import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
+import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
-import { LoaderCircle } from "lucide-react";
+import { LoaderCircle, Trash2 } from "lucide-react";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
 
@@ -16,14 +16,23 @@ import {
 } from "~/services/task.server";
 import { prisma } from "~/db.server";
 import {
-  getConversationAndHistory,
-  readConversation,
-} from "~/services/conversation.server";
+  removeScheduledTask,
+  enqueueScheduledTask,
+} from "~/lib/queue-adapter.server";
+import {
+  extractScheduleFromText,
+  applyScheduleToTask,
+  detectAndApplyRecurrence,
+} from "~/services/tasks/recurrence.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getButlerName } from "~/models/workspace.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { generateCollabToken } from "~/services/collab-token.server";
-import { TaskDetailFull } from "~/components/tasks/task-detail-full.client";
+import { PageHeader } from "~/components/common/page-header";
+import { Button } from "~/components/ui/button";
+import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
+import { ScheduleDialog } from "~/components/tasks/schedule-dialog";
+import React from "react";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 
@@ -48,30 +57,13 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 
   const taskPage = await findOrCreateTaskPage(workspaceId, user.id, taskId);
 
-  let taskConversations: Awaited<ReturnType<typeof getConversationAndHistory>>[] =
-    [];
-  if (task.conversationIds?.length) {
-    const results = await Promise.all(
-      task.conversationIds.map((id) =>
-        getConversationAndHistory(id, user.id),
-      ),
-    );
-    taskConversations = results.filter(Boolean) as typeof taskConversations;
-    await Promise.all(
-      taskConversations
-        .filter((c) => c?.unread)
-        .map((c) => readConversation(c!.id)),
-    );
-  }
-
   const integrationAccountMap: Record<string, string> = {};
   for (const acc of integrationAccounts) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
   }
 
-  return json({
+  return typedjson({
     task,
-    taskConversations,
     integrationAccountMap,
     butlerName,
     taskPageId: taskPage.id,
@@ -97,7 +89,9 @@ const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("create-subtask"),
     title: z.string().min(1),
-    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]).optional(),
+    status: z
+      .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
+      .optional(),
   }),
   z.object({
     intent: z.literal("update-subtask-status"),
@@ -107,6 +101,15 @@ const ActionSchema = z.discriminatedUnion("intent", [
   z.object({
     intent: z.literal("delete-subtask"),
     subtaskId: z.string(),
+  }),
+  z.object({
+    intent: z.literal("update-schedule"),
+    text: z.string().optional(),
+    startTime: z.string().optional(),
+    currentTime: z.string().optional(),
+  }),
+  z.object({
+    intent: z.literal("remove-schedule"),
   }),
 ]);
 
@@ -128,6 +131,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
     description: formData.get("description") ?? undefined,
     status: formData.get("status") ?? undefined,
     subtaskId: formData.get("subtaskId") ?? undefined,
+    text: formData.get("text") ?? undefined,
+    startTime: formData.get("startTime") ?? undefined,
+    currentTime: formData.get("currentTime") ?? undefined,
   });
 
   if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
@@ -140,6 +146,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
         description: parsed.data.description ?? null,
       },
     });
+    detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
     return json({ task });
   }
 
@@ -159,10 +166,16 @@ export async function action({ request, params }: ActionFunctionArgs) {
   }
 
   if (parsed.data.intent === "create-subtask") {
-    const subtask = await createTask(workspaceId, user.id, parsed.data.title, undefined, {
-      status: (parsed.data.status as TaskStatus) ?? "Todo",
-      parentTaskId: taskId,
-    });
+    const subtask = await createTask(
+      workspaceId,
+      user.id,
+      parsed.data.title,
+      undefined,
+      {
+        status: (parsed.data.status as TaskStatus) ?? "Todo",
+        parentTaskId: taskId,
+      },
+    );
     return json({ subtask });
   }
 
@@ -181,56 +194,139 @@ export async function action({ request, params }: ActionFunctionArgs) {
     return json({ deleted: true });
   }
 
+  if (parsed.data.intent === "update-schedule") {
+    const { text, startTime, currentTime } = parsed.data;
+
+    if (startTime) {
+      const nextRunAt = new Date(startTime);
+      const task = await prisma.task.findUnique({ where: { id: taskId } });
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { schedule: null, nextRunAt, isActive: true, maxOccurrences: 1 },
+      });
+      await removeScheduledTask(taskId);
+      await enqueueScheduledTask(
+        {
+          taskId,
+          workspaceId,
+          userId: user.id,
+          channel: task?.channel ?? "email",
+        },
+        nextRunAt,
+      );
+    } else if (text) {
+      const time = currentTime ?? new Date().toISOString();
+      const result = await extractScheduleFromText(text, time, workspaceId);
+      if (result) {
+        await applyScheduleToTask(taskId, workspaceId, user.id, result);
+      }
+    }
+
+    return json({ success: true });
+  }
+
+  if (parsed.data.intent === "remove-schedule") {
+    await prisma.task.update({
+      where: { id: taskId },
+      data: {
+        schedule: null,
+        nextRunAt: null,
+        isActive: false,
+        startDate: null,
+        maxOccurrences: null,
+      },
+    });
+    await removeScheduledTask(taskId);
+    return json({ success: true });
+  }
+
   return json({ error: "Unknown intent" }, { status: 400 });
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+function TaskDetailLayout() {
+  const { task } = useTypedLoaderData<typeof loader>();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const fetcher = useFetcher<typeof action>();
+  const [deleteOpen, setDeleteOpen] = React.useState(false);
+  const [scheduleOpen, setScheduleOpen] = React.useState(false);
+
+  const truncate = (s: string, max = 24) =>
+    s.length > max ? s.slice(0, max) + "…" : s;
+
+  const breadcrumbs = [
+    { label: "Tasks", href: "/home/tasks" },
+    ...(task.parentTask
+      ? [
+          {
+            label: truncate(task.parentTask.title),
+            href: `/home/tasks/${task.parentTask.id}`,
+          },
+        ]
+      : []),
+    { label: truncate(task.title || "Untitled") },
+  ];
+
+  const isRunsTab = location.pathname.endsWith("/runs");
+  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
+
+  return (
+    <div className="flex h-[calc(100vh-16px)] flex-col">
+      <PageHeader
+        title={task.title || "Untitled"}
+        breadcrumbs={breadcrumbs}
+        tabs={[
+          {
+            label: "Info",
+            value: "info",
+            isActive: !isRunsTab,
+            onClick: () => navigate(`/home/tasks/${task.id}`),
+          },
+          ...(isScheduled
+            ? [
+                {
+                  label: "Runs",
+                  value: "runs",
+                  isActive: isRunsTab,
+                  onClick: () => navigate(`/home/tasks/${task.id}/runs`),
+                },
+              ]
+            : []),
+        ]}
+        actionsNode={
+          <Button
+            variant="ghost"
+            className="text-destructive hover:text-destructive gap-2 rounded"
+            onClick={() => setDeleteOpen(true)}
+            disabled={fetcher.state !== "idle"}
+          >
+            <Trash2 size={14} /> Delete
+          </Button>
+        }
+      />
+
+      <div className="flex flex-1 overflow-hidden">
+        <Outlet />
+      </div>
+
+      <DeleteTaskDialog
+        open={deleteOpen}
+        onOpenChange={setDeleteOpen}
+        onConfirm={() =>
+          fetcher.submit({ intent: "delete" }, { method: "POST" })
+        }
+      />
+
+      {scheduleOpen && (
+        <ScheduleDialog onClose={() => setScheduleOpen(false)} />
+      )}
+    </div>
+  );
+}
 
 export default function TaskDetailPage() {
-  const { task, taskConversations, integrationAccountMap, butlerName, taskPageId, collabToken } =
-    useTypedLoaderData<typeof loader>();
-  const navigate = useNavigate();
-  const fetcher = useFetcher<typeof action>();
-
-  const handleSave = (title: string) => {
-    fetcher.submit(
-      { intent: "update", title },
-      { method: "POST" },
-    );
-  };
-
-  const handleStatusChange = (status: string) => {
-    fetcher.submit(
-      { intent: "update-status", status },
-      { method: "POST" },
-    );
-  };
-
-  const handleDelete = () => {
-    fetcher.submit({ intent: "delete" }, { method: "POST" });
-  };
-
-  const handleCreateSubtask = (title: string, status: string) => {
-    fetcher.submit(
-      { intent: "create-subtask", title, status },
-      { method: "POST" },
-    );
-  };
-
-  const handleSubtaskStatusChange = (subtaskId: string, status: string) => {
-    fetcher.submit(
-      { intent: "update-subtask-status", subtaskId, status },
-      { method: "POST" },
-    );
-  };
-
-  const handleSubtaskDelete = (subtaskId: string) => {
-    fetcher.submit(
-      { intent: "delete-subtask", subtaskId },
-      { method: "POST" },
-    );
-  };
-
   if (typeof window === "undefined") return null;
 
   return (
@@ -241,24 +337,7 @@ export default function TaskDetailPage() {
         </div>
       }
     >
-      {() => (
-        <TaskDetailFull
-          task={task}
-          conversations={taskConversations}
-          integrationAccountMap={integrationAccountMap}
-          butlerName={butlerName}
-          taskPageId={taskPageId}
-          collabToken={collabToken}
-          isSubmitting={fetcher.state !== "idle"}
-          onSave={handleSave}
-          onDelete={handleDelete}
-          onStatusChange={handleStatusChange}
-          onCreateSubtask={handleCreateSubtask}
-          onSubtaskStatusChange={handleSubtaskStatusChange}
-          onSubtaskDelete={handleSubtaskDelete}
-          onSubtaskClick={(id) => navigate(`/home/tasks/${id}`)}
-        />
-      )}
+      {() => <TaskDetailLayout />}
     </ClientOnly>
   );
 }

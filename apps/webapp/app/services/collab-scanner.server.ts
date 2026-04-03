@@ -17,6 +17,7 @@ import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { classifyScratchpadIntents } from "~/services/agent/prompts/scratchpad-decision";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { logger } from "~/services/logger.service";
+import { isButlerSnoozed } from "~/services/butler-activity.server";
 
 // ── Hocuspocus reference (set from websocket.ts) ───────────────────────
 let hocuspocusRef: Hocuspocus | null = null;
@@ -117,7 +118,9 @@ async function triggerMentionAgent(
   userId: string,
   workspaceId: string,
 ) {
-  logger.info(`[scratchpad] Mention trigger page=${pageId} message="${message.slice(0, 100)}"`);
+  logger.info(
+    `[scratchpad] Mention trigger page=${pageId} message="${message.slice(0, 100)}"`,
+  );
 
   try {
     const result = await createConversation(workspaceId, userId, {
@@ -160,13 +163,21 @@ async function triggerProactiveDecision(
   userId: string,
   workspaceId: string,
 ) {
-  logger.info(`[scratchpad] Proactive decision page=${pageId} diff=${diffParagraphs.length} paragraphs`);
+  logger.info(
+    `[scratchpad] Proactive decision page=${pageId} diff=${diffParagraphs.length} paragraphs`,
+  );
 
   try {
     // Load connected integrations for the decision prompt
-    const integrationAccounts = await IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId);
+    const integrationAccounts =
+      await IntegrationLoader.getConnectedIntegrationAccounts(
+        userId,
+        workspaceId,
+      );
     const connectedIntegrations = integrationAccounts.map((int) =>
-      "integrationDefinition" in int ? int.integrationDefinition.name : int.name,
+      "integrationDefinition" in int
+        ? int.integrationDefinition.name
+        : int.name,
     );
 
     // Step 1: Classify intents via lightweight LLM call
@@ -178,7 +189,9 @@ async function triggerProactiveDecision(
     );
 
     const actionableIntents = intents.filter((i) => i.actionable);
-    logger.info(`[scratchpad] Decision: ${intents.length} intents, ${actionableIntents.length} actionable`);
+    logger.info(
+      `[scratchpad] Decision: ${intents.length} intents, ${actionableIntents.length} actionable`,
+    );
 
     if (actionableIntents.length === 0) return;
 
@@ -197,23 +210,36 @@ async function triggerProactiveDecision(
           .filter(Boolean);
 
         // Attach conversationId to matching paragraph(s) in Yjs using containment match
-        attachConversationToYdoc(document, sourceParagraphs, result.conversationId);
+        attachConversationToYdoc(
+          document,
+          sourceParagraphs,
+          result.conversationId,
+        );
 
         // Fire agent processing with scratchpad context
         noStreamProcess(
           {
             id: result.conversationId,
-            message: { parts: [{ text: intent.intent, type: "text" }], role: "user" },
+            message: {
+              parts: [{ text: intent.intent, type: "text" }],
+              role: "user",
+            },
             source: "daily",
             scratchpadPageId: pageId,
           },
           userId,
           workspaceId,
         ).catch((err) =>
-          logger.error(`[scratchpad] Proactive agent failed for intent="${intent.intent.slice(0, 60)}"`, err),
+          logger.error(
+            `[scratchpad] Proactive agent failed for intent="${intent.intent.slice(0, 60)}"`,
+            err,
+          ),
         );
       } catch (err) {
-        logger.error(`[scratchpad] Failed to create conversation for intent="${intent.intent.slice(0, 60)}"`, err);
+        logger.error(
+          `[scratchpad] Failed to create conversation for intent="${intent.intent.slice(0, 60)}"`,
+          err,
+        );
       }
     }
   } catch (err) {
@@ -226,10 +252,9 @@ async function triggerProactiveDecision(
 export async function handleScratchpadChange(
   pageId: string,
   document: Y.Doc,
-  context: unknown,
+  context: { workspaceId: string; userId: string } | null,
 ) {
-  const auth = context as { workspaceId: string; userId: string } | null;
-  if (!auth?.workspaceId || !auth?.userId) return;
+  if (!context?.workspaceId || !context?.userId) return;
 
   const fragment = document.getXmlFragment("default");
   const { mentions, paragraphs } = scanYjsFragment(fragment);
@@ -273,7 +298,13 @@ export async function handleScratchpadChange(
 
         for (const { instruction, mentionKey } of freshNew) {
           processed.add(mentionKey);
-          triggerMentionAgent(pageId, instruction, document, auth.userId, auth.workspaceId);
+          triggerMentionAgent(
+            pageId,
+            instruction,
+            document,
+            context.userId,
+            context.workspaceId,
+          );
         }
       }, MENTION_IDLE_MS),
     );
@@ -287,6 +318,14 @@ export async function handleScratchpadChange(
 
   const previousSnapshot = docSnapshots.get(pageId)!;
   const previousSet = new Set(previousSnapshot);
+
+  if (await isButlerSnoozed(context.workspaceId)) {
+    const existingTimer = proactiveTimers.get(pageId);
+    if (existingTimer) clearTimeout(existingTimer);
+    proactiveTimers.delete(pageId);
+    docSnapshots.set(pageId, nonMentionParagraphs);
+    return;
+  }
 
   // Only update snapshot when no proactive timer is pending
   if (!proactiveTimers.has(pageId)) {
@@ -312,9 +351,7 @@ export async function handleScratchpadChange(
       // Re-scan for final state
       const freshFragment = document.getXmlFragment("default");
       const fresh = scanYjsFragment(freshFragment);
-      const freshNonMention = fresh.paragraphs.filter(
-        (p) => !p.includes("@"),
-      );
+      const freshNonMention = fresh.paragraphs.filter((p) => !p.includes("@"));
       const freshDiff = freshNonMention.filter((p) => !previousSet.has(p));
 
       if (freshDiff.length === 0) return;
@@ -328,8 +365,8 @@ export async function handleScratchpadChange(
         freshDiff,
         freshNonMention,
         document,
-        auth.userId,
-        auth.workspaceId,
+        context.userId,
+        context.workspaceId,
       );
     }, PROACTIVE_IDLE_MS),
   );
@@ -369,12 +406,15 @@ function attachConversationToYdoc(
 
       if (isMatch) {
         child.setAttribute("conversationId", conversationId);
+        child.setAttribute("resolved", false);
         matched++;
       }
     });
   }, "server-conversation-attach");
 
-  logger.info(`[scratchpad] attachConversation: matched=${matched}/${paragraphTexts.length} conversationId=${conversationId}`);
+  logger.info(
+    `[scratchpad] attachConversation: matched=${matched}/${paragraphTexts.length} conversationId=${conversationId}`,
+  );
 }
 
 /**

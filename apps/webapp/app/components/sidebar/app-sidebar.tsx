@@ -37,6 +37,7 @@ import {
 import { useNavigate, useParams } from "@remix-run/react";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
+import { ButlerActivityIndicator } from "../common/butler-activity-indicator";
 
 const data = {
   navMain: [
@@ -158,15 +159,21 @@ export function AppSidebar({
 
         <SidebarFooter className="flex flex-col gap-1 px-2">
           <IngestionStatus />
-          <Button
-            variant="ghost"
-            className="justify-end"
-            onClick={() => {
-              navigate("/settings/billing");
-            }}
-          >
-            <div>{user.availableCredits} credits</div>
-          </Button>
+
+          <div className="flex justify-end">
+            <Button
+              variant="ghost"
+              className="w-fit"
+              onClick={() => {
+                navigate("/settings/billing");
+              }}
+            >
+              <div>{user.availableCredits} credits</div>
+            </Button>
+          </div>
+
+          <ButlerActivityIndicator workspaceName={agentName} />
+
           <Button
             variant="secondary"
             className="w-full justify-start gap-2 rounded"

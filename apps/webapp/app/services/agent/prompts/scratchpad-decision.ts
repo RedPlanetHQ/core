@@ -19,15 +19,21 @@ export const ScratchpadIntentSchema = z.object({
       /** 1-based indices into the new_or_modified_content list */
       paragraphIndices: z
         .array(z.number())
-        .describe("1-based indices from the <new_or_modified_content> list that this intent comes from"),
+        .describe(
+          "1-based indices from the <new_or_modified_content> list that this intent comes from",
+        ),
       /** What the user wants done — phrased as a clear instruction for the agent */
       intent: z
         .string()
-        .describe("Clear instruction for the butler describing what needs to be done"),
+        .describe(
+          "Clear instruction for the butler describing what needs to be done",
+        ),
       /** Whether this is actionable (butler can/should act on it) */
       actionable: z
         .boolean()
-        .describe("true if butler can reduce effort here, false if it's just notes/journaling"),
+        .describe(
+          "true if butler can reduce effort here, false if it's just notes/journaling",
+        ),
     }),
   ),
 });
@@ -100,12 +106,16 @@ export async function classifyScratchpadIntents(
   connectedIntegrations: string[],
   workspaceId: string,
 ): Promise<ScratchpadIntent> {
-  const prompt = buildDecisionPrompt(diffParagraphs, fullPageParagraphs, connectedIntegrations);
+  const prompt = buildDecisionPrompt(
+    diffParagraphs,
+    fullPageParagraphs,
+    connectedIntegrations,
+  );
 
   const { object } = await makeStructuredModelCall(
     ScratchpadIntentSchema,
     [{ role: "user", content: prompt }],
-    "low",
+    "medium",
     "scratchpad-decision",
     0.3,
     workspaceId,

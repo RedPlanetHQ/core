@@ -16,7 +16,10 @@ interface DescriptionEditorProps {
   onChange: (markdown: string) => void;
 }
 
-function DescriptionEditor({ initialContent, onChange }: DescriptionEditorProps) {
+function DescriptionEditor({
+  initialContent,
+  onChange,
+}: DescriptionEditorProps) {
   const editor = useEditor({
     extensions: [
       ...extensionsForConversation,
@@ -27,7 +30,7 @@ function DescriptionEditor({ initialContent, onChange }: DescriptionEditorProps)
     editorProps: {
       attributes: {
         class:
-          "min-h-[40px] py-1 focus:outline-none prose prose-sm max-w-none dark:prose-invert text-muted-foreground",
+          "min-h-[40px] py-1 focus:outline-none prose prose-sm max-w-none dark:prose-invert",
       },
     },
     onUpdate({ editor }) {
@@ -47,6 +50,8 @@ export interface TaskInlineFormProps {
   mode?: "create" | "edit";
   initialTitle?: string;
   initialDescription?: string;
+  className?: string;
+  titleClassName?: string;
 }
 
 export function TaskInlineForm({
@@ -58,6 +63,8 @@ export function TaskInlineForm({
   mode = "create",
   initialTitle = "",
   initialDescription = "",
+  className,
+  titleClassName,
 }: TaskInlineFormProps) {
   const [title, setTitle] = useState(initialTitle);
   const [description, setDescription] = useState(initialDescription);
@@ -69,7 +76,12 @@ export function TaskInlineForm({
   };
 
   return (
-    <div className="rounded-lg border p-3 flex flex-col gap-2 bg-background">
+    <div
+      className={cn(
+        "bg-background-2 border-border shadow-1 flex flex-col gap-1 rounded-lg border p-3",
+        className,
+      )}
+    >
       <div className="flex items-center gap-2">
         {showStatus && (
           <div className="shrink-0">
@@ -82,7 +94,10 @@ export function TaskInlineForm({
         )}
         <input
           autoFocus
-          className="flex-1 bg-transparent text-sm focus:outline-none placeholder:text-muted-foreground"
+          className={cn(
+            "placeholder:text-muted-foreground flex-1 bg-transparent text-base focus:outline-none",
+            titleClassName,
+          )}
           placeholder="Issue title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}

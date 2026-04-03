@@ -103,7 +103,13 @@ function TaskRowItem({
             selected && "bg-grayAlpha-100",
           )}
         >
-          <div className="shrink-0 pt-2">
+          <div
+            className="shrink-0 pt-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
             <TaskStatusDropdown
               value={task.status}
               onChange={onStatusChange}

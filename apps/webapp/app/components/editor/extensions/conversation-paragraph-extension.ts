@@ -24,19 +24,51 @@ export const ConversationParagraph = Paragraph.extend({
           };
         },
       },
+      resolved: {
+        default: false,
+        parseHTML: (element) =>
+          element.getAttribute("data-resolved") === "true",
+        renderHTML: (attributes) => {
+          if (!attributes.conversationId) return {};
+          return {
+            "data-resolved": String(Boolean(attributes.resolved)),
+          };
+        },
+      },
     };
   },
 
   renderHTML({ node, HTMLAttributes }) {
     const hasConversation = !!node.attrs.conversationId;
+    const isResolved = !!node.attrs.resolved;
+
+    if (!hasConversation) {
+      return [
+        "p",
+        mergeAttributes(HTMLAttributes, {
+          class: "leading-[24px] mt-[0.25rem] paragraph-node",
+        }),
+        0,
+      ];
+    }
+
     return [
       "p",
       mergeAttributes(HTMLAttributes, {
-        class: hasConversation
-          ? "leading-[24px] mt-[0.25rem] paragraph-node border-l-2 border-primary/30 pl-2 cursor-pointer"
-          : "leading-[24px] mt-[0.25rem] paragraph-node",
+        class: "leading-[24px] mt-[0.25rem] paragraph-node",
       }),
-      0,
+      [
+        "span",
+        {
+          class: [
+            "inline cursor-pointer px-1 py-0.5 transition-colors box-decoration-clone",
+            isResolved
+              ? "bg-primary/15 text-foreground/50"
+              : "bg-primary/30 text-foreground",
+          ].join(" "),
+        },
+        0,
+      ],
     ];
   },
 });

@@ -1,162 +1,232 @@
-/**
- * Popover that shows a conversation thread when clicking a paragraph
- * with an attached conversationId (from scratchpad detection).
- *
- * Shows text messages from both user and assistant (no tool calls).
- * Supports replies and polls for in-progress conversations.
- */
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+} from "react";
+import { useChat, type UIMessage } from "@ai-sdk/react";
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from "ai";
+import {
+  Popover,
+  PopoverContent,
+  PopoverAnchor,
+} from "~/components/ui/popover";
+import { ArrowUpRight, Check, Loader2, RotateCcw } from "lucide-react";
+import { Button, buttonVariants } from "../ui";
+import { cn } from "~/lib/utils";
+import {
+  ConversationItem,
+  ConversationTextarea,
+} from "../conversation";
+import { hasNeedsApprovalDeep } from "../conversation/conversation-utils";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
-import { Popover, PopoverContent, PopoverAnchor } from "~/components/ui/popover";
-import { Loader2, Send } from "lucide-react";
+interface ConversationPart {
+  type: string;
+  text?: string;
+}
 
-interface ConversationMessage {
+interface ConversationHistoryItem {
   id: string;
-  role: "user" | "assistant";
-  text: string;
+  role?: "user" | "assistant";
+  userType?: string;
+  parts?: ConversationPart[];
+  createdAt: string;
+}
+
+interface ConversationResponse {
+  ConversationHistory: ConversationHistoryItem[];
+}
+
+interface VisibleMessage {
+  id: string;
+  role: UIMessage["role"];
   createdAt: string;
 }
 
 interface ConversationPopoverProps {
   conversationId: string | null;
   anchorRect: DOMRect | null;
+  resolved: boolean;
   butlerName: string;
-  pageId: string;
+  onResolvedChange: (conversationId: string, resolved: boolean) => void;
   onClose: () => void;
+}
+
+function isTextPart(part: unknown): part is { type: "text"; text: string } {
+  if (typeof part !== "object" || part === null) return false;
+  if (!("type" in part) || !("text" in part)) return false;
+
+  const candidate = part as { type?: unknown; text?: unknown };
+  return candidate.type === "text" && typeof candidate.text === "string";
 }
 
 export function ConversationPopover({
   conversationId,
   anchorRect,
+  resolved,
   butlerName,
-  pageId,
+  onResolvedChange,
   onClose,
 }: ConversationPopoverProps) {
   const open = !!conversationId && !!anchorRect;
-  const [messages, setMessages] = useState<ConversationMessage[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-  const [replyText, setReplyText] = useState("");
-  const [sending, setSending] = useState(false);
+  const [historyMessages, setHistoryMessages] = useState<UIMessage[]>([]);
+  const [historyMeta, setHistoryMeta] = useState<Record<string, string>>({});
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const toolArgOverridesRef = useRef<Record<string, Record<string, unknown>>>(
+    {},
+  );
 
-  // Fetch conversation when opened
+  const setToolArgOverride = useCallback(
+    (toolCallId: string, args: Record<string, unknown>) => {
+      toolArgOverridesRef.current = {
+        ...toolArgOverridesRef.current,
+        [toolCallId]: {
+          ...(toolArgOverridesRef.current[toolCallId] ?? {}),
+          ...args,
+        },
+      };
+    },
+    [],
+  );
+
+  const {
+    messages,
+    status,
+    sendMessage,
+    setMessages,
+    addToolApprovalResponse,
+  } = useChat({
+    id: conversationId ?? "conversation-popover",
+    messages: historyMessages,
+    onFinish: () => {
+      toolArgOverridesRef.current = {};
+    },
+    transport: new DefaultChatTransport({
+      api: "/api/v1/conversation",
+      prepareSendMessagesRequest({ messages, id }) {
+        const toolArgOverrides = toolArgOverridesRef.current;
+        const hasApprovals = Object.values(toolArgOverrides).some(
+          (e) => "approved" in e,
+        );
+
+        if (hasApprovals) {
+          return {
+            body: { messages, needsApproval: true, id, toolArgOverrides },
+          };
+        }
+
+        return {
+          body: {
+            id,
+            message: messages[messages.length - 1],
+            toolArgOverrides,
+          },
+        };
+      },
+    }),
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  });
+
   useEffect(() => {
     if (!conversationId) {
+      setHistoryMessages([]);
+      setHistoryMeta({});
       setMessages([]);
-      setStatus(null);
-      setReplyText("");
+      toolArgOverridesRef.current = {};
       return;
     }
 
-    let cancelled = false;
-    let pollTimer: ReturnType<typeof setInterval> | null = null;
-
-    async function fetchConversation() {
-      setLoading(true);
+    async function loadConversation() {
+      setLoadingHistory(true);
+      let data: ConversationResponse;
       try {
         const res = await fetch(`/api/v1/conversation/${conversationId}`);
         if (!res.ok) return;
-        const data = await res.json();
-
-        if (cancelled) return;
-
-        const convStatus = data.status ?? "completed";
-        setStatus(convStatus);
-
-        // Extract text messages from both user and assistant
-        const msgs: ConversationMessage[] = [];
-        for (const history of data.ConversationHistory ?? []) {
-          const role = history.role ?? (history.userType === "Agent" ? "assistant" : "user");
-
-          const textParts = (history.parts ?? [])
-            .filter((p: any) => p.type === "text" && p.text)
-            .map((p: any) => p.text)
-            .join("\n");
-
-          if (textParts.trim()) {
-            msgs.push({
-              id: history.id,
-              role: role as "user" | "assistant",
-              text: textParts.trim(),
-              createdAt: history.createdAt,
-            });
-          }
-        }
-
-        setMessages(msgs);
-        setLoading(false);
-
-        // If still running, poll every 3s
-        if (convStatus === "running" && !pollTimer) {
-          pollTimer = setInterval(fetchConversation, 3000);
-        }
-
-        // Stop polling once done
-        if (convStatus !== "running" && pollTimer) {
-          clearInterval(pollTimer);
-          pollTimer = null;
-        }
+        data = (await res.json()) as ConversationResponse;
       } catch {
-        setLoading(false);
+        return;
+      } finally {
+        setLoadingHistory(false);
       }
+
+      const nextHistory = (data.ConversationHistory ?? []).map((history) => ({
+        id: history.id,
+        role:
+          history.role ?? (history.userType === "Agent" ? "assistant" : "user"),
+        parts: history.parts ?? [],
+      })) as UIMessage[];
+
+      setHistoryMessages(nextHistory);
+      setMessages(nextHistory);
+      setHistoryMeta(
+        Object.fromEntries(
+          (data.ConversationHistory ?? []).map((history) => [
+            history.id,
+            history.createdAt,
+          ]),
+        ),
+      );
     }
 
-    fetchConversation();
+    loadConversation();
+  }, [conversationId, setMessages]);
 
-    return () => {
-      cancelled = true;
-      if (pollTimer) clearInterval(pollTimer);
-    };
-  }, [conversationId]);
+  const sending = status === "submitted" || status === "streaming";
 
-  // Scroll to bottom when messages update
+  const visibleMessages = useMemo(() => {
+    const normalized = messages
+      .map((message) => {
+        const hasRenderableParts = (message.parts ?? []).some(
+          (part) =>
+            isTextPart(part) ||
+            (typeof part === "object" &&
+              part !== null &&
+              "type" in part &&
+              typeof (part as { type?: unknown }).type === "string" &&
+              (part as { type: string }).type.includes("tool-")),
+        );
+
+        if (!hasRenderableParts) return null;
+
+        return {
+          id: message.id,
+          role: message.role,
+          createdAt: historyMeta[message.id] ?? new Date().toISOString(),
+        };
+      })
+      .filter((message): message is VisibleMessage => message !== null);
+
+    const firstAssistantIndex = normalized.findIndex(
+      (message) => message.role === "assistant",
+    );
+
+    return firstAssistantIndex === -1
+      ? []
+      : normalized.slice(firstAssistantIndex);
+  }, [historyMeta, messages]);
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
+  }, [visibleMessages]);
 
-  const handleReply = useCallback(async () => {
-    if (!replyText.trim() || !conversationId || sending) return;
+  const lastAssistant = [...messages]
+    .reverse()
+    .find((message) => message.role === "assistant");
 
-    const message = replyText.trim();
-    setReplyText("");
-    setSending(true);
+  const needsApproval = lastAssistant?.parts
+    ? hasNeedsApprovalDeep(lastAssistant.parts)
+    : false;
 
-    // Optimistically add user message
-    setMessages((prev) => [
-      ...prev,
-      {
-        id: `temp-${Date.now()}`,
-        role: "user",
-        text: message,
-        createdAt: new Date().toISOString(),
-      },
-    ]);
-
-    try {
-      await fetch(`/api/v1/page/${pageId}/reply`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, message }),
-      });
-      // Status will switch to "running" on next poll
-      setStatus("running");
-    } catch {
-      // ignore
-    } finally {
-      setSending(false);
-    }
-  }, [conversationId, pageId, replyText, sending]);
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        handleReply();
-      }
+  const handleToolApprovalResponse = useCallback(
+    (params: { id: string; approved: boolean }) => {
+      addToolApprovalResponse({ id: params.id, approved: true });
     },
-    [handleReply],
+    [addToolApprovalResponse],
   );
 
   return (
@@ -182,84 +252,96 @@ export function ConversationPopover({
       />
       <PopoverContent align="start" sideOffset={8} className="w-80 p-0">
         <div className="flex flex-col">
+          <div className="flex items-center justify-between border-b px-3 py-2">
+            <span className="text-muted-foreground text-xs font-medium">
+              {resolved ? "Resolved" : "Open"}
+            </span>
+            <div className="flex items-center">
+              {conversationId && (
+                <a
+                  href={`/home/conversation/${conversationId}`}
+                  className={cn(buttonVariants({ variant: "ghost" }), "gap-1")}
+                >
+                  <ArrowUpRight className="h-3.5 w-3.5" />
+                  <span>View</span>
+                </a>
+              )}
+              {conversationId && (
+                <Button
+                  type="button"
+                  onClick={() => onResolvedChange(conversationId, !resolved)}
+                  variant="ghost"
+                  className="gap-1"
+                >
+                  {resolved ? (
+                    <RotateCcw className="h-3.5 w-3.5" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5" />
+                  )}
+                  <span>{resolved ? "Reopen" : "Resolve"}</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
           {/* Messages thread */}
-          <div className="max-h-60 overflow-y-auto p-3 flex flex-col gap-3">
-            {loading && messages.length === 0 && (
+          <div className="flex max-h-60 flex-col gap-3 overflow-y-auto p-3">
+            {loadingHistory && visibleMessages.length === 0 && (
               <div className="flex items-center gap-2 py-2">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Loading...</span>
+                <Loader2 className="text-muted-foreground h-4 w-4 animate-spin" />
+                <span className="text-muted-foreground text-sm">
+                  Loading...
+                </span>
               </div>
             )}
 
-            {messages.map((msg) => (
-              <div key={msg.id} className="flex flex-col gap-0.5">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-medium text-muted-foreground">
-                    {msg.role === "assistant" ? butlerName : "You"}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground/60">
-                    {new Date(msg.createdAt).toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </span>
-                </div>
-                <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                  {msg.text}
-                </p>
-              </div>
-            ))}
+            {visibleMessages.map((msg) => {
+              const message = messages.find((item) => item.id === msg.id);
+              if (!message) return null;
 
-            {status === "running" && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+              return (
+                <ConversationItem
+                  key={msg.id}
+                  message={message}
+                  createdAt={msg.createdAt}
+                  addToolApprovalResponse={handleToolApprovalResponse}
+                  setToolArgOverride={setToolArgOverride}
+                  isChatBusy={sending}
+                />
+              );
+            })}
+
+            {sending && (
+              <div className="text-muted-foreground flex items-center gap-1 text-xs">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 {butlerName} is thinking...
               </div>
             )}
 
-            {!loading && messages.length === 0 && status !== "running" && (
-              <p className="text-sm text-muted-foreground">No response yet.</p>
+            {!loadingHistory && visibleMessages.length === 0 && !sending && (
+              <p className="text-muted-foreground text-sm">No response yet.</p>
             )}
 
             <div ref={messagesEndRef} />
           </div>
 
           {/* Reply input */}
-          <div className="border-t px-3 py-2 flex items-center gap-2">
-            <input
-              ref={inputRef}
-              type="text"
+          <div className="border-t p-2">
+            <ConversationTextarea
               placeholder="Reply..."
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={handleKeyDown}
-              disabled={sending}
-              className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/50"
+              isLoading={sending}
+              disabled={needsApproval}
+              needsApproval={needsApproval}
+              onConversationCreated={(message) => {
+                if (!conversationId) return;
+                sendMessage({
+                  role: "user",
+                  parts: [{ type: "text", text: message }],
+                });
+                onResolvedChange(conversationId, false);
+              }}
             />
-            <button
-              onClick={handleReply}
-              disabled={!replyText.trim() || sending}
-              className="text-muted-foreground hover:text-foreground disabled:opacity-30 transition-colors"
-            >
-              {sending ? (
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              ) : (
-                <Send className="h-3.5 w-3.5" />
-              )}
-            </button>
           </div>
-
-          {/* View full conversation link */}
-          {conversationId && (
-            <div className="border-t px-3 py-1.5 text-center">
-              <a
-                href={`/home/conversations/${conversationId}`}
-                className="text-xs text-muted-foreground underline hover:text-foreground"
-              >
-                View full conversation
-              </a>
-            </div>
-          )}
         </div>
       </PopoverContent>
     </Popover>

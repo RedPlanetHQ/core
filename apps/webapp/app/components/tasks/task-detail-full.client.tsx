@@ -1,50 +1,38 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Trash2, Plus, ExternalLink, ChevronRight, ArrowUpRight, Layers } from "lucide-react";
-import { TaskPageEditor } from "~/components/tasks/task-page-editor.client";
-import { Tabs, TabsContent } from "~/components/ui/tabs";
-import { Button } from "~/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "~/components/ui/select";
+  Plus,
+  ChevronRight,
+  ArrowUpRight,
+  Clock,
+  RefreshCw,
+} from "lucide-react";
+import { format } from "date-fns";
+import { TaskPageEditor } from "~/components/tasks/task-page-editor.client";
+import { Button } from "~/components/ui/button";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "~/components/ui/popover";
-import {
-  TaskConversationsSelect,
-  formatRunLabel,
-} from "~/components/tasks/task-conversations-select";
-import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
+import { ScheduleDialog } from "~/components/tasks/schedule-dialog";
 import {
   TaskStatusDropdown,
   TaskStatusDropdownVariant,
 } from "~/components/tasks/task-status-dropdown";
 import { TaskInlineForm } from "~/components/tasks/task-inline-form.client";
-import { PageHeader } from "~/components/common/page-header";
-import type { getConversationAndHistory } from "~/services/conversation.server";
 import type { TaskFull } from "~/services/task.server";
 import { cn } from "~/lib/utils";
 import type { TaskStatus } from "@core/database";
-
-type ConversationItem = NonNullable<
-  Awaited<ReturnType<typeof getConversationAndHistory>>
->;
+import { SubTask } from "../icons/sub-task";
 
 interface TaskDetailFullProps {
   task: TaskFull;
-  conversations: ConversationItem[];
   integrationAccountMap?: Record<string, string>;
   butlerName?: string;
   taskPageId: string;
   collabToken: string;
   isSubmitting: boolean;
   onSave: (title: string) => void;
-  onDelete: () => void;
   onStatusChange: (status: string) => void;
   onCreateSubtask: (title: string, status: string) => void;
   onSubtaskStatusChange: (subtaskId: string, status: string) => void;
@@ -71,12 +59,12 @@ function SubIssuesPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button className="border-border text-muted-foreground hover:bg-grayAlpha-100 flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs transition-colors">
-          <Layers size={11} />
+        <Button variant="secondary">
+          <SubTask size={14} />
           <span>
             {doneCount}/{subtasks.length}
           </span>
-        </button>
+        </Button>
       </PopoverTrigger>
       <PopoverContent className="w-72 p-0" align="start">
         <div className="border-border border-b px-3 py-2">
@@ -85,14 +73,15 @@ function SubIssuesPopover({
             placeholder="Search sub tasks..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="text-muted-foreground w-full bg-transparent text-sm focus:outline-none"
+            className="w-full bg-transparent text-sm focus:outline-none"
           />
         </div>
-        <div className="max-h-52 overflow-y-auto py-1">
+        <div className="flex max-h-52 flex-col items-start justify-start gap-1 overflow-y-auto p-1">
           {filtered.map((subtask) => (
-            <button
+            <Button
               key={subtask.id}
-              className="hover:bg-grayAlpha-100 flex w-full min-w-0 items-center gap-2 px-3 py-1.5 text-left"
+              variant="ghost"
+              className="w-full min-w-0 justify-start gap-1"
               onClick={() => {
                 onSubtaskClick(subtask.id);
                 setOpen(false);
@@ -111,7 +100,7 @@ function SubIssuesPopover({
                 </span>
               )}
               <span className="min-w-0 truncate text-sm">{subtask.title}</span>
-            </button>
+            </Button>
           ))}
           {filtered.length === 0 && (
             <p className="text-muted-foreground px-3 py-2 text-xs">
@@ -136,7 +125,7 @@ function SubtaskRow({
   onClick: () => void;
 }) {
   return (
-    <div className="hover:bg-grayAlpha-100 group flex min-w-0 items-center gap-2 px-3 py-2">
+    <div className="hover:bg-grayAlpha-100 group flex min-w-0 items-center gap-2 rounded px-3 py-2">
       <div className="shrink-0">
         <TaskStatusDropdown
           value={subtask.status as TaskStatus}
@@ -146,7 +135,7 @@ function SubtaskRow({
       </div>
       <span
         className={cn(
-          "min-w-0 flex-1 cursor-pointer truncate text-sm",
+          "min-w-0 flex-1 cursor-pointer truncate",
           subtask.status === "Completed" &&
             "text-muted-foreground line-through decoration-[1px]",
         )}
@@ -154,30 +143,18 @@ function SubtaskRow({
       >
         {subtask.title}
       </span>
-      <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 rounded"
-          onClick={onClick}
-        >
-          <ExternalLink size={12} />
-        </Button>
-      </div>
     </div>
   );
 }
 
 export function TaskDetailFull({
   task,
-  conversations,
   integrationAccountMap = {},
   butlerName = "Core",
   taskPageId,
   collabToken,
   isSubmitting,
   onSave,
-  onDelete,
   onStatusChange,
   onCreateSubtask,
   onSubtaskStatusChange,
@@ -185,13 +162,10 @@ export function TaskDetailFull({
   onSubtaskClick,
 }: TaskDetailFullProps) {
   const [title, setTitle] = React.useState(task.title);
-  const [activeTab, setActiveTab] = React.useState("info");
-  const [deleteOpen, setDeleteOpen] = React.useState(false);
-  const [selectedConversationId, setSelectedConversationId] = React.useState(
-    () => conversations[conversations.length - 1]?.id ?? "",
-  );
+
   const [subtasksExpanded, setSubtasksExpanded] = useState(true);
   const [showSubtaskForm, setShowSubtaskForm] = useState(false);
+  const [scheduleOpen, setScheduleOpen] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedTitleRef = useRef(task.title);
   const titleRef = useRef<HTMLDivElement>(null);
@@ -202,9 +176,6 @@ export function TaskDetailFull({
     if (titleRef.current && titleRef.current.textContent !== task.title) {
       titleRef.current.textContent = task.title;
     }
-    setSelectedConversationId(
-      conversations[conversations.length - 1]?.id ?? "",
-    );
   }, [task.id]);
 
   const handleTitleInput = (e: React.FormEvent<HTMLDivElement>) => {
@@ -224,87 +195,9 @@ export function TaskDetailFull({
   ).length;
   const totalSubtasks = task.subtasks.length;
 
-  const truncate = (s: string, max = 24) =>
-    s.length > max ? s.slice(0, max) + "…" : s;
-
-  const breadcrumbs = [
-    { label: "Tasks", href: "/home/tasks" },
-    ...(task.parentTask
-      ? [
-          {
-            label: truncate(task.parentTask.title),
-            href: `/home/tasks/${task.parentTask.id}`,
-          },
-        ]
-      : []),
-    { label: truncate(title || "Untitled") },
-  ];
-
   return (
-    <Tabs
-      value={activeTab}
-      onValueChange={setActiveTab}
-      className="flex h-[calc(100vh-16px)] flex-col"
-    >
-      <PageHeader
-        title={title || "Untitled"}
-        breadcrumbs={breadcrumbs}
-        tabs={[
-          {
-            label: "Info",
-            value: "info",
-            isActive: activeTab === "info",
-            onClick: () => setActiveTab("info"),
-          },
-          {
-            label: "Conversations",
-            value: "conversation",
-            isActive: activeTab === "conversation",
-            onClick: () => setActiveTab("conversation"),
-          },
-        ]}
-        actionsNode={
-          <div className="flex items-center gap-2">
-            {activeTab === "conversation" && conversations.length > 1 && (
-              <Select
-                value={selectedConversationId}
-                onValueChange={setSelectedConversationId}
-              >
-                <SelectTrigger className="h-7 w-auto rounded border-none bg-transparent text-xs shadow-none focus:ring-0">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent align="end">
-                  {[...conversations].reverse().map((conv, i) => (
-                    <SelectItem
-                      key={conv.id}
-                      value={conv.id}
-                      className="text-xs"
-                    >
-                      {formatRunLabel(conv, conversations.length - 1 - i)}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-destructive hover:text-destructive h-7 w-7 rounded"
-              onClick={() => setDeleteOpen(true)}
-              disabled={isSubmitting}
-            >
-              <Trash2 size={14} />
-            </Button>
-          </div>
-        }
-      />
-
-      {/* Info tab */}
-      <TabsContent
-        value="info"
-        className="mt-0 flex flex-1 flex-col overflow-y-auto px-6 py-6"
-      >
+    <>
+      <div className="w-full overflow-y-auto px-6 py-6">
         <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
           <div
             ref={titleRef}
@@ -315,9 +208,9 @@ export function TaskDetailFull({
           />
 
           {/* Properties bar */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="bg-grayAlpha-50 flex flex-wrap items-center gap-1.5 rounded p-2">
             {task.displayId && (
-              <span className="border-border text-muted-foreground rounded border px-2 py-0.5 font-mono text-xs">
+              <span className="rounded px-2 py-0.5 font-mono text-sm">
                 {task.displayId}
               </span>
             )}
@@ -325,7 +218,7 @@ export function TaskDetailFull({
             <TaskStatusDropdown
               value={task.status as TaskStatus}
               onChange={onStatusChange}
-              variant={TaskStatusDropdownVariant.DEFAULT}
+              variant={TaskStatusDropdownVariant.LINK}
             />
 
             {totalSubtasks > 0 && (
@@ -337,17 +230,37 @@ export function TaskDetailFull({
             )}
 
             {task.parentTask && (
-              <button
-                className="border-border text-muted-foreground hover:bg-grayAlpha-100 flex items-center gap-1 rounded border px-2 py-0.5 text-xs transition-colors"
+              <Button
+                variant="secondary"
+                className="gap-1"
                 onClick={() => onSubtaskClick(task.parentTask!.id)}
               >
-                <ArrowUpRight size={11} />
+                <ArrowUpRight size={16} />
                 <span className="text-muted-foreground">Parent</span>
-                <span className="max-w-[140px] truncate text-foreground">
+                <span className="text-foreground max-w-[140px] truncate">
                   {task.parentTask.title}
                 </span>
-              </button>
+              </Button>
             )}
+
+            <Button
+              variant="secondary"
+              className="gap-1"
+              onClick={() => setScheduleOpen(true)}
+            >
+              {task.isActive && task.schedule ? (
+                <RefreshCw size={14} />
+              ) : (
+                <Clock size={14} />
+              )}
+              <span>
+                {task.isActive && task.schedule
+                  ? ((task.metadata as Record<string, string> | null)?.scheduleText ?? "Recurring")
+                  : task.isActive && task.nextRunAt
+                    ? format(new Date(task.nextRunAt as unknown as string), "MMM d")
+                    : "Schedule"}
+              </span>
+            </Button>
           </div>
 
           <div className="flex flex-col gap-1">
@@ -401,7 +314,7 @@ export function TaskDetailFull({
             {subtasksExpanded && (
               <div className="flex flex-col gap-0">
                 {task.subtasks.length > 0 && (
-                  <div className="divide-border divide-y overflow-hidden rounded-lg border">
+                  <div>
                     {task.subtasks.map((subtask) => (
                       <SubtaskRow
                         key={subtask.id}
@@ -432,26 +345,11 @@ export function TaskDetailFull({
             )}
           </div>
         </div>
-      </TabsContent>
+      </div>
 
-      {/* Conversations tab */}
-      <TabsContent
-        value="conversation"
-        className="mt-0 flex flex-1 flex-col overflow-hidden"
-      >
-        <TaskConversationsSelect
-          conversations={conversations}
-          selectedId={selectedConversationId}
-          integrationAccountMap={integrationAccountMap}
-          butlerName={butlerName}
-        />
-      </TabsContent>
-
-      <DeleteTaskDialog
-        open={deleteOpen}
-        onOpenChange={setDeleteOpen}
-        onConfirm={onDelete}
-      />
-    </Tabs>
+      {scheduleOpen && (
+        <ScheduleDialog onClose={() => setScheduleOpen(false)} />
+      )}
+    </>
   );
 }

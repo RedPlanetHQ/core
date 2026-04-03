@@ -21,11 +21,10 @@ import {
   DEFAULT_VISIBLE,
 } from "~/components/tasks/task-view-options";
 import { Plus } from "lucide-react";
-import { useTypedLoaderData } from "remix-typedjson";
+import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
-import { prisma } from "~/db.server";
 import { ClientOnly } from "remix-utils/client-only";
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
@@ -38,8 +37,8 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const tasks = await getTasks(workspaceId);
-  return json({ tasks });
+  const tasks = await getTasks(workspaceId, { isScheduled: false });
+  return typedjson({ tasks });
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
@@ -129,9 +128,9 @@ export default function TasksIndex() {
     navigate(`/home/tasks/${id}`);
   };
 
-  const handleCreate = (title: string, description: string) => {
+  const handleCreate = (title: string, description: string, status: string) => {
     fetcher.submit(
-      { intent: "create", title, description },
+      { intent: "create", title, description, status },
       { method: "POST" },
     );
     setDialogOpen(false);
@@ -144,22 +143,26 @@ export default function TasksIndex() {
     );
   };
 
-  // Navigate to newly created task
-  React.useEffect(() => {
-    if (fetcher.state === "idle" && fetcher.data) {
-      const data = fetcher.data as any;
-      if (data.task?.id) {
-        navigate(`/home/tasks/${data.task.id}`);
-      }
-    }
-  }, [fetcher.state, fetcher.data]);
-
   if (typeof window === "undefined") return null;
 
   return (
     <div className="flex h-[calc(100vh-16px)] flex-col">
       <PageHeader
         title="Tasks"
+        tabs={[
+          {
+            label: "Tasks",
+            value: "tasks",
+            isActive: true,
+            onClick: () => navigate("/home/tasks"),
+          },
+          {
+            label: "Scheduled",
+            value: "scheduled",
+            isActive: false,
+            onClick: () => navigate("/home/tasks/scheduled"),
+          },
+        ]}
         actionsNode={
           <div className="flex items-center gap-2">
             <TaskViewOptions

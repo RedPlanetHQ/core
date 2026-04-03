@@ -7,6 +7,7 @@ import {
 import { searchTasks, getTasks, createTask } from "~/services/task.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { setPageContentFromHtml } from "~/services/hocuspocus/content.server";
+import { detectAndApplyRecurrence } from "~/services/tasks/recurrence.server";
 
 const loader = createHybridLoaderApiRoute(
   {
@@ -65,6 +66,9 @@ const { action } = createHybridActionApiRoute(
       const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
       await setPageContentFromHtml(page.id, body.description);
     }
+
+    // Feature 2: auto-detect schedule from title in background
+    detectAndApplyRecurrence(task.id, workspaceId, userId, task.title);
 
     return json(task);
   },

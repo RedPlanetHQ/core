@@ -25,6 +25,7 @@ interface ConversationHistory {
   userType: string;
   message: string;
   parts: any;
+  createdAt?: string;
 }
 
 interface ConversationViewProps {
@@ -263,6 +264,7 @@ export function ConversationView({
             >
               <ConversationItem
                 message={message}
+                createdAt={history[i]?.createdAt}
                 addToolApprovalResponse={handleToolApprovalResponse}
                 setToolArgOverride={setToolArgOverride}
                 isChatBusy={status === "streaming" || status === "submitted"}

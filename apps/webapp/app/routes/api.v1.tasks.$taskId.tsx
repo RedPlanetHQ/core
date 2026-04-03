@@ -4,6 +4,7 @@ import {
   createHybridActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { getTaskById, updateTask } from "~/services/task.server";
+import { detectAndApplyRecurrence } from "~/services/tasks/recurrence.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import type { TaskStatus } from "@prisma/client";
 import z from "zod";
@@ -71,6 +72,16 @@ const { action } = createHybridActionApiRoute(
       ...(body.title !== undefined && { title: body.title }),
       ...(body.description !== undefined && { description: body.description }),
     });
+
+    // Feature 2: auto-detect schedule from updated title in background
+    if (body.title !== undefined) {
+      detectAndApplyRecurrence(
+        taskId,
+        authentication.workspaceId as string,
+        task.userId,
+        body.title,
+      );
+    }
 
     return json({
       id: updated.id,

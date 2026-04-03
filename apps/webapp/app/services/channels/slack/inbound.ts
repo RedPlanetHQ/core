@@ -159,7 +159,6 @@ export async function parseSlackDMEvent(
 
   // For DMs, verify the channel is with the CORE bot
   if (event.channel_type === "im" && event.channel) {
-    console.log(event.channel, JSON.stringify(eventBody));
     const botDM = await isDMWithBot(event.channel, slackUserId);
     if (!botDM) {
       logger.info("Ignoring DM not directed at CORE bot", {
