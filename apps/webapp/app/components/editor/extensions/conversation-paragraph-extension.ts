@@ -16,6 +16,7 @@ export const ConversationParagraph = Paragraph.extend({
       ...this.parent?.(),
       conversationId: {
         default: null,
+        keepOnSplit: false,
         parseHTML: (element) => element.getAttribute("data-conversation-id"),
         renderHTML: (attributes) => {
           if (!attributes.conversationId) return {};
@@ -26,6 +27,7 @@ export const ConversationParagraph = Paragraph.extend({
       },
       resolved: {
         default: false,
+        keepOnSplit: false,
         parseHTML: (element) =>
           element.getAttribute("data-resolved") === "true",
         renderHTML: (attributes) => {
@@ -41,8 +43,9 @@ export const ConversationParagraph = Paragraph.extend({
   renderHTML({ node, HTMLAttributes }) {
     const hasConversation = !!node.attrs.conversationId;
     const isResolved = !!node.attrs.resolved;
+    const hasText = node.textContent.trim().length > 0;
 
-    if (!hasConversation) {
+    if (!hasConversation || !hasText) {
       return [
         "p",
         mergeAttributes(HTMLAttributes, {
