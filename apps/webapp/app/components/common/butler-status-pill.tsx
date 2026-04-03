@@ -7,14 +7,15 @@ import type {
   ButlerActivitySummary,
 } from "~/services/butler-activity.server";
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "~/components/ui/dropdown-menu";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "~/components/ui/popover";
+import { Button } from "~/components/ui";
 import { FlickeringGrid } from "~/components/ui/flickering-grid";
 
 const ACTIVE_STATES: ButlerActivityState[] = ["watching", "thinking", "acting"];
+
 
 function formatPauseCopy(data: ButlerActivitySummary | undefined) {
   if (!data || data.pausedIndefinitely || !data.snoozedUntil)
@@ -28,6 +29,19 @@ export function ButlerStatusPill() {
   const fetcher = useFetcher<ButlerActivitySummary>();
   const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [open, setOpen] = React.useState(false);
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleMouseEnter = () => {
+    if (closeTimerRef.current) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+    setOpen(true);
+  };
+
+  const handleMouseLeave = () => {
+    closeTimerRef.current = setTimeout(() => setOpen(false), 150);
+  };
 
   React.useEffect(() => {
     if (fetcher.state === "idle" && !fetcher.data) {
@@ -68,90 +82,85 @@ export function ButlerStatusPill() {
   };
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <button
-        type="button"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
-        className={cn(
-          "flex h-6 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
-          isActive
-            ? "border-primary/30 bg-primary/10 text-primary"
-            : "border-border bg-background-3 text-muted-foreground",
-        )}
-      >
-        <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
-          <FlickeringGrid
-            width={20}
-            height={14}
-            squareSize={2}
-            gridGap={2}
-            flickerChance={isActive ? 0.4 : 0.05}
-            maxOpacity={isActive ? 0.7 : 0.25}
-            color={isActive ? "rgb(var(--primary))" : "currentColor"}
-          />
-        </div>
-        {stateLabel}
-      </button>
-      <DropdownMenuContent
+    <Popover open={open}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          onMouseEnter={handleMouseEnter}
+          onMouseLeave={handleMouseLeave}
+          className={cn(
+            "flex h-6 items-center gap-1.5 rounded-lg border px-2 text-xs font-medium transition-colors",
+            isActive
+              ? "border-primary/30 bg-primary/10 text-primary"
+              : "border-border bg-background-3 text-muted-foreground",
+          )}
+        >
+          <div className="relative h-3.5 w-5 overflow-hidden rounded-sm">
+            <FlickeringGrid
+              width={20}
+              height={14}
+              squareSize={2}
+              gridGap={2}
+              flickerChance={isActive ? 0.4 : 0.05}
+              maxOpacity={isActive ? 0.7 : 0.25}
+              color={isActive ? "rgb(var(--primary))" : "currentColor"}
+            />
+          </div>
+          {stateLabel}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent
         side="bottom"
         align="start"
         sideOffset={6}
         className="w-[260px] p-0"
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="p-3">
-          <div className="font-medium">{stateLabel}</div>
-          <div className="text-muted-foreground mt-0.5 text-sm">{sentence}</div>
+          {state === "idle" ? (
+            <>
+              <div className="font-medium">Butler is chillin' 🛋️</div>
+              <div className="text-muted-foreground mt-0.5 text-sm">
+                No pages to watch. Living the dream.
+              </div>
+            </>
+          ) : (
+            <>
+              <div className="font-medium">{stateLabel}</div>
+              <div className="text-muted-foreground mt-0.5 text-sm">{sentence}</div>
+            </>
+          )}
         </div>
-        <DropdownMenuSeparator />
-        {data?.state === "paused" ? (
-          <>
-            <DropdownMenuItem
-              className="flex gap-2 rounded"
-              onClick={() => submitControl("resume")}
-            >
-              <Play size={14} />
-              Resume automatic watching
-            </DropdownMenuItem>
-            <div className="text-muted-foreground px-2 py-1 text-xs">
-              {formatPauseCopy(data)}
-            </div>
-          </>
-        ) : (
-          <>
-            <DropdownMenuItem
-              className="flex gap-2 rounded"
-              onClick={() => submitControl("snooze", "30m")}
-            >
-              <MoonStar size={14} />
-              Snooze for 30 minutes
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex gap-2 rounded"
-              onClick={() => submitControl("snooze", "1h")}
-            >
-              <MoonStar size={14} />
-              Snooze for 1 hour
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex gap-2 rounded"
-              onClick={() => submitControl("snooze", "tomorrow")}
-            >
-              <MoonStar size={14} />
-              Snooze until tomorrow
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              className="flex gap-2 rounded"
-              onClick={() => submitControl("snooze", "indefinite")}
-            >
-              <BellOff size={14} />
-              Pause until resumed
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        <div className="border-t px-1 py-1">
+          {data?.state === "paused" ? (
+            <>
+              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("resume")}>
+                <Play size={14} /> Resume automatic watching
+              </Button>
+              <p className="text-muted-foreground px-2 py-1 text-xs">
+                {formatPauseCopy(data)}
+              </p>
+            </>
+          ) : (
+            <>
+              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "30m")}>
+                <MoonStar size={14} /> Snooze for 30 minutes
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "1h")}>
+                <MoonStar size={14} /> Snooze for 1 hour
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "tomorrow")}>
+                <MoonStar size={14} /> Snooze until tomorrow
+              </Button>
+              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "indefinite")}>
+                <BellOff size={14} /> Pause until resumed
+              </Button>
+            </>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
