@@ -13,9 +13,7 @@ import { type Agent, convertMessages } from "@mastra/core/agent";
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
 import { writeFile } from "fs/promises";
-import {
-  IntegrationLoader,
-} from "~/utils/mcp/integration-loader";
+import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PronounType } from "~/services/agent/prompts/personality";
@@ -34,6 +32,7 @@ import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
+import { getCommentTools } from "~/services/agent/tools/comment-tools";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -89,6 +88,7 @@ export async function buildAgentContext({
   interactive = true,
   modelConfig,
   scratchpadPageId,
+  scratchpadType = "mention",
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
   const [

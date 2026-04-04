@@ -1151,8 +1151,10 @@ model ButlerComment {
   resolved   Boolean   @default(false)
   resolvedAt DateTime?
 
-  selectedText String
-  content      String
+  selectedText   String
+  content        String
+  relativeStart  Json?
+  relativeEnd    Json?
 
   pageId         String
   conversationId String?

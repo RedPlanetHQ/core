@@ -133,18 +133,81 @@ function EditorInner({
     resolved: boolean;
   } | null>(null);
 
+  // Load butler comments and apply conversationId to matching paragraph nodes
+  useEffect(() => {
+    if (!editor) return;
+
+    async function applyButlerComments() {
+      const res = await fetch(`/api/v1/page/${pageId}/comments`);
+      if (!res.ok) return;
+      const { comments } = await res.json() as {
+        comments: { id: string; selectedText: string; conversationId: string | null; resolved: boolean }[];
+      };
+
+      if (!comments.length) return;
+
+      const { tr } = editor!.state;
+      let changed = false;
+
+      for (const comment of comments) {
+        if (!comment.conversationId) continue;
+
+        // Check if already applied
+        let alreadyTagged = false;
+        editor!.state.doc.descendants((node) => {
+          if (node.attrs.conversationId === comment.conversationId) {
+            alreadyTagged = true;
+          }
+        });
+        if (alreadyTagged) continue;
+
+        // Find the paragraph node whose text content matches selectedText
+        editor!.state.doc.descendants((node, pos) => {
+          if (alreadyTagged) return false;
+          if (!node.isBlock) return;
+          if (node.textContent.trim() !== comment.selectedText.trim()) return;
+
+          const nodeType = editor!.schema.nodes[node.type.name];
+          if (!nodeType) return;
+
+          tr.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            conversationId: comment.conversationId,
+            resolved: comment.resolved,
+          });
+          changed = true;
+          alreadyTagged = true;
+        });
+      }
+
+      if (changed) {
+        editor!.view.dispatch(tr);
+      }
+    }
+
+    // Wait for collaboration to sync before applying
+    const timeout = setTimeout(applyButlerComments, 1000);
+    return () => clearTimeout(timeout);
+  }, [editor, pageId]);
+
   const updateConversationResolved = React.useCallback(
     (conversationId: string, resolved: boolean) => {
+      // Update Yjs attribute for live collaborators
       const fragment = ydoc.getXmlFragment("default");
-
       ydoc.transact(() => {
         fragment.forEach((child) => {
           if (!(child instanceof Y.XmlElement)) return;
           if (child.getAttribute("conversationId") !== conversationId) return;
-
           child.setAttribute("resolved", resolved);
         });
       }, "client-conversation-resolved");
+
+      // Persist resolved state in DB
+      fetch(`/api/v1/page/${pageId}/comments`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, resolved }),
+      }).catch(() => {});
 
       setActiveConversation((current) =>
         current?.conversationId === conversationId
@@ -152,7 +215,7 @@ function EditorInner({
           : current,
       );
     },
-    [ydoc],
+    [ydoc, pageId],
   );
 
   const editor = useEditor({
