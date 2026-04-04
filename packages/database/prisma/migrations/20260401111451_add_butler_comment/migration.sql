@@ -1,11 +1,4 @@
-/*
-  Warnings:
 
-  - You are about to drop the column `lastSentAt` on the `Task` table. All the data in the column will be lost.
-
-*/
--- AlterTable
-ALTER TABLE "Task" DROP COLUMN "lastSentAt";
 
 -- CreateTable
 CREATE TABLE "ButlerComment" (

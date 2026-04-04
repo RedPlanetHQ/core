@@ -1136,23 +1136,23 @@ model Page {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
 
-  task   Task?   @relation("TaskPage", fields: [taskId], references: [id])
-  taskId String?
+  task           Task?           @relation("TaskPage", fields: [taskId], references: [id])
+  taskId         String?
+  butlerComments ButlerComment[]
 
   @@unique([workspaceId, userId, date])
   @@index([workspaceId, userId])
-  butlerComments ButlerComment[]
 }
 
 model ButlerComment {
-  id        String    @id @default(uuid())
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  resolved  Boolean   @default(false)
+  id         String    @id @default(uuid())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolved   Boolean   @default(false)
   resolvedAt DateTime?
 
-  selectedText   String
-  content        String
+  selectedText String
+  content      String
 
   pageId         String
   conversationId String?

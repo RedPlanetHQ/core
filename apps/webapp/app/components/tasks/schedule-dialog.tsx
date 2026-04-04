@@ -13,6 +13,7 @@ import { useFetcher } from "@remix-run/react";
 
 interface ScheduleDialogProps {
   onClose: () => void;
+  taskId: string;
 }
 
 interface ScheduleSample {
@@ -57,24 +58,25 @@ function buildSamples(): ScheduleSample[] {
   ];
 }
 
-export function ScheduleDialog({ onClose }: ScheduleDialogProps) {
+export function ScheduleDialog({ onClose, taskId }: ScheduleDialogProps) {
   const [value, setValue] = React.useState("");
   const fetcher = useFetcher();
   const samples = React.useMemo(() => buildSamples(), []);
   const currentTime = formatISO(new Date(), { representation: "complete" });
+  const action = `/home/tasks/${taskId}`;
 
   const submit = (sample: ScheduleSample) => {
     if (sample.text === "Remove schedule") {
-      fetcher.submit({ intent: "remove-schedule" }, { method: "POST" });
+      fetcher.submit({ intent: "remove-schedule" }, { method: "POST", action });
     } else if (sample.startTime) {
       fetcher.submit(
         { intent: "update-schedule", startTime: sample.startTime },
-        { method: "POST" },
+        { method: "POST", action },
       );
     } else {
       fetcher.submit(
         { intent: "update-schedule", text: sample.text, currentTime },
-        { method: "POST" },
+        { method: "POST", action },
       );
     }
     onClose();
@@ -99,7 +101,7 @@ export function ScheduleDialog({ onClose }: ScheduleDialogProps) {
           value={value}
           onValueChange={setValue}
         />
-        <CommandList className="p-1 max-h-[300px]">
+        <CommandList className="max-h-[300px] p-1">
           <CommandEmpty>
             Type a schedule — we'll take care of the rest
           </CommandEmpty>
@@ -110,15 +112,15 @@ export function ScheduleDialog({ onClose }: ScheduleDialogProps) {
               className="flex items-center gap-2 py-2"
             >
               {sample.text === "Remove schedule" ? (
-                <Ban size={14} className="shrink-0 text-destructive" />
+                <Ban size={14} className="text-destructive shrink-0" />
               ) : (
-                <Clock size={14} className="shrink-0 text-muted-foreground" />
+                <Clock size={14} className="text-muted-foreground shrink-0" />
               )}
               <span className="flex-1 truncate">{sample.text}</span>
               {sample.isRecurring && (
                 <RefreshCw
                   size={12}
-                  className="shrink-0 text-muted-foreground"
+                  className="text-muted-foreground shrink-0"
                 />
               )}
             </CommandItem>
@@ -128,7 +130,7 @@ export function ScheduleDialog({ onClose }: ScheduleDialogProps) {
               onSelect={() => submit({ text: value, isRecurring: false })}
               className="flex items-center gap-2 py-2"
             >
-              <Clock size={14} className="shrink-0 text-muted-foreground" />
+              <Clock size={14} className="text-muted-foreground shrink-0" />
               <span>Schedule: {value}</span>
             </CommandItem>
           )}

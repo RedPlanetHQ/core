@@ -9,6 +9,7 @@
 
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
+import { env } from "~/env.server";
 import { createConversation } from "~/services/conversation.server";
 import { noStreamProcess } from "~/services/agent/no-stream-process";
 import { classifyScratchpadIntents } from "~/services/agent/prompts/scratchpad-decision";
@@ -46,7 +47,10 @@ function loadYdocFromBinary(binary: Buffer | Uint8Array): Y.Doc {
 }
 
 /** Recursively extract all text from a Yjs element */
-function extractTextFromElement(element: Y.XmlElement): { text: string; hasMention: boolean } {
+function extractTextFromElement(element: Y.XmlElement): {
+  text: string;
+  hasMention: boolean;
+} {
   let hasMention = false;
   const textParts: string[] = [];
 
@@ -74,7 +78,10 @@ function extractParagraphs(doc: Y.Doc): ScanResult {
   let idx = 0;
 
   fragment.forEach((child) => {
-    if (!(child instanceof Y.XmlElement)) { idx++; return; }
+    if (!(child instanceof Y.XmlElement)) {
+      idx++;
+      return;
+    }
 
     const { text, hasMention } = extractTextFromElement(child);
     if (text && !hasMention) {
@@ -88,14 +95,23 @@ function extractParagraphs(doc: Y.Doc): ScanResult {
 }
 
 /** Find the fragment index of a mention paragraph matching the instruction text */
-function findMentionFragmentIndex(doc: Y.Doc, instruction: string): number | null {
+function findMentionFragmentIndex(
+  doc: Y.Doc,
+  instruction: string,
+): number | null {
   const fragment = doc.getXmlFragment("default");
   let idx = 0;
 
   let found: number | null = null;
   fragment.forEach((child) => {
-    if (found !== null) { idx++; return; }
-    if (!(child instanceof Y.XmlElement)) { idx++; return; }
+    if (found !== null) {
+      idx++;
+      return;
+    }
+    if (!(child instanceof Y.XmlElement)) {
+      idx++;
+      return;
+    }
 
     let hasMention = false;
     const textParts: string[] = [];
@@ -109,7 +125,11 @@ function findMentionFragmentIndex(doc: Y.Doc, instruction: string): number | nul
     });
 
     if (hasMention) {
-      const paraInstruction = textParts.join("").trim().replace(/@\S+/g, "").trim();
+      const paraInstruction = textParts
+        .join("")
+        .trim()
+        .replace(/@\S+/g, "")
+        .trim();
       if (paraInstruction === instruction) {
         found = idx;
       }
@@ -122,45 +142,38 @@ function findMentionFragmentIndex(doc: Y.Doc, instruction: string): number | nul
 }
 
 /**
- * Tag a paragraph in the Yjs doc with a conversationId and save back to DB.
- * This modifies descriptionBinary directly since the worker doesn't have Hocuspocus access.
+ * Tag paragraphs with a conversationId via the webapp API so Hocuspocus
+ * applies the mark on the live Y.Doc and syncs it to all connected clients.
  */
-async function tagParagraphInDb(
+async function tagParagraphViaApi(
   pageId: string,
   fragmentIndices: number[],
   conversationId: string,
 ): Promise<void> {
-  const page = await prisma.page.findUnique({
-    where: { id: pageId },
-    select: { descriptionBinary: true },
-  });
-  if (!page?.descriptionBinary) return;
+  if (fragmentIndices.length === 0) return;
 
-  const doc = loadYdocFromBinary(page.descriptionBinary);
-  const fragment = doc.getXmlFragment("default");
-  let tagged = 0;
+  const origin = env.APP_ORIGIN;
+  const url = `${origin}/api/v1/page/${pageId}/tag-conversation`;
 
-  doc.transact(() => {
-    for (const idx of fragmentIndices) {
-      if (idx < 0 || idx >= fragment.length) continue;
-      const child = fragment.get(idx);
-      if (child instanceof Y.XmlElement) {
-        child.setAttribute("conversationId", conversationId);
-        tagged++;
-      }
-    }
-  }, "server-conversation-attach");
-
-  // Save modified doc back to DB
-  const updatedBinary = Buffer.from(Y.encodeStateAsUpdate(doc));
-  await prisma.page.update({
-    where: { id: pageId },
-    data: { descriptionBinary: updatedBinary },
+  const res = await fetch(url, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${env.SESSION_SECRET}`,
+    },
+    body: JSON.stringify({ fragmentIndices, conversationId }),
   });
 
-  logger.info(
-    `[scratchpad] tagInDb: tagged=${tagged}/${fragmentIndices.length} conversationId=${conversationId}`,
-  );
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    logger.warn(
+      `[scratchpad] tagParagraphViaApi failed status=${res.status} page=${pageId} body="${text}"`,
+    );
+  } else {
+    logger.info(
+      `[scratchpad] tagParagraphViaApi: tagged ${fragmentIndices.length} paragraphs conversationId=${conversationId}`,
+    );
+  }
 }
 
 // ── Main processor ────────────────────────────────────────────────────────────
@@ -175,7 +188,9 @@ export async function processScratchpadScan(
   }
 }
 
-async function processMention(payload: Extract<ScratchpadScanPayload, { type: "mention" }>) {
+async function processMention(
+  payload: Extract<ScratchpadScanPayload, { type: "mention" }>,
+) {
   const { pageId, userId, workspaceId, instruction } = payload;
 
   logger.info(
@@ -199,9 +214,15 @@ async function processMention(payload: Extract<ScratchpadScanPayload, { type: "m
       const doc = loadYdocFromBinary(page.descriptionBinary);
       const fragmentIndex = findMentionFragmentIndex(doc, instruction);
       if (fragmentIndex !== null) {
-        await tagParagraphInDb(pageId, [fragmentIndex], result.conversationId);
+        await tagParagraphViaApi(
+          pageId,
+          [fragmentIndex],
+          result.conversationId,
+        );
       } else {
-        logger.warn(`[scratchpad] Mention: couldn't find paragraph for instruction="${instruction.slice(0, 60)}"`);
+        logger.warn(
+          `[scratchpad] Mention: couldn't find paragraph for instruction="${instruction.slice(0, 60)}"`,
+        );
       }
     }
 
@@ -222,7 +243,9 @@ async function processMention(payload: Extract<ScratchpadScanPayload, { type: "m
   }
 }
 
-async function processProactive(payload: Extract<ScratchpadScanPayload, { type: "proactive" }>) {
+async function processProactive(
+  payload: Extract<ScratchpadScanPayload, { type: "proactive" }>,
+) {
   const { pageId, userId, workspaceId } = payload;
 
   // Read current state and baseline from DB
@@ -232,7 +255,9 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
   });
 
   if (!page?.descriptionBinary) {
-    logger.warn(`[scratchpad] Proactive: no descriptionBinary for page=${pageId}`);
+    logger.warn(
+      `[scratchpad] Proactive: no descriptionBinary for page=${pageId}`,
+    );
     return;
   }
 
@@ -255,9 +280,14 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
 
   try {
     const integrationAccounts =
-      await IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId);
+      await IntegrationLoader.getConnectedIntegrationAccounts(
+        userId,
+        workspaceId,
+      );
     const connectedIntegrations = integrationAccounts.map((int) =>
-      "integrationDefinition" in int ? int.integrationDefinition.name : int.name,
+      "integrationDefinition" in int
+        ? int.integrationDefinition.name
+        : int.name,
     );
 
     const { intents } = await classifyScratchpadIntents(
@@ -268,7 +298,7 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
     );
 
     const actionableIntents = intents.filter((i) => i.actionable);
-    logger.debug(
+    logger.info(
       `[scratchpad] Decision: ${intents.length} intents, ${actionableIntents.length} actionable`,
     );
 
@@ -284,12 +314,19 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
         const fragmentIndices = intent.paragraphIndices
           .map((i) => currentFragmentIndices[i - 1])
           .filter((i) => i !== undefined);
-        await tagParagraphInDb(pageId, fragmentIndices, result.conversationId);
+        await tagParagraphViaApi(
+          pageId,
+          fragmentIndices,
+          result.conversationId,
+        );
 
         await noStreamProcess(
           {
             id: result.conversationId,
-            message: { parts: [{ text: intent.intent, type: "text" }], role: "user" },
+            message: {
+              parts: [{ text: intent.intent, type: "text" }],
+              role: "user",
+            },
             source: "daily",
             scratchpadPageId: pageId,
             interactive: true,
@@ -310,7 +347,7 @@ async function processProactive(payload: Extract<ScratchpadScanPayload, { type: 
       where: { id: pageId },
       data: { butlerLastSeen: Buffer.from(page.descriptionBinary) },
     });
-    logger.debug(`[scratchpad] butlerLastSeen updated page=${pageId}`);
+    logger.info(`[scratchpad] butlerLastSeen updated page=${pageId}`);
   } catch (err) {
     logger.error("[scratchpad] Proactive job failed", { err });
     throw err;

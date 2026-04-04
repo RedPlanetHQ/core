@@ -147,7 +147,9 @@ function EditorInner({
       }, "client-conversation-resolved");
 
       setActiveConversation((current) =>
-        current?.conversationId === conversationId ? { ...current, resolved } : current,
+        current?.conversationId === conversationId
+          ? { ...current, resolved }
+          : current,
       );
     },
     [ydoc],
@@ -240,7 +242,9 @@ export function PageEditor({
             websocketProvider: sharedSocket,
             name: pageId,
             document: doc,
+            forceSyncInterval: 10_000,
             token: collabToken,
+
             onConnect: () => {
               console.log("connected");
             },

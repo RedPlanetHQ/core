@@ -19,7 +19,7 @@ import {
 } from "~/lib/queue-adapter.server";
 
 const MENTION_IDLE_MS = 10_000;
-const PROACTIVE_IDLE_MS = 60_000;
+const PROACTIVE_IDLE_MS = 20_000;
 
 /** Cancel any pending scratchpad jobs when a document is closed */
 export function cleanupPage(pageId: string) {
@@ -42,11 +42,17 @@ function scanForUnprocessedMentions(fragment: Y.XmlFragment): MentionResult[] {
   let idx = 0;
 
   fragment.forEach((child) => {
-    if (!(child instanceof Y.XmlElement)) { idx++; return; }
+    if (!(child instanceof Y.XmlElement)) {
+      idx++;
+      return;
+    }
 
     // Skip paragraphs already tagged with a conversationId
     const existingConversationId = child.getAttribute("conversationId");
-    if (existingConversationId) { idx++; return; }
+    if (existingConversationId) {
+      idx++;
+      return;
+    }
 
     let hasMention = false;
     const textParts: string[] = [];
@@ -87,6 +93,7 @@ export async function handleScratchpadStore(
   // ── Mention detection ──
   const unprocessedMentions = scanForUnprocessedMentions(fragment);
 
+  console.log(unprocessedMentions);
   if (unprocessedMentions.length > 0) {
     // Take the first unprocessed mention — process one at a time
     const { instruction } = unprocessedMentions[0];
@@ -103,7 +110,9 @@ export async function handleScratchpadStore(
         },
         MENTION_IDLE_MS,
       );
-      logger.debug(`[scratchpad] mention enqueued page=${pageId} instruction="${instruction.slice(0, 60)}"`);
+      logger.debug(
+        `[scratchpad] mention enqueued page=${pageId} instruction="${instruction.slice(0, 60)}"`,
+      );
     } catch (err) {
       logger.error("[scratchpad] Failed to enqueue mention scan", { err });
     }
@@ -117,17 +126,21 @@ export async function handleScratchpadStore(
   }
 
   try {
-    await cancelScratchpadScan(pageId);
-    await enqueueScratchpadScan(
-      {
-        type: "proactive",
-        pageId,
-        userId,
-        workspaceId,
-      },
-      PROACTIVE_IDLE_MS,
-    );
-    logger.debug(`[scratchpad] proactive enqueued page=${pageId}`);
+    const existingRuns = await cancelScratchpadScan(pageId);
+    if (!existingRuns) {
+      const repsonse = await enqueueScratchpadScan(
+        {
+          type: "proactive",
+          pageId,
+          userId,
+          workspaceId,
+        },
+        PROACTIVE_IDLE_MS,
+      );
+      console.log(repsonse);
+    }
+
+    logger.info(`[scratchpad] proactive enqueued page=${pageId}`);
   } catch (err) {
     logger.error("[scratchpad] Failed to enqueue proactive scan", { err });
   }

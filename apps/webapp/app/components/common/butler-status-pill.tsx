@@ -16,7 +16,6 @@ import { FlickeringGrid } from "~/components/ui/flickering-grid";
 
 const ACTIVE_STATES: ButlerActivityState[] = ["watching", "thinking", "acting"];
 
-
 function formatPauseCopy(data: ButlerActivitySummary | undefined) {
   if (!data || data.pausedIndefinitely || !data.snoozedUntil)
     return "Automatic page watching is paused";
@@ -29,7 +28,9 @@ export function ButlerStatusPill() {
   const fetcher = useFetcher<ButlerActivitySummary>();
   const intervalRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const [open, setOpen] = React.useState(false);
-  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeTimerRef = React.useRef<ReturnType<typeof setTimeout> | null>(
+    null,
+  );
 
   const handleMouseEnter = () => {
     if (closeTimerRef.current) {
@@ -101,7 +102,7 @@ export function ButlerStatusPill() {
               height={14}
               squareSize={2}
               gridGap={2}
-              flickerChance={isActive ? 0.4 : 0.05}
+              flickerChance={isActive ? 0.8 : 0.3}
               maxOpacity={isActive ? 0.7 : 0.25}
               color={isActive ? "rgb(var(--primary))" : "currentColor"}
             />
@@ -129,14 +130,20 @@ export function ButlerStatusPill() {
           ) : (
             <>
               <div className="font-medium">{stateLabel}</div>
-              <div className="text-muted-foreground mt-0.5 text-sm">{sentence}</div>
+              <div className="text-muted-foreground mt-0.5 text-sm">
+                {sentence}
+              </div>
             </>
           )}
         </div>
         <div className="border-t px-1 py-1">
           {data?.state === "paused" ? (
             <>
-              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("resume")}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2"
+                onClick={() => submitControl("resume")}
+              >
                 <Play size={14} /> Resume automatic watching
               </Button>
               <p className="text-muted-foreground px-2 py-1 text-xs">
@@ -145,16 +152,32 @@ export function ButlerStatusPill() {
             </>
           ) : (
             <>
-              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "30m")}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2"
+                onClick={() => submitControl("snooze", "30m")}
+              >
                 <MoonStar size={14} /> Snooze for 30 minutes
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "1h")}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2"
+                onClick={() => submitControl("snooze", "1h")}
+              >
                 <MoonStar size={14} /> Snooze for 1 hour
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "tomorrow")}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2"
+                onClick={() => submitControl("snooze", "tomorrow")}
+              >
                 <MoonStar size={14} /> Snooze until tomorrow
               </Button>
-              <Button variant="ghost" className="w-full justify-start gap-2" onClick={() => submitControl("snooze", "indefinite")}>
+              <Button
+                variant="ghost"
+                className="w-full justify-start gap-2"
+                onClick={() => submitControl("snooze", "indefinite")}
+              >
                 <BellOff size={14} /> Pause until resumed
               </Button>
             </>

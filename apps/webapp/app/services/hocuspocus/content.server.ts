@@ -58,13 +58,10 @@ export const hocuspocus: Hocuspocus =
             },
           });
 
-          handleScratchpadStore(
-            documentName,
-            document,
-            { workspaceId: page.workspaceId, userId: page.userId },
-          ).catch((err) =>
-            console.error("[collab-store-scratchpad]", err),
-          );
+          handleScratchpadStore(documentName, document, {
+            workspaceId: page.workspaceId,
+            userId: page.userId,
+          }).catch((err) => console.error("[collab-store-scratchpad]", err));
         },
       }),
     ],
@@ -122,6 +119,29 @@ export async function setPageContentFromHtml(
 ): Promise<void> {
   const json = htmlToTiptapJson(html);
   await updateContentForDocument(pageId, json);
+}
+
+/**
+ * Surgically set a conversationId attribute on specific fragment indices
+ * in the live Hocuspocus Y.Doc. Syncs to all connected clients via WebSocket.
+ */
+export async function tagConversationOnParagraphs(
+  pageId: string,
+  fragmentIndices: number[],
+  conversationId: string,
+): Promise<void> {
+  const connection = await hocuspocus.openDirectConnection(pageId, {});
+  connection.transact((doc) => {
+    const fragment = doc.getXmlFragment("default");
+    for (const idx of fragmentIndices) {
+      if (idx < 0 || idx >= fragment.length) continue;
+      const child = fragment.get(idx);
+      if (child instanceof Y.XmlElement) {
+        child.setAttribute("conversationId", conversationId);
+      }
+    }
+  });
+  await connection.disconnect();
 }
 
 /**

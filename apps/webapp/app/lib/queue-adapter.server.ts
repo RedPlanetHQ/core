@@ -596,13 +596,11 @@ export async function enqueueScratchpadScan(
   const jobId = `scratchpad-${payload.pageId}`;
 
   if (provider === "trigger") {
-    const { scratchpadScanTask } = await import(
-      "~/trigger/scratchpad/scratchpad-scan"
-    );
+    const { scratchpadScanTask } =
+      await import("~/trigger/scratchpad/scratchpad-scan");
     const handler = await scratchpadScanTask.trigger(payload, {
       queue: "scratchpad-scan-queue",
       delay: delayMs > 0 ? `${Math.ceil(delayMs / 1000)}s` : undefined,
-      idempotencyKey: jobId,
       tags: [`scratchpad:${payload.pageId}`, payload.workspaceId],
     });
     return { id: handler.id };
@@ -619,7 +617,7 @@ export async function enqueueScratchpadScan(
 /**
  * Cancel a pending scratchpad scan job for a page (called before re-enqueuing)
  */
-export async function cancelScratchpadScan(pageId: string): Promise<void> {
+export async function cancelScratchpadScan(pageId: string): Promise<boolean> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
@@ -628,22 +626,23 @@ export async function cancelScratchpadScan(pageId: string): Promise<void> {
         tag: [`scratchpad:${pageId}`],
         status: ["QUEUED", "DELAYED"],
       });
+      let count = 0;
+
       for await (const run of pendingRuns) {
-        await runs.cancel(run.id);
+        count++;
       }
+
+      return count > 1;
     } catch {
       // Silently fail — job may not exist
     }
   } else {
     const { scratchpadScanQueue } = await import("~/bullmq/queues");
     const job = await scratchpadScanQueue.getJob(`scratchpad-${pageId}`);
-    if (job) {
-      const state = await job.getState();
-      if (state === "delayed" || state === "waiting") {
-        await job.remove();
-      }
-    }
+    return !!job;
   }
+
+  return false;
 }
 
 /**

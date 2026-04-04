@@ -352,7 +352,7 @@ export function TaskDetailFull({
       </div>
 
       {scheduleOpen && (
-        <ScheduleDialog onClose={() => setScheduleOpen(false)} />
+        <ScheduleDialog onClose={() => setScheduleOpen(false)} taskId={task.id} />
       )}
     </>
   );
