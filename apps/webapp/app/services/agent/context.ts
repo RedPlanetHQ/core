@@ -363,13 +363,17 @@ A trigger has fired: "${triggerContext.reminderText}"
 </trigger_context>`;
   }
 
-  // Scratchpad context — when user @mentioned butler in the daily scratchpad
+  // Scratchpad context — when triggered from the daily scratchpad
   if (scratchpadPageId) {
     systemPrompt += `\n\n<scratchpad_context>
-This request comes from the user's daily scratchpad — an unstructured page where they jot down thoughts, tasks, and notes.
-The system detected something actionable in what they wrote and extracted an intent for you.
-Do the work (gather info, take actions, etc.) and respond concisely. Your text response will be shown directly on the paragraph they wrote.
-Keep it short — this is a scratchpad, not a conversation.
+This request comes from the user's daily scratchpad. A decision agent observed what they wrote and created this intent for you.
+
+The intent is your instruction — follow it precisely:
+- If it says "do NOT execute yet" or "wait for user confirmation" — gather context and present findings, but do NOT take action (don't send emails, don't create tasks, don't message anyone)
+- If it says to execute something — do it (create tasks, set reminders, search email, etc.)
+- If it includes "Context from memory:" — use that context, don't re-search for the same information
+
+Keep your response concise — this shows up on a scratchpad, not a chat conversation.
 </scratchpad_context>`;
   }
 

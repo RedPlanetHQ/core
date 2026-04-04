@@ -4,12 +4,16 @@ import * as Y from "yjs";
 import { prisma } from "~/db.server";
 import { createButlerComment } from "~/services/butler-comment.server";
 import { searchMemoryWithAgent } from "~/services/agent/memory";
+import { createConversation } from "~/services/conversation.server";
+import { noStreamProcess } from "~/services/agent/no-stream-process";
+import { logger } from "~/services/logger.service";
 
 interface GetCommentToolsParams {
   workspaceId: string;
   userId: string;
   /** Closed over — agent cannot pick a different page */
   pageId: string;
+  /** If provided, reuse this conversation. Otherwise add_comment creates one. */
   conversationId?: string;
 }
 
@@ -102,7 +106,7 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
 
     add_comment: tool({
       description:
-        "Add a comment anchored to a specific line of the scratchpad. Use the lineNumber from the page content in your context and copy the text verbatim as selectedText.",
+        "Add a comment anchored to a specific line of the scratchpad and dispatch the intent to the main agent for execution. Use the lineNumber from the page content in your context and copy the text verbatim as selectedText.",
       inputSchema: z.object({
         lineNumber: z
           .number()
@@ -114,8 +118,13 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
             "The exact text of the line, copied verbatim from the page content. Used to anchor the comment precisely.",
           ),
         content: z.string().describe("Your comment — concise and helpful."),
+        intent: z
+          .string()
+          .describe(
+            "The actionable intent to pass to the main agent. E.g. 'Set a reminder for 6pm to call mom' or 'Draft a follow-up email to the investor about the check-in'.",
+          ),
       }),
-      execute: async ({ lineNumber, selectedText, content }) => {
+      execute: async ({ lineNumber, selectedText, content, intent }) => {
         // Verify/correct selectedText using lineNumber as the source of truth
         const page = await prisma.page.findUnique({
           where: { id: pageId },
@@ -129,20 +138,52 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
           const lines = extractPageLines(fragment);
           const lineAtNumber = lines.find((l) => l.lineNumber === lineNumber);
           if (lineAtNumber) {
-            // lineNumber is the ground truth — correct any LLM hallucination in selectedText
             selectedText = lineAtNumber.text;
           }
         }
 
+        // Use existing conversationId or create a new one
+        let convId = conversationId;
+        if (!convId) {
+          const result = await createConversation(workspaceId, userId, {
+            message: intent,
+            source: "daily",
+            parts: [{ text: intent, type: "text" }],
+          });
+          convId = result.conversationId;
+        }
+
+        // Save the comment with the conversationId (used for UI marks)
         const comment = await createButlerComment(
           workspaceId,
           pageId,
           selectedText,
           content,
-          conversationId,
+          convId,
         );
 
-        return `Comment added (id: ${comment.id}) on "${selectedText.slice(0, 50)}${selectedText.length > 50 ? "..." : ""}"`;
+        // Fire the core agent to do the actual work
+        noStreamProcess(
+          {
+            id: convId,
+            message: {
+              parts: [{ text: intent, type: "text" }],
+              role: "user",
+            },
+            source: "daily",
+            scratchpadPageId: pageId,
+            interactive: true,
+          },
+          userId,
+          workspaceId,
+        ).catch((err) => {
+          logger.error(
+            `[scratchpad] Core agent failed for comment=${comment.id}`,
+            { err },
+          );
+        });
+
+        return `Comment added (id: ${comment.id}, conversationId: ${convId}) on "${selectedText.slice(0, 50)}${selectedText.length > 50 ? "..." : ""}" — main agent dispatched.`;
       },
     }),
   };
