@@ -42,7 +42,7 @@ interface ConversationViewProps {
 
 export function ConversationView({
   conversationId,
-  history,
+  history: historyProp,
   className,
   integrationAccountMap = {},
   integrationFrontendMap = {},
@@ -50,6 +50,7 @@ export function ConversationView({
   conversationStatus,
   models: modelsProp = [],
 }: ConversationViewProps) {
+  const history = historyProp ?? [];
   const readFetcher = useFetcher();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);

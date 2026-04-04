@@ -4,7 +4,7 @@ import {
 } from "@remix-run/server-runtime";
 import { Memory } from "@mastra/memory";
 
-import { useParams, useNavigate, useFetcher } from "@remix-run/react";
+import { useParams, useNavigate, useFetcher, Link } from "@remix-run/react";
 
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
@@ -102,8 +102,24 @@ export default function SingleConversation() {
 
   if (!conversation) {
     return (
-      <div className="flex h-[calc(100vh)] w-full items-center justify-center md:h-[calc(100vh_-_16px)]">
-        <p className="text-muted-foreground text-sm">No conversation found</p>
+      <div className="flex h-[calc(100vh)] w-full flex-col items-center justify-center gap-4 md:h-[calc(100vh_-_16px)]">
+        <p className="text-muted-foreground text-sm">
+          This conversation context is no longer available.
+        </p>
+        <div className="flex gap-3">
+          <Link
+            to="/home/conversation"
+            className="text-sm underline underline-offset-4"
+          >
+            Back to conversations
+          </Link>
+          <Link
+            to="/home/conversation/new"
+            className="text-sm underline underline-offset-4"
+          >
+            Start a new conversation
+          </Link>
+        </div>
       </div>
     );
   }
