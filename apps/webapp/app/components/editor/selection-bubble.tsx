@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRevalidator } from "@remix-run/react";
 import type { Editor } from "@tiptap/react";
 import {
   Bold,
@@ -15,7 +16,7 @@ import { cn } from "~/lib/utils";
 
 interface SelectionBubbleProps {
   editor: Editor | null;
-  isToday: boolean;
+  parentTaskId?: string;
 }
 
 interface Position {
@@ -70,9 +71,10 @@ function BubbleButton({
   );
 }
 
-export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
+export function SelectionBubble({ editor, parentTaskId }: SelectionBubbleProps) {
   const [pos, setPos] = useState<Position | null>(null);
   const [, forceRender] = useState(0);
+  const { revalidate } = useRevalidator();
 
   useEffect(() => {
     if (!editor) return;
@@ -129,7 +131,6 @@ export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
     blocks: { title: string; description?: string }[],
   ) {
     if (!editor || blocks.length === 0) return [];
-    const taskStatus = isToday ? "Todo" : "Backlog";
     return Promise.all(
       blocks.map(({ title, description }) =>
         fetch("/api/v1/tasks", {
@@ -138,8 +139,9 @@ export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
           body: JSON.stringify({
             title,
             source: "daily",
-            status: taskStatus,
+            status: "Backlog",
             ...(description && { description }),
+            ...(parentTaskId && { parentTaskId }),
           }),
         })
           .then((r) => {
@@ -148,7 +150,7 @@ export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
           })
           .catch((err) => {
             console.error("[selectionBubble] create failed:", err);
-            return { id: null, status: taskStatus, title };
+            return { id: null, status: "Backlog", title };
           }),
       ),
     );
@@ -191,12 +193,15 @@ export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
     setPos(null);
 
     const tasks = await createTasksFromBlocks(blocks);
+    const created = tasks.filter((t) => t.id !== null);
+    if (created.length === 0) return;
     editor
       .chain()
       .focus()
       .deleteSelection()
-      .insertContent(buildTaskListContent(tasks))
+      .insertContent(buildTaskListContent(created))
       .run();
+    if (parentTaskId) revalidate();
   }
 
   async function handleConvertListToTasks() {
@@ -214,12 +219,15 @@ export function SelectionBubble({ editor, isToday }: SelectionBubbleProps) {
     setPos(null);
 
     const tasks = await createTasksFromBlocks(blocks);
+    const created = tasks.filter((t) => t.id !== null);
+    if (created.length === 0) return;
     editor
       .chain()
       .focus()
       .deleteSelection()
-      .insertContent(buildTaskListContent(tasks))
+      .insertContent(buildTaskListContent(created))
       .run();
+    if (parentTaskId) revalidate();
   }
 
   function cmd(e: React.MouseEvent, fn: () => void) {

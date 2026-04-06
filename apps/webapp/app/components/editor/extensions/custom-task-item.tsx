@@ -28,7 +28,7 @@ const CustomTaskItemComponent = ({ node, updateAttributes }: any) => {
       <NodeViewContent
         as="div"
         className={cn(
-          "flex min-w-[3px] flex-1 items-center leading-6",
+          "flex min-h-6 min-w-[3px] flex-1 items-center leading-6 caret-foreground",
           checked &&
             "text-muted-foreground line-through decoration-[1px] opacity-60",
         )}

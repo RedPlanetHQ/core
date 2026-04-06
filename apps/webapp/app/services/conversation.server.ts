@@ -442,9 +442,12 @@ export type TaskRun = {
   lastMessage: { text: string; userType: string } | null;
 };
 
-export async function getTaskRuns(taskId: string): Promise<TaskRun[]> {
+export async function getTaskRuns(
+  taskId: string,
+  workspaceId: string,
+): Promise<TaskRun[]> {
   const conversations = await prisma.conversation.findMany({
-    where: { asyncJobId: taskId, deleted: null },
+    where: { asyncJobId: taskId, deleted: null, workspaceId },
     orderBy: { createdAt: "desc" },
     include: {
       ConversationHistory: {

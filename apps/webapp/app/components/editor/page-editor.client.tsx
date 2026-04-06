@@ -24,6 +24,7 @@ import { ChecklistInputRule } from "~/components/editor/extensions/checklist-inp
 import { SelectionBubble } from "~/components/editor/selection-bubble";
 import { ConversationParagraph } from "~/components/editor/extensions/conversation-paragraph-extension";
 import { ConversationPopover } from "~/components/editor/conversation-popover";
+import { useButlerComments } from "~/components/editor/hooks/use-butler-comments";
 
 const lowlight = createLowlight(all);
 
@@ -69,7 +70,7 @@ function buildExtensions(
       blockquote: {
         HTMLAttributes: { class: cx("border-l-4 border-border pl-2") },
       },
-      paragraph: false, // Replaced by ConversationParagraph extension
+      paragraph: false, // replaced by ConversationParagraph
       codeBlock: false,
       code: {
         HTMLAttributes: {
@@ -95,10 +96,10 @@ function buildExtensions(
     CodeBlockLowlight.configure({ lowlight }),
     Markdown,
     Placeholder.configure({
-      placeholder: ({ node }) => {
-        if (node.type.name === "heading") return `Heading ${node.attrs.level}`;
-        return "Write notes...";
-      },
+      placeholder: ({ node }) =>
+        node.type.name === "heading"
+          ? `Heading ${node.attrs.level}`
+          : "Write notes...",
       includeChildren: true,
     }),
     ConversationParagraph,
@@ -133,34 +134,6 @@ function EditorInner({
     resolved: boolean;
   } | null>(null);
 
-  const updateConversationResolved = React.useCallback(
-    (conversationId: string, resolved: boolean) => {
-      // Update Yjs attribute for live collaborators
-      const fragment = ydoc.getXmlFragment("default");
-      ydoc.transact(() => {
-        fragment.forEach((child) => {
-          if (!(child instanceof Y.XmlElement)) return;
-          if (child.getAttribute("conversationId") !== conversationId) return;
-          child.setAttribute("resolved", resolved);
-        });
-      }, "client-conversation-resolved");
-
-      // Persist resolved state in DB
-      fetch(`/api/v1/page/${pageId}/comments`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId, resolved }),
-      }).catch(() => {});
-
-      setActiveConversation((current) =>
-        current?.conversationId === conversationId
-          ? { ...current, resolved }
-          : current,
-      );
-    },
-    [ydoc, pageId],
-  );
-
   const editor = useEditor({
     extensions: buildExtensions(
       pageId,
@@ -175,22 +148,20 @@ function EditorInner({
         style: `min-height: ${minHeight}`,
       },
       handleClick(view, pos) {
-        // Check for conversation paragraph click
         const $pos = view.state.doc.resolve(pos);
         for (let depth = $pos.depth; depth > 0; depth--) {
           const node = $pos.node(depth);
           if (node.type.name === "paragraph" && node.attrs.conversationId) {
             const startPos = $pos.start(depth);
             const coords = view.coordsAtPos(startPos);
-            const rect = new DOMRect(
-              coords.left,
-              coords.top,
-              0,
-              coords.bottom - coords.top,
-            );
             setActiveConversation({
               conversationId: node.attrs.conversationId,
-              rect,
+              rect: new DOMRect(
+                coords.left,
+                coords.top,
+                0,
+                coords.bottom - coords.top,
+              ),
               resolved: Boolean(node.attrs.resolved),
             });
             return true;
@@ -202,86 +173,30 @@ function EditorInner({
     },
   });
 
-  // Load butler comments and apply conversationId to matching paragraph nodes
-  useEffect(() => {
-    if (!editor) return;
+  const { resolveComment } = useButlerComments(editor, ydoc, pageId);
 
-    async function applyButlerComments() {
-      // Wait until the doc has content (collab sync)
-      if (editor!.state.doc.textContent.trim().length === 0) return;
-
-      const res = await fetch(`/api/v1/page/${pageId}/comments`);
-      if (!res.ok) return;
-      const { comments } = (await res.json()) as {
-        comments: {
-          id: string;
-          selectedText: string;
-          conversationId: string | null;
-          resolved: boolean;
-        }[];
-      };
-
-      if (!comments.length) return;
-
-      let changed = false;
-      const { tr } = editor!.state;
-
-      for (const comment of comments) {
-        if (!comment.conversationId) continue;
-
-        // Check if already applied
-        let alreadyTagged = false;
-        editor!.state.doc.descendants((node) => {
-          if (node.attrs.conversationId === comment.conversationId) {
-            alreadyTagged = true;
-          }
-        });
-        if (alreadyTagged) continue;
-
-        // Find the paragraph node whose text content matches selectedText
-        editor!.state.doc.descendants((node, pos) => {
-          if (alreadyTagged) return false;
-          if (!node.isBlock) return;
-          const nodeText = node.textContent.trim();
-          const commentText = comment.selectedText.trim();
-          if (nodeText !== commentText && !nodeText.includes(commentText)) return;
-
-          tr.setNodeMarkup(pos, undefined, {
-            ...node.attrs,
-            conversationId: comment.conversationId,
-            resolved: comment.resolved,
-          });
-          changed = true;
-          alreadyTagged = true;
-        });
-      }
-
-      if (changed) {
-        editor!.view.dispatch(tr);
-      }
-    }
-
-    // Retry a few times to handle collab sync delay
-    let attempts = 0;
-    const interval = setInterval(() => {
-      attempts++;
-      applyButlerComments();
-      if (attempts >= 5) clearInterval(interval);
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, [editor, pageId]);
+  const handleResolvedChange = React.useCallback(
+    (conversationId: string, resolved: boolean) => {
+      resolveComment(conversationId, resolved);
+      setActiveConversation((current) =>
+        current?.conversationId === conversationId
+          ? { ...current, resolved }
+          : current,
+      );
+    },
+    [resolveComment],
+  );
 
   return (
     <>
-      <SelectionBubble editor={editor} isToday={isToday} />
+      <SelectionBubble editor={editor} parentTaskId={parentTaskId} />
       <EditorContent editor={editor} className="w-full" />
       <ConversationPopover
         conversationId={activeConversation?.conversationId ?? null}
         anchorRect={activeConversation?.rect ?? null}
         resolved={activeConversation?.resolved ?? false}
         butlerName={butlerName}
-        onResolvedChange={updateConversationResolved}
+        onResolvedChange={handleResolvedChange}
         onClose={() => setActiveConversation(null)}
       />
     </>
@@ -320,10 +235,7 @@ export function PageEditor({
             document: doc,
             forceSyncInterval: 10_000,
             token: collabToken,
-
-            onConnect: () => {
-              console.log("connected");
-            },
+            onConnect: () => console.log("connected"),
           }
         : {
             url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collab`,
@@ -331,15 +243,11 @@ export function PageEditor({
             document: doc,
             token: collabToken,
           };
-    providerRef.current = new HocuspocusProvider(providerOptions);
-    if (sharedSocket) {
-      // When websocketProvider is passed, HocuspocusProvider skips calling attach()
-      // internally (manageSocket stays false). We must call it manually so the
-      // provider registers in the socket's providerMap and receives onOpen.
-      providerRef.current.attach();
-    }
-    const t = setTimeout(() => setYdoc(doc), 50);
 
+    providerRef.current = new HocuspocusProvider(providerOptions);
+    if (sharedSocket) providerRef.current.attach();
+
+    const t = setTimeout(() => setYdoc(doc), 50);
     return () => {
       clearTimeout(t);
       providerRef.current?.destroy();
@@ -363,7 +271,6 @@ export function PageEditor({
   );
 }
 
-// Convenience re-export so daily page imports still work
 export function DayEditor({
   pageId,
   collabToken,

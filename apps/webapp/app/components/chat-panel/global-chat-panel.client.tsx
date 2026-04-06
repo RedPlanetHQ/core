@@ -218,13 +218,10 @@ export function GlobalChatPanel({
   };
 
   return (
-    <div className="flex h-full flex-col border-l">
+    <div className="border-l-0.5 border-border flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between border-b px-3 py-2">
-        <div className="flex items-center gap-2">
-          <MessageSquare size={14} className="text-muted-foreground" />
-          <span className="text-sm font-medium">Chat</span>
-        </div>
+      <div className="flex h-[40px] items-center justify-between border-b px-3 py-2">
+        <div className="flex items-center gap-2"></div>
         <div className="flex items-center gap-1">
           {activeConversation && (
             <Button
@@ -250,7 +247,7 @@ export function GlobalChatPanel({
 
       {/* Content */}
       {activeConversation ? (
-        <div className="flex h-[100vh] flex-col overflow-hidden md:h-[calc(100vh_-_56px)]">
+        <div className="flex h-[100vh] flex-col overflow-hidden border-b md:h-[calc(100vh_-_56px)]">
           <ConversationView
             conversationId={activeConversation.conversationId}
             history={activeConversation.history}

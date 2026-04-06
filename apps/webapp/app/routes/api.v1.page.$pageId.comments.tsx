@@ -1,6 +1,11 @@
-import { json, type LoaderFunctionArgs, type ActionFunctionArgs } from "@remix-run/node";
-import { requireUserId } from "~/services/auth.server";
+import {
+  json,
+  type LoaderFunctionArgs,
+  type ActionFunctionArgs,
+} from "@remix-run/node";
+
 import { prisma } from "~/db.server";
+import { requireUserId } from "~/services/session.server";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   await requireUserId(request);
@@ -35,7 +40,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
   const pageId = params.pageId;
   if (!pageId) return json({ error: "Missing pageId" }, { status: 400 });
 
-  const { conversationId, resolved } = await request.json() as {
+  const { conversationId, resolved } = (await request.json()) as {
     conversationId: string;
     resolved: boolean;
   };

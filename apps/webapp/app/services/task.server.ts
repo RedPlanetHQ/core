@@ -54,6 +54,21 @@ export async function createTask(
   _description?: string,
   options?: { source?: string; status?: TaskStatus; parentTaskId?: string },
 ): Promise<Task> {
+  // Enforce max depth: epic → task → sub-task (no further nesting).
+  // A sub-task's displayId has 2 dots (e.g. tk-zshue.1.1), so if the parent
+  // already has 2+ dots we drop parentTaskId to prevent a 4th level.
+  let resolvedParentTaskId = options?.parentTaskId;
+  if (resolvedParentTaskId) {
+    const parent = await prisma.task.findUnique({
+      where: { id: resolvedParentTaskId },
+      select: { displayId: true },
+    });
+    const dots = (parent?.displayId?.match(/\./g) ?? []).length;
+    if (dots >= 2) {
+      throw new Error("Task depth limit reached: max 2 levels (epic → task → sub-task)");
+    }
+  }
+
   const task = await prisma.task.create({
     data: {
       title,
@@ -61,7 +76,7 @@ export async function createTask(
       workspaceId,
       userId,
       ...(options?.source && { source: options.source }),
-      ...(options?.parentTaskId && { parentTaskId: options.parentTaskId }),
+      ...(resolvedParentTaskId && { parentTaskId: resolvedParentTaskId }),
     },
   });
 

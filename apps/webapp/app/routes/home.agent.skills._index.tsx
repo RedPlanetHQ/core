@@ -195,15 +195,15 @@ export default function Skills() {
             }
           >
             {() => (
-              <div className="flex-1 overflow-y-auto px-4">
-                <div className="space-y-5 pb-8">
+              <div className="flex flex-1 justify-center overflow-y-auto px-5">
+                <div className="w-full max-w-3xl space-y-5 pb-8">
                   {Object.entries(libraryByCategory).map(
                     ([category, skills]) => (
                       <div key={category} className="space-y-2">
                         <h3 className="text-muted-foreground/80 text-sm font-medium">
                           {category}
                         </h3>
-                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+                        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
                           {skills.map((skill) => (
                             <LibrarySkillCard
                               key={skill.slug}

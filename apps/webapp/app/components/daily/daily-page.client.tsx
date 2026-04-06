@@ -66,6 +66,7 @@ function DaySection({
           }`}
         >
           {format(date, "EEE, MMMM do, yyyy")}
+          {today && <span className="text-primary ml-2">•</span>}
         </h2>
       </div>
 

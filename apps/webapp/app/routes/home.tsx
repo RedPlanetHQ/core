@@ -31,7 +31,7 @@ import {
 import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
-import { LLMModel } from "~/components/conversation";
+import { type LLMModel } from "~/components/conversation";
 
 export async function action({ request }: ActionFunctionArgs) {
   const { workspaceId } = await requireUser(request);

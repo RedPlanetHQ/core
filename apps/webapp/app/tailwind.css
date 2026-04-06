@@ -17,7 +17,7 @@
   --secondary: 210 40% 96.1%;
   --secondary-foreground: oklch(0% 0 0);
   --muted: oklch(0% 0 0 / 19.22%);
-  --muted-foreground: oklch(49.26% 0 0);
+  --muted-foreground: oklch(55.26% 0 0);
   --accent: oklch(0% 0 0 / 9.02%);
   --accent-foreground: oklch(20.87% 0 0);
   --destructive: oklch(61.34% 0.162 23.58);
@@ -440,7 +440,7 @@
   p.is-editor-empty:before {
     @apply text-muted-foreground/70;
 
-    font-size: 14px !important;
+    font-size: 13px !important;
     content: attr(data-placeholder);
     float: left;
     height: 0;

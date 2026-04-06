@@ -36,16 +36,12 @@ import { cn } from "~/lib/utils";
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);
-  const workspaceId = (await getWorkspaceId(
-    request,
-    user.id,
-    user.workspaceId,
-  )) as string;
 
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
+  if (!user.workspaceId) return redirect("/home/tasks");
 
-  const runs = await getTaskRuns(taskId);
+  const runs = await getTaskRuns(taskId, user.workspaceId);
   return typedjson({ runs });
 }
 
@@ -54,11 +50,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
 function RunListItem({
   run,
   selected,
+  index,
+  total,
   onClick,
 }: {
   run: TaskRun;
   selected: boolean;
   onClick: () => void;
+  index: number;
+  total: number;
 }) {
   const statusColor: Record<string, string> = {
     completed: "bg-green-500/20 text-green-600",
@@ -68,28 +68,36 @@ function RunListItem({
   };
 
   return (
-    <button
-      onClick={onClick}
+    <div
       className={cn(
-        "border-border hover:bg-grayAlpha-100 flex w-full flex-col gap-1 border-b px-4 py-3 text-left transition-colors",
-        selected && "bg-grayAlpha-100",
+        "p-2 py-1",
+        index === 0 && "pt-2",
+        index === total - 1 && "pb-2",
       )}
     >
-      <div className="flex items-center justify-between gap-2">
-        <span className="text-sm font-medium">
-          {format(new Date(run.createdAt), "MMM d, yyyy")}
+      <button
+        onClick={onClick}
+        className={cn(
+          "border-border hover:bg-grayAlpha-100 flex w-full flex-col gap-1 rounded border-b px-4 py-3 text-left transition-colors",
+          selected && "bg-grayAlpha-100",
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-sm font-medium">
+            {format(new Date(run.createdAt), "MMM d, yyyy")}
+          </span>
+          <Badge
+            variant="secondary"
+            className={cn("text-xs capitalize", statusColor[run.status] ?? "")}
+          >
+            {run.status}
+          </Badge>
+        </div>
+        <span className="text-muted-foreground text-xs">
+          {format(new Date(run.createdAt), "h:mm a")}
         </span>
-        <Badge
-          variant="secondary"
-          className={cn("text-xs capitalize", statusColor[run.status] ?? "")}
-        >
-          {run.status}
-        </Badge>
-      </div>
-      <span className="text-muted-foreground text-xs">
-        {format(new Date(run.createdAt), "h:mm a")}
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -177,6 +185,8 @@ function RunsPage() {
           <div style={style}>
             <RunListItem
               run={run}
+              index={index}
+              total={runs.length}
               selected={run.id === selectedId}
               onClick={() => setSelectedId(run.id)}
             />
@@ -198,7 +208,7 @@ function RunsPage() {
 
   return (
     <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-      <ResizablePanel defaultSize="35%" minSize="20%" maxSize="50%">
+      <ResizablePanel defaultSize="20%" minSize="20%" maxSize="35%">
         <div className="flex h-full flex-col">
           <div className="border-border border-b px-4 py-2">
             <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">

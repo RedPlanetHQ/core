@@ -426,9 +426,9 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed", "Recurring"])
+          .enum(["Backlog", "InProgress", "Blocked", "Completed", "Recurring"])
           .optional()
-          .describe("New status"),
+          .describe("New status. To move a Blocked task to Todo, use unblock_task instead."),
         title: z.string().optional().describe("Updated title"),
         description: z
           .string()
@@ -468,17 +468,17 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           if (schedule !== undefined || isActive !== undefined || maxOccurrences !== undefined || endDate !== undefined || updateChannel !== undefined) {
             await updateScheduledTask(taskId, workspaceId, {
               title,
-              description: mergedDescription,
+              description,
               schedule,
               channel: updateChannel,
               isActive,
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
-          } else if (title || mergedDescription !== undefined) {
+          } else if (title || description !== undefined) {
             const data: { title?: string; description?: string } = {};
             if (title) data.title = title;
-            if (mergedDescription !== undefined) data.description = mergedDescription;
+            if (description !== undefined) data.description = description;
             await updateTask(taskId, data);
           }
 
@@ -495,6 +495,36 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           return `Task ${taskId} updated: ${parts.join(", ")}.`;
         } catch (error) {
           return `Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`;
+        }
+      },
+    }),
+
+    unblock_task: tool({
+      description: `Move a Blocked task to Todo so the agent can pick it up. Requires a reason explaining why the block is resolved. The reason is appended to the task description. Only works on tasks currently in Blocked status.`,
+      inputSchema: z.object({
+        taskId: z.string().describe("The ID of the blocked task"),
+        reason: z.string().describe("Why the block is resolved — this is appended to the task description"),
+      }),
+      execute: async ({ taskId, reason }) => {
+        try {
+          const task = await getTaskById(taskId);
+          if (!task) return `Task ${taskId} not found.`;
+          if (task.status !== "Blocked") return `Task is not Blocked (current status: ${task.status}). Only Blocked tasks can be unblocked.`;
+
+          // Append reason to description
+          const page = task.pageId ? await prisma.page.findUnique({ where: { id: task.pageId } }) : null;
+          const existingHtml = page ? (await getPageContentAsHtml(task.pageId!)) ?? "" : "";
+          const reasonHtml = `<p><strong>Unblocked:</strong> ${reason}</p>`;
+          const mergedHtml = existingHtml ? `${existingHtml}${reasonHtml}` : reasonHtml;
+
+          if (task.pageId) {
+            await setPageContentFromHtml(task.pageId, mergedHtml);
+          }
+
+          await changeTaskStatus(taskId, "Todo", workspaceId, userId);
+          return `Task "${task.title}" unblocked and moved to Todo. Reason appended to description.`;
+        } catch (error) {
+          return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),
