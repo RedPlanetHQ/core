@@ -17,6 +17,7 @@ import {
   enqueueScratchpadScan,
   cancelScratchpadScan,
 } from "~/lib/queue-adapter.server";
+import { prisma } from "~/db.server";
 
 const MENTION_IDLE_MS = 10_000;
 const PROACTIVE_IDLE_MS = 20_000;
@@ -34,22 +35,27 @@ interface MentionResult {
 }
 
 /**
- * Scan a Yjs fragment for @butler mentions that don't already have a conversationId.
- * Returns only unprocessed mentions.
+ * Scan a Yjs fragment for @butler mentions that haven't been processed yet.
+ * Checks ButlerComment DB for existing comments with matching selectedText.
  */
-function scanForUnprocessedMentions(fragment: Y.XmlFragment): MentionResult[] {
+async function scanForUnprocessedMentions(
+  fragment: Y.XmlFragment,
+  pageId: string,
+): Promise<MentionResult[]> {
+  // Get all existing comment texts for this page to skip already-processed mentions
+  const existingComments = await prisma.butlerComment.findMany({
+    where: { pageId },
+    select: { selectedText: true },
+  });
+  const processedTexts = new Set(
+    existingComments.map((c) => c.selectedText.trim()),
+  );
+
   const mentions: MentionResult[] = [];
   let idx = 0;
 
   fragment.forEach((child) => {
     if (!(child instanceof Y.XmlElement)) {
-      idx++;
-      return;
-    }
-
-    // Skip paragraphs already tagged with a conversationId
-    const existingConversationId = child.getAttribute("conversationId");
-    if (existingConversationId) {
       idx++;
       return;
     }
@@ -68,7 +74,7 @@ function scanForUnprocessedMentions(fragment: Y.XmlFragment): MentionResult[] {
     if (hasMention) {
       const paraText = textParts.join("").trim();
       const instruction = paraText.replace(/@\S+/g, "").trim();
-      if (instruction) {
+      if (instruction && !processedTexts.has(instruction)) {
         mentions.push({ instruction, fragmentIndex: idx });
       }
     }
@@ -91,7 +97,7 @@ export async function handleScratchpadStore(
   const fragment = document.getXmlFragment("default");
 
   // ── Mention detection ──
-  const unprocessedMentions = scanForUnprocessedMentions(fragment);
+  const unprocessedMentions = await scanForUnprocessedMentions(fragment, pageId);
 
   console.log(unprocessedMentions);
   if (unprocessedMentions.length > 0) {

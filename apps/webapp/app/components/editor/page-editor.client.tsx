@@ -133,63 +133,6 @@ function EditorInner({
     resolved: boolean;
   } | null>(null);
 
-  // Load butler comments and apply conversationId to matching paragraph nodes
-  useEffect(() => {
-    if (!editor) return;
-
-    async function applyButlerComments() {
-      const res = await fetch(`/api/v1/page/${pageId}/comments`);
-      if (!res.ok) return;
-      const { comments } = await res.json() as {
-        comments: { id: string; selectedText: string; conversationId: string | null; resolved: boolean }[];
-      };
-
-      if (!comments.length) return;
-
-      const { tr } = editor!.state;
-      let changed = false;
-
-      for (const comment of comments) {
-        if (!comment.conversationId) continue;
-
-        // Check if already applied
-        let alreadyTagged = false;
-        editor!.state.doc.descendants((node) => {
-          if (node.attrs.conversationId === comment.conversationId) {
-            alreadyTagged = true;
-          }
-        });
-        if (alreadyTagged) continue;
-
-        // Find the paragraph node whose text content matches selectedText
-        editor!.state.doc.descendants((node, pos) => {
-          if (alreadyTagged) return false;
-          if (!node.isBlock) return;
-          if (node.textContent.trim() !== comment.selectedText.trim()) return;
-
-          const nodeType = editor!.schema.nodes[node.type.name];
-          if (!nodeType) return;
-
-          tr.setNodeMarkup(pos, undefined, {
-            ...node.attrs,
-            conversationId: comment.conversationId,
-            resolved: comment.resolved,
-          });
-          changed = true;
-          alreadyTagged = true;
-        });
-      }
-
-      if (changed) {
-        editor!.view.dispatch(tr);
-      }
-    }
-
-    // Wait for collaboration to sync before applying
-    const timeout = setTimeout(applyButlerComments, 1000);
-    return () => clearTimeout(timeout);
-  }, [editor, pageId]);
-
   const updateConversationResolved = React.useCallback(
     (conversationId: string, resolved: boolean) => {
       // Update Yjs attribute for live collaborators
@@ -258,6 +201,76 @@ function EditorInner({
       },
     },
   });
+
+  // Load butler comments and apply conversationId to matching paragraph nodes
+  useEffect(() => {
+    if (!editor) return;
+
+    async function applyButlerComments() {
+      // Wait until the doc has content (collab sync)
+      if (editor!.state.doc.textContent.trim().length === 0) return;
+
+      const res = await fetch(`/api/v1/page/${pageId}/comments`);
+      if (!res.ok) return;
+      const { comments } = (await res.json()) as {
+        comments: {
+          id: string;
+          selectedText: string;
+          conversationId: string | null;
+          resolved: boolean;
+        }[];
+      };
+
+      if (!comments.length) return;
+
+      let changed = false;
+      const { tr } = editor!.state;
+
+      for (const comment of comments) {
+        if (!comment.conversationId) continue;
+
+        // Check if already applied
+        let alreadyTagged = false;
+        editor!.state.doc.descendants((node) => {
+          if (node.attrs.conversationId === comment.conversationId) {
+            alreadyTagged = true;
+          }
+        });
+        if (alreadyTagged) continue;
+
+        // Find the paragraph node whose text content matches selectedText
+        editor!.state.doc.descendants((node, pos) => {
+          if (alreadyTagged) return false;
+          if (!node.isBlock) return;
+          const nodeText = node.textContent.trim();
+          const commentText = comment.selectedText.trim();
+          if (nodeText !== commentText && !nodeText.includes(commentText)) return;
+
+          tr.setNodeMarkup(pos, undefined, {
+            ...node.attrs,
+            conversationId: comment.conversationId,
+            resolved: comment.resolved,
+          });
+          changed = true;
+          alreadyTagged = true;
+        });
+      }
+
+      if (changed) {
+        editor!.view.dispatch(tr);
+      }
+    }
+
+    // Retry a few times to handle collab sync delay
+    let attempts = 0;
+    const interval = setInterval(() => {
+      attempts++;
+      applyButlerComments();
+      if (attempts >= 5) clearInterval(interval);
+    }, 1000);
+
+    return () => clearInterval(interval);
+  }, [editor, pageId]);
 
   return (
     <>
