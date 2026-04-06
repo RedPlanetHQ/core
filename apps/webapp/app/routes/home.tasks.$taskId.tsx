@@ -172,7 +172,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       parsed.data.title,
       undefined,
       {
-        status: (parsed.data.status as TaskStatus) ?? "Todo",
+        status: (parsed.data.status as TaskStatus) ?? "Backlog",
         parentTaskId: taskId,
       },
     );

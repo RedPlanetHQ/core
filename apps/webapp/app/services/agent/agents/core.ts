@@ -45,6 +45,8 @@ interface CreateCoreToolsParams {
   defaultChannel?: string;
   availableChannels?: string[];
   isBackgroundExecution?: boolean;
+  /** Task ID when running as a background task (for reschedule_self tool) */
+  currentTaskId?: string;
   /** Channel name from trigger's reminder config (for send_message tool) */
   triggerChannel?: string;
   /** Channel ID from trigger's reminder config (for send_message tool) */
@@ -96,6 +98,7 @@ export async function createCoreTools(
     defaultChannel,
     availableChannels,
     isBackgroundExecution,
+    currentTaskId,
     triggerChannel,
     triggerChannelId,
     userEmail,
@@ -160,6 +163,7 @@ export async function createCoreTools(
         availableChannels || (channelCtx.availableTypes as any) || ["email"],
         minRecurrenceMinutes,
         channelCtx.channels,
+        currentTaskId,
       );
 
   // Message tools (only in trigger or background task contexts)

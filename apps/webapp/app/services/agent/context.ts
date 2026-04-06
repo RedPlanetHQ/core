@@ -125,12 +125,23 @@ export async function buildAgentContext({
   const linkedTaskRecord = conversationRecord?.asyncJobId
     ? await prisma.task.findUnique({
         where: { id: conversationRecord.asyncJobId },
-        select: { id: true, title: true, pageId: true, status: true },
+        select: { id: true, title: true, pageId: true, status: true, parentTaskId: true, metadata: true },
       })
     : null;
 
   const linkedTaskDescription = linkedTaskRecord?.pageId
     ? await getPageContentAsHtml(linkedTaskRecord.pageId)
+    : null;
+
+  // Fetch parent task context if this is a subtask
+  const parentTaskRecord = linkedTaskRecord?.parentTaskId
+    ? await prisma.task.findUnique({
+        where: { id: linkedTaskRecord.parentTaskId },
+        select: { id: true, title: true, pageId: true },
+      })
+    : null;
+  const parentTaskDescription = parentTaskRecord?.pageId
+    ? await getPageContentAsHtml(parentTaskRecord.pageId)
     : null;
 
   const linkedTask = linkedTaskRecord
@@ -162,6 +173,7 @@ export async function buildAgentContext({
       defaultChannel,
       availableChannels,
       isBackgroundExecution,
+      currentTaskId: linkedTask?.id,
       triggerChannel: triggerContext?.trigger.channel,
       triggerChannelId: triggerContext?.trigger.channelId,
       userEmail: user?.email ?? undefined,
@@ -298,39 +310,55 @@ export async function buildAgentContext({
     const isExecuting =
       linkedTask.status === "InProgress" || linkedTask.status === "Todo";
 
+    const isSubtask = !!linkedTask.parentTaskId;
+    const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};
+    const taskSkillId = taskMeta.skillId as string | undefined;
+
+    // Try to find a matching skill for this task
+    let skillHint = "";
+    if (taskSkillId) {
+      const matchedSkill = skills.find((s: any) => s.id === taskSkillId);
+      if (matchedSkill) {
+        skillHint = `\nA skill is attached to this task: "${matchedSkill.title}" (ID: ${matchedSkill.id}). Call get_skill to load its instructions before starting.`;
+      }
+    }
+
     if (isExecuting) {
       systemPrompt += `\n\n<task_execution>
-You're on this task. Get it done — don't just discuss it.
+You're executing this task in the background. Get it done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}
+Task ID: ${linkedTask.id}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
 
-- Delegate to the orchestrator to do the actual work (gather information, execute actions)
-- If they send a message, treat it as additional direction for this task
-- This IS the task — don't create or search for other tasks about this topic
-- Mark task ${linkedTask.id} as Completed ONLY when the user's original intent is fully achieved — not just when execution finishes
-- Mark task ${linkedTask.id} as Blocked in ALL other cases: errors, failures, partial completion, needs input, unresolvable dependency
-- When marking Blocked, always call update_task first to append a clear error/status summary to the description — what was attempted, what failed, what's needed to unblock
+RULES:
+- Delegate to the orchestrator for actual work (gather information, execute actions)
+- If the user sends a message, treat it as additional direction for this task${isSubtask ? `
+- When you complete this subtask, the system automatically starts the next one and marks the parent Completed when all subtasks are done
+- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Blocked and send_message with the error` : `
+- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Backlog, move this task to Blocked, then send_message to the user explaining the plan and asking for approval
+- The system handles sequential subtask execution automatically — when unblocked, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
+- Mark task ${linkedTask.id} as Completed ONLY when the original intent is fully achieved
+- Mark task ${linkedTask.id} as Blocked when: errors, needs user input, needs approval, partial completion
+- When marking Blocked, always call update_task first to append what was attempted and what's needed
+- ALWAYS send_message to the user when completing or blocking — they may never check the dashboard
+- Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 
 LONG-RUNNING SESSIONS (coding, browser):
-If you start a coding session or browser session via the orchestrator, the response will include a sessionId.
-After getting the sessionId, immediately call create_task with scheduling to check on it:
-  title: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
-  schedule: "FREQ=MINUTELY;INTERVAL=10"
-  maxOccurrences: 1
+If you start a coding session via the orchestrator, the response includes a sessionId.
 
-For browser tasks, use sessionName (not sessionId) and include the intent:
-  title: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
-  schedule: "FREQ=MINUTELY;INTERVAL=10"
-  maxOccurrences: 1
+BEFORE using reschedule_self, save state to the task description:
+  - Call update_task to append: sessionId, worktreePath (if any), what was requested
 
-Do NOT create a scheduled task if the work completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
+WAIT PATTERN:
+1. Quick poll: sleep(60) then coding_read_session(sessionId) — repeat up to 3 times
+2. If still running after 3 polls: call reschedule_self(minutesFromNow=10)
+3. On re-execution (you'll see [reschedule:N/6] in your context): read sessionId from the task description, then coding_read_session
+   - completed → send_message with result, mark task Completed
+   - running → reschedule_self(10) again (max 6 total reschedules)
+   - error → send_message with error, mark task Blocked
+4. After 6 reschedules (~60 min): mark task Blocked, notify user "coding session timed out"
 
-NOTIFYING THE USER:
-When you complete the task (or it fails/blocks), use the \`send_message\` tool to notify the user.
-- For completion: send a concise summary of what was accomplished
-- For failure/blocked: send what happened and what's needed
-- Do NOT skip notification — the user is waiting to hear back
+Do NOT create a scheduled task to check on sessions — use reschedule_self instead.
 </task_execution>`;
     } else {
       systemPrompt += `\n\n<task_context>
@@ -346,14 +374,17 @@ This IS the task — don't create or search for other tasks about this topic. If
 
   // Trigger context — butler needs to think first before acting
   if (triggerContext) {
+    const isTriggerFollowUp = triggerContext.trigger.type === "reminder_followup" ||
+      (triggerContext.trigger.data as any)?.isFollowUp === true;
+
     systemPrompt += `\n\n<trigger_context>
-A trigger has fired: "${triggerContext.reminderText}"
+A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Blocked and notify the user.` : ""}
 
 1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
 2. Follow the ActionPlan it returns:
    - Execute any required work (skills, integrations, gather_context, take_action)
    - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
-   - If \`createFollowUps\` contains items: these are RESCHEDULES of the current task, not new tasks. Call \`create_task\` with isFollowUp=true and parentTaskId set to the triggering task's ID. This reschedules the existing task instead of creating a new one.
+   - If \`createFollowUps\` contains items: these are RESCHEDULES of the current task, not new tasks. Call \`create_task\` with isFollowUp=true and parentTaskId set to the triggering task's ID.${isTriggerFollowUp ? ` HOWEVER: this trigger is itself a follow-up — IGNORE any createFollowUps. Do not chain follow-ups.` : ""}
    - If \`updateTasks\` contains items: apply each update via \`update_task\` (status changes, description updates)
    - If shouldMessage=true: craft a response summarizing what happened, match the tone specified, be concise. Use \`send_message\` to deliver it.
    - If shouldMessage=false: do NOT call send_message.

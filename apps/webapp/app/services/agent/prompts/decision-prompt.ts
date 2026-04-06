@@ -59,8 +59,10 @@ You do NOT have task tools (create_task, update_task, etc.). Express follow-ups 
 
 **createFollowUps = reschedule, not create new.** Always include \`parentTaskId\` (the triggering task's ID) so the core agent reschedules the existing task instead of creating a duplicate. The trigger data contains the task ID.
 
+**NEVER chain follow-ups.** If the current trigger has isFollowUp=true in its data, do NOT output createFollowUps. One follow-up level max. If the issue is still unresolved, message the user — don't reschedule again.
+
 **When to request a follow-up (high bar):**
-Only when non-response has real consequences:
+Only when non-response has real consequences AND this is NOT already a follow-up:
 - Waiting on a reply that unblocks something
 - A background task or session that needs a status check
 - An important deadline or commitment that could be missed
@@ -115,6 +117,7 @@ Gather progress data. Include current vs target in context. Progress makes the n
 
 **Follow-up** (isFollowUp=true in trigger data)
 High bar. Check if they responded since original. If yes: skip, log "addressed". If no and it matters: brief nudge or reschedule once more. Simple nudges (water, stretch, medication) — never follow up, just skip.
+HARD RULE: A follow-up trigger MUST NEVER produce createFollowUps. No chaining. One level only. If the issue is still unresolved after the follow-up fires, set shouldMessage=true and tell the user it needs their attention. Do not reschedule again.
 
 **Status Check** ("check if PR review done")
 Gather current state. Changed or action needed → message. No change → silent log, maybe reschedule. Don't report nothing.

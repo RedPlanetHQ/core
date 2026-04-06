@@ -41,6 +41,7 @@ export function getTaskTools(
   availableChannels: MessageChannel[] = ["email"],
   minRecurrenceMinutes: number = 60,
   channelRecords?: ChannelRecord[],
+  currentTaskId?: string,
 ): Record<string, Tool> {
   const minRecurrenceLabel =
     minRecurrenceMinutes >= 60
@@ -243,13 +244,16 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           }
 
           // Immediate task (no scheduling)
-          const task = await createTask(workspaceId, userId, title);
+          const task = await createTask(workspaceId, userId, title, undefined, {
+            ...(parentTaskId && { parentTaskId }),
+          });
           if (description) {
             const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
             await setPageContentFromHtml(page.id, description);
           }
-          logger.info(`Task ${task.id} created in Backlog`);
-          return `Task created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
+          const label = parentTaskId ? "subtask" : "task";
+          logger.info(`Task ${task.id} created in Backlog${parentTaskId ? ` (subtask of ${parentTaskId})` : ""}`);
+          return `${label} created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
         } catch (error) {
           logger.error("Failed to create task", { error });
           return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -582,6 +586,66 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         }
       },
     }),
+
+    // reschedule_self — only available in background task execution
+    ...(isBackgroundExecution &&
+      currentTaskId && {
+        reschedule_self: tool({
+          description:
+            "Reschedule this background task to run again after a delay. Use when waiting for a long-running coding or browser session. BEFORE calling this, save any state (sessionId, worktreePath, progress) to the task description via update_task — you will need it when you wake up. Max 6 reschedules per task.",
+          inputSchema: z.object({
+            minutesFromNow: z
+              .number()
+              .min(1)
+              .max(60)
+              .describe("Minutes to wait before re-executing this task"),
+            reason: z
+              .string()
+              .optional()
+              .describe("Why you are rescheduling (for logging)"),
+          }),
+          execute: async ({ minutesFromNow, reason }) => {
+            try {
+              const task = await getTaskById(currentTaskId);
+              if (!task)
+                return `Task ${currentTaskId} not found. Cannot reschedule.`;
+
+              const metadata =
+                (task.metadata as Record<string, unknown>) ?? {};
+              const rescheduleCount =
+                (metadata.rescheduleCount as number) ?? 0;
+
+              if (rescheduleCount >= 6) {
+                return "Max reschedules reached (6). Mark the task as Blocked and notify the user that the session timed out.";
+              }
+
+              // Increment reschedule count in metadata
+              await prisma.task.update({
+                where: { id: currentTaskId },
+                data: {
+                  metadata: { ...metadata, rescheduleCount: rescheduleCount + 1 },
+                },
+              });
+
+              // Enqueue delayed re-execution
+              const delayMs = minutesFromNow * 60_000;
+              await enqueueTask(
+                { taskId: currentTaskId, workspaceId, userId },
+                delayMs,
+              );
+
+              logger.info(
+                `Task ${currentTaskId} rescheduled in ${minutesFromNow}m (count: ${rescheduleCount + 1}/6)${reason ? ` — ${reason}` : ""}`,
+              );
+
+              return `Rescheduled to run again in ${minutesFromNow} minutes (reschedule ${rescheduleCount + 1}/6). This execution will now end. Make sure you saved sessionId and any state to the task description before this point.`;
+            } catch (error) {
+              logger.error("Failed to reschedule task", { error });
+              return `Failed to reschedule: ${error instanceof Error ? error.message : "Unknown error"}`;
+            }
+          },
+        }),
+      }),
 
     set_timezone: tool({
       description:

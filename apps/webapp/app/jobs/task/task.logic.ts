@@ -71,7 +71,10 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     // Prefix intent with task context so the agent knows its own taskId
     // and can embed it in any reminders it creates (e.g. after starting a coding session)
-    const taskMessage = `[background-task taskId:${taskId}]\n${intent}`;
+    const metadata = (task.metadata as Record<string, unknown>) ?? {};
+    const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
+    const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/6]` : "";
+    const taskMessage = `[background-task taskId:${taskId}${rescheduleNote}]\n${intent}`;
 
     try {
       await processInboundMessage({

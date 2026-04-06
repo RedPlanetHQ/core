@@ -5,6 +5,7 @@ import {
   cancelTaskJob,
   removeScheduledTask,
   enqueueScheduledTask,
+  enqueueTask,
 } from "~/lib/queue-adapter.server";
 import { computeNextRun, checkShouldDeactivate } from "~/utils/schedule-utils";
 import { DateTime } from "luxon";
@@ -185,9 +186,24 @@ export async function updateTaskStatus(
 }
 
 /**
+ * Get the next Backlog subtask for a parent, ordered by displayId.
+ * Returns null if no Backlog subtasks remain.
+ */
+export async function getNextBacklogSubtask(
+  parentTaskId: string,
+): Promise<Task | null> {
+  return prisma.task.findFirst({
+    where: { parentTaskId, status: "Backlog" },
+    orderBy: { displayId: "asc" },
+  });
+}
+
+/**
  * Central lifecycle handler for task status changes.
  * - Cancels any queued/executing job when moving away from InProgress
  * - Cancels scheduled jobs when deactivating
+ * - Sequential subtask execution: parent Todo enqueues first subtask,
+ *   subtask completion enqueues next sibling
  */
 export async function changeTaskStatus(
   taskId: string,
@@ -197,6 +213,42 @@ export async function changeTaskStatus(
 ): Promise<Task> {
   if (status === "Backlog") {
     await cancelTaskJob(taskId);
+  }
+
+  // Auto-start execution when task moves to Todo
+  if (status === "Todo") {
+    // Check if this task has Backlog subtasks — if so, enqueue the first one
+    // instead of the parent, and move parent to InProgress
+    const nextSubtask = await getNextBacklogSubtask(taskId);
+    if (nextSubtask) {
+      await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
+      await updateTaskStatus(taskId, "InProgress");
+      return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    }
+    // No subtasks — enqueue the task itself (existing behavior)
+    await enqueueTask({ taskId, workspaceId, userId });
+  }
+
+  // Subtask completed — enqueue next Backlog sibling, or auto-complete parent if all done
+  if (status === "Completed") {
+    const currentTask = await getTaskById(taskId);
+    if (currentTask?.parentTaskId) {
+      const nextSibling = await getNextBacklogSubtask(currentTask.parentTaskId);
+      if (nextSibling) {
+        await enqueueTask({ taskId: nextSibling.id, workspaceId, userId });
+      } else {
+        // No more Backlog siblings — check if all subtasks are done
+        const activeSubtasks = await prisma.task.count({
+          where: {
+            parentTaskId: currentTask.parentTaskId,
+            status: { in: ["Backlog", "Todo", "InProgress"] },
+          },
+        });
+        if (activeSubtasks === 0) {
+          await updateTaskStatus(currentTask.parentTaskId, "Completed");
+        }
+      }
+    }
   }
 
   // If moving a recurring/scheduled task to Completed or Blocked, deactivate scheduling

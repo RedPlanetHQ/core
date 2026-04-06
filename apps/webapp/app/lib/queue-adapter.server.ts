@@ -560,10 +560,11 @@ export async function enqueueActivityCase(
 }
 
 /**
- * Enqueue task job
+ * Enqueue task job (with optional delay for rescheduled tasks)
  */
 export async function enqueueTask(
   payload: TaskPayload,
+  delayMs?: number,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
@@ -573,13 +574,15 @@ export async function enqueueTask(
       queue: "task-queue",
       concurrencyKey: payload.workspaceId,
       tags: [`task:${payload.taskId}`, payload.workspaceId],
+      ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
     });
     return { id: handler.id };
   } else {
     const { taskQueue } = await import("~/bullmq/queues");
     const job = await taskQueue.add("task", payload, {
-      jobId: `task-${payload.taskId}`,
+      jobId: `task-${payload.taskId}-${Date.now()}`,
       attempts: 1,
+      ...(delayMs ? { delay: delayMs } : {}),
     });
     return { id: job.id };
   }

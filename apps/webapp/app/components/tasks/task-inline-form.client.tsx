@@ -55,7 +55,7 @@ export interface TaskInlineFormProps {
 }
 
 export function TaskInlineForm({
-  defaultStatus = "Todo" as TaskStatus,
+  defaultStatus = "Backlog" as TaskStatus,
   showStatus = true,
   onSubmit,
   onCancel,
