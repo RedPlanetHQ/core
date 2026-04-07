@@ -7,10 +7,10 @@ import {
   type Index,
   type ListRowProps,
 } from "react-virtualized";
-import { Plus } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
-import type { Task, TaskStatus } from "@core/database";
+import { Plus, ArrowUpRight } from "lucide-react";
+import type { TaskStatus } from "@core/database";
 import { Button } from "~/components/ui";
+import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import { TaskStatusIcons } from "~/components/icon-utils";
 import { getTaskStatusColor } from "~/components/ui/color-utils";
@@ -19,6 +19,8 @@ import {
   TaskStatusDropdownVariant,
 } from "~/components/tasks/task-status-dropdown";
 import { Task as TaskIcon } from "~/components/icons/task";
+import type { TaskWithRelations } from "~/services/task.server";
+import { SubTask } from "../icons/sub-task";
 
 const STATUS_ORDER: TaskStatus[] = [
   "InProgress",
@@ -38,9 +40,9 @@ const STATUS_LABELS: Record<TaskStatus, string> = {
 
 type TaskRow =
   | { type: "header"; status: TaskStatus; count: number }
-  | { type: "item"; task: Task };
+  | { type: "item"; task: TaskWithRelations };
 
-function buildRows(tasks: Task[]): TaskRow[] {
+function buildRows(tasks: TaskWithRelations[]): TaskRow[] {
   const rows: TaskRow[] = [];
   for (const status of STATUS_ORDER) {
     const group = tasks.filter((t) => t.status === status);
@@ -82,11 +84,16 @@ function TaskRowItem({
   onClick,
   onStatusChange,
 }: {
-  task: Task;
+  task: TaskWithRelations;
   selected: boolean;
   onClick: () => void;
   onStatusChange: (status: string) => void;
 }) {
+  const doneSubtasks = task.subtasks.filter(
+    (s) => s.status === "Completed",
+  ).length;
+  const totalSubtasks = task.subtasks.length;
+
   return (
     <a onClick={onClick} className={cn("group flex cursor-default gap-2 pr-4")}>
       <div className="flex w-full items-center">
@@ -96,7 +103,13 @@ function TaskRowItem({
             selected && "bg-grayAlpha-100",
           )}
         >
-          <div className="shrink-0 pt-2">
+          <div
+            className="shrink-0 pt-2"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+            }}
+          >
             <TaskStatusDropdown
               value={task.status}
               onChange={onStatusChange}
@@ -109,21 +122,46 @@ function TaskRowItem({
               "border-border flex w-full min-w-[0px] shrink flex-col border-b py-2.5",
             )}
           >
-            <div className="flex w-full gap-4">
+            <div className="flex w-full items-center gap-2">
               <div className="inline-flex min-w-[0px] shrink items-center justify-start">
-                <div className="truncate text-left">{task.title}</div>
-              </div>
-              <div className="inline-flex min-w-[0px] flex-1 shrink items-center justify-start">
-                <div className="text-muted-foreground/80 truncate text-left">
-                  {task.description}
+                <div
+                  className={cn(
+                    "truncate text-left",
+                    task.status === "Completed" &&
+                      "text-muted-foreground line-through decoration-[1px]",
+                  )}
+                >
+                  {task.title}
                 </div>
               </div>
-              <div className="flex shrink-0 items-center pr-1">
-                <span className="text-muted-foreground text-sm">
-                  {formatDistanceToNow(new Date(task.createdAt), {
-                    addSuffix: true,
-                  })}
-                </span>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {task.source && task.source !== "manual" && (
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    <span className="text-muted-foreground">{task.source}</span>
+                  </Badge>
+                )}
+                {task.parentTask && (
+                  <Badge
+                    variant="secondary"
+                    className="max-w-[140px] gap-1 text-xs"
+                  >
+                    <ArrowUpRight
+                      size={14}
+                      className="text-muted-foreground shrink-0"
+                    />
+                    <span className="text-muted-foreground">Parent</span>
+                    <span className="truncate">{task.parentTask.title}</span>
+                  </Badge>
+                )}
+                {totalSubtasks > 0 && (
+                  <Badge variant="secondary" className="gap-1 text-xs">
+                    <SubTask size={14} className="shrink-0" />
+                    <span className="text-muted-foreground">
+                      {doneSubtasks}/{totalSubtasks}
+                    </span>
+                  </Badge>
+                )}
               </div>
             </div>
           </div>
@@ -140,7 +178,7 @@ export function TaskListPanel({
   onNew,
   onStatusChange,
 }: {
-  tasks: Task[];
+  tasks: TaskWithRelations[];
   selectedTaskId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;

@@ -13,6 +13,7 @@ interface DailyPageProps {
   workspaceId: string;
   userId: string;
   collabToken: string;
+  todayPage?: PageRecord;
 }
 
 // Days before and after today in the initial array
@@ -31,16 +32,21 @@ function DaySection({
   date,
   butlerName,
   collabToken,
+  prefetchedPage,
 }: {
   date: Date;
   butlerName: string;
   collabToken: string;
+  prefetchedPage?: PageRecord;
 }) {
-  const [page, setPage] = React.useState<PageRecord | null>(null);
-  const [loading, setLoading] = React.useState(true);
+  const [page, setPage] = React.useState<PageRecord | null>(
+    prefetchedPage ?? null,
+  );
+  const [loading, setLoading] = React.useState(!prefetchedPage);
   const today = isToday(date);
 
   React.useEffect(() => {
+    if (prefetchedPage) return;
     const dateStr = format(date, "yyyy-MM-dd");
     fetch(`/api/v1/page?date=${dateStr}`)
       .then((r) => r.json())
@@ -52,14 +58,15 @@ function DaySection({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={`mb-8 ${today ? "min-h-[60vh]" : ""}`}>
-      <div className={`mb-3 flex items-center gap-2`}>
+    <div className={`mb-8 ${today ? "min-h-[60vh]" : "min-h-[120px]"}`}>
+      <div className="mb-3 flex items-center gap-2">
         <h2
           className={`text-2xl font-medium ${
             today ? "text-foreground" : "text-muted-foreground"
           }`}
         >
           {format(date, "EEE, MMMM do, yyyy")}
+          {today && <span className="text-primary ml-2">•</span>}
         </h2>
       </div>
 
@@ -81,15 +88,23 @@ function DaySection({
   );
 }
 
-export function DailyPage({ butlerName, collabToken }: DailyPageProps) {
+export function DailyPage({
+  butlerName,
+  collabToken,
+  todayPage,
+}: DailyPageProps) {
   const today = useRef(new Date()).current;
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [initialScrollDone, setInitialScrollDone] = useState(false);
+  // Callback ref: re-renders when the scroll element mounts, so Virtuoso
+  // receives the correct customScrollParent on its very first render.
+  const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
   const [dates, setDates] = useState<Date[]>(() => buildInitialDates(today));
 
   // today is always at index INITIAL_BEFORE in the initial array
   const todayIndex = INITIAL_BEFORE;
+
+  // Use a ref so the guard doesn't trigger re-renders
+  const initialScrollDoneRef = useRef(false);
 
   const prependDays = useCallback(() => {
     setDates((prev) => {
@@ -112,39 +127,47 @@ export function DailyPage({ butlerName, collabToken }: DailyPageProps) {
   }, []);
 
   return (
-    <div className="flex h-full w-full flex-col">
+    <div className="h-full w-full">
       <div
-        ref={scrollRef}
-        className="h-full grow overflow-y-auto"
+        ref={setScrollEl}
+        className="h-full overflow-y-auto"
         style={{
           scrollbarWidth: "thin",
           scrollbarColor: "var(--border) transparent",
         }}
       >
-        <Virtuoso
-          customScrollParent={scrollRef.current ?? undefined}
-          totalCount={dates.length}
-          itemContent={(index) => (
-            <div className="px-2 pt-6">
-              <DaySection
-                date={dates[index]}
-                butlerName={butlerName}
-                collabToken={collabToken}
-              />
-            </div>
-          )}
-          style={{ height: "100%" }}
-          overscan={LOAD_MORE}
-          initialTopMostItemIndex={todayIndex}
-          endReached={appendDays}
-          atTopStateChange={(atTop) => {
-            if (initialScrollDone && atTop) {
-              prependDays();
-            } else {
-              setInitialScrollDone(true);
-            }
-          }}
-        />
+        {/* Only mount Virtuoso once scrollEl is available so initialTopMostItemIndex
+            works correctly and customScrollParent is never undefined on first render */}
+        {scrollEl && (
+          <Virtuoso
+            customScrollParent={scrollEl}
+            totalCount={dates.length}
+            itemContent={(index) => {
+              const date = dates[index];
+              return (
+                <div className="px-2 pt-6">
+                  <DaySection
+                    date={date}
+                    butlerName={butlerName}
+                    collabToken={collabToken}
+                    prefetchedPage={isToday(date) ? todayPage : undefined}
+                  />
+                </div>
+              );
+            }}
+            increaseViewportBy={800}
+            overscan={LOAD_MORE}
+            initialTopMostItemIndex={todayIndex}
+            endReached={appendDays}
+            atTopStateChange={(atTop) => {
+              if (initialScrollDoneRef.current && atTop) {
+                prependDays();
+              } else {
+                initialScrollDoneRef.current = true;
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

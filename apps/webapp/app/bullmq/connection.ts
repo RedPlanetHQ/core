@@ -1,4 +1,6 @@
 import Redis, { type RedisOptions } from "ioredis";
+import { createResumableStreamContext } from "resumable-stream/ioredis";
+import type { ResumableStreamContext } from "resumable-stream";
 
 let redisConnection: Redis | null = null;
 
@@ -47,4 +49,22 @@ export async function closeRedisConnection(): Promise<void> {
     await redisConnection.quit();
     redisConnection = null;
   }
+}
+
+let _streamContext: ResumableStreamContext | null = null;
+
+/**
+ * Resumable stream context backed by the same Redis instance.
+ * Uses duplicate() to get separate pub/sub connections (required by Redis).
+ */
+export function getResumableStreamContext(): ResumableStreamContext {
+  if (!_streamContext) {
+    const base = getRedisConnection();
+    _streamContext = createResumableStreamContext({
+      waitUntil: null, // long-running server process — no keepalive needed
+      publisher: base.duplicate(),
+      subscriber: base.duplicate(),
+    });
+  }
+  return _streamContext;
 }

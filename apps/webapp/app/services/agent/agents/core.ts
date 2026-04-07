@@ -19,15 +19,17 @@ import { type Trigger, type DecisionContext } from "../types/decision-agent";
 import { createThinkAgent } from "./decision";
 import { logger } from "../../logger.service";
 import { prisma } from "~/db.server";
-import { getReminderTools } from "../tools/reminder-tools";
 import {
   getSkillTool,
   createSkillTool,
   updateSkillTool,
 } from "../tools/skill-tools";
 import { getTaskTools } from "../tools/task-tools";
+import { getMessageTools } from "../tools/message-tools";
 import { getSleepTool } from "../tools/utils-tools";
 import { createOrchestratorAgent } from "./orchestrator";
+import { createGatewayAgents } from "./gateway";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
 
 // ---------------------------------------------------------------------------
 // Params
@@ -41,9 +43,21 @@ interface CreateCoreToolsParams {
   readOnly?: boolean;
   skills?: SkillRef[];
   onMessage?: (message: string) => Promise<void>;
-  defaultChannel?: "whatsapp" | "slack" | "email";
-  availableChannels?: Array<"whatsapp" | "slack" | "email">;
+  defaultChannel?: string;
+  availableChannels?: string[];
   isBackgroundExecution?: boolean;
+  /** Task ID when running as a background task (for reschedule_self tool) */
+  currentTaskId?: string;
+  /** Channel name from trigger's reminder config (for send_message tool) */
+  triggerChannel?: string;
+  /** Channel ID from trigger's reminder config (for send_message tool) */
+  triggerChannelId?: string | null;
+  /** User email for send_message fallback */
+  userEmail?: string;
+  /** User phone for send_message WhatsApp delivery */
+  userPhoneNumber?: string;
+  /** Executor tools — used to resolve gateways and call tools in non-websocket contexts */
+  executorTools?: OrchestratorTools;
 }
 
 interface CreateCoreAgentsParams {
@@ -60,8 +74,8 @@ interface CreateCoreAgentsParams {
     userPersona?: string;
   };
   /** For think agent tools */
-  defaultChannel?: "whatsapp" | "slack" | "email";
-  availableChannels?: Array<"whatsapp" | "slack" | "email">;
+  defaultChannel?: string;
+  availableChannels?: string[];
   minRecurrenceMinutes?: number;
   /** When false, tools run without requireApproval */
   interactive?: boolean;
@@ -87,6 +101,12 @@ export async function createCoreTools(
     defaultChannel,
     availableChannels,
     isBackgroundExecution,
+    currentTaskId,
+    triggerChannel,
+    triggerChannelId,
+    userEmail,
+    userPhoneNumber,
+    executorTools,
   } = params;
 
   const tools: Record<string, Tool> = {};
@@ -114,7 +134,7 @@ export async function createCoreTools(
     });
   }
 
-  // Reminder tools
+  // Resolve channel context for task tools
   const channel =
     source === "whatsapp"
       ? "whatsapp"
@@ -122,28 +142,46 @@ export async function createCoreTools(
         ? "slack"
         : defaultChannel || "email";
 
-  const subscription = await prisma.subscription.findFirst({
-    where: {
-      workspace: { id: workspaceId },
-      status: "ACTIVE",
-    },
-    select: { planType: true },
-  });
+  const [subscription, channelCtx] = await Promise.all([
+    prisma.subscription.findFirst({
+      where: {
+        workspace: { id: workspaceId },
+        status: "ACTIVE",
+      },
+      select: { planType: true },
+    }),
+    getWorkspaceChannelContext(workspaceId),
+  ]);
   const minRecurrenceMinutes =
     subscription?.planType === "FREE" || !subscription ? 60 : 30;
 
-  const reminderTools = getReminderTools(
-    workspaceId,
-    channel,
-    timezone,
-    availableChannels || ["email"],
-    minRecurrenceMinutes,
-  );
-
-  // Task tools (only in write mode)
+  // Unified task tools (includes scheduling / recurring — replaces reminder tools)
   const taskTools = readOnly
     ? {}
-    : getTaskTools(workspaceId, userId, isBackgroundExecution);
+    : getTaskTools(
+        workspaceId,
+        userId,
+        isBackgroundExecution,
+        timezone,
+        channel as any,
+        availableChannels || (channelCtx.availableTypes as any) || ["email"],
+        minRecurrenceMinutes,
+        channelCtx.channels,
+        currentTaskId,
+      );
+
+  // Message tools (only in trigger or background task contexts)
+  const messageTools =
+    isBackgroundExecution || triggerChannel
+      ? getMessageTools({
+          workspaceId,
+          userId,
+          userEmail: userEmail ?? "",
+          userPhoneNumber,
+          triggerChannel,
+          triggerChannelId,
+        })
+      : {};
 
   // Skill tools
   tools["get_skill"] = getSkillTool(workspaceId);
@@ -152,7 +190,7 @@ export async function createCoreTools(
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
   }
 
-  return { ...tools, ...reminderTools, ...taskTools };
+  return { ...tools, ...taskTools, ...messageTools };
 }
 
 // ---------------------------------------------------------------------------
@@ -183,32 +221,42 @@ export async function createCoreAgents(
     modelConfig,
   } = params;
 
-  const [reader, writer] = await Promise.all([
-    createOrchestratorAgent(
-      userId,
-      workspaceId,
-      "read",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-    createOrchestratorAgent(
-      userId,
-      workspaceId,
-      "write",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-  ]);
+  // Load gateways for subagent creation
+  const gateways = executorTools
+    ? await executorTools.getGateways(workspaceId)
+    : await prisma.gateway.findMany({
+        where: { workspaceId, status: "CONNECTED" },
+        select: { id: true, name: true, status: true, description: true },
+      });
+
+  const [reader, writer, { agentList: gatewayAgents }] =
+    await Promise.all([
+      createOrchestratorAgent(
+        userId,
+        workspaceId,
+        "read",
+        timezone,
+        source,
+        persona,
+        skills,
+        executorTools,
+        interactive,
+        modelConfig,
+      ),
+      createOrchestratorAgent(
+        userId,
+        workspaceId,
+        "write",
+        timezone,
+        source,
+        persona,
+        skills,
+        executorTools,
+        interactive,
+        modelConfig,
+      ),
+      createGatewayAgents(gateways, executorTools, interactive, modelConfig),
+    ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)
   const channel =
@@ -222,11 +270,14 @@ export async function createCoreAgents(
     ? await createThinkAgent(
         reader.agent,
         workspaceId,
+        userId,
         channel,
         timezone,
         availableChannels || ["email"],
         minRecurrenceMinutes ?? 60,
         modelConfig,
+        triggerContext,
+        skills,
       )
     : undefined;
 
@@ -234,6 +285,6 @@ export async function createCoreAgents(
     gatherContextAgent: reader.agent,
     takeActionAgent: writer.agent,
     thinkAgent,
-    gatewayAgents: reader.gatewayAgents,
+    gatewayAgents,
   };
 }

@@ -67,11 +67,25 @@ import {
   scheduleNextOccurrence,
   deactivateReminder,
 } from "~/services/reminder.server";
-import { reminderQueue, followUpQueue, taskQueue } from "~/bullmq/queues";
+import {
+  reminderQueue,
+  followUpQueue,
+  taskQueue,
+  scheduledTaskQueue,
+  scratchpadScanQueue,
+} from "~/bullmq/queues";
 import {
   type TaskPayload,
   processTask,
 } from "~/jobs/task/task.logic";
+import {
+  type ScratchpadScanPayload,
+  processScratchpadScan,
+} from "~/jobs/scratchpad/scratchpad-scan.logic";
+import {
+  type ScheduledTaskPayload,
+  processScheduledTask,
+} from "~/jobs/task/scheduled-task.logic";
 import {
   type ActivityCasePayload,
   processActivityCase,
@@ -311,6 +325,22 @@ export const activityCaseWorker = new Worker(
 );
 
 /**
+ * Scheduled task worker
+ * Processes scheduled/recurring tasks (unified with reminders)
+ */
+export const scheduledTaskWorker = new Worker(
+  "scheduled-task-queue",
+  async (job) => {
+    const payload = job.data as ScheduledTaskPayload;
+    return await processScheduledTask(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 10,
+  },
+);
+
+/**
  * Task worker
  * Processes long-running tasks
  */
@@ -319,6 +349,22 @@ export const taskWorker = new Worker(
   async (job) => {
     const payload = job.data as TaskPayload;
     return await processTask(payload);
+  },
+  {
+    connection: getRedisConnection(),
+    concurrency: 5,
+  },
+);
+
+/**
+ * Scratchpad scan worker
+ * Processes mention and proactive scratchpad scan jobs
+ */
+export const scratchpadScanWorker = new Worker(
+  "scratchpad-scan-queue",
+  async (job) => {
+    const payload = job.data as ScratchpadScanPayload;
+    return await processScratchpadScan(payload);
   },
   {
     connection: getRedisConnection(),
@@ -343,10 +389,14 @@ export async function closeAllWorkers(): Promise<void> {
     reminderWorker.close(),
     followUpWorker.close(),
     activityCaseWorker.close(),
+    scheduledTaskWorker.close(),
     taskWorker.close(),
     reminderQueue.close(),
     followUpQueue.close(),
+    scheduledTaskQueue.close(),
     taskQueue.close(),
+    scratchpadScanWorker.close(),
+    scratchpadScanQueue.close(),
   ]);
   logger.log("All BullMQ workers closed");
 }

@@ -14,6 +14,7 @@ import type { MessageChannel } from "~/services/agent/types";
 export type TriggerType =
   | "reminder_fired"
   | "reminder_followup"
+  | "scheduled_task_fired"
   | "daily_sync"
   | "integration_webhook"
   | "scheduled_check"
@@ -78,8 +79,25 @@ export interface ScheduledCheckTrigger extends BaseTrigger {
   };
 }
 
+export interface ScheduledTaskTriggerData {
+  taskId: string;
+  action: string;
+  occurrenceNumber: number;
+  previousResponses: ResponseSummary[];
+  unrespondedCount: number;
+  confirmedActive: boolean;
+  skillId?: string;
+  skillName?: string;
+}
+
+export interface ScheduledTaskTrigger extends BaseTrigger {
+  type: "scheduled_task_fired";
+  data: ScheduledTaskTriggerData;
+}
+
 export type Trigger =
   | ReminderTrigger
+  | ScheduledTaskTrigger
   | WebhookTrigger
   | SyncTrigger
   | ScheduledCheckTrigger;
@@ -122,21 +140,22 @@ export interface MessagePlan {
   tone: MessageTone;
 }
 
-export interface NewReminder {
-  action: string;
-  scheduledFor: Date | string; // absolute or relative like "in 30 minutes"
-  channel: MessageChannel;
-  goal?: GoalInfo;
-  isFollowUp?: boolean;
-  parentReminderId?: string;
+export interface FollowUpTask {
+  title: string;
+  schedule: string; // RRule string
+  maxOccurrences?: number;
+  parentTaskId?: string;
+  channel?: MessageChannel;
 }
 
-export interface ReminderUpdate {
-  reminderId: string;
+export interface TaskUpdate {
+  taskId: string;
   changes: {
-    action?: string;
+    title?: string;
+    description?: string;
     isActive?: boolean;
     schedule?: string;
+    status?: string;
   };
 }
 
@@ -149,8 +168,8 @@ export interface SilentAction {
 export interface ActionPlan {
   shouldMessage: boolean;
   message?: MessagePlan;
-  createReminders: NewReminder[];
-  updateReminders: ReminderUpdate[];
+  createFollowUps: FollowUpTask[];
+  updateTasks: TaskUpdate[];
   silentActions: SilentAction[];
   reasoning: string;
 }

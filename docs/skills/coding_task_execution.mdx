@@ -1,0 +1,78 @@
+---
+title: "Coding Task Execution"
+description: "Full playbook for executing coding tasks in the background: plan the approach, execute via coding agent, poll for completion, and report results. Handles long-running sessions with sleep polling and reschedule_self for multi-minute waits."
+category: Engineering
+integrations: '[]'
+---
+
+**Goal:** Execute a coding task end-to-end — plan, delegate to coding agent, wait for completion, and report results.
+
+**Tools Required:** coding_ask, coding_read_session, sleep, reschedule_self, update_task, send_message
+
+---
+
+### 1. Plan Phase
+
+Before writing any code, understand what needs to be done:
+
+- Read the task description for context and requirements
+- Use the orchestrator to gather context: read relevant files, understand the codebase area
+- Write a plan: approach, files to change, risks or edge cases
+- Save the plan to the task description via update_task — this is your working document
+
+Do NOT skip planning. Even small changes benefit from a 2-3 line plan.
+
+---
+
+### 2. Execute Phase
+
+Hand off to the coding agent:
+
+- Call coding_ask via the orchestrator with the plan and intent as context
+- The response includes a sessionId (and worktreePath/worktreeBranch if using a worktree)
+- Immediately save state to the task description via update_task:
+  - sessionId
+  - worktreePath (if any)
+  - worktreeBranch (if any)
+  - What was requested
+
+Do NOT proceed to the wait phase without saving state first.
+
+---
+
+### 3. Wait Phase
+
+Poll for the coding session to complete:
+
+**Quick polling (for fast tasks):**
+1. Call sleep(60)
+2. Call coding_read_session(sessionId)
+3. If completed or error — go to Report Phase
+4. If still running — repeat up to 3 times total
+
+**Long polling (for slow tasks):**
+If still running after 3 quick polls:
+1. Call reschedule_self(minutesFromNow=10)
+2. Current execution ends here
+
+**On re-execution (you will see [reschedule:N/6] in your context):**
+1. Read sessionId from the task description
+2. Call coding_read_session(sessionId)
+3. If completed — go to Report Phase
+4. If error — go to Report Phase
+5. If still running — call reschedule_self(10) again (max 6 total reschedules)
+
+**Timeout:**
+After 6 reschedules (~60 minutes total): go to Report Phase with timeout status.
+
+---
+
+### 4. Report Phase
+
+Based on session status:
+
+- **Completed:** Read the session output. Summarize what was accomplished. Call send_message to notify the user. Mark task as Completed.
+- **Error:** Read the error details. Call send_message with what happened and what might be needed. Mark task as Blocked.
+- **Timeout (6 reschedules exhausted):** Call send_message telling the user the coding session timed out after ~60 minutes. Mark task as Blocked.
+
+Never complete or fail silently — always notify the user via send_message.

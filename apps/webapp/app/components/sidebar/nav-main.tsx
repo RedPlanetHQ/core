@@ -44,7 +44,7 @@ export const NavMain = ({
               <Button
                 isActive={isActive(item)}
                 className={cn(
-                  "bg-grayAlpha-100 text-foreground w-fit gap-1 !rounded-md",
+                  "text-foreground w-fit gap-1 !rounded-md",
                   isActive(item) && "!bg-accent !text-accent-foreground",
                 )}
                 onClick={() => {

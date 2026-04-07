@@ -1,9 +1,8 @@
 /**
  * Gateway Agent Factory
  *
- * Creates Mastra Agent instances for connected gateways.
- * Each gateway becomes a sub-subagent under the orchestrator,
- * with direct tools (browser, coding, exec) that can be called by the agent.
+ * Gateway tool helpers — converts gateway JSON schema tools into AI SDK tools
+ * that are registered directly on the core agent (not via the orchestrator).
  */
 
 import { Agent } from "@mastra/core/agent";
@@ -41,7 +40,7 @@ interface JsonSchemaProperty {
 /**
  * Convert a JSON Schema property to a Zod schema
  */
-function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
+export function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
   switch (prop.type) {
     case "string":
       return z.string().describe(prop.description || "");
@@ -64,7 +63,7 @@ function jsonSchemaPropertyToZod(prop: JsonSchemaProperty): any {
 /**
  * Convert a gateway tool's JSON Schema to a Zod object schema
  */
-function gatewayToolToZodSchema(
+export function gatewayToolToZodSchema(
   gatewayTool: GatewayTool,
 ): z.ZodObject<Record<string, any>> {
   const schema = gatewayTool.inputSchema;

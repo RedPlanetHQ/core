@@ -1,31 +1,26 @@
 /**
  * Decision Agent Pipeline
  *
- * Trigger pipeline: takes a trigger + context, runs the butler with think enabled,
- * and optionally delivers to channel.
+ * Trigger pipeline: takes a trigger + context, runs the butler with think enabled.
+ * Message delivery is handled by the butler via send_message tool.
  *
  * Flow:
  * 1. Butler starts with trigger context + think tool
  * 2. Butler calls think (subagent) → gets ActionPlan
- * 3. Butler executes the plan (skills, integrations, tasks)
- * 4. Pipeline extracts shouldMessage from think output → delivers to channel or not
+ * 3. Butler executes the plan (skills, integrations, tasks, send_message)
  */
 
 import { UserTypeEnum } from "@core/types";
-import {
-  processInboundMessage,
-  getOrCreateChannelConversation,
-} from "~/services/agent/message-processor";
+import { processInboundMessage } from "~/services/agent/message-processor";
 import {
   type DecisionContext,
   type Trigger,
 } from "~/services/agent/types/decision-agent";
-import { getChannel } from "~/services/channels";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
-import { upsertConversationHistory } from "~/services/conversation.server";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { deductCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
@@ -52,6 +47,10 @@ export interface CASEPipelineInput {
   timezone: string;
   /** Optional tool executor — defaults to DirectOrchestratorTools (direct DB calls) */
   executorTools?: OrchestratorTools;
+  /** Unified task ID (when triggered from scheduled task) */
+  taskId?: string;
+  /** Unified task text (when triggered from scheduled task) */
+  taskText?: string;
 }
 
 export interface CASEPipelineResult {
@@ -85,7 +84,13 @@ export async function runCASEPipeline(
     reminderId,
     timezone,
     executorTools,
+    taskId,
+    taskText,
   } = input;
+
+  // Use unified task fields when available, fall back to reminder fields
+  const entityId = taskId ?? reminderId;
+  const entityText = taskText ?? reminderText;
 
   try {
     // =========================================================================
@@ -94,14 +99,16 @@ export async function runCASEPipeline(
     const conversationSource =
       trigger.type === "integration_webhook"
         ? ((trigger.data as any).integration ?? "integration")
-        : "reminder";
+        : trigger.type === "scheduled_task_fired"
+          ? "scheduled-task"
+          : "reminder";
 
     const conversationId = await getOrCreateAsyncConversation(
       userData.workspaceId,
       userData.userId,
-      reminderId,
+      entityId,
       conversationSource,
-      reminderText,
+      entityText,
     );
 
     // =========================================================================
@@ -115,20 +122,20 @@ export async function runCASEPipeline(
     // =========================================================================
     // Run butler with think tool enabled
     // =========================================================================
-    logger.info(`[pipeline] Running butler with think for ${reminderId}`);
+    logger.info(`[pipeline] Running butler with think for ${entityId}`);
 
     const { responseText, parts } = await processInboundMessage({
       userId: userData.userId,
       workspaceId: userData.workspaceId,
       channel: channelType,
-      userMessage: `[Trigger fired] ${reminderText}`,
+      userMessage: `[Trigger fired] ${entityText}`,
       conversationId,
       skipUserMessage: true,
       messageUserType: UserTypeEnum.System,
       triggerContext: {
         trigger,
         context,
-        reminderText,
+        reminderText: entityText,
         userPersona,
       },
       executorTools,
@@ -142,36 +149,19 @@ export async function runCASEPipeline(
     const shouldMessage = actionPlan?.shouldMessage ?? true;
     const reasoning = actionPlan?.reasoning ?? "No think output found";
 
-    logger.info(`[pipeline] Decision for ${reminderId}`, {
+    logger.info(`[pipeline] Decision for ${entityId}`, {
       shouldMessage,
       reasoning,
       hasThinkOutput: !!thinkPart,
     });
 
     // =========================================================================
-    // Deliver to channel if shouldMessage
+    // Message delivery is handled by the butler via send_message tool.
+    // No code-based fallback — the trigger_context prompt instructs the butler
+    // to call send_message when shouldMessage=true.
     // =========================================================================
-    if (shouldMessage) {
-      if (!responseText || responseText === "I processed your request.") {
-        logger.warn(
-          `[pipeline] Butler produced empty/generic response for ${reminderId}`,
-          {
-            channel: trigger.channel,
-            responseText,
-          },
-        );
-      }
-
-      await deliverToChannel(
-        responseText,
-        trigger.channel,
-        userData,
-        { id: reminderId, text: reminderText },
-        conversationId,
-        trigger.channelId,
-      );
-    } else {
-      logger.info(`[pipeline] Butler executed silently for ${reminderId}`, {
+    if (!shouldMessage) {
+      logger.info(`[pipeline] Butler executed silently for ${entityId}`, {
         reasoning,
         responsePreview: responseText?.slice(0, 100),
       });
@@ -186,13 +176,13 @@ export async function runCASEPipeline(
           switch (action.type) {
             case "log": {
               logger.info(`[silent] ${action.description}`, {
-                reminderId,
+                entityId,
                 data: action.data,
               });
               break;
             }
             case "update_state": {
-              await executeStateUpdate(action, trigger.userId, reminderId);
+              await executeStateUpdate(action, trigger.userId, entityId, !!taskId);
               break;
             }
             default:
@@ -200,7 +190,7 @@ export async function runCASEPipeline(
           }
         } catch (error) {
           logger.error(`Failed to execute silent action: ${action.type}`, {
-            reminderId,
+            entityId,
             error,
           });
         }
@@ -219,13 +209,13 @@ export async function runCASEPipeline(
           1, // noStreamProcess already deducts 1, so just 1 more for the pipeline
         );
       } catch (error) {
-        logger.warn(`[pipeline] Failed to deduct credits for ${reminderId}`, {
+        logger.warn(`[pipeline] Failed to deduct credits for ${entityId}`, {
           error,
         });
       }
     }
 
-    logger.info(`[pipeline] Successfully processed ${reminderId}`);
+    logger.info(`[pipeline] Successfully processed ${entityId}`);
 
     return {
       success: true,
@@ -233,132 +223,13 @@ export async function runCASEPipeline(
       reasoning,
     };
   } catch (error) {
-    logger.error(`[pipeline] Failed for ${reminderId}`, { error });
+    logger.error(`[pipeline] Failed for ${entityId}`, { error });
     return {
       success: false,
       shouldMessage: false,
       reasoning: "Pipeline error",
       error: error instanceof Error ? error.message : "Unknown error",
     };
-  }
-}
-
-// ============================================================================
-// Channel Delivery
-// ============================================================================
-
-/**
- * Deliver the butler's response to the user's channel.
- * Resolves the target from the Channel table — by channelId (precise) or by name fallback.
- */
-async function deliverToChannel(
-  responseText: string,
-  channel: string,
-  userData: {
-    userId: string;
-    email: string;
-    phoneNumber?: string;
-    workspaceId: string;
-  },
-  reminder: { id: string; text: string },
-  conversationId: string,
-  channelId?: string | null,
-) {
-  let replyTo: string | undefined;
-  let channelType: string | undefined;
-
-  const metadata: Record<string, string> = {
-    workspaceId: userData.workspaceId,
-  };
-
-  // Resolve channel record: by channelId first, then by name, then by type
-  const channelRecord = channelId
-    ? await prisma.channel.findFirst({
-        where: {
-          id: channelId,
-          workspaceId: userData.workspaceId,
-          isActive: true,
-        },
-      })
-    : await prisma.channel.findFirst({
-        where: {
-          workspaceId: userData.workspaceId,
-          isActive: true,
-          OR: [{ name: channel }, { type: channel }],
-        },
-        orderBy: { isDefault: "desc" },
-      });
-
-  if (channelRecord) {
-    const config = channelRecord.config as Record<string, string>;
-    channelType = channelRecord.type;
-    metadata.channelId = channelRecord.id;
-
-    if (channelType === "slack") {
-      replyTo = config.user_id;
-    } else if (channelType === "whatsapp") {
-      replyTo = config.phone_number ?? userData.phoneNumber;
-    } else if (channelType === "telegram") {
-      replyTo = config.chat_id;
-    } else {
-      replyTo = userData.email;
-    }
-  }
-
-  // Last resort: no channel record found
-  if (!channelType) channelType = "email";
-  if (!replyTo) replyTo = userData.email;
-
-  const handler = getChannel(channelType);
-
-  if (channelType === "email") {
-    const subjectMatch = reminder.text.match(/\*\*Subject:\*\*\s*(.+)/);
-    const subject = subjectMatch
-      ? subjectMatch[1].trim()
-      : reminder.text.split("\n")[0].replace(/[#*_]/g, "").trim();
-    metadata.subject = subject.slice(0, 120);
-  }
-
-  logger.info(`[pipeline] Sending ${channelType} message`, {
-    reminderId: reminder.id,
-    replyTo,
-    channel,
-    channelId: metadata.channelId,
-    responseLength: responseText.length,
-    responsePreview: responseText.slice(0, 150),
-  });
-
-  await handler.sendReply(replyTo, responseText, metadata);
-  logger.info(
-    `[pipeline] Sent ${channelType} message for ${reminder.id} to ${userData.userId}`,
-  );
-
-  // Mirror to channel conversation so user replies have context
-  try {
-    const channelConversationId = await getOrCreateChannelConversation(
-      userData.userId,
-      userData.workspaceId,
-      reminder.text,
-      channelType,
-    );
-    await upsertConversationHistory(
-      crypto.randomUUID(),
-      [{ text: `[Reminder] ${reminder.text}`, type: "text" }],
-      channelConversationId,
-      UserTypeEnum.System,
-      false,
-    );
-    await upsertConversationHistory(
-      crypto.randomUUID(),
-      [{ text: responseText, type: "text" }],
-      channelConversationId,
-      UserTypeEnum.Agent,
-      false,
-    );
-  } catch (error) {
-    logger.warn(`[pipeline] Failed to mirror to channel conversation`, {
-      error,
-    });
   }
 }
 
@@ -372,23 +243,28 @@ async function deliverToChannel(
 async function executeStateUpdate(
   action: { description: string; data?: Record<string, unknown> },
   userId: string,
-  defaultReminderId: string,
+  defaultEntityId: string,
+  isTask: boolean = false,
 ) {
   const data = action.data || {};
-  const targetReminderId =
-    (data.targetReminderId as string) || defaultReminderId;
+  const targetId =
+    (data.targetReminderId as string) ||
+    (data.targetTaskId as string) ||
+    defaultEntityId;
 
   logger.info(`[silent] State update: ${action.description}`, {
     userId,
-    targetReminderId,
+    targetId,
+    isTask,
   });
 
   const updateData: Record<string, unknown> = {};
 
   // Handle metadata merge
   if (data.metadata && typeof data.metadata === "object") {
-    const existing = await prisma.reminder.findUnique({
-      where: { id: targetReminderId },
+    const table = isTask ? prisma.task : prisma.reminder;
+    const existing = await (table as any).findUnique({
+      where: { id: targetId },
       select: { metadata: true },
     });
     const existingMetadata =
@@ -416,10 +292,11 @@ async function executeStateUpdate(
   }
 
   if (Object.keys(updateData).length > 0) {
-    await prisma.reminder.update({
-      where: { id: targetReminderId },
+    const table = isTask ? prisma.task : prisma.reminder;
+    await (table as any).update({
+      where: { id: targetId },
       data: updateData,
     });
-    logger.info(`[silent] State updated for reminder ${targetReminderId}`);
+    logger.info(`[silent] State updated for ${isTask ? "task" : "reminder"} ${targetId}`);
   }
 }

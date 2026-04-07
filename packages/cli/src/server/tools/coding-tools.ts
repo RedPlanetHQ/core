@@ -514,7 +514,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 						pid,
 						resumed: isResume,
 						message:
-							'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+							'Session started. Poll with sleep(60) + coding_read_session, up to 3 times. If still running, use reschedule_self(10) for long polling.',
 					},
 				};
 			}
@@ -528,7 +528,7 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 			pid,
 			resumed: isResume,
 			message:
-				'Session started. Come back in ~1 minute, then use coding_read_session to check output.',
+				'Session started. Poll with sleep(60) + coding_read_session, up to 3 times. If still running, use reschedule_self(10) for long polling.',
 			...(worktreePath ? {worktreePath, worktreeBranch} : {}),
 		},
 	};

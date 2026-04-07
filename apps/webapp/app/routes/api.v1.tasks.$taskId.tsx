@@ -4,10 +4,11 @@ import {
   createHybridActionApiRoute,
 } from "~/services/routeBuilders/apiBuilder.server";
 import { getTaskById, updateTask } from "~/services/task.server";
+import { detectAndApplyRecurrence } from "~/services/tasks/recurrence.server";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import type { TaskStatus } from "@prisma/client";
 import z from "zod";
 
-// Schema for space ID parameter
 const TaskParamsSchema = z.object({
   taskId: z.string(),
 });
@@ -28,7 +29,17 @@ const loader = createHybridLoaderApiRoute(
       return json({ error: "Not found" }, { status: 404 });
     }
 
-    return json({ id: task.id, status: task.status });
+    let description: string | null = null;
+    if (task.pageId) {
+      description = await getPageContentAsHtml(task.pageId);
+    }
+
+    return json({
+      id: task.id,
+      status: task.status,
+      title: task.title,
+      description,
+    });
   },
 );
 
@@ -50,15 +61,28 @@ const { action } = createHybridActionApiRoute(
     const body = (await request.json()) as {
       status?: TaskStatus;
       title?: string;
+      description?: string;
     };
-    if (!body.status && !body.title) {
+    if (!body.status && !body.title && body.description === undefined) {
       return json({ error: "Missing fields" }, { status: 400 });
     }
 
     const updated = await updateTask(taskId, {
       ...(body.status && { status: body.status }),
       ...(body.title !== undefined && { title: body.title }),
+      ...(body.description !== undefined && { description: body.description }),
     });
+
+    // Feature 2: auto-detect schedule from updated title in background
+    if (body.title !== undefined) {
+      detectAndApplyRecurrence(
+        taskId,
+        authentication.workspaceId as string,
+        task.userId,
+        body.title,
+      );
+    }
+
     return json({
       id: updated.id,
       status: updated.status,

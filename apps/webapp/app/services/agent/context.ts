@@ -4,7 +4,7 @@
  * Extracts the common setup used by web chat (stream + no_stream) and
  * async channels (WhatsApp, Email). Each caller gets back everything
  * needed to call Mastra Agent's stream() / generate(), plus the
- * orchestrator subagent and gateway sub-subagents.
+ * orchestrator subagent.
  */
 
 import { type Tool } from "ai";
@@ -12,24 +12,26 @@ import { type Agent, convertMessages } from "@mastra/core/agent";
 
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
-import { writeFile } from "fs/promises";
-import {
-  type IntegrationAccountWithDefinition,
-  IntegrationLoader,
-} from "~/utils/mcp/integration-loader";
+import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
 import { type PronounType } from "~/services/agent/prompts/personality";
 import { getCustomPersonalities } from "~/models/personality.server";
-import { createCoreTools, createCoreAgents } from "~/services/agent/agents/core";
+import {
+  createCoreTools,
+  createCoreAgents,
+} from "~/services/agent/agents/core";
 import {
   type Trigger,
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
 import { prisma } from "~/db.server";
-import { MessageListInput } from "@mastra/core/agent/message-list";
+import { getWorkspaceChannelContext } from "~/services/channel.server";
+import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
+import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
+import { DirectOrchestratorTools } from "./executors";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -55,6 +57,8 @@ interface BuildAgentContextParams {
   interactive?: boolean;
   /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
   modelConfig?: ModelConfig;
+  /** Optional scratchpad page ID for context retrieval */
+  scratchpadPageId?: string;
 }
 
 interface AgentContext {
@@ -82,82 +86,81 @@ export async function buildAgentContext({
   executorTools,
   interactive = true,
   modelConfig,
+  scratchpadPageId,
+  scratchpadType = "mention",
 }: BuildAgentContextParams): Promise<AgentContext> {
   // Load context in parallel
-  const [user, persona, connectedIntegrations, skills, conversationRecord, workspace, customPersonalities] =
-    await Promise.all([
-      getUserById(userId),
-      getPersonaDocumentForUser(workspaceId),
-      IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
-      prisma.document.findMany({
-        where: { workspaceId, type: "skill", deleted: null },
-        select: { id: true, title: true, metadata: true },
-        orderBy: { createdAt: "desc" },
-      }),
-      prisma.conversation.findUnique({
-        where: { id: conversationId },
-        select: { asyncJobId: true },
-      }),
-      prisma.workspace.findUnique({
-        where: { id: workspaceId },
-        select: { name: true },
-      }),
-      getCustomPersonalities(workspaceId),
-    ]);
+  const [
+    user,
+    persona,
+    connectedIntegrations,
+    skills,
+    conversationRecord,
+    workspace,
+    customPersonalities,
+    channelCtx,
+  ] = await Promise.all([
+    getUserById(userId),
+    getPersonaDocumentForUser(workspaceId),
+    IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
+    prisma.document.findMany({
+      where: { workspaceId, type: "skill", deleted: null },
+      select: { id: true, title: true, metadata: true },
+      orderBy: { createdAt: "desc" },
+    }),
+    prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { asyncJobId: true },
+    }),
+    prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true },
+    }),
+    getCustomPersonalities(workspaceId),
+    getWorkspaceChannelContext(workspaceId),
+  ]);
 
   // Look up linked task context
-  const linkedTask = conversationRecord?.asyncJobId
+  const linkedTaskRecord = conversationRecord?.asyncJobId
     ? await prisma.task.findUnique({
         where: { id: conversationRecord.asyncJobId },
-        select: { id: true, title: true, description: true, status: true },
+        select: { id: true, title: true, pageId: true, status: true, parentTaskId: true, metadata: true },
       })
+    : null;
+
+  const linkedTaskDescription = linkedTaskRecord?.pageId
+    ? await getPageContentAsHtml(linkedTaskRecord.pageId)
+    : null;
+
+  // Fetch parent task context if this is a subtask
+  const parentTaskRecord = linkedTaskRecord?.parentTaskId
+    ? await prisma.task.findUnique({
+        where: { id: linkedTaskRecord.parentTaskId },
+        select: { id: true, title: true, pageId: true },
+      })
+    : null;
+  const parentTaskDescription = parentTaskRecord?.pageId
+    ? await getPageContentAsHtml(parentTaskRecord.pageId)
+    : null;
+
+  const linkedTask = linkedTaskRecord
+    ? { ...linkedTaskRecord, description: linkedTaskDescription }
     : null;
 
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
   const personality = (metadata?.personality as string) ?? "tars";
   const pronoun = (metadata?.pronoun as PronounType) ?? undefined;
-  const defaultChannel =
-    (metadata?.defaultChannel as "whatsapp" | "slack" | "email" | undefined) ??
-    "email";
-
-  // Determine available messaging channels
-  const hasWhatsapp = !!user?.phoneNumber;
-  const hasSlack = connectedIntegrations.some(
-    (int) =>
-      "integrationDefinition" in int &&
-      int.integrationDefinition.slug === "slack",
-  );
-  const availableChannels: Array<"email" | "whatsapp" | "slack"> = [
-    "email", // always available
-    ...(hasWhatsapp ? (["whatsapp"] as const) : []),
-    ...(hasSlack ? (["slack"] as const) : []),
-  ];
-
-  // Resolve replyTo for background task callbacks (so tasks are self-contained)
-  let replyTo: string | undefined;
-  if (source === "slack") {
-    const slackAccount = connectedIntegrations.find(
-      (int) =>
-        "integrationDefinition" in int &&
-        int.integrationDefinition.slug === "slack",
-    );
-    replyTo = slackAccount?.accountId ?? undefined;
-  } else if (source === "whatsapp") {
-    replyTo = user?.phoneNumber ?? undefined;
-  } else if (source === "email") {
-    replyTo = user?.email ?? undefined;
-  }
-
-  const resolvedChannelMetadata = {
-    ...(channelMetadata ?? {}),
-    ...(replyTo ? { replyTo } : {}),
-  };
+  const defaultChannel = channelCtx.defaultChannelType;
+  const availableChannels = channelCtx.availableTypes;
 
   const isBackgroundExecution = !!linkedTask;
 
   // Build tools and agents in parallel (no dependency between them)
-  const [tools, { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents }] = await Promise.all([
+  const [
+    tools,
+    { gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents },
+  ] = await Promise.all([
     createCoreTools({
       userId,
       workspaceId,
@@ -169,6 +172,12 @@ export async function buildAgentContext({
       defaultChannel,
       availableChannels,
       isBackgroundExecution,
+      currentTaskId: linkedTask?.id,
+      triggerChannel: triggerContext?.trigger.channel,
+      triggerChannelId: triggerContext?.trigger.channelId,
+      userEmail: user?.email ?? undefined,
+      userPhoneNumber: user?.phoneNumber ?? undefined,
+      executorTools,
     }),
     createCoreAgents({
       userId,
@@ -192,7 +201,9 @@ export async function buildAgentContext({
     }),
   ]);
 
-  const customPersonality = customPersonalities.find((p) => p.id === personality);
+  const customPersonality = customPersonalities.find(
+    (p) => p.id === personality,
+  );
 
   // Build system prompt
   let systemPrompt = getCorePrompt(
@@ -205,7 +216,10 @@ export async function buildAgentContext({
       personality,
       pronoun,
       customPersonality: customPersonality
-        ? { text: customPersonality.text, useHonorifics: customPersonality.useHonorifics }
+        ? {
+            text: customPersonality.text,
+            useHonorifics: customPersonality.useHonorifics,
+          }
         : undefined,
     },
     persona ?? "",
@@ -214,11 +228,19 @@ export async function buildAgentContext({
 
   // Integrations context
   const integrationsList = connectedIntegrations
+    .map((int, index) =>
+      "integrationDefinition" in int
+        ? `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`
+        : "",
+    )
+    .join("\n");
+
+  const executor = executorTools ?? new DirectOrchestratorTools();
+  const gatewayInfos = await executor.getGateways(workspaceId);
+  const gatewaysList = gatewayInfos
     .map(
-      (int, index) =>
-        "integrationDefinition" in int
-          ? `${index + 1}. **${int.integrationDefinition.name}** (Account ID: ${int.id})`
-          : "",
+      (gw, index) =>
+        `${index + 1}. **${gw.name}** (agent: agent-gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}): ${gw.description}`,
     )
     .join("\n");
 
@@ -231,18 +253,23 @@ export async function buildAgentContext({
     - Information from their integrations (emails, calendar, issues, etc.)
     - Actions on their integrations (send, create, update, delete)
     - Web search or URL reading
-    - Gateway operations (device tasks, coding, browser automation)
 
     Simply delegate to the orchestrator with a clear intent describing what's needed.
-    </connected_integrations>`;
+    </connected_integrations>
+    
+    <connected_gateways>
+    Each gateway is a subagent you can call directly. Give it a clear intent and it will pick the right tool (coding_*, browser_*, exec_*).
+    ${gatewaysList || "No gateways connected."}
+    </connected_gateways>
+    `;
 
   // Messaging channels context
   systemPrompt += `
     <messaging_channels>
-    Channels you can reach them on: ${availableChannels.join(", ")}
-    Default: ${defaultChannel}
+    Channels you can reach them on: ${channelCtx.channelNames.join(", ")}
+    Default: ${channelCtx.defaultChannelName}
 
-    Reminders go via ${defaultChannel} unless they say otherwise.
+    Scheduled tasks and notifications go via ${channelCtx.defaultChannelName} unless they say otherwise.
     </messaging_channels>`;
 
   // Skills context
@@ -297,31 +324,59 @@ export async function buildAgentContext({
     const isExecuting =
       linkedTask.status === "InProgress" || linkedTask.status === "Todo";
 
+    const isSubtask = !!linkedTask.parentTaskId;
+    const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};
+    const taskSkillId = taskMeta.skillId as string | undefined;
+
+    // Try to find a matching skill for this task
+    let skillHint = "";
+    if (taskSkillId) {
+      const matchedSkill = skills.find((s: any) => s.id === taskSkillId);
+      if (matchedSkill) {
+        skillHint = `\nA skill is attached to this task: "${matchedSkill.title}" (ID: ${matchedSkill.id}). Call get_skill to load its instructions before starting.`;
+      }
+    }
+
     if (isExecuting) {
       systemPrompt += `\n\n<task_execution>
-You're on this task. Get it done — don't just discuss it.
+You're executing this task in the background. Get it done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}
+Task ID: ${linkedTask.id}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
 
-- Delegate to the orchestrator to do the actual work (gather information, execute actions)
-- If they send a message, treat it as additional direction for this task
-- This IS the task — don't create or search for other tasks about this topic
-- Mark task ${linkedTask.id} as Completed ONLY when the user's original intent is fully achieved — not just when execution finishes
-- Mark task ${linkedTask.id} as Blocked in ALL other cases: errors, failures, partial completion, needs input, unresolvable dependency
-- When marking Blocked, always call update_task first to append a clear error/status summary to the description — what was attempted, what failed, what's needed to unblock
+RULES:
+- For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected
+- If the user sends a message, treat it as additional direction for this task${isSubtask ? `
+- When you complete this subtask, the system automatically starts the next one and marks the parent Completed when all subtasks are done
+- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Blocked and send_message with the error` : `
+- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Backlog, move this task to Blocked, then send_message to the user explaining the plan and asking for approval
+- The system handles sequential subtask execution automatically — when unblocked, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
+- Mark task ${linkedTask.id} as Completed ONLY when the original intent is fully achieved
+- When Blocked (errors, needs user input, needs approval, partial completion):
+  1. call update_task(taskId: "${linkedTask.id}", status: "Blocked", description: "<append what was attempted and what's needed>")
+  2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is blocked: <reason>. <what's needed to unblock>"
+- When Completed:
+  1. call update_task(taskId: "${linkedTask.id}", status: "Completed")
+  2. call send_message with a summary of what was done
+- Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 
 LONG-RUNNING SESSIONS (coding, browser):
-If you start a coding session or browser session via the orchestrator, the response will include a sessionId.
-After getting the sessionId, immediately call add_reminder with this exact format:
-  text: "check [taskId:${linkedTask.id}] [sessionId:<the-session-id>] '<task title>' — read session output, report to user if done or failed, reschedule 10 min if still running"
-  schedule: "FREQ=MINUTELY;INTERVAL=10"
-  maxOccurrences: 1
+If you start a coding session via the orchestrator, the response includes a sessionId.
 
-For browser tasks, use sessionName (not sessionId) and include the intent:
-  text: "check [taskId:${linkedTask.id}] [sessionName:<session-name>] [intent:<what browser was doing>] — check status, report if done, reschedule 10 min if running"
+BEFORE using reschedule_self, save state to the task description:
+  - Call update_task to append: sessionId, worktreePath (if any), what was requested
 
-Do NOT create a reminder if the task completes inline (integration actions, quick writes). Only for sessions that run beyond this execution.
+WAIT PATTERN:
+1. Quick poll: sleep(60) then coding_read_session(sessionId) — repeat up to 3 times
+2. If still running after 3 polls: call reschedule_self(minutesFromNow=10)
+3. On re-execution (you'll see [reschedule:N/6] in your context): read sessionId from the task description, then coding_read_session
+   - completed → update_task(status: "Completed") then send_message with result
+   - running → reschedule_self(10) again (max 6 total reschedules)
+   - error → update_task(status: "Blocked") then send_message with error detail
+4. After 6 reschedules (~60 min): update_task(status: "Blocked") then send_message "coding session timed out"
+
+Do NOT create a scheduled task to check on sessions — use reschedule_self instead.
 </task_execution>`;
     } else {
       systemPrompt += `\n\n<task_context>
@@ -330,25 +385,45 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Blocked" ? `\nThis task is BLOCKED. If the user says to proceed, approves, or says the issue is resolved — call unblock_task(taskId: "${linkedTask.id}", reason: "<what changed>"). Do NOT create a new task.` : ""}
 </task_context>`;
     }
   }
 
   // Trigger context — butler needs to think first before acting
   if (triggerContext) {
+    const isTriggerFollowUp = triggerContext.trigger.type === "reminder_followup" ||
+      (triggerContext.trigger.data as any)?.isFollowUp === true;
+
     systemPrompt += `\n\n<trigger_context>
-A trigger has fired: "${triggerContext.reminderText}"
+A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Blocked and notify the user.` : ""}
 
 1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
 2. Follow the ActionPlan it returns:
-   - Execute any required work (skills, integrations, tasks)
+   - Execute any required work (skills, integrations, gather_context, take_action)
    - If the plan references a skill (skillId in context): call get_skill to load it, then follow the skill's instructions step-by-step
-   - Always craft a response summarizing what happened. Match the tone specified. Be concise.
-   - The pipeline handles whether to deliver your message to the owner or not — just always write one.
-3. Don't create new reminders unless the ActionPlan's intent specifically calls for it (think handles scheduling)
-4. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
+   - If \`createFollowUps\` contains items: these are RESCHEDULES of the current task, not new tasks. Call \`create_task\` with isFollowUp=true and parentTaskId set to the triggering task's ID.${isTriggerFollowUp ? ` HOWEVER: this trigger is itself a follow-up — IGNORE any createFollowUps. Do not chain follow-ups.` : ""}
+   - If \`updateTasks\` contains items: apply each update via \`update_task\` (status changes, description updates)
+   - If shouldMessage=true: craft a response summarizing what happened, match the tone specified, be concise. Use \`send_message\` to deliver it.
+   - If shouldMessage=false: do NOT call send_message.
+3. Do NOT create new tasks unless the ActionPlan explicitly says to. The trigger IS already a task — don't duplicate it.
+4. Do NOT use create_task as a way to "deliver" or "send" a message. Use send_message for that.
+5. Don't second-guess the ActionPlan's decision — it already evaluated the trigger
 </trigger_context>`;
+  }
+
+  // Scratchpad context — when triggered from the daily scratchpad
+  if (scratchpadPageId) {
+    systemPrompt += `\n\n<scratchpad_context>
+This request comes from the user's daily scratchpad. A decision agent observed what they wrote and created this intent for you.
+
+The intent is your instruction — follow it precisely:
+- If it says "do NOT execute yet" or "wait for user confirmation" — gather context and present findings, but do NOT take action (don't send emails, don't create tasks, don't message anyone)
+- If it says to execute something — do it (create tasks, set reminders, search email, etc.)
+- If it includes "Context from memory:" — use that context, don't re-search for the same information
+
+Keep your response concise — this shows up on a scratchpad, not a chat conversation.
+</scratchpad_context>`;
   }
 
   // Convert UI messages to Mastra-compatible ModelMessage format
@@ -356,5 +431,15 @@ A trigger has fired: "${triggerContext.reminderText}"
     finalMessages as MessageListInput,
   ).to("AIV5.Model");
 
-  return { systemPrompt, tools, modelMessages, user, timezone, gatherContextAgent, takeActionAgent, thinkAgent, gatewayAgents };
+  return {
+    systemPrompt,
+    tools,
+    modelMessages,
+    user,
+    timezone,
+    gatherContextAgent,
+    takeActionAgent,
+    thinkAgent,
+    gatewayAgents,
+  };
 }

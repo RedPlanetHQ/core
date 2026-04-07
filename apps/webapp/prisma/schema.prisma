@@ -101,7 +101,8 @@ model Conversation {
   workspace   Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   workspaceId String?
 
-  status String @default("pending") // Can be "pending", "running", "completed", "failed", "need_attention"
+  status         String  @default("pending") // Can be "pending", "running", "completed", "failed", "need_attention"
+  activeStreamId String? // Set while background stream is active; cleared on completion
 
   ConversationHistory ConversationHistory[]
   RecallLog           RecallLog[]
@@ -708,6 +709,7 @@ model Channel {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   reminders   Reminder[]
+  tasks       Task[]
 
   @@index([workspaceId])
   @@index([workspaceId, type])
@@ -1040,6 +1042,8 @@ model Workspace {
   reminders               Reminder[]
   channels                Channel[]
   tasks                   Task[]
+  pages                   Page[]
+  butlerComments          ButlerComment[]
   voiceAspects            VoiceAspect[]
   voiceAspectEmbeddings   VoiceAspectEmbedding[]
   llmProviders            LLMProvider[]
@@ -1051,6 +1055,7 @@ enum TaskStatus {
   InProgress
   Blocked
   Completed
+  Recurring
 }
 
 model Task {
@@ -1074,9 +1079,91 @@ model Task {
   jobId    String?
   metadata Json?   @default("{}")
 
+  // Scheduling fields (unified with reminders)
+  schedule         String? // RRule string for recurring (null = one-time or immediate)
+  nextRunAt        DateTime? // When to fire next (one-time scheduled or recurring)
+  lastRunAt        DateTime?
+  occurrenceCount  Int       @default(0)
+  maxOccurrences   Int? // null = unlimited, 1 = one-shot
+  isActive         Boolean   @default(true)
+  startDate        DateTime? // Don't fire before this date
+  endDate          DateTime? // Auto-deactivate after this date
+  confirmedActive  Boolean   @default(false)
+  unrespondedCount Int       @default(0)
+
+  channel    String? // Delivery channel name/type
+  channelId  String? // FK to Channel table
+  channelRef Channel? @relation(fields: [channelId], references: [id], onDelete: SetNull)
+
+  parentTaskId String? // FK to self (subtasks/follow-ups)
+  parentTask   Task?   @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: SetNull)
+  subtasks     Task[]  @relation("TaskSubtasks")
+
+  displayId String? // Hierarchical human-readable ID e.g. tk-abcde, tk-abcde.1.2
+
+  pageId String? @unique
+  page   Page?   @relation("TaskPage", fields: [pageId], references: [id], onDelete: SetNull)
+  source String  @default("manual")
+
+  @@unique([workspaceId, displayId])
   @@index([workspaceId])
   @@index([workspaceId, status])
   @@index([userId, status])
+  @@index([nextRunAt])
+  @@index([isActive])
+  @@index([parentTaskId])
+  @@index([workspaceId, isActive, nextRunAt])
+}
+
+enum PageType {
+  Daily
+  Task
+}
+
+model Page {
+  id        String    @id @default(uuid())
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deleted   DateTime?
+
+  type              PageType  @default(Daily)
+  date              DateTime?
+  description       String?
+  descriptionBinary Bytes?
+  butlerLastSeen    Bytes?
+  outlinks          Json?     @default("[]")
+
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String
+
+  task           Task?           @relation("TaskPage")
+  butlerComments ButlerComment[]
+
+  @@unique([workspaceId, userId, date])
+  @@index([workspaceId, userId])
+}
+
+model ButlerComment {
+  id         String    @id @default(uuid())
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  resolved   Boolean   @default(false)
+  resolvedAt DateTime?
+
+  selectedText  String
+  content       String
+  relativeStart Json?
+  relativeEnd   Json?
+
+  pageId         String
+  conversationId String?
+  workspaceId    String
+
+  page      Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([pageId, resolved])
 }
 
 enum PlanType {

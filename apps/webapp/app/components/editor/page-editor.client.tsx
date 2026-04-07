@@ -1,0 +1,293 @@
+import React, { useEffect, useRef, useState } from "react";
+import { useEditor, EditorContent } from "@tiptap/react";
+import StarterKit from "@tiptap/starter-kit";
+import Heading from "@tiptap/extension-heading";
+import Placeholder from "@tiptap/extension-placeholder";
+import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
+import Collaboration from "@tiptap/extension-collaboration";
+import TaskList from "@tiptap/extension-task-list";
+import { HocuspocusProvider } from "@hocuspocus/provider";
+import { useCollabSocket } from "~/components/editor/collab-socket-context";
+import { IndexeddbPersistence } from "y-indexeddb";
+import * as Y from "yjs";
+import { all, createLowlight } from "lowlight";
+import { Markdown } from "tiptap-markdown";
+import { mergeAttributes } from "@tiptap/core";
+import { cx } from "class-variance-authority";
+
+import { CustomTaskItem } from "~/components/editor/extensions/custom-task-item";
+import { buildMentionExtension } from "~/components/editor/extensions/mention-extension";
+import { SlashCommand } from "~/components/editor/extensions/slash-command";
+import { ButlerTaskExtension } from "~/components/editor/extensions/butler-task-extension";
+import { TaskPickerExtension } from "~/components/editor/extensions/task-picker-extension";
+import { ChecklistInputRule } from "~/components/editor/extensions/checklist-input-rule";
+import { SelectionBubble } from "~/components/editor/selection-bubble";
+import { ConversationParagraph } from "~/components/editor/extensions/conversation-paragraph-extension";
+import { ConversationPopover } from "~/components/editor/conversation-popover";
+import { useButlerComments } from "~/components/editor/hooks/use-butler-comments";
+
+const lowlight = createLowlight(all);
+
+function buildExtensions(
+  pageId: string,
+  isToday: boolean,
+  butlerName: string,
+  ydoc: Y.Doc,
+  parentTaskId?: string,
+) {
+  const heading = Heading.extend({
+    renderHTML({ node, HTMLAttributes }) {
+      const level: 1 | 2 | 3 = node.attrs.level;
+      const levelMap: Record<number, string> = {
+        1: "text-2xl",
+        2: "text-xl",
+        3: "text-lg",
+      };
+      return [
+        `h${level}`,
+        mergeAttributes(HTMLAttributes, {
+          class: `h${level}-style ${levelMap[level] ?? "text-base"} mt-4 font-medium`,
+        }),
+        0,
+      ];
+    },
+  }).configure({ levels: [1, 2, 3] });
+
+  return [
+    StarterKit.configure({
+      heading: false,
+      bulletList: {
+        HTMLAttributes: {
+          class: cx("list-disc list-outside pl-4 leading-1 my-1"),
+        },
+      },
+      orderedList: {
+        HTMLAttributes: {
+          class: cx("list-decimal list-outside pl-4 leading-1 my-1"),
+        },
+      },
+      listItem: { HTMLAttributes: { class: cx("mt-1.5") } },
+      blockquote: {
+        HTMLAttributes: { class: cx("border-l-4 border-border pl-2") },
+      },
+      paragraph: false, // replaced by ConversationParagraph
+      codeBlock: false,
+      code: {
+        HTMLAttributes: {
+          class: cx(
+            "rounded bg-muted text-[#BF4594] px-1.5 py-1 font-mono font-medium",
+          ),
+          spellcheck: "false",
+        },
+      },
+      horizontalRule: false,
+      dropcursor: { color: "#DBEAFE", width: 4 },
+      gapcursor: false,
+      link: {
+        HTMLAttributes: { class: "text-primary cursor-pointer" },
+        openOnClick: false,
+      },
+    }),
+    heading,
+    TaskList.configure({
+      HTMLAttributes: { class: cx("list-none pl-0 my-1") },
+    }),
+    CustomTaskItem,
+    CodeBlockLowlight.configure({ lowlight }),
+    Markdown,
+    Placeholder.configure({
+      placeholder: ({ node }) =>
+        node.type.name === "heading"
+          ? `Heading ${node.attrs.level}`
+          : "Write notes...",
+      includeChildren: true,
+    }),
+    ConversationParagraph,
+    ChecklistInputRule,
+    ButlerTaskExtension({ pageId, isToday, parentTaskId }),
+    buildMentionExtension(butlerName),
+    SlashCommand,
+    TaskPickerExtension,
+    Collaboration.configure({ document: ydoc }),
+  ];
+}
+
+function EditorInner({
+  pageId,
+  isToday,
+  butlerName,
+  minHeight,
+  parentTaskId,
+  ydoc,
+}: {
+  pageId: string;
+  isToday: boolean;
+  butlerName: string;
+  collabToken: string;
+  minHeight: string;
+  parentTaskId?: string;
+  ydoc: Y.Doc;
+}) {
+  const [activeConversation, setActiveConversation] = useState<{
+    conversationId: string;
+    rect: DOMRect;
+    resolved: boolean;
+  } | null>(null);
+
+  const editor = useEditor({
+    extensions: buildExtensions(
+      pageId,
+      isToday,
+      butlerName,
+      ydoc,
+      parentTaskId,
+    ),
+    editorProps: {
+      attributes: {
+        class: "prose prose-sm focus:outline-none max-w-full py-1",
+        style: `min-height: ${minHeight}`,
+      },
+      handleClick(view, pos) {
+        const $pos = view.state.doc.resolve(pos);
+        for (let depth = $pos.depth; depth > 0; depth--) {
+          const node = $pos.node(depth);
+          if (node.type.name === "paragraph" && node.attrs.conversationId) {
+            const startPos = $pos.start(depth);
+            const coords = view.coordsAtPos(startPos);
+            setActiveConversation({
+              conversationId: node.attrs.conversationId,
+              rect: new DOMRect(
+                coords.left,
+                coords.top,
+                0,
+                coords.bottom - coords.top,
+              ),
+              resolved: Boolean(node.attrs.resolved),
+            });
+            return true;
+          }
+        }
+        setActiveConversation(null);
+        return false;
+      },
+    },
+  });
+
+  const { resolveComment } = useButlerComments(editor, ydoc, pageId);
+
+  const handleResolvedChange = React.useCallback(
+    (conversationId: string, resolved: boolean) => {
+      resolveComment(conversationId, resolved);
+      setActiveConversation((current) =>
+        current?.conversationId === conversationId
+          ? { ...current, resolved }
+          : current,
+      );
+    },
+    [resolveComment],
+  );
+
+  return (
+    <>
+      <SelectionBubble editor={editor} parentTaskId={parentTaskId} />
+      <EditorContent editor={editor} className="w-full" />
+      <ConversationPopover
+        conversationId={activeConversation?.conversationId ?? null}
+        anchorRect={activeConversation?.rect ?? null}
+        resolved={activeConversation?.resolved ?? false}
+        butlerName={butlerName}
+        onResolvedChange={handleResolvedChange}
+        onClose={() => setActiveConversation(null)}
+      />
+    </>
+  );
+}
+
+export interface PageEditorProps {
+  pageId: string;
+  collabToken: string;
+  butlerName: string;
+  isToday?: boolean;
+  parentTaskId?: string;
+  minHeight?: string;
+}
+
+export function PageEditor({
+  pageId,
+  collabToken,
+  butlerName,
+  isToday = false,
+  parentTaskId,
+  minHeight = "400px",
+}: PageEditorProps) {
+  const [ydoc, setYdoc] = useState<Y.Doc | null>(null);
+  const providerRef = useRef<HocuspocusProvider | null>(null);
+  const sharedSocket = useCollabSocket();
+
+  useEffect(() => {
+    const doc = new Y.Doc();
+    new IndexeddbPersistence(pageId, doc);
+    const providerOptions: ConstructorParameters<typeof HocuspocusProvider>[0] =
+      sharedSocket
+        ? {
+            websocketProvider: sharedSocket,
+            name: pageId,
+            document: doc,
+            forceSyncInterval: 10_000,
+            token: collabToken,
+            onConnect: () => console.log("connected"),
+          }
+        : {
+            url: `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}/collab`,
+            name: pageId,
+            document: doc,
+            token: collabToken,
+          };
+
+    providerRef.current = new HocuspocusProvider(providerOptions);
+    if (sharedSocket) providerRef.current.attach();
+
+    const t = setTimeout(() => setYdoc(doc), 50);
+    return () => {
+      clearTimeout(t);
+      providerRef.current?.destroy();
+      doc.destroy();
+      setYdoc(null);
+    };
+  }, [pageId]);
+
+  if (!ydoc) return <div style={{ minHeight }} />;
+
+  return (
+    <EditorInner
+      pageId={pageId}
+      isToday={isToday}
+      butlerName={butlerName}
+      collabToken={collabToken}
+      minHeight={minHeight}
+      parentTaskId={parentTaskId}
+      ydoc={ydoc}
+    />
+  );
+}
+
+export function DayEditor({
+  pageId,
+  collabToken,
+  butlerName,
+  isToday,
+}: {
+  pageId: string;
+  collabToken: string;
+  butlerName: string;
+  isToday: boolean;
+}) {
+  return (
+    <PageEditor
+      pageId={pageId}
+      collabToken={collabToken}
+      butlerName={butlerName}
+      isToday={isToday}
+    />
+  );
+}

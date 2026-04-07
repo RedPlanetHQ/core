@@ -127,7 +127,7 @@ export default function Settings() {
                   {data.nav.map((item) => (
                     <SidebarMenuItem key={item.name}>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         isActive={isActive(item)}
                         onClick={() => navigate(`/settings/${item.path}`)}
                         className={cn(
@@ -150,7 +150,7 @@ export default function Settings() {
                   {data.workspace.map((item) => (
                     <SidebarMenuItem key={item.name}>
                       <Button
-                        variant="secondary"
+                        variant="ghost"
                         isActive={isActive(item)}
                         onClick={() => navigate(`${item.path}`)}
                         className={cn(

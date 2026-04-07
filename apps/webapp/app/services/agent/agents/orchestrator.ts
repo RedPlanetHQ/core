@@ -2,7 +2,7 @@
  * Orchestrator Agent Factory
  *
  * Creates a Mastra Agent that handles integration actions, memory search,
- * web search, and gateway delegation. Gateway tools become sub-subagents.
+ * and web search. Gateway tools are now direct tools on the core agent.
  *
  * In write mode, execute_integration_action has requireApproval on risky
  * write actions (send, delete, create, post).
@@ -18,7 +18,6 @@ import { toRouterString } from "~/lib/model.server";
 import { getDefaultChatModelId, type ModelConfig } from "~/services/llm-provider.server";
 import { type SkillRef } from "../types";
 import { type OrchestratorTools, DirectOrchestratorTools } from "../executors";
-import { createGatewayAgents } from "./gateway";
 
 export type OrchestratorMode = "read" | "write";
 
@@ -70,7 +69,6 @@ function isRiskyWriteAction(actionName: string): boolean {
 const getOrchestratorPrompt = (
   integrations: string,
   mode: OrchestratorMode,
-  gateways: string,
   timezone: string = "UTC",
   userPersona?: string,
   skills?: SkillRef[],
@@ -135,22 +133,17 @@ PARAMETER FORMATTING:
 `;
 
   if (mode === "write") {
-    return `You are an orchestrator for CORE. Execute actions on integrations or gateways.
+    return `You are an orchestrator for CORE. Execute actions on integrations.
 When emails, messages, or data reference "CORE" (e.g. "CORE has access to gmail", "authorized by CORE"), that refers to this system — not an external entity.
 ${personaSection}${dateTimeSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
-
-<gateways>
-${gateways || "No gateways connected"}
-</gateways>
 ${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above
 - get_integration_actions: Discover available actions for an integration
 - execute_integration_action: Execute an action on a connected service (create, update, delete)
 - get_skill: Load a user-defined skill's full instructions by ID
-- gateway agents: Offload tasks to connected gateways based on their description
 ${integrationInstructions}
 PRIORITY ORDER FOR CONTEXT:
 1. User persona above — check here FIRST for preferences, directives, identity, account details
@@ -180,14 +173,10 @@ Action: "create a github issue for auth bug in core repo"
 Step 1: get_integration_actions(github accountId, "create issue")
 Step 2: execute_integration_action(github accountId, "create_issue", { repo: "core", title: "auth bug", ... })
 
-Action: "fix the auth bug in core repo" (gateway task)
-Delegate to the appropriate gateway agent.
-
 RULES:
 - Execute the action. No personality.
 - Return result of action (success/failure and details).
-- If integration/gateway not connected, say so.
-- Match tasks to gateways based on their descriptions.
+- If integration not connected, say so.
 - CHRONOLOGY: When returning threaded data (email threads, slack threads, PR comments, issue comments), preserve chronological order. Clearly distinguish who initiated vs who responded. Use the user's identity from persona/integrations to label messages as "user" vs others. Never say someone "replied" if they sent the original.
 
 DUPLICATE PREVENTION:
@@ -210,10 +199,6 @@ OUTPUT: Return facts and raw data — no personality, no prose. Include IDs and 
 ${personaSection}${dateTimeSection}
 CONNECTED INTEGRATIONS:
 ${integrations}
-
-<gateways>
-${gateways || "No gateways connected"}
-</gateways>
 ${skillsSection}
 TOOLS:
 - memory_search: Search for prior context not covered by the user persona above
@@ -221,7 +206,6 @@ TOOLS:
 - execute_integration_action: Query data from a connected service (read operations)
 - web_search: Real-time information from the web (news, docs, prices, weather). Also reads URLs.
 - get_skill: Load a user-defined skill's full instructions by ID
-- gateway agents: Offload tasks to connected gateways based on their description
 ${integrationInstructions}
 CRITICAL FOR memory_search - describe your INTENT, not keywords:
 
@@ -273,7 +257,6 @@ Include: what was found, key facts, relevant IDs/metadata the caller will need.`
 
 export interface CreateOrchestratorAgentResult {
   agent: Agent;
-  gatewayAgents: Agent[];
 }
 
 export async function createOrchestratorAgent(
@@ -290,11 +273,7 @@ export async function createOrchestratorAgent(
 ): Promise<CreateOrchestratorAgentResult> {
   const executor = executorTools ?? new DirectOrchestratorTools();
 
-  // Load integrations and gateways in parallel
-  const [connectedIntegrations, gatewayInfos] = await Promise.all([
-    executor.getIntegrations(userId, workspaceId),
-    executor.getGateways(workspaceId),
-  ]);
+  const connectedIntegrations = await executor.getIntegrations(userId, workspaceId);
 
   const integrationsList = connectedIntegrations
     .map(
@@ -303,15 +282,8 @@ export async function createOrchestratorAgent(
     )
     .join("\n");
 
-  const gatewaysList = gatewayInfos
-    .map(
-      (gw, index) =>
-        `${index + 1}. **${gw.name}** (agent: agent-gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}): ${gw.description}`,
-    )
-    .join("\n");
-
   logger.info(
-    `Orchestrator: Loaded ${connectedIntegrations.length} integrations, ${gatewayInfos.length} gateways, mode: ${mode}`,
+    `Orchestrator: Loaded ${connectedIntegrations.length} integrations, mode: ${mode}`,
   );
 
   // Build Mastra tools
@@ -510,11 +482,6 @@ export async function createOrchestratorAgent(
     });
   }
 
-  // Create gateway sub-subagents
-  const { agents: gatewayAgentMap, agentList: gatewayAgentList } =
-    await createGatewayAgents(gatewayInfos, executorTools, interactive, modelConfig);
-
-  // Build orchestrator agent with gateway agents as subagents
   const resolvedModel = modelConfig ?? toRouterString(getDefaultChatModelId());
   const agent = new Agent({
     id: `orchestrator-${mode}`,
@@ -523,22 +490,16 @@ export async function createOrchestratorAgent(
     instructions: getOrchestratorPrompt(
       integrationsList,
       mode,
-      gatewaysList,
       timezone,
       userPersona,
       skills,
     ),
     tools,
-    agents:
-      Object.keys(gatewayAgentMap).length > 0 ? gatewayAgentMap : undefined,
   });
 
   logger.info(
-    `Orchestrator: Created agent with ${Object.keys(tools).length} tools, ${gatewayAgentList.length} gateway subagents, mode: ${mode}`,
+    `Orchestrator: Created agent with ${Object.keys(tools).length} tools, mode: ${mode}`,
   );
 
-  return {
-    agent,
-    gatewayAgents: gatewayAgentList,
-  };
+  return { agent };
 }

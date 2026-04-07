@@ -1,6 +1,9 @@
 import { Extension } from "@tiptap/core";
+import { PluginKey } from "@tiptap/pm/state";
 import { ReactRenderer } from "@tiptap/react";
 import Suggestion from "@tiptap/suggestion";
+
+const SlashCommandPluginKey = new PluginKey("slashCommand");
 import React, { forwardRef, useEffect, useImperativeHandle, useState } from "react";
 import tippy, { type Instance as TippyInstance } from "tippy.js";
 import {
@@ -11,7 +14,6 @@ import {
   List,
   ListOrdered,
   CheckSquare,
-  BrainCircuit,
   Code2,
 } from "lucide-react";
 
@@ -71,17 +73,6 @@ const COMMANDS: CommandItem[] = [
         .chain()
         .focus()
         .insertContent({ type: "taskItem", attrs: { checked: false } })
-        .run(),
-  },
-  {
-    title: "Agent Task",
-    description: "Delegated agent task ( )",
-    icon: BrainCircuit,
-    command: (editor) =>
-      editor
-        .chain()
-        .focus()
-        .insertContent({ type: "agentTask", attrs: { status: "Backlog" } })
         .run(),
   },
   {
@@ -153,6 +144,7 @@ export const SlashCommand = Extension.create({
     return [
       Suggestion({
         editor: this.editor,
+        pluginKey: SlashCommandPluginKey,
         char: "/",
         command: ({ editor, range, props }: any) => {
           props.command(editor);

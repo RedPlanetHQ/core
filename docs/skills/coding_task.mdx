@@ -1,0 +1,112 @@
+---
+title: "Coding Task"
+description: "Handle engineering and coding requests using a plan-then-execute pattern. Creates a main task with two subtasks — Plan (understand the codebase, outline the approach) and Execute (implement using coding tools). Always gets user approval before starting execution."
+category: Engineering
+integrations: '[]'
+---
+
+**Goal:** Reliably handle coding tasks by separating planning from execution, getting user approval before any code changes, and using gateway coding tools to implement.
+
+**Tools Required:** A connected coding gateway (provides coding_*, exec_*, browser_* tools)
+
+**Trigger:** Any coding, engineering, or implementation request — "build X", "fix Y", "implement Z", "write a script to...", "add a feature that...".
+
+---
+
+### Step 1 — Dedup Check
+
+Call `search_tasks` with the core topic of the request. If a matching task already exists in Backlog/Todo/InProgress, surface it to the user and ask if they want to continue that one instead. Do not create a duplicate.
+
+---
+
+### Step 2 — Create Task Structure
+
+Create three tasks in this order:
+
+**Main task** — the top-level work item:
+```
+create_task(title="<clear title>", status="Blocked")
+```
+Starts Blocked — waits for user approval before any execution begins.
+
+**Plan subtask** — first subtask under the main task:
+```
+create_task(title="Plan: <title>", parentTaskId=<mainTaskId>)
+```
+Backlog by default. When the main task is unblocked, this runs first.
+
+**Execute subtask** — second subtask under the main task:
+```
+create_task(title="Execute: <title>", parentTaskId=<mainTaskId>)
+```
+Backlog by default. Runs automatically after Plan completes.
+
+---
+
+### Step 3 — Send Approval Message
+
+Use `send_message` to tell the user:
+- What you plan to build/fix (plain language summary)
+- The two-phase approach: Plan → Execute
+- Ask for approval to proceed
+
+Example:
+> I've structured this as a two-phase task:
+> 1. **Plan** — explore the codebase and outline the approach
+> 2. **Execute** — implement the changes using coding tools
+>
+> Approve to start? I'll run the plan phase first, then come back for execution.
+
+---
+
+### Step 4 — Wait for Approval
+
+Do nothing further. The user approves by:
+- Replying with approval ("yes", "go ahead", "approved", etc.) — you call `unblock_task` on the main task
+- Or moving the main task to Todo in the dashboard
+
+When `unblock_task` is called, the system automatically enqueues the Plan subtask. When Plan completes, Execute is enqueued automatically.
+
+---
+
+### Plan Subtask Behavior
+
+When executing the Plan subtask, the background agent should:
+
+1. Read the task description to understand the full request
+2. Use coding tools (`coding_read_session`, `exec_*`) to explore the relevant codebase areas
+3. Write a detailed implementation plan to the task description (`update_task` with description)
+   - Files to modify
+   - Approach and reasoning
+   - Any risks or open questions
+4. Call `send_message` with a summary of the plan
+5. Mark the subtask Completed
+
+---
+
+### Execute Subtask Behavior
+
+When executing the Execute subtask, the background agent should:
+
+1. Call `get_task` on the parent task to read the plan written by the Plan subtask
+2. Implement the changes step by step using coding tools
+3. Test the changes if possible (run tests, check for errors)
+4. Call `send_message` with results — what was done, any files changed, anything the user should review
+5. Mark the subtask Completed
+
+---
+
+### Edge Cases
+
+**Too complex during execution:**
+- Mark the subtask Blocked
+- Call `send_message` explaining what the blocker is and what's needed from the user
+- Do NOT create new tasks or attempt to decompose further
+
+**Coding tools not available:**
+- Skip this skill
+- Tell the user: "I don't have access to coding tools. Connect a coding gateway to enable this."
+
+**Plan reveals misalignment:**
+- During the Plan subtask, if the actual work is very different from what was described, send a message clarifying before marking Plan complete
+- Let the user confirm before Execute runs

@@ -17,6 +17,9 @@ export const CreateConversationSchema = z.object({
   userType: z.nativeEnum(UserTypeEnum).optional(),
   asyncJobId: z.string().optional(),
   modelId: z.string().optional(),
+  panelMode: z
+    .preprocess((v) => v === "true" || v === true, z.boolean())
+    .optional(),
   parts: z
     .array(
       z.object({
@@ -155,6 +158,25 @@ export async function readAllConversations(userId: string) {
   return prisma.conversation.updateMany({
     where: { userId, unread: true, deleted: null },
     data: { unread: false },
+  });
+}
+
+export async function setActiveStreamId(
+  conversationId: string,
+  streamId: string,
+): Promise<void> {
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { activeStreamId: streamId },
+  });
+}
+
+export async function clearActiveStreamId(
+  conversationId: string,
+): Promise<void> {
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { activeStreamId: null },
   });
 }
 
@@ -299,6 +321,7 @@ export const GetConversationsListSchema = z.object({
   search: z.string().optional(),
   source: z.string().optional(),
   unread: z.string().optional(),
+  asyncJobId: z.string().optional(),
 });
 
 export type GetConversationsListDto = z.infer<
@@ -332,6 +355,9 @@ export async function getConversationsList(
     deleted: null,
     ...(params.source && {
       source: params.source,
+    }),
+    ...(params.asyncJobId && {
+      asyncJobId: params.asyncJobId,
     }),
     ...(params.unread === "true" && {
       unread: true,
@@ -430,4 +456,40 @@ export async function isWithinWhatsApp24hWindow(
     // Default to false (don't send) if we can't check
     return false;
   }
+}
+
+export type TaskRun = {
+  id: string;
+  createdAt: Date;
+  status: string;
+  lastMessage: { text: string; userType: string } | null;
+};
+
+export async function getTaskRuns(
+  taskId: string,
+  workspaceId: string,
+): Promise<TaskRun[]> {
+  const conversations = await prisma.conversation.findMany({
+    where: { asyncJobId: taskId, deleted: null, workspaceId },
+    orderBy: { createdAt: "desc" },
+    include: {
+      ConversationHistory: {
+        orderBy: { createdAt: "desc" },
+        take: 1,
+        select: { message: true, userType: true },
+      },
+    },
+  });
+
+  return conversations.map((c) => ({
+    id: c.id,
+    createdAt: c.createdAt,
+    status: c.status,
+    lastMessage: c.ConversationHistory[0]
+      ? {
+          text: c.ConversationHistory[0].message ?? "",
+          userType: c.ConversationHistory[0].userType,
+        }
+      : null,
+  }));
 }

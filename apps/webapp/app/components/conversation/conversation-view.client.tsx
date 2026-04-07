@@ -25,6 +25,7 @@ interface ConversationHistory {
   userType: string;
   message: string;
   parts: any;
+  createdAt?: string;
 }
 
 interface ConversationViewProps {
@@ -52,6 +53,7 @@ export function ConversationView({
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
   const prevMessageCountRef = useRef(history.length);
@@ -106,6 +108,7 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
+    resume: true,
     onFinish: () => {
       toolArgOverridesRef.current = {};
       pendingApprovalRequestsRef.current = [];
@@ -175,6 +178,20 @@ export function ConversationView({
       container.scrollTop = container.scrollHeight;
     }
   }, []);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const input = composerRef.current?.querySelector(
+        "[contenteditable='true']",
+      );
+
+      if (input instanceof HTMLElement) {
+        input.focus();
+      }
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [conversationId]);
 
   // Remove spacer when user scrolls back to bottom
   useEffect(() => {
@@ -263,6 +280,7 @@ export function ConversationView({
             >
               <ConversationItem
                 message={message}
+                createdAt={history[i]?.createdAt}
                 addToolApprovalResponse={handleToolApprovalResponse}
                 setToolArgOverride={setToolArgOverride}
                 isChatBusy={status === "streaming" || status === "submitted"}
@@ -279,7 +297,7 @@ export function ConversationView({
       </div>
 
       <div className="flex w-full flex-col items-center">
-        <div className="w-full max-w-[90ch] px-4">
+        <div ref={composerRef} className="w-full max-w-[90ch] px-4">
           <ThinkingIndicator
             isLoading={status === "streaming" || status === "submitted"}
           />

@@ -24,6 +24,7 @@ import type {
 } from "~/jobs/reminder/reminder.logic";
 import type { TaskPayload } from "~/jobs/task/task.logic";
 import type { ActivityCasePayload } from "~/jobs/integrations/activity-case.logic";
+import type { ScratchpadScanPayload } from "~/jobs/scratchpad/scratchpad-scan.logic";
 import { runs } from "@trigger.dev/sdk";
 
 export type QueueProvider = "trigger" | "bullmq";
@@ -452,6 +453,85 @@ export const isTriggerDeployment = () => {
   return env.QUEUE_PROVIDER === "trigger";
 };
 
+// ============================================================================
+// Scheduled Task Queue (unified — replaces reminder queue for new tasks)
+// ============================================================================
+
+export interface ScheduledTaskPayload {
+  taskId: string;
+  workspaceId: string;
+  userId: string;
+  channel: string;
+}
+
+/**
+ * Enqueue a scheduled task job (with delay support for scheduling)
+ */
+export async function enqueueScheduledTask(
+  payload: ScheduledTaskPayload,
+  nextRunAt: Date,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const delay = Math.max(nextRunAt.getTime() - Date.now(), 0);
+  const jobId = `scheduled-task-${payload.taskId}-${nextRunAt.getTime()}`;
+
+  if (provider === "trigger") {
+    const { scheduledTaskRunner } = await import("~/trigger/task/task");
+    const handler = await scheduledTaskRunner.trigger(payload, {
+      queue: "scheduled-task-queue",
+      delay: delay > 0 ? `${Math.ceil(delay / 1000)}s` : undefined,
+      concurrencyKey: payload.workspaceId,
+      idempotencyKey: jobId,
+      tags: [`scheduledTask:${payload.taskId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    const { scheduledTaskQueue } = await import("~/bullmq/queues");
+    const job = await scheduledTaskQueue.add(
+      `scheduled-task-${payload.taskId}`,
+      payload,
+      {
+        delay,
+        jobId,
+      },
+    );
+    return { id: job.id };
+  }
+}
+
+/**
+ * Remove a scheduled task job from the queue
+ */
+export async function removeScheduledTask(taskId: string): Promise<void> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`scheduledTask:${taskId}`],
+        status: ["QUEUED", "DELAYED"],
+      });
+
+      for await (const run of pendingRuns) {
+        await runs.cancel(run.id);
+      }
+    } catch {
+      // Silently fail - job may not exist
+    }
+  } else {
+    const { scheduledTaskQueue } = await import("~/bullmq/queues");
+    const delayed = await scheduledTaskQueue.getDelayed();
+    const waiting = await scheduledTaskQueue.getWaiting();
+    const jobs = [...delayed, ...waiting];
+
+    for (const job of jobs) {
+      if (job.data.taskId === taskId) {
+        await job.remove();
+      }
+    }
+  }
+}
+
 /**
  * Enqueue activity CASE job
  */
@@ -480,10 +560,11 @@ export async function enqueueActivityCase(
 }
 
 /**
- * Enqueue task job
+ * Enqueue task job (with optional delay for rescheduled tasks)
  */
 export async function enqueueTask(
   payload: TaskPayload,
+  delayMs?: number,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
@@ -493,16 +574,78 @@ export async function enqueueTask(
       queue: "task-queue",
       concurrencyKey: payload.workspaceId,
       tags: [`task:${payload.taskId}`, payload.workspaceId],
+      ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
     });
     return { id: handler.id };
   } else {
     const { taskQueue } = await import("~/bullmq/queues");
     const job = await taskQueue.add("task", payload, {
-      jobId: `task-${payload.taskId}`,
+      jobId: `task-${payload.taskId}-${Date.now()}`,
       attempts: 1,
+      ...(delayMs ? { delay: delayMs } : {}),
     });
     return { id: job.id };
   }
+}
+
+/**
+ * Enqueue scratchpad scan job (with delay for debouncing)
+ */
+export async function enqueueScratchpadScan(
+  payload: ScratchpadScanPayload,
+  delayMs: number,
+): Promise<{ id?: string }> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const jobId = `scratchpad-${payload.pageId}`;
+
+  if (provider === "trigger") {
+    const { scratchpadScanTask } =
+      await import("~/trigger/scratchpad/scratchpad-scan");
+    const handler = await scratchpadScanTask.trigger(payload, {
+      queue: "scratchpad-scan-queue",
+      delay: delayMs > 0 ? `${Math.ceil(delayMs / 1000)}s` : undefined,
+      tags: [`scratchpad:${payload.pageId}`, payload.workspaceId],
+    });
+    return { id: handler.id };
+  } else {
+    const { scratchpadScanQueue } = await import("~/bullmq/queues");
+    const job = await scratchpadScanQueue.add("scratchpad-scan", payload, {
+      jobId,
+      delay: delayMs,
+    });
+    return { id: job.id };
+  }
+}
+
+/**
+ * Cancel a pending scratchpad scan job for a page (called before re-enqueuing)
+ */
+export async function cancelScratchpadScan(pageId: string): Promise<boolean> {
+  const provider = env.QUEUE_PROVIDER as QueueProvider;
+
+  if (provider === "trigger") {
+    try {
+      const pendingRuns = await runs.list({
+        tag: [`scratchpad:${pageId}`],
+        status: ["QUEUED", "DELAYED"],
+      });
+      let count = 0;
+
+      for await (const run of pendingRuns) {
+        count++;
+      }
+
+      return count > 1;
+    } catch {
+      // Silently fail — job may not exist
+    }
+  } else {
+    const { scratchpadScanQueue } = await import("~/bullmq/queues");
+    const job = await scratchpadScanQueue.getJob(`scratchpad-${pageId}`);
+    return !!job;
+  }
+
+  return false;
 }
 
 /**

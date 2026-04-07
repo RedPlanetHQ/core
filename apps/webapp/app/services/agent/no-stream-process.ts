@@ -3,21 +3,27 @@ import {
   getConversationAndHistory,
   updateConversationStatus,
   upsertConversationHistory,
+  setActiveStreamId,
+  clearActiveStreamId,
 } from "../conversation.server";
-import { EpisodeType, UserTypeEnum } from "@core/types";
-import { generateId, stepCountIs } from "ai";
-import { Agent } from "@mastra/core/agent";
+import { UserTypeEnum } from "@core/types";
+import {
+  generateId,
+  stepCountIs,
+  JsonToSseTransformStream,
+} from "ai";
+import { Agent, convertMessages } from "@mastra/core/agent";
+import type { OutputProcessor } from "@mastra/core/processors";
 import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
-import { toRouterString } from "~/lib/model.server";
 import { getDefaultChatModelId, resolveModelConfig } from "~/services/llm-provider.server";
-import { addToQueue } from "~/lib/ingest.server";
 import {
   type Trigger,
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
-import { deductCredits } from "~/trigger/utils/utils";
+import { createUIStreamWithApprovals, saveConversationResult } from "./mastra-stream.server";
+import { getResumableStreamContext } from "~/bullmq/connection";
 
 interface NoStreamProcessBody {
   id: string;
@@ -50,6 +56,10 @@ interface NoStreamProcessBody {
   skipUserMessage?: boolean;
   /** Optional executor tools — uses HttpOrchestratorTools for trigger/job contexts */
   executorTools?: OrchestratorTools;
+  /** When set, adds add_comment tool for daily scratchpad responses */
+  scratchpadPageId?: string;
+  /** When true, write tools require user approval (default false) */
+  interactive?: boolean;
 }
 
 export async function noStreamProcess(
@@ -135,8 +145,9 @@ export async function noStreamProcess(
       channelMetadata: body.channelMetadata,
       conversationId: body.id,
       executorTools: body.executorTools,
-      interactive: false,
+      interactive: body.interactive ?? false,
       modelConfig,
+      scratchpadPageId: body.scratchpadPageId,
     });
 
   // Create core agent with subagents — think only present for triggered flows
@@ -145,6 +156,9 @@ export async function noStreamProcess(
     take_action: takeActionAgent,
   };
   if (thinkAgent) subagents.think = thinkAgent;
+  for (const gw of gatewayAgents) {
+    subagents[gw.id] = gw;
+  }
 
   const agent = new Agent({
     id: "core-agent",
@@ -164,81 +178,69 @@ export async function noStreamProcess(
     (gw as any).__registerMastra(mastra);
   }
 
-  let result: any;
+  // Capture final parts/text from outputProcessor for channel reply
+  let capturedParts: any[] = [];
+  let capturedText = "";
+
+  const messageHistoryProcessor: OutputProcessor = {
+    id: "message-history",
+    async processInput({ messages }: any) { return messages; },
+    async processOutputResult({ messages }: any) {
+      const converted = convertMessages(messages).to("AIV5.UI") as any[];
+      const lastMsg = converted[converted.length - 1];
+      capturedParts = lastMsg?.parts ?? [];
+      capturedText = capturedParts
+        .filter((p: any) => p.type === "text")
+        .map((p: any) => p.text)
+        .join("");
+      await saveConversationResult({
+        parts: capturedParts,
+        conversationId: body.id,
+        incomingUserText: message,
+        incognito: conversation?.incognito ?? false,
+        userId,
+        workspaceId,
+        isBYOK,
+      });
+      return messages;
+    },
+  };
+
+  let agentResult: any;
   try {
-    result = await agent.generate(modelMessages, {
+    agentResult = await agent.stream(modelMessages, {
       toolsets: { core: tools },
       stopWhen: [stepCountIs(10)],
       modelSettings: { temperature: 0.5 },
+      outputProcessors: [messageHistoryProcessor],
     });
   } catch (error) {
     await updateConversationStatus(body.id, "failed");
     throw error;
   }
 
-  // Build assistant parts from result.steps (handle Mastra payload wrapper)
-  const assistantMessageId = crypto.randomUUID();
-  const assistantParts: any[] = [];
+  const uiStream = createUIStreamWithApprovals(agentResult);
+  const sseStream = uiStream.pipeThrough(new JsonToSseTransformStream());
+  const streamId = generateId();
+  await setActiveStreamId(body.id, streamId);
 
-  for (const step of result.steps) {
-    if (result.steps.length > 1 && step !== result.steps[0]) {
-      assistantParts.push({ type: "step-start" });
+  try {
+    const ctx = getResumableStreamContext();
+    const resumable = await ctx.createNewResumableStream(streamId, () => sseStream);
+    if (resumable) {
+      const reader = resumable.getReader();
+      while (true) {
+        const { done } = await reader.read();
+        if (done) break;
+      }
+      reader.releaseLock();
     }
-
-    for (const toolCall of step.toolCalls ?? []) {
-      const tc = toolCall.payload ?? toolCall;
-      const toolResult = (step.toolResults ?? []).find((r: any) => {
-        const tr = r.payload ?? r;
-        return tr.toolCallId === tc.toolCallId;
-      });
-      const tr = toolResult?.payload ?? toolResult;
-      assistantParts.push({
-        type: `tool-${tc.toolName}`,
-        toolCallId: tc.toolCallId,
-        toolName: tc.toolName,
-        state: "output-available",
-        input: tc.args,
-        output: tr?.result,
-      });
-    }
-
-    if (step.text) {
-      assistantParts.push({ type: "text", text: step.text });
-    }
+  } catch (error) {
+    await updateConversationStatus(body.id, "failed");
+    throw error;
+  } finally {
+    await clearActiveStreamId(body.id);
   }
 
-  const assistantMessage = {
-    id: assistantMessageId,
-    role: "assistant",
-    parts: assistantParts,
-  };
-
-  await upsertConversationHistory(
-    assistantMessageId,
-    assistantParts,
-    body.id,
-    UserTypeEnum.Agent,
-    false,
-  );
-
-  if (result.text) {
-    await addToQueue(
-      {
-        episodeBody: `<user>${message}</user><assistant>${result.text}</assistant>`,
-        source: body.source,
-        referenceTime: new Date().toISOString(),
-        type: EpisodeType.CONVERSATION,
-        sessionId: body.id,
-      },
-      userId,
-      workspaceId,
-    );
-  }
-
-  if (!isBYOK) {
-    await deductCredits(workspaceId, userId, "chatMessage", 1);
-  }
-  await updateConversationStatus(body.id, "completed");
-
-  return { ...assistantMessage, text: result.text };
+  return { id: crypto.randomUUID(), role: "assistant", parts: capturedParts, text: capturedText };
 }

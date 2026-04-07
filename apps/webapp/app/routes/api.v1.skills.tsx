@@ -18,7 +18,7 @@ const CreateSkillBody = z.object({
   content: z.string().min(1, "Content is required"),
   source: z.string().default("manual"),
   labelIds: z.array(z.string()).optional().default([]),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.object({}).optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(

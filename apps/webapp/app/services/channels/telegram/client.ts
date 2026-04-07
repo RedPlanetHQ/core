@@ -35,7 +35,7 @@ export async function setTelegramWebhook(
     body: JSON.stringify(body),
   });
   const data = await res.json();
-  console.log(data);
+
   if (!data.ok) {
     throw new Error(`Telegram setWebhook failed: ${data.description}`);
   }

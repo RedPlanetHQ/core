@@ -14,7 +14,7 @@ const SkillParamsSchema = z.object({
 const UpdateSkillBody = z.object({
   title: z.string().min(1).optional(),
   content: z.string().min(1).optional(),
-  metadata: z.record(z.unknown()).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const loader = createHybridLoaderApiRoute(

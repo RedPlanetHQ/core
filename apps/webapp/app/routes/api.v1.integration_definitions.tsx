@@ -11,7 +11,10 @@ import { logger } from "~/services/logger.service";
 // Schema for creating an integration definition
 const IntegrationDefinitionBodySchema = z.object({
   name: z.string().min(1, "Name is required"),
-  slug: z.string().min(1, "Slug is required").regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
+  slug: z
+    .string()
+    .min(1, "Slug is required")
+    .regex(/^[a-z0-9-]+$/, "Slug must be lowercase alphanumeric with hyphens"),
   description: z.string().min(1, "Description is required"),
   icon: z.string().min(1, "Icon is required"),
   url: z.string().url(),
@@ -23,13 +26,15 @@ const IntegrationDefinitionBodySchema = z.object({
     mcp: z.object({
       type: z.enum(["cli", "http"]),
       url: z.string().optional(),
-      headers: z.record(z.string()).optional(),
+      headers: z.record(z.string(), z.string()).optional(),
       needsAuth: z.boolean().optional(),
     }),
-    schedule: z.object({
-      frequency: z.string(),
-    }).optional(),
-    auth: z.record(z.any()),
+    schedule: z
+      .object({
+        frequency: z.string(),
+      })
+      .optional(),
+    auth: z.record(z.string(), z.any()),
   }),
 });
 
@@ -48,7 +53,9 @@ const loader = createHybridLoaderApiRoute(
       throw new Error("Workspace not found");
     }
 
-    const definitions = await getIntegrationDefinitions(authentication.workspaceId);
+    const definitions = await getIntegrationDefinitions(
+      authentication.workspaceId,
+    );
 
     return json({ definitions });
   },
@@ -72,20 +79,14 @@ const { action } = createHybridActionApiRoute(
     const { workspaceId } = authentication;
 
     if (!workspaceId) {
-      return json(
-        { error: "Workspace not found" },
-        { status: 400 },
-      );
+      return json({ error: "Workspace not found" }, { status: 400 });
     }
 
     try {
       // Check if integration with this name or slug already exists
       const existing = await prisma.integrationDefinitionV2.findFirst({
         where: {
-          OR: [
-            { name },
-            { slug, workspaceId },
-          ],
+          OR: [{ name }, { slug, workspaceId }],
         },
       });
 
@@ -97,18 +98,20 @@ const { action } = createHybridActionApiRoute(
       }
 
       // Create the integration definition
-      const integrationDefinition = await prisma.integrationDefinitionV2.create({
-        data: {
-          name,
-          slug,
-          description,
-          icon,
-          url,
-          spec,
-          version: "1.0.0",
-          workspaceId,
+      const integrationDefinition = await prisma.integrationDefinitionV2.create(
+        {
+          data: {
+            name,
+            slug,
+            description,
+            icon,
+            url,
+            spec,
+            version: "1.0.0",
+            workspaceId,
+          },
         },
-      });
+      );
 
       logger.info("Created integration definition", {
         integrationDefinitionId: integrationDefinition.id,

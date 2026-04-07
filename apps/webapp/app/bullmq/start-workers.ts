@@ -18,8 +18,10 @@ import {
   labelAssignmentWorker,
   titleGenerationWorker,
   integrationRunWorker,
+  scratchpadScanWorker,
 } from "./workers";
 import { initializeReminderScheduler } from "~/services/reminder-scheduler";
+import { initializeScheduledTaskScheduler } from "~/services/task-scheduler";
 import {
   ingestQueue,
   conversationTitleQueue,
@@ -28,6 +30,7 @@ import {
   titleGenerationQueue,
   preprocessQueue,
   integrationRunQueue,
+  scratchpadScanQueue,
 } from "./queues";
 import {
   setupWorkerLogging,
@@ -76,6 +79,11 @@ export async function initWorkers(): Promise<void> {
     integrationRunQueue,
     "integration-run",
   );
+  setupWorkerLogging(
+    scratchpadScanWorker,
+    scratchpadScanQueue,
+    "scratchpad-scan",
+  );
 
   // Start periodic metrics logging (every 60 seconds)
   metricsInterval = startPeriodicMetricsLogging(
@@ -112,12 +120,20 @@ export async function initWorkers(): Promise<void> {
         queue: integrationRunQueue,
         name: "integration-run",
       },
+      {
+        worker: scratchpadScanWorker,
+        queue: scratchpadScanQueue,
+        name: "scratchpad-scan",
+      },
     ],
     60000, // Log metrics every 60 seconds
   );
 
   // Initialize reminder scheduler (starts its own workers + recovers missed jobs)
   await initializeReminderScheduler();
+
+  // Initialize scheduled task scheduler (recovers missed scheduled task jobs)
+  await initializeScheduledTaskScheduler();
 
   // Log worker startup
   logger.log("\n🚀 Starting BullMQ workers...");
@@ -141,7 +157,9 @@ export async function initWorkers(): Promise<void> {
   logger.log(
     `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
   );
+  logger.log(`✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: 5)`);
   logger.log(`✓ Reminder scheduler: reminder-queue + followup-queue`);
+  logger.log(`✓ Scheduled task scheduler: scheduled-task-queue`);
   logger.log("─".repeat(80));
   logger.log("✅ All BullMQ workers started and listening for jobs");
   logger.log("📊 Metrics will be logged every 60 seconds\n");
