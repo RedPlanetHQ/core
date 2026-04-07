@@ -59,7 +59,7 @@ function SubIssuesPopover({
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <Button variant="secondary">
+        <Button variant="secondary" className="gap-1">
           <SubTask size={14} />
           <span>
             {doneCount}/{subtasks.length}
@@ -352,7 +352,10 @@ export function TaskDetailFull({
       </div>
 
       {scheduleOpen && (
-        <ScheduleDialog onClose={() => setScheduleOpen(false)} taskId={task.id} />
+        <ScheduleDialog
+          onClose={() => setScheduleOpen(false)}
+          taskId={task.id}
+        />
       )}
     </>
   );

@@ -58,10 +58,12 @@ export const hocuspocus: Hocuspocus =
             },
           });
 
-          handleScratchpadStore(documentName, document, {
-            workspaceId: page.workspaceId,
-            userId: page.userId,
-          }).catch((err) => console.error("[collab-store-scratchpad]", err));
+          if (page.type === "Daily") {
+            handleScratchpadStore(documentName, document, {
+              workspaceId: page.workspaceId,
+              userId: page.userId,
+            }).catch((err) => console.error("[collab-store-scratchpad]", err));
+          }
         },
       }),
     ],

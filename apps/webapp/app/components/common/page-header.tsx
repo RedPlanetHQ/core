@@ -32,6 +32,7 @@ export interface PageHeaderProps {
   actionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
   showTrigger?: boolean;
+  showChatToggle?: boolean;
 }
 
 // Back and Forward navigation component
@@ -70,6 +71,7 @@ export function PageHeader({
   actions,
   tabs,
   showTrigger = true,
+  showChatToggle = true,
   actionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
@@ -177,7 +179,7 @@ export function PageHeader({
           {actionsNode && actionsNode}
 
           {/* Global chat toggle — visible on every page */}
-          {chatPanel && (
+          {showChatToggle && chatPanel && (
             <Button
               variant="ghost"
               isActive={chatPanel.chatOpen}

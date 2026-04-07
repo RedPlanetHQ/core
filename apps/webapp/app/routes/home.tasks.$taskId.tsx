@@ -14,6 +14,7 @@ import {
   changeTaskStatus,
   deleteTask,
 } from "~/services/task.server";
+import { getTaskRuns } from "~/services/conversation.server";
 import { prisma } from "~/db.server";
 import {
   removeScheduledTask,
@@ -47,10 +48,11 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
 
-  const [task, integrationAccounts, butlerName] = await Promise.all([
+  const [task, integrationAccounts, butlerName, runs] = await Promise.all([
     getTaskFull(taskId, workspaceId),
     getIntegrationAccounts(user.id, workspaceId),
     getButlerName(workspaceId),
+    getTaskRuns(taskId, workspaceId),
   ]);
 
   if (!task) return redirect("/home/tasks");
@@ -62,12 +64,21 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     integrationAccountMap[acc.id] = acc.integrationDefinition.slug;
   }
 
+  const integrationFrontendMap: Record<string, string> = {};
+  for (const acc of integrationAccounts) {
+    if (acc.integrationDefinition.frontendUrl) {
+      integrationFrontendMap[acc.id] = acc.integrationDefinition.frontendUrl;
+    }
+  }
+
   return typedjson({
     task,
     integrationAccountMap,
+    integrationFrontendMap,
     butlerName,
     taskPageId: taskPage.id,
     collabToken: generateCollabToken(workspaceId, user.id),
+    runs,
   });
 }
 

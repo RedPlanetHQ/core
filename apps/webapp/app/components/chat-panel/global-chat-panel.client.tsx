@@ -1,5 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useFetcher } from "@remix-run/react";
+import { useFetcher, useNavigate } from "@remix-run/react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Document } from "@tiptap/extension-document";
 import { Paragraph } from "@tiptap/extension-paragraph";
@@ -7,7 +7,7 @@ import { Text } from "@tiptap/extension-text";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
 import Placeholder from "@tiptap/extension-placeholder";
-import { ArrowUp, X, MessageSquare, Plus } from "lucide-react";
+import { ArrowUp, X, MessageSquare, Plus, Maximize2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   ConversationView,
@@ -17,6 +17,8 @@ import {
 import { UserTypeEnum } from "@core/types";
 import { cn } from "~/lib/utils";
 import Avatar from "boring-avatars";
+import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
+import { ConversationHistoryPopover } from "~/components/conversation/conversation-history-popover";
 
 interface GlobalChatPanelProps {
   agentName: string;
@@ -185,6 +187,9 @@ export function GlobalChatPanel({
   models,
   integrationAccountMap,
 }: GlobalChatPanelProps) {
+  const { pinnedConversationId } = useChatPanel()!;
+  const navigate = useNavigate();
+
   const [activeConversation, setActiveConversation] = useState<{
     conversationId: string;
     history: Array<{
@@ -194,6 +199,30 @@ export function GlobalChatPanel({
       parts: any[];
     }>;
   } | null>(null);
+
+  const historyFetcher = useFetcher<{
+    conversation: {
+      id: string;
+      status: string;
+      ConversationHistory: Array<{
+        id: string;
+        userType: string;
+        message: string;
+        parts: any[];
+      }>;
+    };
+  }>();
+
+  const pendingHistoryId = useRef<string | null>(null);
+
+  // Load a pinned conversation when set via context
+  useEffect(() => {
+    if (pinnedConversationId) {
+      pendingHistoryId.current = pinnedConversationId;
+      historyFetcher.load(`/home/conversation/${pinnedConversationId}`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pinnedConversationId]);
 
   const handleConversationCreated = (
     conversationId: string,
@@ -213,6 +242,26 @@ export function GlobalChatPanel({
     });
   };
 
+  const handleSelectHistory = (conversationId: string) => {
+    pendingHistoryId.current = conversationId;
+    historyFetcher.load(`/home/conversation/${conversationId}`);
+  };
+
+  useEffect(() => {
+    if (
+      historyFetcher.state === "idle" &&
+      historyFetcher.data?.conversation &&
+      pendingHistoryId.current
+    ) {
+      const conv = historyFetcher.data.conversation;
+      setActiveConversation({
+        conversationId: pendingHistoryId.current,
+        history: conv.ConversationHistory ?? [],
+      });
+      pendingHistoryId.current = null;
+    }
+  }, [historyFetcher.state, historyFetcher.data]);
+
   const handleNewChat = () => {
     setActiveConversation(null);
   };
@@ -221,25 +270,38 @@ export function GlobalChatPanel({
     <div className="border-l-0.5 border-border flex h-full flex-col">
       {/* Header */}
       <div className="flex h-[40px] items-center justify-between border-b px-3 py-2">
-        <div className="flex items-center gap-2"></div>
+        <div className="flex items-center gap-2">
+          <ConversationHistoryPopover
+            onSelect={handleSelectHistory}
+            currentConversationId={activeConversation?.conversationId}
+          />
+        </div>
         <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            className="rounded"
+            title="Open full view"
+            onClick={() =>
+              navigate(
+                activeConversation
+                  ? `/home/conversation/${activeConversation.conversationId}`
+                  : "/home/conversation",
+              )
+            }
+          >
+            <Maximize2 size={14} />
+          </Button>
           {activeConversation && (
             <Button
               variant="ghost"
-              size="icon"
-              className="h-6 w-6 rounded"
+              className="rounded"
               onClick={handleNewChat}
               title="New chat"
             >
               <Plus size={14} />
             </Button>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded"
-            onClick={onClose}
-          >
+          <Button variant="ghost" className="rounded" onClick={onClose}>
             <X size={14} />
           </Button>
         </div>

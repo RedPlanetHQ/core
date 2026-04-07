@@ -161,6 +161,25 @@ export async function readAllConversations(userId: string) {
   });
 }
 
+export async function setActiveStreamId(
+  conversationId: string,
+  streamId: string,
+): Promise<void> {
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { activeStreamId: streamId },
+  });
+}
+
+export async function clearActiveStreamId(
+  conversationId: string,
+): Promise<void> {
+  await prisma.conversation.update({
+    where: { id: conversationId },
+    data: { activeStreamId: null },
+  });
+}
+
 export const getConversationAndHistory = async (
   conversationId: string,
   userId: string,
@@ -302,6 +321,7 @@ export const GetConversationsListSchema = z.object({
   search: z.string().optional(),
   source: z.string().optional(),
   unread: z.string().optional(),
+  asyncJobId: z.string().optional(),
 });
 
 export type GetConversationsListDto = z.infer<
@@ -335,6 +355,9 @@ export async function getConversationsList(
     deleted: null,
     ...(params.source && {
       source: params.source,
+    }),
+    ...(params.asyncJobId && {
+      asyncJobId: params.asyncJobId,
     }),
     ...(params.unread === "true" && {
       unread: true,

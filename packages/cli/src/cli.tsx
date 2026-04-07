@@ -1,21 +1,21 @@
 #!/usr/bin/env node
 import Pastel from 'pastel';
-import { createRequire } from 'node:module';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import {createRequire} from 'node:module';
+import {fileURLToPath} from 'node:url';
+import {dirname, join} from 'node:path';
 
 // Get version from packages/cli/package.json, not workspace root
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const require = createRequire(import.meta.url);
-const pkg = require(join(__dirname, '..', 'package.json')) as { version: string };
+const pkg = require(join(__dirname, '..', 'package.json')) as {version: string};
 
 // Handle `tui` command before Pastel to avoid terminal conflicts with pi-tui
 const args = process.argv.slice(2);
 
 if (args[0] === 'tui') {
-	const { startTuiApp } = await import('./tui/chat.js');
-	const { getConfig } = await import('./config/index.js');
+	const {startTuiApp} = await import('./tui/chat.js');
+	const {getConfig} = await import('./config/index.js');
 
 	const config = getConfig();
 	const apiKey = config.auth?.apiKey;

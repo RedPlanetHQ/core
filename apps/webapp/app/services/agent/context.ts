@@ -4,7 +4,7 @@
  * Extracts the common setup used by web chat (stream + no_stream) and
  * async channels (WhatsApp, Email). Each caller gets back everything
  * needed to call Mastra Agent's stream() / generate(), plus the
- * orchestrator subagent and gateway sub-subagents.
+ * orchestrator subagent.
  */
 
 import { type Tool } from "ai";
@@ -177,6 +177,7 @@ export async function buildAgentContext({
       triggerChannelId: triggerContext?.trigger.channelId,
       userEmail: user?.email ?? undefined,
       userPhoneNumber: user?.phoneNumber ?? undefined,
+      executorTools,
     }),
     createCoreAgents({
       userId,
@@ -252,15 +253,14 @@ export async function buildAgentContext({
     - Information from their integrations (emails, calendar, issues, etc.)
     - Actions on their integrations (send, create, update, delete)
     - Web search or URL reading
-    - Gateway operations (device tasks, coding, browser automation)
 
     Simply delegate to the orchestrator with a clear intent describing what's needed.
     </connected_integrations>
     
-    <conneted_gateways>
-    their available gateways:
-    ${gatewaysList}
-    </conneted_gateways>
+    <connected_gateways>
+    Each gateway is a subagent you can call directly. Give it a clear intent and it will pick the right tool (coding_*, browser_*, exec_*).
+    ${gatewaysList || "No gateways connected."}
+    </connected_gateways>
     `;
 
   // Messaging channels context
@@ -345,7 +345,8 @@ Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.des
 Task ID: ${linkedTask.id}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
 
 RULES:
-- Delegate to the orchestrator for actual work (gather information, execute actions)
+- For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Completed when all subtasks are done
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Blocked and send_message with the error` : `

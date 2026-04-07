@@ -66,7 +66,9 @@ export async function createTask(
     });
     const dots = (parent?.displayId?.match(/\./g) ?? []).length;
     if (dots >= 2) {
-      throw new Error("Task depth limit reached: max 2 levels (epic → task → sub-task)");
+      throw new Error(
+        "Task depth limit reached: max 2 levels (epic → task → sub-task)",
+      );
     }
   }
 

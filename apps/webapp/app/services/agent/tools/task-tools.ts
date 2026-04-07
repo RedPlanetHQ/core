@@ -18,8 +18,10 @@ import {
   reparentTask,
 } from "~/services/task.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
-import { setPageContentFromHtml, getPageContentAsHtml } from "~/services/hocuspocus/content.server";
-import { enqueueTask } from "~/lib/queue-adapter.server";
+import {
+  setPageContentFromHtml,
+  getPageContentAsHtml,
+} from "~/services/hocuspocus/content.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 import { env } from "~/env.server";
@@ -31,6 +33,7 @@ import {
 import type { MessageChannel } from "~/services/agent/types";
 import type { ChannelRecord } from "~/services/channel.server";
 import { prisma } from "~/db.server";
+import { enqueueTask } from "~/lib/queue-adapter.server";
 
 export function getTaskTools(
   workspaceId: string,
@@ -72,16 +75,22 @@ export function getTaskTools(
       : z
           .enum(["whatsapp", "slack", "email", "telegram"])
           .optional()
-          .describe("Channel to deliver on. Defaults to user's default channel.");
+          .describe(
+            "Channel to deliver on. Defaults to user's default channel.",
+          );
 
   return {
-    create_task: tool({
-      description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
+    ...(!isBackgroundExecution && {
+      create_task: tool({
+        description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
 NOTE: This is for CORE's own task system. If the user asks to create a task in an external tool (Todoist, Asana, Linear, Jira, etc.), do NOT use this — delegate to the orchestrator via take_action instead.
 
+BEFORE CREATING: Always call search_tasks first. If a matching task already exists in Backlog/Todo/InProgress, reuse it instead of creating a duplicate.
+
 IMMEDIATE TASK (no scheduling):
-- Just pass title + optional description. Created in Backlog.
-- Use run_task_in_background separately to start working on it.
+- Default status is Backlog — use when parking something for later ("don't forget X").
+- Pass status="Todo" to start execution immediately — use when user wants it done now ("do X", "research Y", coding tasks).
+- Pass status="Blocked" for approval-gated work — send_message explaining the plan, wait for user to unblock.
 
 SCHEDULED TASK (one-time, fires at a specific time):
 - Pass title + schedule (RRule) + maxOccurrences=1
@@ -108,157 +117,210 @@ TEXT GUIDELINES for scheduled tasks:
 - Do NOT include channel delivery instructions — the channel is set separately.
 
 FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`,
-      inputSchema: z.object({
-        title: z.string().describe("Short title for the task"),
-        description: z
-          .string()
-          .optional()
-          .describe("Task description as HTML"),
-        // Scheduling params (optional — omit for immediate tasks)
-        schedule: z
-          .string()
-          .optional()
-          .describe("RRule schedule string for scheduled/recurring tasks"),
-        startDate: z
-          .string()
-          .optional()
-          .describe("ISO 8601 date (YYYY-MM-DD) for when to start firing"),
-        maxOccurrences: z
-          .number()
-          .optional()
-          .describe("Max times to fire. 1 for one-time, N for limited, omit for unlimited."),
-        endDate: z
-          .string()
-          .optional()
-          .describe("ISO 8601 date string for when to stop firing"),
-        channel: channelSchema,
-        isFollowUp: z
-          .boolean()
-          .optional()
-          .describe("True if this is a follow-up for an existing task"),
-        parentTaskId: z
-          .string()
-          .optional()
-          .describe("ID of the parent task. Required if isFollowUp is true."),
-        skillId: z
-          .string()
-          .optional()
-          .describe("ID of a skill to attach. When the task fires, the skill is loaded and executed."),
-        skillName: z.string().optional().describe("Name of the attached skill."),
-      }),
-      execute: async ({
-        title,
-        description,
-        schedule,
-        startDate,
-        maxOccurrences,
-        endDate,
-        channel: taskChannel,
-        isFollowUp,
-        parentTaskId,
-        skillId,
-        skillName,
-      }) => {
-        try {
-          // Follow-up: reschedule the parent task
-          if (isFollowUp && parentTaskId) {
-            const parentTask = await getTaskById(parentTaskId);
-            if (!parentTask) return "Parent task not found.";
+        inputSchema: z.object({
+          title: z.string().describe("Short title for the task"),
+          description: z
+            .string()
+            .optional()
+            .describe("Task description as HTML"),
+          // Scheduling params (optional — omit for immediate tasks)
+          schedule: z
+            .string()
+            .optional()
+            .describe("RRule schedule string for scheduled/recurring tasks"),
+          startDate: z
+            .string()
+            .optional()
+            .describe("ISO 8601 date (YYYY-MM-DD) for when to start firing"),
+          maxOccurrences: z
+            .number()
+            .optional()
+            .describe(
+              "Max times to fire. 1 for one-time, N for limited, omit for unlimited.",
+            ),
+          endDate: z
+            .string()
+            .optional()
+            .describe("ISO 8601 date string for when to stop firing"),
+          channel: channelSchema,
+          isFollowUp: z
+            .boolean()
+            .optional()
+            .describe("True if this is a follow-up for an existing task"),
+          parentTaskId: z
+            .string()
+            .optional()
+            .describe("ID of the parent task. Required if isFollowUp is true."),
+          status: z
+            .enum(["Backlog", "Todo", "Blocked"])
+            .optional()
+            .describe(
+              "Initial status. Backlog=park for later (default). Todo=start immediately. Blocked=needs approval first.",
+            ),
+          skillId: z
+            .string()
+            .optional()
+            .describe(
+              "ID of a skill to attach. When the task fires, the skill is loaded and executed.",
+            ),
+          skillName: z
+            .string()
+            .optional()
+            .describe("Name of the attached skill."),
+        }),
+        execute: async ({
+          title,
+          description,
+          status: initialStatus,
+          schedule,
+          startDate,
+          maxOccurrences,
+          endDate,
+          channel: taskChannel,
+          isFollowUp,
+          parentTaskId,
+          skillId,
+          skillName,
+        }) => {
+          try {
+            // Follow-up: reschedule the parent task
+            if (isFollowUp && parentTaskId) {
+              const parentTask = await getTaskById(parentTaskId);
+              if (!parentTask) return "Parent task not found.";
 
-            if (!schedule) return "Schedule is required for follow-up.";
+              if (!schedule) return "Schedule is required for follow-up.";
 
-            const tz = timezone ?? "UTC";
-            const followUpNextRun = computeNextRun(schedule, tz);
-            if (!followUpNextRun) return "Could not compute follow-up time.";
+              const tz = timezone ?? "UTC";
+              const followUpNextRun = computeNextRun(schedule, tz);
+              if (!followUpNextRun) return "Could not compute follow-up time.";
 
-            await rescheduleTaskAt(parentTaskId, workspaceId, followUpNextRun);
-            return `Follow-up scheduled: task fires again at ${followUpNextRun.toLocaleString()}.`;
-          }
-
-          // Scheduled or recurring task
-          if (schedule) {
-            // Enforce minimum recurrence interval
-            const isRecurring = !maxOccurrences || maxOccurrences > 1;
-            if (isRecurring) {
-              const intervalMins = getRecurrenceIntervalMinutes(schedule);
-              if (intervalMins !== null && intervalMins < minRecurrenceMinutes) {
-                return `Cannot create task: minimum recurrence interval is ${minRecurrenceLabel}.`;
-              }
+              await rescheduleTaskAt(
+                parentTaskId,
+                workspaceId,
+                followUpNextRun,
+              );
+              return `Follow-up scheduled: task fires again at ${followUpNextRun.toLocaleString()}.`;
             }
 
-            // Resolve channel
-            let targetChannelName: string = channel;
-            let targetChannelId: string | null = null;
-
-            if (taskChannel) {
-              const matchedByName = channelByName.get(taskChannel);
-              if (matchedByName) {
-                targetChannelName = matchedByName.name;
-                targetChannelId = matchedByName.id;
-              } else {
-                const asType = taskChannel as MessageChannel;
-                if (availableChannels.includes(asType)) {
-                  targetChannelName = taskChannel;
-                } else {
-                  const names = channelRecords?.length
-                    ? channelRecords.map((ch) => ch.name).join(", ")
-                    : availableChannels.join(", ");
-                  return `Channel "${taskChannel}" is not available. Available: ${names}`;
+            // Scheduled or recurring task
+            if (schedule) {
+              // Enforce minimum recurrence interval
+              const isRecurring = !maxOccurrences || maxOccurrences > 1;
+              if (isRecurring) {
+                const intervalMins = getRecurrenceIntervalMinutes(schedule);
+                if (
+                  intervalMins !== null &&
+                  intervalMins < minRecurrenceMinutes
+                ) {
+                  return `Cannot create task: minimum recurrence interval is ${minRecurrenceLabel}.`;
                 }
               }
+
+              // Resolve channel
+              let targetChannelName: string = channel;
+              let targetChannelId: string | null = null;
+
+              if (taskChannel) {
+                const matchedByName = channelByName.get(taskChannel);
+                if (matchedByName) {
+                  targetChannelName = matchedByName.name;
+                  targetChannelId = matchedByName.id;
+                } else {
+                  const asType = taskChannel as MessageChannel;
+                  if (availableChannels.includes(asType)) {
+                    targetChannelName = taskChannel;
+                  } else {
+                    const names = channelRecords?.length
+                      ? channelRecords.map((ch) => ch.name).join(", ")
+                      : availableChannels.join(", ");
+                    return `Channel "${taskChannel}" is not available. Available: ${names}`;
+                  }
+                }
+              }
+
+              // Build metadata
+              const metadata: Record<string, unknown> = {};
+              if (skillId) {
+                metadata.skillId = skillId;
+                metadata.skillName = skillName || null;
+              }
+
+              const task = await createScheduledTask(workspaceId, userId, {
+                title,
+                description,
+                schedule,
+                channel: targetChannelName,
+                channelId: targetChannelId,
+                maxOccurrences:
+                  maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null,
+                endDate: endDate ? new Date(endDate) : null,
+                startDate: startDate ? new Date(startDate) : null,
+                parentTaskId: parentTaskId ?? null,
+                metadata: Object.keys(metadata).length > 0 ? metadata : null,
+              });
+
+              let limitInfo = "";
+              const maxOcc =
+                maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null;
+              if (maxOcc) {
+                limitInfo =
+                  maxOcc === 1 ? " (one-time)" : ` (${maxOcc} times max)`;
+              } else if (endDate) {
+                limitInfo = ` (until ${endDate})`;
+              }
+
+              const nextRunInfo = task.nextRunAt
+                ? ` Next: ${task.nextRunAt.toLocaleString()}`
+                : "";
+
+              return `Created scheduled task: "${title}" (ID: ${task.id}).${nextRunInfo}${limitInfo}`;
             }
 
-            // Build metadata
-            const metadata: Record<string, unknown> = {};
-            if (skillId) {
-              metadata.skillId = skillId;
-              metadata.skillName = skillName || null;
-            }
-
-            const task = await createScheduledTask(workspaceId, userId, {
+            // Immediate task (no scheduling)
+            const task = await createTask(
+              workspaceId,
+              userId,
               title,
-              description,
-              schedule,
-              channel: targetChannelName,
-              channelId: targetChannelId,
-              maxOccurrences: maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null,
-              endDate: endDate ? new Date(endDate) : null,
-              startDate: startDate ? new Date(startDate) : null,
-              parentTaskId: parentTaskId ?? null,
-              metadata: Object.keys(metadata).length > 0 ? metadata : null,
-            });
-
-            let limitInfo = "";
-            const maxOcc = maxOccurrences && maxOccurrences > 0 ? maxOccurrences : null;
-            if (maxOcc) {
-              limitInfo = maxOcc === 1 ? " (one-time)" : ` (${maxOcc} times max)`;
-            } else if (endDate) {
-              limitInfo = ` (until ${endDate})`;
+              undefined,
+              {
+                ...(parentTaskId && { parentTaskId }),
+              },
+            );
+            if (description) {
+              const page = await findOrCreateTaskPage(
+                workspaceId,
+                userId,
+                task.id,
+              );
+              await setPageContentFromHtml(page.id, description);
             }
-
-            const nextRunInfo = task.nextRunAt
-              ? ` Next: ${task.nextRunAt.toLocaleString()}`
-              : "";
-
-            return `Created scheduled task: "${title}" (ID: ${task.id}).${nextRunInfo}${limitInfo}`;
+            // Move to target status — Todo triggers auto-execution, Blocked gates on approval
+            if (initialStatus && initialStatus !== "Backlog") {
+              await changeTaskStatus(
+                task.id,
+                initialStatus as any,
+                workspaceId,
+                userId,
+              );
+            }
+            const label = parentTaskId ? "subtask" : "task";
+            const targetStatus = initialStatus ?? "Backlog";
+            const statusNote =
+              targetStatus === "Todo"
+                ? "Started in background."
+                : targetStatus === "Blocked"
+                  ? "Blocked — send_message to user explaining what's needed."
+                  : "Added to Backlog.";
+            logger.info(
+              `Task ${task.id} created (${targetStatus})${parentTaskId ? ` subtask of ${parentTaskId}` : ""}`,
+            );
+            return `${label} created: "${title}" (ID: ${task.id}). ${statusNote} Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
+          } catch (error) {
+            logger.error("Failed to create task", { error });
+            return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
-
-          // Immediate task (no scheduling)
-          const task = await createTask(workspaceId, userId, title, undefined, {
-            ...(parentTaskId && { parentTaskId }),
-          });
-          if (description) {
-            const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
-            await setPageContentFromHtml(page.id, description);
-          }
-          const label = parentTaskId ? "subtask" : "task";
-          logger.info(`Task ${task.id} created in Backlog${parentTaskId ? ` (subtask of ${parentTaskId})` : ""}`);
-          return `${label} created: "${title}" (ID: ${task.id}). Added to Backlog. Link: ${env.APP_ORIGIN}/home/tasks?taskId=${task.id}`;
-        } catch (error) {
-          logger.error("Failed to create task", { error });
-          return `Failed to create task: ${error instanceof Error ? error.message : "Unknown error"}`;
-        }
-      },
+        },
+      }),
     }),
 
     get_task: tool({
@@ -287,7 +349,9 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
           ];
 
           if (task.schedule) {
-            parts.push(`Schedule: ${formatScheduleForUser(task.schedule, timezone)}`);
+            parts.push(
+              `Schedule: ${formatScheduleForUser(task.schedule, timezone)}`,
+            );
           }
           if (task.nextRunAt) {
             parts.push(`Next run: ${task.nextRunAt.toLocaleString()}`);
@@ -303,50 +367,27 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
       },
     }),
 
-    ...(!isBackgroundExecution && {
-      run_task_in_background: tool({
-        description: `Hand off a task to a background agent for execution. Use when the user wants something done that takes time — coding tasks, research, browser operations, anything that runs for minutes.
-
-The background agent will handle the work autonomously. It will create scheduled tasks internally if it starts a long-running session (coding, browser) — you do NOT need to create one yourself.
-
-After calling this:
-- Tell the user the task is running in the background
-- Say you'll notify them when it's done
-- Do NOT call take_action for the same task
-- Do NOT create a scheduled task yourself
-
-When the user asks to work on something, search existing tasks first (search_tasks). If a matching Backlog/Todo task exists, use its ID here instead of creating a new one.`,
-        inputSchema: z.object({
-          taskId: z.string().describe("The task ID to run in the background"),
-        }),
-        execute: async ({ taskId }) => {
-          try {
-            const task = await getTaskById(taskId);
-            if (!task) return `Task ${taskId} not found.`;
-            await changeTaskStatus(taskId, "InProgress", workspaceId, userId);
-            await enqueueTask({ taskId, workspaceId, userId });
-            logger.info(`Task ${taskId} started in background`);
-            return `Task "${task.title}" (taskId: ${taskId}) is now running in the background. The background agent will handle it. Tell the user it's running and you'll ping them when done.`;
-          } catch (error) {
-            logger.error("Failed to start background task", { error });
-            return `Failed to start task: ${error instanceof Error ? error.message : "Unknown error"}`;
-          }
-        },
-      }),
-    }),
-
     list_tasks: tool({
       description:
         "List tasks with their current status. Use type filter to see scheduled/recurring tasks separately.",
       inputSchema: z.object({
         status: z
-          .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed", "Recurring"])
+          .enum([
+            "Backlog",
+            "Todo",
+            "InProgress",
+            "Blocked",
+            "Completed",
+            "Recurring",
+          ])
           .optional()
           .describe("Filter by status. Omit to list all."),
         type: z
           .enum(["all", "immediate", "scheduled", "recurring"])
           .optional()
-          .describe("Filter by type: 'immediate' (no schedule), 'scheduled' (one-time), 'recurring'. Default: all."),
+          .describe(
+            "Filter by type: 'immediate' (no schedule), 'scheduled' (one-time), 'recurring'. Default: all.",
+          ),
       }),
       execute: async ({ status, type }) => {
         try {
@@ -356,15 +397,24 @@ When the user asks to work on something, search existing tasks first (search_tas
             // Get active scheduled tasks
             tasks = await getScheduledTasksForWorkspace(workspaceId);
             if (type === "recurring") {
-              tasks = tasks.filter((t) => t.schedule && (!t.maxOccurrences || t.maxOccurrences > 1));
+              tasks = tasks.filter(
+                (t) =>
+                  t.schedule && (!t.maxOccurrences || t.maxOccurrences > 1),
+              );
             } else {
               tasks = tasks.filter((t) => t.maxOccurrences === 1);
             }
           } else if (type === "immediate") {
-            tasks = await getTasks(workspaceId, status as TaskStatus | undefined);
+            tasks = await getTasks(
+              workspaceId,
+              status as TaskStatus | undefined,
+            );
             tasks = tasks.filter((t) => !t.schedule && !t.nextRunAt);
           } else {
-            tasks = await getTasks(workspaceId, status as TaskStatus | undefined);
+            tasks = await getTasks(
+              workspaceId,
+              status as TaskStatus | undefined,
+            );
           }
 
           if (tasks.length === 0) return "No tasks found.";
@@ -376,10 +426,12 @@ When the user asks to work on something, search existing tasks first (search_tas
                 const html = await getPageContentAsHtml(t.pageId);
                 if (html) info += ` — ${html.substring(0, 100)}`;
               }
-              if (t.schedule) info += ` (${formatScheduleForUser(t.schedule, timezone)})`;
+              if (t.schedule)
+                info += ` (${formatScheduleForUser(t.schedule, timezone)})`;
               if (t.maxOccurrences) {
                 const remaining = t.maxOccurrences - t.occurrenceCount;
-                info += remaining === 1 ? " [one-time]" : ` [${remaining} left]`;
+                info +=
+                  remaining === 1 ? " [one-time]" : ` [${remaining} left]`;
               }
               info += ` (ID: ${t.id})`;
               return info;
@@ -432,25 +484,39 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         status: z
           .enum(["Backlog", "InProgress", "Blocked", "Completed", "Recurring"])
           .optional()
-          .describe("New status. To move a Blocked task to Todo, use unblock_task instead."),
+          .describe(
+            "New status. To move a Blocked task to Todo, use unblock_task instead.",
+          ),
         title: z.string().optional().describe("Updated title"),
         description: z
           .string()
           .optional()
-          .describe("Task description as HTML — appended to existing content by default"),
+          .describe(
+            "Task description as HTML — appended to existing content by default",
+          ),
         replaceDescription: z
           .boolean()
           .optional()
-          .describe("Set true to replace the entire description instead of appending. Default: false (append)."),
+          .describe(
+            "Set true to replace the entire description instead of appending. Default: false (append).",
+          ),
         schedule: z.string().optional().describe("New RRule schedule string"),
-        isActive: z.boolean().optional().describe("Set to false to pause, true to resume"),
-        maxOccurrences: z.number().optional().describe("Update max occurrences limit"),
+        isActive: z
+          .boolean()
+          .optional()
+          .describe("Set to false to pause, true to resume"),
+        maxOccurrences: z
+          .number()
+          .optional()
+          .describe("Update max occurrences limit"),
         endDate: z.string().optional().describe("Update end date (ISO 8601)"),
         channel: channelSchema,
         newParentId: z
           .string()
           .optional()
-          .describe("Move task under a new parent (UUID). Deletes and recreates the task with a new displayId. Omit if not reparenting."),
+          .describe(
+            "Move task under a new parent (UUID). Deletes and recreates the task with a new displayId. Omit if not reparenting.",
+          ),
       }),
       execute: async ({
         taskId,
@@ -468,12 +534,23 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         try {
           // Reparent: delete + recreate under new parent (requires a non-null string)
           if (typeof newParentId === "string") {
-            const newTask = await reparentTask(taskId, newParentId, workspaceId, userId);
+            const newTask = await reparentTask(
+              taskId,
+              newParentId,
+              workspaceId,
+              userId,
+            );
             return `Task reparented. New ID: ${newTask.id}, displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
           }
 
           // Handle scheduling updates
-          if (schedule !== undefined || isActive !== undefined || maxOccurrences !== undefined || endDate !== undefined || updateChannel !== undefined) {
+          if (
+            schedule !== undefined ||
+            isActive !== undefined ||
+            maxOccurrences !== undefined ||
+            endDate !== undefined ||
+            updateChannel !== undefined
+          ) {
             await updateScheduledTask(taskId, workspaceId, {
               title,
               description,
@@ -491,7 +568,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           }
 
           if (status) {
-            await changeTaskStatus(taskId, status as TaskStatus, workspaceId, userId);
+            await changeTaskStatus(
+              taskId,
+              status as TaskStatus,
+              workspaceId,
+              userId,
+            );
           }
 
           const parts = [];
@@ -499,7 +581,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           if (title) parts.push(`title updated`);
           if (description !== undefined) parts.push(`description updated`);
           if (schedule) parts.push(`schedule updated`);
-          if (isActive !== undefined) parts.push(isActive ? "resumed" : "paused");
+          if (isActive !== undefined)
+            parts.push(isActive ? "resumed" : "paused");
           return `Task ${taskId} updated: ${parts.join(", ")}.`;
         } catch (error) {
           return `Failed to update task: ${error instanceof Error ? error.message : "Unknown error"}`;
@@ -511,19 +594,30 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       description: `Move a Blocked task to Todo so the agent can pick it up. Requires a reason explaining why the block is resolved. The reason is appended to the task description. Only works on tasks currently in Blocked status.`,
       inputSchema: z.object({
         taskId: z.string().describe("The ID of the blocked task"),
-        reason: z.string().describe("Why the block is resolved — this is appended to the task description"),
+        reason: z
+          .string()
+          .describe(
+            "Why the block is resolved — this is appended to the task description",
+          ),
       }),
       execute: async ({ taskId, reason }) => {
         try {
           const task = await getTaskById(taskId);
           if (!task) return `Task ${taskId} not found.`;
-          if (task.status !== "Blocked") return `Task is not Blocked (current status: ${task.status}). Only Blocked tasks can be unblocked.`;
+          if (task.status !== "Blocked")
+            return `Task is not Blocked (current status: ${task.status}). Only Blocked tasks can be unblocked.`;
 
           // Append reason to description
-          const page = task.pageId ? await prisma.page.findUnique({ where: { id: task.pageId } }) : null;
-          const existingHtml = page ? (await getPageContentAsHtml(task.pageId!)) ?? "" : "";
+          const page = task.pageId
+            ? await prisma.page.findUnique({ where: { id: task.pageId } })
+            : null;
+          const existingHtml = page
+            ? ((await getPageContentAsHtml(task.pageId!)) ?? "")
+            : "";
           const reasonHtml = `<p><strong>Unblocked:</strong> ${reason}</p>`;
-          const mergedHtml = existingHtml ? `${existingHtml}${reasonHtml}` : reasonHtml;
+          const mergedHtml = existingHtml
+            ? `${existingHtml}${reasonHtml}`
+            : reasonHtml;
 
           if (task.pageId) {
             await setPageContentFromHtml(task.pageId, mergedHtml);
@@ -548,7 +642,9 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           await deleteTask(taskId, workspaceId);
           return "Task deleted.";
         } catch (error) {
-          return error instanceof Error ? error.message : "Failed to delete task";
+          return error instanceof Error
+            ? error.message
+            : "Failed to delete task";
         }
       },
     }),
@@ -581,7 +677,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           return tree
             .map((t, i) => {
               const indent = "  ".repeat(i);
-              const label = i === tree.length - 1 ? "(current)" : i === 0 ? "(root)" : "(parent)";
+              const label =
+                i === tree.length - 1
+                  ? "(current)"
+                  : i === 0
+                    ? "(root)"
+                    : "(parent)";
               return `${indent}${t.displayId ?? t.id} — ${t.title} ${label}`;
             })
             .join("\n");
@@ -614,10 +715,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               if (!task)
                 return `Task ${currentTaskId} not found. Cannot reschedule.`;
 
-              const metadata =
-                (task.metadata as Record<string, unknown>) ?? {};
-              const rescheduleCount =
-                (metadata.rescheduleCount as number) ?? 0;
+              const metadata = (task.metadata as Record<string, unknown>) ?? {};
+              const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
 
               if (rescheduleCount >= 6) {
                 return "Max reschedules reached (6). Mark the task as Blocked and notify the user that the session timed out.";
@@ -627,7 +726,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               await prisma.task.update({
                 where: { id: currentTaskId },
                 data: {
-                  metadata: { ...metadata, rescheduleCount: rescheduleCount + 1 },
+                  metadata: {
+                    ...metadata,
+                    rescheduleCount: rescheduleCount + 1,
+                  },
                 },
               });
 

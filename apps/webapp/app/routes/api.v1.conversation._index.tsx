@@ -70,7 +70,7 @@ const { loader, action } = createHybridActionApiRoute(
     authorization: { action: "conversation" },
     corsStrategy: "all",
   },
-  async ({ body, authentication }) => {
+  async ({ body, authentication, request }) => {
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -177,21 +177,26 @@ const { loader, action } = createHybridActionApiRoute(
       modelConfig,
     });
 
+    const subagents: Record<string, Agent> = {
+      gather_context: gatherContextAgent,
+      take_action: takeActionAgent,
+    };
+    for (const gw of gatewayAgents) {
+      subagents[gw.id] = gw;
+    }
+
     const agent = new Agent({
       id: "core-agent",
       name: "Core Agent",
       model: modelConfig as any,
       instructions: systemPrompt,
-      agents: {
-        gather_context: gatherContextAgent,
-        take_action: takeActionAgent,
-      },
+      agents: subagents,
     });
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
     takeActionAgent.__registerMastra(mastra);
     for (const gw of gatewayAgents) {
-      gw.__registerMastra(mastra);
+      (gw as any).__registerMastra(mastra);
     }
 
     const saveParams = {
@@ -210,8 +215,11 @@ const { loader, action } = createHybridActionApiRoute(
       },
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV5.UI");
+        console.log(convertedMessages);
         await saveConversationResult({
-          parts: convertedMessages[convertedMessages.length - 1].parts,
+          parts: convertedMessages[convertedMessages.length - 1]
+            ? convertedMessages[convertedMessages.length - 1].parts
+            : [],
           ...saveParams,
         });
         return messages;
@@ -313,6 +321,11 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     await updateConversationStatus(body.id, "running");
 
+    // When the client aborts (user clicks Stop), update status so it doesn't stay "running"
+    request.signal.addEventListener("abort", () => {
+      updateConversationStatus(body.id, "completed").catch(() => {});
+    });
+
     const stream = await agent.stream(modelMessages, {
       toolsets: { core: tools },
       runId: body.id,
@@ -320,6 +333,7 @@ const { loader, action } = createHybridActionApiRoute(
       toolCallConcurrency: 1,
       outputProcessors: [messageHistoryProcessor as OutputProcessor],
       modelSettings: { temperature: 0.5 },
+      abortSignal: request.signal,
     });
 
     return streamToUIResponse(stream);

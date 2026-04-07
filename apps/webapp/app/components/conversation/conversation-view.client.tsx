@@ -107,6 +107,7 @@ export function ConversationView({
     addToolApprovalResponse,
   } = useChat({
     id: conversationId,
+    resume: true,
     onFinish: () => {
       toolArgOverridesRef.current = {};
       pendingApprovalRequestsRef.current = [];

@@ -4,7 +4,7 @@ import {
 } from "@remix-run/server-runtime";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 
-import { Outlet, useLoaderData } from "@remix-run/react";
+import { Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { clearRedirectTo, commitSession } from "~/services/redirectTo.server";
 
@@ -146,6 +146,8 @@ function HomeInner({
   integrationAccountMap: Record<string, string>;
 }) {
   const { panelRef, closeChat, onPanelCollapse, chatOpen } = useChatPanel()!;
+  const location = useLocation();
+  const isConversationRoute = location.pathname.startsWith("/home/conversation");
 
   return (
     <SidebarProvider
@@ -182,9 +184,9 @@ function HomeInner({
             </div>
           </ResizablePanel>
 
-          <ResizableHandle withHandle />
+          {!isConversationRoute && <ResizableHandle withHandle />}
 
-          {chatOpen && (
+          {chatOpen && !isConversationRoute && (
             <ResizablePanel
               ref={panelRef}
               defaultSize="50%"

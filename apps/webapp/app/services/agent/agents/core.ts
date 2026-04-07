@@ -28,6 +28,7 @@ import { getTaskTools } from "../tools/task-tools";
 import { getMessageTools } from "../tools/message-tools";
 import { getSleepTool } from "../tools/utils-tools";
 import { createOrchestratorAgent } from "./orchestrator";
+import { createGatewayAgents } from "./gateway";
 import { getWorkspaceChannelContext } from "~/services/channel.server";
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,8 @@ interface CreateCoreToolsParams {
   userEmail?: string;
   /** User phone for send_message WhatsApp delivery */
   userPhoneNumber?: string;
+  /** Executor tools — used to resolve gateways and call tools in non-websocket contexts */
+  executorTools?: OrchestratorTools;
 }
 
 interface CreateCoreAgentsParams {
@@ -103,6 +106,7 @@ export async function createCoreTools(
     triggerChannelId,
     userEmail,
     userPhoneNumber,
+    executorTools,
   } = params;
 
   const tools: Record<string, Tool> = {};
@@ -217,32 +221,42 @@ export async function createCoreAgents(
     modelConfig,
   } = params;
 
-  const [reader, writer] = await Promise.all([
-    createOrchestratorAgent(
-      userId,
-      workspaceId,
-      "read",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-    createOrchestratorAgent(
-      userId,
-      workspaceId,
-      "write",
-      timezone,
-      source,
-      persona,
-      skills,
-      executorTools,
-      interactive,
-      modelConfig,
-    ),
-  ]);
+  // Load gateways for subagent creation
+  const gateways = executorTools
+    ? await executorTools.getGateways(workspaceId)
+    : await prisma.gateway.findMany({
+        where: { workspaceId, status: "CONNECTED" },
+        select: { id: true, name: true, status: true, description: true },
+      });
+
+  const [reader, writer, { agentList: gatewayAgents }] =
+    await Promise.all([
+      createOrchestratorAgent(
+        userId,
+        workspaceId,
+        "read",
+        timezone,
+        source,
+        persona,
+        skills,
+        executorTools,
+        interactive,
+        modelConfig,
+      ),
+      createOrchestratorAgent(
+        userId,
+        workspaceId,
+        "write",
+        timezone,
+        source,
+        persona,
+        skills,
+        executorTools,
+        interactive,
+        modelConfig,
+      ),
+      createGatewayAgents(gateways, executorTools, interactive, modelConfig),
+    ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)
   const channel =
@@ -271,6 +285,6 @@ export async function createCoreAgents(
     gatherContextAgent: reader.agent,
     takeActionAgent: writer.agent,
     thinkAgent,
-    gatewayAgents: reader.gatewayAgents,
+    gatewayAgents,
   };
 }

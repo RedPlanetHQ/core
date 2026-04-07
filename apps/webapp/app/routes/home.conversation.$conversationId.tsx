@@ -4,7 +4,7 @@ import {
 } from "@remix-run/server-runtime";
 import { Memory } from "@mastra/memory";
 
-import { useParams, useNavigate, useFetcher } from "@remix-run/react";
+import { useParams } from "@remix-run/react";
 
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
@@ -16,22 +16,9 @@ import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
-import { PageHeader } from "~/components/common/page-header";
-import { Trash2, EyeOff } from "lucide-react";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "~/components/ui/alert-dialog";
-import React from "react";
 
 import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
-// Example loader accessing params
+
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
   const workspaceId = (await getWorkspaceId(
@@ -87,16 +74,7 @@ export async function action({ params, request }: ActionFunctionArgs) {
 export default function SingleConversation() {
   const { conversation, integrationAccountMap, integrationFrontendMap, models } =
     useTypedLoaderData<typeof loader>();
-  const navigate = useNavigate();
   const { conversationId } = useParams();
-  const fetcher = useFetcher();
-  const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
-
-  React.useEffect(() => {
-    if (fetcher.data && (fetcher.data as any).deleted) {
-      navigate("/home/conversation");
-    }
-  }, [fetcher.data]);
 
   if (typeof window === "undefined") return null;
 
@@ -109,69 +87,16 @@ export default function SingleConversation() {
   }
 
   return (
-    <>
-      <PageHeader
-        title="Conversation"
-        breadcrumbs={[
-          { label: "Conversations", href: "/home/conversation" },
-          {
-            label: (
-              <span className="flex items-center gap-1.5">
-                {conversation.title
-                  ? conversation.title.replace(/<[^>]*>/g, "").trim() ||
-                    "Untitled"
-                  : "Untitled"}
-                {conversation.incognito && (
-                  <EyeOff
-                    size={13}
-                    className="text-muted-foreground shrink-0"
-                  />
-                )}
-              </span>
-            ),
-          },
-        ]}
-        actions={[
-          {
-            label: "Delete",
-            icon: <Trash2 size={14} />,
-            onClick: () => setShowDeleteDialog(true),
-            variant: "secondary",
-          },
-        ]}
+    <div className="relative flex h-[calc(100vh)] w-full flex-col items-center justify-center overflow-auto md:h-[calc(100vh_-_56px)]">
+      <ConversationView
+        conversationId={conversationId as string}
+        history={conversation.ConversationHistory}
+        integrationAccountMap={integrationAccountMap}
+        integrationFrontendMap={integrationFrontendMap}
+        conversationStatus={conversation.status}
+        models={models}
+        autoRegenerate
       />
-
-      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Delete conversation</AlertDialogTitle>
-            <AlertDialogDescription>
-              This will permanently delete this conversation. This action cannot
-              be undone.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => fetcher.submit({}, { method: "DELETE" })}
-            >
-              Delete
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      <div className="relative flex h-[calc(100vh)] w-full flex-col items-center justify-center overflow-auto md:h-[calc(100vh_-_56px)]">
-        <ConversationView
-          conversationId={conversationId as string}
-          history={conversation.ConversationHistory}
-          integrationAccountMap={integrationAccountMap}
-          integrationFrontendMap={integrationFrontendMap}
-          conversationStatus={conversation.status}
-          models={models}
-          autoRegenerate
-        />
-      </div>
-    </>
+    </div>
   );
 }

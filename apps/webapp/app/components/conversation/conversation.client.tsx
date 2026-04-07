@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { Form, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
-import { EyeOff } from "lucide-react";
+import { ArrowUp, EyeOff } from "lucide-react";
 import { Document } from "@tiptap/extension-document";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
@@ -12,7 +12,6 @@ import Placeholder from "@tiptap/extension-placeholder";
 import { useEditor, EditorContent } from "@tiptap/react";
 import { Button } from "../ui";
 import { ExampleUseCases } from "./example-usecases";
-import { ArrowUp } from "lucide-react";
 import { RiGithubFill } from "@remixicon/react";
 import { Gmail } from "../icons/gmail";
 import { LinearIcon } from "../icons/linear-icon";
@@ -271,7 +270,7 @@ export const ConversationNew = ({
                 disabled={!content.trim()}
               >
                 <ArrowUp size={16} />
-                Chat
+                {incognito ? "Incognito Chat" : "Chat"}
               </Button>
             </div>
           </div>

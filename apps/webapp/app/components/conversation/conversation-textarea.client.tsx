@@ -39,6 +39,7 @@ interface ConversationTextareaProps {
   selectedModelId?: string;
   onModelChange?: (modelId: string) => void;
   needsApproval?: boolean;
+  leftActions?: React.ReactNode;
 }
 
 export function ConversationTextarea({
@@ -53,6 +54,7 @@ export function ConversationTextarea({
   models,
   selectedModelId,
   onModelChange,
+  leftActions,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const submit = useSubmit();

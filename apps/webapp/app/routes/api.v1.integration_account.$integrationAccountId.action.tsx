@@ -20,7 +20,7 @@ const SearchParamsSchema = z.object({
 
 const ActionBodySchema = z.object({
   action: z.string().min(1, "Action name is required"),
-  parameters: z.record(z.any()).optional().default({}),
+  parameters: z.record(z.string(), z.any()).optional().default({}),
 });
 
 /**

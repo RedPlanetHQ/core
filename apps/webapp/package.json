@@ -67,7 +67,7 @@
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-tooltip": "^1.2.7",
     "@redplanethq/ai": "1.2.1",
-    "@redplanethq/sdk": "0.1.13",
+    "@redplanethq/sdk": "0.1.19",
     "@redplanethq/ui": "^2.1.0",
     "@remix-run/express": "2.17.4",
     "@remix-run/node": "2.17.4",
