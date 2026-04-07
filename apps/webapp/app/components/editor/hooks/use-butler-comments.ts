@@ -42,10 +42,14 @@ export function useButlerComments(
         });
         if (alreadyTagged) continue;
 
-        // Find the block node whose text content matches selectedText
+        // Find the paragraph node whose text content matches selectedText.
+        // Only target paragraph nodes — they are the ones with conversationId
+        // attribute (via ConversationParagraph). For list items, the text lives
+        // inside taskItem > paragraph, so we must skip wrapper nodes like
+        // taskList/taskItem/bulletList/listItem to reach the inner paragraph.
         editor!.state.doc.descendants((node, pos) => {
-          if (alreadyTagged) return false;
-          if (!node.isBlock) return;
+          if (alreadyTagged) return;
+          if (node.type.name !== "paragraph") return;
           const nodeText = node.textContent.trim();
           const commentText = comment.selectedText.trim();
           if (nodeText !== commentText && !nodeText.includes(commentText)) return;
