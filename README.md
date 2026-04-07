@@ -64,27 +64,20 @@ https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
 
 Every AI agent you use today is smart. And every single one forgets you the moment the conversation ends.
 
-**Chat is the wrong interface for a personal assistant.**
+**Chat is the wrong interface.**
+Your EA doesn't wait for you to open a chat window and explain yourself. The right interface is a scratchpad, a shared page you and Butler both have open. You write, Butler picks up what's meant for it and works in the background. When you need to go deep, tasks and direct chat are there. But the default should be the scratchpad.
 
-Your EA doesn't wait for you to open a chat window and explain what you need. They already know. They're already on it. Chat forces you to context-switch, explain yourself, and stay in the loop on things that shouldn't need your attention.
-
-We think the right interface is a scratchpad, a shared page, like a note you and a colleague both have open at the same time. You write what's on your mind: tasks, thoughts, half-formed ideas. Butler reads it alongside you, picks up what's meant for it, works in the background, and updates you when something needs your attention or a job is done. No prompting required. No workflow to configure. Just a page you both work on, in harmony, simultaneously, like a good working relationship.
-
-When you need to go deep on something specific, that's what tasks and direct chat are for. But the default shouldn't be chat. It should be the scratchpad.
-
-**Your AI doesn't actually know you.**
-
-Every agent starts fresh. No preferences, no past decisions, no team context, no patterns. So it can't act proactively, because proactivity requires context that accumulates over time. Without persistent memory, agents are reactive tools waiting for your next prompt.
+**Your AI doesn't know you.**
+Every agent starts fresh. No preferences, no past decisions, no patterns. Without persistent memory, agents can't act proactively — they just wait for your next prompt.
 
 **You are the bottleneck.**
-
-Right now you are the glue. You gather the GitHub issue, read the Slack thread, check the error logs, paste it all into Claude Code, wait for output, review it, kick off the next step. That's not delegating, that's operating as an agent yourself. Every workflow starts with you. Every session depends on you explaining things from scratch. CORE is built to break that loop.
+You gather the issue, read the thread, check the logs, paste it into Claude Code, wait, review, kick off the next step. Every workflow starts with you. CORE is built to break that loop.
 
 ---
 
 ## Butler in action
 
-**You finish a meeting and close your laptop.** By the time you check your phone, Butler has already read the transcript, extracted the follow-ups, created the tasks, and drafted the emails you owe people. You open the scratchpad, everything is there. You review, hit send on two, edit one. Done in four minutes. The meeting actually produced something.
+**You finish a meeting and close your laptop.** By the time you check your phone, Butler has already read the transcript, extracted the follow-ups, created the tasks, and drafted the emails you owe people. You open the scratchpad, review, and hit send. The meeting actually produced something.
 
 **You write one line in the scratchpad.** `[ ] fix the checkout bug from issue #312`. Butler pulls the GitHub issue, searches memory for past decisions on that service, checks Sentry for the error trace, and spins up a Claude Code session with everything loaded. You go back to building. You come back to a PR.
 
@@ -92,9 +85,7 @@ Right now you are the glue. You gather the GitHub issue, read the Slack thread, 
 
 **You're running three agent sessions and losing track.** CORE is the orchestrator. Each session gets the right context from memory. CORE tracks what's running, what's blocked, what's done, and reports back. You stop context-switching. You stay in flow.
 
-**At 2 AM, a Sentry alert fires.** CORE has seen you handle these before: check the deployment diff, read the error trace, assign to whoever last touched that file. It does exactly that. Spins up a Claude Code session, investigates, creates the issue, assigns the right engineer. You wake up to: *"Handled. Issue #847, assigned to Harshith."* You didn't ask for any of this.
-
-> Every interaction makes CORE smarter. It learns your patterns, your codebase, your team structure, your communication style. It knows when to ask for approval and when to just handle it.
+**At 2 AM, a Sentry alert fires.** CORE has seen you handle these before. It checks the deployment diff, reads the error trace, assigns the right engineer. You wake up to: *"Handled. Issue #847, assigned to Harshith."* You didn't ask for any of this.
 
 ---
 
@@ -106,7 +97,7 @@ Right now you are the glue. You gather the GitHub issue, read the Slack thread, 
 | ❌ Meetings end. Follow-ups, tasks, and draft emails sit in your head until you manually do them. | ✅ Butler reads the transcript, extracts follow-ups, creates tasks, and drafts replies. You review, not produce. |
 | ❌ You are the bottleneck. Every agent session starts with you gathering context and explaining from scratch. | ✅ Write it in the scratchpad. Butler picks it up, loads the context, runs the session, reports back. |
 | ❌ You have an idea at midnight. Find the repo, open a terminal, set up context, babysit the agent. | ✅ Message CORE on WhatsApp: *"migrate the auth service to Postgres."* Come back to a PR. |
-| ❌ Your chat history is a graveyard. Decisions, preferences, and context die with every session. | ✅ Every conversation feeds a knowledge graph. Facts are classified (preference, decision, goal, directive) and connected over time. |
+| ❌ Your chat history is a graveyard. Decisions, preferences, and context die with every session. | ✅ Every conversation feeds a temporal knowledge graph — facts classified, connected, and updated over time. |
 | ❌ Different agents, different contexts, no shared understanding of who you are. | ✅ One brain. WhatsApp, Slack, email, Claude Code, Cursor: same memory, same butler. |
 
 ---
@@ -116,7 +107,7 @@ Right now you are the glue. You gather the GitHub issue, read the Slack thread, 
 | | |
 |---|---|
 | **Not a chatbot.** | Your butler has a name, a memory, and a job. Chat is for going deep on a specific task, not the default interaction. The scratchpad is. |
-| **Not a RAG wrapper.** | Memory isn't "embed chunks and search." It's a temporal knowledge graph where facts are classified, connected, and updated over time. It knows *when* you decided something and *why*. |
+| **Not a RAG wrapper.** | Memory is a temporal knowledge graph — facts classified, connected, and updated over time, with *when* and *why* attached. |
 | **Not a copilot plugin.** | Copilots assist when you're working. CORE works when you're not. It's proactive, not reactive. |
 | **Not a workflow builder.** | No drag-and-drop. You write what needs doing. Butler figures out the workflow. |
 
@@ -171,8 +162,6 @@ CORE achieves **88.24%** average accuracy on the [LoCoMo benchmark](https://gith
 ---
 
 ## Docs
-
-Want to understand how CORE works under the hood?
 
 - [**Memory**](https://docs.getcore.me/concepts/memory/overview) — Temporal knowledge graph, fact classification, intent-driven retrieval
 - [**Toolkit**](https://docs.getcore.me/concepts/toolkit) — 1000+ actions across 50+ apps via MCP
