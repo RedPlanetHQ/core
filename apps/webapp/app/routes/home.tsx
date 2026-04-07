@@ -32,6 +32,7 @@ import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { type LLMModel } from "~/components/conversation";
+import { tinykeys } from "tinykeys";
 
 export async function action({ request }: ActionFunctionArgs) {
   const { workspaceId } = await requireUser(request);
@@ -145,9 +146,31 @@ function HomeInner({
   models: LLMModel[];
   integrationAccountMap: Record<string, string>;
 }) {
-  const { panelRef, closeChat, onPanelCollapse, chatOpen } = useChatPanel()!;
+  const { panelRef, closeChat, onPanelCollapse, chatOpen, toggleChat } =
+    useChatPanel()!;
   const location = useLocation();
   const isConversationRoute = location.pathname.startsWith("/home/conversation");
+
+  React.useEffect(() => {
+    if (isConversationRoute) return;
+
+    const whenNotEditing = (fn: () => void) => (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+
+      fn();
+    };
+
+    return tinykeys(window, {
+      "$mod+j": whenNotEditing(() => toggleChat()),
+    });
+  }, [isConversationRoute, toggleChat]);
 
   return (
     <SidebarProvider

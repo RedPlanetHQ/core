@@ -110,7 +110,7 @@ export function AppSidebar({
         : {}),
     });
     return unsub;
-  }, [navigate]);
+  }, [navigate, widgetsEnabled]);
 
   return (
     <>

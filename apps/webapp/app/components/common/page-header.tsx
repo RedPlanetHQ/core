@@ -185,7 +185,12 @@ export function PageHeader({
               isActive={chatPanel.chatOpen}
               className="gap-1.5 rounded"
               onClick={chatPanel.toggleChat}
-              title={chatPanel.chatOpen ? "Close chat" : "Open chat"}
+              title={
+                chatPanel.chatOpen
+                  ? "Close chat (Cmd/Ctrl+J)"
+                  : "Open chat (Cmd/Ctrl+J)"
+              }
+              aria-label={chatPanel.chatOpen ? "Close chat" : "Open chat"}
             >
               <MessageSquare size={14} />
               <span className="hidden md:inline">Chat</span>

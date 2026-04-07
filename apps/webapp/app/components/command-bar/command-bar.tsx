@@ -50,12 +50,6 @@ const NAV_ITEMS = [
     icon: Library,
     shortcut: "G S",
   },
-  {
-    label: "Go to Automations",
-    url: "/home/agent/automations",
-    icon: Clock,
-    shortcut: "G A",
-  },
 ];
 
 interface CommandBarProps {
