@@ -15,7 +15,7 @@ const ExecuteGatewayBodySchema = z.union([
   z.object({
     mode: z.literal("tool"),
     toolName: z.string(),
-    params: z.record(z.unknown()),
+    params: z.record(z.string(), z.unknown()),
   }),
 ]);
 

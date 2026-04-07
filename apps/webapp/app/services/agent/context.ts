@@ -12,7 +12,6 @@ import { type Agent, convertMessages } from "@mastra/core/agent";
 
 import { getUserById } from "~/models/user.server";
 import { getPersonaDocumentForUser } from "~/services/document.server";
-import { writeFile } from "fs/promises";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
 import { getCorePrompt } from "~/services/agent/prompts";
 import { type ChannelType } from "~/services/agent/prompts/channel-formats";
@@ -32,7 +31,7 @@ import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
-import { getCommentTools } from "~/services/agent/tools/comment-tools";
+import { DirectOrchestratorTools } from "./executors";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -235,6 +234,15 @@ export async function buildAgentContext({
     )
     .join("\n");
 
+  const executor = executorTools ?? new DirectOrchestratorTools();
+  const gatewayInfos = await executor.getGateways(workspaceId);
+  const gatewaysList = gatewayInfos
+    .map(
+      (gw, index) =>
+        `${index + 1}. **${gw.name}** (agent: agent-gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}): ${gw.description}`,
+    )
+    .join("\n");
+
   systemPrompt += `
     <connected_integrations>
     Their connected tools (${connectedIntegrations.length} accounts):
@@ -247,7 +255,13 @@ export async function buildAgentContext({
     - Gateway operations (device tasks, coding, browser automation)
 
     Simply delegate to the orchestrator with a clear intent describing what's needed.
-    </connected_integrations>`;
+    </connected_integrations>
+    
+    <conneted_gateways>
+    their available gateways:
+    ${gatewaysList}
+    </conneted_gateways>
+    `;
 
   // Messaging channels context
   systemPrompt += `
@@ -338,9 +352,12 @@ RULES:
 - If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Backlog, move this task to Blocked, then send_message to the user explaining the plan and asking for approval
 - The system handles sequential subtask execution automatically — when unblocked, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
 - Mark task ${linkedTask.id} as Completed ONLY when the original intent is fully achieved
-- Mark task ${linkedTask.id} as Blocked when: errors, needs user input, needs approval, partial completion
-- When marking Blocked, always call update_task first to append what was attempted and what's needed
-- ALWAYS send_message to the user when completing or blocking — they may never check the dashboard
+- When Blocked (errors, needs user input, needs approval, partial completion):
+  1. call update_task(taskId: "${linkedTask.id}", status: "Blocked", description: "<append what was attempted and what's needed>")
+  2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is blocked: <reason>. <what's needed to unblock>"
+- When Completed:
+  1. call update_task(taskId: "${linkedTask.id}", status: "Completed")
+  2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 
 LONG-RUNNING SESSIONS (coding, browser):
@@ -353,10 +370,10 @@ WAIT PATTERN:
 1. Quick poll: sleep(60) then coding_read_session(sessionId) — repeat up to 3 times
 2. If still running after 3 polls: call reschedule_self(minutesFromNow=10)
 3. On re-execution (you'll see [reschedule:N/6] in your context): read sessionId from the task description, then coding_read_session
-   - completed → send_message with result, mark task Completed
+   - completed → update_task(status: "Completed") then send_message with result
    - running → reschedule_self(10) again (max 6 total reschedules)
-   - error → send_message with error, mark task Blocked
-4. After 6 reschedules (~60 min): mark task Blocked, notify user "coding session timed out"
+   - error → update_task(status: "Blocked") then send_message with error detail
+4. After 6 reschedules (~60 min): update_task(status: "Blocked") then send_message "coding session timed out"
 
 Do NOT create a scheduled task to check on sessions — use reschedule_self instead.
 </task_execution>`;
@@ -367,7 +384,7 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Blocked" ? `\nThis task is BLOCKED. If the user says to proceed, approves, or says the issue is resolved — call unblock_task(taskId: "${linkedTask.id}", reason: "<what changed>"). Do NOT create a new task.` : ""}
 </task_context>`;
     }
   }

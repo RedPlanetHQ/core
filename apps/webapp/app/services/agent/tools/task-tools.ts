@@ -424,7 +424,7 @@ When the user asks to work on something, search existing tasks first (search_tas
     }),
 
     update_task: tool({
-      description: `Update an existing task — change its status, title, description, scheduling, or parent. When updating the description, ALWAYS call get_task first to read the current description, then write a merged version that includes both old and new context. Never blindly replace — accumulate.
+      description: `Update an existing task — change its status, title, description, scheduling, or parent. Description updates are APPENDED to existing content — just pass the new context, no need to read or merge.
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
@@ -437,7 +437,11 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         description: z
           .string()
           .optional()
-          .describe("Task description as HTML — stored as page content"),
+          .describe("Task description as HTML — appended to existing content by default"),
+        replaceDescription: z
+          .boolean()
+          .optional()
+          .describe("Set true to replace the entire description instead of appending. Default: false (append)."),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z.boolean().optional().describe("Set to false to pause, true to resume"),
         maxOccurrences: z.number().optional().describe("Update max occurrences limit"),
@@ -445,15 +449,15 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         channel: channelSchema,
         newParentId: z
           .string()
-          .nullable()
           .optional()
-          .describe("Move task under a new parent (UUID). Pass null to make it a root task. Deletes and recreates the task with a new displayId."),
+          .describe("Move task under a new parent (UUID). Deletes and recreates the task with a new displayId. Omit if not reparenting."),
       }),
       execute: async ({
         taskId,
         status,
         title,
         description,
+        replaceDescription,
         schedule,
         isActive,
         maxOccurrences,
@@ -462,8 +466,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         newParentId,
       }) => {
         try {
-          // Reparent: delete + recreate under new parent
-          if (newParentId !== undefined) {
+          // Reparent: delete + recreate under new parent (requires a non-null string)
+          if (typeof newParentId === "string") {
             const newTask = await reparentTask(taskId, newParentId, workspaceId, userId);
             return `Task reparented. New ID: ${newTask.id}, displayId: ${(newTask as { displayId?: string | null }).displayId ?? "pending"}.`;
           }
@@ -483,7 +487,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             const data: { title?: string; description?: string } = {};
             if (title) data.title = title;
             if (description !== undefined) data.description = description;
-            await updateTask(taskId, data);
+            await updateTask(taskId, data, !replaceDescription);
           }
 
           if (status) {

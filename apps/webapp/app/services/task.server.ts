@@ -166,13 +166,21 @@ export async function searchTasks(
 export async function updateTask(
   id: string,
   data: { status?: TaskStatus; title?: string; description?: string },
+  /** When true, appends description to existing content instead of replacing */
+  append = false,
 ): Promise<Task> {
   const { description, ...prismaData } = data;
 
   const task = await prisma.task.update({ where: { id }, data: prismaData });
 
   if (description && task.pageId) {
-    await setPageContentFromHtml(task.pageId, description);
+    if (append) {
+      const existing = (await getPageContentAsHtml(task.pageId)) ?? "";
+      const merged = existing ? `${existing}${description}` : description;
+      await setPageContentFromHtml(task.pageId, merged);
+    } else {
+      await setPageContentFromHtml(task.pageId, description);
+    }
   }
 
   return task;
@@ -356,13 +364,9 @@ export async function reparentTask(
   if (!original) throw new Error(`Task ${taskId} not found`);
 
   // Capture page content before deletion
-  let pageContent: string | undefined;
+  let pageHtml: string | undefined;
   if (original.pageId) {
-    const page = await prisma.page.findUnique({
-      where: { id: original.pageId },
-      select: { content: true },
-    });
-    pageContent = (page?.content as string) ?? undefined;
+    pageHtml = (await getPageContentAsHtml(original.pageId)) ?? undefined;
   }
 
   // Delete original — cascades to subtasks
@@ -382,8 +386,8 @@ export async function reparentTask(
   );
 
   // Restore description if any
-  if (pageContent && newTask.pageId) {
-    await setPageContentFromHtml(newTask.pageId, pageContent);
+  if (pageHtml && newTask.pageId) {
+    await setPageContentFromHtml(newTask.pageId, pageHtml);
   }
 
   return newTask;

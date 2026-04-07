@@ -166,6 +166,16 @@ export async function processScheduledTask(
       return { success: true, shouldDeactivate: true };
     }
 
+    // Re-check task still exists before scheduling next (may have been deleted mid-execution)
+    const stillExists = await prisma.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, isActive: true },
+    });
+    if (!stillExists || !stillExists.isActive) {
+      logger.info(`Task ${taskId} was deleted/deactivated during execution, skipping next schedule`);
+      return { success: true };
+    }
+
     await scheduleNextTaskOccurrence(taskId);
     logger.info(`Successfully processed scheduled task ${taskId}`);
 
