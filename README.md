@@ -101,42 +101,18 @@ CORE investigated, created the issue, and assigned the right engineer. You woke 
 
 ---
 
-## Without CORE vs. With CORE
-
-| Without CORE | With CORE |
-|---|---|
-| ❌ You re-explain your project, stack, and preferences to every agent, every session. | ✅ CORE remembers everything: preferences, decisions, relationships, project context, and gets sharper over time. |
-| ❌ Meetings end. Follow-ups, tasks, and draft emails sit in your head until you manually do them. | ✅ Butler reads the transcript, extracts follow-ups, creates tasks, and drafts replies. You review, not produce. |
-| ❌ You are the bottleneck. Every agent session starts with you gathering context and explaining from scratch. | ✅ Write it in the scratchpad. Butler picks it up, loads the context, runs the session, reports back. |
-| ❌ You have an idea at midnight. Find the repo, open a terminal, set up context, babysit the agent. | ✅ Message CORE on WhatsApp: *"migrate the auth service to Postgres."* Come back to a PR. |
-| ❌ Your chat history is a graveyard. Decisions, preferences, and context die with every session. | ✅ Every conversation feeds a knowledge graph. Facts are classified (preference, decision, goal, directive) and connected over time. |
-| ❌ Different agents, different contexts, no shared understanding of who you are. | ✅ One brain. WhatsApp, Slack, email, Claude Code, Cursor: same memory, same butler. |
-
----
-
 ## What CORE is not
 
 | | |
 |---|---|
-| **Not a chatbot.** | Your butler has a name, a memory, and a job. Chat is for going deep on a specific task, not the default interaction. The scratchpad is. |
 | **Not a RAG wrapper.** | Memory isn't "embed chunks and search." It's a temporal knowledge graph where facts are classified, connected, and updated over time. It knows *when* you decided something and *why*. |
-| **Not a copilot plugin.** | Copilots assist when you're working. CORE works when you're not. It's proactive, not reactive. |
 | **Not a workflow builder.** | No drag-and-drop. You write what needs doing. Butler figures out the workflow. |
-
----
-
-## Who it's built for
-
-- ✅ You finish meetings and then spend an hour doing what the meeting produced. You want that handled before you close your laptop.
-- ✅ You want to stay in flow. Non-code work should get handled without you leaving the terminal.
-- ✅ You care about owning your AI: self-hosted, open source, your data never leaves your infra.
-- ✅ You want one brain across WhatsApp, Slack, email, and your coding tools, not five separate contexts.
 
 ---
 
 ## Quickstart
 
-Self-hosted, open source. No account required.
+Open source, self-hosted. Your data never leaves your infra.
 
 ```bash
 git clone https://github.com/RedPlanetHQ/core.git
