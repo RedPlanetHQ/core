@@ -83,27 +83,21 @@ Right now you are the glue. You gather the GitHub issue, read the Slack thread, 
 
 ## Butler in action
 
-### You finish a meeting and close your laptop.
+### You closed your laptop. Your meeting already produced results.
 
-By the time you check your phone, Butler has already read the transcript, extracted the follow-ups, created the tasks, and drafted the emails you owe people. You open the scratchpad, everything is there. You review, hit send on two, edit one. Done in four minutes. The meeting actually produced something.
+Butler read the transcript, extracted the follow-ups, created the tasks, and drafted the emails. You open the scratchpad and review. Done in four minutes.
 
-### You write one line in the scratchpad.
+### You wrote one line. You came back to a PR.
 
-`[ ] fix the checkout bug from issue #312`. Butler pulls the GitHub issue, searches memory for past decisions on that service, checks Sentry for the error trace, and spins up a Claude Code session with everything loaded. You go back to building. You come back to a PR.
+`[ ] fix the checkout bug from issue #312` — Butler loaded the context, spun up a Claude Code session, and handled it. You never left the terminal.
 
-### Your inbox is a decision queue, not a graveyard.
+### You opened your inbox to review, not to triage.
 
-Butler reads incoming emails, flags the ones that need you, drafts replies for the ones it knows how to handle, and creates tasks from the ones with action items. You open email to review, not to triage.
+Butler flagged what needs you, drafted replies for the rest, and turned action items into tasks. Your inbox is a decision queue now.
 
-### You're running three agent sessions and losing track.
+### You slept. The Sentry alert got handled.
 
-CORE is the orchestrator. Each session gets the right context from memory. CORE tracks what's running, what's blocked, what's done, and reports back. You stop context-switching. You stay in flow.
-
-### At 2 AM, a Sentry alert fires.
-
-CORE has seen you handle these before: check the deployment diff, read the error trace, assign to whoever last touched that file. It does exactly that. Spins up a Claude Code session, investigates, creates the issue, assigns the right engineer. You wake up to: *"Handled. Issue #847, assigned to Harshith."* You didn't ask for any of this.
-
-> Every interaction makes CORE smarter. It learns your patterns, your codebase, your team structure, your communication style. It knows when to ask for approval and when to just handle it.
+CORE investigated, created the issue, and assigned the right engineer. You woke up to: *"Handled. Issue #847, assigned to Harshith."*
 
 ---
 
