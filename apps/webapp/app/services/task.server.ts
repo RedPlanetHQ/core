@@ -52,7 +52,7 @@ export async function createTask(
   workspaceId: string,
   userId: string,
   title: string,
-  _description?: string,
+  description?: string,
   options?: { source?: string; status?: TaskStatus; parentTaskId?: string },
 ): Promise<Task> {
   // Enforce max depth: epic → task → sub-task (no further nesting).
@@ -83,7 +83,10 @@ export async function createTask(
     },
   });
 
-  await findOrCreateTaskPage(workspaceId, userId, task.id);
+  const page = await findOrCreateTaskPage(workspaceId, userId, task.id);
+  if (description) {
+    await setPageContentFromHtml(page.id, description);
+  }
 
   return prisma.task.findUniqueOrThrow({ where: { id: task.id } });
 }

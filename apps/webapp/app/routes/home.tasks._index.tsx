@@ -46,6 +46,7 @@ const ActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("create"),
     title: z.string().min(1),
     description: z.string().optional(),
+    status: z.enum(["Backlog", "Todo", "Completed"]).optional(),
   }),
   z.object({
     intent: z.literal("update-status"),
@@ -83,6 +84,7 @@ export async function action({ request }: ActionFunctionArgs) {
       user.id,
       parsed.data.title,
       parsed.data.description,
+      { status: parsed.data.status as TaskStatus | undefined },
     );
     return json({ task });
   }

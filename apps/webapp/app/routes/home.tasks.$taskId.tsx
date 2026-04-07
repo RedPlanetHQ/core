@@ -331,7 +331,10 @@ function TaskDetailLayout() {
       />
 
       {scheduleOpen && (
-        <ScheduleDialog onClose={() => setScheduleOpen(false)} taskId={task.id} />
+        <ScheduleDialog
+          onClose={() => setScheduleOpen(false)}
+          taskId={task.id}
+        />
       )}
     </div>
   );

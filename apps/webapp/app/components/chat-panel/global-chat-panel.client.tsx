@@ -11,12 +11,12 @@ import { ArrowUp, X, MessageSquare, Plus, Maximize2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   ConversationView,
-  LLMModel,
+  type LLMModel,
   SUGGESTED,
 } from "~/components/conversation";
 import { UserTypeEnum } from "@core/types";
 import { cn } from "~/lib/utils";
-import Avatar from "boring-avatars";
+
 import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 import { ConversationHistoryPopover } from "~/components/conversation/conversation-history-popover";
 

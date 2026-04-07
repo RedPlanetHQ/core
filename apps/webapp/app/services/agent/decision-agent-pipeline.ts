@@ -24,7 +24,6 @@ import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
 import { deductCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
-import { getWorkspaceChannelContext } from "../channel.server";
 
 // ============================================================================
 // Types
@@ -182,7 +181,12 @@ export async function runCASEPipeline(
               break;
             }
             case "update_state": {
-              await executeStateUpdate(action, trigger.userId, entityId, !!taskId);
+              await executeStateUpdate(
+                action,
+                trigger.userId,
+                entityId,
+                !!taskId,
+              );
               break;
             }
             default:
@@ -297,6 +301,8 @@ async function executeStateUpdate(
       where: { id: targetId },
       data: updateData,
     });
-    logger.info(`[silent] State updated for ${isTask ? "task" : "reminder"} ${targetId}`);
+    logger.info(
+      `[silent] State updated for ${isTask ? "task" : "reminder"} ${targetId}`,
+    );
   }
 }

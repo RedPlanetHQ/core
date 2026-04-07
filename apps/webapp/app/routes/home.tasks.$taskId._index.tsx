@@ -15,10 +15,16 @@ function TaskDetailInner() {
   const openedRunRef = useRef<string | null>(null);
 
   if (!data) return null;
-  const { task, integrationAccountMap, butlerName, taskPageId, collabToken, runs } = data;
+  const {
+    task,
+    integrationAccountMap,
+    butlerName,
+    taskPageId,
+    collabToken,
+    runs,
+  } = data;
 
   const latestRun = runs?.[0] ?? null;
-  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   // Set current task ID so the history popover filters to this task's runs
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -32,13 +38,13 @@ function TaskDetailInner() {
   // and only if a conversation already exists (don't create a new one)
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    const shouldOpen = isScheduled || task.status === "Blocked";
-    if (shouldOpen && latestRun?.id && openedRunRef.current !== latestRun.id) {
+    const shouldOpen = task.status === "Blocked";
+    if (latestRun?.id && openedRunRef.current !== latestRun.id) {
       openedRunRef.current = latestRun.id;
       openChatWithConversation(latestRun.id);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [latestRun?.id, isScheduled, task.status]);
+  }, [latestRun?.id, task.status]);
 
   const handleSave = (title: string) => {
     fetcher.submit(

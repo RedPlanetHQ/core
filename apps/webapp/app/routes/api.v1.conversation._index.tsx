@@ -215,7 +215,6 @@ const { loader, action } = createHybridActionApiRoute(
       },
       async processOutputResult({ messages }) {
         const convertedMessages = convertMessages(messages).to("AIV5.UI");
-        console.log(convertedMessages);
         await saveConversationResult({
           parts: convertedMessages[convertedMessages.length - 1]
             ? convertedMessages[convertedMessages.length - 1].parts

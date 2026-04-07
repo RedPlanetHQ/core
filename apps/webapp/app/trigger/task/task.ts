@@ -14,6 +14,7 @@ const taskQueueDef = queue({
 export const taskRunner = task({
   id: "task-runner",
   queue: taskQueueDef,
+  machine: "large-1x",
   maxDuration: 3600,
   run: async (payload: TaskPayload) => {
     return await processTask(payload);
@@ -27,7 +28,7 @@ const scheduledTaskQueueDef = queue({
 
 export const scheduledTaskRunner = task({
   id: "process-scheduled-task",
-  maxDuration: 600,
+  maxDuration: 3600,
   machine: "large-1x",
   queue: scheduledTaskQueueDef,
   run: async (payload: ScheduledTaskPayload) => {

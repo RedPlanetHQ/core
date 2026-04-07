@@ -117,6 +117,15 @@ function createGatewayTools(
             `GatewayAgent: Executing ${gatewayId}/${gatewayTool.name} with params: ${JSON.stringify(params)}`,
           );
 
+          // Handle sleep server-side instead of forwarding to gateway CLI
+          if (gatewayTool.name === "sleep") {
+            const { seconds } = params as { seconds: number; reason?: string };
+            await new Promise<void>((resolve) =>
+              setTimeout(resolve, seconds * 1000),
+            );
+            return JSON.stringify({ waited: seconds });
+          }
+
           const result = executorTools
             ? await executorTools.executeGatewayTool(
                 gatewayId,

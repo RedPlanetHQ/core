@@ -2,7 +2,7 @@ import { makeModelCall } from "~/lib/model.server";
 import { recurrencePrompt } from "~/services/agent/prompts/recurrence";
 import { updateScheduledTask } from "~/services/task.server";
 import { prisma } from "~/db.server";
-import { enqueueScheduledTask } from "~/lib/queue-adapter.server";
+import { enqueueScheduledTask, removeScheduledTask } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
 
 export interface RecurrenceResult {
