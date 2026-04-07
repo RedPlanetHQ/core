@@ -53,6 +53,7 @@ export function ConversationView({
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
   const prevMessageCountRef = useRef(history.length);
@@ -178,6 +179,20 @@ export function ConversationView({
     }
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const input = composerRef.current?.querySelector(
+        "[contenteditable='true']",
+      );
+
+      if (input instanceof HTMLElement) {
+        input.focus();
+      }
+    }, 150);
+
+    return () => window.clearTimeout(timer);
+  }, [conversationId]);
+
   // Remove spacer when user scrolls back to bottom
   useEffect(() => {
     const container = scrollContainerRef.current;
@@ -282,7 +297,7 @@ export function ConversationView({
       </div>
 
       <div className="flex w-full flex-col items-center">
-        <div className="w-full max-w-[90ch] px-4">
+        <div ref={composerRef} className="w-full max-w-[90ch] px-4">
           <ThinkingIndicator
             isLoading={status === "streaming" || status === "submitted"}
           />
