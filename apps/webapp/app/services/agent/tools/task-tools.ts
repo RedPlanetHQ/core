@@ -585,12 +585,18 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           }
 
           if (status) {
-            await changeTaskStatus(
-              taskId,
-              status as TaskStatus,
-              workspaceId,
-              userId,
-            );
+            const currentTask = await getTaskById(taskId);
+            const isScheduledOrRecurring =
+              currentTask?.schedule ||
+              (currentTask?.nextRunAt && currentTask?.isActive);
+            if (!isScheduledOrRecurring) {
+              await changeTaskStatus(
+                taskId,
+                status as TaskStatus,
+                workspaceId,
+                userId,
+              );
+            }
           }
 
           const parts = [];

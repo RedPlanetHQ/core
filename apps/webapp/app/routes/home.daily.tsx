@@ -47,6 +47,7 @@ export default function DailyRoute() {
               workspaceId={workspaceId}
               userId={userId}
               collabToken={collabToken}
+              todayPage={todayPage}
               blockedCount={blockedCount}
             />
           )}

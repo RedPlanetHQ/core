@@ -194,6 +194,7 @@ export function TaskDetailFull({
     (s) => s.status === "Completed",
   ).length;
   const totalSubtasks = task.subtasks.length;
+  const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   return (
     <>
@@ -215,11 +216,13 @@ export function TaskDetailFull({
               </span>
             )}
 
-            <TaskStatusDropdown
-              value={task.status as TaskStatus}
-              onChange={onStatusChange}
-              variant={TaskStatusDropdownVariant.LINK}
-            />
+            {!isScheduled && (
+              <TaskStatusDropdown
+                value={task.status as TaskStatus}
+                onChange={onStatusChange}
+                variant={TaskStatusDropdownVariant.LINK}
+              />
+            )}
 
             {totalSubtasks > 0 && (
               <SubIssuesPopover
