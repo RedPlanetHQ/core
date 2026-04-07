@@ -1,6 +1,8 @@
 import React, { useState, useCallback, useRef } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { format, addDays, isToday } from "date-fns";
+import { useNavigate } from "@remix-run/react";
+import { Button } from "~/components/ui";
 import { DayEditor } from "./day-editor.client";
 
 interface PageRecord {
@@ -14,6 +16,7 @@ interface DailyPageProps {
   userId: string;
   collabToken: string;
   todayPage?: PageRecord;
+  blockedCount?: number;
 }
 
 // Days before and after today in the initial array
@@ -33,17 +36,20 @@ function DaySection({
   butlerName,
   collabToken,
   prefetchedPage,
+  blockedCount,
 }: {
   date: Date;
   butlerName: string;
   collabToken: string;
   prefetchedPage?: PageRecord;
+  blockedCount?: number;
 }) {
   const [page, setPage] = React.useState<PageRecord | null>(
     prefetchedPage ?? null,
   );
   const [loading, setLoading] = React.useState(!prefetchedPage);
   const today = isToday(date);
+  const navigate = useNavigate();
 
   React.useEffect(() => {
     if (prefetchedPage) return;
@@ -59,7 +65,7 @@ function DaySection({
 
   return (
     <div className={`mb-8 ${today ? "min-h-[60vh]" : "min-h-[120px]"}`}>
-      <div className="mb-3 flex items-center gap-2">
+      <div className="mb-3 flex items-center gap-3">
         <h2
           className={`text-2xl font-medium ${
             today ? "text-foreground" : "text-muted-foreground"
@@ -68,6 +74,23 @@ function DaySection({
           {format(date, "EEE, MMMM do, yyyy")}
           {today && <span className="text-primary ml-2">•</span>}
         </h2>
+        {today && blockedCount != null && blockedCount > 0 && (
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => {
+              const saved = localStorage.getItem("userSettings");
+              const parsed = saved ? JSON.parse(saved) : {};
+              localStorage.setItem(
+                "userSettings",
+                JSON.stringify({ ...parsed, "task-view-filter": ["Blocked"] }),
+              );
+              navigate("/home/tasks");
+            }}
+          >
+            {blockedCount} blocked
+          </Button>
+        )}
       </div>
 
       {loading ? (
@@ -92,6 +115,7 @@ export function DailyPage({
   butlerName,
   collabToken,
   todayPage,
+  blockedCount,
 }: DailyPageProps) {
   const today = useRef(new Date()).current;
   // Callback ref: re-renders when the scroll element mounts, so Virtuoso
@@ -151,6 +175,7 @@ export function DailyPage({
                     butlerName={butlerName}
                     collabToken={collabToken}
                     prefetchedPage={isToday(date) ? todayPage : undefined}
+                    blockedCount={isToday(date) ? blockedCount : undefined}
                   />
                 </div>
               );

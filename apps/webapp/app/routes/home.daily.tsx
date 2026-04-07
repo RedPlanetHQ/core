@@ -7,16 +7,16 @@ import { DailyPage } from "~/components/daily/daily-page.client";
 import { PageHeader } from "~/components/common/page-header";
 import { generateCollabToken } from "~/services/collab-token.server";
 import { findOrCreateDailyPage } from "~/services/page.server";
+import { getTasks } from "~/services/task.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);
   const workspace = await requireWorkpace(request);
 
-  const todayPage = await findOrCreateDailyPage(
-    workspace?.id ?? "",
-    user.id,
-    new Date(),
-  );
+  const [todayPage, blockedTasks] = await Promise.all([
+    findOrCreateDailyPage(workspace?.id ?? "", user.id, new Date()),
+    getTasks(workspace?.id ?? "", { status: "Blocked", isScheduled: false }),
+  ]);
 
   return typedjson({
     butlerName: workspace?.name ?? "butler",
@@ -24,11 +24,12 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     userId: user.id,
     collabToken: generateCollabToken(workspace?.id ?? "", user.id),
     todayPage: { id: todayPage.id, date: todayPage.date?.toISOString() ?? "" },
+    blockedCount: blockedTasks.length,
   });
 };
 
 export default function DailyRoute() {
-  const { butlerName, workspaceId, userId, collabToken, todayPage } =
+  const { butlerName, workspaceId, userId, collabToken, todayPage, blockedCount } =
     useLoaderData<typeof loader>() as any;
 
   return (
@@ -46,6 +47,7 @@ export default function DailyRoute() {
               workspaceId={workspaceId}
               userId={userId}
               collabToken={collabToken}
+              blockedCount={blockedCount}
             />
           )}
         </ClientOnly>

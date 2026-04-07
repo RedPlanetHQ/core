@@ -17,7 +17,10 @@ import {
   getTaskTree,
   reparentTask,
 } from "~/services/task.server";
-import { findOrCreateTaskPage } from "~/services/page.server";
+import {
+  findOrCreateTaskPage,
+  findOrCreateDailyPage,
+} from "~/services/page.server";
 import {
   setPageContentFromHtml,
   getPageContentAsHtml,
@@ -30,6 +33,7 @@ import {
   getRecurrenceIntervalMinutes,
   formatScheduleForUser,
 } from "~/utils/schedule-utils";
+import { textSimilarity } from "~/lib/utils";
 import type { MessageChannel } from "~/services/agent/types";
 import type { ChannelRecord } from "~/services/channel.server";
 import { prisma } from "~/db.server";
@@ -561,6 +565,19 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               endDate: endDate ? new Date(endDate) : undefined,
             });
           } else if (title || description !== undefined) {
+            if (replaceDescription && description !== undefined) {
+              const existingTask = await getTaskById(taskId);
+              if (existingTask?.pageId) {
+                const existingHtml =
+                  (await getPageContentAsHtml(existingTask.pageId)) ?? "";
+                if (existingHtml.length > 0) {
+                  const similarity = textSimilarity(existingHtml, description);
+                  if (similarity < 0.3) {
+                    return `Description update rejected: the new content is too different from the existing description (similarity: ${Math.round(similarity * 100)}%). Prefer appending new context instead — omit replaceDescription and pass only the new content to append.`;
+                  }
+                }
+              }
+            }
             const data: { title?: string; description?: string } = {};
             if (title) data.title = title;
             if (description !== undefined) data.description = description;
@@ -802,6 +819,79 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         } catch (error) {
           logger.error("Failed to update timezone", { error });
           return "failed to update timezone";
+        }
+      },
+    }),
+
+    get_scratchpad: tool({
+      description: `Read the user's daily scratchpad page for a given date. Returns the page content as HTML. Use this to see what the user has written on their scratchpad for a specific day.`,
+      inputSchema: z.object({
+        date: z
+          .string()
+          .describe(
+            "The date to read the scratchpad for, in YYYY-MM-DD format. Defaults to today if omitted.",
+          )
+          .optional(),
+      }),
+      execute: async ({ date }) => {
+        try {
+          const target = date ? new Date(date) : new Date();
+          target.setUTCHours(0, 0, 0, 0);
+
+          const page = await prisma.page.findUnique({
+            where: {
+              workspaceId_userId_date: {
+                workspaceId,
+                userId,
+                date: target,
+              },
+            },
+            select: { id: true },
+          });
+
+          if (!page) {
+            return `No scratchpad page found for ${target.toISOString().slice(0, 10)}.`;
+          }
+
+          const content = await getPageContentAsHtml(page.id);
+          if (!content) {
+            return `Scratchpad for ${target.toISOString().slice(0, 10)} is empty.`;
+          }
+
+          return `Scratchpad (${target.toISOString().slice(0, 10)}):\n${content}`;
+        } catch (error) {
+          return `Failed to read scratchpad: ${error instanceof Error ? error.message : "Unknown error"}`;
+        }
+      },
+    }),
+
+    update_scratchpad: tool({
+      description: `Append content to the user's daily scratchpad page for a given date. Creates the page if it doesn't exist. Content is always appended — never replaces existing content.`,
+      inputSchema: z.object({
+        content: z
+          .string()
+          .describe("HTML content to append to the scratchpad page"),
+        date: z
+          .string()
+          .optional()
+          .describe(
+            "The date to write to, in YYYY-MM-DD format. Defaults to today if omitted.",
+          ),
+      }),
+      execute: async ({ content, date }) => {
+        try {
+          const target = date ? new Date(date) : new Date();
+          target.setUTCHours(0, 0, 0, 0);
+
+          const page = await findOrCreateDailyPage(workspaceId, userId, target);
+
+          const existing = (await getPageContentAsHtml(page.id)) ?? "";
+          const merged = existing ? `${existing}${content}` : content;
+          await setPageContentFromHtml(page.id, merged);
+
+          return `Scratchpad updated for ${target.toISOString().slice(0, 10)}.`;
+        } catch (error) {
+          return `Failed to update scratchpad: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
       },
     }),
