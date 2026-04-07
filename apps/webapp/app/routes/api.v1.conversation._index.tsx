@@ -70,7 +70,7 @@ const { loader, action } = createHybridActionApiRoute(
     authorization: { action: "conversation" },
     corsStrategy: "all",
   },
-  async ({ body, authentication }) => {
+  async ({ body, authentication, request }) => {
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -313,6 +313,8 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     await updateConversationStatus(body.id, "running");
 
+    const abortSignal = request.signal;
+
     const stream = await agent.stream(modelMessages, {
       toolsets: { core: tools },
       runId: body.id,
@@ -320,7 +322,16 @@ const { loader, action } = createHybridActionApiRoute(
       toolCallConcurrency: 1,
       outputProcessors: [messageHistoryProcessor as OutputProcessor],
       modelSettings: { temperature: 0.5 },
+      abortSignal,
     });
+
+    abortSignal.addEventListener(
+      "abort",
+      () => {
+        updateConversationStatus(body.id, "completed").catch(() => {});
+      },
+      { once: true },
+    );
 
     return streamToUIResponse(stream);
   },
