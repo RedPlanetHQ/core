@@ -52,9 +52,10 @@
 
 ---
 
-> Today you are Claude Code. You gather the context, kick off the session, babysit the output.
-> Soon you will just describe the outcome, and Butler runs Claude Code, pulls from your apps,
-> coordinates the agents. You stop being the orchestrator. Butler becomes the harness.
+> Today you use specialized agents like Claude Code and Cursor. You gather the context, kick off
+> the session, babysit the output. Soon you will just describe the outcome, and Butler runs
+> Claude Code, pulls from your apps, coordinates the agents. You stop being the orchestrator.
+> Butler becomes the harness.
 
 https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
 
@@ -68,11 +69,7 @@ Every AI agent you use today is smart. And every single one forgets you the mome
 
 Your EA doesn't wait for you to open a chat window and explain what you need. They already know. They're already on it. Chat forces you to context-switch, explain yourself, and stay in the loop on things that shouldn't need your attention.
 
-We think the right interface is a scratchpad, a shared page, like a note you and a colleague both have open at the same time. You write what's on your mind: tasks, thoughts, half-formed ideas. Butler reads it alongside you, picks up what's meant for it, works in the background, and updates you when something needs your attention or a job is done.
-
-No prompting required. No workflow to configure. Just a page you both work on, in harmony, simultaneously, like a good working relationship.
-
-When you need to go deep on something specific, that's what tasks and direct chat are for. But the default shouldn't be chat. It should be the scratchpad.
+We think the right interface is a scratchpad, a shared page, like a note you and a colleague both have open at the same time. You write what's on your mind: tasks, thoughts, half-formed ideas. Butler reads it alongside you, picks up what's meant for it, works in the background, and updates you when something needs your attention or a job is done. No prompting required, no workflow to configure. When you need to go deep on something specific, tasks and direct chat are there, but the default should be the scratchpad.
 
 ### Your AI doesn't actually know you.
 
