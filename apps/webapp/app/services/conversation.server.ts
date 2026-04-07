@@ -465,6 +465,21 @@ export type TaskRun = {
   lastMessage: { text: string; userType: string } | null;
 };
 
+function extractTextFromParts(parts: unknown): string {
+  if (!Array.isArray(parts)) return "";
+  for (const part of parts) {
+    if (
+      part &&
+      typeof part === "object" &&
+      part.type === "text" &&
+      typeof part.text === "string"
+    ) {
+      return part.text;
+    }
+  }
+  return "";
+}
+
 export async function getTaskRuns(
   taskId: string,
   workspaceId: string,
@@ -476,7 +491,7 @@ export async function getTaskRuns(
       ConversationHistory: {
         orderBy: { createdAt: "desc" },
         take: 1,
-        select: { message: true, userType: true },
+        select: { parts: true, userType: true },
       },
     },
   });
@@ -487,7 +502,7 @@ export async function getTaskRuns(
     status: c.status,
     lastMessage: c.ConversationHistory[0]
       ? {
-          text: c.ConversationHistory[0].message ?? "",
+          text: extractTextFromParts(c.ConversationHistory[0].parts),
           userType: c.ConversationHistory[0].userType,
         }
       : null,

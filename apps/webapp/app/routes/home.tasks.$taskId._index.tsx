@@ -39,7 +39,7 @@ function TaskDetailInner() {
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     const shouldOpen = task.status === "Blocked";
-    if (latestRun?.id && openedRunRef.current !== latestRun.id) {
+    if (shouldOpen && latestRun?.id && openedRunRef.current !== latestRun.id) {
       openedRunRef.current = latestRun.id;
       openChatWithConversation(latestRun.id);
     }
