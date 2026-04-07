@@ -140,7 +140,7 @@ export function AppSidebar({
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarHeader>
-        <SidebarContent>
+        <SidebarContent className="mt-2">
           <NavMain
             items={data.navMain.filter(
               (item) => item.url !== "/home/overview" || widgetsEnabled,

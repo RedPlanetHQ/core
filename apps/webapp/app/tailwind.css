@@ -652,7 +652,7 @@
     }
 
     pre {
-      @apply bg-grayAlpha-100 text-foreground w-fit rounded-md p-4;
+      @apply bg-grayAlpha-50 text-foreground w-fit rounded-md p-4;
       margin: 1.5rem 0;
 
       code {

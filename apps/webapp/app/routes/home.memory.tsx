@@ -14,7 +14,7 @@ export default function MemoryLayout() {
 
   const tabs = [
     {
-      label: "Memory graph",
+      label: "Graph",
       value: "graph",
       isActive: isGraph,
       onClick: () => navigate("/home/memory/graph"),

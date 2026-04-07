@@ -29,7 +29,7 @@ export interface ButlerActivitySummary {
   pausedIndefinitely: boolean;
 }
 
-const ACTIVE_WINDOW_MS = 30 * 60 * 1000;
+const ACTIVE_WINDOW_MS = 10 * 60 * 1000;
 const SNOOZE_CACHE_TTL_MS = 15 * 1000;
 
 const snoozeCache = new Map<
@@ -118,7 +118,9 @@ function readSnoozeMeta(metadata: unknown) {
   return {
     pausedIndefinitely: meta.butlerPausedIndefinitely === true,
     snoozedUntil:
-      typeof meta.butlerSnoozedUntil === "string" ? meta.butlerSnoozedUntil : null,
+      typeof meta.butlerSnoozedUntil === "string"
+        ? meta.butlerSnoozedUntil
+        : null,
   };
 }
 
@@ -186,9 +188,8 @@ export async function setButlerSnoozeState(
 }
 
 export async function isButlerSnoozed(workspaceId: string) {
-  const { pausedIndefinitely, snoozedUntil } = await getButlerSnoozeState(
-    workspaceId,
-  );
+  const { pausedIndefinitely, snoozedUntil } =
+    await getButlerSnoozeState(workspaceId);
 
   if (pausedIndefinitely) return true;
   if (!snoozedUntil) return false;
@@ -244,25 +245,30 @@ export async function getButlerActivity(
 
   const taskMap = new Map(linkedTasks.map((task) => [task.id, task]));
 
-  const items: ButlerActivityItem[] = runningConversations.map((conversation) => {
-    const linkedTask = conversation.asyncJobId
-      ? taskMap.get(conversation.asyncJobId)
-      : null;
-    const description = describeConversationActivity(
-      conversation.source,
-      conversation.title,
-      linkedTask?.title,
-    );
+  const items: ButlerActivityItem[] = runningConversations.map(
+    (conversation) => {
+      const linkedTask = conversation.asyncJobId
+        ? taskMap.get(conversation.asyncJobId)
+        : null;
+      const description = describeConversationActivity(
+        conversation.source,
+        conversation.title,
+        linkedTask?.title,
+      );
 
-    return {
-      id: linkedTask ? `task-${linkedTask.id}` : `conversation-${conversation.id}`,
-      type: linkedTask ? "task" : "conversation",
-      title: linkedTask?.title ?? conversation.title ?? "Working on a request",
-      state: description.state,
-      sentence: description.sentence,
-      updatedAt: conversation.updatedAt.toISOString(),
-    };
-  });
+      return {
+        id: linkedTask
+          ? `task-${linkedTask.id}`
+          : `conversation-${conversation.id}`,
+        type: linkedTask ? "task" : "conversation",
+        title:
+          linkedTask?.title ?? conversation.title ?? "Working on a request",
+        state: description.state,
+        sentence: description.sentence,
+        updatedAt: conversation.updatedAt.toISOString(),
+      };
+    },
+  );
 
   const isPaused =
     snoozeState.pausedIndefinitely ||
@@ -280,7 +286,7 @@ export async function getButlerActivity(
           hour: "numeric",
           minute: "2-digit",
         })}`
-    : primary?.sentence ?? "Watching for page edits";
+    : (primary?.sentence ?? "Watching for page edits");
 
   return {
     active: items.length > 0,
