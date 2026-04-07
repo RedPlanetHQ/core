@@ -70,7 +70,7 @@ const { loader, action } = createHybridActionApiRoute(
     authorization: { action: "conversation" },
     corsStrategy: "all",
   },
-  async ({ body, authentication }) => {
+  async ({ body, authentication, request }) => {
     const conversation = await getConversationAndHistory(
       body.id,
       authentication.userId,
@@ -320,6 +320,7 @@ const { loader, action } = createHybridActionApiRoute(
       toolCallConcurrency: 1,
       outputProcessors: [messageHistoryProcessor as OutputProcessor],
       modelSettings: { temperature: 0.5 },
+      abortSignal: request.signal,
     });
 
     return streamToUIResponse(stream);

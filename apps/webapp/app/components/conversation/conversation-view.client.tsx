@@ -151,6 +151,15 @@ export function ConversationView({
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
 
+  const handleStop = useCallback(() => {
+    stop();
+    fetch(`/api/v1/conversation/${conversationId}/stop`, {
+      method: "POST",
+    }).catch(() => {
+      // best-effort — the abort signal on the stream handles the critical path
+    });
+  }, [stop, conversationId]);
+
   useEffect(() => {
     if (autoRegenerate && history.length === 1) {
       regenerate();
@@ -290,7 +299,7 @@ export function ConversationView({
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
             }}
-            stop={() => stop()}
+            stop={handleStop}
             models={modelsProp}
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
