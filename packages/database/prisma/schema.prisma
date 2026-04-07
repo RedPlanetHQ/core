@@ -1137,8 +1137,7 @@ model Page {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   userId      String
 
-  task           Task?           @relation("TaskPage", fields: [taskId], references: [id])
-  taskId         String?
+  task   Task? @relation("TaskPage")
   butlerComments ButlerComment[]
 
   @@unique([workspaceId, userId, date])
