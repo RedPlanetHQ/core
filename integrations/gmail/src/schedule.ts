@@ -1,5 +1,4 @@
-import { getGmailClient, parseEmailContent, formatEmailSender, GmailConfig } from './utils';
-import TurndownService from 'turndown';
+import { getGmailClient, formatEmailSender, GmailConfig } from './utils';
 
 interface GmailSettings {
   lastSyncTime?: string;
@@ -7,20 +6,42 @@ interface GmailSettings {
   emailAddress?: string;
 }
 
-interface GmailActivityCreateParams {
-  text: string;
+/**
+ * Metadata-only representation of a scheduled Gmail email activity.
+ * No message body or raw content is included.
+ */
+export interface GmailScheduledEmailMetadata {
+  id: string;
+  threadId: string;
+  subject: string;
+  from: string;
+  to: string;
+  date: string;
+  internalDate: number;
+  snippet: string;
+  labelIds: string[];
   sourceURL: string;
 }
 
 /**
- * Creates an activity message based on Gmail data
+ * Creates an activity message containing only email metadata (no body/text)
  */
-function createActivityMessage(params: GmailActivityCreateParams) {
+function createActivityMessage(metadata: GmailScheduledEmailMetadata) {
+  const lines = [
+    `**From:** ${metadata.from}`,
+    `**To:** ${metadata.to}`,
+    `**Subject:** ${metadata.subject}`,
+    `**Date:** ${metadata.date}`,
+    `**Thread ID:** ${metadata.threadId}`,
+    `**Labels:** ${metadata.labelIds.join(', ')}`,
+    `**Snippet:** ${metadata.snippet}`,
+  ];
+
   return {
     type: 'activity',
     data: {
-      text: params.text,
-      sourceURL: params.sourceURL,
+      text: lines.join('\n'),
+      sourceURL: metadata.sourceURL,
     },
   };
 }
@@ -33,35 +54,6 @@ function getDefaultSyncTime(): string {
 }
 
 /**
- * Initialize Turndown service for HTML to Markdown conversion
- */
-const turndownService = new TurndownService({
-  headingStyle: 'atx',
-  codeBlockStyle: 'fenced',
-  emDelimiter: '*',
-});
-
-// Remove style, script, and other unwanted elements
-turndownService.remove(['style', 'script', 'noscript', 'iframe', 'object', 'embed']);
-
-/**
- * Clean and convert email content to markdown
- */
-function cleanEmailContent(htmlContent: string, textContent: string): string {
-  // If we have HTML content, convert it to markdown
-  if (htmlContent) {
-    const markdown = turndownService.turndown(htmlContent);
-    return markdown
-      .replace(/\n\n+/g, '\n\n') // Remove excessive line breaks
-      .replace(/\s+/g, ' ') // Normalize spaces
-      .trim();
-  }
-
-  // Otherwise use text content and clean it
-  return textContent.replace(/\r/g, '').replace(/\n\n+/g, '\n\n').replace(/\s+/g, ' ').trim();
-}
-
-/**
  * Convert ISO date to Gmail query format as Unix timestamp in seconds
  * Using timestamp is more precise than YYYY/MM/DD which truncates to day
  */
@@ -70,7 +62,7 @@ function toGmailTimestamp(isoDate: string): number {
 }
 
 /**
- * Fetch and process received emails
+ * Fetch and process received emails — metadata only, no body parts
  */
 async function processReceivedEmails(
   gmail: any,
@@ -82,7 +74,6 @@ async function processReceivedEmails(
   let lastEmailTime = 0;
 
   try {
-    // Query for important received emails after lastSyncTime
     const response = await gmail.users.messages.list({
       userId: 'me',
       q: `in:inbox is:important after:${afterTimestamp}`,
@@ -93,21 +84,26 @@ async function processReceivedEmails(
 
     for (const message of messages) {
       try {
-        // Get full message details
-        const fullMessage = await gmail.users.messages.get({
+        // Fetch metadata only — no body parts returned
+        const metaMessage = await gmail.users.messages.get({
           userId: 'me',
           id: message.id,
-          format: 'full',
+          format: 'metadata',
+          metadataHeaders: ['From', 'To', 'Subject', 'Date'],
         });
 
-        const headers = fullMessage.data.payload.headers;
+        const headers = metaMessage.data.payload?.headers ?? [];
         const from = headers.find((h: any) => h.name === 'From')?.value || 'Unknown';
+        const to = headers.find((h: any) => h.name === 'To')?.value || emailAddress;
         const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-        const internalDate = parseInt(fullMessage.data.internalDate || '0');
+        const internalDate = parseInt(metaMessage.data.internalDate || '0');
+        const snippet = metaMessage.data.snippet || '';
+        const labelIds: string[] = metaMessage.data.labelIds || [];
+        const threadId: string = metaMessage.data.threadId || '';
 
-        // Skip emails that are at or before lastSyncTime (Gmail after: is not precise at second level)
+        // Skip emails at or before lastSyncTime
         const lastSyncMs = new Date(lastSyncTime).getTime();
         if (internalDate <= lastSyncMs) {
           continue;
@@ -118,38 +114,23 @@ async function processReceivedEmails(
         }
 
         const sender = formatEmailSender(from);
-        const threadId = fullMessage.data.threadId || '';
-        const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
-
-        // Clean and convert email content to markdown
-        const cleanedContent = cleanEmailContent(htmlContent, textContent);
-
-        // Skip if no meaningful content
-        if (!cleanedContent || cleanedContent.length < 10) {
-          continue;
-        }
-
-        // Create Gmail web URL
         const sourceURL = `https://mail.google.com/mail/u/0/#inbox/${message.id}`;
 
-        // Format activity text with full email content as markdown
-        const text = `## 📧 Email from ${sender}
+        const metadata: GmailScheduledEmailMetadata = {
+          id: message.id,
+          threadId,
+          subject,
+          from,
+          to,
+          date,
+          internalDate,
+          snippet,
+          labelIds,
+          sourceURL,
+        };
 
-**From:** ${from}
-**Subject:** ${subject}
-**Date:** ${date}
-**Thread ID:** ${threadId}
-
-${cleanedContent}`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL,
-          })
-        );
+        activities.push(createActivityMessage(metadata));
       } catch (error) {
-        // Silently ignore errors for individual messages
         console.error('Error processing received email:', error);
       }
     }
@@ -161,7 +142,7 @@ ${cleanedContent}`;
 }
 
 /**
- * Fetch and process sent emails
+ * Fetch and process sent emails — metadata only, no body parts
  */
 async function processSentEmails(
   gmail: any,
@@ -173,7 +154,6 @@ async function processSentEmails(
   let lastEmailTime = 0;
 
   try {
-    // Query for sent emails after lastSyncTime
     const response = await gmail.users.messages.list({
       userId: 'me',
       q: `in:sent after:${afterTimestamp}`,
@@ -184,21 +164,25 @@ async function processSentEmails(
 
     for (const message of messages) {
       try {
-        // Get full message details
-        const fullMessage = await gmail.users.messages.get({
+        // Fetch metadata only — no body parts returned
+        const metaMessage = await gmail.users.messages.get({
           userId: 'me',
           id: message.id,
-          format: 'full',
+          format: 'metadata',
+          metadataHeaders: ['From', 'To', 'Subject', 'Date'],
         });
 
-        const headers = fullMessage.data.payload.headers;
+        const headers = metaMessage.data.payload?.headers ?? [];
         const to = headers.find((h: any) => h.name === 'To')?.value || 'Unknown';
         const subject = headers.find((h: any) => h.name === 'Subject')?.value || '(No subject)';
         const date = headers.find((h: any) => h.name === 'Date')?.value || '';
 
-        const internalDate = parseInt(fullMessage.data.internalDate || '0');
+        const internalDate = parseInt(metaMessage.data.internalDate || '0');
+        const snippet = metaMessage.data.snippet || '';
+        const labelIds: string[] = metaMessage.data.labelIds || [];
+        const threadId: string = metaMessage.data.threadId || message.id;
 
-        // Skip emails that are at or before lastSyncTime
+        // Skip emails at or before lastSyncTime
         const lastSyncMs = new Date(lastSyncTime).getTime();
         if (internalDate <= lastSyncMs) {
           continue;
@@ -208,39 +192,23 @@ async function processSentEmails(
           lastEmailTime = internalDate;
         }
 
-        const threadId = fullMessage.data.threadId || message.id;
-        const { textContent, htmlContent } = parseEmailContent(fullMessage.data.payload);
-
-        // Clean and convert email content to markdown
-        const cleanedContent = cleanEmailContent(htmlContent, textContent);
-
-        // Skip if no meaningful content
-        if (!cleanedContent || cleanedContent.length < 10) {
-          continue;
-        }
-
-        // Create Gmail web URL
         const sourceURL = `https://mail.google.com/mail/u/0/#sent/${message.id}`;
 
-        // Format activity text with full email content as markdown
-        const text = `## 📤 Sent to ${to}
+        const metadata: GmailScheduledEmailMetadata = {
+          id: message.id,
+          threadId,
+          subject,
+          from: emailAddress,
+          to,
+          date,
+          internalDate,
+          snippet,
+          labelIds,
+          sourceURL,
+        };
 
-**From:** ${emailAddress}
-**To:** ${to}
-**Subject:** ${subject}
-**Date:** ${date}
-**Thread ID:** ${threadId}
-
-${cleanedContent}`;
-
-        activities.push(
-          createActivityMessage({
-            text,
-            sourceURL,
-          })
-        );
+        activities.push(createActivityMessage(metadata));
       } catch (error) {
-        // Silently ignore errors for individual messages
         console.error('Error processing sent email:', error);
       }
     }

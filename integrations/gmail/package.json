@@ -24,14 +24,14 @@
     "build:frontend": "tsup",
     "dev:frontend": "tsup --watch",
     "lint": "eslint --ext js,ts,tsx src/ --fix",
-    "prettier": "prettier --config .prettierrc --write ."
+    "prettier": "prettier --config .prettierrc --write .",
+    "test": "bun test src/schedule.test.ts"
   },
   "devDependencies": {
     "@types/react": "^19.2.13",
     "react": "^19.2.4",
     "tsup": "^8.0.1",
     "@types/nodemailer": "^6.4.17",
-    "@types/turndown": "^5.0.5",
     "@babel/preset-typescript": "^7.26.0",
     "@rollup/plugin-commonjs": "^28.0.1",
     "@rollup/plugin-json": "^6.1.0",
@@ -81,7 +81,6 @@
     "openai": "^4.0.0",
     "react-query": "^3.39.3",
     "@redplanethq/sdk": "0.1.18",
-    "turndown": "^7.2.0",
     "@redplanethq/ui": "2.1.4"
   }
 }
