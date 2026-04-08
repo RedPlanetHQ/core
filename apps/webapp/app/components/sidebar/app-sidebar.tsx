@@ -101,6 +101,7 @@ export function AppSidebar({
         e.preventDefault();
         setCommandBar(true);
       },
+      "g c": whenNotEditing(() => navigate("/home/conversation")),
       "g d": whenNotEditing(() => navigate("/home/daily")),
       "g t": whenNotEditing(() => navigate("/home/tasks")),
       "g m": whenNotEditing(() => navigate("/home/memory")),

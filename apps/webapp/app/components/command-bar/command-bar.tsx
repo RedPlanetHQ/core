@@ -8,6 +8,7 @@ import {
   Brain,
   Clock,
   Library,
+  MessagesSquare,
 } from "lucide-react";
 import {
   CommandDialog,
@@ -26,6 +27,12 @@ import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { Task } from "../icons/task";
 
 const NAV_ITEMS = [
+  {
+    label: "Go to Chats",
+    url: "/home/conversation",
+    icon: MessagesSquare,
+    shortcut: "G C",
+  },
   {
     label: "Go to Tasks",
     url: "/home/tasks",
