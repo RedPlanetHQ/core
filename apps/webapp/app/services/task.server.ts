@@ -667,7 +667,7 @@ export async function incrementTaskUnrespondedCount(
     where: { id: taskId },
     data: {
       unrespondedCount: { increment: 1 },
-      lastSentAt: new Date(),
+      lastRunAt: new Date(),
     },
   });
 }

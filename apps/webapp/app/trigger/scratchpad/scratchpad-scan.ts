@@ -12,6 +12,7 @@ const scratchpadQueue = queue({
 
 export const scratchpadScanTask = task({
   id: "scratchpad-scan",
+  machine: "medium-2x",
   maxDuration: 300,
   queue: scratchpadQueue,
   run: async (payload: ScratchpadScanPayload) => {
