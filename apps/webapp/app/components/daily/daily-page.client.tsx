@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from "react";
+import React, { useState, useCallback, useRef, useEffect } from "react";
 import { Virtuoso } from "react-virtuoso";
 import { format, addDays, isToday } from "date-fns";
 import { useNavigate } from "@remix-run/react";
@@ -64,7 +64,7 @@ function DaySection({
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={`mb-8 ${today ? "min-h-[60vh]" : "min-h-[120px]"}`}>
+    <div className={`mb-8 ${today ? "min-h-[60vh]" : ""}`}>
       <div className="mb-3 flex items-center gap-3">
         <h2
           className={`text-2xl font-medium ${
@@ -94,7 +94,7 @@ function DaySection({
       </div>
 
       {loading ? (
-        <div className="bg-muted/30 ml-0 h-4 w-32 animate-pulse rounded" />
+        <div className="min-h-[400px]" />
       ) : page ? (
         <DayEditor
           pageId={page.id}
@@ -123,12 +123,25 @@ export function DailyPage({
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
 
   const [dates, setDates] = useState<Date[]>(() => buildInitialDates(today));
+  // firstItemIndex tracks how many items have been prepended so Virtuoso
+  // can maintain scroll position without jumping when new items are added.
+  const [firstItemIndex, setFirstItemIndex] = useState(0);
 
   // today is always at index INITIAL_BEFORE in the initial array
   const todayIndex = INITIAL_BEFORE;
 
-  // Use a ref so the guard doesn't trigger re-renders
-  const initialScrollDoneRef = useRef(false);
+  const todayItemRef = useRef<HTMLDivElement | null>(null);
+
+  // After Virtuoso renders today's item, smoothly scroll it to the top of
+  // the scroll container using native scrollIntoView — reliable regardless
+  // of item heights above today.
+  useEffect(() => {
+    if (!scrollEl) return;
+    const id = setTimeout(() => {
+      todayItemRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 50);
+    return () => clearTimeout(id);
+  }, [scrollEl]);
 
   const prependDays = useCallback(() => {
     setDates((prev) => {
@@ -138,6 +151,7 @@ export function DailyPage({
       );
       return [...newDays, ...prev];
     });
+    setFirstItemIndex((fi) => fi - LOAD_MORE);
   }, []);
 
   const appendDays = useCallback(() => {
@@ -160,37 +174,32 @@ export function DailyPage({
           scrollbarColor: "var(--border) transparent",
         }}
       >
-        {/* Only mount Virtuoso once scrollEl is available so initialTopMostItemIndex
-            works correctly and customScrollParent is never undefined on first render */}
+        {/* Only mount Virtuoso once scrollEl is available so customScrollParent is never undefined on first render */}
         {scrollEl && (
           <Virtuoso
             customScrollParent={scrollEl}
-            totalCount={dates.length}
-            itemContent={(index) => {
-              const date = dates[index];
-              return (
-                <div className="px-2 pt-6">
-                  <DaySection
-                    date={date}
-                    butlerName={butlerName}
-                    collabToken={collabToken}
-                    prefetchedPage={isToday(date) ? todayPage : undefined}
-                    blockedCount={isToday(date) ? blockedCount : undefined}
-                  />
-                </div>
-              );
-            }}
-            increaseViewportBy={800}
-            overscan={LOAD_MORE}
+            firstItemIndex={firstItemIndex}
             initialTopMostItemIndex={todayIndex}
+            estimatedItemSize={500}
+            data={dates}
+            itemContent={(_index, date) => (
+              <div
+                className="px-2 pt-6"
+                ref={isToday(date) ? todayItemRef : undefined}
+              >
+                <DaySection
+                  date={date}
+                  butlerName={butlerName}
+                  collabToken={collabToken}
+                  prefetchedPage={isToday(date) ? todayPage : undefined}
+                  blockedCount={isToday(date) ? blockedCount : undefined}
+                />
+              </div>
+            )}
+            increaseViewportBy={2000}
+            overscan={LOAD_MORE}
+            startReached={prependDays}
             endReached={appendDays}
-            atTopStateChange={(atTop) => {
-              if (initialScrollDoneRef.current && atTop) {
-                prependDays();
-              } else {
-                initialScrollDoneRef.current = true;
-              }
-            }}
           />
         )}
       </div>

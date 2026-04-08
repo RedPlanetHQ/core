@@ -656,7 +656,7 @@ export async function cancelTaskJob(taskId: string): Promise<boolean> {
       });
 
       let cancelled = false;
-      for await (const run of pendingRuns) {
+      for await (const run of pendingRuns.data) {
         await runs.cancel(run.id);
         cancelled = true;
       }
