@@ -21,10 +21,7 @@ import {
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
-import {
-  createUIStreamWithApprovals,
-  saveConversationResult,
-} from "./mastra-stream.server";
+import { createUIStreamWithApprovals } from "./mastra-stream.server";
 import { getResumableStreamContext } from "~/bullmq/connection";
 import { deductCredits } from "~/trigger/utils/utils";
 import { addToQueue } from "~/lib/ingest.server";
@@ -210,15 +207,6 @@ export async function noStreamProcess(
         .filter((p: any) => p.type === "text")
         .map((p: any) => p.text)
         .join("");
-      await saveConversationResult({
-        parts: capturedParts,
-        conversationId: body.id,
-        incomingUserText: message,
-        incognito: conversation?.incognito ?? false,
-        userId,
-        workspaceId,
-        isBYOK,
-      });
       return messages;
     },
   };
@@ -273,32 +261,35 @@ export async function noStreamProcess(
     parts: assistantParts,
   };
 
-  await upsertConversationHistory(
-    assistantMessageId,
-    assistantParts,
-    body.id,
-    UserTypeEnum.Agent,
-    false,
-  );
-
-  if (agentResult.text) {
-    await addToQueue(
-      {
-        episodeBody: `<user>${message}</user><assistant>${agentResult.text}</assistant>`,
-        source: body.source,
-        referenceTime: new Date().toISOString(),
-        type: EpisodeType.CONVERSATION,
-        sessionId: body.id,
-      },
-      userId,
-      workspaceId,
+  try {
+    await upsertConversationHistory(
+      assistantMessageId,
+      assistantParts,
+      body.id,
+      UserTypeEnum.Agent,
+      false,
     );
-  }
 
-  if (!isBYOK) {
-    await deductCredits(workspaceId, userId, "chatMessage", 1);
+    if (agentResult.text) {
+      await addToQueue(
+        {
+          episodeBody: `<user>${message}</user><assistant>${agentResult.text}</assistant>`,
+          source: body.source,
+          referenceTime: new Date().toISOString(),
+          type: EpisodeType.CONVERSATION,
+          sessionId: body.id,
+        },
+        userId,
+        workspaceId,
+      );
+    }
+
+    if (!isBYOK) {
+      await deductCredits(workspaceId, userId, "chatMessage", 1);
+    }
+  } finally {
+    await updateConversationStatus(body.id, "completed");
   }
-  await updateConversationStatus(body.id, "completed");
 
   return { ...assistantMessage, text: agentResult.text };
 
