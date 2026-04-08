@@ -254,35 +254,17 @@ export const getPersonaForUser = async (workspaceId: string) => {
 };
 
 export const getPersonaDocumentForUser = async (workspaceId: string) => {
-  // Try to get v2 persona first
-  const v2Document = await prisma.document.findFirst({
+  // Persona is now the default "Persona" skill (skillType: "persona")
+  const personaSkill = await prisma.document.findFirst({
     where: {
-      title: "Persona",
-      source: "persona-v2",
       workspaceId,
-    },
-    orderBy: {
-      createdAt: "desc",
+      type: "skill",
+      title: "Persona",
+      deleted: null,
     },
   });
 
-  if (v2Document) {
-    return v2Document.content;
-  }
-
-  // Fall back to v1 persona if v2 doesn't exist
-  const v1Document = await prisma.document.findFirst({
-    where: {
-      title: "Persona",
-      source: "persona",
-      workspaceId,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
-
-  return v1Document?.content;
+  return personaSkill?.content ?? null;
 };
 
 export const updateDocumentContent = async (

@@ -19,6 +19,29 @@ export interface ListSkillsParams {
   cursor?: string;
 }
 
+const RESERVED_SKILL_TITLES = ["Persona", "Reading Guide", "Watch Rules"] as const;
+type SkillType = "persona" | "reading-guide" | "watch-rules";
+
+export const getDefaultSkill = async (
+  workspaceId: string,
+  skillType: SkillType,
+) => {
+  const titleMap: Record<SkillType, string> = {
+    "persona": "Persona",
+    "reading-guide": "Reading Guide",
+    "watch-rules": "Watch Rules",
+  };
+
+  return prisma.document.findFirst({
+    where: {
+      workspaceId,
+      type: "skill",
+      title: titleMap[skillType],
+      deleted: null,
+    },
+  });
+};
+
 export const listSkills = async (
   workspaceId: string,
   params: ListSkillsParams = {},
@@ -78,6 +101,18 @@ export const createSkill = async (
   userId: string,
   params: CreateSkillParams,
 ) => {
+  const isReserved = RESERVED_SKILL_TITLES.includes(params.title as any);
+  if (isReserved && params.source !== "system") {
+    throw new Error(`"${params.title}" is a reserved skill name and cannot be created by users.`);
+  }
+
+  // Strip skillType from non-system skills
+  let metadata = params.metadata ?? {};
+  if (params.source !== "system") {
+    const { skillType: _stripped, ...rest } = metadata as Record<string, unknown>;
+    metadata = rest;
+  }
+
   const skill = await prisma.document.create({
     data: {
       title: params.title,
@@ -85,7 +120,7 @@ export const createSkill = async (
       source: params.source ?? "manual",
       type: "skill",
       labelIds: params.labelIds ?? [],
-      metadata: (params.metadata ?? {}) as any,
+      metadata: metadata as any,
       editedBy: userId,
       workspaceId,
     },
@@ -112,6 +147,7 @@ export const updateSkill = async (
   workspaceId: string,
   userId: string,
   updateData: UpdateSkillParams,
+  source?: string,
 ) => {
   const existingSkill = await getSkill(skillId, workspaceId);
 
@@ -119,15 +155,37 @@ export const updateSkill = async (
     return null;
   }
 
+  const existingMeta = (existingSkill.metadata as Record<string, unknown>) ?? {};
+  const isDefaultSkill = !!existingMeta.skillType;
+
+  // Guard: reserved title cannot be changed by non-system callers
+  if (updateData.title) {
+    const isReserved = RESERVED_SKILL_TITLES.includes(updateData.title as any);
+    if (isReserved && source !== "system") {
+      throw new Error(`"${updateData.title}" is a reserved skill name.`);
+    }
+    // Default skills cannot have their title changed
+    if (isDefaultSkill && source !== "system") {
+      throw new Error("The title of a default skill cannot be changed.");
+    }
+  }
+
+  // Strip skillType from metadata updates for non-system callers
+  let metadataUpdate = updateData.metadata;
+  if (metadataUpdate && source !== "system") {
+    const { skillType: _stripped, ...rest } = metadataUpdate;
+    metadataUpdate = rest;
+  }
+
   const skill = await prisma.document.update({
     where: { id: skillId },
     data: {
-      ...(updateData.title && { title: updateData.title }),
-      ...(updateData.content && { content: updateData.content }),
-      ...(updateData.metadata && {
+      ...(updateData.title && source === "system" && { title: updateData.title }),
+      ...(updateData.content !== undefined && { content: updateData.content }),
+      ...(metadataUpdate && {
         metadata: {
-          ...((existingSkill.metadata as Record<string, unknown>) ?? {}),
-          ...updateData.metadata,
+          ...existingMeta,
+          ...metadataUpdate,
         },
       }),
       editedBy: userId,

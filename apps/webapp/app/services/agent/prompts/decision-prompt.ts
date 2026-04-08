@@ -433,6 +433,7 @@ export function buildDecisionAgentPrompt(
   timezone: string,
   userPersona?: string,
   skills?: SkillRef[],
+  watchRules?: string,
 ): string {
   const personaSection = userPersona
     ? `
@@ -442,6 +443,18 @@ The following describes the user's preferences, goals, and automation directives
 **Follow these directives when making decisions** - they override default classification rules.
 
 ${userPersona}
+
+---
+`
+    : "";
+
+  const watchRulesSection = watchRules
+    ? `
+## Watch Rules
+
+The user has defined rules for how to handle inbound events. Apply these when deciding what to surface vs handle silently.
+
+${watchRules}
 
 ---
 `
@@ -488,7 +501,7 @@ ${skills
       : "";
 
   return `${DECISION_AGENT_PROMPT}
-${personaSection}${skillsSection}
+${personaSection}${watchRulesSection}${skillsSection}
 ---
 
 ## Current Situation

@@ -17,80 +17,129 @@ interface GetCommentToolsParams {
   conversationId?: string;
 }
 
-/** Walk a Yjs tree and emit one entry per text-bearing leaf, handling lists */
-export function extractPageLines(
-  fragment: Y.XmlFragment,
-): { lineNumber: number; text: string }[] {
-  const lines: { lineNumber: number; text: string }[] = [];
-  let lineNumber = 1;
+/** Resolve stored relative positions → ancestor paragraph/heading XmlElement nodes */
+function buildCommentedNodeSet(
+  doc: Y.Doc,
+  comments: { relativeStart: unknown }[],
+): WeakSet<Y.XmlElement> {
+  const set = new WeakSet<Y.XmlElement>();
+  const blockNodes = new Set(["paragraph", "heading", "codeBlock", "blockquote"]);
 
-  function collectText(node: Y.XmlElement | Y.XmlFragment): string {
-    const parts: string[] = [];
-    node.forEach((child) => {
-      if (child instanceof Y.XmlText) {
-        parts.push(child.toString());
-      } else if (child instanceof Y.XmlElement) {
-        if (child.nodeName === "mention") {
-          parts.push(`@${child.getAttribute("label") ?? ""}`);
-        } else {
-          parts.push(collectText(child));
+  for (const comment of comments) {
+    if (!comment.relativeStart) continue;
+    try {
+      const relPos = Y.createRelativePositionFromJSON(
+        comment.relativeStart as Parameters<typeof Y.createRelativePositionFromJSON>[0],
+      );
+      const absPos = Y.createAbsolutePositionFromRelativePosition(relPos, doc);
+      if (!absPos) continue;
+
+      // Walk up from the XmlText to find the containing block element
+      let node: Y.AbstractType<any> | null = absPos.type as Y.AbstractType<any>;
+      while (node) {
+        if (node instanceof Y.XmlElement && blockNodes.has(node.nodeName)) {
+          set.add(node);
+          break;
         }
+        node = (node as any).parent ?? null;
       }
-    });
-    return parts.join("").trim();
+    } catch {
+      // Ignore malformed / stale positions
+    }
   }
 
-  const listNodes = new Set(["bulletList", "orderedList", "taskList"]);
-  const itemNodes = new Set(["listItem", "taskItem"]);
+  return set;
+}
 
-  fragment.forEach((child) => {
-    if (!(child instanceof Y.XmlElement)) return;
-
-    if (listNodes.has(child.nodeName)) {
-      child.forEach((listChild) => {
-        if (listChild instanceof Y.XmlElement && itemNodes.has(listChild.nodeName)) {
-          const text = collectText(listChild);
-          if (text) {
-            lines.push({ lineNumber, text });
-            lineNumber++;
-          }
-        }
-      });
-    } else {
-      const text = collectText(child);
-      if (text) {
-        lines.push({ lineNumber, text });
-        lineNumber++;
+function collectText(node: Y.XmlElement | Y.XmlFragment): string {
+  const parts: string[] = [];
+  node.forEach((child) => {
+    if (child instanceof Y.XmlText) {
+      parts.push(child.toString());
+    } else if (child instanceof Y.XmlElement) {
+      if (child.nodeName === "mention") {
+        parts.push(`@${child.getAttribute("label") ?? ""}`);
+      } else {
+        parts.push(collectText(child));
       }
     }
   });
+  return parts.join("").trim();
+}
 
-  return lines;
+/** Walk the Yjs tree and serialize to an annotated XML string.
+ *  Nodes in `commentedNodes` get data-commented="true" so the agent skips them. */
+export function buildAnnotatedPageXml(
+  doc: Y.Doc,
+  comments: { relativeStart: unknown }[],
+): string {
+  const fragment = doc.getXmlFragment("default");
+  const commentedNodes = buildCommentedNodeSet(doc, comments);
+
+  const leafNodes = new Set(["paragraph", "heading", "codeBlock", "blockquote"]);
+  const listNodes = new Set(["bulletList", "orderedList", "taskList"]);
+  const itemNodes = new Set(["listItem", "taskItem"]);
+
+  function serializeNode(node: Y.XmlElement, indent: string): string {
+    const name = node.nodeName;
+    const childIndent = indent + "  ";
+
+    if (leafNodes.has(name)) {
+      const text = collectText(node);
+      if (!text) return "";
+      const attr = commentedNodes.has(node) ? ` data-commented="true"` : "";
+      return `${indent}<${name}${attr}>${text}</${name}>`;
+    }
+
+    if (listNodes.has(name)) {
+      const children: string[] = [];
+      node.forEach((child) => {
+        if (child instanceof Y.XmlElement && itemNodes.has(child.nodeName)) {
+          const s = serializeNode(child, childIndent);
+          if (s) children.push(s);
+        }
+      });
+      if (!children.length) return "";
+      return `${indent}<${name}>\n${children.join("\n")}\n${indent}</${name}>`;
+    }
+
+    if (itemNodes.has(name)) {
+      const children: string[] = [];
+      node.forEach((child) => {
+        if (child instanceof Y.XmlElement) {
+          const s = serializeNode(child, childIndent);
+          if (s) children.push(s);
+        }
+      });
+      if (children.length) {
+        return `${indent}<${name}>\n${children.join("\n")}\n${indent}</${name}>`;
+      }
+      const text = collectText(node);
+      if (!text) return "";
+      return `${indent}<${name}>${text}</${name}>`;
+    }
+
+    // Generic fallback
+    const text = collectText(node);
+    if (!text) return "";
+    const attr = commentedNodes.has(node) ? ` data-commented="true"` : "";
+    return `${indent}<${name}${attr}>${text}</${name}>`;
+  }
+
+  const lines: string[] = [];
+  fragment.forEach((child) => {
+    if (child instanceof Y.XmlElement) {
+      const s = serializeNode(child, "");
+      if (s) lines.push(s);
+    }
+  });
+  return lines.join("\n");
 }
 
 export function getCommentTools(params: GetCommentToolsParams): Record<string, Tool> {
   const { workspaceId, userId, pageId, conversationId } = params;
 
   return {
-    get_my_comments: tool({
-      description:
-        "Get the list of lines you have already commented on (unresolved). Call this before add_comment to avoid re-engaging the same content.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const comments = await prisma.butlerComment.findMany({
-          where: { pageId, resolved: false },
-          select: { selectedText: true, createdAt: true },
-          orderBy: { createdAt: "desc" },
-        });
-
-        if (comments.length === 0) return "No existing comments.";
-
-        return comments
-          .map((c) => `- "${c.selectedText.slice(0, 80)}"`)
-          .join("\n");
-      },
-    }),
-
     search_memory: tool({
       description:
         "Search the user's memory for relevant context — past decisions, preferences, people, projects. Use this when scratchpad content references something you need more context on.",
@@ -106,41 +155,26 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
 
     add_comment: tool({
       description:
-        "Add a comment anchored to a specific line of the scratchpad and dispatch the intent to the main agent for execution. Use the lineNumber from the page content in your context and copy the text verbatim as selectedText.",
+        "Add a comment anchored to a specific piece of the scratchpad and dispatch the intent to the main agent. Copy selectedText verbatim from the XML page content.",
       inputSchema: z.object({
-        lineNumber: z
-          .number()
-          .int()
-          .describe("The line number from the page content."),
         selectedText: z
           .string()
           .describe(
-            "The exact text of the line, copied verbatim from the page content. Used to anchor the comment precisely.",
+            "The exact text to anchor the comment on, copied verbatim from the page content XML.",
           ),
         content: z.string().describe("Your comment — concise and helpful."),
         intent: z
           .string()
           .describe(
-            "The actionable intent to pass to the main agent. E.g. 'Set a reminder for 6pm to call mom' or 'Draft a follow-up email to the investor about the check-in'.",
+            "The actionable intent to pass to the main agent. Must be self-contained and unambiguous.",
           ),
       }),
-      execute: async ({ lineNumber, selectedText, content, intent }) => {
-        // Verify/correct selectedText using lineNumber as the source of truth
-        const page = await prisma.page.findUnique({
-          where: { id: pageId },
-          select: { descriptionBinary: true },
+      execute: async ({ selectedText, content, intent }) => {
+        // Dedup guard — prevent multiple comments on the same text across scans
+        const duplicate = await prisma.butlerComment.findFirst({
+          where: { pageId, resolved: false, selectedText: selectedText.trim() },
         });
-
-        if (page?.descriptionBinary) {
-          const doc = new Y.Doc();
-          Y.applyUpdate(doc, new Uint8Array(page.descriptionBinary));
-          const fragment = doc.getXmlFragment("default");
-          const lines = extractPageLines(fragment);
-          const lineAtNumber = lines.find((l) => l.lineNumber === lineNumber);
-          if (lineAtNumber) {
-            selectedText = lineAtNumber.text;
-          }
-        }
+        if (duplicate) return "Already commented on this text — skipping.";
 
         // Use existing conversationId or create a new one
         let convId = conversationId;
@@ -153,14 +187,20 @@ export function getCommentTools(params: GetCommentToolsParams): Record<string, T
           convId = result.conversationId;
         }
 
-        // Save the comment with the conversationId (used for UI marks)
+        // Save the comment (createButlerComment resolves position internally)
         const comment = await createButlerComment(
           workspaceId,
           pageId,
-          selectedText,
+          selectedText.trim(),
           content,
           convId,
         );
+
+        // If the text wasn't found verbatim in the document, clean up and ask the agent to retry
+        if (!comment.relativeStart) {
+          await prisma.butlerComment.delete({ where: { id: comment.id } });
+          return `Could not anchor comment: "${selectedText.slice(0, 60)}" not found verbatim in document. Use a shorter phrase copied exactly from the XML and try again.`;
+        }
 
         // Fire the core agent to do the actual work
         noStreamProcess(
