@@ -51,6 +51,19 @@ const { action } = createHybridActionApiRoute(
     }
 
     if (request.method === "DELETE") {
+      const skillToDelete = await getSkill(
+        params.skillId,
+        authentication.workspaceId,
+      );
+
+      if (!skillToDelete) {
+        throw new Response("Skill not found", { status: 404 });
+      }
+
+      if (skillToDelete.source === "persona-v2") {
+        throw new Response("Persona skill cannot be deleted", { status: 403 });
+      }
+
       const result = await deleteSkill(
         params.skillId,
         authentication.workspaceId,

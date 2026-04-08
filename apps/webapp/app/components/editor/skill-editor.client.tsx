@@ -21,6 +21,7 @@ interface Skill {
   title: string | null;
   content: string | null;
   metadata: Record<string, unknown> | null;
+  source?: string | null;
 }
 
 interface SkillEditorProps {
@@ -278,7 +279,7 @@ export const SkillEditor = ({ skill }: SkillEditorProps) => {
         </div>
       </div>
       <div className="flex w-full justify-between gap-2 border-t border-gray-300 p-2">
-        {isEditMode ? (
+        {isEditMode && skill?.source !== "persona-v2" ? (
           <DeleteSkillAlert onDelete={handleDelete} isLoading={isLoading} />
         ) : (
           <div />
