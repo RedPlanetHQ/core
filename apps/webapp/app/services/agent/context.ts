@@ -72,6 +72,8 @@ interface AgentContext {
   takeActionAgent: Agent;
   thinkAgent?: Agent;
   gatewayAgents: Agent[];
+  /** True when running as a background task — ask_user should not be registered */
+  isBackgroundExecution: boolean;
 }
 
 export async function buildAgentContext({
@@ -447,5 +449,6 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     takeActionAgent,
     thinkAgent,
     gatewayAgents,
+    isBackgroundExecution,
   };
 }

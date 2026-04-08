@@ -15,6 +15,7 @@ import {
 import { UserTypeEnum } from "@core/types";
 import { enqueueCreateConversationTitle } from "~/lib/queue-adapter.server";
 import { buildAgentContext } from "~/services/agent/context";
+import { createAskUserTool } from "~/services/agent/agents/core";
 import { mastra } from "~/services/agent/mastra";
 import { logger } from "~/services/logger.service";
 import {
@@ -167,6 +168,7 @@ const { loader, action } = createHybridActionApiRoute(
       gatherContextAgent,
       takeActionAgent,
       gatewayAgents,
+      isBackgroundExecution,
     } = await buildAgentContext({
       userId: authentication.userId,
       workspaceId,
@@ -191,6 +193,9 @@ const { loader, action } = createHybridActionApiRoute(
       model: modelConfig as any,
       instructions: systemPrompt,
       agents: subagents,
+      // ask_user must be a direct agent tool (not in toolsets) so Mastra's
+      // requireApproval middleware applies correctly on approveToolCall.
+      ...(!isBackgroundExecution && { tools: { ask_user: createAskUserTool() } }),
     });
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
@@ -320,10 +325,18 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     await updateConversationStatus(body.id, "running");
 
-    // When the client aborts (user clicks Stop), update status so it doesn't stay "running"
-    request.signal.addEventListener("abort", () => {
-      updateConversationStatus(body.id, "completed").catch(() => {});
-    });
+    const abortController = new AbortController();
+
+    const cancelStream = () => {
+      if (!abortController.signal.aborted) {
+        logger.info(`[conversation] client disconnected, aborting stream for ${body.id}`);
+        abortController.abort();
+        updateConversationStatus(body.id, "completed").catch(() => {});
+      }
+    };
+
+    // Belt-and-suspenders: also fire if request.signal ever works
+    request.signal.addEventListener("abort", cancelStream);
 
     const stream = await agent.stream(modelMessages, {
       toolsets: { core: tools },
@@ -332,10 +345,10 @@ const { loader, action } = createHybridActionApiRoute(
       toolCallConcurrency: 1,
       outputProcessors: [messageHistoryProcessor as OutputProcessor],
       modelSettings: { temperature: 0.5 },
-      abortSignal: request.signal,
+      abortSignal: abortController.signal,
     });
 
-    return streamToUIResponse(stream);
+    return streamToUIResponse(stream, cancelStream);
   },
 );
 

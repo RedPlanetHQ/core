@@ -438,6 +438,7 @@ export const getToolDisplayName = (toolType: string): string => {
     get_integration_actions: "Get integration actions",
     decision: "Decision",
     silent_action: "Silent action",
+    ask_user: "Question",
     "agent-gather_context": "Gather Context",
     "agent-take_action": "Take Action",
     "agent-think": "Think",

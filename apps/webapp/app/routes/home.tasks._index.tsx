@@ -17,8 +17,8 @@ import { PageHeader } from "~/components/common/page-header";
 import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
-  TaskViewOptions,
-  DEFAULT_VISIBLE,
+  TaskFilterButton,
+  StatusFilterChip,
 } from "~/components/tasks/task-view-options";
 import { Plus } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
@@ -114,13 +114,15 @@ export default function TasksIndex() {
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const [visibleStatuses, setVisibleStatuses] = useLocalCommonState<
-    TaskStatus[]
-  >("task-view-filter", DEFAULT_VISIBLE);
-
-  const filteredTasks = tasks.filter((t) =>
-    visibleStatuses.includes(t.status as TaskStatus),
+  const [activeFilters, setActiveFilters] = useLocalCommonState<TaskStatus[]>(
+    "task-status-filters",
+    [],
   );
+
+  const filteredTasks =
+    activeFilters.length === 0
+      ? tasks
+      : tasks.filter((t) => activeFilters.includes(t.status as TaskStatus));
 
   const isCreating =
     fetcher.state !== "idle" &&
@@ -166,21 +168,31 @@ export default function TasksIndex() {
           },
         ]}
         actionsNode={
-          <div className="flex items-center gap-2">
-            <TaskViewOptions
-              visibleStatuses={visibleStatuses}
-              onChange={setVisibleStatuses}
-            />
-            <Button
-              variant="secondary"
-              className="gap-2 rounded"
-              onClick={() => setDialogOpen(true)}
-            >
-              <Plus size={16} /> Add task
-            </Button>
-          </div>
+          <Button
+            variant="secondary"
+            className="gap-2 rounded"
+            onClick={() => setDialogOpen(true)}
+          >
+            <Plus size={16} /> Add task
+          </Button>
         }
       />
+
+      <div className="mb-1 flex w-full items-center justify-start gap-2 px-3 pt-3">
+        <TaskFilterButton
+          activeFilters={activeFilters}
+          onChange={setActiveFilters}
+        />
+        {activeFilters.map((status) => (
+          <StatusFilterChip
+            key={status}
+            status={status}
+            onRemove={() =>
+              setActiveFilters(activeFilters.filter((s) => s !== status))
+            }
+          />
+        ))}
+      </div>
 
       <ClientOnly fallback={null}>
         {() => (
