@@ -104,7 +104,7 @@ export async function buildAgentContext({
     getPersonaDocumentForUser(workspaceId),
     IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
     prisma.document.findMany({
-      where: { workspaceId, type: "skill", deleted: null },
+      where: { workspaceId, type: "skill", deleted: null, source: { not: "persona-v2" } },
       select: { id: true, title: true, metadata: true },
       orderBy: { createdAt: "desc" },
     }),
