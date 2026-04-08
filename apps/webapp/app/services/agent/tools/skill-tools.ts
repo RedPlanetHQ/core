@@ -43,21 +43,29 @@ export function getSkillTool(workspaceId: string): Tool {
 /**
  * Create a new skill
  *
- * The butler provides the intent — the tool internally runs the skill generator
- * to produce a properly structured workflow, then saves it.
+ * Two paths:
+ * 1. `content` provided — saves directly (context skills: preferences, rules, persona, domain knowledge)
+ * 2. `intent` provided — runs the skill generator to produce a structured workflow, then saves
  */
 export function createSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Create a new skill (reusable workflow). Provide the title and a description of what the workflow should do — the system will generate the structured workflow content automatically. You don't need to write the full workflow yourself.",
+      "Create a new skill (extensible capability). For workflow skills, provide intent and the system generates structured content. For context skills (preferences, rules, persona, domain knowledge), provide content directly.",
     inputSchema: z.object({
       title: z
         .string()
-        .describe("The skill title (5-8 words, action-oriented)"),
+        .describe("The skill title — concise and descriptive"),
       intent: z
         .string()
+        .optional()
         .describe(
-          "Describe what this workflow should do — the steps, rules, tools to use, and expected output. Be specific about the workflow logic.",
+          "For workflow skills: describe what the workflow should do — the steps, rules, tools to use, and expected output. The system will generate structured content from this.",
+        ),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          "For context skills: the full content to save directly — use this for preferences, rules, persona, domain knowledge, or any non-workflow capability. Saved as-is without running through the generator.",
         ),
       short_description: z
         .string()
@@ -66,28 +74,40 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
           "1-2 sentence description with trigger phrases (under 200 chars)",
         ),
     }),
-    execute: async ({ title, intent, short_description }) => {
+    execute: async ({ title, intent, content, short_description }) => {
       try {
-        // Fetch connected tools for context
-        const accounts = await getConnectedIntegrationAccounts(userId, workspaceId);
-        const connectedTools = accounts.map((a) => a.integrationDefinition.name);
-        const toolsContext = connectedTools.length > 0
-          ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
-          : "";
+        if (!content && !intent) {
+          return "Failed to create skill: provide either content (for context skills) or intent (for workflow skills).";
+        }
 
-        const userMessage = `User intent: ${intent}${toolsContext}`;
+        let skillContent: string;
 
-        // Generate structured workflow via the skill generator
-        const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
-        const { text: generatedContent } = await agent.generate(userMessage);
+        if (content) {
+          // Direct save path — context skills bypass the generator
+          skillContent = content;
+        } else {
+          // Generator path — workflow skills get structured content
+          const accounts = await getConnectedIntegrationAccounts(userId, workspaceId);
+          const connectedTools = accounts.map((a) => a.integrationDefinition.name);
+          const toolsContext = connectedTools.length > 0
+            ? `\n\nUser's connected tools: ${connectedTools.join(", ")}`
+            : "";
 
-        if (!generatedContent) {
-          return "Failed to generate skill workflow — generator produced no output.";
+          const userMessage = `User intent: ${intent}${toolsContext}`;
+
+          const agent = createAgent(await resolveModelString("chat", "low"), SKILL_GENERATOR_SYSTEM_PROMPT);
+          const { text: generatedContent } = await agent.generate(userMessage);
+
+          if (!generatedContent) {
+            return "Failed to generate skill content — generator produced no output.";
+          }
+
+          skillContent = generatedContent;
         }
 
         const skill = await createSkill(workspaceId, userId, {
           title,
-          content: generatedContent,
+          content: skillContent,
           source: "agent",
           metadata: short_description
             ? { shortDescription: short_description }
