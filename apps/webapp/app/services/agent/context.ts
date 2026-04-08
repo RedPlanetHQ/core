@@ -94,7 +94,7 @@ export async function buildAgentContext({
     user,
     persona,
     connectedIntegrations,
-    skills,
+    allSkills,
     conversationRecord,
     workspace,
     customPersonalities,
@@ -104,7 +104,7 @@ export async function buildAgentContext({
     getPersonaDocumentForUser(workspaceId),
     IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
     prisma.document.findMany({
-      where: { workspaceId, type: "skill", deleted: null, source: { not: "persona-v2" } },
+      where: { workspaceId, type: "skill", deleted: null },
       select: { id: true, title: true, metadata: true },
       orderBy: { createdAt: "desc" },
     }),
@@ -119,6 +119,12 @@ export async function buildAgentContext({
     getCustomPersonalities(workspaceId),
     getWorkspaceChannelContext(workspaceId),
   ]);
+
+  // Exclude default skills (those with skillType in metadata) from the dynamic skills list
+  const skills = allSkills.filter((s) => {
+    const meta = s.metadata as Record<string, unknown> | null;
+    return !meta?.skillType;
+  });
 
   // Look up linked task context
   const linkedTaskRecord = conversationRecord?.asyncJobId
@@ -222,7 +228,7 @@ export async function buildAgentContext({
           }
         : undefined,
     },
-    persona ?? "",
+    persona ?? undefined,
     workspace?.name ?? undefined,
   );
 

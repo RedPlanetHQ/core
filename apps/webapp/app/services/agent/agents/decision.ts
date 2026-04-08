@@ -25,6 +25,7 @@ import {
 import { getSkillTool } from "../tools/skill-tools";
 import { buildDecisionAgentPrompt } from "../prompts/decision-prompt";
 import { type SkillRef } from "../types";
+import { getDefaultSkill } from "~/services/skills.server";
 
 /**
  * Default action plan when Decision Agent fails or produces invalid output
@@ -156,6 +157,9 @@ export async function createThinkAgent(
   const tools: Record<string, any> = {};
   tools["get_skill"] = getSkillTool(workspaceId);
 
+  // Load Watch Rules skill in parallel with prompt building
+  const watchRulesSkill = await getDefaultSkill(workspaceId, "watch-rules");
+
   // Build the full decision prompt with trigger + context
   const currentTime = new Date().toLocaleString("en-US", {
     timeZone: timezone,
@@ -170,6 +174,7 @@ export async function createThinkAgent(
         timezone,
         triggerContext.userPersona,
         skills,
+        watchRulesSkill?.content ?? undefined,
       )
     : "Analyze triggers and produce structured JSON action plans.";
 
