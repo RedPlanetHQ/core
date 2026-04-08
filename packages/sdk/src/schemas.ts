@@ -185,6 +185,24 @@ export type GetDocumentResponse = z.infer<
   typeof GetDocumentResponseSchema
 >;
 
+
+// ---------------------------------------------------------------------------
+// Skills
+// ---------------------------------------------------------------------------
+
+export const GetSkillInputSchema = z.object({
+  skillId: z.string(),
+});
+
+export type GetSkillInput = z.infer<typeof GetSkillInputSchema>;
+
+export const GetSkillResponseSchema = z.object({
+  skill: DocumentSchema.nullable(),
+});
+
+export type GetSkillResponse = z.infer<typeof GetSkillResponseSchema>;
+
+
 // ---------------------------------------------------------------------------
 // Gateways
 // ---------------------------------------------------------------------------
