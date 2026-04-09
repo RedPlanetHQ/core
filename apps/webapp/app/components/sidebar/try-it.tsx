@@ -1,4 +1,4 @@
-import { BookOpen, ChevronDown, Mail, MessageCircle, Phone, Plug } from "lucide-react";
+import { BookOpen, ChevronDown, Mail, MessageCircle, Phone, Plug, Puzzle } from "lucide-react";
 import { useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import {
@@ -39,6 +39,16 @@ export function TryIt() {
         <CollapsibleContent>
           <SidebarGroupContent>
             <SidebarMenu className="gap-0.5">
+              <SidebarMenuItem>
+                <Button
+                  variant="ghost"
+                  className="text-foreground w-fit gap-2 !rounded-md"
+                  onClick={() => navigate("/home/integrations")}
+                >
+                  <Puzzle size={16} />
+                  Integrations
+                </Button>
+              </SidebarMenuItem>
               <SidebarMenuItem>
                 <Button
                   variant="ghost"
