@@ -69,6 +69,7 @@ export default function SkillDetail() {
                   title: skill.title,
                   content: skill.content,
                   metadata: skill.metadata as Record<string, unknown> | null,
+                  source: skill.source,
                 }}
               />
             );

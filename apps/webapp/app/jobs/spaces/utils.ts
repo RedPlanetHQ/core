@@ -26,7 +26,7 @@ export const savePersonaDocument = async (
       content,
       labelIds: labelId ? [labelId] : [],
       source: "persona-v2",
-      type: "DOCUMENT",
+      type: "skill",
       metadata: {
         generatedAt: new Date().toISOString(),
         version: "v2",
@@ -36,6 +36,8 @@ export const savePersonaDocument = async (
     },
     update: {
       content,
+      source: "persona-v2",
+      type: "skill",
       updatedAt: new Date(),
       metadata: {
         generatedAt: new Date().toISOString(),

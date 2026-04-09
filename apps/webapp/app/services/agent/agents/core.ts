@@ -11,6 +11,8 @@
 import { type Tool, tool } from "ai";
 import { z } from "zod";
 import { Agent } from "@mastra/core/agent";
+import { createTool } from "@mastra/core/tools";
+import { createTool } from "@mastra/core/tools";
 
 import { type SkillRef } from "../types";
 import { type ModelConfig } from "~/services/llm-provider.server";
@@ -191,6 +193,102 @@ export async function createCoreTools(
   }
 
   return { ...tools, ...taskTools, ...messageTools };
+}
+
+// ---------------------------------------------------------------------------
+// createAskUserTool — must be registered directly on the Agent (not toolsets)
+// so Mastra's requireApproval middleware applies correctly on approveToolCall.
+// ---------------------------------------------------------------------------
+
+export function createAskUserTool() {
+  return createTool({
+    id: "ask_user",
+    description:
+      "Ask the user 1–4 questions during execution. Use this to gather preferences, clarify ambiguous instructions, get decisions on implementation choices, or offer direction options. Don't overuse — only ask when you genuinely can't proceed without the answer.",
+    inputSchema: z.object({
+      questions: z
+        .array(
+          z.object({
+            question: z
+              .string()
+              .describe("The complete question to ask. Should be clear and specific, ending with a question mark."),
+            header: z
+              .string()
+              .optional()
+              .describe("Very short label shown as a chip (max 12 chars). E.g. 'Auth method', 'Priority'."),
+            options: z
+              .array(
+                z.object({
+                  label: z
+                    .string()
+                    .describe("Display text for this option (1–5 words)"),
+                  description: z
+                    .string()
+                    .optional()
+                    .describe("Explanation of what this option means or its trade-offs"),
+                  markdown: z
+                    .string()
+                    .optional()
+                    .describe("Optional preview content (code snippet, ASCII mockup) shown when this option is focused"),
+                }),
+              )
+              .min(2)
+              .max(4)
+              .describe("2–4 mutually exclusive options for the user to choose from"),
+            multiSelect: z
+              .boolean()
+              .optional()
+              .default(false)
+              .describe("Set true to allow the user to select multiple options"),
+          }),
+        )
+        .min(1)
+        .max(4)
+        .describe("1–4 questions to ask the user"),
+      answers: z
+        .record(z.string(), z.string())
+        .optional()
+        .describe("The user's answers keyed by question text — set automatically when the user responds, do not set this yourself"),
+      annotations: z
+        .record(
+          z.string(),
+          z.object({
+            markdown: z.string().optional(),
+            notes: z.string().optional(),
+          }),
+        )
+        .optional()
+        .describe("Per-answer annotations from the user — set automatically"),
+    }),
+    requireApproval: true,
+    execute: async (inputData, args) => {
+      // The user's answers are sent as toolArgOverrides and must be read
+      // from requestContext — they are NOT auto-applied to inputData.
+      const ctx = args as { agent?: { toolCallId?: string }; requestContext?: { get: (key: string) => unknown } };
+      const callId = ctx?.agent?.toolCallId;
+      const overrideRaw = ctx?.requestContext?.get("toolArgsOverride");
+
+      let answers = inputData.answers;
+      let annotations = inputData.annotations;
+
+      if (callId && overrideRaw) {
+        try {
+          const overrideMap: Record<string, Record<string, unknown>> =
+            typeof overrideRaw === "string"
+              ? JSON.parse(overrideRaw)
+              : (overrideRaw as Record<string, Record<string, unknown>>);
+          if (overrideMap[callId]) {
+            answers = (overrideMap[callId].answers as typeof answers) ?? answers;
+            annotations = (overrideMap[callId].annotations as typeof annotations) ?? annotations;
+          }
+        } catch {
+          // fall through to original inputData
+        }
+      }
+
+      return { answers: answers ?? {}, annotations: annotations ?? {} };
+    },
+  });
 }
 
 // ---------------------------------------------------------------------------

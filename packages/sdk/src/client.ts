@@ -15,6 +15,8 @@ import type {
   GetDocumentsResponse,
   GetDocumentInput,
   GetDocumentResponse,
+  GetSkillInput,
+  GetSkillResponse,
   GetGatewaysResponse,
   ExecuteGatewayInput,
   ExecuteGatewayToolInput,
@@ -239,6 +241,19 @@ export class CoreClient {
     return this.request<GetDocumentResponse>(
       "GET",
       `/api/v1/documents/${params.documentId}`,
+    );
+  }
+
+  /**
+   * Get a single skill by ID.
+   * GET /api/v1/skills/:skillId
+   */
+  async getSkill(
+    params: GetSkillInput,
+  ): Promise<GetSkillResponse> {
+    return this.request<GetSkillResponse>(
+      "GET",
+      `/api/v1/skills/${params.skillId}`,
     );
   }
 

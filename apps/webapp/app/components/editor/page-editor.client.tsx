@@ -75,7 +75,7 @@ function buildExtensions(
       code: {
         HTMLAttributes: {
           class: cx(
-            "rounded bg-muted text-[#BF4594] px-1.5 py-1 font-mono font-medium",
+            "rounded bg-grayAlpha-50 text-[#BF4594] px-1.5 py-1 font-mono font-medium",
           ),
           spellcheck: "false",
         },
@@ -173,7 +173,7 @@ function EditorInner({
     },
   });
 
-  const { resolveComment } = useButlerComments(editor, ydoc, pageId);
+  const { resolveComment } = useButlerComments(ydoc, pageId);
 
   const handleResolvedChange = React.useCallback(
     (conversationId: string, resolved: boolean) => {

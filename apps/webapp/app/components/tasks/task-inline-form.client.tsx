@@ -98,7 +98,7 @@ export function TaskInlineForm({
             "placeholder:text-muted-foreground flex-1 bg-transparent text-base focus:outline-none",
             titleClassName,
           )}
-          placeholder="Issue title"
+          placeholder="Task title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={(e) => {

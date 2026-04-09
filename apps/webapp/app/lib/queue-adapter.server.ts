@@ -629,13 +629,7 @@ export async function cancelScratchpadScan(pageId: string): Promise<boolean> {
         tag: [`scratchpad:${pageId}`],
         status: ["QUEUED", "DELAYED"],
       });
-      let count = 0;
-
-      for await (const run of pendingRuns) {
-        count++;
-      }
-
-      return count > 1;
+      return pendingRuns.data.length > 0;
     } catch {
       // Silently fail — job may not exist
     }
@@ -662,7 +656,7 @@ export async function cancelTaskJob(taskId: string): Promise<boolean> {
       });
 
       let cancelled = false;
-      for await (const run of pendingRuns) {
+      for await (const run of pendingRuns.data) {
         await runs.cancel(run.id);
         cancelled = true;
       }

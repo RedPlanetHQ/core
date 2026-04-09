@@ -5,18 +5,21 @@
  * and decides what (if anything) to comment on.
  *
  * No conversation, no history, no subagents. Just:
- *   page content (injected in system prompt) → reason → add_comment via tool
+ *   annotated page XML (injected in system prompt) → reason → add_comment via tool
  */
 
 import { Agent } from "@mastra/core/agent";
-import { stepCountIs } from "ai";
+import { stepCountIs, tool } from "ai";
+import { z } from "zod";
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
 import { getDefaultChatModelId } from "~/services/llm-provider.server";
 import { toRouterString } from "~/lib/model.server";
 import { getMastra } from "~/services/agent/mastra";
-import { getCommentTools, extractPageLines } from "~/services/agent/tools/comment-tools";
+import { getCommentTools, buildAnnotatedPageXml } from "~/services/agent/tools/comment-tools";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
+import { getDefaultSkill } from "~/services/skills.server";
+import { runWebExplorer } from "~/services/agent/explorers/web-explorer";
 
 interface RunScratchpadObserverParams {
   pageId: string;
@@ -25,14 +28,10 @@ interface RunScratchpadObserverParams {
 }
 
 function buildObserverSystemPrompt(
-  pageLines: { lineNumber: number; text: string }[],
+  pageXml: string,
   connectedIntegrations: string[],
+  scratchpadReadSkill: string,
 ): string {
-  const pageContent =
-    pageLines.length > 0
-      ? pageLines.map((l) => `${l.lineNumber}: ${l.text}`).join("\n")
-      : "(empty)";
-
   const capabilities =
     connectedIntegrations.length > 0
       ? connectedIntegrations.join(", ")
@@ -45,37 +44,45 @@ The main agent has access to: ${capabilities}
 The main agent can also: search the web, search the user's memory, send messages, manage tasks and reminders, create scheduled tasks, draft emails
 </butler_capabilities>
 
+<user_preferences>
+${scratchpadReadSkill}
+</user_preferences>
+
 <page_content>
-${pageContent}
+${pageXml}
 </page_content>
 
 ---
 
-## Step 1 — Call get_my_comments first
+## Step 1 — Read the XML, respect markers, apply grouping rule
 
-See which lines you have already commented on. Do not re-engage those lines.
+The page content is structured XML. Each element represents a block in the document.
 
-## Step 2 — Call search_memory for lines that reference people, projects, or events
+**Grouping rule:** When a \`<paragraph>\` or \`<heading>\` is immediately followed by a \`<bulletList>\`, \`<orderedList>\`, or \`<taskList>\`, treat them as one section. Comment once on the paragraph/heading using its exact text as \`selectedText\`. Do not comment on individual list items. If the paragraph has \`data-commented="true"\`, skip the entire section including its list.
 
-Before classifying, search memory for context on any line that mentions a person, project, meeting, or commitment. This helps you write better intents.
+**Already commented:** Any node with \`data-commented="true"\` already has an active comment — skip it entirely.
+
+## Step 2 — Call search_memory for ENGAGE items
+
+Before classifying, search memory for context on any item that mentions a person, project, meeting, or commitment. For Exploratory items, also call search_web for reference material.
 
 Examples:
 - "follow up with investor" → search_memory("investor meetings and follow-ups")
-- "check in with Sarah about proposal" → search_memory("Sarah proposal discussions")
-- "standup notes from yesterday" → search_memory("recent standup meetings")
+- "create a Show HN post" → search_memory("product positioning and messaging") + search_web("Show HN best practices")
 
-## Step 3 — Classify each remaining line
+## Step 3 — Classify each remaining section
 
 **ENGAGE categories** (call add_comment):
 
 | Category | Description | Examples |
 |---|---|---|
 | Delegation | User is directly instructing the butler | "@alfred send my standup", "can you check my emails" |
-| Task / TODO | Something the user needs to get done | "need to fix the login bug", "submit the invoice today" |
+| Task / TODO | Something the user needs to get done with a clear outcome | "submit the invoice today", "fix the login bug" |
 | Question / Research | User wants to find something out | "what's Notion's pricing?", "who leads growth at Acme?" |
 | Event / Reminder | Time-bound thing to remember or schedule | "call mom at 6pm", "standup in 10 min" |
 | Follow-up | User has an open loop with someone or something | "email Manoj about Saturday event", "follow up with investor" |
 | Plan / Intention | User intends to do something or wants to structure their day | "today I want to finish auth", "focus on backend this week" |
+| Exploratory | Open-ended creative or research task, outcome is vague | "create a Show HN post", "think about our pricing", "help me prep for the board meeting" |
 
 **SKIP categories** (stay quiet):
 
@@ -85,52 +92,42 @@ Examples:
 | Reflection | Personal feeling or observation | "feeling good about progress", "that went better than expected" |
 | Idea | Brainstorm or hypothetical, not a commitment | "idea: what if we added dark mode" |
 | Record | Something that already happened | "sent the invoice", "pushed the fix" |
+| Task list items | Checkbox items the user manages themselves — skip individual bullets |
 
-## Step 4 — For each ENGAGE line, call add_comment with:
+## Step 4 — Call add_comment per logical section
 
-**content**: What the user sees as the comment on their scratchpad. Keep it short.
+**selectedText**: copy the header paragraph/heading text verbatim from the XML. Do not use list item text.
 
-**intent**: A clear, complete instruction for the main agent. This is the most important field — the main agent will receive ONLY this as its task. It must be unambiguous about what to do.
+**content**: What the user sees as the comment. Keep it short.
+
+**intent**: A clear, complete instruction for the main agent. Self-contained — the main agent has no access to the scratchpad.
+
+If add_comment returns a "not found" error, try a shorter phrase from the same block and retry once.
 
 ### Writing good intents by category:
 
-**Delegation, Task, Question, Event/Reminder** — the main agent should execute immediately:
+**Delegation, Task, Question, Event/Reminder** — main agent executes immediately:
 - content: "On it — setting a reminder for 6pm."
-- intent: "Create a scheduled task to remind the user to call mom at 6pm today. Use their default notification channel."
+- intent: "Create a scheduled task to remind the user to call mom at 6pm today."
 
 - content: "Checking your emails now."
 - intent: "Search the user's email for anything urgent from today. Summarise findings."
 
-- content: "Looking that up."
-- intent: "Research Notion's current pricing tiers and summarise them."
+**Follow-up, Plan** — main agent presents findings, does NOT execute yet:
+- intent: "The user wants to email Manoj about the Saturday event. Context: [memory findings]. Do NOT send anything yet — ask the user to confirm details first."
 
-**Follow-up, Plan** — the main agent should NOT execute yet, just present what it found:
-- User wrote: "email Manoj about Saturday event"
-- Memory found: "Saturday event is the team offsite at WeWork on April 12"
-- content: "I see there's a team offsite at WeWork on April 12 — want me to draft the email to Manoj? Any specific details to include?"
-- intent: "The user wants to email Manoj about the Saturday event. Context from memory: team offsite at WeWork on April 12. This is a follow-up — do NOT send any email yet. Wait for the user to confirm and provide details."
+**Exploratory** — do NOT write an execution intent. Instead:
+1. Call search_memory for relevant context (product notes, past decisions)
+2. Call search_web for reference material
+3. Write add_comment where:
+   - content: your gathered context + 2-3 initiating questions for the user
+   - intent: "User wants to [X]. Context gathered: [findings]. This is exploratory — ask the following initiating questions before doing anything: [questions]. Wait for user response."
 
-- User wrote: "follow up with investor"
-- Memory found: "Check-in with Sequoia partner scheduled biweekly"
-- content: "You have a biweekly check-in with Sequoia — want me to draft the follow-up message?"
-- intent: "The user wants to follow up with an investor. Context from memory: biweekly check-in with Sequoia partner. This is a follow-up — do NOT send anything yet. Ask the user what they want to communicate."
-
-- User wrote: "focus on backend this week"
-- content: "Want me to pull your open backend tasks so you can prioritise?"
-- intent: "The user wants to focus on backend work this week. Search for their open backend-related tasks and list them. Do NOT create or modify any tasks — just present what's open."
-
-**Key rules for intent:**
-- Always include context from memory search if you found any
-- For follow-ups: explicitly say "do NOT execute yet" and "wait for user confirmation"
-- For immediate actions: be specific about what to do (create task, search email, set reminder)
-- The main agent has no access to the scratchpad content — the intent must be self-contained
-
-## General rules
-
-- Use the lineNumber from <page_content> and copy the text verbatim as selectedText
-- Multiple related lines can share one comment
-- If nothing warrants engagement, do nothing — that's the expected common case
-- The scratchpad is a personal notepad, not a command interface — most lines are just notes`;
+**Key rules:**
+- Always include memory context in intent if found
+- For follow-ups and exploratory: explicitly say "do NOT execute yet"
+- The main agent has no access to the scratchpad — intent must be self-contained
+- If nothing warrants engagement, do nothing — that's the expected common case`;
 }
 
 export async function runScratchpadObserver({
@@ -138,35 +135,55 @@ export async function runScratchpadObserver({
   userId,
   workspaceId,
 }: RunScratchpadObserverParams): Promise<void> {
-  const [page, integrationAccounts] = await Promise.all([
+  const [page, integrationAccounts, existingComments, readingGuideSkill] = await Promise.all([
     prisma.page.findUnique({
       where: { id: pageId },
       select: { descriptionBinary: true },
     }),
     IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
+    prisma.butlerComment.findMany({
+      where: { pageId, resolved: false },
+      select: { relativeStart: true, selectedText: true },
+    }),
+    getDefaultSkill(workspaceId, "reading-guide"),
   ]);
 
-  let pageLines: { lineNumber: number; text: string }[] = [];
-  if (page?.descriptionBinary) {
-    const doc = new Y.Doc();
-    Y.applyUpdate(doc, new Uint8Array(page.descriptionBinary));
-    pageLines = extractPageLines(doc.getXmlFragment("default"));
-  }
+  if (!page?.descriptionBinary) return;
 
-  if (pageLines.length === 0) return;
+  const doc = new Y.Doc();
+  Y.applyUpdate(doc, new Uint8Array(page.descriptionBinary));
+
+  const pageXml = buildAnnotatedPageXml(doc, existingComments);
+  if (!pageXml.trim()) return;
 
   const connectedIntegrations = integrationAccounts.map((int) =>
     "integrationDefinition" in int ? int.integrationDefinition.name : int.name,
   );
 
-  const tools = getCommentTools({ workspaceId, userId, pageId });
+  const scratchpadReadSkill = readingGuideSkill?.content ?? "(No reading guide configured.)";
+
+  const searchWebTool = tool({
+    description:
+      "Search the web for reference material when an exploratory task needs external context.",
+    inputSchema: z.object({ query: z.string() }),
+    execute: async ({ query }) => {
+      const result = await runWebExplorer(query);
+      return result.success ? result.data : "Web search unavailable.";
+    },
+  });
+
+  const tools = {
+    ...getCommentTools({ workspaceId, userId, pageId }),
+    search_web: searchWebTool,
+  };
+
   const model = toRouterString(getDefaultChatModelId());
 
   const agent = new Agent({
     id: "scratchpad-observer",
     name: "Scratchpad Observer",
     model,
-    instructions: buildObserverSystemPrompt(pageLines, connectedIntegrations),
+    instructions: buildObserverSystemPrompt(pageXml, connectedIntegrations, scratchpadReadSkill),
     tools,
   });
 

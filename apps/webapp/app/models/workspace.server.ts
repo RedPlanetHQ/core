@@ -5,6 +5,8 @@ import { ensureDefaultProviders } from "~/services/llm-provider.server";
 import { sendEmail } from "~/services/email.server";
 import { logger } from "~/services/logger.service";
 import { LabelService } from "~/services/label.server";
+import { createSkill } from "~/services/skills.server";
+import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
 
 interface CreateWorkspaceDto {
   name: string;
@@ -66,6 +68,30 @@ export async function createWorkspace(
   } catch (e) {
     logger.error(`Error creating persona document: ${e}`);
     // Don't fail workspace creation if persona setup fails
+  }
+
+  // Seed default skills
+  try {
+    await Promise.all(
+      DEFAULT_SKILL_DEFINITIONS.map((def) =>
+        createSkill(workspace.id, input.userId, {
+          title: def.title,
+          content: def.content,
+          source: "system",
+          metadata: {
+            skillType: def.skillType,
+            shortDescription: def.shortDescription,
+          },
+          ...(def.sessionIdPrefix
+            ? { sessionId: `${def.sessionIdPrefix}-${workspace.id}` }
+            : {}),
+        }),
+      ),
+    );
+    logger.info(`Seeded default skills for workspace ${workspace.id}`);
+  } catch (e) {
+    logger.error(`Error seeding default skills: ${e}`);
+    // Don't fail workspace creation if skill seeding fails
   }
 
   try {

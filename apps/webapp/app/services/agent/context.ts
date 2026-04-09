@@ -72,6 +72,8 @@ interface AgentContext {
   takeActionAgent: Agent;
   thinkAgent?: Agent;
   gatewayAgents: Agent[];
+  /** True when running as a background task — ask_user should not be registered */
+  isBackgroundExecution: boolean;
 }
 
 export async function buildAgentContext({
@@ -94,7 +96,7 @@ export async function buildAgentContext({
     user,
     persona,
     connectedIntegrations,
-    skills,
+    allSkills,
     conversationRecord,
     workspace,
     customPersonalities,
@@ -119,6 +121,12 @@ export async function buildAgentContext({
     getCustomPersonalities(workspaceId),
     getWorkspaceChannelContext(workspaceId),
   ]);
+
+  // Exclude default skills (those with skillType in metadata) from the dynamic skills list
+  const skills = allSkills.filter((s) => {
+    const meta = s.metadata as Record<string, unknown> | null;
+    return !meta?.skillType;
+  });
 
   // Look up linked task context
   const linkedTaskRecord = conversationRecord?.asyncJobId
@@ -222,7 +230,7 @@ export async function buildAgentContext({
           }
         : undefined,
     },
-    persona ?? "",
+    persona ?? undefined,
     workspace?.name ?? undefined,
   );
 
@@ -441,5 +449,6 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
     takeActionAgent,
     thinkAgent,
     gatewayAgents,
+    isBackgroundExecution,
   };
 }

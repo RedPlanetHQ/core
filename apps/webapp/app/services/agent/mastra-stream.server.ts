@@ -23,7 +23,6 @@ export function buildAssistantPartsFromSteps(steps: any[]): any[] {
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
 
-    console.log(JSON.stringify(step) + "\n\n");
     parts.push(convertMastraChunkToAISDKv5({ chunk: step, mode: "stream" }));
   }
 
@@ -124,9 +123,30 @@ export function createUIStreamWithApprovals(agentResult: any): ReadableStream {
   );
 }
 
-export function streamToUIResponse(agentResult: any): Response {
+export function streamToUIResponse(
+  agentResult: any,
+  onCancel?: () => void,
+): Response {
+  let stream = createUIStreamWithApprovals(agentResult);
+
+  if (onCancel) {
+    // Pipe through a passthrough transform whose cancel() fires when the
+    // client disconnects (readable side cancelled). request.signal does not
+    // reliably fire in Remix streaming, so this is the reliable hook.
+    stream = stream.pipeThrough(
+      new TransformStream({
+        transform(chunk, controller) {
+          controller.enqueue(chunk);
+        },
+        cancel() {
+          onCancel();
+        },
+      }),
+    );
+  }
+
   return createUIMessageStreamResponse({
-    stream: createUIStreamWithApprovals(agentResult),
+    stream,
   });
 }
 

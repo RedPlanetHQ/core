@@ -10,6 +10,7 @@ import {
 } from "./conversation-utils";
 import { ICON_MAPPING } from "../icon-utils";
 import type { IconType } from "../icon-utils";
+import { AskUserQuestion } from "./tool-ui/ask-user-question";
 
 interface ToolApprovalCardProps {
   part: ConversationToolPart;
@@ -156,6 +157,23 @@ function ToolApprovalCard({
     );
   }
 
+  // ask_user → render rich question UI instead of generic approve/reject
+  if (toolName === "ask_user") {
+    const wrappedApproval: ChatAddToolApproveResponseFunction = ({ id, approved }) => {
+      onApproval(id, approved, part.toolCallId);
+    };
+    return (
+      <div className="px-3 py-3">
+        <AskUserQuestion
+          part={part}
+          addToolApprovalResponse={wrappedApproval}
+          setToolArgOverride={setToolArgOverride}
+          isChatBusy={isChatBusy}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="px-3 py-3">
       <div className="mb-2 flex items-center gap-2">
@@ -274,9 +292,11 @@ export function ToolApprovalPanel({
         <div className="bg-grayAlpha-50 border-border flex items-center gap-2 border-b px-3 py-2">
           <Zap size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">
-            {pendingApprovals.length} action
-            {pendingApprovals.length > 1 ? "s" : ""} require
-            {pendingApprovals.length === 1 ? "s" : ""} approval
+            {pendingApprovals.every((p) => p.type.includes("ask_user"))
+              ? pendingApprovals.length === 1
+                ? "Question"
+                : `${pendingApprovals.length} questions`
+              : `${pendingApprovals.length} action${pendingApprovals.length > 1 ? "s" : ""} require${pendingApprovals.length === 1 ? "s" : ""} approval`}
           </span>
         </div>
         {pendingApprovals.map((part, idx) => {
