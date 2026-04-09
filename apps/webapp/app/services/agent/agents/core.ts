@@ -187,7 +187,7 @@ export async function createCoreTools(
 
   // Skill tools
   tools["get_skill"] = getSkillTool(workspaceId);
-  if (!readOnly) {
+  if (!readOnly && !isBackgroundExecution) {
     tools["create_skill"] = createSkillTool(workspaceId, userId);
     tools["update_skill"] = updateSkillTool(workspaceId, userId);
   }
