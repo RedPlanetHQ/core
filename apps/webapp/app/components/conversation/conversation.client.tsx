@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { useLocalCommonState } from "~/hooks/use-local-state";
-import { Form, useSubmit } from "@remix-run/react";
+import { Form, useFetcher, useSubmit } from "@remix-run/react";
 import { cn } from "~/lib/utils";
 import { ArrowUp, EyeOff } from "lucide-react";
 import { Document } from "@tiptap/extension-document";
@@ -25,6 +25,7 @@ import {
 } from "../ui/select";
 import type { LLMModel } from "./conversation-textarea.client";
 import Avatar from "boring-avatars";
+import { createSkillSlashCommand } from "./slash-command-extension";
 
 export const SUGGESTED = [
   {
@@ -71,6 +72,16 @@ export const ConversationNew = ({
   >("selectedModelId", defaultModelId);
 
   const submit = useSubmit();
+  const skillsFetcher = useFetcher<{ skills: Array<{ id: string; title: string }> }>();
+  const skillsRef = useRef<Array<{ id: string; title: string }>>([]);
+
+  useEffect(() => {
+    skillsFetcher.load("/api/v1/skills?limit=100");
+  }, []);
+
+  useEffect(() => {
+    skillsRef.current = skillsFetcher.data?.skills ?? [];
+  }, [skillsFetcher.data]);
 
   // Refs so handleKeyDown always sees the latest values without stale closures
   const doSubmitRef = useRef<(messageContent: string) => void>(() => {});
@@ -108,6 +119,7 @@ export const ConversationNew = ({
       Text,
       HardBreak.configure({ keepMarks: true }),
       History,
+      createSkillSlashCommand(skillsRef),
     ],
     immediatelyRender: false,
     autofocus: true,
@@ -220,7 +232,7 @@ export const ConversationNew = ({
               editor={editor}
               className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
             />
-            <div className="flex items-center justify-between px-3 pb-3 pt-1">
+            <div className="flex items-center justify-between px-3 pb-2 pt-1">
               <div className="flex items-center gap-1">
                 <Button
                   type="button"

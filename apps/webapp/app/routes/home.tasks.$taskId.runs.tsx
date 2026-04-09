@@ -23,6 +23,7 @@ import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { getTaskRuns } from "~/services/conversation.server";
 import type { TaskRun } from "~/services/conversation.server";
 import type { loader as parentLoader } from "~/routes/home.tasks.$taskId";
+import { StyledMarkdown } from "~/components/common/styled-markdown";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -131,11 +132,9 @@ function RunDetail({
         </Button>
       </div>
 
-      <div className="bg-grayAlpha-50 flex-1 rounded-lg p-4">
+      <div className="bg-grayAlpha-50 min-h-0 flex-1 overflow-y-auto rounded-lg p-4 text-sm">
         {run.lastMessage ? (
-          <p className="whitespace-pre-wrap text-sm leading-relaxed">
-            {run.lastMessage.text}
-          </p>
+          <StyledMarkdown>{run.lastMessage.text}</StyledMarkdown>
         ) : (
           <p className="text-muted-foreground text-sm">No messages yet.</p>
         )}

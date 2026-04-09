@@ -1,7 +1,7 @@
 import {existsSync, statSync, readdirSync} from 'node:fs';
 import {join, basename} from 'node:path';
 import {homedir} from 'node:os';
-import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type ScannedSession, type ScanOptions} from './types';
+import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type SessionEntry} from './types';
 
 const CLAUDE_PROJECTS_DIR = join(homedir(), '.claude', 'projects');
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
@@ -23,6 +23,27 @@ function projectFolderToDir(folder: string): string {
 
 function getSessionPath(dir: string, sessionId: string): string {
 	return join(CLAUDE_PROJECTS_DIR, dirToProjectFolder(dir), `${sessionId}.jsonl`);
+}
+
+function extractText(content: string | Array<{type: string; text?: string}>): string {
+	if (typeof content === 'string') return content;
+	// Only grab 'text' parts — skip 'thinking', 'tool_use', 'tool_result', etc.
+	return content
+		.filter((p) => p.type === 'text' && p.text)
+		.map((p) => p.text!)
+		.join('');
+}
+
+export function claudeCodeEntriesToTurns(entries: SessionEntry[]): ConversationTurn[] {
+	const turns: ConversationTurn[] = [];
+	for (const entry of entries) {
+		if ((entry.type !== 'user' && entry.type !== 'assistant') || !entry.message) continue;
+		const {role, content} = entry.message;
+		if (role !== 'user' && role !== 'assistant') continue;
+		const text = extractText(content).trim();
+		if (text) turns.push({role: role as 'user' | 'assistant', content: text});
+	}
+	return turns;
 }
 
 export class ClaudeCodeReader extends BaseCodingAgentReader {
@@ -64,6 +85,22 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 				error: err instanceof Error ? err.message : 'Failed to read session file',
 			};
 		}
+	}
+
+	async readSessionTurns(
+		dir: string,
+		sessionId: string,
+		options: AgentReadOptions = {},
+	): Promise<AgentTurnsResult> {
+		const result = await this.readSessionOutput(dir, sessionId, options);
+		return {
+			turns: claudeCodeEntriesToTurns(result.entries),
+			totalLines: result.totalLines,
+			fileExists: result.fileExists,
+			fileSizeBytes: result.fileSizeBytes,
+			fileSizeHuman: result.fileSizeHuman,
+			error: result.error,
+		};
 	}
 
 	async scanSessions(options: ScanOptions = {}): Promise<ScannedSession[]> {

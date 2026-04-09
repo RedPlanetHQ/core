@@ -1,5 +1,6 @@
 import { type ActionFunctionArgs, json } from "@remix-run/server-runtime";
 
+import { z } from "zod";
 import { generateErrorMessage } from "zod-error";
 import { logger } from "~/services/logger.service";
 
@@ -7,7 +8,13 @@ import {
   getPersonalAccessTokenFromAuthorizationCode,
   GetPersonalAccessTokenRequestSchema,
   type GetPersonalAccessTokenResponse,
+  authenticatePersonalAccessToken,
 } from "~/services/personalAccessToken.server";
+import { saveSession } from "~/services/sessionStorage.server";
+
+const RequestSchema = GetPersonalAccessTokenRequestSchema.extend({
+  desktop: z.boolean().optional(),
+});
 
 export async function action({ request }: ActionFunctionArgs) {
   logger.info("Getting PersonalAccessToken from AuthorizationCode", {
@@ -24,7 +31,7 @@ export async function action({ request }: ActionFunctionArgs) {
 
   // Now parse the request body
   const anyBody = await request.json();
-  const body = GetPersonalAccessTokenRequestSchema.safeParse(anyBody);
+  const body = RequestSchema.safeParse(anyBody);
   if (!body.success) {
     return json(
       { error: generateErrorMessage(body.error.issues) },
@@ -41,6 +48,22 @@ export async function action({ request }: ActionFunctionArgs) {
     const responseJson: GetPersonalAccessTokenResponse = {
       token: personalAccessToken.token,
     };
+
+    // For desktop (Tauri) login: also set the session cookie so the webview
+    // becomes authenticated after this fetch completes.
+    if (body.data.desktop && personalAccessToken.token) {
+      const session = await authenticatePersonalAccessToken(
+        personalAccessToken.token.token,
+      );
+      if (session) {
+        const headers = await saveSession(request, {
+          userId: session.userId,
+          workspaceId: session.workspaceId ?? "",
+        });
+        return json(responseJson, { headers });
+      }
+    }
+
     return json(responseJson);
   } catch (error) {
     if (error instanceof Error) {

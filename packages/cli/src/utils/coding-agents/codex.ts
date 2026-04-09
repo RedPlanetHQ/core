@@ -7,6 +7,8 @@ import {
 	BaseCodingAgentReader,
 	type AgentReadResult,
 	type AgentReadOptions,
+	type AgentTurnsResult,
+	type ConversationTurn,
 	type ScannedSession,
 	type ScanOptions,
 	type SessionEntry,
@@ -160,6 +162,29 @@ export async function findLatestCodexSession(
 	return null;
 }
 
+export function codexEntriesToTurns(entries: SessionEntry[]): ConversationTurn[] {
+	const turns: ConversationTurn[] = [];
+	for (const entry of entries) {
+		if (entry.type !== 'response_item') continue;
+		const payload = entry.payload as Record<string, unknown> | undefined;
+		if (!payload || payload['type'] !== 'message') continue;
+		const role = payload['role'];
+		if (role !== 'user' && role !== 'assistant') continue;
+		const contentParts = payload['content'];
+		if (!Array.isArray(contentParts)) continue;
+		const text = (contentParts as Array<{type: string; text?: string}>)
+			.filter((p) => (p.type === 'input_text' || p.type === 'output_text') && p.text)
+			.map((p) => p.text!)
+			.join('')
+			.trim();
+		if (!text) continue;
+		// Skip environment context injected by codex
+		if (role === 'user' && text.startsWith('<environment_context>')) continue;
+		turns.push({role: role as 'user' | 'assistant', content: text});
+	}
+	return turns;
+}
+
 export class CodexReader extends BaseCodingAgentReader {
 	readonly agentName = 'codex-cli';
 
@@ -216,6 +241,22 @@ export class CodexReader extends BaseCodingAgentReader {
 				error: err instanceof Error ? err.message : 'Failed to read session file',
 			};
 		}
+	}
+
+	async readSessionTurns(
+		dir: string,
+		sessionId: string,
+		options: AgentReadOptions = {},
+	): Promise<AgentTurnsResult> {
+		const result = await this.readSessionOutput(dir, sessionId, options);
+		return {
+			turns: codexEntriesToTurns(result.entries),
+			totalLines: result.totalLines,
+			fileExists: result.fileExists,
+			fileSizeBytes: result.fileSizeBytes,
+			fileSizeHuman: result.fileSizeHuman,
+			error: result.error,
+		};
 	}
 
 	/**

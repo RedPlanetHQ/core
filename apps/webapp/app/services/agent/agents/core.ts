@@ -83,6 +83,9 @@ interface CreateCoreAgentsParams {
   interactive?: boolean;
   /** Resolved model config (string or OpenAICompatibleConfig for BYOK) */
   modelConfig?: ModelConfig;
+  /** Conversation context for recording coding sessions */
+  conversationId?: string;
+  taskId?: string;
 }
 
 // ---------------------------------------------------------------------------
@@ -317,6 +320,8 @@ export async function createCoreAgents(
     minRecurrenceMinutes,
     interactive = true,
     modelConfig,
+    conversationId,
+    taskId,
   } = params;
 
   // Load gateways for subagent creation
@@ -353,7 +358,12 @@ export async function createCoreAgents(
         interactive,
         modelConfig,
       ),
-      createGatewayAgents(gateways, executorTools, interactive, modelConfig),
+      createGatewayAgents(gateways, executorTools, interactive, modelConfig, {
+        conversationId,
+        taskId,
+        workspaceId,
+        userId,
+      }),
     ]);
 
   // Think agent — only when triggered (reminders, webhooks, scheduled jobs)

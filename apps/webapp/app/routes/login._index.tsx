@@ -1,5 +1,5 @@
 import { type LoaderFunctionArgs } from "@remix-run/node";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 import { redirect, typedjson, useTypedLoaderData } from "remix-typedjson";
 import { LoginPageLayout } from "~/components/layout/login-page-layout";
@@ -84,7 +84,8 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
                 <div>
                   <h2 className="text-base font-semibold">Privacy</h2>
                   <p className="text-muted-foreground/80 text-sm leading-relaxed">
-                    Everything you share stays between you and your butler. Always.
+                    Everything you share stays between you and your butler.
+                    Always.
                   </p>
                 </div>
               </div>
@@ -117,9 +118,134 @@ function SecurityScreen({ onContinue }: { onContinue: () => void }) {
   );
 }
 
+const POLL_INTERVAL_MS = 2000;
+const POLL_TIMEOUT_MS = 5 * 60 * 1000;
+
+function DesktopLoginPage() {
+  const [status, setStatus] = useState<"idle" | "waiting" | "error">("idle");
+  const [error, setError] = useState<string | null>(null);
+
+  const handleLogin = async () => {
+    setStatus("waiting");
+    setError(null);
+
+    try {
+      const res = await fetch("/api/v1/authorization-code", {
+        method: "POST",
+      });
+      const { authorizationCode } = await res.json();
+
+      const base64Token = btoa(
+        JSON.stringify({
+          authorizationCode,
+          source: "core-desktop",
+          clientName: "CORE Desktop",
+        }),
+      );
+      const verifyUrl = `${window.location.origin}/agent/verify/${base64Token}?source=core-desktop`;
+
+      // Open in system browser via Tauri shell plugin
+      await (window as any).__TAURI_INTERNALS__.invoke("plugin:shell|open", {
+        path: verifyUrl,
+      });
+
+      // Poll for PAT
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < POLL_TIMEOUT_MS) {
+        await new Promise((r) => setTimeout(r, POLL_INTERVAL_MS));
+
+        const tokenRes = await fetch("/api/v1/token", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ authorizationCode, desktop: true }),
+        });
+        const tokenData = await tokenRes.json();
+
+        if (tokenData.token?.token) {
+          window.location.href = "/";
+          return;
+        }
+      }
+
+      setStatus("error");
+      setError("Login timed out. Please try again.");
+    } catch {
+      setStatus("error");
+      setError("Something went wrong. Please try again.");
+    }
+  };
+
+  return (
+    <LoginPageLayout>
+      <Card className="w-full max-w-[350px] rounded-md bg-transparent p-3">
+        <CardHeader className="flex flex-col items-center">
+          <div className="mb-4 flex justify-center">
+            <Logo size={60} />
+          </div>
+          <CardTitle className="text-2xl font-normal">
+            Welcome to CORE
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="pt-2">
+          <Fieldset className="w-full">
+            <div className="flex flex-col gap-y-4">
+              {error && (
+                <p className="text-center text-sm text-red-500">{error}</p>
+              )}
+
+              <p className="text-muted-foreground/70 mb-2 text-center">
+                By connecting a third-party account, you <br /> agree to our{" "}
+                <a
+                  href="https://getcore.me/terms"
+                  target="_blank"
+                  className="text-muted-foreground underline"
+                >
+                  Terms of Service
+                </a>{" "}
+                and
+                <a
+                  href="https://getcore.me/privacy"
+                  target="_blank"
+                  className="text-muted-foreground underline"
+                >
+                  {" "}
+                  Privacy Policy
+                </a>
+              </p>
+              <Button
+                size="xl"
+                variant="secondary"
+                className="w-full rounded-lg text-base"
+                onClick={handleLogin}
+                disabled={status === "waiting"}
+              >
+                {status === "waiting" ? "Waiting for browser…" : "Get started"}
+              </Button>
+              {status === "waiting" && (
+                <p className="text-muted-foreground text-center text-xs">
+                  Complete login in the browser window that just opened.
+                </p>
+              )}
+            </div>
+          </Fieldset>
+        </CardContent>
+      </Card>
+    </LoginPageLayout>
+  );
+}
+
 export default function LoginPage() {
   const data = useTypedLoaderData<typeof loader>();
   const [showSecurity, setShowSecurity] = useState(false);
+  const [isDesktop, setIsDesktop] = useState(false);
+
+  useEffect(() => {
+    setIsDesktop(!!(window as any).__TAURI_INTERNALS__);
+  }, []);
+
+  if (isDesktop) {
+    return <DesktopLoginPage />;
+  }
 
   const handleGetStarted = () => {
     setShowSecurity(true);

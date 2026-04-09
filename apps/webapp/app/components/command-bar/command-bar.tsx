@@ -223,7 +223,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   };
 
   const handleTaskClick = (taskId: string) => {
-    navigate(`/home/tasks?taskId=${taskId}`);
+    navigate(`/home/tasks/${taskId}`);
     onOpenChange(false);
   };
 

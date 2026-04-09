@@ -26,6 +26,7 @@ import {
   detectAndApplyRecurrence,
 } from "~/services/tasks/recurrence.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
+import { hasCodingSessions } from "~/services/coding/coding-session.server";
 import { getButlerName } from "~/models/workspace.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { generateCollabToken } from "~/services/collab-token.server";
@@ -48,12 +49,14 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
 
-  const [task, integrationAccounts, butlerName, runs] = await Promise.all([
-    getTaskFull(taskId, workspaceId),
-    getIntegrationAccounts(user.id, workspaceId),
-    getButlerName(workspaceId),
-    getTaskRuns(taskId, workspaceId),
-  ]);
+  const [task, integrationAccounts, butlerName, runs, hasCoding] =
+    await Promise.all([
+      getTaskFull(taskId, workspaceId),
+      getIntegrationAccounts(user.id, workspaceId),
+      getButlerName(workspaceId),
+      getTaskRuns(taskId, workspaceId),
+      hasCodingSessions(taskId, workspaceId),
+    ]);
 
   if (!task) return redirect("/home/tasks");
 
@@ -79,6 +82,7 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     taskPageId: taskPage.id,
     collabToken: generateCollabToken(workspaceId, user.id),
     runs,
+    hasCoding,
   });
 }
 
@@ -257,7 +261,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
 // ─── Layout ───────────────────────────────────────────────────────────────────
 
 function TaskDetailLayout() {
-  const { task } = useTypedLoaderData<typeof loader>();
+  const { task, hasCoding } = useTypedLoaderData<typeof loader>();
   const navigate = useNavigate();
   const location = useLocation();
   const fetcher = useFetcher<typeof action>();
@@ -281,6 +285,7 @@ function TaskDetailLayout() {
   ];
 
   const isRunsTab = location.pathname.endsWith("/runs");
+  const isCodingTab = location.pathname.endsWith("/coding");
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   return (
@@ -292,9 +297,19 @@ function TaskDetailLayout() {
           {
             label: "Info",
             value: "info",
-            isActive: !isRunsTab,
+            isActive: !isRunsTab && !isCodingTab,
             onClick: () => navigate(`/home/tasks/${task.id}`),
           },
+          ...(hasCoding
+            ? [
+                {
+                  label: "Coding",
+                  value: "coding",
+                  isActive: isCodingTab,
+                  onClick: () => navigate(`/home/tasks/${task.id}/coding`),
+                },
+              ]
+            : []),
           ...(isScheduled
             ? [
                 {

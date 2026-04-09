@@ -16,6 +16,7 @@ import {
   Library,
   CalendarDays,
   LayoutDashboard,
+  MessageSquare,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -35,6 +36,11 @@ const data = {
       title: "Daily",
       url: "/home/daily",
       icon: CalendarDays,
+    },
+    {
+      title: "Chat",
+      url: "/home/conversation",
+      icon: MessageSquare,
     },
     {
       title: "Overview",

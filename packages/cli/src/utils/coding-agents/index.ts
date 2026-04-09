@@ -1,10 +1,11 @@
-import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type ScannedSession, type ScanOptions, type ScanResult} from './types';
-import {claudeCodeReader} from './claude-code';
-import {codexReader, findLatestCodexSession} from './codex';
+import {BaseCodingAgentReader, type AgentReadResult, type AgentReadOptions, type AgentTurnsResult, type ConversationTurn, type ScannedSession, type ScanOptions, type ScanResult} from './types';
+import {claudeCodeReader, claudeCodeEntriesToTurns} from './claude-code';
+import {codexReader, codexEntriesToTurns, findLatestCodexSession} from './codex';
 
 export {findLatestCodexSession};
+export {claudeCodeEntriesToTurns, codexEntriesToTurns};
 
-export type {AgentReadResult, AgentReadOptions, ScannedSession, ScanOptions, ScanResult};
+export type {AgentReadResult, AgentReadOptions, AgentTurnsResult, ConversationTurn, ScannedSession, ScanOptions, ScanResult};
 export {BaseCodingAgentReader};
 
 const agentReaders: Record<string, BaseCodingAgentReader> = {
@@ -30,6 +31,22 @@ export async function readAgentSessionOutput(
 		};
 	}
 	return reader.readSessionOutput(dir, sessionId, options);
+}
+
+export async function readAgentSessionTurns(
+	agentName: string,
+	dir: string,
+	sessionId: string,
+	options?: AgentReadOptions,
+): Promise<AgentTurnsResult> {
+	const reader = getAgentReader(agentName);
+	if (!reader) {
+		return {
+			turns: [], totalLines: 0, fileExists: false, fileSizeBytes: 0,
+			fileSizeHuman: '0 B', error: `No reader for agent: ${agentName}`,
+		};
+	}
+	return reader.readSessionTurns(dir, sessionId, options);
 }
 
 export function agentSessionExists(agentName: string, dir: string, sessionId: string): boolean {
