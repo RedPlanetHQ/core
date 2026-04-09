@@ -247,9 +247,9 @@ export function ConversationPopover({
             : undefined
         }
       />
-      <PopoverContent align="start" sideOffset={8} className="w-80 p-0">
+      <PopoverContent align="start" sideOffset={8} className="w-90 p-0">
         <div className="flex flex-col">
-          <div className="flex items-center justify-between border-b px-3 py-2">
+          <div className="flex items-center justify-between border-b px-2 py-1">
             <span className="text-muted-foreground text-xs font-medium">
               {resolved ? "Resolved" : "Open"}
             </span>
@@ -328,6 +328,7 @@ export function ConversationPopover({
             <ConversationTextarea
               placeholder="Reply..."
               isLoading={sending}
+              className="max-h-[200px] min-h-[36px] p-3"
               disabled={needsApproval}
               needsApproval={needsApproval}
               onConversationCreated={(message) => {

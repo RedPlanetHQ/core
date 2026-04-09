@@ -55,6 +55,7 @@ export function ConversationTextarea({
   selectedModelId,
   onModelChange,
   leftActions,
+  className,
 }: ConversationTextareaProps) {
   const [text, setText] = useState(defaultValue ?? "");
   const submit = useSubmit();
@@ -156,7 +157,10 @@ export function ConversationTextarea({
     <div className="bg-background-3 rounded-xl">
       <EditorContent
         editor={editor}
-        className="max-h-[200px] min-h-[48px] w-full overflow-auto px-4 pt-4 text-base"
+        className={cn(
+          "max-h-[200px] min-h-[48px] w-full overflow-auto px-4 text-base",
+          className,
+        )}
       />
       <div className="flex items-center justify-between px-3 pb-3 pt-1">
         <div>

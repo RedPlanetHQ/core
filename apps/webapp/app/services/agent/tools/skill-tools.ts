@@ -50,7 +50,7 @@ export function getSkillTool(workspaceId: string): Tool {
 export function createSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Create a new skill (extensible capability). For workflow skills, provide intent and the system generates structured content. For context skills (preferences, rules, persona, domain knowledge), provide content directly.",
+      "Save a reusable capability — structured knowledge, rules, preferences, or a repeatable workflow. Use this ONLY when there is something worth reusing in future conversations. NEVER use this for reminders, follow-ups, or scheduled notifications — those are tasks (use create_task with a schedule instead).",
     inputSchema: z.object({
       title: z
         .string()
@@ -59,13 +59,13 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
         .string()
         .optional()
         .describe(
-          "For workflow skills: describe what the workflow should do — the steps, rules, tools to use, and expected output. The system will generate structured content from this.",
+          "For repeatable workflow skills only: describe the reusable procedure — what it does, the steps involved, which tools to use, and when to apply it. Example: 'How to draft and send investor updates: pull last email for format reference, gather metrics, draft following the 6-section structure, confirm numbers with user, send.' Do NOT use this field for one-time actions, reminders, or scheduling requests.",
         ),
       content: z
         .string()
         .optional()
         .describe(
-          "For context skills: the full content to save directly — use this for preferences, rules, persona, domain knowledge, or any non-workflow capability. Saved as-is without running through the generator.",
+          "For knowledge/context skills: the full content to save directly — use this for captured knowledge, format templates, preferences, rules, persona, or domain expertise. Saved as-is without running through the generator. Example: the investor update format structure, email tone rules, code review checklist.",
         ),
       short_description: z
         .string()

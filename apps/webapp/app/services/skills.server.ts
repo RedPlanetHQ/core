@@ -204,6 +204,11 @@ export const deleteSkill = async (skillId: string, workspaceId: string) => {
     return null;
   }
 
+  const existingMeta = (existingSkill.metadata as Record<string, unknown>) ?? {};
+  if (existingSkill.source === "system" || existingMeta.skillType) {
+    throw new Error("Default skills cannot be deleted.");
+  }
+
   await prisma.document.update({
     where: { id: skillId },
     data: { deleted: new Date() },
