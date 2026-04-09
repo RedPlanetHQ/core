@@ -18,6 +18,7 @@ export const addToQueue = async (
   workspaceId: string,
   activityId?: string,
   ingestionQueueId?: string,
+  enqueueDelayMs?: number,
 ) => {
   const body = { ...rawBody, source: rawBody.source.toLowerCase() };
   const sessionId = body.sessionId || crypto.randomUUID();
@@ -133,6 +134,7 @@ export const addToQueue = async (
       queueId: queuePersist.id,
     },
     rawBody.delay,
+    enqueueDelayMs,
   );
 
   // Track feature usage

@@ -37,6 +37,7 @@ import {
   enqueueGraphResolution,
 } from "~/lib/queue-adapter.server";
 import { logger } from "~/services/logger.service";
+import { getBurstSafeBullmqConcurrency } from "~/services/llm-provider.server";
 import {
   type PersonaGenerationPayload,
   processPersonaGeneration,
@@ -106,7 +107,8 @@ export const preprocessWorker = new Worker(
       // Callback to enqueue individual chunk ingestion jobs
       enqueueIngestEpisode,
       // Callback to enqueue session compaction for conversations
-      enqueueSessionCompaction,
+      (compactionPayload, delayMs) =>
+        enqueueSessionCompaction(compactionPayload, delayMs),
     );
     if (!result?.success) {
       throw new Error(result?.error || "Episode preprocessing failed");
@@ -147,7 +149,10 @@ export const ingestWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_INGEST, // Global limit for ingestion jobs
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_INGEST",
+      env.BULLMQ_CONCURRENCY_INGEST,
+    ), // Keep proxy/self-hosted chat from being dogpiled by background ingestion unless explicitly overridden
   },
 );
 
@@ -162,7 +167,10 @@ export const conversationTitleWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_CONVERSATION_TITLE, // Process title creations in parallel
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_CONVERSATION_TITLE",
+      env.BULLMQ_CONCURRENCY_CONVERSATION_TITLE,
+    ), // Strict providers benefit from serial title generation unless explicitly overridden
   },
 );
 
@@ -177,7 +185,10 @@ export const sessionCompactionWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_SESSION_COMPACTION, // Process compactions in parallel
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_SESSION_COMPACTION",
+      env.BULLMQ_CONCURRENCY_SESSION_COMPACTION,
+    ), // Compaction is background polish; keep it from competing with chat unless explicitly overridden
   },
 );
 
@@ -193,7 +204,10 @@ export const labelAssignmentWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT, // Process label assignments in parallel
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT",
+      env.BULLMQ_CONCURRENCY_LABEL_ASSIGNMENT,
+    ), // Labels are non-critical background work for proxy mode unless explicitly overridden
   },
 );
 
@@ -209,7 +223,10 @@ export const titleGenerationWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_TITLE_GENERATION, // Process title generations in parallel
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_TITLE_GENERATION",
+      env.BULLMQ_CONCURRENCY_TITLE_GENERATION,
+    ), // Keep follow-up title generation from stampeding strict providers unless explicitly overridden
   },
 );
 
@@ -225,7 +242,10 @@ export const personaGenerationWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_PERSONA_GENERATION, // Persona is CPU-intensive
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_PERSONA_GENERATION",
+      env.BULLMQ_CONCURRENCY_PERSONA_GENERATION,
+    ), // Serialize expensive background LLM work for burst-sensitive setups unless explicitly overridden
   },
 );
 
@@ -241,7 +261,10 @@ export const graphResolutionWorker = new Worker(
   },
   {
     connection: getRedisConnection(),
-    concurrency: env.BULLMQ_CONCURRENCY_GRAPH_RESOLUTION, // Graph resolution concurrency
+    concurrency: getBurstSafeBullmqConcurrency(
+      "BULLMQ_CONCURRENCY_GRAPH_RESOLUTION",
+      env.BULLMQ_CONCURRENCY_GRAPH_RESOLUTION,
+    ), // Proxy mode needs stricter background pacing unless explicitly overridden
   },
 );
 

@@ -138,26 +138,30 @@ export async function initWorkers(): Promise<void> {
   // Log worker startup
   logger.log("\n🚀 Starting BullMQ workers...");
   logger.log("─".repeat(80));
-  logger.log(`✓ Ingest worker: ${ingestWorker.name} (concurrency: 1)`);
   logger.log(
-    `✓ Document ingest worker: ${preprocessWorker.name} (concurrency: 3)`,
+    `✓ Ingest worker: ${ingestWorker.name} (concurrency: ${ingestWorker.opts.concurrency ?? 1})`,
   );
   logger.log(
-    `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: 10)`,
+    `✓ Document ingest worker: ${preprocessWorker.name} (concurrency: ${preprocessWorker.opts.concurrency ?? 1})`,
   );
   logger.log(
-    `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: 3)`,
+    `✓ Conversation title worker: ${conversationTitleWorker.name} (concurrency: ${conversationTitleWorker.opts.concurrency ?? 1})`,
   );
   logger.log(
-    `✓ Label assignment worker: ${labelAssignmentWorker.name} (concurrency: 5)`,
+    `✓ Session compaction worker: ${sessionCompactionWorker.name} (concurrency: ${sessionCompactionWorker.opts.concurrency ?? 1})`,
   );
   logger.log(
-    `✓ Title generation worker: ${titleGenerationWorker.name} (concurrency: 10)`,
+    `✓ Label assignment worker: ${labelAssignmentWorker.name} (concurrency: ${labelAssignmentWorker.opts.concurrency ?? 1})`,
   );
   logger.log(
-    `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: 3)`,
+    `✓ Title generation worker: ${titleGenerationWorker.name} (concurrency: ${titleGenerationWorker.opts.concurrency ?? 1})`,
   );
-  logger.log(`✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: 5)`);
+  logger.log(
+    `✓ Integration run worker: ${integrationRunWorker.name} (concurrency: ${integrationRunWorker.opts.concurrency ?? 1})`,
+  );
+  logger.log(
+    `✓ Scratchpad scan worker: ${scratchpadScanWorker.name} (concurrency: ${scratchpadScanWorker.opts.concurrency ?? 1})`,
+  );
   logger.log(`✓ Reminder scheduler: reminder-queue + followup-queue`);
   logger.log(`✓ Scheduled task scheduler: scheduled-task-queue`);
   logger.log("─".repeat(80));

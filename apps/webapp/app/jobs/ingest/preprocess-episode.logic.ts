@@ -22,6 +22,7 @@ import { prisma } from "~/db.server";
 import { type SessionCompactionPayload } from "~/jobs/session/session-compaction.logic";
 import { getRecentEpisodes } from "~/services/vectorStorage.server";
 import { type EpisodeEmbedding } from "@prisma/client";
+import { getBurstSafeBackgroundDelayMs } from "~/services/llm-provider.server";
 
 export { IngestBodyRequest };
 
@@ -73,7 +74,10 @@ export async function processEpisodePreprocessing(
   // Callback function for enqueueing ingestion jobs (one per chunk)
   enqueueIngestEpisode?: (params: IngestEpisodePayload) => Promise<any>,
   // Callback function for enqueueing session compaction (for conversations)
-  enqueueSessionCompaction?: (params: SessionCompactionPayload) => Promise<any>,
+  enqueueSessionCompaction?: (
+    params: SessionCompactionPayload,
+    delayMs?: number,
+  ) => Promise<any>,
 ): Promise<PreprocessEpisodeResult> {
   try {
     logger.info(`Preprocessing episode for user ${payload.userId}`, {
@@ -495,12 +499,13 @@ export async function processEpisodePreprocessing(
         });
 
         try {
+          const delayMs = !document ? getBurstSafeBackgroundDelayMs() : 0;
           await enqueueSessionCompaction({
             userId: payload.userId,
             sessionId,
             source: episodeBody.source,
             workspaceId: payload.workspaceId,
-          });
+          }, delayMs);
         } catch (compactionError) {
           // Don't fail preprocessing if compaction enqueueing fails
           logger.warn(`Failed to enqueue session compaction`, {

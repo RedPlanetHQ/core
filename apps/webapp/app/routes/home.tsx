@@ -30,7 +30,10 @@ import {
 } from "~/components/chat-panel/chat-panel-context";
 import React from "react";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
-import { getAvailableModels } from "~/services/llm-provider.server";
+import {
+  getAvailableModels,
+  isBurstSensitiveChatProvider,
+} from "~/services/llm-provider.server";
 import { type LLMModel } from "~/components/conversation";
 import { tinykeys } from "tinykeys";
 
@@ -84,6 +87,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
     getIntegrationAccounts(user.id, workspace?.id as string),
     getAvailableModels(),
   ]);
+  const enableBurstSafeReplyRecovery = isBurstSensitiveChatProvider();
 
   const models = allModels
     .filter(
@@ -117,6 +121,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
         models,
         integrationAccountMap,
         integrationFrontendMap,
+        enableBurstSafeReplyRecovery,
       },
       {
         headers: {
@@ -136,6 +141,7 @@ function HomeInner({
   needsButlerName,
   models,
   integrationAccountMap,
+  enableBurstSafeReplyRecovery,
 }: {
   conversationSources: any;
   workspace: any;
@@ -145,6 +151,7 @@ function HomeInner({
   needsButlerName: boolean;
   models: LLMModel[];
   integrationAccountMap: Record<string, string>;
+  enableBurstSafeReplyRecovery: boolean;
 }) {
   const { panelRef, closeChat, onPanelCollapse, chatOpen, toggleChat } =
     useChatPanel()!;
@@ -226,6 +233,7 @@ function HomeInner({
                     onClose={closeChat}
                     models={models}
                     integrationAccountMap={integrationAccountMap}
+                    enableBurstSafeReplyRecovery={enableBurstSafeReplyRecovery}
                   />
                 )}
               </ClientOnly>
@@ -238,8 +246,13 @@ function HomeInner({
 }
 
 export default function Home() {
-  const { conversationSources, workspace, models, integrationAccountMap } =
-    useLoaderData<typeof loader>() as any;
+  const {
+    conversationSources,
+    workspace,
+    models,
+    integrationAccountMap,
+    enableBurstSafeReplyRecovery,
+  } = useLoaderData<typeof loader>() as any;
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
   const needsButlerName = !meta.onboardingV2Complete;
   const accentColor = (meta.accentColor as string) || "#c87844";
@@ -257,6 +270,7 @@ export default function Home() {
           needsButlerName={needsButlerName}
           models={models}
           integrationAccountMap={integrationAccountMap}
+          enableBurstSafeReplyRecovery={enableBurstSafeReplyRecovery}
         />
       </ChatPanelProvider>
     </CollabSocketProvider>

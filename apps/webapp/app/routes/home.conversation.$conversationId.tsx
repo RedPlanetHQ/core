@@ -13,7 +13,10 @@ import {
   deleteConversation,
 } from "~/services/conversation.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
-import { getAvailableModels } from "~/services/llm-provider.server";
+import {
+  getAvailableModels,
+  isBurstSensitiveChatProvider,
+} from "~/services/llm-provider.server";
 import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
 
@@ -32,6 +35,7 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     getIntegrationAccounts(user.id, workspaceId),
     getAvailableModels(),
   ]);
+  const enableBurstSafeFirstReplyRecovery = isBurstSensitiveChatProvider();
 
   const models = allModels
     .filter(
@@ -46,7 +50,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }));
 
   if (!conversation) {
-    return { conversation: null, integrationAccountMap: {}, models };
+    return {
+      conversation: null,
+      integrationAccountMap: {},
+      models,
+      enableBurstSafeFirstReplyRecovery,
+    };
   }
 
   if (conversation.unread) {
@@ -62,7 +71,13 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }
   }
 
-  return { conversation, integrationAccountMap, integrationFrontendMap, models };
+  return {
+    conversation,
+    integrationAccountMap,
+    integrationFrontendMap,
+    models,
+    enableBurstSafeFirstReplyRecovery,
+  };
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
@@ -72,7 +87,13 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap, integrationFrontendMap, models } =
+  const {
+    conversation,
+    integrationAccountMap,
+    integrationFrontendMap,
+    models,
+    enableBurstSafeFirstReplyRecovery,
+  } =
     useTypedLoaderData<typeof loader>();
   const { conversationId } = useParams();
 
@@ -96,6 +117,7 @@ export default function SingleConversation() {
         conversationStatus={conversation.status}
         models={models}
         autoRegenerate
+        enableBurstSafeFirstReplyRecovery={enableBurstSafeFirstReplyRecovery}
       />
     </div>
   );

@@ -25,6 +25,7 @@ interface GlobalChatPanelProps {
   onClose: () => void;
   models: LLMModel[];
   integrationAccountMap: Record<string, string>;
+  enableBurstSafeReplyRecovery?: boolean;
 }
 
 // Minimal chat input — creates a conversation and hands off to ConversationView
@@ -186,12 +187,14 @@ export function GlobalChatPanel({
   onClose,
   models,
   integrationAccountMap,
+  enableBurstSafeReplyRecovery = false,
 }: GlobalChatPanelProps) {
   const { pinnedConversationId } = useChatPanel()!;
   const navigate = useNavigate();
 
   const [activeConversation, setActiveConversation] = useState<{
     conversationId: string;
+    status?: string;
     history: Array<{
       id: string;
       userType: string;
@@ -231,6 +234,7 @@ export function GlobalChatPanel({
   ) => {
     setActiveConversation({
       conversationId,
+      status: "pending",
       history: [
         {
           id: historyId,
@@ -256,6 +260,7 @@ export function GlobalChatPanel({
       const conv = historyFetcher.data.conversation;
       setActiveConversation({
         conversationId: pendingHistoryId.current,
+        status: conv.status,
         history: conv.ConversationHistory ?? [],
       });
       pendingHistoryId.current = null;
@@ -314,7 +319,9 @@ export function GlobalChatPanel({
             conversationId={activeConversation.conversationId}
             history={activeConversation.history}
             autoRegenerate
+            enableBurstSafeFirstReplyRecovery={enableBurstSafeReplyRecovery}
             integrationAccountMap={integrationAccountMap}
+            conversationStatus={activeConversation.status}
             models={models}
           />
         </div>

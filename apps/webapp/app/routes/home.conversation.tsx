@@ -16,6 +16,9 @@ import {
   createConversation,
   CreateConversationSchema,
 } from "~/services/conversation.server";
+import { noStreamProcess } from "~/services/agent/no-stream-process";
+import { isBurstSensitiveChatProvider } from "~/services/llm-provider.server";
+import { logger } from "~/services/logger.service";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -70,6 +73,37 @@ export async function action({ request }: ActionFunctionArgs) {
   }
 
   const conversationId = conversation?.conversationId;
+
+  const shouldPrecomputeFirstReply =
+    !!conversationId &&
+    !submission.value.conversationId &&
+    !submission.value.panelMode &&
+    isBurstSensitiveChatProvider();
+
+  if (shouldPrecomputeFirstReply) {
+    // Keep the default client autoRegenerate flow for normal providers. Proxy/self-hosted
+    // setups can fail after the initial stream starts (late 429s), so we precompute here.
+    try {
+      await noStreamProcess(
+        {
+          id: conversationId,
+          modelId: submission.value.modelId,
+          message: {
+            parts: [{ text: submission.value.message, type: "text" }],
+            role: "user",
+          },
+          source: submission.value.source ?? "core",
+        },
+        userId,
+        workspace?.id as string,
+      );
+    } catch (error) {
+      logger.warn("Burst-safe first reply precompute failed; falling back to client retry path", {
+        conversationId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
 
   if (submission.value.panelMode) {
     return json({ conversation, conversationId });

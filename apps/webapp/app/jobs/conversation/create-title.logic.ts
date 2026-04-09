@@ -3,6 +3,7 @@ import { conversationTitlePrompt } from "~/trigger/conversation/prompt";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
 import { makeStructuredModelCall } from "~/lib/model.server";
+import { runWithBurstRetry } from "~/services/agent/burst-retry.server";
 
 
 export interface CreateConversationTitlePayload {
@@ -34,18 +35,23 @@ export async function processConversationTitleCreation(
       select: { workspaceId: true },
     });
 
-    const { object } = await makeStructuredModelCall(
-      TitleSchema,
-      [
-        {
-          role: "user",
-          content: conversationTitlePrompt.replace("{{message}}", payload.message),
-        },
-      ],
-      "medium",
-      "conversationTitle",
-      undefined,
-      conversation?.workspaceId ?? undefined,
+    const { object } = await runWithBurstRetry("conversation.title", () =>
+      makeStructuredModelCall(
+        TitleSchema,
+        [
+          {
+            role: "user",
+            content: conversationTitlePrompt.replace(
+              "{{message}}",
+              payload.message,
+            ),
+          },
+        ],
+        "medium",
+        "conversationTitle",
+        undefined,
+        conversation?.workspaceId ?? undefined,
+      ),
     );
 
     const title = object.title?.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, 80) || "";

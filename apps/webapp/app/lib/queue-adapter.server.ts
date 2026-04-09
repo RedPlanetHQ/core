@@ -35,8 +35,10 @@ export type QueueProvider = "trigger" | "bullmq";
 export async function enqueuePreprocessEpisode(
   payload: IngestEpisodePayload,
   delay?: boolean,
+  delayMs?: number,
 ): Promise<{ id?: string; token?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
+  const resolvedDelayMs = delayMs ?? (delay ? 5 * 60 * 1000 : undefined);
 
   if (provider === "trigger") {
     const { preprocessTask } =
@@ -45,7 +47,9 @@ export async function enqueuePreprocessEpisode(
       queue: "preprocessing-queue",
       concurrencyKey: payload.userId,
       tags: [payload.userId, payload.queueId],
-      delay: delay ? "5m" : undefined,
+      delay: resolvedDelayMs
+        ? `${Math.ceil(resolvedDelayMs / 1000)}s`
+        : undefined,
     });
     return { id: handler.id, token: handler.publicAccessToken };
   } else {
@@ -55,7 +59,7 @@ export async function enqueuePreprocessEpisode(
       jobId: payload.queueId,
       attempts: 3,
       backoff: { type: "exponential", delay: 2000 },
-      delay: delay ? 5 * 60 * 1000 : undefined, // 5 minutes in milliseconds
+      delay: resolvedDelayMs,
     });
     return { id: job.id };
   }
@@ -94,13 +98,16 @@ export async function enqueueIngestEpisode(
  */
 export async function enqueueCreateConversationTitle(
   payload: CreateConversationTitlePayload,
+  delayMs?: number,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
     const { createConversationTitle } =
       await import("~/trigger/conversation/create-conversation-title");
-    const handler = await createConversationTitle.trigger(payload);
+    const handler = await createConversationTitle.trigger(payload, {
+      ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
+    });
     return { id: handler.id };
   } else {
     // BullMQ
@@ -111,6 +118,7 @@ export async function enqueueCreateConversationTitle(
       {
         attempts: 3,
         backoff: { type: "exponential", delay: 2000 },
+        ...(delayMs ? { delay: delayMs } : {}),
       },
     );
     return { id: job.id };
@@ -122,13 +130,16 @@ export async function enqueueCreateConversationTitle(
  */
 export async function enqueueSessionCompaction(
   payload: SessionCompactionPayload,
+  delayMs?: number,
 ): Promise<{ id?: string }> {
   const provider = env.QUEUE_PROVIDER as QueueProvider;
 
   if (provider === "trigger") {
     const { triggerSessionCompaction } =
       await import("~/trigger/session/session-compaction");
-    const handler = await triggerSessionCompaction(payload);
+    const handler = await triggerSessionCompaction(payload, {
+      ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
+    });
     return { id: handler.id };
   } else {
     // BullMQ
@@ -139,6 +150,7 @@ export async function enqueueSessionCompaction(
       {
         attempts: 3,
         backoff: { type: "exponential", delay: 2000 },
+        ...(delayMs ? { delay: delayMs } : {}),
       },
     );
     return { id: job.id };

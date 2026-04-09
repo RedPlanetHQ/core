@@ -29,11 +29,12 @@ export const preprocessTask = task({
         });
       },
       // Callback to enqueue session compaction for conversations
-      async (compactionPayload) => {
+      async (compactionPayload, delayMs) => {
         await sessionCompactionTask.trigger(compactionPayload, {
           queue: "session-compaction-queue",
           concurrencyKey: compactionPayload.userId,
           tags: [compactionPayload.userId, compactionPayload.sessionId],
+          ...(delayMs ? { delay: `${Math.ceil(delayMs / 1000)}s` } : {}),
         });
       },
     );

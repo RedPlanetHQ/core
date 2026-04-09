@@ -37,6 +37,8 @@ interface ProviderConfig {
 
 export type UseCase = "chat" | "memory" | "search";
 export type ModelComplexity = "low" | "medium" | "high";
+const BURST_SAFE_BACKGROUND_DELAY_MS = 15_000;
+const BURST_SAFE_CONVERSATION_INGEST_DELAY_MS = 45_000;
 
 // ---------------------------------------------------------------------------
 // Seeder
@@ -73,6 +75,9 @@ function buildProviderConfig(providerType: string): Record<string, unknown> {
  */
 export async function ensureDefaultProviders(): Promise<void> {
   const catalog = seedData as Record<string, SeedProvider>;
+  const protectedCustomModelIds = new Set(
+    [env.MODEL, env.EMBEDDING_MODEL].filter(Boolean) as string[],
+  );
 
   for (const [providerType, providerData] of Object.entries(catalog)) {
     let provider = await prisma.lLMProvider.findFirst({
@@ -136,7 +141,11 @@ export async function ensureDefaultProviders(): Promise<void> {
     }
 
     for (const existing of existingModels) {
-      if (!seedModelIds.has(existing.modelId) && !existing.isDeprecated) {
+      if (
+        !seedModelIds.has(existing.modelId) &&
+        !protectedCustomModelIds.has(existing.modelId) &&
+        !existing.isDeprecated
+      ) {
         await prisma.lLMModel.update({
           where: { id: existing.id },
           data: { isDeprecated: true },
@@ -149,14 +158,19 @@ export async function ensureDefaultProviders(): Promise<void> {
   // Dynamic model creation for env-specified models not in seed
 
   if (env.MODEL) {
-    const chatModelExists = await prisma.lLMModel.findFirst({
-      where: { modelId: env.MODEL },
+    const targetProvider = await prisma.lLMProvider.findFirst({
+      where: { type: env.CHAT_PROVIDER, workspaceId: null },
     });
-    if (!chatModelExists) {
-      const targetProvider = await prisma.lLMProvider.findFirst({
-        where: { type: env.CHAT_PROVIDER, workspaceId: null },
+    if (targetProvider) {
+      const chatModel = await prisma.lLMModel.findFirst({
+        where: {
+          providerId: targetProvider.id,
+          modelId: env.MODEL,
+          capabilities: { has: "chat" },
+        },
       });
-      if (targetProvider) {
+
+      if (!chatModel) {
         await prisma.lLMModel.create({
           data: {
             providerId: targetProvider.id,
@@ -170,21 +184,40 @@ export async function ensureDefaultProviders(): Promise<void> {
         logger.info(
           `[LLM] Added custom chat model: ${env.MODEL} under ${env.CHAT_PROVIDER}`,
         );
+      } else if (chatModel.isDeprecated) {
+        await prisma.lLMModel.update({
+          where: { id: chatModel.id },
+          data: {
+            label: env.MODEL,
+            complexity: chatModel.complexity,
+            supportsBatch: false,
+            capabilities: ["chat"],
+            isDeprecated: false,
+            isEnabled: true,
+          },
+        });
+        logger.info(
+          `[LLM] Restored custom chat model: ${env.MODEL} under ${env.CHAT_PROVIDER}`,
+        );
       }
     }
   }
 
   const embeddingProvider = env.EMBEDDINGS_PROVIDER ?? "openai";
   const embeddingModelId = env.EMBEDDING_MODEL || "text-embedding-3-small";
-  const embeddingModelExists = await prisma.lLMModel.findFirst({
-    where: { modelId: embeddingModelId, capabilities: { has: "embedding" } },
+  const targetProvider = await prisma.lLMProvider.findFirst({
+    where: { type: embeddingProvider, workspaceId: null },
   });
-  if (!embeddingModelExists) {
-    const targetProvider = await prisma.lLMProvider.findFirst({
-      where: { type: embeddingProvider, workspaceId: null },
+  if (targetProvider) {
+    const embeddingModel = await prisma.lLMModel.findFirst({
+      where: {
+        providerId: targetProvider.id,
+        modelId: embeddingModelId,
+        capabilities: { has: "embedding" },
+      },
     });
-    if (targetProvider) {
-      const dims = parseInt(env.EMBEDDING_MODEL_SIZE || "1024", 10);
+    const dims = parseInt(env.EMBEDDING_MODEL_SIZE || "1024", 10);
+    if (!embeddingModel) {
       await prisma.lLMModel.create({
         data: {
           providerId: targetProvider.id,
@@ -196,8 +229,24 @@ export async function ensureDefaultProviders(): Promise<void> {
           dimensions: dims,
         },
       });
+        logger.info(
+          `[LLM] Added custom embedding model: ${embeddingModelId} under ${embeddingProvider}`,
+        );
+    } else if (embeddingModel.isDeprecated) {
+      await prisma.lLMModel.update({
+        where: { id: embeddingModel.id },
+        data: {
+          label: embeddingModelId,
+          complexity: embeddingModel.complexity,
+          supportsBatch: false,
+          capabilities: ["embedding"],
+          dimensions: dims,
+          isDeprecated: false,
+          isEnabled: true,
+        },
+      });
       logger.info(
-        `[LLM] Added custom embedding model: ${embeddingModelId} under ${embeddingProvider}`,
+        `[LLM] Restored custom embedding model: ${embeddingModelId} under ${embeddingProvider}`,
       );
     }
   }
@@ -234,6 +283,64 @@ export function getProviderConfig(providerType: string): ProviderConfig {
   return {};
 }
 
+async function resolveProviderBaseUrl(
+  providerType: string,
+  workspaceId?: string | null,
+): Promise<string | undefined> {
+  if (
+    providerType !== "azure" &&
+    providerType !== "openai" &&
+    providerType !== "ollama"
+  ) {
+    return undefined;
+  }
+
+  const byokBaseUrl = workspaceId
+    ? await resolveWorkspaceProviderBaseUrl(workspaceId, providerType)
+    : null;
+
+  const envBaseUrl =
+    providerType === "azure"
+      ? env.AZURE_BASE_URL
+      : providerType === "openai"
+        ? env.OPENAI_BASE_URL
+        : env.OLLAMA_URL;
+
+  return byokBaseUrl ?? envBaseUrl;
+}
+
+export function isBurstSensitiveChatProvider(): boolean {
+  return (
+    env.CHAT_PROVIDER === "ollama" ||
+    (env.CHAT_PROVIDER === "openai" && !!env.OPENAI_BASE_URL)
+  );
+}
+
+export function getBurstSafeBackgroundDelayMs(): number {
+  return isBurstSensitiveChatProvider() ? BURST_SAFE_BACKGROUND_DELAY_MS : 0;
+}
+
+export function getBurstSafeConversationIngestDelayMs(): number {
+  return isBurstSensitiveChatProvider()
+    ? BURST_SAFE_CONVERSATION_INGEST_DELAY_MS
+    : 0;
+}
+
+export function getBurstSafeBullmqConcurrency(
+  envKey: string,
+  defaultConcurrency: number,
+): number {
+  if (process.env[envKey]) {
+    return defaultConcurrency;
+  }
+
+  if (!isBurstSensitiveChatProvider()) {
+    return defaultConcurrency;
+  }
+
+  return Math.min(defaultConcurrency, 1);
+}
+
 export async function getDefaultEmbeddingInfo(): Promise<EmbeddingInfo | null> {
   const embeddingModelId = env.EMBEDDING_MODEL || "text-embedding-3-small";
   const model = await prisma.lLMModel.findFirst({
@@ -263,8 +370,8 @@ export async function getEmbeddingDimensions(): Promise<number> {
  *
  * Resolution order:
  *   1. workspace.metadata.modelConfig[useCase].modelId  (explicit workspace override)
- *   2. LLMModel with env.CHAT_PROVIDER + complexity     (DB complexity routing)
- *   3. env.MODEL                                        (final fallback)
+ *   2. env.MODEL                                        (server-level default)
+ *   3. LLMModel with env.CHAT_PROVIDER + complexity     (DB complexity routing fallback)
  */
 export async function getModelForUseCase(
   useCase: UseCase,
@@ -286,7 +393,10 @@ export async function getModelForUseCase(
     if (modelId) return modelId;
   }
 
-  // 2. DB complexity routing via env.CHAT_PROVIDER
+  // 2. Server-level default model
+  if (env.MODEL) return env.MODEL;
+
+  // 3. DB complexity routing via env.CHAT_PROVIDER
   const provider = await prisma.lLMProvider.findFirst({
     where: { type: env.CHAT_PROVIDER, workspaceId: null },
   });
@@ -303,7 +413,7 @@ export async function getModelForUseCase(
     if (model) return model.modelId;
   }
 
-  // 3. env fallback
+  // 4. env fallback
   return env.MODEL;
 }
 
@@ -368,6 +478,10 @@ export async function getChatModels(workspaceId?: string) {
 }
 
 export async function getAvailableModels(workspaceId?: string) {
+  const defaultModelId = workspaceId
+    ? await getModelForUseCase("chat", workspaceId, "medium")
+    : getDefaultChatModelId();
+
   const providers = await getProviders(workspaceId);
   const providerIds = providers.map((p) => p.id);
 
@@ -399,10 +513,13 @@ export async function getAvailableModels(workspaceId?: string) {
       include: { provider: true },
     });
 
-    return [...globalModels, ...customModels];
+    return [...globalModels, ...customModels].map((model) => ({
+      ...model,
+      isDefault: model.modelId === defaultModelId,
+    }));
   }
 
-  return prisma.lLMModel.findMany({
+  const models = await prisma.lLMModel.findMany({
     where: {
       providerId: { in: providerIds },
       isEnabled: true,
@@ -410,6 +527,11 @@ export async function getAvailableModels(workspaceId?: string) {
     },
     include: { provider: true },
   });
+
+  return models.map((model) => ({
+    ...model,
+    isDefault: model.modelId === defaultModelId,
+  }));
 }
 
 // ---------------------------------------------------------------------------
@@ -493,12 +615,13 @@ export async function resolveModelForWorkspace(
     providerType,
   );
 
-  // For Azure, also resolve the base URL (BYOK stores it in baseUrl; env fallback)
-  if (providerType === "azure") {
-    const byokBaseUrl = workspaceId
-      ? await resolveWorkspaceProviderBaseUrl(workspaceId, "azure")
-      : null;
-    const baseUrl = byokBaseUrl ?? env.AZURE_BASE_URL;
+  // Providers with custom endpoints can resolve a workspace-scoped base URL.
+  if (
+    providerType === "azure" ||
+    providerType === "openai" ||
+    providerType === "ollama"
+  ) {
+    const baseUrl = await resolveProviderBaseUrl(providerType, workspaceId);
     return { modelId, apiKey, isBYOK, baseUrl };
   }
 
@@ -512,7 +635,7 @@ export type OpenAICompatibleConfig = {
   headers?: Record<string, string>;
 };
 
-export type ModelConfig = string | OpenAICompatibleConfig;
+export type ModelConfig = string | OpenAICompatibleConfig | object;
 
 export interface ResolvedModelConfig {
   modelConfig: ModelConfig;
@@ -523,14 +646,27 @@ export async function resolveModelConfig(
   modelString: string,
   workspaceId: string | null | undefined,
 ): Promise<ResolvedModelConfig> {
-  const { toRouterString, getProvider } = await import("~/lib/model.server");
+  const { toRouterString, getProvider, getDirectModelInstance, shouldBypassMastraAgent } = await import(
+    "~/lib/model.server"
+  );
 
   const providerType = getProvider(modelString);
   const { apiKey, isBYOK } = await resolveApiKeyForWorkspace(
     workspaceId,
     providerType,
   );
+  const baseUrl = await resolveProviderBaseUrl(providerType, workspaceId);
   const routerString = toRouterString(modelString) as `${string}/${string}`;
+
+  if (shouldBypassMastraAgent(modelString, baseUrl)) {
+    return {
+      modelConfig: getDirectModelInstance(modelString, {
+        ...(apiKey && { apiKey }),
+        ...(baseUrl && { baseUrl }),
+      }) as object,
+      isBYOK,
+    };
+  }
 
   if (isBYOK && apiKey) {
     return { modelConfig: { id: routerString, apiKey }, isBYOK: true };

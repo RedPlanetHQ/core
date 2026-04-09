@@ -6,7 +6,7 @@ import {
   setActiveStreamId,
   clearActiveStreamId,
 } from "../conversation.server";
-import { EpisodeType, UserTypeEnum } from "@core/types";
+import { UserTypeEnum } from "@core/types";
 import { generateId, stepCountIs, JsonToSseTransformStream } from "ai";
 import { Agent, convertMessages } from "@mastra/core/agent";
 import type { OutputProcessor } from "@mastra/core/processors";
@@ -14,6 +14,7 @@ import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
 import {
   getDefaultChatModelId,
+  getBurstSafeBackgroundDelayMs,
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import {
@@ -21,13 +22,16 @@ import {
   type DecisionContext,
 } from "~/services/agent/types/decision-agent";
 import { type OrchestratorTools } from "~/services/agent/executors/base";
-import { createUIStreamWithApprovals } from "./mastra-stream.server";
+import {
+  createUIStreamWithApprovals,
+  saveConversationResult,
+} from "./mastra-stream.server";
+import { runWithBurstRetry } from "./burst-retry.server";
 import { getResumableStreamContext } from "~/bullmq/connection";
-import { deductCredits } from "~/trigger/utils/utils";
-import { addToQueue } from "~/lib/ingest.server";
 
 interface NoStreamProcessBody {
   id: string;
+  modelId?: string;
   message?: {
     id?: string;
     parts: any[];
@@ -78,10 +82,11 @@ export async function noStreamProcess(
   if (conversationHistory.length === 1 && !isAssistantApproval) {
     const message = body.message?.parts[0].text;
     // Trigger conversation title task
+    const delayMs = getBurstSafeBackgroundDelayMs();
     await enqueueCreateConversationTitle({
       conversationId: body.id,
       message,
-    });
+    }, delayMs);
   }
 
   const messageUserType = body.messageUserType ?? UserTypeEnum.User;
@@ -93,7 +98,6 @@ export async function noStreamProcess(
   ) {
     const message = body.message?.parts[0].text;
     const messageParts = body.message?.parts;
-
     await upsertConversationHistory(
       message.id ?? crypto.randomUUID(),
       messageParts,
@@ -120,19 +124,30 @@ export async function noStreamProcess(
   if (!isAssistantApproval) {
     const id = body.message?.id;
     const userMessageId = id ?? generateId();
+    const latestHistoryMessage = messages[messages.length - 1];
+    const currentMessageParts =
+      body.message?.parts ?? [{ text: message, type: "text" }];
+    const alreadyInHistory =
+      latestHistoryMessage?.role === "user" &&
+      JSON.stringify(latestHistoryMessage.parts ?? []) ===
+        JSON.stringify(currentMessageParts);
     finalMessages = [
       ...messages,
-      {
-        parts: body.message?.parts ?? [{ text: message, type: "text" }],
-        role: "user",
-        id: userMessageId,
-      },
+      ...(!alreadyInHistory
+        ? [
+            {
+              parts: currentMessageParts,
+              role: "user",
+              id: userMessageId,
+            },
+          ]
+        : []),
     ];
   } else {
     finalMessages = body.messages as any;
   }
 
-  const modelString = getDefaultChatModelId();
+  const modelString = body.modelId ?? getDefaultChatModelId();
   const { modelConfig, isBYOK } = await resolveModelConfig(
     modelString,
     workspaceId,
@@ -193,6 +208,7 @@ export async function noStreamProcess(
   // Capture final parts/text from outputProcessor for channel reply
   let capturedParts: any[] = [];
   let capturedText = "";
+  let didPersistResult = false;
 
   const messageHistoryProcessor: OutputProcessor = {
     id: "message-history",
@@ -207,25 +223,36 @@ export async function noStreamProcess(
         .filter((p: any) => p.type === "text")
         .map((p: any) => p.text)
         .join("");
+      await saveConversationResult({
+        parts: capturedParts,
+        conversationId: body.id,
+        incomingUserText: message,
+        incognito: conversation?.incognito ?? false,
+        userId,
+        workspaceId,
+        isBYOK,
+      });
+      didPersistResult = true;
       return messages;
     },
   };
 
   let agentResult: any;
   try {
-    agentResult = await agent.generate(modelMessages, {
-      toolsets: { core: tools },
-      stopWhen: [stepCountIs(10)],
-      modelSettings: { temperature: 0.5 },
-      outputProcessors: [messageHistoryProcessor],
-    });
+    agentResult = await runWithBurstRetry("conversation.generate", () =>
+      agent.generate(modelMessages, {
+        toolsets: { core: tools },
+        stopWhen: [stepCountIs(10)],
+        modelSettings: { temperature: 0.5 },
+        outputProcessors: [messageHistoryProcessor],
+      }),
+    );
   } catch (error) {
     await updateConversationStatus(body.id, "failed");
     throw error;
   }
 
   // Build assistant parts from result.steps (handle Mastra payload wrapper)
-  const assistantMessageId = crypto.randomUUID();
   const assistantParts: any[] = [];
 
   for (const step of agentResult.steps) {
@@ -255,43 +282,24 @@ export async function noStreamProcess(
     }
   }
 
-  const assistantMessage = {
-    id: assistantMessageId,
-    role: "assistant",
-    parts: assistantParts,
-  };
-
-  try {
-    await upsertConversationHistory(
-      assistantMessageId,
-      assistantParts,
-      body.id,
-      UserTypeEnum.Agent,
-      false,
-    );
-
-    if (agentResult.text) {
-      await addToQueue(
-        {
-          episodeBody: `<user>${message}</user><assistant>${agentResult.text}</assistant>`,
-          source: body.source,
-          referenceTime: new Date().toISOString(),
-          type: EpisodeType.CONVERSATION,
-          sessionId: body.id,
-        },
-        userId,
-        workspaceId,
-      );
-    }
-
-    if (!isBYOK) {
-      await deductCredits(workspaceId, userId, "chatMessage", 1);
-    }
-  } finally {
-    await updateConversationStatus(body.id, "completed");
+  if (!didPersistResult && assistantParts.length > 0) {
+    await saveConversationResult({
+      parts: assistantParts,
+      conversationId: body.id,
+      incomingUserText: message,
+      incognito: conversation?.incognito ?? false,
+      userId,
+      workspaceId,
+      isBYOK,
+    });
   }
 
-  return { ...assistantMessage, text: agentResult.text };
+  return {
+    id: crypto.randomUUID(),
+    role: "assistant",
+    parts: capturedParts.length > 0 ? capturedParts : assistantParts,
+    text: capturedText || agentResult.text || "",
+  };
 
   // const uiStream = createUIStreamWithApprovals(agentResult);
   // const sseStream = uiStream.pipeThrough(new JsonToSseTransformStream());

@@ -1,4 +1,9 @@
-import { embed, type ModelMessage } from "ai";
+import {
+  embed,
+  generateText,
+  streamText,
+  type ModelMessage,
+} from "ai";
 import { type z } from "zod";
 import {
   createOpenAI,
@@ -117,21 +122,23 @@ export const getModel = (takeModel?: string) => {
   const modelId = getModelId(model);
 
   // Ollama: use direct AI SDK provider (needs custom URL)
-  if (provider === "ollama" || getDefaultChatProviderType() === "ollama") {
+  if (provider === "ollama") {
+    return getDirectModelInstance(model);
+  }
+  if (getDefaultChatProviderType() === "ollama") {
     const ollamaConfig = getProviderConfig("ollama");
     const ollamaUrl = ollamaConfig.baseUrl;
     if (!ollamaUrl) {
       throw new Error("Ollama provider selected but no baseUrl configured.");
     }
-    if (!modelId) {
-      throw new Error("No chat model configured for Ollama.");
-    }
-    const ollama = createOllama({ baseURL: ollamaUrl });
-    return ollama(modelId);
+    return createOllama({ baseURL: ollamaUrl })(modelId);
   }
 
   // Azure: use direct AI SDK provider (needs base URL + API key)
-  if (provider === "azure" || getDefaultChatProviderType() === "azure") {
+  if (provider === "azure") {
+    return getDirectModelInstance(model);
+  }
+  if (getDefaultChatProviderType() === "azure") {
     const azureConfig = getProviderConfig("azure");
     const baseURL = azureConfig.baseUrl;
     if (!baseURL) {
@@ -141,27 +148,13 @@ export const getModel = (takeModel?: string) => {
     if (!apiKey) {
       throw new Error("Azure provider selected but AZURE_API_KEY is not configured.");
     }
-    const azureClient = createAzure({ baseURL, apiKey });
-    return azureClient(modelId);
+    return createAzure({ baseURL, apiKey })(modelId);
   }
 
   // OpenAI proxy: use direct AI SDK provider (needs custom base URL)
   const openaiConfig = getProviderConfig("openai");
   if (provider === "openai" && openaiConfig.baseUrl) {
-    const openaiKey = resolveApiKey("openai");
-    if (!openaiKey) {
-      throw new Error(
-        "OpenAI proxy configured but OPENAI_API_KEY is missing.",
-      );
-    }
-    const openaiClient = createOpenAI({
-      baseURL: openaiConfig.baseUrl,
-      apiKey: openaiKey,
-    });
-    const apiMode = openaiConfig.apiMode ?? "responses";
-    return apiMode === "chat_completions"
-      ? openaiClient.chat(modelId)
-      : openaiClient.responses(modelId);
+    return getDirectModelInstance(model);
   }
 
   // All other providers: use Mastra model router
@@ -225,6 +218,77 @@ function logTokenUsage(prefix: string, model: string, tokenUsage: TokenUsage | u
   logger.log(
     `[${prefix}] ${model} - Tokens: ${tokenUsage.totalTokens} (prompt: ${tokenUsage.promptTokens}, completion: ${tokenUsage.completionTokens}${tokenUsage.cachedInputTokens ? `, cached: ${tokenUsage.cachedInputTokens}` : ""})`,
   );
+}
+
+export function shouldBypassMastraAgent(
+  modelString: string,
+  resolvedBaseUrl?: string,
+): boolean {
+  const provider = getProvider(modelString);
+  const providerConfig = getProviderConfig(provider);
+  const effectiveBaseUrl = resolvedBaseUrl ?? providerConfig.baseUrl;
+
+  return (
+    provider === "ollama" ||
+    provider === "azure" ||
+    (provider === "openai" && !!effectiveBaseUrl)
+  );
+}
+
+export function getDirectModelInstance(
+  modelString: string,
+  options?: { apiKey?: string; baseUrl?: string },
+) {
+  const provider = getProvider(modelString);
+  const modelId = getModelId(modelString);
+
+  if (provider === "ollama") {
+    const baseURL =
+      options?.baseUrl ?? options?.apiKey ?? getProviderConfig("ollama").baseUrl;
+    if (!baseURL) {
+      throw new Error("Ollama provider selected but no baseUrl configured.");
+    }
+    return createOllama({ baseURL })(modelId);
+  }
+
+  if (provider === "azure") {
+    const baseURL = options?.baseUrl ?? getProviderConfig("azure").baseUrl;
+    const apiKey = options?.apiKey ?? resolveApiKey("azure");
+    if (!baseURL) {
+      throw new Error(
+        "Azure provider selected but AZURE_BASE_URL is not configured.",
+      );
+    }
+    if (!apiKey) {
+      throw new Error(
+        "Azure provider selected but AZURE_API_KEY is not configured.",
+      );
+    }
+    return createAzure({ baseURL, apiKey })(modelId);
+  }
+
+  if (provider === "openai") {
+    const openaiConfig = getProviderConfig("openai");
+    const baseURL = options?.baseUrl ?? openaiConfig.baseUrl;
+    const apiKey = options?.apiKey ?? resolveApiKey("openai");
+    if (!baseURL) {
+      throw new Error(
+        "OpenAI direct model requested but no proxy baseUrl is configured.",
+      );
+    }
+    if (!apiKey) {
+      throw new Error(
+        "OpenAI proxy configured but OPENAI_API_KEY is missing.",
+      );
+    }
+    const openaiClient = createOpenAI({ baseURL, apiKey });
+    const apiMode = openaiConfig.apiMode ?? "responses";
+    return apiMode === "chat_completions"
+      ? openaiClient.chat(modelId)
+      : openaiClient.responses(modelId);
+  }
+
+  throw new Error(`Direct model instance not supported for provider: ${provider}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -328,6 +392,38 @@ export async function makeModelCall(
   );
 
   const agentOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
+
+  if (shouldBypassMastraAgent(model, agentOptions?.baseUrl)) {
+    const modelInstance = getDirectModelInstance(model, agentOptions) as any;
+
+    if (stream) {
+      return streamText({
+        model: modelInstance,
+        messages,
+        ...options,
+        ...(providerOptions && { providerOptions }),
+        onFinish: async ({ text, usage }) => {
+          const tokenUsage = toTokenUsage(usage);
+          logTokenUsage(complexity.toUpperCase(), model, tokenUsage);
+          onFinish(text, model, tokenUsage);
+        },
+      });
+    }
+
+    const result = await generateText({
+      model: modelInstance,
+      messages,
+      ...options,
+      ...(providerOptions && { providerOptions }),
+    });
+
+    const tokenUsage = toTokenUsage(result.usage);
+    logTokenUsage(complexity.toUpperCase(), model, tokenUsage);
+    onFinish(result.text, model, tokenUsage);
+
+    return result.text;
+  }
+
   const agent = createAgent(model, undefined, undefined, agentOptions);
 
   if (stream) {
@@ -378,14 +474,6 @@ function tryParseJsonFromText(raw: string): unknown | undefined {
   }
 }
 
-function needsTolerantParsing(): boolean {
-  const openaiConfig = getProviderConfig("openai");
-  const apiMode = openaiConfig.apiMode ?? "responses";
-  const isProxyChatMode = apiMode === "chat_completions" && !!openaiConfig.baseUrl;
-  const isOllama = getDefaultChatProviderType() === "ollama";
-  return isProxyChatMode || isOllama;
-}
-
 export async function makeStructuredModelCall<T extends z.ZodType>(
   schema: T,
   messages: ModelMessage[],
@@ -406,13 +494,13 @@ export async function makeStructuredModelCall<T extends z.ZodType>(
   const agentApiOptions = apiKey ? { apiKey, ...(baseUrl && { baseUrl }) } : undefined;
 
   // Proxy/Ollama: manual JSON extraction (no structured output support)
-  if (needsTolerantParsing()) {
+  if (shouldBypassMastraAgent(model, agentApiOptions?.baseUrl)) {
     const { object, usage } = await structuredCallWithTolerantParsing(
       schema,
       messages,
       model,
       temperature,
-      apiKey,
+      agentApiOptions,
     );
     const tokenUsage = toTokenUsage(usage);
     logTokenUsage(`Structured/${complexity.toUpperCase()}`, model, tokenUsage);
@@ -459,19 +547,23 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   messages: ModelMessage[],
   modelString: string,
   temperature?: number,
-  apiKey?: string,
+  modelOptions?: { apiKey?: string; baseUrl?: string },
 ): Promise<{ object: z.infer<T>; usage: any }> {
-  const jsonPreamble =
-    "Return ONLY a single valid JSON object that matches the requested schema. " +
-    "Do not wrap it in Markdown fences. Do not include extra text. " +
-    "Include every required key; use null for nullable fields; use [] for empty arrays.";
-
-  const agentOpts = apiKey ? { apiKey } : undefined;
-  const agent = createAgent(modelString, jsonPreamble, undefined, agentOpts);
-
-  const textResult = await agent.generate(messages as any, {
+  const modelInstance = getDirectModelInstance(modelString, modelOptions) as any;
+  const textResult = await generateText({
+    model: modelInstance,
+    messages: [
+      {
+        role: "system",
+        content:
+          "Return ONLY a single valid JSON object that matches the requested schema. " +
+          "Do not wrap it in Markdown fences. Do not include extra text. " +
+          "Include every required key; use null for nullable fields; use [] for empty arrays.",
+      },
+      ...messages,
+    ],
     ...(temperature !== undefined && { temperature }),
-  } as any);
+  });
 
   const parsed = tryParseJsonFromText(textResult.text);
   const validated = parsed ? schema.safeParse(parsed) : undefined;
@@ -480,18 +572,19 @@ async function structuredCallWithTolerantParsing<T extends z.ZodType>(
   }
 
   // Repair attempt
-  const repairAgent = createAgent(
-    modelString,
-    "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
-    "Return ONLY the JSON object, with no Markdown fences and no extra text.",
-    undefined,
-    agentOpts,
-  );
-
-  const repairResult = await repairAgent.generate(
-    [{ role: "user", content: textResult.text }] as any,
-    { temperature: 0 } as any,
-  );
+  const repairResult = await generateText({
+    model: modelInstance,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a JSON repair assistant. Convert the user's content into a single valid JSON object. " +
+          "Return ONLY the JSON object, with no Markdown fences and no extra text.",
+      },
+      { role: "user", content: textResult.text },
+    ],
+    temperature: 0,
+  });
 
   const repairedParsed = tryParseJsonFromText(repairResult.text);
   const repairedValidated = repairedParsed ? schema.safeParse(repairedParsed) : undefined;

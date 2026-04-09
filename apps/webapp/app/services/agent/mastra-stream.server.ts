@@ -9,6 +9,7 @@ import {
 import { deductCredits } from "~/trigger/utils/utils";
 import { logger } from "~/services/logger.service";
 import { convertMastraChunkToAISDKv5 } from "@mastra/core/stream";
+import { getBurstSafeConversationIngestDelayMs } from "~/services/llm-provider.server";
 
 /**
  * Builds assistant message parts from LLMStepResult[].
@@ -69,6 +70,7 @@ export async function saveConversationResult({
       .map((p: any) => p.text);
 
     if (textParts.length > 0 && !incognito) {
+      const enqueueDelayMs = getBurstSafeConversationIngestDelayMs();
       await addToQueue(
         {
           episodeBody: `<user>${incomingUserText ?? ""}</user><assistant>${textParts.join("\n")}</assistant>`,
@@ -79,6 +81,9 @@ export async function saveConversationResult({
         },
         userId,
         workspaceId,
+        undefined,
+        undefined,
+        enqueueDelayMs,
       );
     }
   }

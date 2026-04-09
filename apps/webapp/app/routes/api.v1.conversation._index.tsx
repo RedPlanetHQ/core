@@ -10,6 +10,7 @@ import {
 import { toRouterString } from "~/lib/model.server";
 import {
   getDefaultChatModelId,
+  getBurstSafeBackgroundDelayMs,
   resolveModelConfig,
 } from "~/services/llm-provider.server";
 import { UserTypeEnum } from "@core/types";
@@ -23,6 +24,7 @@ import {
   streamToUIResponse,
   drainAgentResult,
 } from "~/services/agent/mastra-stream.server";
+import { runWithBurstRetry } from "~/services/agent/burst-retry.server";
 import {
   InputProcessor,
   type OutputProcessor,
@@ -85,10 +87,11 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     if (!isAssistantApproval) {
       if (conversationHistory.length === 1 && incomingUserText) {
+        const delayMs = getBurstSafeBackgroundDelayMs();
         await enqueueCreateConversationTitle({
           conversationId: body.id,
           message: incomingUserText,
-        });
+        }, delayMs);
       }
 
       const messageParts = normalizeParts(body.message?.parts);
@@ -338,15 +341,17 @@ const { loader, action } = createHybridActionApiRoute(
     // Belt-and-suspenders: also fire if request.signal ever works
     request.signal.addEventListener("abort", cancelStream);
 
-    const stream = await agent.stream(modelMessages, {
-      toolsets: { core: tools },
-      runId: body.id,
-      stopWhen: [stepCountIs(10)],
-      toolCallConcurrency: 1,
-      outputProcessors: [messageHistoryProcessor as OutputProcessor],
-      modelSettings: { temperature: 0.5 },
-      abortSignal: abortController.signal,
-    });
+    const stream = await runWithBurstRetry("conversation.stream", () =>
+      agent.stream(modelMessages, {
+        toolsets: { core: tools },
+        runId: body.id,
+        stopWhen: [stepCountIs(10)],
+        toolCallConcurrency: 1,
+        outputProcessors: [messageHistoryProcessor as OutputProcessor],
+        modelSettings: { temperature: 0.5 },
+        abortSignal: abortController.signal,
+      }),
+    );
 
     return streamToUIResponse(stream, cancelStream);
   },
