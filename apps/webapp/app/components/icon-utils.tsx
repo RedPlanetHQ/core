@@ -138,8 +138,11 @@ export const getIconForAuthorise = (
 
 export const TaskStatusIcons: Record<TaskStatus, React.ElementType> = {
   Backlog: BacklogLine,
-  Todo: TodoLine,
-  InProgress: InProgressLine,
-  Blocked: BlockedLine,
-  Completed: DoneFill,
+  Planning: TodoLine,
+  Waiting: BlockedLine,
+  Ready: TodoLine,
+  Working: InProgressLine,
+  Review: InProgressLine,
+  Done: DoneFill,
+  Recurring: InProgressLine,
 };

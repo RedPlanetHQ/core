@@ -27,7 +27,7 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
     creatingRef.current = true;
 
     const taskTitle = "Untitled task";
-    const taskStatus = isToday ? "Todo" : "Backlog";
+    const taskStatus = isToday ? "Planning" : "Backlog";
 
     fetch("/api/v1/tasks", {
       method: "POST",
@@ -70,9 +70,9 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
       .catch(console.error);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll only when status is "Todo"
+  // Poll only when status is "Planning"
   useEffect(() => {
-    if (!id || task?.status !== "Todo") {
+    if (!id || task?.status !== "Planning") {
       if (pollRef.current) clearInterval(pollRef.current);
       return;
     }
@@ -134,7 +134,7 @@ const ButlerTaskComponent = ({ node, updateAttributes, extension }: any) => {
         <span
           className={cn(
             "max-w-[240px] cursor-pointer truncate",
-            task.status === "Completed" &&
+            task.status === "Done" &&
               "text-muted-foreground line-through decoration-[1px]",
           )}
           onMouseDown={(e) => {

@@ -45,11 +45,14 @@ export function getTeamColor(name: string): string {
 }
 
 const TaskStatusColorNumber: Record<TaskStatus, string> = {
-  InProgress: "4",
-  Blocked: "0",
-  Todo: "3",
   Backlog: "2",
-  Completed: "6",
+  Planning: "3",
+  Waiting: "0",
+  Ready: "5",
+  Working: "4",
+  Review: "1",
+  Done: "6",
+  Recurring: "4",
 };
 
 export function getTaskStatusColor(status: TaskStatus) {

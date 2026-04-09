@@ -34,7 +34,7 @@ const CreateTaskSchema = z.object({
   description: z.string().optional(),
   source: z.string().default("manual"),
   status: z
-    .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
+    .enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"])
     .default("Backlog"),
   parentTaskId: z.string().optional(),
 });

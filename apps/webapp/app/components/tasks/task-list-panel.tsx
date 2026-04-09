@@ -23,19 +23,24 @@ import type { TaskWithRelations } from "~/services/task.server";
 import { SubTask } from "../icons/sub-task";
 
 const STATUS_ORDER: TaskStatus[] = [
-  "InProgress",
-  "Blocked",
-  "Todo",
+  "Waiting",
+  "Review",
+  "Working",
+  "Ready",
+  "Planning",
   "Backlog",
-  "Completed",
+  "Done",
 ];
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
-  InProgress: "In Progress",
-  Blocked: "Blocked",
-  Todo: "Todo",
   Backlog: "Backlog",
-  Completed: "Completed",
+  Planning: "Planning",
+  Waiting: "Waiting",
+  Ready: "Ready",
+  Working: "Working",
+  Review: "Review",
+  Done: "Done",
+  Recurring: "Recurring",
 };
 
 type TaskRow =
@@ -90,7 +95,7 @@ function TaskRowItem({
   onStatusChange: (status: string) => void;
 }) {
   const doneSubtasks = task.subtasks.filter(
-    (s) => s.status === "Completed",
+    (s) => s.status === "Done",
   ).length;
   const totalSubtasks = task.subtasks.length;
 
@@ -127,7 +132,7 @@ function TaskRowItem({
                 <div
                   className={cn(
                     "truncate text-left",
-                    task.status === "Completed" &&
+                    task.status === "Done" &&
                       "text-muted-foreground line-through decoration-[1px]",
                   )}
                 >

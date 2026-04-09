@@ -224,18 +224,18 @@ export async function changeTaskStatus(
   workspaceId: string,
   userId: string,
 ): Promise<Task> {
-  if (status === "Backlog") {
+  if (status === "Backlog" || status === "Waiting" || status === "Review") {
     await cancelTaskJob(taskId);
   }
 
-  // Auto-start execution when task moves to Todo
-  if (status === "Todo") {
+  // Auto-start execution when task moves to Ready
+  if (status === "Ready") {
     // Check if this task has Backlog subtasks — if so, enqueue the first one
-    // instead of the parent, and move parent to InProgress
+    // instead of the parent, and move parent to Working
     const nextSubtask = await getNextBacklogSubtask(taskId);
     if (nextSubtask) {
       await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
-      await updateTaskStatus(taskId, "InProgress");
+      await updateTaskStatus(taskId, "Working");
       return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
     }
     // No subtasks — enqueue the task itself (existing behavior)
@@ -243,7 +243,7 @@ export async function changeTaskStatus(
   }
 
   // Subtask completed — enqueue next Backlog sibling, or auto-complete parent if all done
-  if (status === "Completed") {
+  if (status === "Done") {
     const currentTask = await getTaskById(taskId);
     if (currentTask?.parentTaskId) {
       const nextSibling = await getNextBacklogSubtask(currentTask.parentTaskId);
@@ -254,18 +254,18 @@ export async function changeTaskStatus(
         const activeSubtasks = await prisma.task.count({
           where: {
             parentTaskId: currentTask.parentTaskId,
-            status: { in: ["Backlog", "Todo", "InProgress"] },
+            status: { in: ["Backlog", "Planning", "Working"] },
           },
         });
         if (activeSubtasks === 0) {
-          await updateTaskStatus(currentTask.parentTaskId, "Completed");
+          await updateTaskStatus(currentTask.parentTaskId, "Done");
         }
       }
     }
   }
 
-  // If moving a recurring/scheduled task to Completed or Blocked, deactivate scheduling
-  if (status === "Completed" || status === "Blocked") {
+  // If moving a recurring/scheduled task to Done or Waiting, deactivate scheduling
+  if (status === "Done" || status === "Waiting") {
     const task = await getTaskById(taskId);
     if (task?.nextRunAt || task?.schedule) {
       await removeScheduledTask(taskId);
@@ -293,7 +293,7 @@ export async function markTaskInProcess(
 ): Promise<Task> {
   return prisma.task.update({
     where: { id },
-    data: { status: "InProgress", ...(jobId && { jobId }) },
+    data: { status: "Working", ...(jobId && { jobId }) },
   });
 }
 
@@ -303,7 +303,7 @@ export async function markTaskCompleted(
 ): Promise<Task> {
   return prisma.task.update({
     where: { id },
-    data: { status: "Completed", result },
+    data: { status: "Review", result },
   });
 }
 
@@ -318,7 +318,7 @@ export async function markTaskFailed(id: string, error: string): Promise<Task> {
 
   return prisma.task.update({
     where: { id },
-    data: { status: "Blocked", error },
+    data: { status: "Waiting", error },
   });
 }
 

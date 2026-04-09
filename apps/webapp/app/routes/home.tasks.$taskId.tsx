@@ -92,7 +92,7 @@ const ActionSchema = z.discriminatedUnion("intent", [
   }),
   z.object({
     intent: z.literal("update-status"),
-    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]),
+    status: z.enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"]),
   }),
   z.object({
     intent: z.literal("delete"),
@@ -101,13 +101,13 @@ const ActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("create-subtask"),
     title: z.string().min(1),
     status: z
-      .enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"])
+      .enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"])
       .optional(),
   }),
   z.object({
     intent: z.literal("update-subtask-status"),
     subtaskId: z.string(),
-    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]),
+    status: z.enum(["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"]),
   }),
   z.object({
     intent: z.literal("delete-subtask"),

@@ -136,7 +136,7 @@ function SubtaskRow({
       <span
         className={cn(
           "min-w-0 flex-1 cursor-pointer truncate",
-          subtask.status === "Completed" &&
+          subtask.status === "Done" &&
             "text-muted-foreground line-through decoration-[1px]",
         )}
         onClick={onClick}
@@ -191,7 +191,7 @@ export function TaskDetailFull({
   };
 
   const doneSubtasks = task.subtasks.filter(
-    (s) => s.status === "Completed",
+    (s) => s.status === "Done",
   ).length;
   const totalSubtasks = task.subtasks.length;
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);

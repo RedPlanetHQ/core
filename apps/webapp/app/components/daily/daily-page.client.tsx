@@ -83,7 +83,7 @@ function DaySection({
               const parsed = saved ? JSON.parse(saved) : {};
               localStorage.setItem(
                 "userSettings",
-                JSON.stringify({ ...parsed, "task-view-filter": ["Blocked"] }),
+                JSON.stringify({ ...parsed, "task-view-filter": ["Waiting"] }),
               );
               navigate("/home/tasks");
             }}

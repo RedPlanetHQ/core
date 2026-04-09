@@ -5,7 +5,7 @@ import { getTaskStatusColor } from "../ui/color-utils";
 import { CommandGroup, CommandItem } from "../ui/command";
 
 import { type TaskStatus } from "@core/database";
-const STATUS_ORDER: TaskStatus[] = ["Todo", "Backlog", "Completed"];
+const STATUS_ORDER: TaskStatus[] = ["Backlog", "Planning", "Waiting", "Ready", "Working", "Review", "Done"];
 
 interface TaskStatusDropdownContentProps {
   onChange?: (id: string | string[]) => void;

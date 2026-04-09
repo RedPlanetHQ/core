@@ -23,7 +23,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const [todayPage, blockedTasks] = await Promise.all([
     findOrCreateDailyPage(workspace?.id ?? "", user.id, todayUTC),
-    getTasks(workspace?.id ?? "", { status: "Blocked", isScheduled: false }),
+    getTasks(workspace?.id ?? "", { status: "Waiting", isScheduled: false }),
   ]);
 
   return typedjson({
