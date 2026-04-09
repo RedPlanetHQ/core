@@ -143,7 +143,7 @@ export async function runScratchpadObserver({
     IntegrationLoader.getConnectedIntegrationAccounts(userId, workspaceId),
     prisma.butlerComment.findMany({
       where: { pageId, resolved: false },
-      select: { relativeStart: true },
+      select: { relativeStart: true, selectedText: true },
     }),
     getDefaultSkill(workspaceId, "reading-guide"),
   ]);

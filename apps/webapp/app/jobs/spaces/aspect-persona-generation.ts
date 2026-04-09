@@ -103,6 +103,35 @@ export interface ParsedPersonaSections {
 }
 
 /**
+ * Minimum Jaccard similarity required between an existing section and the
+ * post-delta merged section. Below this threshold the delta is rejected and
+ * the existing section is kept verbatim — guards against the LLM rewriting
+ * the whole section instead of applying a small patch.
+ *
+ * 0.5 means at least half the word-tokens must overlap. Tune if needed.
+ */
+const INCREMENTAL_JACCARD_THRESHOLD = 0.5;
+
+/**
+ * Word-level Jaccard similarity between two strings.
+ * Returns 1.0 if both are empty, 0.0 if one is empty and the other isn't.
+ */
+function jaccardSimilarity(a: string, b: string): number {
+  const tokenize = (s: string) =>
+    new Set(s.toLowerCase().match(/\b\w+\b/g) ?? []);
+  const setA = tokenize(a);
+  const setB = tokenize(b);
+  if (setA.size === 0 && setB.size === 0) return 1.0;
+  if (setA.size === 0 || setB.size === 0) return 0.0;
+  let intersection = 0;
+  for (const token of setA) {
+    if (setB.has(token)) intersection++;
+  }
+  const union = setA.size + setB.size - intersection;
+  return intersection / union;
+}
+
+/**
  * Parse a persona document into individual sections using <!-- section:X --> markers.
  * Falls back to ## header splitting if markers are missing (legacy docs).
  */
@@ -1509,6 +1538,24 @@ export async function generateIncrementalPersona(
         const delta = IncrementalDeltaSchema.parse(parsed);
 
         const mergedSection = applyDelta(existingClean, delta);
+
+        // Jaccard check: reject if merged section diverges too much from existing.
+        // This catches cases where the LLM rewrites the section instead of patching it.
+        if (existingClean.trim().length > 0) {
+          const similarity = jaccardSimilarity(existingClean, mergedSection);
+          if (similarity < INCREMENTAL_JACCARD_THRESHOLD) {
+            logger.warn(
+              `Jaccard similarity too low for ${aspect} — rejecting delta, keeping existing section`,
+              {
+                similarity,
+                threshold: INCREMENTAL_JACCARD_THRESHOLD,
+                adds: delta.add.length,
+                replacements: delta.replace.length,
+              },
+            );
+            return { aspect, mergedSection: null };
+          }
+        }
 
         logger.info(`Delta applied for ${aspect}`, {
           adds: delta.add.length,

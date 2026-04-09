@@ -23,7 +23,6 @@ export function buildAssistantPartsFromSteps(steps: any[]): any[] {
   for (let i = 0; i < steps.length; i++) {
     const step = steps[i];
 
-    console.log(JSON.stringify(step) + "\n\n");
     parts.push(convertMastraChunkToAISDKv5({ chunk: step, mode: "stream" }));
   }
 
@@ -124,7 +123,10 @@ export function createUIStreamWithApprovals(agentResult: any): ReadableStream {
   );
 }
 
-export function streamToUIResponse(agentResult: any, onCancel?: () => void): Response {
+export function streamToUIResponse(
+  agentResult: any,
+  onCancel?: () => void,
+): Response {
   let stream = createUIStreamWithApprovals(agentResult);
 
   if (onCancel) {

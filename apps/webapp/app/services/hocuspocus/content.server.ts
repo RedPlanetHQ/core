@@ -48,7 +48,6 @@ export const hocuspocus: Hocuspocus =
           return page?.descriptionBinary ?? null;
         },
         store: async ({ documentName, document, state }) => {
-          console.log(documentName, "store");
           const json = TiptapTransformer.fromYdoc(document, "default");
           const page = await prisma.page.update({
             where: { id: documentName },
@@ -121,6 +120,41 @@ export async function setPageContentFromHtml(
 ): Promise<void> {
   const json = htmlToTiptapJson(html);
   await updateContentForDocument(pageId, json);
+}
+
+/**
+ * Resolve a stored relativeStart position and set conversationId on the
+ * containing paragraph/heading in the live Hocuspocus Y.Doc.
+ * Syncs to all connected clients via WebSocket in real-time.
+ */
+export async function tagConversationByRelativePosition(
+  pageId: string,
+  relativeStart: object,
+  conversationId: string,
+): Promise<void> {
+  const blockNodes = new Set(["paragraph", "heading", "codeBlock", "blockquote"]);
+  const connection = await hocuspocus.openDirectConnection(pageId, {});
+  connection.transact((doc) => {
+    try {
+      const relPos = Y.createRelativePositionFromJSON(
+        relativeStart as Parameters<typeof Y.createRelativePositionFromJSON>[0],
+      );
+      const absPos = Y.createAbsolutePositionFromRelativePosition(relPos, doc);
+      if (!absPos) return;
+
+      let node: Y.AbstractType<any> | null = absPos.type as Y.AbstractType<any>;
+      while (node) {
+        if (node instanceof Y.XmlElement && blockNodes.has(node.nodeName)) {
+          node.setAttribute("conversationId", conversationId);
+          break;
+        }
+        node = (node as any).parent ?? null;
+      }
+    } catch {
+      // Stale or malformed position — skip silently
+    }
+  });
+  await connection.disconnect();
 }
 
 /**

@@ -97,9 +97,11 @@ export async function handleScratchpadStore(
   const fragment = document.getXmlFragment("default");
 
   // ── Mention detection ──
-  const unprocessedMentions = await scanForUnprocessedMentions(fragment, pageId);
+  const unprocessedMentions = await scanForUnprocessedMentions(
+    fragment,
+    pageId,
+  );
 
-  console.log(unprocessedMentions);
   if (unprocessedMentions.length > 0) {
     // Take the first unprocessed mention — process one at a time
     const { instruction } = unprocessedMentions[0];
@@ -143,7 +145,6 @@ export async function handleScratchpadStore(
         },
         PROACTIVE_IDLE_MS,
       );
-      console.log(repsonse);
     }
 
     logger.info(`[scratchpad] proactive enqueued page=${pageId}`);

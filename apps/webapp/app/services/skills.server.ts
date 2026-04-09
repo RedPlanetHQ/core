@@ -12,6 +12,7 @@ export interface CreateSkillParams {
   source?: string;
   labelIds?: string[];
   metadata?: Record<string, unknown>;
+  sessionId?: string;
 }
 
 export interface ListSkillsParams {
@@ -123,6 +124,7 @@ export const createSkill = async (
       metadata: metadata as any,
       editedBy: userId,
       workspaceId,
+      ...(params.sessionId ? { sessionId: params.sessionId } : {}),
     },
   });
 

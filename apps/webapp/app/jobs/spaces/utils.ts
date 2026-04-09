@@ -36,6 +36,7 @@ export const savePersonaDocument = async (
     },
     update: {
       content,
+      source: "persona-v2",
       type: "skill",
       updatedAt: new Date(),
       metadata: {

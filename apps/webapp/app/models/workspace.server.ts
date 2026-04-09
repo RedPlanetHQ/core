@@ -82,6 +82,9 @@ export async function createWorkspace(
             skillType: def.skillType,
             shortDescription: def.shortDescription,
           },
+          ...(def.sessionIdPrefix
+            ? { sessionId: `${def.sessionIdPrefix}-${workspace.id}` }
+            : {}),
         }),
       ),
     );

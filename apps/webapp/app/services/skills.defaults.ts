@@ -7,12 +7,15 @@ export interface DefaultSkillDef {
   skillType: string;
   shortDescription: string;
   content: string;
+  /** Session ID prefix for upsert — workspaceId will be appended as `${sessionId}-${workspaceId}` */
+  sessionIdPrefix?: string;
 }
 
 export const DEFAULT_SKILL_DEFINITIONS: DefaultSkillDef[] = [
   {
     title: "Persona",
     skillType: "persona",
+    sessionIdPrefix: "persona-v2",
     shortDescription:
       "Use when composing messages, making decisions, or responding on the user's behalf.",
     content: `<!-- Fill in your personal context below. The butler uses this whenever it writes on your behalf or makes decisions for you. -->
@@ -39,7 +42,50 @@ export const DEFAULT_SKILL_DEFINITIONS: DefaultSkillDef[] = [
     skillType: "reading-guide",
     shortDescription:
       "Use when reading the user's scratchpad to interpret their writing and intent correctly.",
-    content: `## How to read my scratchpad
+    content: `## Reading the page XML
+
+The scratchpad is passed to you as structured XML. Each element maps to a block in the document.
+
+### Element reference
+
+**Commentable blocks** — these are the only elements you should use as \`selectedText\` in \`add_comment\`:
+- \`<paragraph>\` — a regular paragraph. Primary unit of engagement.
+- \`<heading>\` — a section heading. Treat the same as paragraph.
+- \`<blockquote>\` — quoted text. Usually reference — skip unless a question or task is embedded.
+- \`<codeBlock>\` — code. Skip unless the user is clearly asking something about it.
+
+**List containers** — never comment on these directly:
+- \`<bulletList>\` — unordered list
+- \`<orderedList>\` — numbered list
+- \`<taskList>\` — checkbox list
+
+**List items** — never use as \`selectedText\`, never comment on individually:
+- \`<listItem>\` — bullet or numbered item (text is already flattened, no nested elements)
+- \`<taskItem>\` — checkbox item (same)
+
+### The grouping pattern
+
+When a \`<paragraph>\` or \`<heading>\` is immediately followed by a list container, they form one logical section. Comment once on the paragraph/heading. Never on the items inside.
+
+\`\`\`xml
+<paragraph>Github Issues to be created</paragraph>   ← use this as selectedText
+<bulletList>
+  <listItem>Create a skill for agent...</listItem>    ← skip
+  <listItem>Create another skill...</listItem>         ← skip
+</bulletList>
+\`\`\`
+
+### Already commented nodes
+
+Any element with \`data-commented="true"\` has an active unresolved comment. Skip it entirely. If the paragraph/heading of a section is already commented, skip the whole section including its list.
+
+### Selecting the right anchor text
+
+Copy the \`<paragraph>\` or \`<heading>\` text **verbatim** from the XML — no paraphrasing, no trimming words. The system does exact-string matching to anchor the comment in the document. If the match fails, the comment is discarded and you'll get an error asking you to retry with a shorter phrase.
+
+---
+
+## How I use my scratchpad
 
 I use my daily scratchpad as a running stream of thoughts, tasks, and notes.
 
@@ -56,15 +102,50 @@ I use my daily scratchpad as a running stream of thoughts, tasks, and notes.
 - Personal reflections or journal-style entries
 - Idea dumps unless I'm explicitly asking for help
 
-**Grouping:**
-When I write a header with a list underneath it, treat the whole section as one item. Comment on the section header, not each bullet point.
-
 **For open-ended tasks:**
 When I write something like "create a Show HN post" or "think about our pricing", don't dive into execution. Instead: gather what you know from memory, pull relevant reference material, then ask me 2-3 initiating questions so we can get to a first concrete output together.
 
-**My preferences:**
-- Keep comments short and to the point
-- Ask before doing anything irreversible`,
+**Comment style:**
+- One sentence for simple tasks, one question max
+- Don't repeat what I wrote back to me
+- Ask before doing anything irreversible
+
+---
+
+<!-- Fill in the sections below. The more context you give, the better the butler reads your scratchpad. -->
+
+## My current focus areas
+
+<!-- List your active projects or priorities. The butler uses this to search memory more precisely and classify items correctly. -->
+<!-- Example:
+- Launching v2 of the product (targeting end of month)
+- Investor outreach for seed round
+- Hiring a backend engineer
+-->
+
+## Key people
+
+<!-- List people you work with frequently. When you mention someone by name, the butler will search memory for recent context on them. -->
+<!-- Example:
+- Manoj — co-founder, handles design and growth
+- Sarah — lead investor, last spoke about milestone update
+-->
+
+## My writing patterns to ignore
+
+<!-- Describe recurring things you write that the butler should always skip. -->
+<!-- Example:
+- My daily standup block (format: Yesterday / Today / Blockers) — skip entirely
+- Lines starting with "thinking:" or "note:" — just personal notes
+- Anything under a "Done" or "Completed" heading
+-->
+
+## Explicit delegation phrases
+
+<!-- Phrases that always mean "do this now", regardless of context. -->
+<!-- Example:
+- "can you", "please handle", lines starting with "→"
+-->`,
   },
   {
     title: "Watch Rules",

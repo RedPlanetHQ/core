@@ -21,14 +21,34 @@ async function migrateDefaultSkills() {
   console.log(`Seeding default skills for ${workspacesNeedingMigration.length} workspaces...`);
 
   const workspaceIds = workspacesNeedingMigration.map((w) => w.id);
-  const defaultTitles = DEFAULT_SKILL_DEFINITIONS.map((s) => s.title);
 
-  // Find which default skills already exist per workspace
+  // Migrate existing persona documents (source=persona-v2) to type=skill with skill metadata.
+  // All signed-up users have a persona doc — we just ensure it's typed correctly.
+  const personaDef = DEFAULT_SKILL_DEFINITIONS.find((d) => d.skillType === "persona")!;
+  await prisma.document.updateMany({
+    where: {
+      workspaceId: { in: workspaceIds },
+      source: "persona-v2",
+      deleted: null,
+    },
+    data: {
+      type: "skill",
+      metadata: {
+        skillType: personaDef.skillType,
+        shortDescription: personaDef.shortDescription,
+      },
+    },
+  });
+
+  // For the remaining non-persona default skills, seed only if missing
+  const nonPersonaDefs = DEFAULT_SKILL_DEFINITIONS.filter((d) => d.skillType !== "persona");
+  const nonPersonaTitles = nonPersonaDefs.map((s) => s.title);
+
   const existingSkills = await prisma.document.findMany({
     where: {
       workspaceId: { in: workspaceIds },
       type: "skill",
-      title: { in: defaultTitles },
+      title: { in: nonPersonaTitles },
       deleted: null,
     },
     select: { workspaceId: true, title: true },
@@ -36,7 +56,6 @@ async function migrateDefaultSkills() {
 
   const existingSet = new Set(existingSkills.map((s) => `${s.workspaceId}:${s.title}`));
 
-  // Get owner userId for each workspace (needed for editedBy)
   const userWorkspaces = await prisma.userWorkspace.findMany({
     where: { workspaceId: { in: workspaceIds }, isActive: true },
     select: { workspaceId: true, userId: true },
@@ -56,7 +75,7 @@ async function migrateDefaultSkills() {
     const userId = ownerMap.get(workspace.id);
     if (!userId) continue;
 
-    const toCreate = DEFAULT_SKILL_DEFINITIONS.filter(
+    const toCreate = nonPersonaDefs.filter(
       (def) => !existingSet.has(`${workspace.id}:${def.title}`),
     );
 
@@ -74,6 +93,9 @@ async function migrateDefaultSkills() {
             shortDescription: def.shortDescription,
           },
           editedBy: userId,
+          ...(def.sessionIdPrefix
+            ? { sessionId: `${def.sessionIdPrefix}-${workspace.id}` }
+            : {}),
         })),
         skipDuplicates: true,
       });

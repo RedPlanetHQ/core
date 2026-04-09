@@ -155,7 +155,7 @@ export function ConversationView({
   });
 
   useEffect(() => {
-    if (autoRegenerate && history.length === 1) {
+    if (autoRegenerate && history.length === 1 && conversationStatus !== "running") {
       regenerate();
     }
   }, []);
@@ -303,7 +303,7 @@ export function ConversationView({
           />
           <ConversationTextarea
             className="bg-background-3 border-1 w-full border-gray-300"
-            isLoading={status === "streaming" || status === "submitted"}
+            isLoading={status === "streaming" || status === "submitted" || conversationStatus === "running"}
             disabled={needsApproval || conversationStatus === "running"}
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });

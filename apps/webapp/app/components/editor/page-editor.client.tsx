@@ -173,7 +173,7 @@ function EditorInner({
     },
   });
 
-  const { resolveComment } = useButlerComments(editor, ydoc, pageId);
+  const { resolveComment } = useButlerComments(ydoc, pageId);
 
   const handleResolvedChange = React.useCallback(
     (conversationId: string, resolved: boolean) => {
