@@ -65,26 +65,29 @@ export async function parseInbound(
     return {};
   }
 
-  // Resolve channel and credentials by caller's phone number
-  const resolved = await resolveChannel(from);
-  if (!resolved) {
-    logger.warn(
-      "No WhatsApp channel or Twilio credentials for incoming message",
-      { from },
-    );
-    return {};
-  }
-
-  // Verify Twilio signature
+  // Verify Twilio signature before doing anything else
   const signature = request.headers.get("X-Twilio-Signature") ?? "";
   const url = new URL(request.url);
   const fullUrl = url.origin + url.pathname;
 
-  if (
-    !verifyTwilioSignature(fullUrl, params, signature, resolved.creds.authToken)
-  ) {
+  // Resolve channel and credentials by caller's phone number
+  const resolved = await resolveChannel(from);
+
+  // Use per-channel auth token if available, else fall back to env var
+  const authToken = resolved?.creds.authToken ?? env.TWILIO_AUTH_TOKEN;
+  if (!verifyTwilioSignature(fullUrl, params, signature, authToken)) {
     logger.warn("Invalid Twilio signature", { from });
     return {};
+  }
+
+  if (!resolved) {
+    logger.info("Unknown WhatsApp contact, sending invite", { from });
+    return {
+      unknownContact: {
+        identifier: from,
+        channel: "whatsapp",
+      },
+    };
   }
 
   const userWorkspace = await getUserWorkspaceByWorkspace(resolved.workspaceId);
