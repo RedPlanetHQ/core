@@ -42,29 +42,6 @@ async function resolveChannel(
     }
   }
 
-  // Fallback: env-var credentials only (no DB channel match)
-  if (
-    env.TWILIO_ACCOUNT_SID &&
-    env.TWILIO_AUTH_TOKEN &&
-    env.TWILIO_WHATSAPP_NUMBER
-  ) {
-    // Try to find workspaceId from any active whatsapp channel
-    const fallbackChannel = await prisma.channel.findFirst({
-      where: { type: "whatsapp", isActive: true },
-      orderBy: { isDefault: "desc" },
-    });
-    if (fallbackChannel) {
-      return {
-        creds: {
-          accountSid: env.TWILIO_ACCOUNT_SID,
-          authToken: env.TWILIO_AUTH_TOKEN,
-          whatsappNumber: env.TWILIO_WHATSAPP_NUMBER,
-        },
-        workspaceId: fallbackChannel.workspaceId,
-      };
-    }
-  }
-
   return null;
 }
 
