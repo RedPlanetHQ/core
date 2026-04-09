@@ -1,4 +1,13 @@
-import { BookOpen, ChevronDown, Mail, MessageCircle, Phone, Plug, Puzzle } from "lucide-react";
+import {
+  BookOpen,
+  ChevronDown,
+  LayoutGrid,
+  Mail,
+  MessageCircle,
+  Phone,
+  Plug,
+  Puzzle,
+} from "lucide-react";
 import { useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import {
@@ -45,7 +54,7 @@ export function TryIt() {
                   className="text-foreground w-fit gap-2 !rounded-md"
                   onClick={() => navigate("/home/integrations")}
                 >
-                  <Puzzle size={16} />
+                  <LayoutGrid size={16} />
                   Integrations
                 </Button>
               </SidebarMenuItem>
@@ -70,24 +79,35 @@ export function TryIt() {
                       Help
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent side="right" align="end" className="w-[200px]">
+                  <DropdownMenuContent
+                    side="right"
+                    align="end"
+                    className="w-[200px]"
+                  >
                     <DropdownMenuItem
                       className="flex gap-2 rounded"
-                      onClick={() => window.open("https://docs.getcore.me", "_blank")}
+                      onClick={() =>
+                        window.open("https://docs.getcore.me", "_blank")
+                      }
                     >
                       <BookOpen size={16} />
                       Documentation
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="flex gap-2 rounded"
-                      onClick={() => (window.location.href = "mailto:harshith@poozle.dev")}
+                      onClick={() =>
+                        (window.location.href = "mailto:harshith@poozle.dev")
+                      }
                     >
                       <Mail size={16} />
                       Email Us
                     </DropdownMenuItem>
                     <DropdownMenuItem
                       className="flex gap-2 rounded"
-                      onClick={() => (window.location.href = "https://cal.com/core-memory/15min")}
+                      onClick={() =>
+                        (window.location.href =
+                          "https://cal.com/core-memory/15min")
+                      }
                     >
                       <Phone size={16} />
                       Book a call
