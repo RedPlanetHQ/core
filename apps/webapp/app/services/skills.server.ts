@@ -197,6 +197,24 @@ export const updateSkill = async (
   return skill;
 };
 
+function titleToSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+}
+
+export const findSkillBySlug = async (
+  workspaceId: string,
+  slug: string,
+): Promise<{ id: string; title: string; content: string } | null> => {
+  const skills = await prisma.document.findMany({
+    where: { workspaceId, type: "skill", deleted: null },
+    select: { id: true, title: true, content: true },
+  });
+  return skills.find((s) => titleToSlug(s.title) === slug) ?? null;
+};
+
 export const deleteSkill = async (skillId: string, workspaceId: string) => {
   const existingSkill = await getSkill(skillId, workspaceId);
 

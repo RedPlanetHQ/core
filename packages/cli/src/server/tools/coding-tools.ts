@@ -21,7 +21,7 @@ import {
 	type Logger,
 } from '@/utils/coding-runner';
 import {
-	readAgentSessionOutput,
+	readAgentSessionTurns,
 	agentSessionExists,
 	getAgentReader,
 	scanAllSessions,
@@ -49,9 +49,6 @@ const CloseSessionSchema = zod.object({
 
 const ReadSessionSchema = zod.object({
 	sessionId: zod.string(),
-	lines: zod.number().optional(),
-	offset: zod.number().optional(),
-	tail: zod.boolean().optional(),
 });
 
 const ListSessionsSchema = zod.object({
@@ -135,15 +132,6 @@ const jsonSchemas: Record<string, Record<string, unknown>> = {
 				type: 'string',
 				description: 'Session ID to read output from',
 			},
-			lines: {type: 'number', description: 'Number of lines to return'},
-			offset: {
-				type: 'number',
-				description: 'Line offset to start from (0-indexed)',
-			},
-			tail: {
-				type: 'boolean',
-				description: 'If true, return the last N lines instead of first N',
-			},
 		},
 		required: ['sessionId'],
 	},
@@ -220,7 +208,7 @@ export const codingTools: GatewayTool[] = [
 	{
 		name: 'coding_read_session',
 		description:
-			'Read current output from a coding session (works while running)',
+			'Read conversation turns (user/assistant messages) from a coding session. Returns structured turns instead of raw log lines.',
 		inputSchema: jsonSchemas.coding_read_session!,
 	},
 	{
@@ -620,18 +608,13 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 	const agent = detectAgentForSession(params.sessionId, sessionDir);
 
 	const {
-		entries,
+		turns,
 		totalLines,
-		returnedLines,
 		fileExists,
 		fileSizeBytes,
 		fileSizeHuman,
 		error: readError,
-	} = await readAgentSessionOutput(agent, sessionDir, params.sessionId, {
-		lines: params.lines,
-		offset: params.offset,
-		tail: params.tail,
-	});
+	} = await readAgentSessionTurns(agent, sessionDir, params.sessionId);
 
 	let status: string;
 	let statusMessage: string | undefined;
@@ -655,10 +638,9 @@ async function handleReadSession(params: zod.infer<typeof ReadSessionSchema>) {
 			status,
 			...(statusMessage ? {statusMessage} : {}),
 			running,
-			entries,
+			turns,
 			error: readError,
 			totalLines,
-			returnedLines,
 			fileExists,
 			fileSizeBytes,
 			fileSizeHuman,

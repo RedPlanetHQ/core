@@ -31,6 +31,7 @@ import { getWorkspaceChannelContext } from "~/services/channel.server";
 import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
+import { getLastCodingSession } from "~/services/coding/coding-session.server";
 import { DirectOrchestratorTools } from "./executors";
 
 interface BuildAgentContextParams {
@@ -155,6 +156,10 @@ export async function buildAgentContext({
     ? { ...linkedTaskRecord, description: linkedTaskDescription }
     : null;
 
+  const lastCodingSession = linkedTaskRecord
+    ? await getLastCodingSession(linkedTaskRecord.id, workspaceId)
+    : null;
+
   const metadata = user?.metadata as Record<string, unknown> | null;
   const timezone = (metadata?.timezone as string) ?? "UTC";
   const personality = (metadata?.personality as string) ?? "tars";
@@ -206,6 +211,8 @@ export async function buildAgentContext({
       availableChannels,
       interactive,
       modelConfig,
+      conversationId,
+      taskId: linkedTask?.id,
     }),
   ]);
 
@@ -286,13 +293,17 @@ export async function buildAgentContext({
       .map((s: any, i: number) => {
         const meta = s.metadata as Record<string, unknown> | null;
         const desc = meta?.shortDescription as string | undefined;
-        return `${i + 1}. "${s.title}" (id: ${s.id})${desc ? ` — ${desc}` : ""}`;
+        const slug = s.title
+          .toLowerCase()
+          .replace(/\s+/g, "-")
+          .replace(/[^a-z0-9-]/g, "");
+        return `${i + 1}. "${s.title}" (id: ${s.id}, slash: /${slug})${desc ? ` — ${desc}` : ""}`;
       })
       .join("\n");
 
     systemPrompt += `
     <skills>
-    You have access to user-defined skills (reusable workflows). When a user's request matches a skill, call get_skill to load its full instructions, then follow them step-by-step using your tools.
+    You have access to user-defined skills (reusable workflows). When a user's request matches a skill — or they invoke one with a slash command like /skill-name — call get_skill to load its full instructions, then follow them step-by-step using your tools.
 
     Available skills:
     ${skillsList}
@@ -354,7 +365,7 @@ Task ID: ${linkedTask.id}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specif
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — prefer resuming it over starting a new one:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Completed when all subtasks are done
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Blocked and send_message with the error` : `

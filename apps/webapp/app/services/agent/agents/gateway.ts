@@ -9,6 +9,8 @@ import { Agent } from "@mastra/core/agent";
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 
+import { createCodingSession } from "~/services/coding/coding-session.server";
+
 import { logger } from "~/services/logger.service";
 import { getGateway } from "~/services/gateway.server";
 import { toRouterString } from "~/lib/model.server";
@@ -95,11 +97,19 @@ function requiresApproval(toolName: string): boolean {
  * Create Mastra tools from a gateway's tool definitions.
  * Each gateway tool becomes a Mastra createTool() with proper Zod schema.
  */
+interface SessionContext {
+  conversationId?: string;
+  taskId?: string;
+  workspaceId: string;
+  userId: string;
+}
+
 function createGatewayTools(
   gatewayId: string,
   gatewayTools: GatewayTool[],
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
+  sessionCtx?: SessionContext,
 ) {
   const tools: Record<string, any> = {};
 
@@ -138,6 +148,29 @@ function createGatewayTools(
                 params as Record<string, unknown>,
                 60000,
               );
+
+          // Record coding session only on successful coding_ask (result has sessionId)
+          if (gatewayTool.name === "coding_ask" && sessionCtx) {
+            const r = result as Record<string, unknown>;
+            if (r.sessionId) {
+              const p = params as Record<string, unknown>;
+              createCodingSession({
+                workspaceId: sessionCtx.workspaceId,
+                userId: sessionCtx.userId,
+                taskId: sessionCtx.taskId,
+                conversationId: sessionCtx.conversationId,
+                gatewayId,
+                agent: (p.agent as string) ?? "claude-code",
+                prompt: p.prompt as string | undefined,
+                dir: p.dir as string | undefined,
+                externalSessionId: r.sessionId as string,
+                worktreePath: r.worktreePath as string | undefined,
+                worktreeBranch: r.worktreeBranch as string | undefined,
+              }).catch((err) =>
+                logger.warn("Failed to record coding session", { err }),
+              );
+            }
+          }
 
           const r = result as Record<string, unknown>;
           if (r?.screenshot && typeof r.screenshot === "string" && r.mimeType) {
@@ -211,6 +244,7 @@ export async function createGatewayAgent(
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
   modelConfig?: ModelConfig,
+  sessionCtx?: SessionContext,
 ): Promise<{ agent: Agent; connected: boolean }> {
   const gateway = await getGateway(gatewayId);
 
@@ -235,6 +269,7 @@ export async function createGatewayAgent(
     gatewayTools,
     executorTools,
     interactive,
+    sessionCtx,
   );
 
   const agentId = `gateway_${gateway.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;
@@ -267,6 +302,7 @@ export async function createGatewayAgents(
   executorTools?: OrchestratorTools,
   interactive: boolean = true,
   modelConfig?: ModelConfig,
+  sessionCtx?: SessionContext,
 ): Promise<{ agents: Record<string, Agent>; agentList: Agent[] }> {
   const agents: Record<string, Agent> = {};
   const agentList: Agent[] = [];
@@ -278,6 +314,8 @@ export async function createGatewayAgents(
       gw.id,
       executorTools,
       interactive,
+      modelConfig,
+      sessionCtx,
     );
     if (connected) {
       const agentId = `gateway_${gw.name.toLowerCase().replace(/[^a-z0-9]/g, "_")}`;

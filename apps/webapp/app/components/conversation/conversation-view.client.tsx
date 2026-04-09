@@ -52,7 +52,13 @@ export function ConversationView({
   models: modelsProp = [],
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
+  const skillsFetcher = useFetcher<{ skills: Array<{ id: string; title: string }> }>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
+
+  // Load skills once for slash command autocomplete
+  useEffect(() => {
+    skillsFetcher.load("/api/v1/skills?limit=100");
+  }, []);
   const composerRef = useRef<HTMLDivElement>(null);
   const messageRefs = useRef<(HTMLDivElement | null)[]>([]);
   // initialize to history.length so mount doesn't trigger the scroll effect
@@ -62,11 +68,11 @@ export function ConversationView({
   // keeps spacer alive after streaming ends until user scrolls back to bottom
   const [keepSpacer, setKeepSpacer] = useState(false);
 
-  const defaultModelId = modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
-  const [selectedModelId, setSelectedModelId] = useLocalCommonState<string | undefined>(
-    "selectedModelId",
-    defaultModelId,
-  );
+  const defaultModelId =
+    modelsProp.find((m) => m.isDefault)?.id ?? modelsProp[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<
+    string | undefined
+  >("selectedModelId", defaultModelId);
   // Ref so prepareSendMessagesRequest always reads the latest selection
   const selectedModelRef = useRef<string | undefined>(selectedModelId);
   selectedModelRef.current = selectedModelId;
@@ -155,7 +161,11 @@ export function ConversationView({
   });
 
   useEffect(() => {
-    if (autoRegenerate && history.length === 1 && conversationStatus !== "running") {
+    if (
+      autoRegenerate &&
+      history.length === 1 &&
+      conversationStatus !== "running"
+    ) {
       regenerate();
     }
   }, []);
@@ -302,8 +312,12 @@ export function ConversationView({
             isLoading={status === "streaming" || status === "submitted"}
           />
           <ConversationTextarea
-            className="bg-background-3 border-1 w-full border-gray-300"
-            isLoading={status === "streaming" || status === "submitted" || conversationStatus === "running"}
+            className="pt-4"
+            isLoading={
+              status === "streaming" ||
+              status === "submitted" ||
+              conversationStatus === "running"
+            }
             disabled={needsApproval || conversationStatus === "running"}
             onConversationCreated={(message) => {
               if (message) sendMessage({ text: message });
@@ -312,6 +326,7 @@ export function ConversationView({
             models={modelsProp}
             selectedModelId={selectedModelId}
             onModelChange={handleModelChange}
+            skills={skillsFetcher.data?.skills}
           />
         </div>
       </div>
