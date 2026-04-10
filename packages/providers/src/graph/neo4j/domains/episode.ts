@@ -687,10 +687,10 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const conditions: string[] = [];
 
       if (params.startTime) {
-        conditions.push("e.createdAt >= datetime($startTime)");
+        conditions.push("e.createdAt >= $startTime");
       }
       if (params.endTime) {
-        conditions.push("e.createdAt <= datetime($endTime)");
+        conditions.push("e.createdAt <= $endTime");
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
@@ -733,13 +733,14 @@ export function createEpisodeMethods(core: Neo4jCore) {
         MATCH (episode:Episode {uuid: $episodeUuid, userId: $userId${wsFilter}})
         MATCH (statement:Statement {uuid: $statementUuid, userId: $userId${wsFilter}})
         MERGE (episode)-[r:HAS_PROVENANCE]->(statement)
-        ON CREATE SET r.uuid = randomUUID(), r.createdAt = datetime(), r.userId = $userId, r.workspaceId = $workspaceId
+        ON CREATE SET r.uuid = randomUUID(), r.createdAt = $createdAt, r.userId = $userId, r.workspaceId = $workspaceId
       `;
 
       await core.runQuery(query, {
         episodeUuid,
         statementUuid,
         userId,
+        createdAt: new Date().toISOString(),
         workspaceId: workspaceId || null,
       });
     },
@@ -776,7 +777,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
 
         // Create new relationships to target (MERGE to avoid duplicates)
         FOREACH (ep IN episodes | MERGE (ep)-[newR:HAS_PROVENANCE]->(target)
-          ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = datetime(), newR.userId = $userId, newR.workspaceId = $workspaceId)
+          ON CREATE SET newR.uuid = randomUUID(), newR.createdAt = $createdAt, newR.userId = $userId, newR.workspaceId = $workspaceId)
 
         RETURN size(episodes) AS movedCount
       `;
@@ -785,6 +786,7 @@ export function createEpisodeMethods(core: Neo4jCore) {
         sourceStatementUuid,
         targetStatementUuid,
         userId,
+        createdAt: new Date().toISOString(),
         workspaceId: workspaceId || null,
       });
 

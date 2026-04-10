@@ -4,17 +4,10 @@ import {
   type LoaderFunctionArgs,
 } from "@remix-run/node";
 import { useFetcher, useNavigate } from "@remix-run/react";
-import React from "react";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
-import {
-  getTasks,
-  createTask,
-  changeTaskStatus,
-  deleteTask,
-} from "~/services/task.server";
+import { getTasks, changeTaskStatus, deleteTask } from "~/services/task.server";
 import { Button } from "~/components/ui";
 import { PageHeader } from "~/components/common/page-header";
-import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
   TaskFilterButton,
@@ -25,12 +18,10 @@ import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { useLocalCommonState } from "~/hooks/use-local-state";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
-import { ClientOnly } from "remix-utils/client-only";
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
 
 export const meta = () => [{ title: "Tasks" }];
-
 
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
@@ -45,14 +36,6 @@ export async function loader({ request }: LoaderFunctionArgs) {
 }
 
 const ActionSchema = z.discriminatedUnion("intent", [
-  z.object({
-    intent: z.literal("create"),
-    title: z.string().min(1),
-    description: z.string().optional(),
-    status: z
-      .enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"])
-      .optional(),
-  }),
   z.object({
     intent: z.literal("update-status"),
     taskId: z.string(),
@@ -75,24 +58,11 @@ export async function action({ request }: ActionFunctionArgs) {
   const formData = await request.formData();
   const parsed = ActionSchema.safeParse({
     intent: formData.get("intent"),
-    title: formData.get("title") ?? undefined,
-    description: formData.get("description") ?? undefined,
     taskId: formData.get("taskId") ?? undefined,
     status: formData.get("status") ?? undefined,
   });
 
   if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
-
-  if (parsed.data.intent === "create") {
-    const task = await createTask(
-      workspaceId,
-      user.id,
-      parsed.data.title,
-      parsed.data.description,
-      { status: parsed.data.status as TaskStatus | undefined },
-    );
-    return json({ task });
-  }
 
   if (parsed.data.intent === "update-status") {
     const task = await changeTaskStatus(
@@ -119,7 +89,6 @@ export default function TasksIndex() {
   const { tasks } = useTypedLoaderData<typeof loader>();
   const fetcher = useFetcher<typeof action>();
   const navigate = useNavigate();
-  const [dialogOpen, setDialogOpen] = React.useState(false);
   const [activeFilters, setActiveFilters] = useLocalCommonState<TaskStatus[]>(
     "task-status-filters",
     [],
@@ -130,20 +99,8 @@ export default function TasksIndex() {
       ? tasks
       : tasks.filter((t) => activeFilters.includes(t.status as TaskStatus));
 
-  const isCreating =
-    fetcher.state !== "idle" &&
-    (fetcher.formData?.get("intent") as string) === "create";
-
   const handleSelect = (id: string) => {
     navigate(`/home/tasks/${id}`);
-  };
-
-  const handleCreate = (title: string, description: string, status: string) => {
-    fetcher.submit(
-      { intent: "create", title, description, status },
-      { method: "POST" },
-    );
-    setDialogOpen(false);
   };
 
   const handleStatusChange = (taskId: string, status: string) => {
@@ -177,7 +134,7 @@ export default function TasksIndex() {
           <Button
             variant="secondary"
             className="gap-2 rounded"
-            onClick={() => setDialogOpen(true)}
+            onClick={() => navigate("/home/conversation?msg=Create+a+new+task")}
           >
             <Plus size={16} /> Add task
           </Button>
@@ -200,24 +157,13 @@ export default function TasksIndex() {
         ))}
       </div>
 
-      <ClientOnly fallback={null}>
-        {() => (
-          <NewTaskDialog
-            open={dialogOpen}
-            onOpenChange={setDialogOpen}
-            onSubmit={handleCreate}
-            isSubmitting={isCreating}
-          />
-        )}
-      </ClientOnly>
-
       <div className="flex flex-1 overflow-hidden">
         <div className="w-full overflow-hidden">
           <TaskListPanel
             tasks={filteredTasks}
             selectedTaskId={null}
             onSelect={handleSelect}
-            onNew={() => setDialogOpen(true)}
+            onNew={() => navigate("/home/conversation?msg=Create+a+new+task")}
             onStatusChange={handleStatusChange}
           />
         </div>

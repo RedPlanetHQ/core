@@ -43,6 +43,7 @@ import { TaskStatus } from "@core/database";
 import { Task } from "./icons/task";
 import { Spotify } from "./icons/spotify";
 import { Stripe } from "./icons/stripe";
+import { InReviewLine } from "./icons/in-review-line";
 
 export const ICON_MAPPING = {
   slack: SlackIcon,
@@ -141,7 +142,7 @@ export const TaskStatusIcons: Record<TaskStatus, React.ElementType> = {
   Waiting: BlockedLine,
   Ready: TodoLine,
   Working: InProgressLine,
-  Review: InProgressLine,
+  Review: InReviewLine,
   Done: DoneFill,
   Recurring: InProgressLine,
 };

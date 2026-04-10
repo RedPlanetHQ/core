@@ -23,12 +23,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
 
   const meta = (workspace?.metadata ?? {}) as Record<string, unknown>;
   const accentColor = (meta.accentColor as string) || "#c87844";
-  return { user, models, workspace, accentColor };
+  const url = new URL(request.url);
+  const defaultMessage = url.searchParams.get("msg") ?? undefined;
+  return { user, models, workspace, accentColor, defaultMessage };
 }
 
 
 export default function Chat() {
-  const { user, models, workspace, accentColor } =
+  const { user, models, workspace, accentColor, defaultMessage } =
     useTypedLoaderData<typeof loader>();
 
   if (typeof window === "undefined") return null;
@@ -39,6 +41,7 @@ export default function Chat() {
       models={models}
       name={workspace?.name ?? "core"}
       accentColor={accentColor}
+      defaultMessage={defaultMessage}
     />
   );
 }

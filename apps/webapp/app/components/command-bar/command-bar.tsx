@@ -6,7 +6,6 @@ import {
   MessageSquare,
   Tag,
   Brain,
-  Clock,
   Library,
   MessagesSquare,
 } from "lucide-react";
@@ -23,7 +22,6 @@ import {
 
 import { useNavigate } from "@remix-run/react";
 import { useDebounce } from "~/hooks/use-debounce";
-import { NewTaskDialog } from "~/components/tasks/new-task-dialog.client";
 import { Task } from "../icons/task";
 
 const NAV_ITEMS = [
@@ -102,8 +100,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   const [labelResults, setLabelResults] = useState<LabelResult[]>([]);
   const [taskResults, setTaskResults] = useState<TaskResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
-  const [newTaskOpen, setNewTaskOpen] = useState(false);
-  const [isCreatingTask, setIsCreatingTask] = useState(false);
   const navigate = useNavigate();
 
   // Search documents and conversations when debounced query changes
@@ -171,40 +167,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
 
   const handleAddTask = () => {
     onOpenChange(false);
-    setNewTaskOpen(true);
-  };
-
-  const handleTaskCreate = async (
-    title: string,
-    description: string,
-    status: string,
-  ) => {
-    setIsCreatingTask(true);
-    try {
-      const formData = new FormData();
-      formData.set("intent", "create");
-      formData.set("title", title);
-      formData.set("status", status);
-      if (description) formData.set("description", description);
-
-      const res = await fetch("/home/tasks", {
-        method: "POST",
-        body: formData,
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setNewTaskOpen(false);
-        if (data?.task?.id) {
-          navigate(`/home/tasks?taskId=${data.task.id}`);
-        } else {
-          navigate(`/home/tasks`);
-        }
-      }
-    } catch (error) {
-      console.error("Task creation failed:", error);
-    } finally {
-      setIsCreatingTask(false);
-    }
+    navigate("/home/conversation?msg=Create+a+new+task");
   };
 
   const handleDocumentClick = (documentId: string) => {
@@ -228,8 +191,7 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
   };
 
   return (
-    <>
-      <CommandDialog open={open} onOpenChange={onOpenChange}>
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
         <Command shouldFilter={false}>
           <CommandInput
             placeholder="Search conversations, tasks and documents..."
@@ -426,16 +388,6 @@ export function CommandBar({ open, onOpenChange }: CommandBarProps) {
             </CommandGroup>
           </CommandList>
         </Command>
-      </CommandDialog>
-
-      {newTaskOpen && (
-        <NewTaskDialog
-          open={newTaskOpen}
-          onOpenChange={setNewTaskOpen}
-          onSubmit={handleTaskCreate}
-          isSubmitting={isCreatingTask}
-        />
-      )}
-    </>
+    </CommandDialog>
   );
 }

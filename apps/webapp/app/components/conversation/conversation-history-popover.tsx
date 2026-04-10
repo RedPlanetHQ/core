@@ -177,15 +177,6 @@ export function ConversationHistoryPopover({
           />
         </div>
 
-        {/* Label when filtering by task */}
-        {currentTaskId && (
-          <div className="border-b px-3 py-1.5">
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
-              Task runs
-            </p>
-          </div>
-        )}
-
         {/* Virtual list */}
         {conversations.length === 0 && !isLoading ? (
           <p className="text-muted-foreground px-3 py-3 text-xs">

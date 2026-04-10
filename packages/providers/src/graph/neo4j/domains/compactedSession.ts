@@ -178,14 +178,17 @@ export function createCompactedSessionMethods(core: Neo4jCore) {
         MATCH (cs:CompactedSession {uuid: $compactUuid, userId: $userId${wsFilter}})
         UNWIND $episodeUuids as episodeUuid
         MATCH (e:Episode {uuid: episodeUuid, userId: $userId${wsFilter}})
-        MERGE (cs)-[:COMPACTS {createdAt: datetime()}]->(e)
-        MERGE (e)-[:COMPACTED_INTO {createdAt: datetime()}]->(cs)
+        MERGE (cs)-[compacts:COMPACTS]->(e)
+          ON CREATE SET compacts.createdAt = $createdAt
+        MERGE (e)-[compactedInto:COMPACTED_INTO]->(cs)
+          ON CREATE SET compactedInto.createdAt = $createdAt
       `;
 
       await core.runQuery(query, {
         compactUuid,
         episodeUuids,
         userId,
+        createdAt: new Date().toISOString(),
         ...(workspaceId && { workspaceId }),
       });
     },
