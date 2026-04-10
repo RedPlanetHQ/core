@@ -30,6 +30,7 @@ export interface PageHeaderProps {
   breadcrumbs?: BreadcrumbItem[];
   actions?: PageHeaderAction[];
   actionsNode?: React.ReactNode;
+  leftActionsNode?: React.ReactNode;
   tabs?: PageHeaderTab[];
   showTrigger?: boolean;
   showChatToggle?: boolean;
@@ -73,6 +74,7 @@ export function PageHeader({
   showTrigger = true,
   showChatToggle = true,
   actionsNode,
+  leftActionsNode,
 }: PageHeaderProps) {
   const navigation = useNavigation();
   const navigate = useNavigate();
@@ -138,6 +140,8 @@ export function PageHeader({
           ) : (
             <h1 className="text-base">{title}</h1>
           )}
+
+          {leftActionsNode && leftActionsNode}
 
           {/* Tabs */}
           {tabs && tabs.length > 0 && (

@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { type ChatAddToolApproveResponseFunction } from "ai";
 import { LayoutGrid, Zap } from "lucide-react";
-import { loadIntegrationBundle, type ToolUIComponent } from "~/utils/integration-loader.client";
+import {
+  loadIntegrationBundle,
+  type ToolUIComponent,
+} from "~/utils/integration-loader.client";
 import { ApprovalComponent } from "./approval-component";
 import {
   type ConversationToolPart,
@@ -27,6 +30,7 @@ interface ToolApprovalCardProps {
     toolCallId: string,
     args: Record<string, unknown>,
   ) => void;
+  onQuestionProgress?: (answered: number, total: number) => void;
 }
 
 function ToolApprovalCard({
@@ -159,18 +163,19 @@ function ToolApprovalCard({
 
   // ask_user → render rich question UI instead of generic approve/reject
   if (toolName === "ask_user") {
-    const wrappedApproval: ChatAddToolApproveResponseFunction = ({ id, approved }) => {
+    const wrappedApproval: ChatAddToolApproveResponseFunction = ({
+      id,
+      approved,
+    }) => {
       onApproval(id, approved, part.toolCallId);
     };
     return (
-      <div className="px-3 py-3">
-        <AskUserQuestion
-          part={part}
-          addToolApprovalResponse={wrappedApproval}
-          setToolArgOverride={setToolArgOverride}
-          isChatBusy={isChatBusy}
-        />
-      </div>
+      <AskUserQuestion
+        part={part}
+        addToolApprovalResponse={wrappedApproval}
+        setToolArgOverride={setToolArgOverride}
+        isChatBusy={isChatBusy}
+      />
     );
   }
 
@@ -239,7 +244,6 @@ export function ToolApprovalPanel({
   const [localDecisions, setLocalDecisions] = useState<Map<string, boolean>>(
     new Map(),
   );
-
   if (pendingApprovals.length === 0) return null;
 
   const handleApproval = (
@@ -293,9 +297,7 @@ export function ToolApprovalPanel({
           <Zap size={14} className="text-muted-foreground" />
           <span className="text-sm font-medium">
             {pendingApprovals.every((p) => p.type.includes("ask_user"))
-              ? pendingApprovals.length === 1
-                ? "Question"
-                : `${pendingApprovals.length} questions`
+              ? "Question"
               : `${pendingApprovals.length} action${pendingApprovals.length > 1 ? "s" : ""} require${pendingApprovals.length === 1 ? "s" : ""} approval`}
           </span>
         </div>

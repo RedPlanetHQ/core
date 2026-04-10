@@ -6,8 +6,16 @@ import {
   useNavigate,
   useFetcher,
 } from "@remix-run/react";
-import React from "react";
-import { Trash2, EyeOff, SquarePen } from "lucide-react";
+import React, { useState } from "react";
+import {
+  Trash2,
+  EyeOff,
+  SquarePen,
+  PanelLeft,
+  PanelLeftClose,
+  ArrowLeft,
+  Clock,
+} from "lucide-react";
 import { redirect, json } from "@remix-run/node";
 import { parseWithZod } from "@conform-to/zod/v4";
 import type { ActionFunctionArgs } from "@remix-run/server-runtime";
@@ -91,11 +99,11 @@ export default function ConversationLayout() {
   const navigate = useNavigate();
   const fetcher = useFetcher<{ deleted?: boolean }>();
   const [showDeleteDialog, setShowDeleteDialog] = React.useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const homeData = useRouteLoaderData<typeof homeLoader>("routes/home") as any;
   const conversationSources = homeData?.conversationSources ?? [];
 
-  // Get conversation data from the child route loader via useMatches
   const matches = useMatches();
   const convMatch = matches.find(
     (m) => m.id === "routes/home.conversation.$conversationId",
@@ -187,22 +195,53 @@ export default function ConversationLayout() {
       </AlertDialog>
 
       <div className="flex flex-1 overflow-hidden">
-        <ResizablePanelGroup orientation="horizontal" className="h-full">
-          <ResizablePanel defaultSize="25%" minSize="18%" maxSize="40%">
-            <div className="mt-2 flex h-full flex-col overflow-y-auto">
-              <UnreadConversations
-                currentConversationId={params.conversationId}
-              />
-              <ConversationList
-                currentConversationId={params.conversationId}
-                conversationSources={conversationSources}
-              />
-            </div>
-          </ResizablePanel>
+        {/* Collapsed icon strip — hidden when sidebar is open */}
+        {!sidebarOpen && (
+          <div className="flex w-10 shrink-0 flex-col items-center pt-2">
+            <Button
+              variant="ghost"
+              onClick={() => setSidebarOpen(true)}
+              title="Show history"
+              className="ml-3"
+            >
+              <Clock size={16} />
+            </Button>
+          </div>
+        )}
 
-          <ResizableHandle withHandle />
+        <ResizablePanelGroup orientation="horizontal" className="flex-1">
+          {/* Sidebar panel — only rendered when open */}
+          {sidebarOpen && (
+            <ResizablePanel defaultSize="25%" minSize="18%" maxSize="40%">
+              <div className="flex h-full flex-col">
+                <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
+                  <span className="text-sm font-medium">History</span>
+                  <Button
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSidebarOpen(false)}
+                    title="Close"
+                  >
+                    <ArrowLeft size={13} />
+                  </Button>
+                </div>
+                <div className="flex flex-1 flex-col overflow-y-auto">
+                  <UnreadConversations
+                    currentConversationId={params.conversationId}
+                  />
+                  <ConversationList
+                    currentConversationId={params.conversationId}
+                    conversationSources={conversationSources}
+                  />
+                </div>
+              </div>
+            </ResizablePanel>
+          )}
 
-          <ResizablePanel defaultSize="75%" minSize="50%">
+          {sidebarOpen && <ResizableHandle withHandle />}
+
+          {/* Main content — always in the same panel so Outlet never remounts */}
+          <ResizablePanel minSize="50%">
             <Outlet />
           </ResizablePanel>
         </ResizablePanelGroup>

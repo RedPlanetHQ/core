@@ -25,7 +25,10 @@ import {
 } from "../ui/select";
 import type { LLMModel } from "./conversation-textarea.client";
 import Avatar from "boring-avatars";
-import { createSkillSlashCommand } from "./slash-command-extension";
+import {
+  createSkillSlashCommand,
+  SkillSlashPluginKey,
+} from "./slash-command-extension";
 
 export const SUGGESTED = [
   {
@@ -72,7 +75,9 @@ export const ConversationNew = ({
   >("selectedModelId", defaultModelId);
 
   const submit = useSubmit();
-  const skillsFetcher = useFetcher<{ skills: Array<{ id: string; title: string }> }>();
+  const skillsFetcher = useFetcher<{
+    skills: Array<{ id: string; title: string }>;
+  }>();
   const skillsRef = useRef<Array<{ id: string; title: string }>>([]);
 
   useEffect(() => {
@@ -127,8 +132,13 @@ export const ConversationNew = ({
       attributes: {
         class: `prose prose-base dark:prose-invert focus:outline-none max-w-full`,
       },
-      handleKeyDown: (_view, event) => {
+      handleKeyDown: (view, event) => {
         if (event.key === "Enter" && !event.shiftKey) {
+          const suggestionState = SkillSlashPluginKey.getState(view.state);
+          if (suggestionState?.active) {
+            return false;
+          }
+
           event.preventDefault();
           if (contentRef.current.trim()) {
             doSubmitRef.current(contentRef.current);

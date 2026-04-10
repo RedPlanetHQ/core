@@ -127,13 +127,13 @@ export function ConversationHistoryPopover({
     if (!conversation) return null;
     const isActive = conversation.id === currentConversationId;
     return (
-      <div key={key} style={style}>
-        <button
+      <div key={key} style={style} className="p-1 pb-0.5">
+        <Button
           onClick={() => handleSelect(conversation.id)}
-          className={`hover:bg-accent flex w-full items-center gap-2 px-3 text-left text-sm transition-colors ${
-            isActive ? "bg-accent" : ""
-          }`}
-          style={{ height: ITEM_HEIGHT }}
+          isActive={isActive}
+          className="w-full truncate text-left"
+          size="lg"
+          variant="ghost"
         >
           {conversation.unread && (
             <span className="bg-primary h-1.5 w-1.5 shrink-0 rounded-full" />
@@ -144,7 +144,7 @@ export function ConversationHistoryPopover({
                 "Untitled Conversation"
               : "Untitled Conversation"}
           </span>
-        </button>
+        </Button>
       </div>
     );
   };

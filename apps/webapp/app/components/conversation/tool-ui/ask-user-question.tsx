@@ -45,7 +45,9 @@ function QuestionBlock({
   const toggleOption = (label: string) => {
     if (isMulti) {
       setSelected((prev) =>
-        prev.includes(label) ? prev.filter((l) => l !== label) : [...prev, label],
+        prev.includes(label)
+          ? prev.filter((l) => l !== label)
+          : [...prev, label],
       );
     } else {
       setSelected([label]);
@@ -69,14 +71,8 @@ function QuestionBlock({
   };
 
   return (
-    <div className="flex flex-col gap-3">
-      {question.header && (
-        <span className="bg-grayAlpha-100 text-muted-foreground w-fit rounded px-2 py-0.5 text-xs font-medium">
-          {question.header}
-        </span>
-      )}
-
-      <p className="text-sm font-medium">{question.question}</p>
+    <div className="flex flex-col gap-2 p-3 pt-1">
+      <p className="font-medium">{question.question}</p>
 
       {question.options && question.options.length > 0 && (
         <div className="flex flex-col gap-1.5">
@@ -104,9 +100,9 @@ function QuestionBlock({
                   {isSelected && <Check size={10} strokeWidth={3} />}
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  <span className="text-sm font-medium">{opt.label}</span>
+                  <span className="font-medium">{opt.label}</span>
                   {opt.description && (
-                    <span className="text-muted-foreground text-xs">
+                    <span className="text-muted-foreground text-sm">
                       {opt.description}
                     </span>
                   )}
@@ -155,8 +151,13 @@ function QuestionBlock({
         />
       )}
 
-      <div className="flex justify-end">
-        <Button size="sm" disabled={!canSubmit} onClick={handleSubmit}>
+      <div className="mt-2 flex justify-end">
+        <Button
+          disabled={!canSubmit}
+          size="lg"
+          variant="secondary"
+          onClick={handleSubmit}
+        >
           Submit
         </Button>
       </div>
@@ -220,22 +221,31 @@ export function AskUserQuestion({
   const nextUnanswered = questions.find((q) => !(q.question in answers));
   if (!nextUnanswered) return null;
 
+  const currentIndex = Object.keys(answers).length;
+
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-1">
       {Object.entries(answers).map(([q, a]) => (
         <div
           key={q}
-          className="text-muted-foreground border-border border-b pb-3 text-sm"
+          className="text-muted-foreground border-border border-b p-3 text-sm"
         >
           <span className="text-foreground font-medium">{q}</span>{" "}
           <span>→ {a}</span>
         </div>
       ))}
 
-      <QuestionBlock
-        question={nextUnanswered}
-        onAnswer={(answer) => handleAnswer(nextUnanswered.question, answer)}
-      />
+      <div>
+        {questions.length > 1 && (
+          <p className="text-muted-foreground px-3 pt-1 text-xs">
+            Question {currentIndex + 1} of {questions.length}
+          </p>
+        )}
+        <QuestionBlock
+          question={nextUnanswered}
+          onAnswer={(answer) => handleAnswer(nextUnanswered.question, answer)}
+        />
+      </div>
     </div>
   );
 }
