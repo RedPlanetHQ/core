@@ -15,6 +15,7 @@ import { BILLING_CONFIG, getPlanConfig } from "~/config/billing.server";
 import { logger } from "~/services/logger.service";
 import type { PlanType } from "@prisma/client";
 import { unscheduleAllForWorkspace } from "~/services/oauth/scheduler";
+import { sendPaymentFailedEmail } from "~/services/email.server";
 
 // Initialize Stripe
 const stripe = BILLING_CONFIG.stripe.secretKey
@@ -371,7 +372,37 @@ async function handleInvoicePaymentFailed(invoice: Stripe.Invoice) {
         },
       });
 
-      // TODO: Send email notification to user about failed payment
+      // Send email notification to user about failed payment
+      try {
+        const user = await prisma.user.findUnique({
+          where: { id: subscription.userId },
+        });
+
+        if (user?.email) {
+          const planConfig = getPlanConfig(subscription.planType as PlanType);
+          await sendPaymentFailedEmail({
+            email: user.email,
+            userName: user.name || undefined,
+            planName: planConfig?.name,
+            amount: invoice.amount_due,
+            currency: invoice.currency,
+            nextRetryDate: invoice.next_retry_at
+              ? new Date(invoice.next_retry_at * 1000).toLocaleDateString()
+              : undefined,
+          });
+
+          logger.info("Payment failed email sent", {
+            userId: user.id,
+            email: user.email,
+            subscriptionId: subscription.id,
+          });
+        }
+      } catch (emailError) {
+        logger.error("Failed to send payment failed email", {
+          error: emailError instanceof Error ? emailError.message : "Unknown error",
+          subscriptionId: subscription.id,
+        });
+      }
     }
   }
 }

@@ -468,22 +468,32 @@ export class OAuth2Service {
     }
 
     // Validate PKCE if required //TODO: cursor is failing to send right pkce
-    if (
-      authCode.codeChallenge &&
-      params.redirectUri.includes("cursor:://anysphere")
-    ) {
-      if (!params.codeVerifier) {
-        throw new Error(OAuth2Errors.INVALID_REQUEST);
-      }
+    // if (
+    //   authCode.codeChallenge &&
+    //   params.redirectUri.includes("cursor:://anysphere")
+    // ) {
+    // Validate PKCE if required
+    if (authCode.codeChallenge) {
+      // Skip PKCE validation for known clients that don't support it properly
+      const skipPkceClients = ["cursor:://anysphere"];
+      const shouldSkipPkce = skipPkceClients.some(client =>
+        params.redirectUri?.includes(client)
+      );
 
-      if (
-        !this.validatePkceChallenge(
-          params.codeVerifier,
-          authCode.codeChallenge,
-          authCode.codeChallengeMethod || "S256",
-        )
-      ) {
-        throw new Error(OAuth2Errors.INVALID_GRANT);
+      if (!shouldSkipPkce) {
+        if (!params.codeVerifier) {
+          throw new Error(OAuth2Errors.INVALID_REQUEST);
+        }
+
+        if (
+          !this.validatePkceChallenge(
+            params.codeVerifier,
+            authCode.codeChallenge,
+            authCode.codeChallengeMethod || "S256",
+          )
+        ) {
+          throw new Error(OAuth2Errors.INVALID_GRANT);
+        }
       }
     }
 

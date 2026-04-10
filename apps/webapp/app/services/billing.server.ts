@@ -13,8 +13,31 @@ import {
   isPaidPlan,
 } from "~/config/billing.server";
 import type { PlanType, Subscription } from "@prisma/client";
+import Stripe from "stripe";
 
 export type CreditOperation = "addEpisode" | "search" | "chatMessage";
+
+// Initialize Stripe
+const stripe = BILLING_CONFIG.stripe.secretKey
+  ? new Stripe(BILLING_CONFIG.stripe.secretKey)
+  : null;
+
+/**
+ * Get subscription amount from Stripe
+ */
+async function getSubscriptionAmount(stripeSubscriptionId: string): Promise<number> {
+  if (!stripe) {
+    return 0;
+  }
+
+  try {
+    const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubscriptionId);
+    return stripeSubscription.items.data[0]?.price.unit_amount || 0;
+  } catch (error) {
+    console.error("Failed to get subscription amount from Stripe:", error);
+    return 0;
+  }
+}
 
 /**
  * Reset monthly credits for a workspace
@@ -49,6 +72,11 @@ export async function resetMonthlyCredits(
   const nextMonth = new Date(now);
   nextMonth.setMonth(nextMonth.getMonth() + 1);
 
+  // Get actual subscription amount from Stripe
+  const subscriptionAmount = subscription.stripeSubscriptionId
+    ? await getSubscriptionAmount(subscription.stripeSubscriptionId)
+    : 0;
+
   // Create billing history record
   await prisma.billingHistory.create({
     data: {
@@ -58,9 +86,11 @@ export async function resetMonthlyCredits(
       monthlyCreditsAllocated: subscription.monthlyCredits,
       creditsUsed: userUsage.usedCredits,
       overageCreditsUsed: userUsage.overageCredits,
-      subscriptionAmount: 0, // TODO: Get from Stripe
+      // subscriptionAmount: 0, // TODO: Get from Stripe
+      subscriptionAmount: subscriptionAmount / 100, // Convert from cents to dollars
       usageAmount: subscription.overageAmount,
-      totalAmount: subscription.overageAmount,
+      // totalAmount: subscription.overageAmount,
+      totalAmount: (subscriptionAmount / 100) + subscription.overageAmount,
     },
   });
 
@@ -238,7 +268,7 @@ export async function getUsageSummary(workspaceId: string, userId: string) {
       end: subscription.currentPeriodEnd,
       daysRemaining: Math.ceil(
         (subscription.currentPeriodEnd.getTime() - Date.now()) /
-          (1000 * 60 * 60 * 24),
+        (1000 * 60 * 60 * 24),
       ),
     },
     overage: {

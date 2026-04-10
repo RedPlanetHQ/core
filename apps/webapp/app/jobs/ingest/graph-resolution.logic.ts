@@ -278,10 +278,10 @@ export async function processGraphResolution(
 
       const episodeStatements = finalOutput?.episodeUuid
         ? await getEpisodeStatements({
-            episodeUuid: finalOutput.episodeUuid,
-            userId: payload.userId,
-            workspaceId: payload.workspaceId,
-          })
+          episodeUuid: finalOutput.episodeUuid,
+          userId: payload.userId,
+          workspaceId: payload.workspaceId,
+        })
         : [];
 
       const statementsCount = episodeStatements.length;

@@ -82,7 +82,39 @@ export async function sendPlainTextEmail(options: SendPlainTextOptions) {
 export async function scheduleEmail(
   data: DeliverEmail,
   delay?: { seconds: number },
-) {}
+) { }
+
+export async function sendPaymentFailedEmail(options: {
+  email: string;
+  userName?: string;
+  planName?: string;
+  amount?: number;
+  currency?: string;
+  nextRetryDate?: string;
+}) {
+  logger.debug("Sending payment failed email", {
+    email: options.email,
+  });
+
+  try {
+    return await client.send({
+      email: "payment_failed",
+      to: options.email,
+      userName: options.userName,
+      planName: options.planName,
+      amount: options.amount,
+      currency: options.currency,
+      nextRetryDate: options.nextRetryDate,
+      updatePaymentUrl: `${env.APP_ORIGIN}/settings/billing`,
+    });
+  } catch (error) {
+    logger.error("Error sending payment failed email", {
+      error: JSON.stringify(error),
+    });
+
+    throw error;
+  }
+}
 
 export async function sendEmail(data: DeliverEmail) {
   try {
