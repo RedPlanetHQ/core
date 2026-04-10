@@ -39,6 +39,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 OR
                 (s.aspect = 'Event' AND s.attributes IS NOT NULL
                 AND apoc.convert.fromJsonMap(s.attributes).event_date IS NOT NULL
+                AND apoc.convert.fromJsonMap(s.attributes).event_date <> ''
                 AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) >= datetime($startTime)
                 ${params.temporalEnd ? "AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) <= datetime($endTime)" : ""})
                 )`
@@ -140,6 +141,7 @@ export function createSearchV2Methods(core: Neo4jCore) {
                 (s.aspect = 'Event'
                 AND s.attributes IS NOT NULL
                 AND apoc.convert.fromJsonMap(s.attributes).event_date IS NOT NULL
+                AND apoc.convert.fromJsonMap(s.attributes).event_date <> ''
                 AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) >= datetime($startTime)
                 ${params.endTime ? "AND datetime(apoc.convert.fromJsonMap(s.attributes).event_date) <= datetime($endTime)" : ""})
                 )

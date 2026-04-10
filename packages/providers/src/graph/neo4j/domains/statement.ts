@@ -188,13 +188,14 @@ export function createStatementMethods(core: Neo4jCore) {
         MATCH (predicate:Entity {userId: $userId${wsFilter}})<-[:HAS_PREDICATE]-(s)
         WHERE toLower(subject.name) = toLower($subjectName)
           AND toLower(predicate.name) = toLower($predicateName)
-          AND (s.invalidAt IS NULL OR s.invalidAt > datetime())
+          AND (s.invalidAt IS NULL OR s.invalidAt > $now)
         RETURN ${STATEMENT_NODE_PROPERTIES} as statement
       `;
 
       const result = await core.runQuery(query, {
         ...params,
         ...(params.workspaceId && { workspaceId: params.workspaceId }),
+        now: new Date().toISOString(),
       });
       return result.map((record) => parseStatementNode(record.get("statement")));
     },

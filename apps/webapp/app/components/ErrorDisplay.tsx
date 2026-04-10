@@ -3,6 +3,7 @@ import {
   useNavigate,
   useRouteError,
 } from "@remix-run/react";
+import { useEffect } from "react";
 
 import { friendlyErrorDisplay } from "~/utils/httpErrors";
 
@@ -21,6 +22,16 @@ type ErrorDisplayOptions = {
 
 export function RouteErrorDisplay(options?: ErrorDisplayOptions) {
   const error = useRouteError();
+
+  useEffect(() => {
+    if (error instanceof Error && error.message.includes("turbo-stream")) {
+      window.location.reload();
+    }
+  }, [error]);
+
+  if (error instanceof Error && error.message.includes("turbo-stream")) {
+    return null;
+  }
 
   return (
     <>

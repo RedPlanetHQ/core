@@ -156,6 +156,17 @@ export const ConversationNew = ({
     },
   });
 
+  // Set default message content in editor on mount
+  useEffect(() => {
+    if (editor && defaultMessage) {
+      const htmlContent = `<p>${defaultMessage}</p>`;
+      editor.commands.setContent(htmlContent);
+      setContent(htmlContent);
+      setTitle(defaultMessage);
+      contentRef.current = htmlContent;
+    }
+  }, [editor]);
+
   // Focus on mount
   useEffect(() => {
     if (editor) {

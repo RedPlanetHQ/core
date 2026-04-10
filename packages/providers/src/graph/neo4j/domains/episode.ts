@@ -687,10 +687,10 @@ export function createEpisodeMethods(core: Neo4jCore) {
       const conditions: string[] = [];
 
       if (params.startTime) {
-        conditions.push("e.createdAt >= datetime($startTime)");
+        conditions.push("e.createdAt >= $startTime");
       }
       if (params.endTime) {
-        conditions.push("e.createdAt <= datetime($endTime)");
+        conditions.push("e.createdAt <= $endTime");
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
