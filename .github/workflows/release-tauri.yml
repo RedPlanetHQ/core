@@ -53,8 +53,9 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: CORE ${{ github.ref_name }}
           releaseBody: "See release notes."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
+          updaterJsonKeepUniversal: true
           args: --target universal-apple-darwin
 
   release-linux:
@@ -106,6 +107,6 @@ jobs:
           tagName: ${{ github.ref_name }}
           releaseName: CORE ${{ github.ref_name }}
           releaseBody: "See release notes."
-          releaseDraft: true
+          releaseDraft: false
           prerelease: false
           args: --bundles appimage
