@@ -1,35 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 
 /**
- * Server-safe ButlerTask node — same attrs as client but no React renderer.
- * Used for generateHTML/generateJSON on the server.
- */
-export const ButlerTaskExtensionServer = Node.create({
-  name: "butlerTask",
-  group: "inline",
-  inline: true,
-  atom: true,
-  selectable: true,
-
-  addAttributes() {
-    return {
-      id: { default: null },
-    };
-  },
-
-  parseHTML() {
-    return [{ tag: 'span[data-type="butlerTask"]' }];
-  },
-
-  renderHTML({ HTMLAttributes }) {
-    return [
-      "span",
-      mergeAttributes(HTMLAttributes, { "data-type": "butlerTask" }),
-    ];
-  },
-});
-
-/**
  * Server-safe TaskItem node — same attrs as client but no React renderer.
  */
 export const CustomTaskItemServer = Node.create({
@@ -45,6 +16,7 @@ export const CustomTaskItemServer = Node.create({
 
   addAttributes() {
     return {
+      id: { default: null },
       checked: {
         default: false,
         parseHTML: (el) => el.getAttribute("data-checked") === "true",
@@ -54,14 +26,10 @@ export const CustomTaskItemServer = Node.create({
   },
 
   parseHTML() {
-    return [{ tag: 'li[data-type="taskItem"]', priority: 51 }];
+    return [{ tag: "taskItem" }, { tag: 'li[data-type="taskItem"]', priority: 51 }];
   },
 
   renderHTML({ HTMLAttributes }) {
-    return [
-      "li",
-      mergeAttributes(HTMLAttributes, { "data-type": "taskItem" }),
-      0,
-    ];
+    return ["taskItem", mergeAttributes(HTMLAttributes), 0];
   },
 });

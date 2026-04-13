@@ -183,7 +183,7 @@ function AppWithProviders() {
 
   return (
     <ThemeProvider
-      specifiedTheme={theme}
+      specifiedTheme={theme ?? Theme.LIGHT}
       disableTransitionOnThemeChange={true}
       themeAction="/action/set-theme"
     >

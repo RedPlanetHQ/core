@@ -8,7 +8,7 @@ import {
   Plug,
   Puzzle,
 } from "lucide-react";
-import { useNavigate } from "@remix-run/react";
+import { useLocation, useNavigate } from "@remix-run/react";
 import { useState } from "react";
 import {
   Collapsible,
@@ -32,6 +32,7 @@ import {
 export function TryIt() {
   const navigate = useNavigate();
   const [open, setOpen] = useState(true);
+  const location = useLocation();
 
   return (
     <SidebarGroup className="py-0">
@@ -53,6 +54,7 @@ export function TryIt() {
                   variant="ghost"
                   className="text-foreground w-fit gap-2 !rounded-md"
                   onClick={() => navigate("/home/integrations")}
+                  isActive={location.pathname.includes("/home/integrations")}
                 >
                   <LayoutGrid size={16} />
                   Integrations
@@ -63,6 +65,7 @@ export function TryIt() {
                   variant="ghost"
                   className="text-foreground w-fit gap-2 !rounded-md"
                   onClick={() => navigate("/home/agent/connect")}
+                  isActive={location.pathname.includes("/home/agent/connect")}
                 >
                   <Plug size={16} />
                   Connect

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useContext, useEffect, useRef, useState } from "react";
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Heading from "@tiptap/extension-heading";
@@ -15,16 +15,17 @@ import { Markdown } from "tiptap-markdown";
 import { mergeAttributes } from "@tiptap/core";
 import { cx } from "class-variance-authority";
 
-import { CustomTaskItem } from "~/components/editor/extensions/custom-task-item";
+import { ScratchpadTaskItem } from "~/components/editor/extensions/scratchpad-task-item";
 import { buildMentionExtension } from "~/components/editor/extensions/mention-extension";
-import { SlashCommand } from "~/components/editor/extensions/slash-command";
-import { ButlerTaskExtension } from "~/components/editor/extensions/butler-task-extension";
+import { buildSlashCommand } from "~/components/editor/extensions/slash-command";
 import { TaskPickerExtension } from "~/components/editor/extensions/task-picker-extension";
 import { ChecklistInputRule } from "~/components/editor/extensions/checklist-input-rule";
 import { SelectionBubble } from "~/components/editor/selection-bubble";
 import { ConversationParagraph } from "~/components/editor/extensions/conversation-paragraph-extension";
 import { ConversationPopover } from "~/components/editor/conversation-popover";
 import { useButlerComments } from "~/components/editor/hooks/use-butler-comments";
+import { WidgetNode, WidgetContext } from "~/components/editor/extensions/widget-node-extension";
+import type { WidgetOption } from "~/components/overview/types";
 
 const lowlight = createLowlight(all);
 
@@ -34,6 +35,7 @@ function buildExtensions(
   butlerName: string,
   ydoc: Y.Doc,
   parentTaskId?: string,
+  widgetOptions: WidgetOption[] = [],
 ) {
   const heading = Heading.extend({
     renderHTML({ node, HTMLAttributes }) {
@@ -92,7 +94,7 @@ function buildExtensions(
     TaskList.configure({
       HTMLAttributes: { class: cx("list-none pl-0 my-1") },
     }),
-    CustomTaskItem,
+    ScratchpadTaskItem({ pageId, parentTaskId }),
     CodeBlockLowlight.configure({ lowlight }),
     Markdown,
     Placeholder.configure({
@@ -104,10 +106,10 @@ function buildExtensions(
     }),
     ConversationParagraph,
     ChecklistInputRule,
-    ButlerTaskExtension({ pageId, isToday, parentTaskId }),
     buildMentionExtension(butlerName),
-    SlashCommand,
+    buildSlashCommand(widgetOptions),
     TaskPickerExtension,
+    WidgetNode,
     Collaboration.configure({ document: ydoc }),
   ];
 }
@@ -134,6 +136,8 @@ function EditorInner({
     resolved: boolean;
   } | null>(null);
 
+  const widgetCtx = useContext(WidgetContext);
+
   const editor = useEditor({
     extensions: buildExtensions(
       pageId,
@@ -141,6 +145,7 @@ function EditorInner({
       butlerName,
       ydoc,
       parentTaskId,
+      widgetCtx?.widgetOptions ?? [],
     ),
     editorProps: {
       attributes: {

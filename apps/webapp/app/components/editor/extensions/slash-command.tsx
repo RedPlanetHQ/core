@@ -15,7 +15,9 @@ import {
   ListOrdered,
   CheckSquare,
   Code2,
+  Plug,
 } from "lucide-react";
+import type { WidgetOption } from "~/components/overview/types";
 
 interface CommandItem {
   title: string;
@@ -24,7 +26,7 @@ interface CommandItem {
   command: (editor: any) => void;
 }
 
-const COMMANDS: CommandItem[] = [
+const STATIC_COMMANDS: CommandItem[] = [
   {
     title: "Text",
     description: "Plain paragraph",
@@ -137,62 +139,93 @@ const CommandList = forwardRef<any, CommandListProps>(({ items, command }, ref) 
 });
 CommandList.displayName = "CommandList";
 
-export const SlashCommand = Extension.create({
-  name: "slashCommand",
+function makeSuggestionRender() {
+  return () => {
+    let component: ReactRenderer<any>;
+    let popup: TippyInstance[];
 
-  addProseMirrorPlugins() {
-    return [
-      Suggestion({
-        editor: this.editor,
-        pluginKey: SlashCommandPluginKey,
-        char: "/",
-        command: ({ editor, range, props }: any) => {
-          props.command(editor);
-          editor.chain().focus().deleteRange(range).run();
-        },
-        items: ({ query }: { query: string }) =>
-          COMMANDS.filter((c) =>
-            c.title.toLowerCase().includes(query.toLowerCase()),
-          ),
-        render: () => {
-          let component: ReactRenderer<any>;
-          let popup: TippyInstance[];
+    return {
+      onStart(props: any) {
+        component = new ReactRenderer(CommandList, {
+          props,
+          editor: props.editor,
+        });
 
-          return {
-            onStart(props: any) {
-              component = new ReactRenderer(CommandList, {
-                props,
-                editor: props.editor,
-              });
+        popup = tippy("body", {
+          getReferenceClientRect: props.clientRect,
+          appendTo: () => document.body,
+          content: component.element,
+          showOnCreate: true,
+          interactive: true,
+          trigger: "manual",
+          placement: "bottom-start",
+        });
+      },
+      onUpdate(props: any) {
+        component.updateProps(props);
+        popup[0]?.setProps({ getReferenceClientRect: props.clientRect });
+      },
+      onKeyDown(props: any) {
+        if (props.event.key === "Escape") {
+          popup[0]?.hide();
+          return true;
+        }
+        return (component.ref as any)?.onKeyDown(props) ?? false;
+      },
+      onExit() {
+        popup[0]?.destroy();
+        component.destroy();
+      },
+    };
+  };
+}
 
-              popup = tippy("body", {
-                getReferenceClientRect: props.clientRect,
-                appendTo: () => document.body,
-                content: component.element,
-                showOnCreate: true,
-                interactive: true,
-                trigger: "manual",
-                placement: "bottom-start",
-              });
-            },
-            onUpdate(props: any) {
-              component.updateProps(props);
-              popup[0]?.setProps({ getReferenceClientRect: props.clientRect });
-            },
-            onKeyDown(props: any) {
-              if (props.event.key === "Escape") {
-                popup[0]?.hide();
-                return true;
-              }
-              return (component.ref as any)?.onKeyDown(props) ?? false;
-            },
-            onExit() {
-              popup[0]?.destroy();
-              component.destroy();
-            },
-          };
-        },
-      }),
-    ];
-  },
-});
+export const buildSlashCommand = (widgetOptions: WidgetOption[] = []) => {
+  const widgetCommands: CommandItem[] = widgetOptions.map((opt) => ({
+    title: opt.widgetName,
+    description: `${opt.integrationName} widget`,
+    icon: Plug,
+    command: (editor: any) => {
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "widget",
+          attrs: {
+            widgetSlug: opt.widgetSlug,
+            integrationAccountId: opt.integrationAccountId,
+            config: null,
+          },
+        })
+        .run();
+    },
+  }));
+
+  const allCommands = [...STATIC_COMMANDS, ...widgetCommands];
+
+  return Extension.create({
+    name: "slashCommand",
+
+    addProseMirrorPlugins() {
+      return [
+        Suggestion({
+          editor: this.editor,
+          pluginKey: SlashCommandPluginKey,
+          char: "/",
+          command: ({ editor, range, props }: any) => {
+            props.command(editor);
+            editor.chain().focus().deleteRange(range).run();
+          },
+          items: ({ query }: { query: string }) =>
+            allCommands.filter((c) =>
+              c.title.toLowerCase().includes(query.toLowerCase()),
+            ),
+          render: makeSuggestionRender(),
+        }),
+      ];
+    },
+  });
+};
+
+// Backward-compat export (no widgets)
+export const SlashCommand = buildSlashCommand([]);

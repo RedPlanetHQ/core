@@ -86,7 +86,7 @@ async function scanForUnprocessedMentions(
 }
 
 // ── Store handler (called from Database.store callback) ──────────────
-
+// @deprecated
 export async function handleScratchpadStore(
   pageId: string,
   document: Y.Doc,

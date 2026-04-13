@@ -14,6 +14,7 @@ import {
   setPageContentFromHtml,
   getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
+import { updateTaskTitleInPages } from "~/services/hocuspocus/page-outlinks.server";
 
 // ============================================================================
 // Interfaces
@@ -176,7 +177,13 @@ export async function updateTask(
 ): Promise<Task> {
   const { description, ...prismaData } = data;
 
+  const existing = data.title ? await prisma.task.findUnique({ where: { id }, select: { title: true } }) : null;
   const task = await prisma.task.update({ where: { id }, data: prismaData });
+
+  // Propagate title change to all pages that reference this task
+  if (data.title && data.title !== existing?.title) {
+    updateTaskTitleInPages(id, data.title).catch(console.error);
+  }
 
   if (description && task.pageId) {
     if (append) {

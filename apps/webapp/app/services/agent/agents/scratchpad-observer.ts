@@ -1,5 +1,5 @@
 /**
- * Scratchpad Observer Agent
+ * @deprecated Scratchpad Observer Agent — no longer in use.
  *
  * Lightweight autonomous agent that wakes up when a daily scratchpad is idle
  * and decides what (if anything) to comment on.
@@ -18,7 +18,6 @@ import { toRouterString } from "~/lib/model.server";
 import { getMastra } from "~/services/agent/mastra";
 import { getCommentTools, buildAnnotatedPageXml } from "~/services/agent/tools/comment-tools";
 import { IntegrationLoader } from "~/utils/mcp/integration-loader";
-import { getDefaultSkill } from "~/services/skills.server";
 import { runWebExplorer } from "~/services/agent/explorers/web-explorer";
 
 interface RunScratchpadObserverParams {

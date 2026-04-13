@@ -9,10 +9,7 @@ import type { Extensions } from "@tiptap/core";
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
 import { verifyCollabToken } from "~/services/collab-token.server";
-import {
-  ButlerTaskExtensionServer,
-  CustomTaskItemServer,
-} from "~/services/hocuspocus/extensions.server";
+import { CustomTaskItemServer } from "~/services/hocuspocus/extensions.server";
 import {
   handleScratchpadStore,
   cleanupPage,
@@ -49,20 +46,16 @@ export const hocuspocus: Hocuspocus =
         },
         store: async ({ documentName, document, state }) => {
           const json = TiptapTransformer.fromYdoc(document, "default");
-          const page = await prisma.page.update({
+          await prisma.page.update({
             where: { id: documentName },
             data: {
               descriptionBinary: Buffer.from(state),
               description: JSON.stringify(json),
             },
           });
-
-          if (page.type === "Daily") {
-            handleScratchpadStore(documentName, document, {
-              workspaceId: page.workspaceId,
-              userId: page.userId,
-            }).catch((err) => console.error("[collab-store-scratchpad]", err));
-          }
+          import("~/services/hocuspocus/page-outlinks.server")
+            .then((m) => m.storeOutlinks(documentName, json))
+            .catch(console.error);
         },
       }),
     ],
@@ -73,10 +66,9 @@ export const hocuspocus: Hocuspocus =
  */
 export function getServerExtensions(): Extensions {
   return [
-    StarterKit,
+    StarterKit.configure({ heading: false }),
     TaskList,
     Heading.configure({ levels: [1, 2, 3] }),
-    ButlerTaskExtensionServer,
     CustomTaskItemServer,
   ];
 }
@@ -105,7 +97,7 @@ export async function updateContentForDocument(
     if (fragment.length > 0) {
       fragment.delete(0, fragment.length);
     }
-    const newDoc = TiptapTransformer.toYdoc(json as any, "default");
+    const newDoc = TiptapTransformer.toYdoc(json as any, "default", getServerExtensions());
     Y.applyUpdate(doc, Y.encodeStateAsUpdate(newDoc));
   });
   await connection.disconnect();
@@ -132,7 +124,12 @@ export async function tagConversationByRelativePosition(
   relativeStart: object,
   conversationId: string,
 ): Promise<void> {
-  const blockNodes = new Set(["paragraph", "heading", "codeBlock", "blockquote"]);
+  const blockNodes = new Set([
+    "paragraph",
+    "heading",
+    "codeBlock",
+    "blockquote",
+  ]);
   const connection = await hocuspocus.openDirectConnection(pageId, {});
   connection.transact((doc) => {
     try {

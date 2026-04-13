@@ -11,6 +11,7 @@ import { getWorkspaceId, requireUser } from "~/services/session.server";
 import {
   getTaskFull,
   createTask,
+  updateTask,
   changeTaskStatus,
   deleteTask,
 } from "~/services/task.server";
@@ -27,6 +28,8 @@ import {
 } from "~/services/tasks/recurrence.server";
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { hasCodingSessions } from "~/services/coding/coding-session.server";
+import { getWidgetOptions, getOrCreateWidgetPat } from "~/services/widgets.server";
+import { getWidgetOptions, getWidgetPat } from "~/services/widgets.server";
 import { getButlerName } from "~/models/workspace.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { generateCollabToken } from "~/services/collab-token.server";
@@ -49,13 +52,15 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
   const { taskId } = params;
   if (!taskId) return redirect("/home/tasks");
 
-  const [task, integrationAccounts, butlerName, runs, hasCoding] =
+  const [task, integrationAccounts, butlerName, runs, hasCoding, widgetOptions, widgetPat] =
     await Promise.all([
       getTaskFull(taskId, workspaceId),
       getIntegrationAccounts(user.id, workspaceId),
       getButlerName(workspaceId),
       getTaskRuns(taskId, workspaceId),
       hasCodingSessions(taskId, workspaceId),
+      getWidgetOptions(user.id, workspaceId),
+      getOrCreateWidgetPat(workspaceId, user.id),
     ]);
 
   if (!task) return redirect("/home/tasks");
@@ -83,6 +88,9 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     collabToken: generateCollabToken(workspaceId, user.id),
     runs,
     hasCoding,
+    widgetOptions,
+    widgetPat,
+    baseUrl: new URL(request.url).origin,
   });
 }
 
@@ -154,12 +162,9 @@ export async function action({ request, params }: ActionFunctionArgs) {
   if (!parsed.success) return json({ error: "Invalid input" }, { status: 400 });
 
   if (parsed.data.intent === "update") {
-    const task = await prisma.task.update({
-      where: { id: taskId },
-      data: {
-        title: parsed.data.title,
-        description: parsed.data.description ?? null,
-      },
+    const task = await updateTask(taskId, {
+      title: parsed.data.title,
+      ...(parsed.data.description !== undefined && { description: parsed.data.description }),
     });
     detectAndApplyRecurrence(taskId, workspaceId, user.id, parsed.data.title);
     return json({ task });

@@ -1,3 +1,5 @@
+import type { WidgetConfigField } from "@redplanethq/types";
+
 export interface OverviewCell {
   id: string;
   x: number;
@@ -7,6 +9,7 @@ export interface OverviewCell {
   widgetSlug: string | null;
   integrationSlug: string | null;
   integrationAccountId: string | null;
+  config: Record<string, string> | null;
 }
 
 /** A single renderable widget option available to the user */
@@ -19,4 +22,5 @@ export interface WidgetOption {
   integrationIcon: string | null;
   frontendUrl: string;
   integrationAccountId: string;
+  configSchema: WidgetConfigField[];
 }

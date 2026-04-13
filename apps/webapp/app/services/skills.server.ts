@@ -20,8 +20,8 @@ export interface ListSkillsParams {
   cursor?: string;
 }
 
-const RESERVED_SKILL_TITLES = ["Persona", "Reading Guide", "Watch Rules"] as const;
-type SkillType = "persona" | "reading-guide" | "watch-rules";
+const RESERVED_SKILL_TITLES = ["Persona", "Watch Rules"] as const;
+type SkillType = "persona" | "watch-rules";
 
 export const getDefaultSkill = async (
   workspaceId: string,
@@ -29,7 +29,6 @@ export const getDefaultSkill = async (
 ) => {
   const titleMap: Record<SkillType, string> = {
     "persona": "Persona",
-    "reading-guide": "Reading Guide",
     "watch-rules": "Watch Rules",
   };
 
@@ -161,7 +160,7 @@ export const updateSkill = async (
   const isDefaultSkill = !!existingMeta.skillType;
 
   // Guard: reserved title cannot be changed by non-system callers
-  if (updateData.title) {
+  if (updateData.title && updateData.title !== existingSkill.title) {
     const isReserved = RESERVED_SKILL_TITLES.includes(updateData.title as any);
     if (isReserved && source !== "system") {
       throw new Error(`"${updateData.title}" is a reserved skill name.`);
@@ -172,10 +171,15 @@ export const updateSkill = async (
     }
   }
 
-  // Strip skillType from metadata updates for non-system callers
+  // Strip skillType and shortDescription from metadata updates for non-system callers on default skills
   let metadataUpdate = updateData.metadata;
   if (metadataUpdate && source !== "system") {
-    const { skillType: _stripped, ...rest } = metadataUpdate;
+    const { skillType: _stripped, ..._rest } = metadataUpdate;
+    let rest = _rest;
+    if (isDefaultSkill) {
+      const { shortDescription: _desc, ...withoutDesc } = rest;
+      rest = withoutDesc;
+    }
     metadataUpdate = rest;
   }
 

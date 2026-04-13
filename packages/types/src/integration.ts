@@ -1,10 +1,24 @@
 import { APIKeyParams, AuthType, McpAuthParams, OAuth2Params } from "./oauth";
 
+/** A single config field declared by a widget */
+export interface WidgetConfigField {
+  key: string;
+  label: string;
+  type: 'input' | 'select';
+  placeholder?: string;
+  required?: boolean;
+  /** Options for select fields only */
+  options?: Array<{ label: string; value: string }>;
+  default?: string;
+}
+
 export interface WidgetRenderContext {
   placement: 'tui' | 'webapp';
   pat: string;
   accounts: Array<{ id: string; slug: string; name?: string }>;
   baseUrl: string;
+  /** Config values supplied by the agent or by the user via the config form */
+  config?: Record<string, string>;
   /** Call to trigger a TUI re-render after updating internal state (TUI only) */
   requestRender?: () => void;
 }
@@ -16,6 +30,8 @@ export interface WidgetMeta {
   description: string;
   support: Array<'tui' | 'webapp'>;
   tuiPlacement?: 'overview' | 'below-input';
+  /** Declares config fields the widget accepts; drives the config form when agent omits them */
+  configSchema?: WidgetConfigField[];
 }
 
 /**

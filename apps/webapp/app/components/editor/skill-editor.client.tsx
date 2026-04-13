@@ -30,6 +30,7 @@ interface SkillEditorProps {
 
 export const SkillEditor = ({ skill }: SkillEditorProps) => {
   const isEditMode = !!skill;
+  const isDefaultSkill = !!skill?.metadata?.skillType;
   const [name, setName] = useState(skill?.title ?? "");
   const [shortDescription, setShortDescription] = useState(
     (skill?.metadata?.shortDescription as string) ?? "",

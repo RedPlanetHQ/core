@@ -1,6 +1,6 @@
 {
   "name": "@redplanethq/ui",
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "Shared widget UI components for CORE — web (React) and TUI (pi-tui)",
   "publishConfig": {
     "access": "public"
@@ -65,11 +65,13 @@
     "@radix-ui/react-tabs": "^1.0.4",
     "@radix-ui/react-toast": "^1.1.5",
     "@radix-ui/react-tooltip": "^1.2.7",
+    "@tanstack/react-table": "^8.13.2",
     "chalk": "^5.2.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.563.0",
     "radix-ui": "^1.4.3",
+    "recharts": "^3.0.0",
     "tailwind-merge": "^3.4.0"
   },
   "devDependencies": {

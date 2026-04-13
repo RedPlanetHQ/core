@@ -111,21 +111,17 @@ export function SelectionBubble({ editor, parentTaskId }: SelectionBubbleProps) 
 
   const { from, to } = editor.state.selection;
   let listItemCount = 0;
-  let hasButlerTask = false;
   let hasText = false;
   editor.state.doc.nodesBetween(from, to, (node) => {
     if (node.type.name === "listItem" || node.type.name === "taskItem") {
       listItemCount++;
-    }
-    if (node.type.name === "butlerTask") {
-      hasButlerTask = true;
     }
     if (node.isText && node.text?.trim()) {
       hasText = true;
     }
   });
   const isInList = listItemCount >= 2;
-  const hasContent = hasText && !hasButlerTask;
+  const hasContent = hasText;
 
   async function createTasksFromBlocks(
     blocks: { title: string; description?: string }[],
@@ -150,27 +146,26 @@ export function SelectionBubble({ editor, parentTaskId }: SelectionBubbleProps) 
           })
           .catch((err) => {
             console.error("[selectionBubble] create failed:", err);
-            return { id: null, status: "Backlog", title };
+            return { id: null, title };
           }),
       ),
     );
   }
 
-  function buildTaskListContent(tasks: { id: string | null }[]) {
+  function buildTaskListContent(
+    tasks: { id: string | null; title: string }[],
+  ) {
     return {
       type: "taskList",
       content: tasks.map((task) => ({
         type: "taskItem",
-        attrs: { checked: false },
+        attrs: { id: task.id, checked: false },
         content: [
           {
             type: "paragraph",
-            content: [
-              {
-                type: "butlerTask",
-                attrs: { id: task.id },
-              },
-            ],
+            content: task.title
+              ? [{ type: "text", text: task.title }]
+              : [],
           },
         ],
       })),

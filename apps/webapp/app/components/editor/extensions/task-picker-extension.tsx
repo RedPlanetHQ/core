@@ -100,15 +100,18 @@ export const TaskPickerExtension = Extension.create({
             .chain()
             .focus()
             .deleteRange(range)
-            .insertContent({
-              type: "butlerTask",
-              attrs: {
-                id: props.id,
-                status: props.status,
-                title: props.title,
-              },
+            .insertContentAt(range.from, {
+              type: "taskItem",
+              attrs: { id: props.id, checked: props.status === "Completed" },
+              content: [
+                {
+                  type: "paragraph",
+                  content: props.title
+                    ? [{ type: "text", text: props.title }]
+                    : [],
+                },
+              ],
             })
-            .insertContent(" ")
             .run();
         },
         items: async ({ query }: { query: string }) => {

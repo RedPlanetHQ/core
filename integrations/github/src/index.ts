@@ -66,11 +66,39 @@ class GitHubCLI extends IntegrationCLI {
       description:
         'Plan, track, and manage your agile and software development projects in GitHub. Customize your workflow, collaborate, and release great software.',
       icon: 'github',
+      widgets: [
+        {
+          name: 'PR Files',
+          slug: 'pr-files',
+          description: 'Shows file changes for a GitHub Pull Request with a full diff view',
+          support: ['webapp'],
+          configSchema: [
+            {
+              key: 'owner',
+              label: 'Owner',
+              type: 'input',
+              placeholder: 'e.g. RedPlanetHQ',
+              required: true,
+            },
+            {
+              key: 'repo',
+              label: 'Repository',
+              type: 'input',
+              placeholder: 'e.g. core',
+              required: true,
+            },
+            {
+              key: 'pull_number',
+              label: 'PR Number',
+              type: 'input',
+              placeholder: 'Leave empty for latest open PR',
+              required: false,
+            },
+          ],
+        },
+      ],
       schedule: {
         frequency: '*/5 * * * *',
-      },
-      mcp: {
-        type: 'cli',
       },
       auth: {
         OAuth2: {

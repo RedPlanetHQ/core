@@ -27,6 +27,9 @@ export * from "./tabs";
 export * from "./tooltip";
 export * from "./utils";
 
+export * from "./chart";
+export * from "./data-table";
+
 // Widget components
 export * from "./List";
 export * from "./Stat";

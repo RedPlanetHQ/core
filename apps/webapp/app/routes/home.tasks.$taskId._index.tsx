@@ -6,6 +6,7 @@ import { useEffect, useRef } from "react";
 import type { loader } from "~/routes/home.tasks.$taskId";
 import { TaskDetailFull } from "~/components/tasks/task-detail-full.client";
 import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
+import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
 
 function TaskDetailInner() {
   const data = useRouteLoaderData<typeof loader>("routes/home.tasks.$taskId");
@@ -22,6 +23,9 @@ function TaskDetailInner() {
     taskPageId,
     collabToken,
     runs,
+    widgetOptions,
+    widgetPat,
+    baseUrl,
   } = data;
 
   const latestRun = runs?.[0] ?? null;
@@ -81,7 +85,11 @@ function TaskDetailInner() {
     );
   };
 
-  return (
+  const widgetCtxValue = widgetPat && baseUrl
+    ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
+    : null;
+
+  const detail = (
     <TaskDetailFull
       task={task}
       integrationAccountMap={integrationAccountMap}
@@ -97,6 +105,16 @@ function TaskDetailInner() {
       onSubtaskClick={(id) => navigate(`/home/tasks/${id}`)}
     />
   );
+
+  if (widgetCtxValue) {
+    return (
+      <WidgetContext.Provider value={widgetCtxValue}>
+        {detail}
+      </WidgetContext.Provider>
+    );
+  }
+
+  return detail;
 }
 
 export default function TaskDetailInfoPage() {

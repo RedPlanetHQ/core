@@ -38,6 +38,7 @@ const loader = createHybridLoaderApiRoute(
       id: task.id,
       status: task.status,
       title: task.title,
+      displayId: task.displayId,
       description,
     });
   },
