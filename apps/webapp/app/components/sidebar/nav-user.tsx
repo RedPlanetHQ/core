@@ -84,13 +84,7 @@ export function NavUser({
           <Settings size={16} />
           Settings
         </DropdownMenuItem>
-        <DropdownMenuItem
-          className="flex gap-2"
-          onClick={() => navigate("/home/integrations")}
-        >
-          <LayoutGrid size={16} />
-          Integrations
-        </DropdownMenuItem>
+
         <DropdownMenuSub>
           <DropdownMenuSubTrigger className="flex gap-2">
             <AvatarText

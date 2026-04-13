@@ -162,6 +162,10 @@ function DesktopLoginPage() {
         const tokenData = await tokenRes.json();
 
         if (tokenData.token?.token) {
+          // Persist PAT in Rust for outbound API calls from the desktop app
+          await (window as any).__TAURI_INTERNALS__.invoke("store_pat", {
+            token: tokenData.token.token,
+          });
           window.location.href = "/";
           return;
         }

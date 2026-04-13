@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "CORE Desktop App"
 authors = []
 edition = "2021"
+default-run = "core-desktop"
 
 [lib]
 name = "core_desktop_lib"
@@ -22,6 +23,11 @@ tauri-plugin-shell = "2"
 tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+base64 = "0.21"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc = "0.2"
+core-foundation = "0.9"
 
 [profile.release]
 panic = "abort"
