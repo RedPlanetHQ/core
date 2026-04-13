@@ -7,7 +7,7 @@ import { Text } from "@tiptap/extension-text";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
 import Placeholder from "@tiptap/extension-placeholder";
-import { ArrowUp, X, MessageSquare, Plus, Maximize2 } from "lucide-react";
+import { ArrowUp, X, MessageSquare, Plus, Maximize2, EyeOff } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   ConversationView,
@@ -16,6 +16,14 @@ import {
 } from "~/components/conversation";
 import { UserTypeEnum } from "@core/types";
 import { cn } from "~/lib/utils";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "~/components/ui/select";
+import { useLocalCommonState } from "~/hooks/use-local-state";
 
 import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 import { ConversationHistoryPopover } from "~/components/conversation/conversation-history-popover";
@@ -30,9 +38,11 @@ interface GlobalChatPanelProps {
 // Minimal chat input — creates a conversation and hands off to ConversationView
 function ChatInput({
   agentName,
+  models,
   onCreated,
 }: {
   agentName: string;
+  models: LLMModel[];
   onCreated: (convId: string, historyId: string, message: string) => void;
 }) {
   const fetcher = useFetcher<{
@@ -43,6 +53,21 @@ function ChatInput({
   const contentRef = useRef("");
   const doSubmitRef = useRef<(msg: string) => void>(() => {});
   const submittedMessageRef = useRef("");
+  const [incognito, setIncognito] = useState(false);
+  const defaultModelId = models.find((m) => m.isDefault)?.id ?? models[0]?.id;
+  const [selectedModelId, setSelectedModelId] = useLocalCommonState<
+    string | undefined
+  >("selectedModelId", defaultModelId);
+  const incognitoRef = useRef(incognito);
+  const selectedModelIdRef = useRef(selectedModelId);
+
+  useEffect(() => {
+    incognitoRef.current = incognito;
+  }, [incognito]);
+
+  useEffect(() => {
+    selectedModelIdRef.current = selectedModelId;
+  }, [selectedModelId]);
 
   const doSubmit = useCallback(
     (messageContent: string) => {
@@ -51,8 +76,8 @@ function ChatInput({
         {
           message: messageContent,
           title: messageContent,
-          incognito: "false",
-          modelId: "",
+          incognito: String(incognitoRef.current),
+          modelId: selectedModelIdRef.current ?? "",
           panelMode: "true",
         },
         { action: "/home/conversation", method: "post" },
@@ -160,7 +185,48 @@ function ChatInput({
               editor={editor}
               className="max-h-[160px] min-h-[44px] overflow-auto px-3 pt-3 text-sm"
             />
-            <div className="flex items-center justify-end px-2 pb-2 pt-1">
+            <div className="flex items-center justify-between px-2 pb-2 pt-1">
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant={incognito ? "secondary" : "ghost"}
+                  size="sm"
+                  onClick={() => setIncognito((v) => !v)}
+                  title={
+                    incognito
+                      ? "Incognito on — not saved to memory"
+                      : "Incognito off"
+                  }
+                  className="gap-1.5"
+                >
+                  <EyeOff size={13} />
+                  {incognito && <span>Incognito</span>}
+                </Button>
+                {models.length > 1 && (
+                  <Select
+                    value={selectedModelId}
+                    onValueChange={setSelectedModelId}
+                  >
+                    <SelectTrigger className="h-8 w-auto min-w-[140px] border-0 bg-transparent text-xs shadow-none focus:ring-0">
+                      <SelectValue placeholder="Select model" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {models.map((model) => (
+                        <SelectItem
+                          key={model.id}
+                          value={model.id}
+                          className="text-xs"
+                        >
+                          <span className="font-medium">{model.label}</span>
+                          <span className="text-muted-foreground ml-1 capitalize">
+                            · {model.provider}
+                          </span>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
               <Button
                 type="button"
                 variant="secondary"
@@ -171,7 +237,7 @@ function ChatInput({
                 disabled={!content.trim() || isLoading}
               >
                 <ArrowUp size={14} />
-                {isLoading ? "Loading..." : "Chat"}
+                {isLoading ? "Loading..." : incognito ? "Incognito Chat" : "Chat"}
               </Button>
             </div>
           </div>
@@ -321,6 +387,7 @@ export function GlobalChatPanel({
       ) : (
         <ChatInput
           agentName={agentName}
+          models={models}
           onCreated={handleConversationCreated}
         />
       )}
