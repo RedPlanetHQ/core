@@ -46,12 +46,12 @@ const ActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("create"),
     title: z.string().min(1),
     description: z.string().optional(),
-    status: z.enum(["Backlog", "Todo", "Completed"]).optional(),
+    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]).optional(),
   }),
   z.object({
     intent: z.literal("update-status"),
     taskId: z.string(),
-    status: z.enum(["Backlog", "Todo", "InProgress", "Blocked", "Completed"]),
+    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]),
   }),
   z.object({
     intent: z.literal("delete"),

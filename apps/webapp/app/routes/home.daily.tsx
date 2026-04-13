@@ -6,9 +6,15 @@ import { ClientOnly } from "remix-utils/client-only";
 import { DailyPage } from "~/components/daily/daily-page.client";
 import { PageHeader } from "~/components/common/page-header";
 import { generateCollabToken } from "~/services/collab-token.server";
-import { findOrCreateDailyPage, todayUTCMidnightInTimezone } from "~/services/page.server";
+import {
+  findOrCreateDailyPage,
+  todayUTCMidnightInTimezone,
+} from "~/services/page.server";
 import { getTasks } from "~/services/task.server";
-import { getWidgetOptions, getOrCreateWidgetPat } from "~/services/widgets.server";
+import {
+  getWidgetOptions,
+  getOrCreateWidgetPat,
+} from "~/services/widgets.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
@@ -25,12 +31,14 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 
   const workspaceId = workspace?.id ?? "";
 
-  const [todayPage, blockedTasks, widgetOptions, widgetPat] = await Promise.all([
-    findOrCreateDailyPage(workspaceId, user.id, todayUTC),
-    getTasks(workspaceId, { status: "Blocked", isScheduled: false }),
-    getWidgetOptions(user.id, workspaceId),
-    getOrCreateWidgetPat(workspaceId, user.id),
-  ]);
+  const [todayPage, blockedTasks, widgetOptions, widgetPat] = await Promise.all(
+    [
+      findOrCreateDailyPage(workspaceId, user.id, todayUTC),
+      getTasks(workspaceId, { status: "Blocked", isScheduled: false }),
+      getWidgetOptions(user.id, workspaceId),
+      getOrCreateWidgetPat(workspaceId, user.id),
+    ],
+  );
 
   return typedjson({
     butlerName: workspace?.name ?? "butler",
@@ -46,12 +54,22 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
 };
 
 export default function DailyRoute() {
-  const { butlerName, workspaceId, userId, collabToken, todayPage, blockedCount, widgetOptions, widgetPat, baseUrl } =
-    useLoaderData<typeof loader>() as any;
+  const {
+    butlerName,
+    workspaceId,
+    userId,
+    collabToken,
+    todayPage,
+    blockedCount,
+    widgetOptions,
+    widgetPat,
+    baseUrl,
+  } = useLoaderData<typeof loader>() as any;
 
-  const widgetCtxValue = widgetPat && baseUrl
-    ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
-    : null;
+  const widgetCtxValue =
+    widgetPat && baseUrl
+      ? { pat: widgetPat, baseUrl, widgetOptions: widgetOptions ?? [] }
+      : null;
 
   const page = (
     <div className="flex h-full flex-col overflow-hidden">

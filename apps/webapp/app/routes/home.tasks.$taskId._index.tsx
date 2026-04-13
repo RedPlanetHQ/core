@@ -42,7 +42,7 @@ function TaskDetailInner() {
   // and only if a conversation already exists (don't create a new one)
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
-    const shouldOpen = task.status === "Blocked";
+    const shouldOpen = task.status === "Waiting";
     if (shouldOpen && latestRun?.id && openedRunRef.current !== latestRun.id) {
       openedRunRef.current = latestRun.id;
       openChatWithConversation(latestRun.id);

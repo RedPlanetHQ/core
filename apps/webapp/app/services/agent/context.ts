@@ -341,7 +341,7 @@ export async function buildAgentContext({
   // Task context (when conversation was created from a task)
   if (linkedTask) {
     const isExecuting =
-      linkedTask.status === "InProgress" || linkedTask.status === "Todo";
+      linkedTask.status === "Working" || linkedTask.status === "Ready";
 
     const isSubtask = !!linkedTask.parentTaskId;
     const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};
@@ -367,16 +367,16 @@ RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
 - For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — prefer resuming it over starting a new one:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
-- When you complete this subtask, the system automatically starts the next one and marks the parent Completed when all subtasks are done
-- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Blocked and send_message with the error` : `
-- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Backlog, move this task to Blocked, then send_message to the user explaining the plan and asking for approval
-- The system handles sequential subtask execution automatically — when unblocked, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
-- Mark task ${linkedTask.id} as Completed ONLY when the original intent is fully achieved
-- When Blocked (errors, needs user input, needs approval, partial completion):
-  1. call update_task(taskId: "${linkedTask.id}", status: "Blocked", description: "<append what was attempted and what's needed>")
-  2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is blocked: <reason>. <what's needed to unblock>"
-- When Completed:
-  1. call update_task(taskId: "${linkedTask.id}", status: "Completed")
+- When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
+- If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
+- If this task is complex and needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}) in Todo, move this task to Waiting, then send_message to the user explaining the plan and asking for approval
+- The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
+- Mark task ${linkedTask.id} as Done ONLY when the original intent is fully achieved (the system will land it in Review first via markTaskCompleted)
+- When Waiting (errors, needs user input, needs approval, partial completion):
+  1. call update_task(taskId: "${linkedTask.id}", status: "Waiting", description: "<append what was attempted and what's needed>")
+  2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
+- When finished:
+  1. call update_task(taskId: "${linkedTask.id}", status: "Done")
   2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 
@@ -390,10 +390,10 @@ WAIT PATTERN:
 1. Quick poll: sleep(60) then coding_read_session(sessionId) — repeat up to 3 times
 2. If still running after 3 polls: call reschedule_self(minutesFromNow=10)
 3. On re-execution (you'll see [reschedule:N/6] in your context): read sessionId from the task description, then coding_read_session
-   - completed → update_task(status: "Completed") then send_message with result
+   - completed → update_task(status: "Done") then send_message with result
    - running → reschedule_self(10) again (max 6 total reschedules)
-   - error → update_task(status: "Blocked") then send_message with error detail
-4. After 6 reschedules (~60 min): update_task(status: "Blocked") then send_message "coding session timed out"
+   - error → update_task(status: "Waiting") then send_message with error detail
+4. After 6 reschedules (~60 min): update_task(status: "Waiting") then send_message "coding session timed out"
 
 Do NOT create a scheduled task to check on sessions — use reschedule_self instead.
 </task_execution>`;
@@ -404,7 +404,7 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Blocked" ? `\nThis task is BLOCKED. If the user says to proceed, approves, or says the issue is resolved — call unblock_task(taskId: "${linkedTask.id}", reason: "<what changed>"). Do NOT create a new task.` : ""}
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user says to proceed, approves, or says the issue is resolved — call unblock_task(taskId: "${linkedTask.id}", reason: "<what changed>"). Do NOT create a new task.` : ""}
 </task_context>`;
     }
   }

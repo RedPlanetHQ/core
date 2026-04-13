@@ -133,8 +133,8 @@ Do not create a follow-up — the butler creates session-specific check tasks in
 A scheduled task is checking on a background coding session.
 1. Parse \`taskId\` and \`sessionId\` from the task text
 2. Include both in intent context so the butler can read session output and evaluate
-3. Achieved → \`shouldMessage: true\`, intent: summarize results. Add \`updateTasks\` to mark the main task (taskId) as Completed.
-4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Blocked with error details.
+3. Achieved → \`shouldMessage: true\`, intent: summarize results. Add \`updateTasks\` to mark the main task (taskId) as Done.
+4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Waiting with error details.
 5. Still running → \`shouldMessage: false\`. Add \`createFollowUps\` with the same check text, \`parentTaskId\` set to the main taskId, schedule in 10 min.
 Never report "still running" to the user — just schedule a recheck silently.
 
@@ -142,8 +142,8 @@ Never report "still running" to the user — just schedule a recheck silently.
 Same pattern as coding sessions:
 1. Parse \`taskId\`, \`sessionName\`, and \`intent\` from the task text
 2. Include all in intent context so the butler can check status and evaluate
-3. Achieved → \`shouldMessage: true\`, intent: report result. Add \`updateTasks\` to mark the main task as Completed.
-4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Blocked with error details.
+3. Achieved → \`shouldMessage: true\`, intent: report result. Add \`updateTasks\` to mark the main task as Done.
+4. Failed/errored → \`shouldMessage: true\`, intent: report failure. Add \`updateTasks\` to mark the main task as Waiting with error details.
 5. Still running → \`shouldMessage: false\`. Add \`createFollowUps\` with same check text, \`parentTaskId\`, schedule in 10 min.
 
 ### Trigger-Specific Defaults
@@ -203,7 +203,7 @@ Use tools FIRST (gather_context, get_skill), THEN output the JSON ActionPlan. No
   "updateTasks": [
     {
       "taskId": "id of the task to update",
-      "changes": { "status": "Completed", "description": "results..." }
+      "changes": { "status": "Done", "description": "results..." }
     }
   ],
   "silentActions": [

@@ -135,7 +135,7 @@ export function SelectionBubble({ editor, parentTaskId }: SelectionBubbleProps) 
           body: JSON.stringify({
             title,
             source: "daily",
-            status: "Backlog",
+            status: "Todo",
             ...(description && { description }),
             ...(parentTaskId && { parentTaskId }),
           }),

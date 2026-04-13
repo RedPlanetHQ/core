@@ -76,7 +76,7 @@ export async function createTask(
   const task = await prisma.task.create({
     data: {
       title,
-      status: options?.status ?? "Backlog",
+      status: options?.status ?? "Todo",
       workspaceId,
       userId,
       ...(options?.source && { source: options.source }),
@@ -206,14 +206,14 @@ export async function updateTaskStatus(
 }
 
 /**
- * Get the next Backlog subtask for a parent, ordered by displayId.
- * Returns null if no Backlog subtasks remain.
+ * Get the next Todo subtask for a parent, ordered by displayId.
+ * Returns null if no Todo subtasks remain.
  */
 export async function getNextBacklogSubtask(
   parentTaskId: string,
 ): Promise<Task | null> {
   return prisma.task.findFirst({
-    where: { parentTaskId, status: "Backlog" },
+    where: { parentTaskId, status: "Todo" },
     orderBy: { displayId: "asc" },
   });
 }
@@ -231,26 +231,26 @@ export async function changeTaskStatus(
   workspaceId: string,
   userId: string,
 ): Promise<Task> {
-  if (status === "Backlog") {
+  if (status === "Todo" || status === "Waiting" || status === "Review") {
     await cancelTaskJob(taskId);
   }
 
-  // Auto-start execution when task moves to Todo
-  if (status === "Todo") {
-    // Check if this task has Backlog subtasks — if so, enqueue the first one
-    // instead of the parent, and move parent to InProgress
+  // Auto-start execution when task moves to Ready
+  if (status === "Ready") {
+    // Check if this task has Todo subtasks — if so, enqueue the first one
+    // instead of the parent, and move parent to Working
     const nextSubtask = await getNextBacklogSubtask(taskId);
     if (nextSubtask) {
       await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
-      await updateTaskStatus(taskId, "InProgress");
+      await updateTaskStatus(taskId, "Working");
       return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
     }
     // No subtasks — enqueue the task itself (existing behavior)
     await enqueueTask({ taskId, workspaceId, userId });
   }
 
-  // Subtask completed — enqueue next Backlog sibling, or auto-complete parent if all done
-  if (status === "Completed") {
+  // Subtask completed — enqueue next Todo sibling, or auto-complete parent if all done
+  if (status === "Done") {
     const currentTask = await getTaskById(taskId);
     if (currentTask?.parentTaskId) {
       const nextSibling = await getNextBacklogSubtask(currentTask.parentTaskId);
@@ -261,18 +261,18 @@ export async function changeTaskStatus(
         const activeSubtasks = await prisma.task.count({
           where: {
             parentTaskId: currentTask.parentTaskId,
-            status: { in: ["Backlog", "Todo", "InProgress"] },
+            status: { in: ["Todo", "Working"] },
           },
         });
         if (activeSubtasks === 0) {
-          await updateTaskStatus(currentTask.parentTaskId, "Completed");
+          await updateTaskStatus(currentTask.parentTaskId, "Done");
         }
       }
     }
   }
 
-  // If moving a recurring/scheduled task to Completed or Blocked, deactivate scheduling
-  if (status === "Completed" || status === "Blocked") {
+  // If moving a recurring/scheduled task to Done or Waiting, deactivate scheduling
+  if (status === "Done" || status === "Waiting") {
     const task = await getTaskById(taskId);
     if (task?.nextRunAt || task?.schedule) {
       await removeScheduledTask(taskId);
@@ -300,7 +300,7 @@ export async function markTaskInProcess(
 ): Promise<Task> {
   return prisma.task.update({
     where: { id },
-    data: { status: "InProgress", ...(jobId && { jobId }) },
+    data: { status: "Working", ...(jobId && { jobId }) },
   });
 }
 
@@ -310,7 +310,7 @@ export async function markTaskCompleted(
 ): Promise<Task> {
   return prisma.task.update({
     where: { id },
-    data: { status: "Completed", result },
+    data: { status: "Review", result },
   });
 }
 
@@ -325,7 +325,7 @@ export async function markTaskFailed(id: string, error: string): Promise<Task> {
 
   return prisma.task.update({
     where: { id },
-    data: { status: "Blocked", error },
+    data: { status: "Waiting", error },
   });
 }
 
@@ -459,7 +459,7 @@ export async function createScheduledTask(
     nextRunAt = computeNextRun(data.schedule, timezone, afterTime);
   }
 
-  const status: TaskStatus = "Backlog";
+  const status: TaskStatus = "Todo";
 
   const task = await prisma.task.create({
     data: {

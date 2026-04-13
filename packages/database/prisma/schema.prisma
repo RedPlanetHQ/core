@@ -1054,11 +1054,12 @@ model Workspace {
 }
 
 enum TaskStatus {
-  Backlog
   Todo
-  InProgress
-  Blocked
-  Completed
+  Waiting
+  Ready
+  Working
+  Review
+  Done
   Recurring
 }
 
@@ -1069,7 +1070,7 @@ model Task {
 
   title       String
   description String?
-  status      TaskStatus @default(Backlog)
+  status      TaskStatus @default(Todo)
 
   conversationIds String[]
 

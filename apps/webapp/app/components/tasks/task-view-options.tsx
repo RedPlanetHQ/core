@@ -13,19 +13,22 @@ import { TaskStatusIcons } from "~/components/icon-utils";
 import { getTaskStatusColor } from "~/components/ui/color-utils";
 
 export const ALL_STATUSES: TaskStatus[] = [
-  "InProgress",
-  "Blocked",
   "Todo",
-  "Backlog",
-  "Completed",
+  "Waiting",
+  "Ready",
+  "Working",
+  "Review",
+  "Done",
 ];
 
 const STATUS_LABELS: Record<TaskStatus, string> = {
-  InProgress: "In Progress",
-  Blocked: "Blocked",
   Todo: "Todo",
-  Backlog: "Backlog",
-  Completed: "Completed",
+  Waiting: "Waiting",
+  Ready: "Ready",
+  Working: "Working",
+  Review: "Review",
+  Done: "Done",
+  Recurring: "Recurring",
 };
 
 export function StatusFilterChip({

@@ -89,12 +89,11 @@ export function getTaskTools(
         description: `Create a new CORE internal task. Tasks can be immediate (work items) or scheduled (reminders, recurring checks).
 NOTE: This is for CORE's own task system. If the user asks to create a task in an external tool (Todoist, Asana, Linear, Jira, etc.), do NOT use this — delegate to the orchestrator via take_action instead.
 
-BEFORE CREATING: Always call search_tasks first. If a matching task already exists in Backlog/Todo/InProgress, reuse it instead of creating a duplicate.
+BEFORE CREATING: Always call search_tasks first. If a matching task already exists in Todo/Working, reuse it instead of creating a duplicate.
 
 IMMEDIATE TASK (no scheduling):
-- Default status is Backlog — use when parking something for later ("don't forget X").
-- Pass status="Todo" to start execution immediately — use when user wants it done now ("do X", "research Y", coding tasks).
-- Pass status="Blocked" for approval-gated work — send_message explaining the plan, wait for user to unblock.
+- Default status is Todo — use for active work items, planning, and tracked tasks.
+- Pass status="Waiting" for approval-gated work — send_message explaining the plan, wait for user to approve.
 
 SCHEDULED TASK (one-time, fires at a specific time):
 - Pass title + schedule (RRule) + maxOccurrences=1
@@ -156,10 +155,10 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .optional()
             .describe("ID of the parent task. Required if isFollowUp is true."),
           status: z
-            .enum(["Backlog", "Todo", "Blocked"])
+            .enum(["Todo", "Waiting"])
             .optional()
             .describe(
-              "Initial status. Backlog=park for later (default). Todo=start immediately. Blocked=needs approval first.",
+              "Initial status. Todo=active planning/work item (default). Waiting=needs user approval before execution.",
             ),
           skillId: z
             .string()
@@ -298,8 +297,8 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               );
               await setPageContentFromHtml(page.id, description);
             }
-            // Move to target status — Todo triggers auto-execution, Blocked gates on approval
-            if (initialStatus && initialStatus !== "Backlog") {
+            // Move to target status — Ready triggers auto-execution, Waiting gates on approval
+            if (initialStatus && initialStatus !== "Todo") {
               await changeTaskStatus(
                 task.id,
                 initialStatus as any,
@@ -308,13 +307,11 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
               );
             }
             const label = parentTaskId ? "subtask" : "task";
-            const targetStatus = initialStatus ?? "Backlog";
+            const targetStatus = initialStatus ?? "Todo";
             const statusNote =
-              targetStatus === "Todo"
-                ? "Started in background."
-                : targetStatus === "Blocked"
-                  ? "Blocked — send_message to user explaining what's needed."
-                  : "Added to Backlog.";
+              targetStatus === "Waiting"
+                ? "Waiting — send_message to user explaining what's needed."
+                : "Added to Todo (planning).";
             logger.info(
               `Task ${task.id} created (${targetStatus})${parentTaskId ? ` subtask of ${parentTaskId}` : ""}`,
             );
@@ -377,11 +374,12 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
       inputSchema: z.object({
         status: z
           .enum([
-            "Backlog",
             "Todo",
-            "InProgress",
-            "Blocked",
-            "Completed",
+            "Waiting",
+            "Ready",
+            "Working",
+            "Review",
+            "Done",
             "Recurring",
           ])
           .optional()
@@ -486,10 +484,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
         status: z
-          .enum(["Backlog", "InProgress", "Blocked", "Completed", "Recurring"])
+          .enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done", "Recurring"])
           .optional()
           .describe(
-            "New status. To move a Blocked task to Todo, use unblock_task instead.",
+            "New status. To approve a Waiting task and move it to Ready, use unblock_task instead.",
           ),
         title: z.string().optional().describe("Updated title"),
         description: z
@@ -614,21 +612,21 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
     }),
 
     unblock_task: tool({
-      description: `Move a Blocked task to Todo so the agent can pick it up. Requires a reason explaining why the block is resolved. The reason is appended to the task description. Only works on tasks currently in Blocked status.`,
+      description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is appended to the task description. Only works on tasks currently in Waiting status.`,
       inputSchema: z.object({
-        taskId: z.string().describe("The ID of the blocked task"),
+        taskId: z.string().describe("The ID of the waiting task"),
         reason: z
           .string()
           .describe(
-            "Why the block is resolved — this is appended to the task description",
+            "Why the wait is resolved — this is appended to the task description",
           ),
       }),
       execute: async ({ taskId, reason }) => {
         try {
           const task = await getTaskById(taskId);
           if (!task) return `Task ${taskId} not found.`;
-          if (task.status !== "Blocked")
-            return `Task is not Blocked (current status: ${task.status}). Only Blocked tasks can be unblocked.`;
+          if (task.status !== "Waiting")
+            return `Task is not Waiting (current status: ${task.status}). Only Waiting tasks can be approved.`;
 
           // Append reason to description
           const page = task.pageId
@@ -637,7 +635,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           const existingHtml = page
             ? ((await getPageContentAsHtml(task.pageId!)) ?? "")
             : "";
-          const reasonHtml = `<p><strong>Unblocked:</strong> ${reason}</p>`;
+          const reasonHtml = `<p><strong>Approved:</strong> ${reason}</p>`;
           const mergedHtml = existingHtml
             ? `${existingHtml}${reasonHtml}`
             : reasonHtml;
@@ -646,8 +644,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             await setPageContentFromHtml(task.pageId, mergedHtml);
           }
 
-          await changeTaskStatus(taskId, "Todo", workspaceId, userId);
-          return `Task "${task.title}" unblocked and moved to Todo. Reason appended to description.`;
+          await changeTaskStatus(taskId, "Ready", workspaceId, userId);
+          return `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
         } catch (error) {
           return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
         }
