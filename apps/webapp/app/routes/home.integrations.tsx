@@ -38,6 +38,9 @@ import {
 } from "~/components/ui/card";
 import { useToast } from "~/hooks/use-toast";
 
+export const meta = () => [{ title: "Integrations" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const userId = await requireUserId(request);
   const workspace = await requireWorkpace(request);

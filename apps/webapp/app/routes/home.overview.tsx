@@ -16,6 +16,9 @@ import { PageHeader } from "~/components/common/page-header";
 import { OverviewGrid, type OverviewGridHandle } from "~/components/overview/overview-grid.client";
 import type { OverviewCell, WidgetOption } from "~/components/overview/types";
 
+export const meta = () => [{ title: "Overview" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
   const workspace = await requireWorkpace(request);

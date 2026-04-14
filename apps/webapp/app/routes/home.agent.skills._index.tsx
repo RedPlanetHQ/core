@@ -17,6 +17,9 @@ import { createSkill, deleteSkill } from "~/services/skills.server";
 import { getLibrarySkills, groupSkillsByCategory } from "~/lib/skills-library";
 import { ClientOnly } from "remix-utils/client-only";
 
+export const meta = () => [{ title: "Skills" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await getUser(request);
   const workspaceId = await getWorkspaceId(request, user?.id as string);

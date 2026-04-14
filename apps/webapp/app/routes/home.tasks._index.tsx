@@ -29,6 +29,9 @@ import { ClientOnly } from "remix-utils/client-only";
 
 // ─── Loader / Action ──────────────────────────────────────────────────────────
 
+export const meta = () => [{ title: "Tasks" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
   const workspaceId = (await getWorkspaceId(

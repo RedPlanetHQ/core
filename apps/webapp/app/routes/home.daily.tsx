@@ -1,5 +1,5 @@
 import { type LoaderFunctionArgs } from "@remix-run/server-runtime";
-import { useLoaderData } from "@remix-run/react";
+import { useLoaderData, type MetaFunction } from "@remix-run/react";
 import { typedjson } from "remix-typedjson";
 import { requireUser, requireWorkpace } from "~/services/session.server";
 import { ClientOnly } from "remix-utils/client-only";
@@ -16,6 +16,8 @@ import {
   getOrCreateWidgetPat,
 } from "~/services/widgets.server";
 import { WidgetContext } from "~/components/editor/extensions/widget-node-extension";
+
+export const meta: MetaFunction = () => [{ title: "Daily" }];
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
   const user = await requireUser(request);

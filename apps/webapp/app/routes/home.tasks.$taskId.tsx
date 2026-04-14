@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/node";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/node";
 import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
 import { Plus } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
@@ -34,7 +34,6 @@ import {
 import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { hasCodingSessions } from "~/services/coding/coding-session.server";
 import { getWidgetOptions, getOrCreateWidgetPat } from "~/services/widgets.server";
-import { getWidgetOptions, getWidgetPat } from "~/services/widgets.server";
 import { getButlerName } from "~/models/workspace.server";
 import { findOrCreateTaskPage } from "~/services/page.server";
 import { generateCollabToken } from "~/services/collab-token.server";
@@ -43,6 +42,11 @@ import { Button } from "~/components/ui/button";
 import { DeleteTaskDialog } from "~/components/tasks/delete-task-dialog";
 import { ScheduleDialog } from "~/components/tasks/schedule-dialog";
 import React from "react";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.task?.title;
+  return [{ title: title ? `${title} | Tasks` : "Tasks" }];
+};
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 

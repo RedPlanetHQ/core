@@ -3,6 +3,7 @@ import {
   json,
   type LoaderFunctionArgs,
   type ActionFunctionArgs,
+  type MetaFunction,
 } from "@remix-run/node";
 import { useLoaderData } from "@remix-run/react";
 import { requireUser, requireWorkpace } from "~/services/session.server";
@@ -21,6 +22,11 @@ import { prisma } from "~/db.server";
 import { scheduler, unschedule } from "~/services/oauth/scheduler";
 import { Plus } from "lucide-react";
 import { isBillingEnabled, isPaidPlan } from "~/config/billing.server";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const name = data?.integration?.name;
+  return [{ title: name ? `${name} | Integrations` : "Integrations" }];
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await requireUser(request);

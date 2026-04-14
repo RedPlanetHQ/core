@@ -1,6 +1,7 @@
 import {
   type ActionFunctionArgs,
   type LoaderFunctionArgs,
+  type MetaFunction,
 } from "@remix-run/server-runtime";
 import { Memory } from "@mastra/memory";
 
@@ -18,6 +19,11 @@ import { ConversationView } from "~/components/conversation";
 import { useTypedLoaderData } from "remix-typedjson";
 
 import { toAISdkV5Messages } from "@mastra/ai-sdk/ui";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.conversation?.title;
+  return [{ title: title ? `${title} | Chat` : "Chat" }];
+};
 
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const user = await requireUser(request);

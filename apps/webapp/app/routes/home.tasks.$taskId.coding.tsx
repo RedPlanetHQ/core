@@ -34,9 +34,6 @@ import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 import { useSetCodingActions } from "~/components/coding/coding-actions-context";
 import { useSidebar } from "~/components/ui/sidebar";
 import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
-import { useSetCodingActions } from "~/components/coding/coding-actions-context";
-import { useSidebar } from "~/components/ui/sidebar";
-import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 

@@ -47,6 +47,9 @@ import {
 import { RiWhatsappFill } from "@remixicon/react";
 import { SlackIcon } from "~/components/icons";
 
+export const meta = () => [{ title: "Automations" }];
+
+
 export async function loader({ request }: LoaderFunctionArgs) {
   const user = await requireUser(request);
   const workspaceId = await getWorkspaceId(

@@ -123,21 +123,48 @@ export function DesktopTabsProvider({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Sync active tab path + title on navigation
+  // Sync active tab path + icon on navigation (title comes from document.title observer)
   useEffect(() => {
     if (!initialized || !activeTabId) return;
     const currentPath = location.pathname + location.search;
-    const title = getTitleFromPath(location.pathname);
     const icon = getIconFromPath(location.pathname);
 
     setTabs((prev) => {
       const updated = prev.map((tab) =>
-        tab.id === activeTabId ? { ...tab, path: currentPath, title, icon } : tab,
+        tab.id === activeTabId ? { ...tab, path: currentPath, icon } : tab,
       );
       persistTabs(updated, activeTabId);
       return updated;
     });
   }, [location, initialized, activeTabId]);
+
+  // Sync active tab title from document.title whenever Remix updates it
+  useEffect(() => {
+    if (!initialized || !activeTabId) return;
+
+    const sync = () => {
+      const rawTitle = document.title;
+      // Strip common suffixes like " | AppName"
+      const title = rawTitle.split("|")[0].trim() || rawTitle;
+      setTabs((prev) => {
+        const updated = prev.map((tab) =>
+          tab.id === activeTabId ? { ...tab, title } : tab,
+        );
+        persistTabs(updated, activeTabId);
+        return updated;
+      });
+    };
+
+    const titleEl = document.querySelector("title");
+    if (!titleEl) return;
+
+    const observer = new MutationObserver(sync);
+    observer.observe(titleEl, { childList: true, characterData: true, subtree: true });
+    // Sync immediately in case title is already set
+    sync();
+
+    return () => observer.disconnect();
+  }, [initialized, activeTabId]);
 
   const openTab = useCallback(
     (path = "/home") => {

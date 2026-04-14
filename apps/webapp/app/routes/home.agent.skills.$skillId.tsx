@@ -1,4 +1,4 @@
-import { json, type LoaderFunctionArgs } from "@remix-run/node";
+import { json, type LoaderFunctionArgs, type MetaFunction } from "@remix-run/node";
 import { useLoaderData, useNavigate } from "@remix-run/react";
 import { ArrowLeft, Inbox, LoaderCircle } from "lucide-react";
 import { PageHeader } from "~/components/common/page-header";
@@ -6,6 +6,11 @@ import { ClientOnly } from "remix-utils/client-only";
 import { SkillEditor } from "~/components/editor/skill-editor.client";
 import { prisma } from "~/db.server";
 import { getUser, getWorkspaceId } from "~/services/session.server";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const title = data?.skill?.title;
+  return [{ title: title ? `${title} | Skills` : "Skills" }];
+};
 
 export async function loader({ request, params }: LoaderFunctionArgs) {
   const user = await getUser(request);
