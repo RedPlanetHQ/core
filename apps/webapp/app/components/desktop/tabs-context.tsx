@@ -6,11 +6,23 @@ import React, {
   useState,
 } from "react";
 import { useLocation, useNavigate } from "@remix-run/react";
+import {
+  CalendarDays,
+  MessageSquare,
+  Brain,
+  Library,
+  LayoutDashboard,
+  Plug,
+  Home,
+  type LucideIcon,
+} from "lucide-react";
+import { Task } from "~/components/icons/task";
 
 export type Tab = {
   id: string;
   path: string;
   title: string;
+  icon: LucideIcon | React.FC<{ size?: number; className?: string }>;
 };
 
 type TabsContextValue = {
@@ -25,20 +37,32 @@ const TabsContext = createContext<TabsContextValue | null>(null);
 
 const STORAGE_KEY = "desktop-tabs-v1";
 
+const routeMeta: Array<{
+  match: (p: string) => boolean;
+  title: string;
+  icon: Tab["icon"];
+}> = [
+  { match: (p) => p === "/home" || p === "/home/", title: "Home", icon: Home },
+  { match: (p) => p.startsWith("/home/daily"), title: "Daily", icon: CalendarDays },
+  { match: (p) => p.startsWith("/home/conversation"), title: "Chat", icon: MessageSquare },
+  { match: (p) => p.startsWith("/home/tasks/"), title: "Task", icon: Task },
+  { match: (p) => p.startsWith("/home/tasks"), title: "Tasks", icon: Task },
+  { match: (p) => p.startsWith("/home/memory"), title: "Memory", icon: Brain },
+  { match: (p) => p.startsWith("/home/overview"), title: "Overview", icon: LayoutDashboard },
+  { match: (p) => p.startsWith("/home/agent/skills"), title: "Skills", icon: Library },
+  { match: (p) => p.startsWith("/home/integrations") || p.startsWith("/home/integration"), title: "Integrations", icon: Plug },
+];
+
+function getMetaFromPath(path: string): { title: string; icon: Tab["icon"] } {
+  return routeMeta.find((r) => r.match(path)) ?? { title: "Home", icon: Home };
+}
+
 function getTitleFromPath(path: string): string {
-  if (path === "/home" || path === "/home/") return "Home";
-  if (path.startsWith("/home/daily")) return "Daily";
-  if (path.startsWith("/home/conversation/")) return "Chat";
-  if (path.startsWith("/home/tasks/")) return "Task";
-  if (path.startsWith("/home/tasks")) return "Tasks";
-  if (path.startsWith("/home/memory/graph")) return "Memory Graph";
-  if (path.startsWith("/home/memory")) return "Memory";
-  if (path.startsWith("/home/overview")) return "Overview";
-  if (path.startsWith("/home/agent/skills")) return "Skills";
-  if (path.startsWith("/home/agent/automations")) return "Automations";
-  if (path.startsWith("/home/integrations")) return "Integrations";
-  if (path.startsWith("/home/integration/")) return "Integration";
-  return "Home";
+  return getMetaFromPath(path).title;
+}
+
+function getIconFromPath(path: string): Tab["icon"] {
+  return getMetaFromPath(path).icon;
 }
 
 function loadPersistedTabs(): { tabs: Tab[]; activeTabId: string | null } | null {
@@ -76,8 +100,8 @@ export function DesktopTabsProvider({
       // Update the active tab to current path (in case of page reload)
       const updated = saved.tabs.map((tab) =>
         tab.id === saved.activeTabId
-          ? { ...tab, path: currentPath, title: getTitleFromPath(currentPath) }
-          : tab,
+          ? { ...tab, path: currentPath, title: getTitleFromPath(currentPath), icon: getIconFromPath(currentPath) }
+          : { ...tab, icon: getIconFromPath(tab.path) },
       );
       setTabs(updated);
       setActiveTabId(saved.activeTabId);
@@ -88,6 +112,7 @@ export function DesktopTabsProvider({
         id,
         path: currentPath,
         title: getTitleFromPath(currentPath),
+        icon: getIconFromPath(currentPath),
       };
       setTabs([initialTab]);
       setActiveTabId(id);
@@ -103,10 +128,11 @@ export function DesktopTabsProvider({
     if (!initialized || !activeTabId) return;
     const currentPath = location.pathname + location.search;
     const title = getTitleFromPath(location.pathname);
+    const icon = getIconFromPath(location.pathname);
 
     setTabs((prev) => {
       const updated = prev.map((tab) =>
-        tab.id === activeTabId ? { ...tab, path: currentPath, title } : tab,
+        tab.id === activeTabId ? { ...tab, path: currentPath, title, icon } : tab,
       );
       persistTabs(updated, activeTabId);
       return updated;
@@ -116,7 +142,7 @@ export function DesktopTabsProvider({
   const openTab = useCallback(
     (path = "/home") => {
       const id = crypto.randomUUID();
-      const newTab: Tab = { id, path, title: getTitleFromPath(path) };
+      const newTab: Tab = { id, path, title: getTitleFromPath(path), icon: getIconFromPath(path) };
       setTabs((prev) => {
         const updated = [...prev, newTab];
         persistTabs(updated, id);
@@ -139,7 +165,7 @@ export function DesktopTabsProvider({
 
         if (updated.length === 0) {
           const newId = crypto.randomUUID();
-          const newTab: Tab = { id: newId, path: "/home", title: "Home" };
+          const newTab: Tab = { id: newId, path: "/home", title: "Home", icon: Home };
           const withNew = [newTab];
           persistTabs(withNew, newId);
           setActiveTabId(newId);

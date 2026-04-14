@@ -31,6 +31,12 @@ import { cn } from "~/lib/utils";
 import { useTauri } from "~/hooks/use-tauri";
 import { TauriTerminal } from "~/components/coding/tauri-terminal";
 import { NewSessionDialog } from "~/components/coding/new-session-dialog";
+import { useSetCodingActions } from "~/components/coding/coding-actions-context";
+import { useSidebar } from "~/components/ui/sidebar";
+import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
+import { useSetCodingActions } from "~/components/coding/coding-actions-context";
+import { useSidebar } from "~/components/ui/sidebar";
+import { useChatPanel } from "~/components/chat-panel/chat-panel-context";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 
@@ -276,6 +282,9 @@ function CodingPage() {
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
   const { isDesktop } = useTauri();
+  const setCodingActions = useSetCodingActions();
+  const { setOpen: setSidebarOpen } = useSidebar();
+  const chatPanel = useChatPanel();
 
   // Local session list — can grow when new sessions are created from the dialog
   const [sessions, setSessions] =
@@ -374,6 +383,21 @@ function CodingPage() {
 
   const lastDir = sessions.find((s) => s.dir)?.dir ?? "";
 
+  // Auto-collapse sidebar + close chat on mount, restore sidebar on unmount
+  useEffect(() => {
+    setSidebarOpen(false);
+    chatPanel?.closeChat();
+    return () => setSidebarOpen(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Register new-session action in the PageHeader
+  useEffect(() => {
+    setCodingActions({ onNewSession: () => setNewSessionOpen(true) });
+    return () => setCodingActions(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   if (sessions.length === 0 && !isDesktop) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -414,21 +438,6 @@ function CodingPage() {
       <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
         <ResizablePanel defaultSize="20%" minSize="20%" maxSize="35%">
           <div className="flex h-full flex-col">
-            <div className="border-border flex items-center justify-between border-b px-4 py-2">
-              <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
-                {sessions.length} session{sessions.length !== 1 ? "s" : ""}
-              </p>
-              {isDesktop && (
-                <Button
-                  variant="secondary"
-                  className="h-6 px-2"
-                  onClick={() => setNewSessionOpen(true)}
-                >
-                  <Plus size={13} className="mr-0.5" />
-                  New
-                </Button>
-              )}
-            </div>
             <div className="flex-1 overflow-hidden">
               <AutoSizer>
                 {({ width, height }) => (

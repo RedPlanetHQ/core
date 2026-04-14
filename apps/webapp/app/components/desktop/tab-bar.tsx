@@ -68,20 +68,18 @@ export function DesktopTabBar() {
             <div
               key={tab.id}
               className={cn(
-                "group flex h-7 w-[160px] shrink-0 cursor-pointer select-none items-center gap-1 rounded-lg px-2 text-xs transition-colors",
+                "group flex h-7 w-[160px] shrink-0 cursor-pointer select-none items-center gap-2 rounded-lg px-2 text-xs transition-colors",
                 tab.id === activeTabId
                   ? "bg-background-3 text-foreground shadow-1"
                   : "bg-background-2 text-muted-foreground hover:text-foreground",
               )}
               onClick={() => switchTab(tab.id)}
             >
+              <tab.icon size={16} className="shrink-0" />
               <span className="min-w-0 flex-1 truncate">{tab.title}</span>
               <button
                 className={cn(
-                  "shrink-0 rounded p-0.5 transition-opacity",
-                  tab.id === activeTabId
-                    ? "opacity-40 hover:opacity-80"
-                    : "opacity-0 group-hover:opacity-40 group-hover:hover:opacity-80",
+                  "shrink-0 rounded p-0.5 opacity-0 transition-opacity group-hover:opacity-40 group-hover:hover:opacity-80",
                 )}
                 onClick={(e) => {
                   e.stopPropagation();
@@ -89,7 +87,7 @@ export function DesktopTabBar() {
                 }}
                 aria-label={`Close ${tab.title}`}
               >
-                <X size={12} />
+                <X size={16} />
               </button>
             </div>
           ))}

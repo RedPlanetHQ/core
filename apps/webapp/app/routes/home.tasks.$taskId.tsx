@@ -1,9 +1,14 @@
 import { json, redirect } from "@remix-run/node";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/node";
 import { Outlet, useNavigate, useFetcher, useLocation } from "@remix-run/react";
+import { Plus } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { LoaderCircle, Trash2 } from "lucide-react";
+import {
+  CodingActionsProvider,
+  CodingActions,
+} from "~/components/coding/coding-actions-context";
 import { z } from "zod";
 import type { TaskStatus } from "@core/database";
 
@@ -294,6 +299,7 @@ function TaskDetailLayout() {
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   return (
+    <CodingActionsProvider>
     <div className="flex h-page-xs flex-col">
       <PageHeader
         title={task.title || "Untitled"}
@@ -326,15 +332,20 @@ function TaskDetailLayout() {
               ]
             : []),
         ]}
+        showChatToggle={!isCodingTab}
         actionsNode={
-          <Button
-            variant="ghost"
-            className="text-destructive hover:text-destructive gap-2 rounded"
-            onClick={() => setDeleteOpen(true)}
-            disabled={fetcher.state !== "idle"}
-          >
-            <Trash2 size={14} /> Delete
-          </Button>
+          isCodingTab ? (
+            <CodingActions />
+          ) : (
+            <Button
+              variant="ghost"
+              className="text-destructive hover:text-destructive gap-2 rounded"
+              onClick={() => setDeleteOpen(true)}
+              disabled={fetcher.state !== "idle"}
+            >
+              <Trash2 size={14} /> Delete
+            </Button>
+          )
         }
       />
 
@@ -357,6 +368,7 @@ function TaskDetailLayout() {
         />
       )}
     </div>
+    </CodingActionsProvider>
   );
 }
 

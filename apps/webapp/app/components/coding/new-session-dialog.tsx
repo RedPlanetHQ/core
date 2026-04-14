@@ -120,11 +120,12 @@ export function NewSessionDialog({
           </div>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>
+        <DialogFooter className="border-none p-3 pt-0">
+          <Button variant="ghost" onClick={() => onOpenChange(false)}>
             Cancel
           </Button>
           <Button
+            variant="secondary"
             onClick={handleSubmit}
             disabled={!selectedAgent || !dir.trim() || loading}
           >
