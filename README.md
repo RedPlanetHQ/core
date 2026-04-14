@@ -52,10 +52,10 @@
 
 ---
 
-> Today you use specialized agents like Claude Code and Cursor. You gather the context, kick off
-> the session, babysit the output. Soon you will just describe the outcome, and Butler runs
-> Claude Code, pulls from your apps, coordinates the agents. You stop being the orchestrator.
-> Butler becomes the harness.
+> You use specialized agents like Claude Code and Cursor. You gather the context, kick off
+> the session, babysit the output. You're the context middleman — and that makes you the
+> bottleneck. CORE's butler gathers the context, runs the agents, coordinates the work.
+> You stop babysitting. You start operating.
 
 https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
 
@@ -65,7 +65,7 @@ https://github.com/user-attachments/assets/10197ad0-d7d4-44e3-9ea3-504aef81f65f
 
 Every AI agent you use today is smart. And every single one forgets you the moment the conversation ends.
 
-### Chat is the wrong interface for a personal assistant.
+### You shouldn't have to open a chat window to get things done.
 
 Your EA doesn't wait for you to open a chat window and explain what you need. They already know. They're already on it. Chat forces you to context-switch, explain yourself, and stay in the loop on things that shouldn't need your attention.
 
@@ -73,7 +73,7 @@ We think the right interface is a scratchpad, a shared page, like a note you and
 
 ### Your AI doesn't actually know you.
 
-Every agent starts fresh. No preferences, no past decisions, no team context, no patterns. So it can't act proactively, because proactivity requires context that accumulates over time. Without persistent memory, agents are reactive tools waiting for your next prompt.
+Every agent starts fresh. No preferences, no past decisions, no team context, no patterns. So it can't act proactively, because proactivity requires context that accumulates over time. Without persistent memory, agents are reactive tools waiting for your next prompt. CORE builds a persistent memory from every conversation, task, and connected app — so butler already knows your context before you open a task.
 
 ### You are the bottleneck.
 
@@ -82,6 +82,11 @@ Right now you are the glue. You gather the GitHub issue, read the Slack thread, 
 ---
 
 ## Butler in action
+
+### You described it once. It ran every night since.
+
+`[ ] Delegate my backlog to Claude Code every night and open PRs` — you wrote that once.
+Every morning, PRs are waiting. You review, approve, move on. Butler never needed reminding.
 
 ### You closed your laptop. Your meeting already produced results.
 
