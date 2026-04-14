@@ -242,7 +242,7 @@ export default function ActivitySettings() {
                   No activities found
                 </div>
               ) : (
-                <AutoSizer className="h-[calc(100vh-56px)]">
+                <AutoSizer className="h-page">
                   {({ width, height }) => (
                     <InfiniteLoader
                       isRowLoaded={isRowLoaded}

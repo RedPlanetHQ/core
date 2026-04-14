@@ -2,7 +2,27 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { Button } from "~/components/ui/button";
 import { useTauri } from "~/hooks/use-tauri";
+import { terminalThemes } from "./terminal-themes";
 import "@xterm/xterm/css/xterm.css";
+
+// Read theme from <html> class instead of remix-themes context — avoids
+// "useTheme must be used within ThemeProvider" errors inside ClientOnly.
+function useHtmlTheme(): "dark" | "light" {
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    if (typeof document === "undefined") return "dark";
+    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+  });
+
+  useEffect(() => {
+    const mo = new MutationObserver(() => {
+      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+    });
+    mo.observe(document.documentElement, { attributeFilter: ["class"] });
+    return () => mo.disconnect();
+  }, []);
+
+  return theme;
+}
 
 type TerminalState = "spawning" | "running" | "ended" | "error";
 
@@ -45,6 +65,7 @@ export function TauriTerminal({
   onSessionIdUpdated,
 }: Props) {
   const { invoke } = useTauri();
+  const theme = useHtmlTheme();
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<import("@xterm/xterm").Terminal | null>(null);
   const unlistenersRef = useRef<Array<() => void>>([]);
@@ -57,10 +78,21 @@ export function TauriTerminal({
     initialExternalSessionId,
   );
 
+  const resolvedTheme = theme;
+  const xtermTheme = terminalThemes[resolvedTheme];
+  const bg = xtermTheme.background as string;
+
   const setStatusBoth = (s: TerminalState) => {
     statusRef.current = s;
     setStatus(s);
   };
+
+  // Update xterm theme + contrast enforcement when app theme changes
+  useEffect(() => {
+    if (!termRef.current) return;
+    termRef.current.options.theme = xtermTheme;
+    termRef.current.options.minimumContrastRatio = resolvedTheme === "light" ? 4.5 : 1;
+  }, [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateSessionId = useCallback(
     async (extId: string) => {
@@ -103,19 +135,17 @@ export function TauriTerminal({
 
       const term = new Terminal({
         cursorBlink: true,
-        fontSize: 14,
+        fontSize: 13,
         fontFamily: "Menlo, Monaco, 'Courier New', monospace",
         lineHeight: 1.2,
-        theme: {
-          background: "#161616",
-          foreground: "#ededed",
-          cursor: "#6b9bff",
-          black: "#161616",
-          brightBlack: "#444444",
-        },
+        theme: xtermTheme,
         allowTransparency: false,
         scrollback: 5000,
         overviewRulerWidth: 0,
+        // Automatically adjusts any color (including 256-color/true-color)
+        // that has insufficient contrast against the background.
+        // This fixes white dots/text that bypass the 16-color theme palette.
+        minimumContrastRatio: resolvedTheme === "light" ? 4.5 : 1,
       });
 
       const fitAddon = new FitAddon();
@@ -174,7 +204,8 @@ export function TauriTerminal({
         `pty://session-id/${sessionDbId}`,
         (payload) => {
           const extId = (payload as any)?.externalSessionId;
-          if (extId && mounted && !initialExternalSessionId) updateSessionId(extId);
+          if (extId && mounted && !initialExternalSessionId)
+            updateSessionId(extId);
         },
       );
 
@@ -186,12 +217,17 @@ export function TauriTerminal({
         invoke("write_pty", { sessionDbId, data });
       });
 
+      let rafId: number | null = null;
       const ro = new ResizeObserver(() => {
-        fitAddon.fit();
-        invoke("resize_pty", {
-          sessionDbId,
-          cols: term.cols,
-          rows: term.rows,
+        if (rafId !== null) cancelAnimationFrame(rafId);
+        rafId = requestAnimationFrame(() => {
+          fitAddon.fit();
+          invoke("resize_pty", {
+            sessionDbId,
+            cols: term.cols,
+            rows: term.rows,
+          });
+          rafId = null;
         });
       });
       if (containerRef.current) ro.observe(containerRef.current);
@@ -242,22 +278,21 @@ export function TauriTerminal({
     return (
       <div
         className="flex h-full flex-col items-center justify-center gap-4 px-8"
-        style={{ background: "oklch(21.34% 0 0)" }}
+        style={{ background: bg }}
       >
         <AlertCircle
           className="h-8 w-8"
-          style={{ color: "oklch(65% 0.2 25)" }}
+          style={{ color: "oklch(60% 0.13 30)" }}
         />
         <p
           className="text-center font-mono text-sm font-medium"
-          style={{ color: "oklch(65% 0.2 25)" }}
+          style={{ color: "oklch(60% 0.13 30)" }}
         >
           {errorMsg}
         </p>
         <Button
           size="sm"
           variant="ghost"
-          className="text-white/70 hover:bg-white/10 hover:text-white"
           onClick={onNewSession}
         >
           New session
@@ -270,7 +305,7 @@ export function TauriTerminal({
     <div
       className="relative h-full w-full overflow-hidden"
       style={{
-        background: "#161616",
+        background: bg,
         display: "flex",
         flexDirection: "column",
         paddingLeft: 8,
@@ -280,7 +315,7 @@ export function TauriTerminal({
       {status === "spawning" && (
         <div
           className="absolute inset-0 z-10 flex items-center justify-center"
-          style={{ background: "#161616" }}
+          style={{ background: bg }}
         >
           <Loader2
             className="h-5 w-5 animate-spin"
@@ -291,7 +326,7 @@ export function TauriTerminal({
 
       <div
         ref={containerRef}
-        style={{ flex: 1, minHeight: 0, overflow: "hidden" }}
+        style={{ flex: 1, minHeight: 0, minWidth: 0, width: "100%", overflow: "hidden" }}
         onClick={() => termRef.current?.focus()}
       />
 
@@ -299,7 +334,7 @@ export function TauriTerminal({
         <div
           className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4"
           style={{
-            background: "oklch(21.34% 0 0 / 0.85)",
+            background: `color-mix(in oklch, ${bg} 85%, transparent)`,
             backdropFilter: "blur(4px)",
           }}
         >
@@ -309,7 +344,7 @@ export function TauriTerminal({
           />
           <p
             className="text-sm font-medium"
-            style={{ color: "oklch(92.8% 0 0)" }}
+            style={{ color: xtermTheme.foreground as string }}
           >
             Session ended
           </p>
@@ -317,7 +352,6 @@ export function TauriTerminal({
             {externalSessionId && (
               <Button
                 variant="ghost"
-                className="text-white/70 hover:bg-white/10 hover:text-white"
                 onClick={() => onResumeSession(externalSessionId)}
               >
                 Resume session
@@ -325,7 +359,6 @@ export function TauriTerminal({
             )}
             <Button
               variant="ghost"
-              className="text-white/70 hover:bg-white/10 hover:text-white"
               onClick={onNewSession}
             >
               New session

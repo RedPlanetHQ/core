@@ -41,7 +41,7 @@ export default function SkillDetail() {
             },
           ]}
         />
-        <div className="flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4 md:h-[calc(100vh_-_56px)]">
+        <div className="md:h-page flex h-[calc(100vh)] flex-col items-center justify-center gap-2 p-4">
           <Inbox size={30} />
           Skill not found
         </div>
@@ -51,7 +51,7 @@ export default function SkillDetail() {
 
   return (
     <>
-      <div className="flex h-full flex-col">
+      <div className="h-page-xs flex flex-col">
         <PageHeader title="Edit skill" />
 
         <ClientOnly

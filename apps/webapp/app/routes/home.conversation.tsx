@@ -147,7 +147,7 @@ export default function ConversationLayout() {
     : [];
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="h-page-xs flex flex-col">
       <PageHeader
         title="Conversations"
         breadcrumbs={breadcrumbs.length > 0 ? breadcrumbs : undefined}

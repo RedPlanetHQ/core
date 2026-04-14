@@ -385,7 +385,23 @@
   }
 }
 
+@layer utilities {
+  .h-page {
+    height: calc(100vh - 56px - var(--tabbar-height, 0px));
+  }
+  .h-page-sm {
+    height: calc(100vh - 40px - var(--tabbar-height, 0px));
+  }
+  .h-page-xs {
+    height: calc(100vh - 16px - var(--tabbar-height, 0px));
+  }
+}
+
 @layer base {
+  :root {
+    --tabbar-height: 0px;
+  }
+
   * {
     @apply border-border outline-ring/50;
     --header-height: 40px;

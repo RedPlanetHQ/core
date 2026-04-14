@@ -74,7 +74,7 @@ export default function DailyRoute() {
   const page = (
     <div className="flex h-full flex-col overflow-hidden">
       <PageHeader title="Scratchpad" />
-      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-2 px-3 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-2 px-3 md:h-page">
         <ClientOnly
           fallback={
             <div className="text-muted-foreground p-6 text-sm">Loading…</div>

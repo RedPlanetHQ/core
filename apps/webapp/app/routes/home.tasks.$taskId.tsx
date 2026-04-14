@@ -294,7 +294,7 @@ function TaskDetailLayout() {
   const isScheduled = task.isActive && (task.schedule || task.nextRunAt);
 
   return (
-    <div className="flex h-[calc(100vh-16px)] flex-col">
+    <div className="flex h-page-xs flex-col">
       <PageHeader
         title={task.title || "Untitled"}
         breadcrumbs={breadcrumbs}

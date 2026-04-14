@@ -656,7 +656,7 @@ export default function Reminders() {
     <div className="flex h-full flex-col">
       <PageHeader title="Automations" tabs={tabs} />
 
-      <div className="flex h-[calc(100vh)] w-full flex-col p-3 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] w-full flex-col p-3 md:h-page">
         {reminders.length === 0 ? (
           <div className="mt-20 flex flex-col items-center justify-center">
             <div className="bg-primary/10 mb-4 flex h-12 w-12 items-center justify-center rounded-full">

@@ -96,7 +96,7 @@ export default function Overview() {
           },
         ]}
       />
-      <div className="flex h-[calc(100vh_-_56px)] w-full flex-col overflow-auto">
+      <div className="flex h-page w-full flex-col overflow-auto">
         <ClientOnly
           fallback={
             <div className="flex h-full items-center justify-center">

@@ -62,7 +62,12 @@ export async function loader({ params, request }: LoaderFunctionArgs) {
     }
   }
 
-  return { conversation, integrationAccountMap, integrationFrontendMap, models };
+  return {
+    conversation,
+    integrationAccountMap,
+    integrationFrontendMap,
+    models,
+  };
 }
 
 export async function action({ params, request }: ActionFunctionArgs) {
@@ -72,22 +77,26 @@ export async function action({ params, request }: ActionFunctionArgs) {
 }
 
 export default function SingleConversation() {
-  const { conversation, integrationAccountMap, integrationFrontendMap, models } =
-    useTypedLoaderData<typeof loader>();
+  const {
+    conversation,
+    integrationAccountMap,
+    integrationFrontendMap,
+    models,
+  } = useTypedLoaderData<typeof loader>();
   const { conversationId } = useParams();
 
   if (typeof window === "undefined") return null;
 
   if (!conversation) {
     return (
-      <div className="flex h-[calc(100vh)] w-full items-center justify-center md:h-[calc(100vh_-_16px)]">
+      <div className="md:h-page-xs flex h-[calc(100vh)] w-full items-center justify-center">
         <p className="text-muted-foreground text-sm">No conversation found</p>
       </div>
     );
   }
 
   return (
-    <div className="relative flex h-[calc(100vh)] w-full flex-col items-center justify-center overflow-auto md:h-[calc(100vh_-_56px)]">
+    <div className="h-page relative flex w-full flex-col items-center justify-center overflow-hidden">
       <ConversationView
         conversationId={conversationId as string}
         history={conversation.ConversationHistory}

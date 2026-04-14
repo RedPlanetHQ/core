@@ -75,7 +75,7 @@ export const Editor = ({ defaultLabelId, labels }: EditorProps) => {
   }, [fetcher.state, fetcher.data]);
 
   return (
-    <div className="flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3 md:h-[calc(100vh_-_56px)]">
+    <div className="md:h-page-xs flex h-[calc(100vh)] w-full flex-col items-center space-y-6 pt-3">
       <div className="flex h-full w-full flex-1 flex-col items-center overflow-y-auto">
         <div className="md:min-w-3xl min-w-[0px] max-w-4xl">
           <div>

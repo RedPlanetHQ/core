@@ -33,7 +33,7 @@ export default function ScheduledTasksPage() {
   if (typeof window === "undefined") return null;
 
   return (
-    <div className="flex h-[calc(100vh-16px)] flex-col">
+    <div className="flex h-page-xs flex-col">
       <PageHeader
         title="Tasks"
         tabs={[

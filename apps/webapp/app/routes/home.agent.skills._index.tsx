@@ -152,7 +152,7 @@ export default function Skills() {
         ]}
       />
 
-      <div className="flex h-[calc(100vh)] w-full flex-col space-y-4 p-3 px-2 pt-3 md:h-[calc(100vh_-_56px)]">
+      <div className="!md:h-page flex h-[calc(100vh)] w-full flex-col space-y-4 p-3 px-2 pt-3">
         {activeTab === "my-skills" && (
           <div className="flex-1 overflow-hidden">
             {isInitialLoad ? (

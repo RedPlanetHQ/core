@@ -17,6 +17,8 @@ import {
   CalendarDays,
   LayoutDashboard,
   MessageSquare,
+  ArrowLeft,
+  ArrowRight,
 } from "lucide-react";
 import { NavMain } from "./nav-main";
 import { useUser } from "~/hooks/useUser";
@@ -25,6 +27,7 @@ import { Button } from "../ui";
 import { CommandBar } from "../command-bar/command-bar";
 
 import { useNavigate, useParams } from "@remix-run/react";
+import { useTauri } from "~/hooks/use-tauri";
 import { IngestionStatus } from "./ingestion-status";
 import { Task } from "../icons/task";
 import { TryIt } from "./try-it";
@@ -80,6 +83,15 @@ export function AppSidebar({
   const user = useUser();
   const navigate = useNavigate();
   const params = useParams();
+  const { isDesktop } = useTauri();
+  const tauriWindowRef = React.useRef<any>(null);
+
+  React.useEffect(() => {
+    if (!isDesktop) return;
+    import("@tauri-apps/api/window").then(({ getCurrentWindow }) => {
+      tauriWindowRef.current = getCurrentWindow();
+    });
+  }, [isDesktop]);
 
   const [commandBar, setCommandBar] = React.useState(false);
 
@@ -121,7 +133,40 @@ export function AppSidebar({
 
   return (
     <>
-      <Sidebar variant="inset" className="bg-background py-2">
+      <Sidebar variant="inset" className="bg-background pb-2 pt-1">
+        {isDesktop && (
+          <div
+            className="flex h-9 shrink-0 items-center justify-between px-3"
+            onMouseDown={(e) => {
+              if (e.buttons === 1 && tauriWindowRef.current) {
+                tauriWindowRef.current.startDragging();
+              }
+            }}
+          >
+            {/* Left: space for macOS traffic lights (~70px) */}
+            <div className="w-[70px]" />
+
+            {/* Right: back / forward */}
+            <div className="flex gap-0.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded"
+                onClick={() => window.history.back()}
+              >
+                <ArrowLeft size={14} />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded"
+                onClick={() => window.history.forward()}
+              >
+                <ArrowRight size={14} />
+              </Button>
+            </div>
+          </div>
+        )}
         <SidebarHeader className="pb-0">
           <SidebarMenu>
             <SidebarMenuItem className="flex justify-center">

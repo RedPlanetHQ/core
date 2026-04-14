@@ -38,7 +38,7 @@ export default function MemoryGraph() {
   }
 
   return (
-    <div className="flex h-[calc(100vh_-_56px)] grow items-center justify-center rounded">
+    <div className="flex h-page grow items-center justify-center rounded">
       {loading ? (
         <div className="flex h-full w-full flex-col items-center justify-center p-3">
           <LoaderCircle size={18} className="mr-1 animate-spin" />

@@ -197,7 +197,7 @@ export const ConversationNew = ({
       action="/home/conversation"
       method="post"
       onSubmit={(e) => submitForm(e)}
-      className="flex h-[calc(100vh_-_56px)] flex-col"
+      className="flex h-page flex-col"
     >
       {/* Centered hero */}
       <div className="flex flex-1 flex-col items-center justify-center gap-3">

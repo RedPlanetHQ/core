@@ -46,7 +46,9 @@ const ActionSchema = z.discriminatedUnion("intent", [
     intent: z.literal("create"),
     title: z.string().min(1),
     description: z.string().optional(),
-    status: z.enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"]).optional(),
+    status: z
+      .enum(["Todo", "Waiting", "Ready", "Working", "Review", "Done"])
+      .optional(),
   }),
   z.object({
     intent: z.literal("update-status"),
@@ -150,7 +152,7 @@ export default function TasksIndex() {
   if (typeof window === "undefined") return null;
 
   return (
-    <div className="flex h-[calc(100vh-16px)] flex-col">
+    <div className="flex h-[calc(100vh-56px)] flex-col">
       <PageHeader
         title="Tasks"
         tabs={[

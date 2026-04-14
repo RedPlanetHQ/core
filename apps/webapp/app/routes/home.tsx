@@ -33,6 +33,9 @@ import { getIntegrationAccounts } from "~/services/integrationAccount.server";
 import { getAvailableModels } from "~/services/llm-provider.server";
 import { type LLMModel } from "~/components/conversation";
 import { tinykeys } from "tinykeys";
+import { useTauri } from "~/hooks/use-tauri";
+import { DesktopTabsProvider } from "~/components/desktop/tabs-context";
+import { DesktopTabBar } from "~/components/desktop/tab-bar";
 
 export async function action({ request }: ActionFunctionArgs) {
   const { workspaceId } = await requireUser(request);
@@ -148,8 +151,10 @@ function HomeInner({
 }) {
   const { panelRef, closeChat, onPanelCollapse, chatOpen, toggleChat } =
     useChatPanel()!;
+  const { isDesktop } = useTauri();
   const location = useLocation();
-  const isConversationRoute = location.pathname.startsWith("/home/conversation");
+  const isConversationRoute =
+    location.pathname.startsWith("/home/conversation");
 
   React.useEffect(() => {
     if (isConversationRoute) return;
@@ -195,10 +200,18 @@ function HomeInner({
         agentName={agentName}
         accentColor={accentColor}
       />
-      <SidebarInset className="bg-background-2 h-full rounded pr-0">
-        <ResizablePanelGroup orientation="horizontal" className="h-full">
+      <SidebarInset className="h-[calc(100vh_-_16px)] border-none bg-transparent pr-0 !shadow-none outline-none">
+        {isDesktop && (
+          <div className="flex w-full flex-col overflow-hidden">
+            <DesktopTabBar />
+          </div>
+        )}
+        <ResizablePanelGroup
+          orientation="horizontal"
+          className="bg-background-2 shadow-1 border-border h-page-xs !rounded-xl"
+        >
           <ResizablePanel defaultSize="100%" minSize="50%">
-            <div className="flex h-full flex-col rounded">
+            <div className="flex h-full flex-col">
               <div className="flex h-full flex-col gap-2 @container/main">
                 <div className="flex h-full flex-col">
                   <Outlet />
@@ -248,16 +261,18 @@ export default function Home() {
   return (
     <CollabSocketProvider>
       <ChatPanelProvider>
-        <HomeInner
-          conversationSources={conversationSources}
-          workspace={workspace}
-          meta={meta}
-          agentName={agentName}
-          accentColor={accentColor}
-          needsButlerName={needsButlerName}
-          models={models}
-          integrationAccountMap={integrationAccountMap}
-        />
+        <DesktopTabsProvider>
+          <HomeInner
+            conversationSources={conversationSources}
+            workspace={workspace}
+            meta={meta}
+            agentName={agentName}
+            accentColor={accentColor}
+            needsButlerName={needsButlerName}
+            models={models}
+            integrationAccountMap={integrationAccountMap}
+          />
+        </DesktopTabsProvider>
       </ChatPanelProvider>
     </CollabSocketProvider>
   );

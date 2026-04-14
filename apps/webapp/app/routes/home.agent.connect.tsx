@@ -404,7 +404,7 @@ export default function Connect() {
     <div className="flex h-full flex-col">
       <PageHeader title="Connect" />
 
-      <div className="home flex h-[calc(100vh_-_40px)] flex-col gap-8 overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+      <div className="home flex h-page-sm flex-col gap-8 overflow-y-auto p-4 px-5 md:h-page">
         {/* Direct Section */}
         <div className="space-y-3">
           <div>

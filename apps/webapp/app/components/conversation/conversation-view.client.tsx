@@ -52,7 +52,9 @@ export function ConversationView({
   models: modelsProp = [],
 }: ConversationViewProps) {
   const readFetcher = useFetcher();
-  const skillsFetcher = useFetcher<{ skills: Array<{ id: string; title: string }> }>();
+  const skillsFetcher = useFetcher<{
+    skills: Array<{ id: string; title: string }>;
+  }>();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   // Load skills once for slash command autocomplete
@@ -306,7 +308,7 @@ export function ConversationView({
         </div>
       </div>
 
-      <div className="flex w-full flex-col items-center">
+      <div className="flex w-full shrink-0 flex-col items-center">
         <div ref={composerRef} className="w-full max-w-[90ch] px-4">
           <ThinkingIndicator
             isLoading={status === "streaming" || status === "submitted"}

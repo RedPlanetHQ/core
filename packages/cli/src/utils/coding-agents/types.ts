@@ -47,6 +47,7 @@ export interface ScannedSession {
 	fileSizeBytes: number;
 	createdAt: number;
 	updatedAt: number;
+	turnCount: number;
 }
 
 export interface ScanOptions {

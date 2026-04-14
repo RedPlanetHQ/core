@@ -155,7 +155,7 @@ export function IntegrationDetail({
           },
         ]}
       />
-      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-[calc(100vh_-_56px)]">
+      <div className="flex h-[calc(100vh)] flex-col items-center overflow-y-auto p-4 px-5 md:h-page">
         <div className="w-full md:max-w-5xl">
           <Section
             title={integration.name}

@@ -7,7 +7,14 @@ import { Text } from "@tiptap/extension-text";
 import HardBreak from "@tiptap/extension-hard-break";
 import { History } from "@tiptap/extension-history";
 import Placeholder from "@tiptap/extension-placeholder";
-import { ArrowUp, X, MessageSquare, Plus, Maximize2, EyeOff } from "lucide-react";
+import {
+  ArrowUp,
+  X,
+  MessageSquare,
+  Plus,
+  Maximize2,
+  EyeOff,
+} from "lucide-react";
 import { Button } from "~/components/ui/button";
 import {
   ConversationView,
@@ -237,7 +244,11 @@ function ChatInput({
                 disabled={!content.trim() || isLoading}
               >
                 <ArrowUp size={14} />
-                {isLoading ? "Loading..." : incognito ? "Incognito Chat" : "Chat"}
+                {isLoading
+                  ? "Loading..."
+                  : incognito
+                    ? "Incognito Chat"
+                    : "Chat"}
               </Button>
             </div>
           </div>
@@ -333,7 +344,7 @@ export function GlobalChatPanel({
   };
 
   return (
-    <div className="border-l-0.5 border-border flex h-full flex-col">
+    <div className="border-l-0.5 border-border bg-background-2 flex h-full flex-col">
       {/* Header */}
       <div className="flex h-[40px] items-center justify-between border-b px-3 py-2">
         <div className="flex items-center gap-2">
@@ -375,7 +386,7 @@ export function GlobalChatPanel({
 
       {/* Content */}
       {activeConversation ? (
-        <div className="flex h-[100vh] flex-col overflow-hidden border-b md:h-[calc(100vh_-_56px)]">
+        <div className="flex h-[100vh] flex-col overflow-hidden border-b md:h-page">
           <ConversationView
             conversationId={activeConversation.conversationId}
             history={activeConversation.history}

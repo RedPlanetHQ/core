@@ -29,22 +29,22 @@
   "plugins": {
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEYwMUIyQkY2NTk0QTdCNEEKUldSS2UwcFo5aXNiOEFnN0hjYTZENjBJWWQ5cUZSeVZpRThzKzkwcVVaeE5UTkdHQlhETDZIODAK",
-      "endpoints": [
-        "https://github.com/redplanethq/core/releases/latest/download/latest.json"
-      ]
+      "endpoints": ["https://github.com/redplanethq/core/releases/latest/download/latest.json"]
     }
   },
   "app": {
     "windows": [
       {
         "label": "main",
-        "title": "CORE",
+        "title": "",
         "width": 1280,
         "height": 800,
         "minWidth": 800,
         "minHeight": 600,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "titleBarStyle": "Overlay",
+        "trafficLightPosition": { "x": 18, "y": 25 }
       }
     ],
     "security": {
