@@ -25,6 +25,7 @@ import {
   setPageContentFromHtml,
   getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
+import { upsertPageSection } from "~/services/coding-task.server";
 import { logger } from "~/services/logger.service";
 import type { TaskStatus } from "@prisma/client";
 import { env } from "~/env.server";
@@ -480,6 +481,8 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
     update_task: tool({
       description: `Update an existing task — change its status, title, description, scheduling, or parent. Description updates are APPENDED to existing content — just pass the new context, no need to read or merge.
 
+SECTIONS: Pass section (e.g. "Session", "Plan", "Output") to write into a named H2 section. This preserves the user's original description and other sections — only the named section is replaced. Use this for coding task updates instead of plain appends.
+
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
         taskId: z.string().describe("The task ID"),
@@ -501,6 +504,12 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .optional()
           .describe(
             "Set true to replace the entire description instead of appending. Default: false (append).",
+          ),
+        section: z
+          .string()
+          .optional()
+          .describe(
+            "Write description content into a named H2 section (e.g. 'Session', 'Plan', 'Output'). Preserves the user's original description and other sections. When set, replaceDescription is ignored.",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
@@ -526,6 +535,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         title,
         description,
         replaceDescription,
+        section,
         schedule,
         isActive,
         maxOccurrences,
@@ -562,6 +572,15 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               maxOccurrences: maxOccurrences ?? undefined,
               endDate: endDate ? new Date(endDate) : undefined,
             });
+          } else if (section && description !== undefined) {
+            // Section-based update: upsert a named H2 section, preserving everything else
+            const existingTask = await getTaskById(taskId);
+            if (existingTask?.pageId) {
+              await upsertPageSection(existingTask.pageId, section, description);
+            }
+            if (title) {
+              await updateTask(taskId, { title }, false);
+            }
           } else if (title || description !== undefined) {
             if (replaceDescription && description !== undefined) {
               const existingTask = await getTaskById(taskId);
@@ -584,10 +603,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
 
           if (status) {
             const currentTask = await getTaskById(taskId);
-            const isScheduledOrRecurring =
-              currentTask?.schedule ||
-              (currentTask?.nextRunAt && currentTask?.isActive);
-            if (!isScheduledOrRecurring) {
+            // Only block status changes for tasks with an actual recurring schedule (RRule).
+            // Tasks that were rescheduled via reschedule_self have nextRunAt but no schedule — allow status changes for those.
+            const isRecurring = !!currentTask?.schedule;
+            if (!isRecurring) {
               await changeTaskStatus(
                 taskId,
                 status as TaskStatus,

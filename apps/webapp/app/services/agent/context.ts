@@ -361,7 +361,8 @@ export async function buildAgentContext({
 You're executing this task in the background. Get it done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
-Task ID: ${linkedTask.id}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+Task ID: ${linkedTask.id}
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this specific work. Do not create further subtasks. Do not look at or manage sibling tasks.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
@@ -380,22 +381,19 @@ RULES:
   2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
 
-LONG-RUNNING SESSIONS (coding, browser):
-If you start a coding session via the orchestrator, the response includes a sessionId.
+CODING SESSIONS:
+The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT sleep or poll directly.
 
-BEFORE using reschedule_self, save state to the task description:
-  - Call update_task to append: sessionId, worktreePath (if any), what was requested
+When you delegate a coding task to the gateway, it will return one of:
+- Questions from the coding agent → relay to user via send_message, update task description with questions + sessionId, mark task Waiting
+- A plan from the coding agent → relay to user via send_message, update task description with plan + sessionId, mark task Review
+- Execution results → update task description with results, mark task Done
+- "Session still running" (gateway ran out of steps) → save sessionId to task description, call reschedule_self(minutesFromNow=5) to try again later
+- Error → update_task(status: "Waiting") then send_message with error detail
 
-WAIT PATTERN:
-1. Quick poll: sleep(60) then coding_read_session(sessionId) — repeat up to 3 times
-2. If still running after 3 polls: call reschedule_self(minutesFromNow=10)
-3. On re-execution (you'll see [reschedule:N/6] in your context): read sessionId from the task description, then coding_read_session
-   - completed → update_task(status: "Done") then send_message with result
-   - running → reschedule_self(10) again (max 6 total reschedules)
-   - error → update_task(status: "Waiting") then send_message with error detail
-4. After 6 reschedules (~60 min): update_task(status: "Waiting") then send_message "coding session timed out"
+On re-execution after reschedule: read sessionId and dir from task description, delegate to gateway with the sessionId and tell it to POLL (check session status). Do NOT tell it to "resume" or include any task instructions — just the sessionId and dir. The gateway will read the session and return the output. Only pass user answers when the user has actually replied.
 
-Do NOT create a scheduled task to check on sessions — use reschedule_self instead.
+Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — the gateway handles that.
 </task_execution>`;
     } else {
       systemPrompt += `\n\n<task_context>

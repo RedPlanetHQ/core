@@ -89,6 +89,14 @@ export async function createTask(
     await setPageContentFromHtml(page.id, description);
   }
 
+  // Auto-enqueue Todo tasks for agent processing
+  const effectiveStatus = options?.status ?? "Todo";
+  if (effectiveStatus === "Todo") {
+    enqueueTask({ taskId: task.id, workspaceId, userId }).catch((err) =>
+      logger.warn("Failed to enqueue new Todo task", { err, taskId: task.id }),
+    );
+  }
+
   return prisma.task.findUniqueOrThrow({ where: { id: task.id } });
 }
 

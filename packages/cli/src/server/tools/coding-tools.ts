@@ -1,7 +1,7 @@
 import zod from 'zod';
 import {randomUUID} from 'node:crypto';
 import {execSync} from 'node:child_process';
-import {existsSync, mkdirSync} from 'node:fs';
+import {existsSync, mkdirSync, cpSync} from 'node:fs';
 import {resolve} from 'node:path';
 import type {GatewayTool} from './browser-tools';
 import {getPreferences} from '@/config/preferences';
@@ -302,6 +302,17 @@ function setupWorktree(
 			)} -b ${JSON.stringify(branch)} ${JSON.stringify(baseBranch)}`,
 			{stdio: 'pipe'},
 		);
+		// Copy .claude settings to worktree so plugins are available
+		const sourceClaude = resolve(dir, '.claude');
+		const destClaude = resolve(worktreePath, '.claude');
+		if (existsSync(sourceClaude) && !existsSync(destClaude)) {
+			try {
+				cpSync(sourceClaude, destClaude, {recursive: true});
+			} catch {
+				// Non-fatal — plugins just won't be available
+			}
+		}
+
 		return {worktreePath, worktreeBranch: branch};
 	} catch (err) {
 		const stderr = (err as {stderr?: Buffer}).stderr?.toString().trim();
@@ -381,6 +392,16 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	let workingDir = params.dir;
 	let worktreePath: string | undefined;
 	let worktreeBranch: string | undefined;
+
+	// On resume, use the stored worktree path so we don't run in the main repo
+	if (isResume) {
+		const storedSession = getSession(sessionId);
+		if (storedSession?.worktreePath) {
+			workingDir = storedSession.worktreePath;
+			worktreePath = storedSession.worktreePath;
+			worktreeBranch = storedSession.worktreeBranch;
+		}
+	}
 
 	if (params.worktree && !isResume) {
 		const wt = setupWorktree(params.dir, params.baseBranch!, params.branch!);
