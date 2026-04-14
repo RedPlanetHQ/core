@@ -68,8 +68,8 @@ export function LogTextCollapse({
     <div className="flex w-full items-center">
       <div
         className={cn(
-          "group-hover:bg-grayAlpha-100 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2",
-          logId === document.id && "bg-grayAlpha-200",
+          "group-hover:bg-grayAlpha-50 flex min-w-[0px] shrink grow items-start gap-2 rounded-md px-2",
+          logId === document.id && "bg-grayAlpha-100",
         )}
         onClick={() => {
           navigate(`/home/memory/documents/${document.id}`);

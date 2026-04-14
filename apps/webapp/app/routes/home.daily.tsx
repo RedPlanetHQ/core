@@ -34,7 +34,7 @@ export const loader = async ({ request }: LoaderFunctionArgs) => {
   const [todayPage, blockedTasks, widgetOptions, widgetPat] = await Promise.all(
     [
       findOrCreateDailyPage(workspaceId, user.id, todayUTC),
-      getTasks(workspaceId, { status: "Blocked", isScheduled: false }),
+      getTasks(workspaceId, { status: "Waiting", isScheduled: false }),
       getWidgetOptions(user.id, workspaceId),
       getOrCreateWidgetPat(workspaceId, user.id),
     ],

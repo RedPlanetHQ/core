@@ -84,3 +84,14 @@ export async function hasCodingSessions(
   });
   return count > 0;
 }
+
+export async function updateCodingSessionExternalId(
+  id: string,
+  workspaceId: string,
+  externalSessionId: string,
+) {
+  return prisma.codingSession.update({
+    where: { id, workspaceId },
+    data: { externalSessionId },
+  });
+}

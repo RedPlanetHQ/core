@@ -415,7 +415,7 @@ This IS the task — don't create or search for other tasks about this topic. If
       (triggerContext.trigger.data as any)?.isFollowUp === true;
 
     systemPrompt += `\n\n<trigger_context>
-A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Blocked and notify the user.` : ""}
+A trigger has fired: "${triggerContext.reminderText}"${isTriggerFollowUp ? `\nThis is a FOLLOW-UP trigger. Do NOT create further follow-ups — one level only. If the issue is still unresolved, mark the task Waiting and notify the user.` : ""}
 
 1. Call the \`think\` tool FIRST — it will analyze this trigger and return an ActionPlan
 2. Follow the ActionPlan it returns:

@@ -31,22 +31,38 @@ export async function loader({ request, params }: LoaderFunctionArgs) {
     return json({ error: "No external session ID" }, { status: 422 });
 
   try {
-    const result = await callGatewayTool(
+    const result = (await callGatewayTool(
       session.gatewayId,
       "coding_read_session",
       { sessionId: session.externalSessionId },
       30000,
-    ) as { success: boolean; result?: { turns?: unknown[]; status?: string; running?: boolean; error?: string }; error?: string };
+    )) as {
+      turns?: unknown[];
+      status?: string;
+      running?: boolean;
+      error?: string;
+    };
 
-    if (!result.success) {
-      return json({ error: result.error ?? "Tool call failed" }, { status: 502 });
-    }
+    const rawTurns = (result.turns ?? []) as Array<{
+      role: string;
+      content: string;
+    }>;
+
+    const turns = rawTurns.filter((turn) => {
+      const content =
+        typeof turn.content === "string" ? turn.content : String(turn.content);
+      if (content.includes("<local-command-caveat>")) return false;
+      if (content.includes("<command-name>")) return false;
+      if (content.includes("<command-message>")) return false;
+      if (content.includes("Base directory for this skill:")) return false;
+      return true;
+    });
 
     return json({
-      turns: result.result?.turns ?? [],
-      status: result.result?.status,
-      running: result.result?.running,
-      error: result.result?.error,
+      turns,
+      status: result.status,
+      running: result.running,
+      error: result.error,
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

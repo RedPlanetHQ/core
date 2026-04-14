@@ -5,7 +5,14 @@ import { getTaskStatusColor } from "../ui/color-utils";
 import { CommandGroup, CommandItem } from "../ui/command";
 
 import { type TaskStatus } from "@core/database";
-const STATUS_ORDER: TaskStatus[] = ["Todo", "Waiting", "Ready", "Working", "Review", "Done"];
+const STATUS_ORDER: TaskStatus[] = [
+  "Todo",
+  "Waiting",
+  "Ready",
+  "Working",
+  "Review",
+  "Done",
+];
 
 interface TaskStatusDropdownContentProps {
   onChange?: (id: string | string[]) => void;
@@ -90,7 +97,7 @@ export function TaskStatusDropdownContent({
               <label className="flex grow items-center" htmlFor={status}>
                 <CategoryIcon
                   size={20}
-                  className="mr-2 h-5 w-5"
+                  className="mr-2 !h-5 !w-5"
                   color={getTaskStatusColor(status).color}
                 />
                 {status}

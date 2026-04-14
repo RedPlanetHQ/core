@@ -740,7 +740,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
 
               if (rescheduleCount >= 6) {
-                return "Max reschedules reached (6). Mark the task as Blocked and notify the user that the session timed out.";
+                return "Max reschedules reached (6). Mark the task as Waiting and notify the user that the session timed out.";
               }
 
               // Increment reschedule count in metadata

@@ -1,6 +1,6 @@
 import { redirect } from "@remix-run/node";
 import type { LoaderFunctionArgs } from "@remix-run/node";
-import { useNavigate } from "@remix-run/react";
+import { useNavigate, useParams } from "@remix-run/react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
 import { ClientOnly } from "remix-utils/client-only";
 import { useRef, useCallback, useEffect, useState } from "react";
@@ -13,12 +13,13 @@ import {
   type Index,
 } from "react-virtualized";
 import { format } from "date-fns";
-import { ExternalLink, Terminal } from "lucide-react";
+import { Terminal, Loader2, Plus } from "lucide-react";
 
+import { EditorContent, useEditor } from "@tiptap/react";
+import { extensionsForConversation } from "~/components/conversation/editor-extensions";
 import { getWorkspaceId, requireUser } from "~/services/session.server";
 import { getCodingSessionsForTask } from "~/services/coding/coding-session.server";
 import type { CodingSessionListItem } from "~/services/coding/coding-session.server";
-import { StyledMarkdown } from "~/components/common/styled-markdown";
 import {
   ResizablePanelGroup,
   ResizablePanel,
@@ -27,6 +28,9 @@ import {
 import { Button } from "~/components/ui/button";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
+import { useTauri } from "~/hooks/use-tauri";
+import { TauriTerminal } from "~/components/coding/tauri-terminal";
+import { NewSessionDialog } from "~/components/coding/new-session-dialog";
 
 // ─── Loader ───────────────────────────────────────────────────────────────────
 
@@ -63,7 +67,7 @@ function SessionListItem({
   return (
     <div
       className={cn(
-        "p-2 py-1",
+        "px-2",
         index === 0 && "pt-2",
         index === total - 1 && "pb-2",
       )}
@@ -71,27 +75,73 @@ function SessionListItem({
       <button
         onClick={onClick}
         className={cn(
-          "border-border hover:bg-grayAlpha-100 flex w-full flex-col gap-1 rounded border-b px-4 py-3 text-left transition-colors",
-          selected && "bg-grayAlpha-100",
+          "flex w-full flex-col gap-0.5 rounded-md px-3 py-2.5 text-left transition-colors",
+          selected ? "bg-grayAlpha-100" : "hover:bg-grayAlpha-50",
         )}
       >
         <div className="flex items-center justify-between gap-2">
           <span className="text-sm font-medium">
-            {format(new Date(session.createdAt), "MMM d, yyyy")}
+            {format(new Date(session.createdAt), "MMM d")}
+            <span className="text-muted-foreground ml-1 text-xs font-normal">
+              {format(new Date(session.createdAt), "h:mm a")}
+            </span>
           </span>
           <Badge variant="secondary" className="text-xs">
             {session.agent}
           </Badge>
         </div>
         {session.prompt && (
-          <span className="text-muted-foreground line-clamp-1 text-xs">
-            {session.prompt.slice(0, 60)}
+          <span className="text-muted-foreground line-clamp-2 text-xs">
+            {session.prompt.slice(0, 80)}
           </span>
         )}
-        <span className="text-muted-foreground text-xs">
-          {format(new Date(session.createdAt), "h:mm a")}
-        </span>
       </button>
+    </div>
+  );
+}
+
+// ─── Turn bubble ──────────────────────────────────────────────────────────────
+
+interface ConversationTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
+function AssistantContent({ content }: { content: string }) {
+  const editor = useEditor({
+    extensions: extensionsForConversation,
+    content,
+    editable: false,
+    editorProps: {
+      attributes: {
+        class: "focus:outline-none text-sm",
+      },
+    },
+  });
+
+  return (
+    <EditorContent
+      editor={editor}
+      className="prose-sm max-w-full [&_.tiptap]:outline-none"
+    />
+  );
+}
+
+function TurnBubble({ turn }: { turn: ConversationTurn }) {
+  if (turn.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="bg-grayAlpha-100 max-w-[80%] rounded-2xl rounded-tr-sm px-4 py-2.5">
+          <p className="whitespace-pre-wrap text-sm leading-relaxed">
+            {turn.content}
+          </p>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="max-w-full">
+      <AssistantContent content={turn.content} />
     </div>
   );
 }
@@ -99,31 +149,7 @@ function SessionListItem({
 // ─── Session detail ───────────────────────────────────────────────────────────
 
 const POLL_INTERVAL = 5000;
-
-interface ConversationTurn {
-  role: "user" | "assistant";
-  content: string;
-}
-
-function TurnBubble({ turn }: { turn: ConversationTurn }) {
-  if (turn.role === "user") {
-    return (
-      <div className="flex justify-end">
-        <div className="bg-grayAlpha-100 max-w-[85%] rounded-2xl rounded-tr-sm px-4 py-2.5">
-          <p className="text-sm leading-relaxed whitespace-pre-wrap">{turn.content}</p>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex flex-col gap-1">
-      <span className="text-muted-foreground text-xs font-medium">Assistant</span>
-      <div className="text-sm leading-relaxed">
-        <StyledMarkdown>{turn.content}</StyledMarkdown>
-      </div>
-    </div>
-  );
-}
+const NEAR_BOTTOM_THRESHOLD = 80;
 
 function SessionDetail({
   session,
@@ -133,9 +159,25 @@ function SessionDetail({
   onOpenChat: () => void;
 }) {
   const [turns, setTurns] = useState<ConversationTurn[] | null>(null);
+  const [running, setRunning] = useState(false);
   const [turnsError, setTurnsError] = useState<string | null>(null);
-  const turnsEndRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const prevTurnCountRef = useRef(0);
   const canPoll = !!session.gatewayId && !!session.externalSessionId;
+
+  const isNearBottom = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return true;
+    return (
+      el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_THRESHOLD
+    );
+  }, []);
+
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = "smooth") => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior });
+  }, []);
 
   const fetchTurns = useCallback(async () => {
     if (!canPoll) return;
@@ -145,80 +187,83 @@ function SessionDetail({
       if (data.error) {
         setTurnsError(data.error);
       } else {
-        setTurns(data.turns ?? []);
+        const newTurns: ConversationTurn[] = data.turns ?? [];
+        const wasNearBottom = isNearBottom();
+        const prevCount = prevTurnCountRef.current;
+        setTurns(newTurns);
+        setRunning(data.running ?? false);
         setTurnsError(null);
+
+        if (newTurns.length > prevCount && wasNearBottom) {
+          requestAnimationFrame(() => scrollToBottom());
+        }
+        prevTurnCountRef.current = newTurns.length;
       }
     } catch {
       setTurnsError("Failed to fetch session");
     }
-  }, [session.id, canPoll]);
+  }, [session.id, canPoll, isNearBottom, scrollToBottom]);
 
   useEffect(() => {
-    fetchTurns();
+    prevTurnCountRef.current = 0;
+    setTurns(null);
+    setRunning(false);
+    fetchTurns().then(() => {
+      requestAnimationFrame(() => scrollToBottom("instant" as ScrollBehavior));
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session.id]);
+
+  useEffect(() => {
     if (!canPoll) return;
     const id = setInterval(fetchTurns, POLL_INTERVAL);
     return () => clearInterval(id);
   }, [fetchTurns, canPoll]);
 
-  useEffect(() => {
-    turnsEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [turns]);
-
   return (
-    <div className="flex h-full flex-col">
-      {/* Header */}
-      <div className="border-border flex shrink-0 items-start justify-between gap-4 border-b p-6 pb-4">
-        <div className="flex flex-col gap-1">
-          <p className="text-muted-foreground text-xs">
-            {format(new Date(session.createdAt), "EEEE, MMMM d, yyyy · h:mm a")}
-          </p>
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="secondary" className="text-xs">
-              {session.agent}
-            </Badge>
-            {session.gateway && (
-              <span className="text-muted-foreground text-xs">
-                via {session.gateway.name}
-              </span>
-            )}
-            {session.worktreeBranch && (
-              <span className="text-muted-foreground font-mono text-xs">
-                {session.worktreeBranch}
-              </span>
-            )}
-            {session.dir && (
-              <span className="text-muted-foreground font-mono text-xs">
-                {session.dir}
-              </span>
-            )}
-          </div>
+    <div className="mb-1 flex h-full flex-col">
+      <div className="border-border flex shrink-0 items-center justify-between gap-4 border-b px-6 py-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm font-medium">
+            {format(new Date(session.createdAt), "EEEE, MMMM d · h:mm a")}
+          </span>
+          <Badge variant="secondary" className="text-xs">
+            {session.agent}
+          </Badge>
+          {session.worktreeBranch && (
+            <span className="text-muted-foreground font-mono text-xs">
+              {session.worktreeBranch}
+            </span>
+          )}
+          {running && (
+            <span className="text-muted-foreground flex items-center gap-1 text-xs">
+              <Loader2 size={11} className="animate-spin" />
+              Running
+            </span>
+          )}
         </div>
-        {session.conversationId && (
-          <Button
-            variant="secondary"
-            className="shrink-0 gap-1.5 rounded"
-            onClick={onOpenChat}
-          >
-            <ExternalLink size={14} />
-            Open chat
-          </Button>
-        )}
       </div>
 
-      {/* Conversation turns */}
-      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
+      <div
+        ref={scrollRef}
+        className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-6 py-5"
+      >
         {!canPoll ? (
-          <p className="text-muted-foreground text-sm">No gateway linked to this session.</p>
+          <p className="text-muted-foreground text-sm">
+            No gateway linked to this session.
+          </p>
         ) : turnsError ? (
           <p className="text-destructive text-sm">{turnsError}</p>
         ) : turns === null ? (
-          <p className="text-muted-foreground text-sm">Loading…</p>
+          <div className="text-muted-foreground flex items-center gap-2 text-sm">
+            <Loader2 size={14} className="animate-spin" />
+            Loading…
+          </div>
         ) : turns.length === 0 ? (
           <p className="text-muted-foreground text-sm">No messages yet.</p>
         ) : (
           turns.map((turn, i) => <TurnBubble key={i} turn={turn} />)
         )}
-        <div ref={turnsEndRef} />
       </div>
     </div>
   );
@@ -227,26 +272,37 @@ function SessionDetail({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 function CodingPage() {
-  const { sessions } = useTypedLoaderData<typeof loader>();
+  const { sessions: initialSessions } = useTypedLoaderData<typeof loader>();
+  const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
+  const { isDesktop } = useTauri();
+
+  // Local session list — can grow when new sessions are created from the dialog
+  const [sessions, setSessions] =
+    useState<CodingSessionListItem[]>(initialSessions);
   const [selectedId, setSelectedId] = useState<string | null>(
-    sessions[0]?.id ?? null,
+    initialSessions[0]?.id ?? null,
   );
+
+  // Increment to force-remount TauriTerminal (e.g. on resume)
+  const [terminalKey, setTerminalKey] = useState(0);
+
+  const [newSessionOpen, setNewSessionOpen] = useState(false);
 
   const selectedSession =
     sessions.find((s) => s.id === selectedId) ?? sessions[0] ?? null;
 
   const cacheRef = useRef(
-    new CellMeasurerCache({ defaultHeight: 80, fixedWidth: true }),
+    new CellMeasurerCache({ defaultHeight: 48, fixedWidth: true }),
   );
   const cache = cacheRef.current;
 
   useEffect(() => {
     cache.clearAll();
-  }, [sessions.length]);
+  }, [sessions.length, cache]);
 
   const rowHeight = ({ index }: Index) =>
-    Math.max(cache.getHeight(index, 0), 80);
+    Math.max(cache.getHeight(index, 0), 48);
 
   const rowRenderer = useCallback(
     ({ index, key, style, parent: listParent }: ListRowProps) => {
@@ -275,59 +331,171 @@ function CodingPage() {
     [sessions, selectedId, cache],
   );
 
-  if (sessions.length === 0) {
+  const handleNewSessionCreated = (
+    sessionId: string,
+    agent: string,
+    dir: string,
+  ) => {
+    const newSession: CodingSessionListItem = {
+      id: sessionId,
+      agent,
+      dir,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      prompt: null,
+      externalSessionId: null,
+      conversationId: null,
+      gatewayId: null,
+      worktreePath: null,
+      worktreeBranch: null,
+      gateway: null,
+    };
+    setSessions((prev) => [newSession, ...prev]);
+    setSelectedId(sessionId);
+    setTerminalKey((k) => k + 1);
+  };
+
+  const handleSessionIdUpdated = (sessionDbId: string, extId: string) => {
+    setSessions((prev) =>
+      prev.map((s) =>
+        s.id === sessionDbId ? { ...s, externalSessionId: extId } : s,
+      ),
+    );
+  };
+
+  const handleResumeSession = (_extId: string) => {
+    // Force-remount TauriTerminal so spawn_pty is called again with resumeSessionId
+    setTerminalKey((k) => k + 1);
+  };
+
+  const handleNewSession = () => {
+    setNewSessionOpen(true);
+  };
+
+  const lastDir = sessions.find((s) => s.dir)?.dir ?? "";
+
+  if (sessions.length === 0 && !isDesktop) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
         <Terminal className="text-muted-foreground h-8 w-8" />
-        <p className="text-muted-foreground">No coding sessions yet</p>
+        <p className="text-muted-foreground text-sm">No coding sessions yet</p>
       </div>
     );
   }
 
-  return (
-    <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-      <ResizablePanel defaultSize="20%" minSize="20%" maxSize="35%">
-        <div className="flex h-full flex-col">
-          <div className="border-border border-b px-4 py-2">
-            <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
-              {sessions.length} session{sessions.length !== 1 ? "s" : ""}
-            </p>
-          </div>
-          <div className="flex-1 overflow-hidden">
-            <AutoSizer>
-              {({ width, height }) => (
-                <List
-                  height={height}
-                  width={width}
-                  rowCount={sessions.length}
-                  rowHeight={rowHeight}
-                  rowRenderer={rowRenderer}
-                  deferredMeasurementCache={cache}
-                  overscanRowCount={8}
-                />
-              )}
-            </AutoSizer>
-          </div>
+  if (sessions.length === 0 && isDesktop) {
+    return (
+      <>
+        <div className="flex h-full w-full flex-col items-center justify-center gap-3">
+          <Terminal className="text-muted-foreground h-8 w-8" />
+          <p className="text-muted-foreground text-sm">
+            No coding sessions yet
+          </p>
+          <Button variant="secondary" onClick={() => setNewSessionOpen(true)}>
+            <Plus size={14} className="mr-1" />
+            New session
+          </Button>
         </div>
-      </ResizablePanel>
+        <NewSessionDialog
+          open={newSessionOpen}
+          onOpenChange={setNewSessionOpen}
+          taskId={taskId!}
+          defaultDir={lastDir}
+          onCreated={handleNewSessionCreated}
+        />
+      </>
+    );
+  }
 
-      <ResizableHandle withHandle />
+  const showTerminal = isDesktop && selectedSession !== null;
 
-      <ResizablePanel defaultSize="65" minSize="50%">
-        {selectedSession ? (
-          <SessionDetail
-            session={selectedSession}
-            onOpenChat={() =>
-              navigate(`/home/conversation/${selectedSession.conversationId}`)
-            }
-          />
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            Select a session
+  return (
+    <>
+      <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
+        <ResizablePanel defaultSize="20%" minSize="20%" maxSize="35%">
+          <div className="flex h-full flex-col">
+            <div className="border-border flex items-center justify-between border-b px-4 py-2">
+              <p className="text-muted-foreground text-xs font-medium uppercase tracking-wider">
+                {sessions.length} session{sessions.length !== 1 ? "s" : ""}
+              </p>
+              {isDesktop && (
+                <Button
+                  variant="secondary"
+                  className="h-6 px-2"
+                  onClick={() => setNewSessionOpen(true)}
+                >
+                  <Plus size={13} className="mr-0.5" />
+                  New
+                </Button>
+              )}
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <AutoSizer>
+                {({ width, height }) => (
+                  <List
+                    height={height}
+                    width={width}
+                    rowCount={sessions.length}
+                    rowHeight={rowHeight}
+                    rowRenderer={rowRenderer}
+                    deferredMeasurementCache={cache}
+                    overscanRowCount={8}
+                  />
+                )}
+              </AutoSizer>
+            </div>
           </div>
-        )}
-      </ResizablePanel>
-    </ResizablePanelGroup>
+        </ResizablePanel>
+
+        <ResizableHandle withHandle />
+
+        <ResizablePanel
+          defaultSize="65"
+          minSize="50%"
+          className="overflow-hidden"
+        >
+          {selectedSession ? (
+            showTerminal ? (
+              <TauriTerminal
+                key={`${selectedSession.id}-${terminalKey}`}
+                sessionDbId={selectedSession.id}
+                agent={selectedSession.agent}
+                dir={selectedSession.dir ?? ""}
+                externalSessionId={
+                  selectedSession.externalSessionId ?? undefined
+                }
+                onNewSession={handleNewSession}
+                onResumeSession={handleResumeSession}
+                onSessionIdUpdated={handleSessionIdUpdated}
+              />
+            ) : (
+              <SessionDetail
+                session={selectedSession}
+                onOpenChat={() =>
+                  navigate(
+                    `/home/conversation/${selectedSession.conversationId}`,
+                  )
+                }
+              />
+            )
+          ) : (
+            <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
+              Select a session
+            </div>
+          )}
+        </ResizablePanel>
+      </ResizablePanelGroup>
+
+      {isDesktop && (
+        <NewSessionDialog
+          open={newSessionOpen}
+          onOpenChange={setNewSessionOpen}
+          taskId={taskId!}
+          defaultDir={lastDir}
+          onCreated={handleNewSessionCreated}
+        />
+      )}
+    </>
   );
 }
 

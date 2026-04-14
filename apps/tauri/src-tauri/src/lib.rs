@@ -4,8 +4,10 @@ mod screen_context;
 mod apps;
 #[cfg(target_os = "macos")]
 mod capture;
+mod coding_config;
+mod pty;
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 
 use base64::Engine as _;
@@ -229,6 +231,18 @@ fn set_enabled_apps(enabled: Vec<String>, state: State<SharedScreenContextSettin
     save_screen_context_settings(&snapshot);
 }
 
+/// Returns the local gateway ID from ~/.corebrain/config.json, if configured.
+#[tauri::command]
+fn get_gateway_id() -> Option<String> {
+    let path = corebrain_config_path()?;
+    let json: serde_json::Value = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())?;
+    json["preferences"]["gateway"]["id"]
+        .as_str()
+        .map(|s| s.to_string())
+}
+
 /// Called from the frontend after desktop login to persist the PAT for Rust API calls.
 #[tauri::command]
 fn store_pat(token: String, state: State<SharedAuthState>) {
@@ -242,12 +256,21 @@ pub fn run() {
         Arc::new(Mutex::new(ScreenContextSettings::default()));
     let auth: SharedAuthState =
         Arc::new(Mutex::new(AuthState::default()));
+    let pty_state: pty::PtyState =
+        Arc::new(Mutex::new(HashMap::new()));
+    let login_path = pty::SharedLoginPath(
+        Arc::new(Mutex::new(pty::capture_login_path()))
+    );
+
+    let pty_state_exit = pty_state.clone();
 
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(settings.clone())
         .manage(auth.clone())
+        .manage(pty_state.clone())
+        .manage(login_path)
         .invoke_handler(tauri::generate_handler![
             get_screen_context_settings,
             set_screen_context_paused,
@@ -255,12 +278,23 @@ pub fn run() {
             get_running_apps,
             get_app_icon,
             store_pat,
+            get_gateway_id,
+            coding_config::get_coding_agents,
+            pty::spawn_pty,
+            pty::write_pty,
+            pty::resize_pty,
+            pty::kill_pty,
         ])
         .setup(move |_app| {
             *settings.lock().unwrap() = load_screen_context_settings();
             #[cfg(target_os = "macos")]
             screen_context::start_polling(settings.clone());
             Ok(())
+        })
+        .on_window_event(move |_window, event| {
+            if let tauri::WindowEvent::Destroyed = event {
+                pty::kill_all_ptys(&pty_state_exit);
+            }
         })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
