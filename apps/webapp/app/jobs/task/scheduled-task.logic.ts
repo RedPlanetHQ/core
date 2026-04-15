@@ -164,7 +164,7 @@ export async function processScheduledTask(
         ]);
       } catch (error) {
         logger.warn(
-          `Failed to update conversationIds for task ${taskId}, conversation ${result.conversationId} still exists via asyncJobId`,
+          `Failed to update conversationIds for task ${taskId}; conversation ${result.conversationId} was created but will not appear in task history`,
           { error },
         );
       }
