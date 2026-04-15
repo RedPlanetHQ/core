@@ -3,7 +3,7 @@ import {
   setPageContentFromHtml,
 } from "~/services/hocuspocus/content.server";
 import { prisma } from "~/db.server";
-import { enqueueTask } from "~/lib/queue-adapter.server";
+import { changeTaskStatus } from "~/services/task.server";
 import { logger } from "~/services/logger.service";
 
 // ─── upsertPageSection ───────────────────────────────────────────────
@@ -14,10 +14,11 @@ export async function upsertPageSection(
   pageId: string,
   sectionName: string,
   sectionHtml: string,
+  append: boolean = false,
 ): Promise<void> {
   const existingHtml = (await getPageContentAsHtml(pageId)) || "";
 
-  const newHtml = mergeSectionIntoHtml(existingHtml, sectionName, sectionHtml);
+  const newHtml = mergeSectionIntoHtml(existingHtml, sectionName, sectionHtml, append);
   await setPageContentFromHtml(pageId, newHtml);
 }
 
@@ -25,6 +26,7 @@ export function mergeSectionIntoHtml(
   existingHtml: string,
   sectionName: string,
   sectionHtml: string,
+  append: boolean = false,
 ): string {
   // Parse HTML into sections by H2 boundaries
   const sections = splitByH2(existingHtml);
@@ -33,13 +35,21 @@ export function mergeSectionIntoHtml(
     (s) => s.heading?.toLowerCase() === sectionName.toLowerCase(),
   );
 
-  const sectionBlock = `<h2>${sectionName}</h2>${sectionHtml}`;
-
   if (targetIndex >= 0) {
-    // Replace existing section
-    sections[targetIndex] = { heading: sectionName, html: sectionBlock };
+    if (append) {
+      // Append new content after existing section content
+      sections[targetIndex] = {
+        heading: sectionName,
+        html: `${sections[targetIndex].html}${sectionHtml}`,
+      };
+    } else {
+      // Replace existing section
+      const sectionBlock = `<h2>${sectionName}</h2>${sectionHtml}`;
+      sections[targetIndex] = { heading: sectionName, html: sectionBlock };
+    }
   } else {
     // Append new section
+    const sectionBlock = `<h2>${sectionName}</h2>${sectionHtml}`;
     sections.push({ heading: sectionName, html: sectionBlock });
   }
 
@@ -174,15 +184,10 @@ export async function checkWaitingTaskReply(
   });
 
   for (const task of tasks) {
-    // Move back to Todo and re-enqueue for processing
-    await prisma.task.update({
-      where: { id: task.id },
-      data: { status: "Todo" },
-    });
+    // Move to Ready — changeTaskStatus handles auto-enqueue
+    await changeTaskStatus(task.id, "Ready", workspaceId, userId);
 
-    await enqueueTask({ taskId: task.id, workspaceId, userId });
-
-    logger.info("Waiting task reply detected, re-enqueued", {
+    logger.info("Waiting task reply detected, moved to Ready", {
       taskId: task.id,
       conversationId,
     });

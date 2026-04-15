@@ -9,8 +9,8 @@ vi.mock("~/db.server", () => ({
     },
   },
 }));
-vi.mock("~/lib/queue-adapter.server", () => ({
-  enqueueTask: vi.fn(),
+vi.mock("~/services/task.server", () => ({
+  changeTaskStatus: vi.fn().mockResolvedValue({}),
 }));
 vi.mock("~/services/logger.service", () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -27,7 +27,7 @@ import {
   checkWaitingTaskReply,
 } from "../coding-task.server";
 import { prisma } from "~/db.server";
-import { enqueueTask } from "~/lib/queue-adapter.server";
+import { changeTaskStatus } from "~/services/task.server";
 
 // ─── mergeSectionIntoHtml / upsertPageSection ───────────────────────
 
@@ -99,6 +99,50 @@ describe("mergeSectionIntoHtml", () => {
   });
 });
 
+describe("mergeSectionIntoHtml with append mode", () => {
+  it("appends content to an existing section when append=true", () => {
+    const existing =
+      '<h2>Session</h2><p>sessionId: abc</p><h2>Plan</h2><p>plan content</p>';
+    const result = mergeSectionIntoHtml(
+      existing,
+      "Session",
+      "<p>polled gateway: still running</p>",
+      true,
+    );
+    expect(result).toContain("<h2>Session</h2>");
+    expect(result).toContain("<p>sessionId: abc</p>");
+    expect(result).toContain("<p>polled gateway: still running</p>");
+    expect(result).toContain("<h2>Plan</h2>");
+    expect(result).toContain("<p>plan content</p>");
+  });
+
+  it("still replaces when append=false (default)", () => {
+    const existing =
+      '<h2>Session</h2><p>old content</p><h2>Plan</h2><p>plan</p>';
+    const result = mergeSectionIntoHtml(
+      existing,
+      "Session",
+      "<p>new content</p>",
+      false,
+    );
+    expect(result).toContain("<h2>Session</h2><p>new content</p>");
+    expect(result).not.toContain("old content");
+    expect(result).toContain("<h2>Plan</h2>");
+  });
+
+  it("creates new section when append=true but section doesn't exist yet", () => {
+    const existing = '<h2>Plan</h2><p>plan content</p>';
+    const result = mergeSectionIntoHtml(
+      existing,
+      "Session",
+      "<p>first entry</p>",
+      true,
+    );
+    expect(result).toContain("<h2>Session</h2><p>first entry</p>");
+    expect(result).toContain("<h2>Plan</h2>");
+  });
+});
+
 // ─── extractDescriptionSection ──────────────────────────────────────
 
 describe("extractDescriptionSection", () => {
@@ -140,14 +184,13 @@ describe("extractDescriptionSection", () => {
 
 describe("checkWaitingTaskReply", () => {
   const mockFindMany = prisma.task.findMany as ReturnType<typeof vi.fn>;
-  const mockUpdate = prisma.task.update as ReturnType<typeof vi.fn>;
-  const mockEnqueue = enqueueTask as ReturnType<typeof vi.fn>;
+  const mockChangeStatus = changeTaskStatus as ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
-  it("re-enqueues Waiting task on user reply", async () => {
+  it("moves Waiting task to Ready on reply", async () => {
     mockFindMany.mockResolvedValue([
       {
         id: "task-1",
@@ -156,23 +199,18 @@ describe("checkWaitingTaskReply", () => {
         metadata: null,
       },
     ]);
-    mockUpdate.mockResolvedValue({});
-    mockEnqueue.mockResolvedValue({});
 
     await checkWaitingTaskReply("conv-1", "workspace-1", "user-1");
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "task-1" },
-      data: { status: "Todo" },
-    });
-    expect(mockEnqueue).toHaveBeenCalledWith({
-      taskId: "task-1",
-      workspaceId: "workspace-1",
-      userId: "user-1",
-    });
+    expect(mockChangeStatus).toHaveBeenCalledWith(
+      "task-1",
+      "Ready",
+      "workspace-1",
+      "user-1",
+    );
   });
 
-  it("re-enqueues regardless of task metadata", async () => {
+  it("moves task to Ready regardless of task metadata", async () => {
     mockFindMany.mockResolvedValue([
       {
         id: "task-2",
@@ -185,32 +223,26 @@ describe("checkWaitingTaskReply", () => {
         },
       },
     ]);
-    mockUpdate.mockResolvedValue({});
-    mockEnqueue.mockResolvedValue({});
 
     await checkWaitingTaskReply("conv-2", "workspace-1", "user-1");
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "task-2" },
-      data: { status: "Todo" },
-    });
-    expect(mockEnqueue).toHaveBeenCalledWith({
-      taskId: "task-2",
-      workspaceId: "workspace-1",
-      userId: "user-1",
-    });
+    expect(mockChangeStatus).toHaveBeenCalledWith(
+      "task-2",
+      "Ready",
+      "workspace-1",
+      "user-1",
+    );
   });
 
-  it("does NOT re-enqueue when no Waiting tasks match the conversation", async () => {
+  it("does NOT change status when no Waiting tasks match the conversation", async () => {
     mockFindMany.mockResolvedValue([]);
 
     await checkWaitingTaskReply("conv-3", "workspace-1", "user-1");
 
-    expect(mockUpdate).not.toHaveBeenCalled();
-    expect(mockEnqueue).not.toHaveBeenCalled();
+    expect(mockChangeStatus).not.toHaveBeenCalled();
   });
 
-  it("re-enqueues task even with null metadata", async () => {
+  it("moves task to Ready even with null metadata", async () => {
     mockFindMany.mockResolvedValue([
       {
         id: "task-3",
@@ -219,20 +251,15 @@ describe("checkWaitingTaskReply", () => {
         metadata: null,
       },
     ]);
-    mockUpdate.mockResolvedValue({});
-    mockEnqueue.mockResolvedValue({});
 
     await checkWaitingTaskReply("conv-4", "workspace-1", "user-1");
 
-    expect(mockUpdate).toHaveBeenCalledWith({
-      where: { id: "task-3" },
-      data: { status: "Todo" },
-    });
-    expect(mockEnqueue).toHaveBeenCalledWith({
-      taskId: "task-3",
-      workspaceId: "workspace-1",
-      userId: "user-1",
-    });
+    expect(mockChangeStatus).toHaveBeenCalledWith(
+      "task-3",
+      "Ready",
+      "workspace-1",
+      "user-1",
+    );
   });
 
   it("handles multiple Waiting tasks on same conversation", async () => {
@@ -250,13 +277,10 @@ describe("checkWaitingTaskReply", () => {
         metadata: null,
       },
     ]);
-    mockUpdate.mockResolvedValue({});
-    mockEnqueue.mockResolvedValue({});
 
     await checkWaitingTaskReply("conv-5", "workspace-1", "user-1");
 
-    expect(mockUpdate).toHaveBeenCalledTimes(2);
-    expect(mockEnqueue).toHaveBeenCalledTimes(2);
+    expect(mockChangeStatus).toHaveBeenCalledTimes(2);
   });
 });
 

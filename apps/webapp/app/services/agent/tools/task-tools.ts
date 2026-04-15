@@ -50,6 +50,7 @@ export function getTaskTools(
   minRecurrenceMinutes: number = 60,
   channelRecords?: ChannelRecord[],
   currentTaskId?: string,
+  source?: string,
 ): Record<string, Tool> {
   const minRecurrenceLabel =
     minRecurrenceMinutes >= 60
@@ -482,13 +483,12 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
       description: `Update an existing task — change its status, title, description, scheduling, or parent. Description updates are APPENDED to existing content — just pass the new context, no need to read or merge.
 
 WHEN TO UPDATE DESCRIPTION: Only at phase boundaries — not on every interaction.
-- Blocked/Waiting: record what was attempted and what's needed
 - Plan produced: save the plan (use section parameter for coding tasks)
 - Review/Done: record output or results
 - User provides new context: append their requirements or answers
-Do NOT update the description just because you touched the task.
+Do NOT update the description just because you touched the task. NEVER write error logs, debug output, or transient state into the description.
 
-SECTIONS: Pass section (e.g. "Session", "Plan", "Output") to write into a named H2 section. This preserves the user's original description and other sections — only the named section is replaced. Use this for coding task updates instead of plain appends.
+SECTIONS: Pass section (e.g. "Session", "Plan", "Output", "Questions") to write into a named H2 section. By default this REPLACES the section content. Pass appendToSection=true to APPEND within the section instead (useful for Session logs and Q&A).
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
       inputSchema: z.object({
@@ -516,7 +516,13 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
           .string()
           .optional()
           .describe(
-            "Write description content into a named H2 section (e.g. 'Session', 'Plan', 'Output'). Preserves the user's original description and other sections. When set, replaceDescription is ignored.",
+            "Write description content into a named H2 section (e.g. 'Session', 'Plan', 'Output', 'Questions'). Preserves the user's original description and other sections. When set, replaceDescription is ignored.",
+          ),
+        appendToSection: z
+          .boolean()
+          .optional()
+          .describe(
+            "When true and section is set, appends content to the existing section instead of replacing it. Default: false (replace).",
           ),
         schedule: z.string().optional().describe("New RRule schedule string"),
         isActive: z
@@ -543,6 +549,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
         description,
         replaceDescription,
         section,
+        appendToSection,
         schedule,
         isActive,
         maxOccurrences,
@@ -583,7 +590,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             // Section-based update: upsert a named H2 section, preserving everything else
             const existingTask = await getTaskById(taskId);
             if (existingTask?.pageId) {
-              await upsertPageSection(existingTask.pageId, section, description);
+              await upsertPageSection(existingTask.pageId, section, description, appendToSection);
             }
             if (title) {
               await updateTask(taskId, { title }, false);
@@ -637,45 +644,49 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       },
     }),
 
-    unblock_task: tool({
-      description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is appended to the task description. Only works on tasks currently in Waiting status.`,
-      inputSchema: z.object({
-        taskId: z.string().describe("The ID of the waiting task"),
-        reason: z
-          .string()
-          .describe(
-            "Why the wait is resolved — this is appended to the task description",
-          ),
-      }),
-      execute: async ({ taskId, reason }) => {
-        try {
-          const task = await getTaskById(taskId);
-          if (!task) return `Task ${taskId} not found.`;
-          if (task.status !== "Waiting")
-            return `Task is not Waiting (current status: ${task.status}). Only Waiting tasks can be approved.`;
+    // unblock_task — only available in channel flows, not webapp chat
+    // In webapp chat, checkWaitingTaskReply handles auto-unblocking on user reply
+    ...(source && !["web", "core"].includes(source) && {
+      unblock_task: tool({
+        description: `Approve a Waiting task and move it to Ready so execution can start. Requires a reason explaining why the wait is resolved. The reason is appended to the task description. Only works on tasks currently in Waiting status.`,
+        inputSchema: z.object({
+          taskId: z.string().describe("The ID of the waiting task"),
+          reason: z
+            .string()
+            .describe(
+              "Why the wait is resolved — this is appended to the task description",
+            ),
+        }),
+        execute: async ({ taskId, reason }) => {
+          try {
+            const task = await getTaskById(taskId);
+            if (!task) return `Task ${taskId} not found.`;
+            if (task.status !== "Waiting")
+              return `Task is not Waiting (current status: ${task.status}). Only Waiting tasks can be approved.`;
 
-          // Append reason to description
-          const page = task.pageId
-            ? await prisma.page.findUnique({ where: { id: task.pageId } })
-            : null;
-          const existingHtml = page
-            ? ((await getPageContentAsHtml(task.pageId!)) ?? "")
-            : "";
-          const reasonHtml = `<p><strong>Approved:</strong> ${reason}</p>`;
-          const mergedHtml = existingHtml
-            ? `${existingHtml}${reasonHtml}`
-            : reasonHtml;
+            // Append reason to description
+            const page = task.pageId
+              ? await prisma.page.findUnique({ where: { id: task.pageId } })
+              : null;
+            const existingHtml = page
+              ? ((await getPageContentAsHtml(task.pageId!)) ?? "")
+              : "";
+            const reasonHtml = `<p><strong>Approved:</strong> ${reason}</p>`;
+            const mergedHtml = existingHtml
+              ? `${existingHtml}${reasonHtml}`
+              : reasonHtml;
 
-          if (task.pageId) {
-            await setPageContentFromHtml(task.pageId, mergedHtml);
+            if (task.pageId) {
+              await setPageContentFromHtml(task.pageId, mergedHtml);
+            }
+
+            await changeTaskStatus(taskId, "Ready", workspaceId, userId);
+            return `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
+          } catch (error) {
+            return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
           }
-
-          await changeTaskStatus(taskId, "Ready", workspaceId, userId);
-          return `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
-        } catch (error) {
-          return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;
-        }
-      },
+        },
+      }),
     }),
 
     delete_task: tool({
@@ -744,7 +755,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
       currentTaskId && {
         reschedule_self: tool({
           description:
-            "Reschedule this background task to run again after a delay. Use when waiting for a long-running coding or browser session. BEFORE calling this, save any state (sessionId, worktreePath, progress) to the task description via update_task — you will need it when you wake up. Max 6 reschedules per task.",
+            "Reschedule this background task to run again after a delay. Use ONLY during execution phase (coding/browser sessions), NOT during brainstorming or planning — use sleep+poll for those. BEFORE calling this, save any state (sessionId, worktreePath, progress) to the task description via update_task — you will need it when you wake up. Max 10 reschedules per task.",
           inputSchema: z.object({
             minutesFromNow: z
               .number()
@@ -765,8 +776,8 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               const metadata = (task.metadata as Record<string, unknown>) ?? {};
               const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
 
-              if (rescheduleCount >= 6) {
-                return "Max reschedules reached (6). Mark the task as Waiting and notify the user that the session timed out.";
+              if (rescheduleCount >= 10) {
+                return "Max reschedules reached (10). Mark the task as Waiting and notify the user that the session timed out.";
               }
 
               // Increment reschedule count in metadata
@@ -788,10 +799,10 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               );
 
               logger.info(
-                `Task ${currentTaskId} rescheduled in ${minutesFromNow}m (count: ${rescheduleCount + 1}/6)${reason ? ` — ${reason}` : ""}`,
+                `Task ${currentTaskId} rescheduled in ${minutesFromNow}m (count: ${rescheduleCount + 1}/10)${reason ? ` — ${reason}` : ""}`,
               );
 
-              return `Rescheduled to run again in ${minutesFromNow} minutes (reschedule ${rescheduleCount + 1}/6). This execution will now end. Make sure you saved sessionId and any state to the task description before this point.`;
+              return `Rescheduled to run again in ${minutesFromNow} minutes (reschedule ${rescheduleCount + 1}/10). This execution will now end. Make sure you saved sessionId and any state to the task description before this point.`;
             } catch (error) {
               logger.error("Failed to reschedule task", { error });
               return `Failed to reschedule: ${error instanceof Error ? error.message : "Unknown error"}`;

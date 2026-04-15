@@ -29,6 +29,7 @@ import {
   type Processor,
 } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
+import { checkWaitingTaskReply } from "~/services/coding-task.server";
 
 import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
@@ -101,6 +102,20 @@ const { loader, action } = createHybridActionApiRoute(
           messageParts,
           body.id,
           UserTypeEnum.User,
+        );
+      }
+
+      // Check if this conversation is linked to a Waiting task — if so,
+      // the user's reply unblocks it. Fire and forget.
+      if (incomingUserText) {
+        checkWaitingTaskReply(
+          body.id,
+          authentication.workspaceId as string,
+          authentication.userId,
+        ).catch((err) =>
+          logger.error("[conversation] checkWaitingTaskReply failed", {
+            error: String(err),
+          }),
         );
       }
     }

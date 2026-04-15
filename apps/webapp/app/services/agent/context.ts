@@ -374,8 +374,9 @@ RULES:
 - The system handles sequential subtask execution automatically — when approved, it starts the first subtask. Each subtask completion triggers the next one. You do NOT manage the queue.`}
 - Mark task ${linkedTask.id} as Done ONLY when the original intent is fully achieved (the system will land it in Review first via markTaskCompleted)
 - When Waiting (errors, needs user input, needs approval, partial completion):
-  1. call update_task(taskId: "${linkedTask.id}", status: "Waiting", description: "<append what was attempted and what's needed>")
+  1. call update_task(taskId: "${linkedTask.id}", status: "Waiting")
   2. call send_message explaining what's needed — MUST include the task title so the user (and future you) can identify it. Example: "Task '${linkedTask.title}' is waiting: <reason>. <what's needed to continue>"
+- NEVER write error logs, debug output, or transient state into the task description. The description is for task spec, plan, and structured sections (Questions, Plan, Output, Session) only. Errors and status updates go to send_message.
 - When finished:
   1. call update_task(taskId: "${linkedTask.id}", status: "Done")
   2. call send_message with a summary of what was done
@@ -386,11 +387,14 @@ CODING SESSIONS:
 The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT sleep or poll directly.
 
 When you delegate a coding task to the gateway, it will return one of:
-- Questions from the coding agent → relay to user via send_message, update task description with questions + sessionId, mark task Waiting
-- A plan from the coding agent → relay to user via send_message, update task description with plan + sessionId, mark task Review
-- Execution results → update task description with results, mark task Done
-- "Session still running" (gateway ran out of steps) → save sessionId to task description, call reschedule_self(minutesFromNow=5) to try again later
-- Error → update_task(status: "Waiting") then send_message with error detail
+- Questions from the coding agent → write questions to the task description using update_task(section: "Questions", appendToSection: true, description: "<p><strong>Q:</strong> question text</p>"). Then relay to user via send_message, include sessionId in message, mark task Waiting.
+- A plan from the coding agent → write plan to task description using update_task(section: "Plan", description: plan_html). Relay to user via send_message, include sessionId, mark task Review.
+- Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Done.
+- "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5) to check back soon.
+- "Session still running, execution phase" → save sessionId to task description using update_task(section: "Session", description: session_html), call reschedule_self(minutesFromNow=10) to try again later.
+- Error → update_task(status: "Waiting") then send_message with the error detail. Do NOT write errors into the task description.
+
+When the user answers a question, append the answer to the Q&A log: update_task(section: "Questions", appendToSection: true, description: "<p><strong>A:</strong> user's answer</p>"). Then resume the coding session with the answer.
 
 On re-execution after reschedule: read sessionId and dir from task description, delegate to gateway with the sessionId and tell it to POLL (check session status). Do NOT tell it to "resume" or include any task instructions — just the sessionId and dir. The gateway will read the session and return the output. Only pass user answers when the user has actually replied.
 
@@ -403,7 +407,7 @@ Title: ${linkedTask.title}${linkedTask.description ? `\nDescription: ${linkedTas
 Task ID: ${linkedTask.id}
 Status: ${linkedTask.status}
 
-This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. If the user says to proceed, approves, or says the issue is resolved — call unblock_task(taskId: "${linkedTask.id}", reason: "<what changed>"). Do NOT create a new task.` : ""}
+This IS the task — don't create or search for other tasks about this topic. If they add context, update the description via update_task (ID: ${linkedTask.id}).${linkedTask.status === "Waiting" ? `\nThis task is WAITING. The user's reply in this conversation will automatically resume the task. Just acknowledge their input and let them know the task will continue.` : ""}
 </task_context>`;
     }
   }

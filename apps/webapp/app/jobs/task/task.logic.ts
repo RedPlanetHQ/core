@@ -42,20 +42,27 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
 
     const intent = (task.pageId ? await getPageContentAsHtml(task.pageId) : null) ?? task.title;
 
-    // Always create a new conversation for each background run
-    const result = await createConversation(workspaceId, userId, {
-      message: intent,
-      parts: [{ text: intent, type: "text" }],
-      userType: UserTypeEnum.User,
-      asyncJobId: task.id,
-      source: "task",
-    });
-    const conversationId = result.conversationId;
-    // Append to existing conversation history for this task
-    await updateTaskConversationIds(taskId, [
-      ...(task.conversationIds ?? []),
-      conversationId,
-    ]);
+    // Reuse the last conversation if one exists, otherwise create new
+    let conversationId: string;
+    const existingConversationIds = task.conversationIds ?? [];
+
+    if (existingConversationIds.length > 0) {
+      // Reuse the last conversation — preserves full context
+      conversationId = existingConversationIds[existingConversationIds.length - 1];
+      logger.info(`Task ${taskId} reusing conversation ${conversationId}`);
+    } else {
+      // First run — create a new conversation
+      const result = await createConversation(workspaceId, userId, {
+        message: intent,
+        parts: [{ text: intent, type: "text" }],
+        userType: UserTypeEnum.User,
+        asyncJobId: task.id,
+        source: "task",
+      });
+      conversationId = result.conversationId;
+      await updateTaskConversationIds(taskId, [conversationId]);
+      logger.info(`Task ${taskId} created new conversation ${conversationId}`);
+    }
 
     const { token } = await getOrCreatePersonalAccessToken({
       name: "task-internal",
@@ -73,7 +80,7 @@ export async function processTask(payload: TaskPayload): Promise<TaskResult> {
     // and can embed it in any reminders it creates (e.g. after starting a coding session)
     const metadata = (task.metadata as Record<string, unknown>) ?? {};
     const rescheduleCount = (metadata.rescheduleCount as number) ?? 0;
-    const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/6]` : "";
+    const rescheduleNote = rescheduleCount > 0 ? ` [reschedule:${rescheduleCount}/10]` : "";
     const taskMessage = `[background-task taskId:${taskId}${rescheduleNote}]\n${intent}`;
 
     try {

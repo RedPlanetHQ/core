@@ -173,6 +173,7 @@ export async function createCoreTools(
         minRecurrenceMinutes,
         channelCtx.channels,
         currentTaskId,
+        source,
       );
 
   // Message tools (only in trigger or background task contexts)
