@@ -9,6 +9,7 @@ import { format, addDays, isToday } from "date-fns";
 import { useNavigate } from "@remix-run/react";
 import { Button } from "~/components/ui";
 import { DayEditor } from "./day-editor.client";
+import { useTauri } from "~/hooks/use-tauri";
 
 interface PageRecord {
   id: string;
@@ -127,7 +128,7 @@ export function DailyPage({
   const todayDate = useRef(new Date()).current;
   const scrollRef = useRef<HTMLDivElement>(null);
   const todayRef = useRef<HTMLDivElement | null>(null);
-
+  const { isDesktop } = useTauri();
   const sectionEls = useRef<Map<string, HTMLDivElement>>(new Map());
   const sectionHeights = useRef<Map<string, number>>(new Map());
   const refCallbacks = useRef<Map<string, (el: HTMLDivElement | null) => void>>(
@@ -169,7 +170,9 @@ export function DailyPage({
     const container = scrollRef.current;
     const todayEl = todayRef.current;
     if (!container || !todayEl) return;
-    container.scrollTop = Math.max(0, todayEl.offsetTop - 26);
+    container.scrollTop = isDesktop
+      ? Math.max(0, todayEl.offsetTop - 66)
+      : Math.max(0, todayEl.offsetTop - 26);
   }, []);
 
   // Delta compensation after prepend / append-trim.

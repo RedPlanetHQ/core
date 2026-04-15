@@ -369,8 +369,16 @@ function CodingPage() {
     );
   };
 
-  const handleResumeSession = (_extId: string) => {
-    // Force-remount TauriTerminal so spawn_pty is called again with resumeSessionId
+  const handleResumeSession = (extId: string) => {
+    // Ensure parent state has the extId before remounting, so spawn_pty
+    // receives resumeSessionId instead of falling back to reconnect logic.
+    if (selectedId) {
+      setSessions((prev) =>
+        prev.map((s) =>
+          s.id === selectedId ? { ...s, externalSessionId: extId } : s,
+        ),
+      );
+    }
     setTerminalKey((k) => k + 1);
   };
 

@@ -59,54 +59,61 @@ pub fn spawn_pty(
     login_path: State<SharedLoginPath>,
     app: AppHandle,
 ) -> Result<(), String> {
-    // --- Reconnect logic ---
-    // If a PTY already exists for this session and we're not resuming, reconnect instead
-    // of killing and re-spawning. Replay buffered output so the fresh xterm catches up.
-    if resume_session_id.is_none() {
-        enum Action {
-            Reconnect { buffer: Vec<u8>, exited: bool },
-            Spawn,
-        }
+    // --- Reconnect / resume logic ---
+    // If a PTY already exists for this session:
+    //   - Still running → always reconnect (replay buffer). Never kill a live process
+    //     just because the xterm was remounted (e.g. tab switch).
+    //   - Exited + resume_session_id.is_none() → replay buffer + re-emit exit event.
+    //   - Exited + resume_session_id.is_some() → kill stale handle, spawn fresh with --resume.
+    enum Action {
+        Reconnect { buffer: Vec<u8>, emit_exit: bool },
+        Spawn,
+    }
 
-        let action = {
-            let mut map = state.lock().unwrap();
-            if let Some(handle) = map.get_mut(&session_db_id) {
-                if handle.created_at.elapsed() < MAX_PTY_AGE {
+    let action = {
+        let mut map = state.lock().unwrap();
+        if let Some(handle) = map.get_mut(&session_db_id) {
+            if handle.created_at.elapsed() < MAX_PTY_AGE {
+                let exited = handle.child.try_wait().ok().flatten().is_some();
+                if !exited {
+                    // PTY is still running — reconnect regardless of resume_session_id.
                     let buffer = handle.output_buffer.lock().unwrap().clone();
-                    let exited = handle.child.try_wait().ok().flatten().is_some();
-                    Action::Reconnect { buffer, exited }
+                    Action::Reconnect { buffer, emit_exit: false }
+                } else if resume_session_id.is_none() {
+                    // PTY exited, no resume requested — replay buffer + exit event.
+                    let buffer = handle.output_buffer.lock().unwrap().clone();
+                    Action::Reconnect { buffer, emit_exit: true }
                 } else {
-                    // Too old — kill and fall through to spawn
+                    // PTY exited AND caller wants --resume — remove stale handle, spawn fresh.
                     handle.cancelled.store(true, Ordering::Relaxed);
                     let _ = handle.child.kill();
                     map.remove(&session_db_id);
                     Action::Spawn
                 }
             } else {
+                // Too old — kill and fall through to spawn
+                handle.cancelled.store(true, Ordering::Relaxed);
+                let _ = handle.child.kill();
+                map.remove(&session_db_id);
                 Action::Spawn
             }
-        };
+        } else {
+            Action::Spawn
+        }
+    };
 
-        match action {
-            Action::Reconnect { buffer, exited } => {
-                if !buffer.is_empty() {
-                    let data = String::from_utf8_lossy(&buffer).to_string();
-                    let _ = app.emit(&format!("pty://data/{}", session_db_id), data);
-                }
-                if exited {
-                    let _ = app.emit(&format!("pty://exit/{}", session_db_id), ());
-                }
-                return Ok(());
+    match action {
+        Action::Reconnect { buffer, emit_exit } => {
+            if !buffer.is_empty() {
+                let data = String::from_utf8_lossy(&buffer).to_string();
+                let _ = app.emit(&format!("pty://data/{}", session_db_id), data);
             }
-            Action::Spawn => {} // continue below
+            if emit_exit {
+                let _ = app.emit(&format!("pty://exit/{}", session_db_id), ());
+            }
+            return Ok(());
         }
-    } else {
-        // Resume: always kill existing and spawn fresh with --resume args
-        let mut map = state.lock().unwrap();
-        if let Some(mut old) = map.remove(&session_db_id) {
-            old.cancelled.store(true, Ordering::Relaxed);
-            let _ = old.child.kill();
-        }
+        Action::Spawn => {} // continue below
     }
 
     // --- Spawn new PTY ---

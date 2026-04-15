@@ -386,7 +386,7 @@ export function GlobalChatPanel({
 
       {/* Content */}
       {activeConversation ? (
-        <div className="flex h-[100vh] flex-col overflow-hidden border-b md:h-page">
+        <div className="md:h-page flex h-[100vh] flex-col overflow-hidden">
           <ConversationView
             conversationId={activeConversation.conversationId}
             history={activeConversation.history}
