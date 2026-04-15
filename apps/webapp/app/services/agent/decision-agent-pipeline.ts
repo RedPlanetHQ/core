@@ -22,6 +22,7 @@ import { logger } from "~/services/logger.service";
 import { prisma } from "~/db.server";
 import { type OrchestratorTools } from "~/services/agent/orchestrator-tools";
 import { getOrCreateAsyncConversation } from "~/services/agent/context/decision-context";
+import { createConversation } from "~/services/conversation.server";
 import { deductCredits } from "~/trigger/utils/utils";
 import { isWorkspaceBYOK } from "~/services/byok.server";
 
@@ -50,6 +51,8 @@ export interface CASEPipelineInput {
   taskId?: string;
   /** Unified task text (when triggered from scheduled task) */
   taskText?: string;
+  /** When true, always create a new conversation instead of reusing an existing one */
+  forceNewConversation?: boolean;
 }
 
 export interface CASEPipelineResult {
@@ -57,6 +60,8 @@ export interface CASEPipelineResult {
   shouldMessage: boolean;
   reasoning: string;
   error?: string;
+  /** The conversation ID used for this pipeline run */
+  conversationId?: string;
 }
 
 // ============================================================================
@@ -85,6 +90,7 @@ export async function runCASEPipeline(
     executorTools,
     taskId,
     taskText,
+    forceNewConversation,
   } = input;
 
   // Use unified task fields when available, fall back to reminder fields
@@ -102,13 +108,31 @@ export async function runCASEPipeline(
           ? "scheduled-task"
           : "reminder";
 
-    const conversationId = await getOrCreateAsyncConversation(
-      userData.workspaceId,
-      userData.userId,
-      entityId,
-      conversationSource,
-      entityText,
-    );
+    let conversationId: string;
+
+    if (forceNewConversation) {
+      // Always create a fresh conversation for this run
+      const convResult = await createConversation(
+        userData.workspaceId,
+        userData.userId,
+        {
+          message: entityText,
+          parts: [{ text: entityText, type: "text" }],
+          source: conversationSource,
+          asyncJobId: entityId,
+          userType: UserTypeEnum.System,
+        },
+      );
+      conversationId = convResult.conversationId;
+    } else {
+      conversationId = await getOrCreateAsyncConversation(
+        userData.workspaceId,
+        userData.userId,
+        entityId,
+        conversationSource,
+        entityText,
+      );
+    }
 
     // =========================================================================
     // Resolve channel type from Channel table (trigger.channel is a name now)
@@ -225,6 +249,7 @@ export async function runCASEPipeline(
       success: true,
       shouldMessage,
       reasoning,
+      conversationId,
     };
   } catch (error) {
     logger.error(`[pipeline] Failed for ${entityId}`, { error });
