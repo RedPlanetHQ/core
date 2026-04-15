@@ -113,6 +113,99 @@ async function migrateDefaultSkills() {
   console.log(`Default skills migration complete! Created ${created} skill documents.`);
 }
 
+const READINESS_SKILLS_MIGRATION_KEY = "readinessSkillsV1Seeded";
+
+async function migrateReadinessSkills() {
+  const { READINESS_SKILL_DEFINITIONS } = await import("~/services/skills.readiness");
+
+  if (READINESS_SKILL_DEFINITIONS.length === 0) return;
+
+  const allWorkspaces = await prisma.workspace.findMany({
+    select: { id: true, metadata: true },
+  });
+
+  const workspacesNeedingMigration = allWorkspaces.filter((workspace) => {
+    const metadata = workspace.metadata as Record<string, any>;
+    return !metadata?.[READINESS_SKILLS_MIGRATION_KEY];
+  });
+
+  if (workspacesNeedingMigration.length === 0) {
+    console.log("No workspaces need readiness skill seeding.");
+    return;
+  }
+
+  console.log(`Seeding readiness skills for ${workspacesNeedingMigration.length} workspaces...`);
+
+  const workspaceIds = workspacesNeedingMigration.map((w) => w.id);
+  const readinessTitles = READINESS_SKILL_DEFINITIONS.map((d) => d.title);
+
+  // Check which readiness skills already exist
+  const existingSkills = await prisma.document.findMany({
+    where: {
+      workspaceId: { in: workspaceIds },
+      type: "skill",
+      title: { in: readinessTitles },
+      deleted: null,
+    },
+    select: { workspaceId: true, title: true },
+  });
+
+  const existingSet = new Set(existingSkills.map((s) => `${s.workspaceId}:${s.title}`));
+
+  const userWorkspaces = await prisma.userWorkspace.findMany({
+    where: { workspaceId: { in: workspaceIds }, isActive: true },
+    select: { workspaceId: true, userId: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const ownerMap = new Map<string, string>();
+  for (const uw of userWorkspaces) {
+    if (!ownerMap.has(uw.workspaceId)) {
+      ownerMap.set(uw.workspaceId, uw.userId);
+    }
+  }
+
+  let created = 0;
+
+  for (const workspace of workspacesNeedingMigration) {
+    const userId = ownerMap.get(workspace.id);
+    if (!userId) continue;
+
+    const toCreate = READINESS_SKILL_DEFINITIONS.filter(
+      (def) => !existingSet.has(`${workspace.id}:${def.title}`),
+    );
+
+    if (toCreate.length > 0) {
+      await prisma.document.createMany({
+        data: toCreate.map((def) => ({
+          workspaceId: workspace.id,
+          type: "skill",
+          title: def.title,
+          content: def.content,
+          source: "system",
+          labelIds: [],
+          metadata: {
+            shortDescription: def.shortDescription,
+          },
+          editedBy: userId,
+        })),
+        skipDuplicates: true,
+      });
+      created += toCreate.length;
+    }
+  }
+
+  // Mark workspaces as migrated
+  await prisma.$executeRaw`
+    UPDATE "Workspace"
+    SET metadata = metadata || ${JSON.stringify({ [READINESS_SKILLS_MIGRATION_KEY]: true })}::jsonb
+    WHERE id = ANY(${workspaceIds}::text[])
+  `;
+
+  console.log(`Readiness skills migration complete! Created ${created} skill documents.`);
+}
+
 export const migration = async () => {
   await migrateDefaultSkills();
+  await migrateReadinessSkills();
 };

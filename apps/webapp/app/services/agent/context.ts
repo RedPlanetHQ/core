@@ -340,6 +340,7 @@ export async function buildAgentContext({
 
   // Task context (when conversation was created from a task)
   if (linkedTask) {
+    const isPrepPhase = linkedTask.status === "Todo";
     const isExecuting =
       linkedTask.status === "Working" || linkedTask.status === "Ready";
 
@@ -356,9 +357,49 @@ export async function buildAgentContext({
       }
     }
 
-    if (isExecuting) {
+    if (isPrepPhase) {
+      systemPrompt += `\n\n<task_prep>
+You're preparing this task — NOT executing it. Your job is to gather information, clarify scope, and produce a plan. Do NOT do the actual work yet.
+
+Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
+Task ID: ${linkedTask.id}
+Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK.${parentTaskRecord ? `\nParent task: ${parentTaskRecord.title}${parentTaskDescription ? `\nParent context: ${parentTaskDescription}` : ""}` : ""}` : ""}${skillHint}
+
+PREP RULES:
+1. Run the READINESS CHECK (see <capabilities>). Load the appropriate skill from <skills>:
+   - Unclear what's needed? → load "Gather Information" skill
+   - Open-ended, needs shaping? → load "Brainstorm" skill
+   - Multi-step, needs decomposition? → load "Plan" skill
+2. For CODING tasks (when a gateway is connected): delegate brainstorming/planning to the gateway sub-agent. Pass the task title and description. The gateway will return questions or a plan — do NOT tell it to execute.${lastCodingSession?.externalSessionId ? `\n   A coding session already exists — resume it:\n   sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+3. For NON-CODING tasks: do the prep yourself using gather_context, take_action, and the readiness skills.
+4. Write your findings/plan into the task description using update_task.
+5. When prep is complete, move to Review: update_task(taskId: "${linkedTask.id}", status: "Review")
+6. Send the user a summary via send_message: what you found, what the plan is, and ask them to review.
+
+WHEN TO GO TO WAITING instead of Review:
+- You need the user to answer questions before you can plan → mark Waiting, send questions via send_message
+- Gateway returned questions from the coding agent → write to task description, mark Waiting
+
+WHEN TO GO STRAIGHT TO Review:
+- Nothing to prep (task is already clear and simple) → move to Review immediately
+- Plan is complete → write plan to description, move to Review
+
+DO NOT:
+- Execute the actual work (no sending emails, no writing code, no making changes)
+- Mark the task as Done
+- Create independent top-level tasks${isSubtask ? "" : `
+- If this task needs decomposition: create subtasks under this task (parentTaskId: ${linkedTask.id}), write the plan, move to Review, send_message with the plan`}
+
+CODING SESSION POLLING (during prep):
+- "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5)
+- Gateway returns questions → write to description (section: "Questions"), mark Waiting, send_message
+- Gateway returns plan → write to description (section: "Plan"), mark Review, send_message
+
+NEVER write error logs or debug output into the task description.
+</task_prep>`;
+    } else if (isExecuting) {
       systemPrompt += `\n\n<task_execution>
-You're executing this task in the background. Get it done.
+You're executing this task in the background. The prep/planning phase is done — get it done.
 
 Task: ${linkedTask.title}${linkedTask.description ? `\nContext: ${linkedTask.description}` : ""}
 Task ID: ${linkedTask.id}

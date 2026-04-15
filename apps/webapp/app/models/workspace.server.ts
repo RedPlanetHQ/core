@@ -7,6 +7,7 @@ import { logger } from "~/services/logger.service";
 import { LabelService } from "~/services/label.server";
 import { createSkill } from "~/services/skills.server";
 import { DEFAULT_SKILL_DEFINITIONS } from "~/services/skills.defaults";
+import { READINESS_SKILL_DEFINITIONS } from "~/services/skills.readiness";
 
 interface CreateWorkspaceDto {
   name: string;
@@ -92,6 +93,25 @@ export async function createWorkspace(
   } catch (e) {
     logger.error(`Error seeding default skills: ${e}`);
     // Don't fail workspace creation if skill seeding fails
+  }
+
+  // Seed readiness skills (visible in <skills> list, no skillType)
+  try {
+    await Promise.all(
+      READINESS_SKILL_DEFINITIONS.map((def) =>
+        createSkill(workspace.id, input.userId, {
+          title: def.title,
+          content: def.content,
+          source: "system",
+          metadata: {
+            shortDescription: def.shortDescription,
+          },
+        }),
+      ),
+    );
+    logger.info(`Seeded readiness skills for workspace ${workspace.id}`);
+  } catch (e) {
+    logger.error(`Error seeding readiness skills: ${e}`);
   }
 
   try {
