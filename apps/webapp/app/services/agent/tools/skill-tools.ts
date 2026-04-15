@@ -8,7 +8,7 @@ import { tool, type Tool } from "ai";
 import { z } from "zod";
 import { prisma } from "~/db.server";
 import { logger } from "~/services/logger.service";
-import { createSkill, updateSkill } from "~/services/skills.server";
+import { createSkill, updateSkill, getSkill } from "~/services/skills.server";
 import { createAgent, resolveModelString } from "~/lib/model.server";
 import { getConnectedIntegrationAccounts } from "~/services/integrationAccount.server";
 import { SKILL_GENERATOR_SYSTEM_PROMPT } from "~/utils/skill-generator-prompt";
@@ -124,15 +124,23 @@ export function createSkillTool(workspaceId: string, userId: string): Tool {
 
 /**
  * Update an existing skill
+ *
+ * Content updates are always APPENDED to existing content — never replaced.
+ * This preserves the user's original skill description and accumulated knowledge.
  */
 export function updateSkillTool(workspaceId: string, userId: string): Tool {
   return tool({
     description:
-      "Update an existing skill's title, content, or short description. Use get_skill first to load the current content before making changes.",
+      "Update an existing skill's title, content, or short description. Content is always APPENDED to existing content — pass only the new additions, not the full skill. No need to call get_skill first for content updates.",
     inputSchema: z.object({
       skill_id: z.string().describe("The ID of the skill to update"),
       title: z.string().optional().describe("New title for the skill"),
-      content: z.string().optional().describe("New content/instructions"),
+      content: z
+        .string()
+        .optional()
+        .describe(
+          "New content to APPEND to the skill. This is merged with existing content — just pass what's new.",
+        ),
       short_description: z
         .string()
         .optional()
@@ -140,9 +148,19 @@ export function updateSkillTool(workspaceId: string, userId: string): Tool {
     }),
     execute: async ({ skill_id, title, content, short_description }) => {
       try {
+        // Always append content to existing — never replace
+        let mergedContent: string | undefined;
+        if (content) {
+          const existing = await getSkill(skill_id, workspaceId);
+          if (!existing) return "Skill not found or update failed";
+          mergedContent = existing.content
+            ? `${existing.content}\n\n${content}`
+            : content;
+        }
+
         const updated = await updateSkill(skill_id, workspaceId, userId, {
           ...(title && { title }),
-          ...(content && { content }),
+          ...(mergedContent !== undefined && { content: mergedContent }),
           ...(short_description && {
             metadata: { shortDescription: short_description },
           }),

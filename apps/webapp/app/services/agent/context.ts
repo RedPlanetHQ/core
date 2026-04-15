@@ -380,6 +380,7 @@ RULES:
   1. call update_task(taskId: "${linkedTask.id}", status: "Done")
   2. call send_message with a summary of what was done
 - Do NOT create independent top-level tasks. ${isSubtask ? "You are a subtask — just do your work." : "You can only create subtasks under this task."}
+- DESCRIPTION UPDATES: Only update the task description at phase boundaries (Waiting, plan produced, Review/Done, or when the user provides new context). Do NOT update it on every interaction.
 
 CODING SESSIONS:
 The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT sleep or poll directly.

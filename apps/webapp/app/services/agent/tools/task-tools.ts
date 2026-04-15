@@ -481,6 +481,13 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
     update_task: tool({
       description: `Update an existing task — change its status, title, description, scheduling, or parent. Description updates are APPENDED to existing content — just pass the new context, no need to read or merge.
 
+WHEN TO UPDATE DESCRIPTION: Only at phase boundaries — not on every interaction.
+- Blocked/Waiting: record what was attempted and what's needed
+- Plan produced: save the plan (use section parameter for coding tasks)
+- Review/Done: record output or results
+- User provides new context: append their requirements or answers
+Do NOT update the description just because you touched the task.
+
 SECTIONS: Pass section (e.g. "Session", "Plan", "Output") to write into a named H2 section. This preserves the user's original description and other sections — only the named section is replaced. Use this for coding task updates instead of plain appends.
 
 REPARENTING: Pass newParentId to move a task under a different parent (or null to make it a root task). This deletes the task and recreates it under the new parent — the task gets a new displayId. Subtasks are also deleted.`,
