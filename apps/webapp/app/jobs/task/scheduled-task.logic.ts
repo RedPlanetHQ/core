@@ -23,6 +23,7 @@ import {
   incrementTaskUnrespondedCount,
   scheduleNextTaskOccurrence,
   deactivateScheduledTask,
+  updateTaskConversationIds,
 } from "~/services/task.server";
 import { prisma } from "~/db.server";
 import { CoreClient } from "@redplanethq/sdk";
@@ -147,10 +148,26 @@ export async function processScheduledTask(
       taskText,
       timezone,
       executorTools,
+      forceNewConversation: true,
     });
 
     if (!result.success) {
       return { success: false, error: result.error };
+    }
+
+    // Track this run's conversation on the task
+    if (result.conversationId) {
+      try {
+        await updateTaskConversationIds(taskId, [
+          ...(task.conversationIds ?? []),
+          result.conversationId,
+        ]);
+      } catch (error) {
+        logger.warn(
+          `Failed to update conversationIds for task ${taskId}, conversation ${result.conversationId} still exists via asyncJobId`,
+          { error },
+        );
+      }
     }
 
     // =========================================================================
