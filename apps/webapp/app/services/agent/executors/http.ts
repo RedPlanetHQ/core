@@ -108,8 +108,12 @@ export class HttpOrchestratorTools extends OrchestratorTools {
       const skill = response.skill as any;
       return `## Skill: ${skill.title ?? ""}\n\n${skill.content ?? ""}`;
     } catch (error) {
-      logger.warn("HttpOrchestratorTools: failed to load skill", { error });
-      return "Failed to load skill";
+      const msg = error instanceof Error ? error.message : String(error);
+      logger.warn("HttpOrchestratorTools: failed to load skill", {
+        skillId,
+        error: msg,
+      });
+      return `Failed to load skill: ${msg}`;
     }
   }
 

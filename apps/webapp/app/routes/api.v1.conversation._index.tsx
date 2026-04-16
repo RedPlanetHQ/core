@@ -30,6 +30,11 @@ import {
 } from "@mastra/core/processors";
 import { patchArgsDeep } from "~/services/agent/tool-args-patch-processor";
 import { checkWaitingTaskReply } from "~/services/coding-task.server";
+import {
+  selectModelMessages,
+  describeAgentError,
+  type MessageEntry,
+} from "~/services/agent/context-window";
 
 import { RequestContext } from "@mastra/core/request-context";
 const ChatRequestSchema = z.object({
@@ -123,42 +128,70 @@ const { loader, action } = createHybridActionApiRoute(
     // -----------------------------------------------------------------------
     // Build message list for the model
     // -----------------------------------------------------------------------
-    const historyMessages = conversationHistory.map((history: any) => {
-      const role =
-        history.role ?? (history.userType === "Agent" ? "assistant" : "user");
-      const normalized = normalizeParts(history.parts);
-      const parts =
-        role === "assistant"
-          ? normalized.filter((p: any) => p.type === "text")
-          : normalized;
-      return { parts, role, id: history.id };
-    });
+    const historyMessages: MessageEntry[] = conversationHistory.map(
+      (history: any) => {
+        const role =
+          history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+        const normalized = normalizeParts(history.parts);
+        const parts =
+          role === "assistant"
+            ? normalized.filter((p: any) => p.type === "text")
+            : normalized;
+        return { parts, role, id: history.id };
+      },
+    );
 
-    const validHistory = historyMessages.filter((m: any) =>
+    const validHistory: MessageEntry[] = historyMessages.filter((m) =>
       hasNonEmptyParts(m.parts),
     );
 
-    let finalMessages: any[];
+    let finalMessages: MessageEntry[];
     if (isAssistantApproval) {
+      // Resume path: use exactly what the client sent — the suspended run
+      // already has its own message list and we mustn't change it.
       finalMessages = ((body.messages as any[]) ?? [])
         .map((m: any) => ({ ...m, parts: normalizeParts(m.parts) }))
         .filter((m: any) => hasNonEmptyParts(m.parts));
+    } else if (validHistory.length === 0 && !incomingUserText) {
+      // First turn of a fresh conversation — empty, nothing to select from.
+      finalMessages = [];
     } else {
+      // Compaction path. Identify currentMessage + history-without-current.
       const alreadyInHistory =
         !!body.message?.id &&
         validHistory[validHistory.length - 1]?.id === body.message.id;
 
-      finalMessages =
-        incomingUserText && !alreadyInHistory
-          ? [
-              ...validHistory,
-              {
-                parts: [{ text: incomingUserText, type: "text" }],
-                role: "user",
-                id: body.message?.id ?? generateId(),
-              },
-            ]
-          : validHistory;
+      let currentMessage: MessageEntry;
+      let historyForSelection: MessageEntry[];
+      if (incomingUserText && !alreadyInHistory) {
+        currentMessage = {
+          id: body.message?.id ?? generateId(),
+          role: "user",
+          parts: [{ type: "text", text: incomingUserText }],
+        };
+        historyForSelection = validHistory;
+      } else {
+        // Incoming message already persisted (or no new text): last valid
+        // history entry is the "current" for compaction purposes.
+        currentMessage = validHistory[validHistory.length - 1];
+        historyForSelection = validHistory.slice(0, -1);
+      }
+
+      const selection = await selectModelMessages({
+        workspaceId: (authentication.workspaceId as string) ?? "",
+        conversationId: body.id,
+        history: historyForSelection,
+        currentMessage,
+      });
+      logger.info("Agent context selection (stream)", {
+        conversationId: body.id,
+        mode: selection.mode,
+        totalMessages: selection.stats.totalMessages,
+        keptMessages: selection.stats.keptMessages,
+        estimatedTokens: selection.stats.estimatedTokens,
+        compactTokens: selection.stats.compactTokens,
+      });
+      finalMessages = selection.messages;
     }
 
     // -----------------------------------------------------------------------
@@ -353,15 +386,33 @@ const { loader, action } = createHybridActionApiRoute(
     // Belt-and-suspenders: also fire if request.signal ever works
     request.signal.addEventListener("abort", cancelStream);
 
-    const stream = await agent.stream(modelMessages, {
-      toolsets: { core: tools },
-      runId: body.id,
-      stopWhen: [stepCountIs(10)],
-      toolCallConcurrency: 1,
-      outputProcessors: [messageHistoryProcessor as OutputProcessor],
-      modelSettings: { temperature: 0.5 },
-      abortSignal: abortController.signal,
-    });
+    let stream;
+    try {
+      stream = await agent.stream(modelMessages, {
+        toolsets: { core: tools },
+        runId: body.id,
+        stopWhen: [stepCountIs(10)],
+        toolCallConcurrency: 1,
+        outputProcessors: [messageHistoryProcessor as OutputProcessor],
+        modelSettings: { temperature: 0.5 },
+        abortSignal: abortController.signal,
+      });
+    } catch (error) {
+      // Stream failed to start (e.g., context-length overflow, provider
+      // error). Nothing has been sent to the client yet, so we can mark the
+      // conversation failed and rethrow — the client will see a stream error
+      // and surface it. We do NOT retry with trimmed history here because
+      // the selectModelMessages step above should have bounded the prompt;
+      // reaching this branch means something else went wrong.
+      const { kind } = describeAgentError(error);
+      logger.error("[conversation] agent.stream failed to start", {
+        conversationId: body.id,
+        kind,
+        error: error instanceof Error ? error.message : String(error),
+      });
+      await updateConversationStatus(body.id, "failed");
+      throw error;
+    }
 
     return streamToUIResponse(stream, cancelStream);
   },

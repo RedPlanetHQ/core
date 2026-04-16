@@ -12,6 +12,7 @@ import { Agent, convertMessages } from "@mastra/core/agent";
 import type { OutputProcessor } from "@mastra/core/processors";
 import { buildAgentContext } from "./context";
 import { getMastra } from "./mastra";
+import { logger } from "~/services/logger.service";
 import {
   getDefaultChatModelId,
   resolveModelConfig,
@@ -25,6 +26,12 @@ import { createUIStreamWithApprovals } from "./mastra-stream.server";
 import { getResumableStreamContext } from "~/bullmq/connection";
 import { deductCredits } from "~/trigger/utils/utils";
 import { addToQueue } from "~/lib/ingest.server";
+import {
+  selectModelMessages,
+  generateWithRetry,
+  describeAgentError,
+  type MessageEntry,
+} from "./context-window";
 
 interface NoStreamProcessBody {
   id: string;
@@ -103,31 +110,45 @@ export async function noStreamProcess(
     );
   }
 
-  const messages = conversationHistory.map((history: any) => {
-    const role =
-      history.role ?? (history.userType === "Agent" ? "assistant" : "user");
-    // For assistant messages, only inject text parts — tool call internals bloat context
-    const parts =
-      role === "assistant"
-        ? (history.parts ?? []).filter((p: any) => p.type === "text")
-        : history.parts;
-    return { parts, role, id: history.id };
-  });
+  const historyMessages: MessageEntry[] = conversationHistory.map(
+    (history: any) => {
+      const role =
+        history.role ?? (history.userType === "Agent" ? "assistant" : "user");
+      // For assistant messages, only inject text parts — tool call internals bloat context
+      const parts =
+        role === "assistant"
+          ? (history.parts ?? []).filter((p: any) => p.type === "text")
+          : history.parts;
+      return { parts, role, id: history.id };
+    },
+  );
 
   const message = body.message?.parts[0].text;
-  let finalMessages = messages;
+  let finalMessages: MessageEntry[];
 
   if (!isAssistantApproval) {
     const id = body.message?.id;
     const userMessageId = id ?? generateId();
-    finalMessages = [
-      ...messages,
-      {
-        parts: body.message?.parts ?? [{ text: message, type: "text" }],
-        role: "user",
-        id: userMessageId,
-      },
-    ];
+    const currentMessage: MessageEntry = {
+      id: userMessageId,
+      role: "user",
+      parts: body.message?.parts ?? [{ text: message, type: "text" }],
+    };
+    const selection = await selectModelMessages({
+      workspaceId,
+      conversationId: body.id,
+      history: historyMessages,
+      currentMessage,
+    });
+    logger.info("Agent context selection", {
+      conversationId: body.id,
+      mode: selection.mode,
+      totalMessages: selection.stats.totalMessages,
+      keptMessages: selection.stats.keptMessages,
+      estimatedTokens: selection.stats.estimatedTokens,
+      compactTokens: selection.stats.compactTokens,
+    });
+    finalMessages = selection.messages;
   } else {
     finalMessages = body.messages as any;
   }
@@ -213,15 +234,59 @@ export async function noStreamProcess(
 
   let agentResult: any;
   try {
-    agentResult = await agent.generate(modelMessages, {
-      toolsets: { core: tools },
-      stopWhen: [stepCountIs(10)],
-      modelSettings: { temperature: 0.5 },
-      outputProcessors: [messageHistoryProcessor],
+    agentResult = await generateWithRetry({
+      agent,
+      modelMessages: modelMessages as unknown[],
+      generateOptions: {
+        toolsets: { core: tools },
+        stopWhen: [stepCountIs(10)],
+        modelSettings: { temperature: 0.5 },
+        outputProcessors: [messageHistoryProcessor],
+      },
+      conversationId: body.id,
     });
   } catch (error) {
+    // The agent blew up mid-generate (context overflow, provider timeout, etc.).
+    // generateWithRetry already tried to recover from context-length errors by
+    // dropping rounds; reaching this catch means that didn't work or the error
+    // was of a different kind. Persist a graceful assistant message so the
+    // user sees something instead of a silent drop, then mark the conversation
+    // failed so status is accurate.
+    const { kind, userMessage } = describeAgentError(error);
+    logger.warn("Agent generate failed after retries, posting fallback message", {
+      conversationId: body.id,
+      kind,
+      error: error instanceof Error ? error.message : String(error),
+      historyLength: conversationHistory.length,
+    });
+
+    const fallbackMessageId = crypto.randomUUID();
+    const fallbackParts = [{ type: "text", text: userMessage }];
+    try {
+      await upsertConversationHistory(
+        fallbackMessageId,
+        fallbackParts,
+        body.id,
+        UserTypeEnum.Agent,
+        false,
+      );
+    } catch (persistError) {
+      logger.error("Failed to persist fallback assistant message", {
+        conversationId: body.id,
+        error:
+          persistError instanceof Error
+            ? persistError.message
+            : String(persistError),
+      });
+    }
     await updateConversationStatus(body.id, "failed");
-    throw error;
+
+    return {
+      id: fallbackMessageId,
+      role: "assistant",
+      parts: fallbackParts,
+      text: userMessage,
+    };
   }
 
   // Build assistant parts from result.steps (handle Mastra payload wrapper)
