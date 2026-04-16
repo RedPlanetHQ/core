@@ -11,12 +11,16 @@ import {
 } from "@modelcontextprotocol/sdk/client/auth.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import {
+  connectToRemoteServer,
+  type TransportStrategy,
+} from "./utils.js";
 
 /**
  * Stored OAuth credentials for a custom MCP integration
  */
 export interface CustomMcpStoredCredentials {
-  accessToken: string;
+  accessToken?: string;
   refreshToken?: string;
   expiresIn?: number;
   clientId?: string;
@@ -67,7 +71,7 @@ export async function createApiKeyMcpClient(options: {
  * Use this when you have stored OAuth credentials and want to create a client.
  */
 export class CustomMcpTokenProvider implements OAuthClientProvider {
-  private _tokens: OAuthTokens;
+  private _tokens?: OAuthTokens;
   private _clientInformation?: OAuthClientInformationFull;
   private _serverUrl: string;
 
@@ -79,12 +83,14 @@ export class CustomMcpTokenProvider implements OAuthClientProvider {
     ) => Promise<void>
   ) {
     this._serverUrl = serverUrl;
-    this._tokens = {
-      access_token: credentials.accessToken,
-      refresh_token: credentials.refreshToken,
-      expires_in: credentials.expiresIn,
-      token_type: "Bearer",
-    };
+    if (credentials.accessToken) {
+      this._tokens = {
+        access_token: credentials.accessToken,
+        refresh_token: credentials.refreshToken,
+        expires_in: credentials.expiresIn,
+        token_type: "Bearer",
+      };
+    }
 
     if (credentials.clientId) {
       this._clientInformation = {
@@ -151,7 +157,7 @@ export class CustomMcpTokenProvider implements OAuthClientProvider {
    * Attempt to refresh the access token using the refresh token
    */
   async refreshTokens(): Promise<boolean> {
-    if (!this._tokens.refresh_token) {
+    if (!this._tokens?.refresh_token) {
       return false;
     }
 
@@ -179,10 +185,18 @@ export class CustomMcpTokenProvider implements OAuthClientProvider {
  */
 export async function createCustomMcpClient(options: {
   serverUrl: string;
-  credentials: CustomMcpStoredCredentials;
+  credentials?: CustomMcpStoredCredentials;
+  headers?: Record<string, string>;
+  transportStrategy?: TransportStrategy;
   onTokensRefreshed?: (newCredentials: CustomMcpStoredCredentials) => Promise<void>;
 }): Promise<Client> {
-  const { serverUrl, credentials, onTokensRefreshed } = options;
+  const {
+    serverUrl,
+    credentials = {},
+    headers = {},
+    transportStrategy = "http-first",
+    onTokensRefreshed,
+  } = options;
 
   const authProvider = new CustomMcpTokenProvider(serverUrl, credentials, onTokensRefreshed);
 
@@ -194,12 +208,19 @@ export async function createCustomMcpClient(options: {
     { capabilities: {} }
   );
 
-  const baseUrl = new URL(serverUrl);
-  const transport = new StreamableHTTPClientTransport(baseUrl, {
+  await connectToRemoteServer(
+    client,
+    serverUrl,
     authProvider,
-  });
-
-  await client.connect(transport as any);
+    headers,
+    async () => ({
+      waitForAuthCode: async () => {
+        throw new Error("Interactive OAuth is not available for stored custom MCP connections");
+      },
+      skipBrowserAuth: true,
+    }),
+    transportStrategy,
+  );
 
   return client;
 }

@@ -210,6 +210,16 @@ const EnvironmentSchema = z
     MODEL_PROVIDER: z.enum(["vercel-ai"]).default("vercel-ai"),
 
     EXA_API_KEY: z.string().optional(),
+    CUSTOM_MCP_ALLOW_NO_AUTH: z
+      .string()
+      .optional()
+      .default("false")
+      .transform((val) => val === "true" || val === "1"),
+    CUSTOM_MCP_ALLOW_CUSTOM_HEADERS: z
+      .string()
+      .optional()
+      .default("false")
+      .transform((val) => val === "true" || val === "1"),
 
     // Twilio (WhatsApp)
     TWILIO_ACCOUNT_SID: z.string().optional(),
