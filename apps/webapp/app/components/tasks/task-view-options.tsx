@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, ListFilter, X } from "lucide-react";
+import { Check, ListFilter, RefreshCw, Settings2, X } from "lucide-react";
 import type { TaskStatus } from "@core/database";
 import { Button } from "~/components/ui";
 import {
@@ -42,15 +42,22 @@ export function StatusFilterChip({
   const colors = getTaskStatusColor(status);
 
   return (
-    <Badge
-      variant="secondary"
-      className="h-7 items-center gap-2 rounded px-2"
-    >
-      <Icon
-        size={14}
-        style={{ color: colors.color }}
-      />
+    <Badge variant="secondary" className="h-7 items-center gap-2 rounded px-2">
+      <Icon size={14} style={{ color: colors.color }} />
       <div className="mt-[1px]">{STATUS_LABELS[status]}</div>
+      <X
+        className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
+        onClick={onRemove}
+      />
+    </Badge>
+  );
+}
+
+export function RecurringFilterChip({ onRemove }: { onRemove: () => void }) {
+  return (
+    <Badge variant="secondary" className="h-7 items-center gap-2 rounded px-2">
+      <RefreshCw size={14} className="text-muted-foreground" />
+      <div className="mt-[1px]">Recurring</div>
       <X
         className="hover:text-destructive h-3.5 w-3.5 cursor-pointer"
         onClick={onRemove}
@@ -61,10 +68,14 @@ export function StatusFilterChip({
 
 export function TaskFilterButton({
   activeFilters,
+  recurringFilter,
   onChange,
+  onRecurringChange,
 }: {
   activeFilters: TaskStatus[];
+  recurringFilter: boolean;
   onChange: (filters: TaskStatus[]) => void;
+  onRecurringChange: (value: boolean) => void;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -76,18 +87,29 @@ export function TaskFilterButton({
     }
   };
 
+  const totalActive = activeFilters.length + (recurringFilter ? 1 : 0);
+
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="secondary" role="combobox" aria-expanded={open}>
           <ListFilter className="mr-2 h-4 w-4" />
           Filter
+          {totalActive > 0 && (
+            <Badge
+              variant="secondary"
+              className="ml-1 h-4 min-w-4 rounded-full px-1 text-xs"
+            >
+              {totalActive}
+            </Badge>
+          )}
         </Button>
       </PopoverTrigger>
       <PopoverPortal>
-        <PopoverContent className="w-[180px] p-2" align="start">
-          <p className="text-muted-foreground mb-1 px-2 text-xs font-medium">
-            Filter by status
+        <PopoverContent className="w-[200px] p-2" align="start">
+          {/* Status section */}
+          <p className="text-muted-foreground mb-1 px-2 text-xs font-medium uppercase tracking-wider">
+            Status
           </p>
           {ALL_STATUSES.map((status) => {
             const Icon = TaskStatusIcons[status];
@@ -107,6 +129,61 @@ export function TaskFilterButton({
               </Button>
             );
           })}
+
+          {/* Schedule section */}
+          <div className="border-border my-2 border-t" />
+          <p className="text-muted-foreground mb-1 px-2 text-xs font-medium uppercase tracking-wider">
+            Schedule
+          </p>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2"
+            onClick={() => onRecurringChange(!recurringFilter)}
+          >
+            <div className="flex h-4 w-4 items-center justify-center">
+              {recurringFilter && <Check size={12} />}
+            </div>
+            <RefreshCw size={14} />
+            Recurring
+          </Button>
+        </PopoverContent>
+      </PopoverPortal>
+    </Popover>
+  );
+}
+
+export function ViewOptionsButton({
+  showDone,
+  onShowDoneChange,
+}: {
+  showDone: boolean;
+  onShowDoneChange: (value: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button variant="secondary" role="combobox" aria-expanded={open}>
+          <Settings2 className="mr-2 h-4 w-4" />
+          View
+        </Button>
+      </PopoverTrigger>
+      <PopoverPortal>
+        <PopoverContent className="w-[180px] p-2" align="end">
+          <p className="text-muted-foreground mb-1 px-2 text-xs font-medium uppercase tracking-wider">
+            View options
+          </p>
+          <Button
+            variant="ghost"
+            className="w-full justify-start gap-2"
+            onClick={() => onShowDoneChange(!showDone)}
+          >
+            <div className="flex h-4 w-4 items-center justify-center">
+              {showDone && <Check size={12} />}
+            </div>
+            Show done
+          </Button>
         </PopoverContent>
       </PopoverPortal>
     </Popover>

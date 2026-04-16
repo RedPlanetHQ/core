@@ -278,10 +278,20 @@ function CodingPage() {
   const { sessions: initialSessions } = useTypedLoaderData<typeof loader>();
   const { taskId } = useParams<{ taskId: string }>();
   const navigate = useNavigate();
-  const { isDesktop } = useTauri();
+  const { isDesktop, invoke } = useTauri();
   const setCodingActions = useSetCodingActions();
   const { setOpen: setSidebarOpen } = useSidebar();
   const chatPanel = useChatPanel();
+
+  // null = not yet checked, "" = installed, string = error message
+  const [corebrainError, setCorebrainError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isDesktop) return;
+    invoke("check_corebrain_installed")
+      .then(() => setCorebrainError(""))
+      .catch((err: unknown) => setCorebrainError(String(err)));
+  }, [isDesktop]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Local session list — can grow when new sessions are created from the dialog
   const [sessions, setSessions] =
@@ -403,6 +413,34 @@ function CodingPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (isDesktop && corebrainError) {
+    return (
+      <div className="flex h-full w-full flex-col items-center justify-center gap-3 px-8">
+        <Terminal className="text-muted-foreground h-8 w-8" />
+        <p className="text-foreground text-sm font-medium">
+          corebrain CLI not found
+        </p>
+        <p className="text-muted-foreground max-w-sm text-center text-sm">
+          Install it to enable coding sessions:
+        </p>
+        <code className="bg-muted rounded px-3 py-1.5 font-mono text-sm">
+          npm install -g @redplanethq/corebrain
+        </code>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() =>
+            invoke("check_corebrain_installed")
+              .then(() => setCorebrainError(""))
+              .catch((err: unknown) => setCorebrainError(String(err)))
+          }
+        >
+          Check again
+        </Button>
+      </div>
+    );
+  }
+
   if (sessions.length === 0 && !isDesktop) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-3">
@@ -441,7 +479,7 @@ function CodingPage() {
   return (
     <>
       <ResizablePanelGroup orientation="horizontal" className="h-full w-full">
-        <ResizablePanel defaultSize="20%" minSize="20%" maxSize="35%">
+        <ResizablePanel defaultSize="20%" minSize="20%" maxSize="20%">
           <div className="flex h-full flex-col">
             <div className="flex-1 overflow-hidden">
               <AutoSizer>
@@ -464,8 +502,8 @@ function CodingPage() {
         <ResizableHandle withHandle />
 
         <ResizablePanel
-          defaultSize="65"
-          minSize="50%"
+          defaultSize="80%"
+          minSize="80%"
           className="overflow-hidden"
         >
           {selectedSession ? (
@@ -474,7 +512,7 @@ function CodingPage() {
                 key={`${selectedSession.id}-${terminalKey}`}
                 sessionDbId={selectedSession.id}
                 agent={selectedSession.agent}
-                dir={selectedSession.dir ?? ""}
+                dir={selectedSession.worktreePath ?? selectedSession.dir ?? ""}
                 externalSessionId={
                   selectedSession.externalSessionId ?? undefined
                 }

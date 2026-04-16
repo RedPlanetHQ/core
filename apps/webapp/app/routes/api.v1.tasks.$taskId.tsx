@@ -39,6 +39,8 @@ const loader = createHybridLoaderApiRoute(
       status: task.status,
       title: task.title,
       displayId: task.displayId,
+      nextRunAt: task.nextRunAt,
+      schedule: task.schedule,
       description,
     });
   },

@@ -10,12 +10,16 @@ import "@xterm/xterm/css/xterm.css";
 function useHtmlTheme(): "dark" | "light" {
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     if (typeof document === "undefined") return "dark";
-    return document.documentElement.classList.contains("dark") ? "dark" : "light";
+    return document.documentElement.classList.contains("dark")
+      ? "dark"
+      : "light";
   });
 
   useEffect(() => {
     const mo = new MutationObserver(() => {
-      setTheme(document.documentElement.classList.contains("dark") ? "dark" : "light");
+      setTheme(
+        document.documentElement.classList.contains("dark") ? "dark" : "light",
+      );
     });
     mo.observe(document.documentElement, { attributeFilter: ["class"] });
     return () => mo.disconnect();
@@ -91,7 +95,8 @@ export function TauriTerminal({
   useEffect(() => {
     if (!termRef.current) return;
     termRef.current.options.theme = xtermTheme;
-    termRef.current.options.minimumContrastRatio = resolvedTheme === "light" ? 4.5 : 1;
+    termRef.current.options.minimumContrastRatio =
+      resolvedTheme === "light" ? 4.5 : 1;
   }, [resolvedTheme]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const updateSessionId = useCallback(
@@ -290,11 +295,7 @@ export function TauriTerminal({
         >
           {errorMsg}
         </p>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={onNewSession}
-        >
+        <Button size="sm" variant="ghost" onClick={onNewSession}>
           New session
         </Button>
       </div>
@@ -326,7 +327,13 @@ export function TauriTerminal({
 
       <div
         ref={containerRef}
-        style={{ flex: 1, minHeight: 0, minWidth: 0, width: "100%", overflow: "hidden" }}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          minWidth: 0,
+          width: "100%",
+          overflow: "hidden",
+        }}
         onClick={() => termRef.current?.focus()}
       />
 
@@ -334,8 +341,8 @@ export function TauriTerminal({
         <div
           className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-4"
           style={{
-            background: `color-mix(in oklch, ${bg} 85%, transparent)`,
-            backdropFilter: "blur(4px)",
+            background: `color-mix(in oklch, ${bg} 45%, transparent)`,
+            backdropFilter: "blur(1px)",
           }}
         >
           <CheckCircle2
@@ -343,7 +350,7 @@ export function TauriTerminal({
             style={{ color: "oklch(60% 0 0)" }}
           />
           <p
-            className="text-sm font-medium"
+            className="text-md font-medium"
             style={{ color: xtermTheme.foreground as string }}
           >
             Session ended
@@ -357,10 +364,7 @@ export function TauriTerminal({
                 Resume session
               </Button>
             )}
-            <Button
-              variant="ghost"
-              onClick={onNewSession}
-            >
+            <Button variant="secondary" onClick={onNewSession}>
               New session
             </Button>
           </div>

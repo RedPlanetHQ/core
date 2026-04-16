@@ -218,7 +218,9 @@ export async function updateTask(
 ): Promise<Task> {
   const { description, ...prismaData } = data;
 
-  const existing = data.title ? await prisma.task.findUnique({ where: { id }, select: { title: true } }) : null;
+  const existing = data.title
+    ? await prisma.task.findUnique({ where: { id }, select: { title: true } })
+    : null;
   const task = await prisma.task.update({ where: { id }, data: prismaData });
 
   // Propagate title change to all pages that reference this task

@@ -5,8 +5,9 @@ import {
   ArrowUpRight,
   Clock,
   RefreshCw,
+  Bot,
 } from "lucide-react";
-import { format } from "date-fns";
+import { formatRunTime } from "~/components/tasks/butler-run-badge";
 import { TaskPageEditor } from "~/components/tasks/task-page-editor.client";
 import { Button } from "~/components/ui/button";
 import {
@@ -253,6 +254,8 @@ export function TaskDetailFull({
             >
               {task.isActive && task.schedule ? (
                 <RefreshCw size={14} />
+              ) : task.isActive && task.nextRunAt ? (
+                <Bot size={14} />
               ) : (
                 <Clock size={14} />
               )}
@@ -261,10 +264,7 @@ export function TaskDetailFull({
                   ? ((task.metadata as Record<string, string> | null)
                       ?.scheduleText ?? "Recurring")
                   : task.isActive && task.nextRunAt
-                    ? format(
-                        new Date(task.nextRunAt as unknown as string),
-                        "MMM d",
-                      )
+                    ? `Butler · ${formatRunTime(new Date(task.nextRunAt as unknown as string))}`
                     : "Schedule"}
               </span>
             </Button>

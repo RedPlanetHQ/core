@@ -63,6 +63,7 @@ const TaskPickerList = forwardRef<any, TaskPickerListProps>(
 
     return (
       <div className="bg-popover border-border z-50 w-64 overflow-hidden rounded-lg border p-1 shadow-lg">
+        <div className="max-h-64 overflow-y-auto">
         {items.map((item, index) => {
           const Icon = TaskStatusIcons[item.status];
           const color = getTaskStatusColor(item.status as any).color;
@@ -79,6 +80,7 @@ const TaskPickerList = forwardRef<any, TaskPickerListProps>(
             </button>
           );
         })}
+        </div>
       </div>
     );
   },

@@ -10,7 +10,7 @@ import {
   NodeViewContent,
   type ReactNodeViewRendererOptions,
 } from "@tiptap/react";
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useNavigate } from "@remix-run/react";
 import { Checkbox } from "~/components/ui/checkbox";
 import { cn } from "~/lib/utils";
@@ -19,6 +19,7 @@ import {
   TaskStatusDropdownVariant,
 } from "~/components/tasks/task-status-dropdown";
 import type { TaskStatus } from "@core/database";
+import { ButlerRunBadge } from "~/components/tasks/butler-run-badge";
 
 // ── Component ────────────────────────────────────────────────────────────────
 
@@ -32,10 +33,23 @@ const ScratchpadTaskComponent = ({
   const { parentTaskId } = extension.options ?? {};
 
   const [status, setStatus] = useState<TaskStatus>("Todo");
-  const [displayId, setDisplayId] = useState<string | null>(null);
+  const [taskMeta, setTaskMeta] = useState<{
+    displayId: string | null;
+    nextRunAt: string | null;
+    isRecurring: boolean;
+  }>({ displayId: null, nextRunAt: null, isRecurring: false });
   const creatingRef = useRef(false);
   const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
+
+  const applyTaskData = useCallback((data: any) => {
+    setStatus(data.status ?? "Todo");
+    setTaskMeta({
+      displayId: data.displayId ?? null,
+      nextRunAt: data.nextRunAt ?? null,
+      isRecurring: !!data.schedule,
+    });
+  }, []);
 
   // No id → create task in DB on mount
   useEffect(() => {
@@ -58,8 +72,7 @@ const ScratchpadTaskComponent = ({
       })
       .then((data) => {
         updateAttributes({ id: data.id });
-        setStatus(data.status ?? "Todo");
-        if (data.displayId) setDisplayId(data.displayId);
+        applyTaskData(data);
       })
       .catch((err) => {
         console.error("[scratchpadTask] create failed:", err);
@@ -67,15 +80,12 @@ const ScratchpadTaskComponent = ({
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Has id → hydrate status and displayId from DB
+  // Has id → hydrate from DB
   useEffect(() => {
     if (!id) return;
     fetch(`/api/v1/tasks/${id}`)
       .then((r) => r.json())
-      .then((data) => {
-        setStatus(data.status ?? "Todo");
-        if (data.displayId) setDisplayId(data.displayId);
-      })
+      .then(applyTaskData)
       .catch(console.error);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -109,7 +119,7 @@ const ScratchpadTaskComponent = ({
     }).catch(console.error);
   }
 
-  const isCompleted = status === "Completed";
+  const isCompleted = status === "Done";
 
   // Match Sol: NodeViewWrapper as="div" — no li, no bullet dot
   return (
@@ -128,7 +138,7 @@ const ScratchpadTaskComponent = ({
             className="h-[18px] w-[18px] shrink-0"
             checked={isCompleted}
             onCheckedChange={(val) =>
-              handleStatusChange(val === true ? "Completed" : "Todo")
+              handleStatusChange(val === true ? "Done" : "Todo")
             }
           />
         </label>
@@ -147,7 +157,7 @@ const ScratchpadTaskComponent = ({
             className="flex shrink-0 items-center gap-1.5"
             contentEditable={false}
           >
-            {displayId && (
+            {taskMeta.displayId && (
               <span
                 className="text-muted-foreground relative top-[1px] cursor-pointer font-mono text-sm"
                 onMouseDown={(e) => {
@@ -155,8 +165,14 @@ const ScratchpadTaskComponent = ({
                   navigate(`/home/tasks/${id}`);
                 }}
               >
-                {displayId}
+                {taskMeta.displayId}
               </span>
+            )}
+            {taskMeta.nextRunAt && (
+              <ButlerRunBadge
+                nextRunAt={taskMeta.nextRunAt}
+                isRecurring={taskMeta.isRecurring}
+              />
             )}
             <TaskStatusDropdown
               value={status}

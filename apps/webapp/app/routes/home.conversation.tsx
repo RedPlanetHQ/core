@@ -202,7 +202,7 @@ export default function ConversationLayout() {
               variant="ghost"
               onClick={() => setSidebarOpen(true)}
               title="Show history"
-              className="ml-3"
+              className="ml-2.5"
             >
               <Clock size={16} />
             </Button>
@@ -214,11 +214,10 @@ export default function ConversationLayout() {
           {sidebarOpen && (
             <ResizablePanel defaultSize="25%" minSize="18%" maxSize="40%">
               <div className="flex h-full flex-col">
-                <div className="flex shrink-0 items-center justify-between border-b px-3 py-2">
+                <div className="flex shrink-0 items-center justify-between border-b py-1 pl-4 pr-2">
                   <span className="text-sm font-medium">History</span>
                   <Button
                     variant="ghost"
-                    size="xs"
                     onClick={() => setSidebarOpen(false)}
                     title="Close"
                   >

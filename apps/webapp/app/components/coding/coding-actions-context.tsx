@@ -33,7 +33,7 @@ export function CodingActions() {
   if (!ctx) return null;
 
   return (
-    <Button variant="secondary" onClick={ctx.onNewSession}>
+    <Button variant="secondary" onClick={ctx.onNewSession} className="gap-2">
       <Plus size={13} />
       New session
     </Button>

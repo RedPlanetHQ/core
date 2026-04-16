@@ -7,7 +7,7 @@ import {
   updateConversationStatus,
   upsertConversationHistory,
 } from "~/services/conversation.server";
-import { toRouterString } from "~/lib/model.server";
+
 import {
   getDefaultChatModelId,
   resolveModelConfig,
@@ -243,7 +243,9 @@ const { loader, action } = createHybridActionApiRoute(
       agents: subagents,
       // ask_user must be a direct agent tool (not in toolsets) so Mastra's
       // requireApproval middleware applies correctly on approveToolCall.
-      ...(!isBackgroundExecution && { tools: { ask_user: createAskUserTool() } }),
+      ...(!isBackgroundExecution && {
+        tools: { ask_user: createAskUserTool() },
+      }),
     });
     agent.__registerMastra(mastra);
     gatherContextAgent.__registerMastra(mastra);
@@ -377,7 +379,9 @@ const { loader, action } = createHybridActionApiRoute(
 
     const cancelStream = () => {
       if (!abortController.signal.aborted) {
-        logger.info(`[conversation] client disconnected, aborting stream for ${body.id}`);
+        logger.info(
+          `[conversation] client disconnected, aborting stream for ${body.id}`,
+        );
         abortController.abort();
         updateConversationStatus(body.id, "completed").catch(() => {});
       }

@@ -98,7 +98,6 @@ export function DesktopTabBar() {
       <div className="!top-3.75 absolute right-1 -translate-y-1/2">
         <Button
           variant="ghost"
-          size="xs"
           onClick={() => openTab("/home")}
           title="New tab (⌘T)"
           aria-label="New tab"

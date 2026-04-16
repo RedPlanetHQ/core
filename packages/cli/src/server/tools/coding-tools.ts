@@ -294,6 +294,21 @@ function setupWorktree(
 	const encodedBranch = branch.replace(/\//g, '-');
 	const worktreePath = resolve(dir, '..', 'worktrees', encodedBranch);
 
+	// If the worktree already exists (valid git worktree), reuse it so multiple
+	// sessions can run against the same branch without hitting "already checked out".
+	if (existsSync(resolve(worktreePath, '.git'))) {
+		const sourceClaude = resolve(dir, '.claude');
+		const destClaude = resolve(worktreePath, '.claude');
+		if (existsSync(sourceClaude) && !existsSync(destClaude)) {
+			try {
+				cpSync(sourceClaude, destClaude, {recursive: true});
+			} catch {
+				// Non-fatal
+			}
+		}
+		return {worktreePath, worktreeBranch: branch};
+	}
+
 	try {
 		mkdirSync(worktreePath, {recursive: true});
 		execSync(
@@ -393,13 +408,22 @@ async function handleAsk(params: zod.infer<typeof AskSchema>, logger?: Logger) {
 	let worktreePath: string | undefined;
 	let worktreeBranch: string | undefined;
 
-	// On resume, use the stored worktree path so we don't run in the main repo
+	// On resume, use the stored worktree path so we don't run in the main repo.
+	// Fall back to scanning agent session files — the session dir is embedded in the
+	// file path (claude-code) or session_meta (codex), so we can recover it even
+	// after the running-session record has been cleaned up.
 	if (isResume) {
 		const storedSession = getSession(sessionId);
 		if (storedSession?.worktreePath) {
 			workingDir = storedSession.worktreePath;
 			worktreePath = storedSession.worktreePath;
 			worktreeBranch = storedSession.worktreeBranch;
+		} else {
+			const {sessions: allSessions} = await scanAllSessions({});
+			const scanned = allSessions.find(s => s.sessionId === sessionId);
+			if (scanned?.dir) {
+				workingDir = scanned.dir;
+			}
 		}
 	}
 

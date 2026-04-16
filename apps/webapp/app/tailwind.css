@@ -424,7 +424,7 @@
     .overflow-x-auto,
     .overflow-auto {
       overflow-anchor: none;
-      scrollbar-color: var(--gray-500) transparent;
+      scrollbar-color: oklch(var(--grayAlpha-300)) transparent;
       scrollbar-width: thin;
     }
   }
@@ -434,12 +434,13 @@
     .overflow-y-auto::-webkit-scrollbar-thumb,
     .overflow-x-auto::-webkit-scrollbar-thumb,
     .overflow-auto::-webkit-scrollbar-thumb {
-      background: transparent;
+      background: oklch(var(--grayAlpha-300));
+      border-radius: 9999px;
     }
     .overflow-y-auto::-webkit-scrollbar-track,
     .overflow-x-auto::-webkit-scrollbar-track,
     .overflow-auto::-webkit-scrollbar-track {
-      background: var(--gray-600);
+      background: transparent;
     }
 
     .overflow-y-auto::-webkit-scrollbar,

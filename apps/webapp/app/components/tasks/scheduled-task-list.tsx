@@ -7,12 +7,12 @@ import {
   type Index,
   type ListRowProps,
 } from "react-virtualized";
-import { Clock, RefreshCw, Plus } from "lucide-react";
-import { format } from "date-fns";
+import { RefreshCw, Plus, Clock } from "lucide-react";
 import { Button } from "~/components/ui";
 import { Badge } from "~/components/ui/badge";
 import { cn } from "~/lib/utils";
 import type { TaskWithRelations } from "~/services/task.server";
+import { ButlerRunBadge } from "~/components/tasks/butler-run-badge";
 
 function ScheduledTaskRow({
   task,
@@ -62,14 +62,10 @@ function ScheduledTaskRow({
                 </Badge>
 
                 {task.nextRunAt && (
-                  <Badge variant="secondary" className="gap-1 text-xs">
-                    <span className="text-muted-foreground">
-                      {format(
-                        new Date(task.nextRunAt as unknown as string),
-                        "MMM d, h:mm a",
-                      )}
-                    </span>
-                  </Badge>
+                  <ButlerRunBadge
+                    nextRunAt={task.nextRunAt as unknown as string}
+                    isRecurring={!!task.schedule}
+                  />
                 )}
               </div>
             </div>

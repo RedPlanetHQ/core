@@ -1,5 +1,33 @@
 use serde::{Deserialize, Serialize};
 
+/// Check whether `corebrain` is available on the login-shell PATH.
+/// Returns an error string (suitable for displaying in the UI) when not found.
+#[tauri::command]
+pub fn check_corebrain_installed() -> Result<(), String> {
+    // Use the login-shell PATH so nvm / homebrew / fnm locations are included.
+    let path = std::process::Command::new("zsh")
+        .args(["-lc", "echo $PATH"])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+        .unwrap_or_default();
+
+    let found = std::process::Command::new("which")
+        .arg("corebrain")
+        .env("PATH", &path)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false);
+
+    if found {
+        Ok(())
+    } else {
+        Err(
+            "corebrain CLI is not installed. Run: npm install -g @redplanethq/corebrain"
+                .to_string(),
+        )
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentInfo {
     pub name: String,

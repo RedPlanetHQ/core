@@ -12,6 +12,8 @@ import { TaskListPanel } from "~/components/tasks/task-list-panel";
 import {
   TaskFilterButton,
   StatusFilterChip,
+  RecurringFilterChip,
+  ViewOptionsButton,
 } from "~/components/tasks/task-view-options";
 import { Plus } from "lucide-react";
 import { typedjson, useTypedLoaderData } from "remix-typedjson";
@@ -31,7 +33,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     user.workspaceId,
   )) as string;
 
-  const tasks = await getTasks(workspaceId, { isScheduled: false });
+  const tasks = await getTasks(workspaceId);
   return typedjson({ tasks });
 }
 
@@ -93,11 +95,21 @@ export default function TasksIndex() {
     "task-status-filters",
     [],
   );
+  const [recurringFilter, setRecurringFilter] = useLocalCommonState<boolean>(
+    "task-recurring-filter",
+    false,
+  );
+  const [showDone, setShowDone] = useLocalCommonState<boolean>(
+    "task-show-done",
+    true,
+  );
 
-  const filteredTasks =
-    activeFilters.length === 0
-      ? tasks
-      : tasks.filter((t) => activeFilters.includes(t.status as TaskStatus));
+  const filteredTasks = tasks.filter((t) => {
+    if (!showDone && t.status === "Done") return false;
+    if (recurringFilter && !t.schedule) return false;
+    if (activeFilters.length > 0 && !activeFilters.includes(t.status as TaskStatus)) return false;
+    return true;
+  });
 
   const handleSelect = (id: string) => {
     navigate(`/home/tasks/${id}`);
@@ -116,20 +128,6 @@ export default function TasksIndex() {
     <div className="flex h-[calc(100vh-56px)] flex-col">
       <PageHeader
         title="Tasks"
-        tabs={[
-          {
-            label: "Tasks",
-            value: "tasks",
-            isActive: true,
-            onClick: () => navigate("/home/tasks"),
-          },
-          {
-            label: "Scheduled",
-            value: "scheduled",
-            isActive: false,
-            onClick: () => navigate("/home/tasks/scheduled"),
-          },
-        ]}
         actionsNode={
           <Button
             variant="secondary"
@@ -141,20 +139,28 @@ export default function TasksIndex() {
         }
       />
 
-      <div className="mb-1 flex w-full items-center justify-start gap-2 px-3 pt-3">
-        <TaskFilterButton
-          activeFilters={activeFilters}
-          onChange={setActiveFilters}
-        />
-        {activeFilters.map((status) => (
-          <StatusFilterChip
-            key={status}
-            status={status}
-            onRemove={() =>
-              setActiveFilters(activeFilters.filter((s) => s !== status))
-            }
+      <div className="mb-1 flex w-full items-center justify-between gap-2 px-3 pt-3">
+        <div className="flex items-center gap-2">
+          <TaskFilterButton
+            activeFilters={activeFilters}
+            recurringFilter={recurringFilter}
+            onChange={setActiveFilters}
+            onRecurringChange={setRecurringFilter}
           />
-        ))}
+          {activeFilters.map((status) => (
+            <StatusFilterChip
+              key={status}
+              status={status}
+              onRemove={() =>
+                setActiveFilters(activeFilters.filter((s) => s !== status))
+              }
+            />
+          ))}
+          {recurringFilter && (
+            <RecurringFilterChip onRemove={() => setRecurringFilter(false)} />
+          )}
+        </div>
+        <ViewOptionsButton showDone={showDone} onShowDoneChange={setShowDone} />
       </div>
 
       <div className="flex flex-1 overflow-hidden">

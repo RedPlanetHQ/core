@@ -269,6 +269,7 @@ export function GlobalChatPanel({
 
   const [activeConversation, setActiveConversation] = useState<{
     conversationId: string;
+    status: string | undefined;
     history: Array<{
       id: string;
       userType: string;
@@ -308,6 +309,7 @@ export function GlobalChatPanel({
   ) => {
     setActiveConversation({
       conversationId,
+      status: undefined,
       history: [
         {
           id: historyId,
@@ -333,6 +335,7 @@ export function GlobalChatPanel({
       const conv = historyFetcher.data.conversation;
       setActiveConversation({
         conversationId: pendingHistoryId.current,
+        status: conv.status,
         history: conv.ConversationHistory ?? [],
       });
       pendingHistoryId.current = null;
@@ -390,6 +393,7 @@ export function GlobalChatPanel({
           <ConversationView
             conversationId={activeConversation.conversationId}
             history={activeConversation.history}
+            conversationStatus={activeConversation.status}
             autoRegenerate
             integrationAccountMap={integrationAccountMap}
             models={models}

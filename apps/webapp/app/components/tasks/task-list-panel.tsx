@@ -7,7 +7,7 @@ import {
   type Index,
   type ListRowProps,
 } from "react-virtualized";
-import { Plus, ArrowUpRight } from "lucide-react";
+import { Plus, ArrowUpRight, RefreshCw } from "lucide-react";
 import type { TaskStatus } from "@core/database";
 import { Button } from "~/components/ui";
 import { Badge } from "~/components/ui/badge";
@@ -21,6 +21,7 @@ import {
 import { Task as TaskIcon } from "~/components/icons/task";
 import type { TaskWithRelations } from "~/services/task.server";
 import { SubTask } from "../icons/sub-task";
+import { ButlerRunBadge } from "~/components/tasks/butler-run-badge";
 
 const STATUS_ORDER: TaskStatus[] = [
   "Waiting",
@@ -92,9 +93,7 @@ function TaskRowItem({
   onClick: () => void;
   onStatusChange: (status: string) => void;
 }) {
-  const doneSubtasks = task.subtasks.filter(
-    (s) => s.status === "Done",
-  ).length;
+  const doneSubtasks = task.subtasks.filter((s) => s.status === "Done").length;
   const totalSubtasks = task.subtasks.length;
 
   return (
@@ -139,6 +138,18 @@ function TaskRowItem({
               </div>
 
               <div className="flex shrink-0 items-center gap-1.5">
+                {task.schedule && (
+                  <RefreshCw
+                    size={13}
+                    className="text-muted-foreground shrink-0"
+                  />
+                )}
+                {task.nextRunAt && (
+                  <ButlerRunBadge
+                    nextRunAt={task.nextRunAt as unknown as string}
+                    isRecurring={!!task.schedule}
+                  />
+                )}
                 {task.source && task.source !== "manual" && (
                   <Badge variant="secondary" className="gap-1 text-xs">
                     <span className="text-muted-foreground">{task.source}</span>

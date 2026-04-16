@@ -279,6 +279,7 @@ pub fn run() {
             get_app_icon,
             store_pat,
             get_gateway_id,
+            coding_config::check_corebrain_installed,
             coding_config::get_coding_agents,
             pty::spawn_pty,
             pty::write_pty,

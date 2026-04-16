@@ -1,5 +1,5 @@
 import { RiGithubFill, RiMailFill, RiLinkedinFill } from "@remixicon/react";
-import { Chromium, Code, Globe, LayoutGrid } from "lucide-react";
+import { Chromium, Code, Globe, LayoutGrid, RefreshCw } from "lucide-react";
 import { LinearIcon, SlackIcon } from "./icons";
 import { Cursor } from "./icons/cursor";
 import { Claude } from "./icons/claude";
@@ -144,5 +144,5 @@ export const TaskStatusIcons: Record<TaskStatus, React.ElementType> = {
   Working: InProgressLine,
   Review: InReviewLine,
   Done: DoneFill,
-  Recurring: InProgressLine,
+  Recurring: RefreshCw,
 };
