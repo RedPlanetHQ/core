@@ -33,6 +33,7 @@ import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { getLastCodingSession } from "~/services/coding/coding-session.server";
 import { DirectOrchestratorTools } from "./executors";
+import { getTaskPhase } from "~/services/task.phase";
 
 interface BuildAgentContextParams {
   userId: string;
@@ -340,9 +341,9 @@ export async function buildAgentContext({
 
   // Task context (when conversation was created from a task)
   if (linkedTask) {
-    const isPrepPhase = linkedTask.status === "Todo";
-    const isExecuting =
-      linkedTask.status === "Working" || linkedTask.status === "Ready";
+    const phase = getTaskPhase(linkedTask);
+    const isPrepPhase = phase === "prep";
+    const isExecuting = phase === "execute";
 
     const isSubtask = !!linkedTask.parentTaskId;
     const taskMeta = (linkedTask.metadata as Record<string, unknown>) ?? {};

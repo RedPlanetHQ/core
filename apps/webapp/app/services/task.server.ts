@@ -15,6 +15,13 @@ import {
   getPageContentAsHtml,
 } from "~/services/hocuspocus/content.server";
 import { updateTaskTitleInPages } from "~/services/hocuspocus/page-outlinks.server";
+import {
+  canTransition,
+  getTaskPhase,
+  inferNewPhase,
+  setTaskPhaseInMetadata,
+  type TransitionActor,
+} from "~/services/task.phase";
 
 // ============================================================================
 // Interfaces
@@ -73,12 +80,18 @@ export async function createTask(
     }
   }
 
+  const effectiveStatus = options?.status ?? "Todo";
+  // Initial phase: Todo → prep, everything else → execute (e.g., recurring
+  // tasks created in Ready via createScheduledTask skip prep entirely).
+  const initialPhase = effectiveStatus === "Todo" ? "prep" : "execute";
+
   const task = await prisma.task.create({
     data: {
       title,
-      status: options?.status ?? "Todo",
+      status: effectiveStatus,
       workspaceId,
       userId,
+      metadata: setTaskPhaseInMetadata(null, initialPhase),
       ...(options?.source && { source: options.source }),
       ...(resolvedParentTaskId && { parentTaskId: resolvedParentTaskId }),
     },
@@ -89,12 +102,32 @@ export async function createTask(
     await setPageContentFromHtml(page.id, description);
   }
 
-  // Auto-enqueue Todo tasks for agent processing
-  const effectiveStatus = options?.status ?? "Todo";
+  // Buffer wake-up: freshly-created Todo tasks sit for 2 minutes so the user
+  // can edit freely. At expiry, the scheduled-task wake-up handler starts
+  // prep. (Scheduled/recurring tasks use the different createScheduledTask
+  // entry and skip this buffer.)
   if (effectiveStatus === "Todo") {
-    enqueueTask({ taskId: task.id, workspaceId, userId }).catch((err) =>
-      logger.warn("Failed to enqueue new Todo task", { err, taskId: task.id }),
-    );
+    const nextRunAt = new Date(Date.now() + 2 * 60 * 1000);
+    await prisma.task.update({
+      where: { id: task.id },
+      data: { nextRunAt },
+    });
+    try {
+      await enqueueScheduledTask(
+        {
+          taskId: task.id,
+          workspaceId,
+          userId,
+          channel: task.channel ?? "email",
+        },
+        nextRunAt,
+      );
+    } catch (err) {
+      logger.warn("Failed to enqueue buffer wake-up for new Todo task", {
+        err,
+        taskId: task.id,
+      });
+    }
   }
 
   return prisma.task.findUniqueOrThrow({ where: { id: task.id } });
@@ -238,7 +271,21 @@ export async function changeTaskStatus(
   status: TaskStatus,
   workspaceId: string,
   userId: string,
+  actor: TransitionActor = "agent",
 ): Promise<Task> {
+  const current = await prisma.task.findUnique({ where: { id: taskId } });
+  if (!current) throw new Error(`Task ${taskId} not found`);
+
+  const currentPhase = getTaskPhase(current);
+  if (!canTransition(current.status, status, currentPhase, actor)) {
+    throw new Error(
+      `Invalid transition: ${current.status} -> ${status} in phase ${currentPhase} by ${actor}`,
+    );
+  }
+
+  const newPhase = inferNewPhase(current.status, status, currentPhase);
+  const newMetadata = setTaskPhaseInMetadata(current.metadata, newPhase);
+
   if (status === "Todo" || status === "Waiting" || status === "Review") {
     await cancelTaskJob(taskId);
   }
@@ -250,7 +297,15 @@ export async function changeTaskStatus(
     const nextSubtask = await getNextBacklogSubtask(taskId);
     if (nextSubtask) {
       await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
-      await updateTaskStatus(taskId, "Working");
+      // Parent flips directly to Working/execute (subtask sequencing is its own
+      // engine; parent doesn't need its own prep pass).
+      await prisma.task.update({
+        where: { id: taskId },
+        data: {
+          status: "Working",
+          metadata: setTaskPhaseInMetadata(current.metadata, "execute"),
+        },
+      });
       return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
     }
     // No subtasks — enqueue the task itself (existing behavior)
@@ -259,21 +314,27 @@ export async function changeTaskStatus(
 
   // Subtask completed — enqueue next Todo sibling, or auto-complete parent if all done
   if (status === "Done") {
-    const currentTask = await getTaskById(taskId);
-    if (currentTask?.parentTaskId) {
-      const nextSibling = await getNextBacklogSubtask(currentTask.parentTaskId);
+    if (current.parentTaskId) {
+      const nextSibling = await getNextBacklogSubtask(current.parentTaskId);
       if (nextSibling) {
         await enqueueTask({ taskId: nextSibling.id, workspaceId, userId });
       } else {
         // No more Backlog siblings — check if all subtasks are done
         const activeSubtasks = await prisma.task.count({
           where: {
-            parentTaskId: currentTask.parentTaskId,
+            parentTaskId: current.parentTaskId,
             status: { in: ["Todo", "Working"] },
           },
         });
         if (activeSubtasks === 0) {
-          await updateTaskStatus(currentTask.parentTaskId, "Done");
+          // Parent auto-completion is a system-on-behalf-of-user transition.
+          await changeTaskStatus(
+            current.parentTaskId,
+            "Done",
+            workspaceId,
+            userId,
+            "user",
+          );
         }
       }
     }
@@ -281,8 +342,7 @@ export async function changeTaskStatus(
 
   // If moving a recurring/scheduled task to Done or Waiting, deactivate scheduling
   if (status === "Done" || status === "Waiting") {
-    const task = await getTaskById(taskId);
-    if (task?.nextRunAt || task?.schedule) {
+    if (current.nextRunAt || current.schedule) {
       await removeScheduledTask(taskId);
       await prisma.task.update({
         where: { id: taskId },
@@ -291,7 +351,10 @@ export async function changeTaskStatus(
     }
   }
 
-  const task = await updateTaskStatus(taskId, status);
+  const task = await prisma.task.update({
+    where: { id: taskId },
+    data: { status, metadata: newMetadata },
+  });
   return task;
 }
 
@@ -306,9 +369,14 @@ export async function markTaskInProcess(
   id: string,
   jobId?: string,
 ): Promise<Task> {
+  const existing = await prisma.task.findUnique({ where: { id } });
   return prisma.task.update({
     where: { id },
-    data: { status: "Working", ...(jobId && { jobId }) },
+    data: {
+      status: "Working",
+      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, "execute"),
+      ...(jobId && { jobId }),
+    },
   });
 }
 
@@ -316,9 +384,14 @@ export async function markTaskCompleted(
   id: string,
   result: string,
 ): Promise<Task> {
+  const existing = await prisma.task.findUnique({ where: { id } });
   return prisma.task.update({
     where: { id },
-    data: { status: "Review", result },
+    data: {
+      status: "Review",
+      metadata: setTaskPhaseInMetadata(existing?.metadata ?? null, "execute"),
+      result,
+    },
   });
 }
 
@@ -467,7 +540,10 @@ export async function createScheduledTask(
     nextRunAt = computeNextRun(data.schedule, timezone, afterTime);
   }
 
-  const status: TaskStatus = "Todo";
+  // Scheduled/recurring tasks skip the prep phase — the user already told us
+  // when to run and (implicitly) what to do. The first execution handles any
+  // clarification in the execution conversation, not a separate prep pass.
+  const status: TaskStatus = "Ready";
 
   const task = await prisma.task.create({
     data: {
@@ -485,7 +561,7 @@ export async function createScheduledTask(
       endDate: data.endDate ?? null,
       parentTaskId: data.parentTaskId ?? null,
       isActive: true,
-      metadata: data.metadata ?? undefined,
+      metadata: setTaskPhaseInMetadata(data.metadata ?? null, "execute"),
     },
   });
 
@@ -631,6 +707,27 @@ export async function scheduleNextTaskOccurrence(
     where: { id: taskId },
     data: { nextRunAt },
   });
+
+  // Loop Review/Working back to Ready for the next fire. Recurring tasks
+  // never reach Done automatically — the user disables or deletes them to
+  // stop the recurrence.
+  if (task.status === "Review" || task.status === "Working") {
+    try {
+      await changeTaskStatus(
+        taskId,
+        "Ready",
+        task.workspaceId,
+        task.userId,
+        "system",
+      );
+    } catch (err) {
+      logger.warn("Failed to loop recurring task back to Ready", {
+        err,
+        taskId,
+        fromStatus: task.status,
+      });
+    }
+  }
 
   await enqueueScheduledTask(
     {

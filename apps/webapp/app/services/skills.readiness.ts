@@ -41,7 +41,7 @@ export const READINESS_SKILL_DEFINITIONS: ReadinessSkillDef[] = [
 
 4. USE CONTEXT. Check the conversation history, their recent tasks, what integrations they have connected. If the answer is inferrable, don't ask.
 
-5. MAX 3 QUESTIONS total. If you still don't understand after 3 questions, proceed with your best interpretation and state your assumptions: "I'm going to focus on X — let me know if you meant something different."
+5. KEEP GOING UNTIL YOU KNOW. No hard cap on questions — exit when you have enough to propose a concrete shape, not when you've asked N times. If you've asked several questions and it's still fuzzy, propose your best interpretation and ASK for confirmation: "Based on what you said, I'm going to do X. Sound right?" Let the user correct rather than guessing silently.
 
 ## Evaluating Answers
 
@@ -56,7 +56,8 @@ When the user answers your question:
 - Asking multiple questions in one message
 - Asking open-ended "what do you want?" instead of offering specific options
 - Asking about things that don't affect the outcome ("what format do you want?" when there's only one reasonable format)
-- Continuing to ask after 3 questions — commit to an interpretation
+- Acting on partial information just because you've asked "enough" questions — propose and confirm instead
+- Asking the SAME question rephrased — if the user's last answer didn't help, change angle or propose a concrete interpretation
 
 ## After Gathering
 
@@ -126,7 +127,8 @@ Does this look right?"
 - Presenting 3 options and asking "which do you prefer?" — just recommend one
 - Over-designing: adding monitoring, fallbacks, edge cases they didn't ask for
 - Proposing something that requires integrations they don't have connected
-- Going back and forth more than 2 rounds — if it's not converging, commit to your best interpretation
+- Stopping the loop while the user is still engaging — iterate as long as they're refining
+- Changing the proposal without confirming — when user adjusts, re-propose the updated shape and ask "does this look right now?"
 - Writing a formal spec — this is a conversation, not a document
 
 ## After Brainstorming

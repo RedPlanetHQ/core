@@ -184,8 +184,9 @@ export async function checkWaitingTaskReply(
   });
 
   for (const task of tasks) {
-    // Move to Ready — changeTaskStatus handles auto-enqueue
-    await changeTaskStatus(task.id, "Ready", workspaceId, userId);
+    // Move to Ready — changeTaskStatus handles auto-enqueue. This is
+    // triggered by a user reply, so it's a user-driven transition.
+    await changeTaskStatus(task.id, "Ready", workspaceId, userId, "user");
 
     logger.info("Waiting task reply detected, moved to Ready", {
       taskId: task.id,

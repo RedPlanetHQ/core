@@ -68,14 +68,26 @@ export async function applyScheduleToTask(
       isActive: true,
     });
     if (result.scheduleText) {
+      // Merge scheduleText into existing metadata (preserves phase, etc.)
+      const existing = await prisma.task.findUnique({ where: { id: taskId } });
+      const mergedMeta = {
+        ...((existing?.metadata as Record<string, unknown>) ?? {}),
+        scheduleText: result.scheduleText,
+      };
       await prisma.task.update({
         where: { id: taskId },
-        data: { metadata: { scheduleText: result.scheduleText } },
+        data: { metadata: mergedMeta },
       });
     }
   } else if (result.startTime) {
     const nextRunAt = new Date(result.startTime);
     const task = await prisma.task.findUnique({ where: { id: taskId } });
+    const mergedMeta = result.scheduleText
+      ? {
+          ...((task?.metadata as Record<string, unknown>) ?? {}),
+          scheduleText: result.scheduleText,
+        }
+      : undefined;
     await prisma.task.update({
       where: { id: taskId },
       data: {
@@ -83,9 +95,7 @@ export async function applyScheduleToTask(
         nextRunAt,
         isActive: true,
         maxOccurrences: 1,
-        ...(result.scheduleText && {
-          metadata: { scheduleText: result.scheduleText },
-        }),
+        ...(mergedMeta && { metadata: mergedMeta }),
       },
     });
     await removeScheduledTask(taskId);

@@ -100,6 +100,7 @@ export async function action({ request }: ActionFunctionArgs) {
       parsed.data.status as TaskStatus,
       workspaceId,
       user.id,
+      "user",
     );
     return json({ task });
   }

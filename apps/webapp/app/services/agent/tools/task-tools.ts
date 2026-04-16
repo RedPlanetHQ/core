@@ -301,12 +301,19 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             }
             // Move to target status — Ready triggers auto-execution, Waiting gates on approval
             if (initialStatus && initialStatus !== "Todo") {
-              await changeTaskStatus(
-                task.id,
-                initialStatus as any,
-                workspaceId,
-                userId,
-              );
+              try {
+                await changeTaskStatus(
+                  task.id,
+                  initialStatus as TaskStatus,
+                  workspaceId,
+                  userId,
+                  "agent",
+                );
+              } catch (err) {
+                const msg =
+                  err instanceof Error ? err.message : String(err);
+                return `Task created but initial status rejected: ${msg}. Task remains in Todo.`;
+              }
             }
             const label = parentTaskId ? "subtask" : "task";
             const targetStatus = initialStatus ?? "Todo";
@@ -621,12 +628,19 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
             // Tasks that were rescheduled via reschedule_self have nextRunAt but no schedule — allow status changes for those.
             const isRecurring = !!currentTask?.schedule;
             if (!isRecurring) {
-              await changeTaskStatus(
-                taskId,
-                status as TaskStatus,
-                workspaceId,
-                userId,
-              );
+              try {
+                await changeTaskStatus(
+                  taskId,
+                  status as TaskStatus,
+                  workspaceId,
+                  userId,
+                  "agent",
+                );
+              } catch (err) {
+                const msg =
+                  err instanceof Error ? err.message : String(err);
+                return `Status change rejected: ${msg}. Only the user can move a task to Done, and phase transitions must go through Ready (not Working directly).`;
+              }
             }
           }
 
@@ -680,7 +694,7 @@ REPARENTING: Pass newParentId to move a task under a different parent (or null t
               await setPageContentFromHtml(task.pageId, mergedHtml);
             }
 
-            await changeTaskStatus(taskId, "Ready", workspaceId, userId);
+            await changeTaskStatus(taskId, "Ready", workspaceId, userId, "user");
             return `Task "${task.title}" approved and moved to Ready. Reason appended to description.`;
           } catch (error) {
             return `Failed to unblock task: ${error instanceof Error ? error.message : "Unknown error"}`;

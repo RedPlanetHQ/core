@@ -185,6 +185,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       parsed.data.status as TaskStatus,
       workspaceId,
       user.id,
+      "user",
     );
     return json({ task });
   }
@@ -214,6 +215,7 @@ export async function action({ request, params }: ActionFunctionArgs) {
       parsed.data.status as TaskStatus,
       workspaceId,
       user.id,
+      "user",
     );
     return json({ task });
   }

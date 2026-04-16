@@ -207,6 +207,7 @@ describe("checkWaitingTaskReply", () => {
       "Ready",
       "workspace-1",
       "user-1",
+      "user",
     );
   });
 
@@ -231,6 +232,7 @@ describe("checkWaitingTaskReply", () => {
       "Ready",
       "workspace-1",
       "user-1",
+      "user",
     );
   });
 
@@ -259,6 +261,7 @@ describe("checkWaitingTaskReply", () => {
       "Ready",
       "workspace-1",
       "user-1",
+      "user",
     );
   });
 
