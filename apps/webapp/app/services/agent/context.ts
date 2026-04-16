@@ -32,6 +32,8 @@ import { type MessageListInput } from "@mastra/core/agent/message-list";
 import { type ModelConfig } from "~/services/llm-provider.server";
 import { getPageContentAsHtml } from "~/services/hocuspocus/content.server";
 import { getLastCodingSession } from "~/services/coding/coding-session.server";
+import { env } from "~/env.server";
+import { logger } from "~/services/logger.service";
 import { DirectOrchestratorTools } from "./executors";
 import { getTaskPhase } from "~/services/task.phase";
 
@@ -76,6 +78,148 @@ interface AgentContext {
   gatewayAgents: Agent[];
   /** True when running as a background task — ask_user should not be registered */
   isBackgroundExecution: boolean;
+}
+
+function hasApprovalStateDeep(parts: any[]): boolean {
+  for (const part of parts) {
+    if (!part || typeof part !== "object") continue;
+    if (
+      part.state === "approval-requested" ||
+      part.state === "approval-responded"
+    ) {
+      return true;
+    }
+
+    const nestedParts = Array.isArray(part.output?.parts)
+      ? part.output.parts
+      : Array.isArray(part.output?.content)
+        ? part.output.content
+        : [];
+
+    if (nestedParts.length > 0 && hasApprovalStateDeep(nestedParts)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function getTopLevelTextParts(parts: any[]): Array<{ type: "text"; text: string }> {
+  return parts
+    .filter((part) => part?.type === "text" && typeof part.text === "string")
+    .map((part) => ({ type: "text" as const, text: part.text.trim() }))
+    .filter((part) => part.text.length > 0);
+}
+
+function hasOnlyNonEmptyTextParts(parts: any[]): boolean {
+  return (
+    parts.length > 0 &&
+    parts.every(
+      (part) =>
+        part?.type === "text" &&
+        typeof part.text === "string" &&
+        part.text.trim().length > 0,
+    )
+  );
+}
+
+function getToolSummary(parts: any[]): string | null {
+  const tools = parts
+    .filter((part) => typeof part?.type === "string" && part.type.includes("tool-"))
+    .map((part) => {
+      const toolName = String(part.type).replace("tool-", "");
+      const state =
+        typeof part.state === "string" && part.state.length > 0
+          ? ` (${part.state})`
+          : "";
+      return `${toolName}${state}`;
+    });
+
+  if (tools.length === 0) return null;
+
+  return `Prior tool activity omitted for brevity: ${tools.join(", ")}.`;
+}
+
+function sanitizeAssistantMessageForModelContext(message: any) {
+  const normalizedParts = Array.isArray(message?.parts)
+    ? message.parts.filter(Boolean)
+    : [];
+
+  if (normalizedParts.length === 0) {
+    return message;
+  }
+
+  const textParts = getTopLevelTextParts(normalizedParts);
+  if (textParts.length > 0) {
+    if (hasOnlyNonEmptyTextParts(normalizedParts)) {
+      return message;
+    }
+
+    return {
+      ...message,
+      parts: textParts,
+    };
+  }
+
+  const toolSummary = getToolSummary(normalizedParts);
+  if (toolSummary) {
+    return {
+      ...message,
+      parts: [{ type: "text", text: toolSummary }],
+    };
+  }
+
+  // Preserve unrecognized assistant-only shapes on current main
+  // rather than dropping them from model context entirely.
+  return message;
+}
+
+function sanitizeMessagesForModelContext(messages: any[]) {
+  let assistantMessagesSanitized = 0;
+  let assistantToolPartsDropped = 0;
+
+  const sanitized = messages.map((message) => {
+    const normalizedParts = Array.isArray(message?.parts)
+      ? message.parts.filter(Boolean)
+      : [];
+
+    if (
+      message?.role === "assistant" &&
+      normalizedParts.length > 0 &&
+      !hasApprovalStateDeep(normalizedParts)
+    ) {
+      const toolParts = normalizedParts.filter(
+        (part) => typeof part?.type === "string" && part.type.includes("tool-"),
+      ).length;
+      const sanitizedMessage =
+        sanitizeAssistantMessageForModelContext(message);
+
+      if (sanitizedMessage !== message) {
+        assistantMessagesSanitized += 1;
+        assistantToolPartsDropped += toolParts;
+      }
+
+      return sanitizedMessage;
+    }
+
+    return message;
+  });
+
+  if (assistantMessagesSanitized > 0) {
+    const rawChars = JSON.stringify(messages).length;
+    const sanitizedChars = JSON.stringify(sanitized).length;
+    logger.info("Agent context sanitized conversation history", {
+      assistantMessagesSanitized,
+      assistantToolPartsDropped,
+      originalMessages: messages.length,
+      sanitizedMessages: sanitized.length,
+      rawChars,
+      sanitizedChars,
+      reducedChars: rawChars - sanitizedChars,
+    });
+  }
+
+  return sanitized;
 }
 
 export async function buildAgentContext({
@@ -524,9 +668,13 @@ Keep your response concise — this shows up on a scratchpad, not a chat convers
 </scratchpad_context>`;
   }
 
+  const contextMessages = env.LLM_SANITIZE_AGENT_HISTORY
+    ? sanitizeMessagesForModelContext(finalMessages)
+    : finalMessages;
+
   // Convert UI messages to Mastra-compatible ModelMessage format
   const modelMessages: MessageListInput = convertMessages(
-    finalMessages as MessageListInput,
+    contextMessages as MessageListInput,
   ).to("AIV5.Model");
 
   return {

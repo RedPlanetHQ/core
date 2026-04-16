@@ -129,6 +129,11 @@ const EnvironmentSchema = z
     EMBEDDING_MODEL_SIZE: z.string().default("1024"),
     MODEL_TEMPERATURE: z.coerce.number().default(1),
     LLM_TOLERANT_OUTPUT: z.string().optional(),
+    LLM_SANITIZE_AGENT_HISTORY: z
+      .string()
+      .optional()
+      .default("false")
+      .transform((val) => val === "true" || val === "1"),
     OLLAMA_URL: z.string().optional(),
     CHAT_PROVIDER: z.enum(["openai", "anthropic", "google", "ollama", "azure"]).default("openai"),
     EMBEDDINGS_PROVIDER: z.enum(["openai", "google", "ollama", "azure"]).optional(),
