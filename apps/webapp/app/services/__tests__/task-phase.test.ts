@@ -87,6 +87,18 @@ describe("canTransition", () => {
     expect(canTransition("Working", "Waiting", "execute", "agent")).toBe(true);
   });
 
+  it("allows agent Ready -> Review (synchronous finish without Working step)", () => {
+    expect(canTransition("Ready", "Review", "execute", "agent")).toBe(true);
+  });
+
+  it("allows agent Ready -> Waiting (needs input before starting)", () => {
+    expect(canTransition("Ready", "Waiting", "execute", "agent")).toBe(true);
+  });
+
+  it("allows agent Waiting -> Review (trivial completion from waiting)", () => {
+    expect(canTransition("Waiting", "Review", "execute", "agent")).toBe(true);
+  });
+
   // Forbidden butler transitions
   it("forbids agent Review -> Done (user only)", () => {
     expect(canTransition("Review", "Done", "execute", "agent")).toBe(false);
@@ -100,8 +112,16 @@ describe("canTransition", () => {
     expect(canTransition("Waiting", "Working", "prep", "agent")).toBe(false);
   });
 
-  it("forbids agent Prep-phase -> Review directly", () => {
-    expect(canTransition("Todo", "Review", "prep", "agent")).toBe(false);
+  it("allows agent Todo -> Review (synchronous finish during prep)", () => {
+    expect(canTransition("Todo", "Review", "prep", "agent")).toBe(true);
+  });
+
+  it("allows agent Waiting -> Review in prep phase", () => {
+    expect(canTransition("Waiting", "Review", "prep", "agent")).toBe(true);
+  });
+
+  it("allows user Todo -> Review", () => {
+    expect(canTransition("Todo", "Review", "prep", "user")).toBe(true);
   });
 
   // User-driven transitions
@@ -158,6 +178,11 @@ describe("inferNewPhase", () => {
   it("moves to execute on fire-override", () => {
     expect(inferNewPhase("Todo", "Working", "prep")).toBe("execute");
     expect(inferNewPhase("Waiting", "Working", "prep")).toBe("execute");
+  });
+
+  it("moves to execute on prep-phase synchronous finish (Todo/Waiting -> Review)", () => {
+    expect(inferNewPhase("Todo", "Review", "prep")).toBe("execute");
+    expect(inferNewPhase("Waiting", "Review", "prep")).toBe("execute");
   });
 
   it("stays in execute for recurring Review -> Ready loop", () => {

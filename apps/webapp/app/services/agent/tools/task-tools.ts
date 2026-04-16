@@ -157,10 +157,10 @@ FOLLOW-UP: Set isFollowUp=true and parentTaskId to reschedule an existing task.`
             .optional()
             .describe("ID of the parent task. Required if isFollowUp is true."),
           status: z
-            .enum(["Todo", "Waiting"])
+            .enum(["Todo", "Waiting", "Ready"])
             .optional()
             .describe(
-              "Initial status. Todo=active planning/work item (default). Waiting=needs user approval before execution.",
+              "Initial status. Todo=default, enters 2-min prep buffer so user can edit before butler starts. Waiting=needs user approval before execution. Ready=skip prep entirely, execute immediately (use only when the request is unambiguous and you've already gathered everything you need).",
             ),
           skillId: z
             .string()

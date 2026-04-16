@@ -98,9 +98,14 @@ export function canTransition(
     if (PHASE_1_STATUSES.includes(from) && PHASE_1_STATUSES.includes(to)) {
       return true;
     }
-    // Todo/Waiting → Ready is the only exit door from Phase 1 to Phase 2
-    // and is allowed for agent (butler decides ready) and user (force-promote).
+    // Todo/Waiting → Ready: agent (butler decides ready) or user (force-promote).
     if (PHASE_1_STATUSES.includes(from) && to === "Ready") {
+      return actor === "agent" || actor === "user";
+    }
+    // Todo/Waiting → Review: synchronous finish during prep — butler answered
+    // the user inline or the work turned out to be trivial/already-done and no
+    // execution step is needed. Allowed for agent and user.
+    if (PHASE_1_STATUSES.includes(from) && to === "Review") {
       return actor === "agent" || actor === "user";
     }
     // System-only: fire-override from Phase 1 to Working.
@@ -117,12 +122,23 @@ export function canTransition(
     if (from === "Ready" && to === "Working") {
       return actor === "system" || actor === "user";
     }
+    // Ready → Review (butler finished without needing an execution step —
+    // e.g., pure research/planning task done synchronously) or Ready → Waiting
+    // (butler needs input before it can even start).
+    if (from === "Ready" && (to === "Review" || to === "Waiting")) {
+      return true;
+    }
     // Working → Waiting (butler blocked), Working → Review (butler done).
     if (from === "Working" && (to === "Waiting" || to === "Review")) {
       return true;
     }
     // Waiting → Working (user answered, butler resumes).
     if (from === "Waiting" && to === "Working") {
+      return true;
+    }
+    // Waiting → Review (butler finished from a waiting state without needing
+    // more work — e.g., user answer made the task trivially complete).
+    if (from === "Waiting" && to === "Review") {
       return true;
     }
     // Review → Waiting (user rejected, more work needed).

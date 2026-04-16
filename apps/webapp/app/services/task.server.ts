@@ -288,10 +288,35 @@ export async function changeTaskStatus(
 
   if (status === "Todo" || status === "Waiting" || status === "Review") {
     await cancelTaskJob(taskId);
+    // Also cancel any pending scheduled wake-up (e.g., the Todo 2-min buffer
+    // wake-up, or a stale one-time scheduled fire). None of these states
+    // should have a pending wake-up. Skip for recurring tasks — their
+    // nextRunAt is owned by scheduleNextTaskOccurrence.
+    if (!current.schedule && current.nextRunAt) {
+      await removeScheduledTask(taskId);
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { nextRunAt: null },
+      });
+    }
   }
 
   // Auto-start execution when task moves to Ready
   if (status === "Ready") {
+    // If this transition is skipping ahead of a pending scheduled wake-up
+    // (typical for the Todo+buffer case, or butler/user promoting early), we
+    // must cancel the stale scheduled wake-up and clear nextRunAt — otherwise
+    // the wake-up fires after execution starts and runs the pipeline a second
+    // time. Only do this for non-recurring tasks; recurring tasks own their
+    // nextRunAt via scheduleNextTaskOccurrence.
+    if (!current.schedule && current.nextRunAt) {
+      await removeScheduledTask(taskId);
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { nextRunAt: null },
+      });
+    }
+
     // Check if this task has Todo subtasks — if so, enqueue the first one
     // instead of the parent, and move parent to Working
     const nextSubtask = await getNextBacklogSubtask(taskId);
