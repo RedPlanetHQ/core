@@ -9,22 +9,7 @@ import {
 import { Badge } from "~/components/ui/badge";
 import { Button } from "~/components/ui/button";
 import { Plug, Trash2 } from "lucide-react";
-
-export type McpIntegration = {
-  id: string;
-  name: string;
-  serverUrl: string;
-  oauth?: {
-    accessToken: string;
-    refreshToken?: string;
-    expiresIn?: number;
-    clientId?: string;
-  };
-  apiKey?: {
-    key: string;
-    headerType: "x-api-key" | "Authorization";
-  };
-};
+import type { CustomMcpIntegration as McpIntegration } from "~/utils/mcp/custom-mcp-config";
 
 interface CustomMcpCardProps {
   integration: McpIntegration;
@@ -80,6 +65,12 @@ export function CustomMcpCard({
         <CardTitle className="mt-2 text-base">{integration.name}</CardTitle>
         <CardDescription className="line-clamp-2 text-sm">
           {integration.serverUrl}
+        </CardDescription>
+        <CardDescription className="text-xs">
+          {(integration.transportStrategy || "http-first").replace("-", " · ")}
+          {(integration.headers?.length ?? 0) > 0
+            ? ` · ${integration.headers?.length} header${integration.headers?.length === 1 ? "" : "s"}`
+            : ""}
         </CardDescription>
       </CardHeader>
     </Card>

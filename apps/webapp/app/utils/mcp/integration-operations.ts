@@ -178,11 +178,14 @@ export async function getIntegrationActions(
         : await createCustomMcpClient({
             serverUrl: account.serverUrl,
             credentials: {
-              accessToken: account.accessToken!,
+              accessToken: account.accessToken,
               refreshToken: account.integrationConfiguration.refreshToken,
               expiresIn: account.integrationConfiguration.expiresIn,
               clientId: account.integrationConfiguration.clientId,
+              clientSecret: account.integrationConfiguration.clientSecret,
             },
+            headers: account.headers,
+            transportStrategy: account.transportStrategy,
             onTokensRefreshed: userId
               ? createTokenRefreshCallback(userId, account.id)
               : undefined,
@@ -297,11 +300,14 @@ export async function executeIntegrationAction(
           : await createCustomMcpClient({
               serverUrl: account.serverUrl,
               credentials: {
-                accessToken: account.accessToken!,
+                accessToken: account.accessToken,
                 refreshToken: account.integrationConfiguration.refreshToken,
                 expiresIn: account.integrationConfiguration.expiresIn,
                 clientId: account.integrationConfiguration.clientId,
+                clientSecret: account.integrationConfiguration.clientSecret,
               },
+              headers: account.headers,
+              transportStrategy: account.transportStrategy,
               onTokensRefreshed: createTokenRefreshCallback(userId, account.id),
             });
 

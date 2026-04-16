@@ -20,6 +20,7 @@ import { PageHeader } from "~/components/common/page-header";
 import { Plus, Search } from "lucide-react";
 import { prisma } from "~/db.server";
 import { updateUser } from "~/models/user.server";
+import { env } from "~/env.server";
 
 import { Button, Input } from "~/components/ui";
 import {
@@ -37,6 +38,13 @@ import {
   CardTitle,
 } from "~/components/ui/card";
 import { useToast } from "~/hooks/use-toast";
+import {
+  buildCustomMcpIntegration,
+  CUSTOM_MCP_TRANSPORT_STRATEGIES,
+  isCustomMcpIntegrationEnabled,
+  parseCustomMcpHeadersInput,
+  type CustomMcpTransportStrategy,
+} from "~/utils/mcp/custom-mcp-config";
 
 export const meta = () => [{ title: "Integrations" }];
 
@@ -50,7 +58,14 @@ export async function loader({ request }: LoaderFunctionArgs) {
   });
 
   const metadata = (user?.metadata as any) || {};
-  const mcpIntegrations = (metadata?.mcpIntegrations || []) as McpIntegration[];
+  const customMcpFeatureFlags = {
+    allowNoAuth: env.CUSTOM_MCP_ALLOW_NO_AUTH,
+    allowCustomHeaders: env.CUSTOM_MCP_ALLOW_CUSTOM_HEADERS,
+  };
+  const mcpIntegrations = ((metadata?.mcpIntegrations || []) as McpIntegration[]).filter(
+    (integration) =>
+      isCustomMcpIntegrationEnabled(integration, customMcpFeatureFlags),
+  );
 
   if (!workspace) {
     return json({
@@ -58,6 +73,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
       integrationAccounts: [],
       mcpIntegrations,
       userId,
+      customMcpFeatureFlags,
     });
   }
 
@@ -73,6 +89,7 @@ export async function loader({ request }: LoaderFunctionArgs) {
     integrationAccounts,
     mcpIntegrations,
     userId,
+    customMcpFeatureFlags,
   });
 }
 
@@ -102,6 +119,9 @@ export async function action({ request }: ActionFunctionArgs) {
         const apiKeyValue = formData.get("apiKey") as string | undefined;
         const headerType =
           (formData.get("headerType") as string) || "x-api-key";
+        const transportStrategy = (formData.get("transportStrategy") ||
+          "http-first") as CustomMcpTransportStrategy;
+        const headerConfig = formData.get("headers") as string | undefined;
 
         if (!name || !serverUrl) {
           return json(
@@ -110,10 +130,39 @@ export async function action({ request }: ActionFunctionArgs) {
           );
         }
 
-        const newIntegration: McpIntegration = {
-          id: crypto.randomUUID(),
+        if (!CUSTOM_MCP_TRANSPORT_STRATEGIES.includes(transportStrategy)) {
+          return json({ error: "Invalid transport strategy" }, { status: 400 });
+        }
+
+        if (headerConfig?.trim() && !env.CUSTOM_MCP_ALLOW_CUSTOM_HEADERS) {
+          return json(
+            { error: "Custom MCP headers are disabled" },
+            { status: 400 },
+          );
+        }
+
+        const { headers, error } = parseCustomMcpHeadersInput(headerConfig || "");
+        if (error) {
+          return json({ error }, { status: 400 });
+        }
+
+        if (
+          !accessToken?.trim() &&
+          !apiKeyValue?.trim() &&
+          headers.length === 0 &&
+          !env.CUSTOM_MCP_ALLOW_NO_AUTH
+        ) {
+          return json(
+            { error: "OAuth or direct credentials are required" },
+            { status: 400 },
+          );
+        }
+
+        const newIntegration = buildCustomMcpIntegration({
           name,
           serverUrl,
+          transportStrategy,
+          headers,
           ...(apiKeyValue && {
             apiKey: {
               key: apiKeyValue,
@@ -126,7 +175,7 @@ export async function action({ request }: ActionFunctionArgs) {
                 accessToken,
               },
             }),
-        };
+        });
 
         const updatedIntegrations = [...currentIntegrations, newIntegration];
 
@@ -179,9 +228,14 @@ export async function action({ request }: ActionFunctionArgs) {
 function NewIntegrationForm({
   onCancel,
   onSuccess,
+  featureFlags,
 }: {
   onCancel: () => void;
   onSuccess: () => void;
+  featureFlags: {
+    allowNoAuth: boolean;
+    allowCustomHeaders: boolean;
+  };
 }) {
   const fetcher = useFetcher<{
     success: boolean;
@@ -196,6 +250,10 @@ function NewIntegrationForm({
   const [headerType, setHeaderType] = useState<"x-api-key" | "Authorization">(
     "x-api-key",
   );
+  const [useOAuth, setUseOAuth] = useState(true);
+  const [transportStrategy, setTransportStrategy] =
+    useState<CustomMcpTransportStrategy>("http-first");
+  const [headersInput, setHeadersInput] = useState("");
 
   useEffect(() => {
     if (fetcher.data?.success && fetcher.data?.redirectURL) {
@@ -210,18 +268,31 @@ function NewIntegrationForm({
     }
   }, [localFetcher.data, onSuccess]);
 
+  const hasCustomHeaders =
+    featureFlags.allowCustomHeaders && headersInput.trim().length > 0;
+  const shouldCreateDirectly =
+    (authMode === "apikey" && apiKey.trim().length > 0) ||
+    accessToken.trim().length > 0 ||
+    hasCustomHeaders ||
+    (featureFlags.allowNoAuth && authMode === "oauth" && !useOAuth);
+
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
+    formData.set("transportStrategy", transportStrategy);
+    if (featureFlags.allowCustomHeaders) {
+      formData.set("headers", headersInput);
+    }
 
-    if (authMode === "apikey" && apiKey.trim()) {
+    if (shouldCreateDirectly) {
       formData.set("intent", "create");
-      formData.set("apiKey", apiKey);
-      formData.set("headerType", headerType);
-      localFetcher.submit(formData, { method: "post" });
-    } else if (accessToken.trim()) {
-      formData.set("intent", "create");
-      formData.set("accessToken", accessToken);
+      if (authMode === "apikey" && apiKey.trim()) {
+        formData.set("apiKey", apiKey);
+        formData.set("headerType", headerType);
+      }
+      if (accessToken.trim()) {
+        formData.set("accessToken", accessToken);
+      }
       localFetcher.submit(formData, { method: "post" });
     } else {
       formData.set("intent", "initiate");
@@ -241,7 +312,12 @@ function NewIntegrationForm({
       <CardHeader className="p-0 pb-4">
         <CardTitle>New Custom Integration</CardTitle>
         <CardDescription>
-          Connect an external MCP server using OAuth or an access token
+          Connect an external MCP server using OAuth, an access token, or an
+          API key.
+          {featureFlags.allowCustomHeaders
+            ? " Additional static headers are available when needed."
+            : ""}
+          {featureFlags.allowNoAuth ? " No-auth servers can also be added." : ""}
         </CardDescription>
       </CardHeader>
       <CardContent className="p-0">
@@ -285,6 +361,47 @@ function NewIntegrationForm({
               </SelectContent>
             </Select>
           </div>
+
+          <div className="space-y-2">
+            <label htmlFor="transportStrategy" className="text-sm font-medium">
+              Transport
+            </label>
+            <select
+              id="transportStrategy"
+              name="transportStrategy"
+              className="bg-background flex h-10 w-full rounded-md border px-3 py-2 text-sm"
+              value={transportStrategy}
+              onChange={(e) =>
+                setTransportStrategy(
+                  e.target.value as CustomMcpTransportStrategy,
+                )
+              }
+            >
+              <option value="http-first">HTTP first</option>
+              <option value="sse-first">SSE first</option>
+              <option value="http-only">HTTP only</option>
+              <option value="sse-only">SSE only</option>
+            </select>
+            <p className="text-muted-foreground text-xs">
+              Default is HTTP first with automatic fallback when supported.
+            </p>
+          </div>
+
+          {authMode === "oauth" && featureFlags.allowNoAuth && (
+            <div className="space-y-2">
+              <label className="flex items-center gap-2 text-sm font-medium">
+                <input
+                  type="checkbox"
+                  checked={useOAuth}
+                  onChange={(e) => setUseOAuth(e.target.checked)}
+                />
+                Use OAuth if the MCP server supports it
+              </label>
+              <p className="text-muted-foreground text-xs">
+                Turn this off for static-header or no-auth MCP servers.
+              </p>
+            </div>
+          )}
 
           {authMode === "apikey" ? (
             <div className="space-y-2">
@@ -331,8 +448,33 @@ function NewIntegrationForm({
                 onChange={(e) => setAccessToken(e.target.value)}
               />
               <p className="text-muted-foreground text-xs">
-                Provide an access token to skip OAuth, or leave empty to
-                authenticate via OAuth
+                Provide a bearer token to skip OAuth.
+                {featureFlags.allowNoAuth
+                  ? " Leave empty if the server uses OAuth, custom headers, or no auth."
+                  : " Leave empty to authenticate via OAuth."}
+              </p>
+            </div>
+          )}
+
+          {featureFlags.allowCustomHeaders && (
+            <div className="space-y-2">
+              <label htmlFor="headers" className="text-sm font-medium">
+                Additional headers (optional)
+              </label>
+              <textarea
+                id="headers"
+                name="headers"
+                className="bg-background flex min-h-28 w-full rounded-md border px-3 py-2 text-sm"
+                placeholder={[
+                  "X-API-Key=env:MCP_EXAMPLE_API_KEY",
+                  "X-Tenant=acme",
+                ].join("\n")}
+                value={headersInput}
+                onChange={(e) => setHeadersInput(e.target.value)}
+              />
+              <p className="text-muted-foreground text-xs">
+                One header per line. Use <code>Header=env:MCP_KEY</code> for
+                env-backed secrets. Only <code>MCP_*</code> env vars are allowed.
               </p>
             </div>
           )}
@@ -356,7 +498,7 @@ function NewIntegrationForm({
                 ? "Connecting..."
                 : isRedirecting
                   ? "Redirecting..."
-                  : authMode === "apikey" || accessToken.trim()
+                  : shouldCreateDirectly
                     ? "Add Integration"
                     : "Connect with OAuth"}
             </Button>
@@ -368,8 +510,12 @@ function NewIntegrationForm({
 }
 
 export default function Integrations() {
-  const { integrationDefinitions, integrationAccounts, mcpIntegrations } =
-    useLoaderData<typeof loader>();
+  const {
+    integrationDefinitions,
+    integrationAccounts,
+    mcpIntegrations,
+    customMcpFeatureFlags,
+  } = useLoaderData<typeof loader>();
   const revalidator = useRevalidator();
   const [showNewForm, setShowNewForm] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
@@ -424,7 +570,6 @@ export default function Integrations() {
       <PageHeader title="Integrations" />
       <div className="home flex h-page-sm justify-center overflow-y-auto p-4 px-5 md:h-page">
         <div className="flex w-full max-w-3xl flex-col items-center gap-6">
-          {/* Integrations Section */}
           <div className="w-full space-y-3">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -450,7 +595,6 @@ export default function Integrations() {
             />
           </div>
 
-          {/* Custom MCP Integrations Section */}
           <div className="w-full space-y-3">
             <div className="flex items-start justify-between">
               <div>
@@ -478,6 +622,7 @@ export default function Integrations() {
                   setShowNewForm(false);
                   revalidator.revalidate();
                 }}
+                featureFlags={customMcpFeatureFlags}
               />
             )}
 

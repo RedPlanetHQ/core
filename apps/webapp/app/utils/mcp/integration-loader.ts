@@ -1,21 +1,13 @@
 import { prisma } from "~/db.server";
 import { IntegrationRunner } from "~/services/integrations/integration-runner";
-
-export interface CustomMcpIntegration {
-  id: string;
-  name: string;
-  serverUrl: string;
-  oauth?: {
-    accessToken: string;
-    refreshToken?: string;
-    expiresIn?: number;
-    clientId?: string;
-  };
-  apiKey?: {
-    key: string;
-    headerType: "x-api-key" | "Authorization";
-  };
-}
+import { env } from "~/env.server";
+import {
+  isCustomMcpIntegrationEnabled,
+  resolveCustomMcpHeaders,
+  type CustomMcpFeatureFlags,
+  type CustomMcpIntegration,
+  type CustomMcpTransportStrategy,
+} from "./custom-mcp-config";
 
 export interface CustomMcpAccount {
   id: string;
@@ -35,6 +27,8 @@ export interface CustomMcpAccount {
     key: string;
     headerType: "x-api-key" | "Authorization";
   };
+  headers?: Record<string, string>;
+  transportStrategy?: CustomMcpTransportStrategy;
 }
 
 export interface IntegrationAccountWithDefinition {
@@ -55,6 +49,13 @@ export interface IntegrationAccountWithDefinition {
  * Loads and manages integration accounts for MCP sessions
  */
 export class IntegrationLoader {
+  private static getCustomMcpFeatureFlags(): CustomMcpFeatureFlags {
+    return {
+      allowNoAuth: env.CUSTOM_MCP_ALLOW_NO_AUTH,
+      allowCustomHeaders: env.CUSTOM_MCP_ALLOW_CUSTOM_HEADERS,
+    };
+  }
+
   /**
    * Get all connected and active integration accounts for a user/workspace
    * Filtered by integration slugs if provided
@@ -103,17 +104,23 @@ export class IntegrationLoader {
     });
 
     const metadata = (user?.metadata as any) || {};
+    const featureFlags = this.getCustomMcpFeatureFlags();
     const customMcpIntegrations = (metadata?.mcpIntegrations ||
-      []) as CustomMcpIntegration[];
+      []).filter((mcp: CustomMcpIntegration) =>
+      isCustomMcpIntegrationEnabled(mcp, featureFlags),
+    ) as CustomMcpIntegration[];
 
     // Convert custom MCPs to the same format as regular integration accounts
-    const customMcpAccounts: CustomMcpAccount[] = customMcpIntegrations
-      .filter((mcp) => mcp.oauth?.accessToken || mcp.apiKey?.key) // Include OAuth or API key MCPs
-      .map((mcp) => ({
+    const customMcpAccounts: CustomMcpAccount[] = customMcpIntegrations.map(
+      (mcp) => ({
         id: mcp.id,
         accountId: mcp.id,
         integrationConfiguration: {
           accessToken: mcp.oauth?.accessToken,
+          refreshToken: mcp.oauth?.refreshToken,
+          expiresIn: mcp.oauth?.expiresIn,
+          clientId: mcp.oauth?.clientId,
+          clientSecret: mcp.oauth?.clientSecret,
         },
         isActive: true,
         isCustomMcp: true as const,
@@ -126,7 +133,10 @@ export class IntegrationLoader {
         serverUrl: mcp.serverUrl,
         accessToken: mcp.oauth?.accessToken,
         apiKey: mcp.apiKey,
-      }));
+        headers: resolveCustomMcpHeaders(mcp.headers),
+        transportStrategy: mcp.transportStrategy,
+      }),
+    );
 
     return [...integrationAccounts, ...customMcpAccounts];
   }
@@ -184,11 +194,12 @@ export class IntegrationLoader {
     });
 
     const metadata = (user?.metadata as any) || {};
+    const featureFlags = this.getCustomMcpFeatureFlags();
     const customMcpIntegrations = (metadata?.mcpIntegrations ||
       []) as CustomMcpIntegration[];
 
     const mcp = customMcpIntegrations.find((m) => m.id === mcpId);
-    if (!mcp || (!mcp.oauth?.accessToken && !mcp.apiKey?.key)) {
+    if (!mcp || !isCustomMcpIntegrationEnabled(mcp, featureFlags)) {
       return null;
     }
 
@@ -200,6 +211,7 @@ export class IntegrationLoader {
         refreshToken: mcp.oauth?.refreshToken,
         expiresIn: mcp.oauth?.expiresIn,
         clientId: mcp.oauth?.clientId,
+        clientSecret: mcp.oauth?.clientSecret,
       },
       isActive: true,
       isCustomMcp: true as const,
@@ -212,6 +224,8 @@ export class IntegrationLoader {
       serverUrl: mcp.serverUrl,
       accessToken: mcp.oauth?.accessToken,
       apiKey: mcp.apiKey,
+      headers: resolveCustomMcpHeaders(mcp.headers),
+      transportStrategy: mcp.transportStrategy,
     };
   }
 
