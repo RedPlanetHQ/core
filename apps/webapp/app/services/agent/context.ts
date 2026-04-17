@@ -440,7 +440,7 @@ Status: ${linkedTask.status}${isSubtask ? `\nThis is a SUBTASK. Do ONLY this spe
 
 RULES:
 - For integration work (emails, calendar, github, etc.): delegate to the orchestrator via gather_context / take_action
-- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — prefer resuming it over starting a new one:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
+- For coding, browser, shell: use gateway tools directly (coding_*, browser_*, exec_*) if connected${lastCodingSession?.externalSessionId ? `\n- A coding session already exists for this task — resume it with intent "execute the plan" to trigger Phase 3 execution:\n  sessionId: ${lastCodingSession.externalSessionId}, agent: ${lastCodingSession.agent}${lastCodingSession.dir ? `, dir: ${lastCodingSession.dir}` : ""}${lastCodingSession.worktreeBranch ? `, branch: ${lastCodingSession.worktreeBranch}` : ""}` : ""}
 - If the user sends a message, treat it as additional direction for this task${isSubtask ? `
 - When you complete this subtask, the system automatically starts the next one and marks the parent Done when all subtasks are done
 - If you fail or get stuck, mark the PARENT task (${linkedTask.parentTaskId}) as Waiting and send_message with the error` : `
@@ -462,7 +462,7 @@ The gateway sub-agent handles all sleep/polling for coding sessions. You do NOT 
 
 When you delegate a coding task to the gateway, it will return one of:
 - Questions from the coding agent → write questions to the task description using update_task(section: "Questions", appendToSection: true, description: "<p><strong>Q:</strong> question text</p>"). Then relay to user via send_message, include sessionId in message, mark task Waiting.
-- A plan from the coding agent → write plan to task description using update_task(section: "Plan", description: plan_html). Relay to user via send_message, include sessionId, mark task Review.
+- A plan from the coding agent → you are in EXECUTION mode (user already approved the plan). Call the gateway again immediately with sessionId, dir, and intent "execute the plan" to trigger Phase 3 execution. Do NOT mark task Review again — the plan was already reviewed.
 - Execution results → write results to task description using update_task(section: "Output", description: results_html), mark task Done.
 - "Session still running, brainstorming/planning phase" → call reschedule_self(minutesFromNow=5) to check back soon.
 - "Session still running, execution phase" → save sessionId to task description using update_task(section: "Session", description: session_html), call reschedule_self(minutesFromNow=10) to try again later.
@@ -470,7 +470,7 @@ When you delegate a coding task to the gateway, it will return one of:
 
 When the user answers a question, append the answer to the Q&A log: update_task(section: "Questions", appendToSection: true, description: "<p><strong>A:</strong> user's answer</p>"). Then resume the coding session with the answer.
 
-On re-execution after reschedule: read sessionId and dir from task description, delegate to gateway with the sessionId and tell it to POLL (check session status). Do NOT tell it to "resume" or include any task instructions — just the sessionId and dir. The gateway will read the session and return the output. Only pass user answers when the user has actually replied.
+On re-execution after reschedule: read sessionId and dir from task description, delegate to gateway with the sessionId, dir, and intent "execute the plan" — this ensures the gateway enters Phase 3 (execution) rather than re-doing planning. Only pass user answers if the user has replied since the last run.
 
 Do NOT sleep, poll coding_read_session, or create scheduled tasks yourself — the gateway handles that.
 </task_execution>`;
