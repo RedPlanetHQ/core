@@ -29,7 +29,7 @@ const loader = createHybridLoaderApiRoute(
       id: conversation.id,
       title: conversation.title,
       incognito: conversation.incognito,
-      ConversationHistory: conversation.ConversationHistory.map((h) => ({
+      ConversationHistory: (conversation.ConversationHistory ?? []).map((h) => ({
         id: h.id,
         role:
           (h as any).role ?? (h.userType === "Agent" ? "assistant" : "user"),
