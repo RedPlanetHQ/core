@@ -652,7 +652,7 @@ export async function cancelTaskJob(taskId: string): Promise<boolean> {
     try {
       const pendingRuns = await runs.list({
         tag: [`task:${taskId}`],
-        status: ["QUEUED", "DELAYED", "EXECUTING"],
+        status: ["QUEUED", "DELAYED"],
       });
 
       let cancelled = false;

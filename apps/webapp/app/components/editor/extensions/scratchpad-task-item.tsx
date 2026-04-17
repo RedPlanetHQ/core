@@ -39,7 +39,6 @@ const ScratchpadTaskComponent = ({
     isRecurring: boolean;
   }>({ displayId: null, nextRunAt: null, isRecurring: false });
   const creatingRef = useRef(false);
-  const titleDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const navigate = useNavigate();
 
   const applyTaskData = useCallback((data: any) => {
@@ -88,26 +87,6 @@ const ScratchpadTaskComponent = ({
       .then(applyTaskData)
       .catch(console.error);
   }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Title sync — debounced PATCH when node text changes
-  useEffect(() => {
-    if (!id) return;
-    const title = node.textContent.trim();
-    if (!title) return;
-
-    if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-    titleDebounceRef.current = setTimeout(() => {
-      fetch(`/api/v1/tasks/${id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title }),
-      }).catch(console.error);
-    }, 500);
-
-    return () => {
-      if (titleDebounceRef.current) clearTimeout(titleDebounceRef.current);
-    };
-  }, [id, node.textContent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handleStatusChange(newStatus: string) {
     if (!id) return;
@@ -227,11 +206,43 @@ export const ScratchpadTaskItem = ({
     },
 
     addNodeView() {
+      // Per-task debounce timers for title sync — lives outside React so typing
+      // never triggers a React re-render (which would move the cursor).
+      const titleDebounceTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
       return ReactNodeViewRenderer(ScratchpadTaskComponent, {
         as: "li",
         attrs: { "data-type": NODE_NAME } as Record<string, string>,
-        update: (props) => {
-          props.updateProps();
+        update: ({ oldNode, newNode, updateProps }) => {
+          // Only re-render React when attrs change (e.g. id gets assigned after
+          // task creation). Content changes are managed by NodeViewContent
+          // (ProseMirror-owned DOM) and must NOT trigger a React re-render —
+          // doing so resets the cursor position while the user is typing.
+          if (oldNode.attrs.id !== newNode.attrs.id) {
+            updateProps();
+          }
+
+          // Title sync: debounced PATCH on text change, no React re-render needed.
+          const id = newNode.attrs.id as string | undefined;
+          if (id && oldNode.textContent !== newNode.textContent) {
+            const title = newNode.textContent.trim();
+            if (title) {
+              const existing = titleDebounceTimers.get(id);
+              if (existing) clearTimeout(existing);
+              titleDebounceTimers.set(
+                id,
+                setTimeout(() => {
+                  titleDebounceTimers.delete(id);
+                  fetch(`/api/v1/tasks/${id}`, {
+                    method: "PATCH",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ title }),
+                  }).catch(console.error);
+                }, 500),
+              );
+            }
+          }
+
           return true;
         },
       } as ReactNodeViewRendererOptions);

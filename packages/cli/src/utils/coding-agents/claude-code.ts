@@ -147,6 +147,7 @@ export class ClaudeCodeReader extends BaseCodingAgentReader {
 					fileSizeBytes: stats.size,
 					createdAt: stats.birthtimeMs || stats.mtimeMs,
 					updatedAt: stats.mtimeMs,
+					turnCount: 0,
 				});
 			}
 		}
