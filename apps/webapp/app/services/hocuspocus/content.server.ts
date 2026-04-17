@@ -5,6 +5,7 @@ import { generateHTML, generateJSON } from "@tiptap/html";
 import StarterKit from "@tiptap/starter-kit";
 import TaskList from "@tiptap/extension-task-list";
 import Heading from "@tiptap/extension-heading";
+import Mention from "@tiptap/extension-mention";
 import type { Extensions } from "@tiptap/core";
 import * as Y from "yjs";
 import { prisma } from "~/db.server";
@@ -70,6 +71,7 @@ export function getServerExtensions(): Extensions {
     TaskList,
     Heading.configure({ levels: [1, 2, 3] }),
     CustomTaskItemServer,
+    Mention,
   ];
 }
 

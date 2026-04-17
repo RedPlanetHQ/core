@@ -271,4 +271,23 @@ async function init() {
   );
 }
 
+// Catch unhandled errors/rejections — report to Sentry but keep the server alive.
+// Without these, a single thrown RangeError (e.g. unknown ProseMirror node type)
+// will kill the Node.js process and restart the container.
+process.on("uncaughtException", (error) => {
+  console.error("[uncaughtException]", error);
+  try {
+    const Sentry = require("@sentry/remix");
+    Sentry.captureException(error);
+  } catch {}
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+  try {
+    const Sentry = require("@sentry/remix");
+    Sentry.captureException(reason instanceof Error ? reason : new Error(String(reason)));
+  } catch {}
+});
+
 init().catch(console.error);
