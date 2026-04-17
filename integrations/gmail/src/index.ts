@@ -74,9 +74,6 @@ class GmailCLI extends IntegrationCLI {
       description:
         'Connect your workspace to Gmail. Monitor emails, send messages, and manage your email workflow',
       icon: 'gmail',
-      mcp: {
-        type: 'cli',
-      },
       schedule: {
         frequency: '*/15 * * * *',
       },
@@ -104,6 +101,7 @@ class GmailCLI extends IntegrationCLI {
         },
       },
       toolUISupported: true,
+      enableAutoRead: true,
     };
   }
 }

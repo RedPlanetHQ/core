@@ -274,13 +274,15 @@ export function DailyWidgetGrid({
         return (
           <div
             key={cell.id}
-            draggable
-            onDragStart={() => handleDragStart(index)}
             onDragOver={(e) => handleDragOver(e, index)}
             onDragEnd={handleDragEnd}
             className="border-border flex w-full flex-col overflow-hidden rounded-lg border"
           >
-            <div className="flex shrink-0 cursor-grab select-none items-center justify-between border-b border-gray-200 px-3 py-2">
+            <div
+              draggable
+              onDragStart={() => handleDragStart(index)}
+              className="flex shrink-0 cursor-grab select-none items-center justify-between border-b border-gray-200 px-3 py-2"
+            >
               <div className="flex min-w-0 items-center gap-2">
                 <GripVertical
                   size={14}

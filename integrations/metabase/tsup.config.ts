@@ -1,8 +1,8 @@
 import { defineConfig } from 'tsup';
 
 export default defineConfig({
-  name: 'widgets',
-  entry: { 'widgets/index': './src/widgets/index.ts' },
+  name: 'frontend',
+  entry: { frontend: './src/frontend/index.ts' },
   outDir: './dist',
   format: ['esm'],
   platform: 'neutral',

@@ -96,6 +96,13 @@ class GitHubCLI extends IntegrationCLI {
             },
           ],
         },
+        {
+          name: 'Assigned PRs',
+          slug: 'assigned-prs',
+          description: 'Shows all open GitHub Pull Requests currently assigned to you',
+          support: ['webapp'],
+          configSchema: [],
+        },
       ],
       schedule: {
         frequency: '*/5 * * * *',

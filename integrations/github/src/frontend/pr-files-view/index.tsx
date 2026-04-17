@@ -3,7 +3,7 @@ import type { PRFile, PRInfo, WidgetConfig } from './types.js';
 import { callAction } from './api.js';
 import { FileRow } from './FileRow.js';
 import { ConfigForm } from './ConfigForm.js';
-import { PRIcon } from './PRIcon.js';
+import { PRIcon } from '../icons/PRIcon.js';
 
 export interface PRFilesCardProps {
   pat: string;
