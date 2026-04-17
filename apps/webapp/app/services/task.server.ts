@@ -320,24 +320,29 @@ export async function changeTaskStatus(
       });
     }
 
-    // Check if this task has Todo subtasks — if so, enqueue the first one
-    // instead of the parent, and move parent to Working
-    const nextSubtask = await getNextBacklogSubtask(taskId);
-    if (nextSubtask) {
-      await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
-      // Parent flips directly to Working/execute (subtask sequencing is its own
-      // engine; parent doesn't need its own prep pass).
-      await prisma.task.update({
-        where: { id: taskId },
-        data: {
-          status: "Working",
-          metadata: setTaskPhaseInMetadata(current.metadata, "execute"),
-        },
-      });
-      return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+    // Scheduled/recurring tasks must NOT be enqueued immediately — their
+    // nextRunAt is still valid and the scheduled wake-up will fire at the
+    // right time. Only enqueue non-scheduled tasks right away.
+    if (!current.schedule) {
+      // Check if this task has Todo subtasks — if so, enqueue the first one
+      // instead of the parent, and move parent to Working
+      const nextSubtask = await getNextBacklogSubtask(taskId);
+      if (nextSubtask) {
+        await enqueueTask({ taskId: nextSubtask.id, workspaceId, userId });
+        // Parent flips directly to Working/execute (subtask sequencing is its own
+        // engine; parent doesn't need its own prep pass).
+        await prisma.task.update({
+          where: { id: taskId },
+          data: {
+            status: "Working",
+            metadata: setTaskPhaseInMetadata(current.metadata, "execute"),
+          },
+        });
+        return prisma.task.findUniqueOrThrow({ where: { id: taskId } });
+      }
+      // No subtasks — enqueue the task itself (existing behavior)
+      await enqueueTask({ taskId, workspaceId, userId });
     }
-    // No subtasks — enqueue the task itself (existing behavior)
-    await enqueueTask({ taskId, workspaceId, userId });
   }
 
   // Subtask completed — enqueue next Todo sibling, or auto-complete parent if all done
